@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8" standalone="no" ?>
+<GUIProfiles>
+    <Profile name="tc_placeholderText" extends="fs25_textGrey" with="anchorTopLeft">
+        <textSize value="18px" />
+    </Profile>
+    <!-- Plain anchorTopLeft heading, deliberately not based on
+         fs25_statisticsHeaderText (which bakes in an extra 40px
+         textOffset meant for its own table-header layout) or
+         fs25_contractsContentTitle (anchorTopStretchingX, which stretches
+         to whatever container it's placed in and reads as centered when
+         that container is much wider than the vanilla Contracts frame's
+         narrow progress box it was designed for) — see tickets/007's
+         Outcome for the indentation bug this replaced. -->
+    <Profile name="tc_overviewHeading" extends="fs25_textDefault" with="anchorTopLeft">
+        <textSize value="24px" />
+        <textBold value="true" />
+    </Profile>
+</GUIProfiles>

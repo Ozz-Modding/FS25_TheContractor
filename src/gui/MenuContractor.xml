@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8" standalone="no" ?>
+<GUI name="menuContractor">
+    <GuiElement profile="fs25_menuContainer">
+        <GuiElement profile="fs25_menuHeaderPanel">
+            <Bitmap profile="fs25_menuHeaderIconBg">
+                <Bitmap profile="fs25_menuHeaderIcon" id="categoryHeaderIcon"/>
+            </Bitmap>
+            <Text profile="fs25_menuHeaderTitle" id="categoryHeaderText"/>
+        </GuiElement>
+        <BoxLayout profile="fs25_subCategorySelectorTabbedBox" id="subCategoryBox">
+            <Button profile="fs25_subCategorySelectorTabbedTab" id="subCategoryTabs[1]" text="$l10n_tc_header_overview" onClick="onClickOverview">
+                <ThreePartBitmap profile="fs25_subCategorySelectorTabbedTabBg" name="background"/>
+            </Button>
+            <Button profile="fs25_subCategorySelectorTabbedTab" id="subCategoryTabs[2]" text="$l10n_tc_header_inbox" onClick="onClickInbox">
+                <ThreePartBitmap profile="fs25_subCategorySelectorTabbedTabBg" name="background"/>
+            </Button>
+            <Button profile="fs25_subCategorySelectorTabbedTab" id="subCategoryTabs[3]" text="$l10n_tc_header_calendar" onClick="onClickCalendar">
+                <ThreePartBitmap profile="fs25_subCategorySelectorTabbedTabBg" name="background"/>
+            </Button>
+            <Button profile="fs25_subCategorySelectorTabbedTab" id="subCategoryTabs[4]" text="$l10n_tc_header_staff" onClick="onClickStaff">
+                <ThreePartBitmap profile="fs25_subCategorySelectorTabbedTabBg" name="background"/>
+            </Button>
+        </BoxLayout>
+        <ThreePartBitmap profile="fs25_lineSeparatorTopHighlighted" position="0px -57px"/>
+        <MultiTextOption profile="fs25_subCategorySelectorTabbed" id="subCategoryPaging" position="0px -10px" onClick="updateSubCategoryPages"/>
+
+        <GuiElement profile="fs25_subCategorySelectorTabbedContainer" id="subCategoryPages[1]">
+            <Text profile="tc_placeholderText" id="textNoCompany" text="$l10n_tc_overview_noCompany" position="40px -40px" width="900px"/>
+
+            <Text profile="tc_overviewHeading" id="textCompanyName" text="" position="40px -40px" width="900px"/>
+
+            <GuiElement profile="fs25_contractsProgressBox" id="progressBox" position="40px -110px">
+                <Text profile="fs25_contractsContentTitle" id="rankTierText"/>
+                <Text profile="fs25_contractsContentValue" id="progressText"/>
+                <ThreePartBitmap profile="fs25_contractsProgressBarBg" id="progressBarBg">
+                    <ThreePartBitmap profile="fs25_contractsProgressBar" id="progressBar"/>
+                </ThreePartBitmap>
+            </GuiElement>
+
+            <Text profile="tc_placeholderText" id="nextRankText" text="" position="40px -370px" width="900px"/>
+
+            <Text profile="tc_placeholderText" id="textActionsAvailable" text="$l10n_tc_overview_actionsAvailable" position="40px -420px" width="900px"/>
+            <Text profile="tc_placeholderText" id="textJobHistoryPlaceholder" text="$l10n_tc_overview_jobHistoryPlaceholder" position="40px -470px" width="900px"/>
+        </GuiElement>
+        <GuiElement profile="fs25_subCategorySelectorTabbedContainer" id="subCategoryPages[2]">
+            <Text profile="tc_placeholderText" id="placeholderInbox" text="$l10n_tc_placeholder_inbox" position="40px -40px" width="900px"/>
+        </GuiElement>
+        <GuiElement profile="fs25_subCategorySelectorTabbedContainer" id="subCategoryPages[3]">
+            <Text profile="tc_placeholderText" id="placeholderCalendar" text="$l10n_tc_placeholder_calendar" position="40px -40px" width="900px"/>
+        </GuiElement>
+        <GuiElement profile="fs25_subCategorySelectorTabbedContainer" id="subCategoryPages[4]">
+            <Text profile="tc_placeholderText" id="placeholderStaff" text="$l10n_tc_placeholder_staff" position="40px -40px" width="900px"/>
+        </GuiElement>
+    </GuiElement>
+</GUI>

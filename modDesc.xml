@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8" standalone="no" ?>
+<modDesc descVersion="106">
+    <author>Ozz</author>
+    <version>1.0.0.0</version>
+    <iconFilename>icon_TheContractor.dds</iconFilename>
+    <title>
+        <en>The Contractor</en>
+    </title>
+    <description>
+        <en><![CDATA[The Contractor
+
+
+]]>
+        </en>
+    </description>
+
+    <extraSourceFiles>
+        <sourceFile filename="src/main.lua"/>
+    </extraSourceFiles>
+
+    <l10n filenamePrefix="languages/l10n" />
+
+    <multiplayer supported="true"/>
+</modDesc>

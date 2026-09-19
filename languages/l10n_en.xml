@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<l10n>
+	<translationContributors/>
+	<texts>
+		<text name="tc_header_inbox" text="Inbox"/>
+		<text name="tc_header_calendar" text="Calendar"/>
+		<text name="tc_header_staff" text="Staff"/>
+		<text name="tc_header_overview" text="Overview"/>
+		<text name="tc_placeholder_inbox" text="Inbox coming soon."/>
+		<text name="tc_placeholder_calendar" text="Calendar coming soon."/>
+		<text name="tc_placeholder_staff" text="Staff coming soon."/>
+		<text name="tc_placeholder_locked" text="You haven't started a contracting company on this farm yet. Head to the Overview tab to create one."/>
+		<text name="tc_overview_noCompany" text="You haven't started a contracting company on this farm yet. Use the button below to create one."/>
+		<text name="tc_overview_rankMax" text="Max rank"/>
+		<text name="tc_overview_nextRank" text="Next Rank: %s"/>
+		<text name="tc_overview_nextRankNone" text="N/A"/>
+		<text name="tc_overview_actionsAvailable" text="More actions coming soon."/>
+		<text name="tc_overview_jobHistoryPlaceholder" text="Job history and reputation trends coming soon."/>
+		<text name="tc_actions_createButton" text="Create Company"/>
+		<text name="tc_actions_createCompanyPrompt" text="Name your new contracting company (cost: %s):"/>
+		<text name="tc_actions_defaultCompanyName" text="Untitled Contracting Co."/>
+		<text name="tc_actions_cannotAfford" text="You can't afford to start a company right now."/>
+		<text name="tc_moneyType_companyCreation" text="Company creation"/>
+		<text name="tc_reputationTier_unknownContractor" text="Unknown Contractor"/>
+		<text name="tc_reputationTier_localContractor" text="Local Contractor"/>
+		<text name="tc_reputationTier_establishedContractor" text="Established Contractor"/>
+		<text name="tc_reputationTier_regionalContractor" text="Regional Contractor"/>
+		<text name="tc_reputationTier_renownedContractor" text="Renowned Contractor"/>
+		<text name="tc_reputationTier_prestigiousContractor" text="Prestigious Contractor"/>
+	</texts>
+</l10n>
