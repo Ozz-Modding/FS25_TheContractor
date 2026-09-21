@@ -18,6 +18,7 @@ function TCInitialClientStateEvent:writeStream(streamId, connection)
     tc.Jobs:writeInitialClientState(streamId, connection)
     tc.Staff:writeInitialClientState(streamId, connection)
     tc.Company:writeInitialClientState(streamId, connection)
+    tc.Advertising:writeInitialClientState(streamId, connection)
 end
 
 function TCInitialClientStateEvent:readStream(streamId, connection)
@@ -27,6 +28,7 @@ function TCInitialClientStateEvent:readStream(streamId, connection)
     tc.Jobs:readInitialClientState(streamId, connection)
     tc.Staff:readInitialClientState(streamId, connection)
     tc.Company:readInitialClientState(streamId, connection)
+    tc.Advertising:readInitialClientState(streamId, connection)
 
     self:run(connection)
 end

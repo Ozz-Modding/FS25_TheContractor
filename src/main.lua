@@ -2,16 +2,50 @@ TheContractor = {}
 TheContractor.dir = g_currentModDirectory
 TheContractor.SaveKey = "TheContractor"
 
+source(TheContractor.dir .. "src/extensions/TCI18NExtension.lua")
 source(TheContractor.dir .. "src/util/DisableVanillaContracts.lua")
+source(TheContractor.dir .. "src/util/TCEquipmentClass.lua")
+source(TheContractor.dir .. "src/util/TCCropPrediction.lua")
+source(TheContractor.dir .. "src/util/TCJobProgress.lua")
 source(TheContractor.dir .. "src/gui/MenuContractor.lua")
+source(TheContractor.dir .. "src/hud/TCInboxHUD.lua")
 source(TheContractor.dir .. "src/business/Reputation.lua")
+source(TheContractor.dir .. "src/business/Negotiation.lua")
+source(TheContractor.dir .. "src/business/Job.lua")
 source(TheContractor.dir .. "src/business/Jobs.lua")
+source(TheContractor.dir .. "src/business/JobGeneration.lua")
+source(TheContractor.dir .. "src/business/Worker.lua")
 source(TheContractor.dir .. "src/business/Staff.lua")
+source(TheContractor.dir .. "src/business/Allocation.lua")
+source(TheContractor.dir .. "src/business/Dispatch.lua")
+source(TheContractor.dir .. "src/business/Watchdog.lua")
 source(TheContractor.dir .. "src/business/Company.lua")
+source(TheContractor.dir .. "src/business/Advertising.lua")
 source(TheContractor.dir .. "src/events/TCInitialClientStateEvent.lua")
 source(TheContractor.dir .. "src/events/TCCreateCompanyEvent.lua")
 source(TheContractor.dir .. "src/events/TCReputationChangedEvent.lua")
 source(TheContractor.dir .. "src/events/TCDebugAddReputationEvent.lua")
+source(TheContractor.dir .. "src/events/TCJobCreatedEvent.lua")
+source(TheContractor.dir .. "src/events/TCJobStateChangedEvent.lua")
+source(TheContractor.dir .. "src/events/TCJobMissedEvent.lua")
+source(TheContractor.dir .. "src/events/TCDebugCreateJobEvent.lua")
+source(TheContractor.dir .. "src/events/TCDebugSetJobStateEvent.lua")
+source(TheContractor.dir .. "src/events/TCRespondToJobOfferEvent.lua")
+source(TheContractor.dir .. "src/events/TCCounterOfferEvent.lua")
+source(TheContractor.dir .. "src/events/TCJobNegotiationUpdatedEvent.lua")
+source(TheContractor.dir .. "src/events/TCPurchaseAdvertisingEvent.lua")
+source(TheContractor.dir .. "src/events/TCAdvertisingStateChangedEvent.lua")
+source(TheContractor.dir .. "src/events/TCHireWorkerEvent.lua")
+source(TheContractor.dir .. "src/events/TCWorkerHiredEvent.lua")
+source(TheContractor.dir .. "src/events/TCStaffCandidateAddedEvent.lua")
+source(TheContractor.dir .. "src/events/TCStaffCandidateRemovedEvent.lua")
+source(TheContractor.dir .. "src/events/TCReleaseWorkerEvent.lua")
+source(TheContractor.dir .. "src/events/TCWorkerReleasedEvent.lua")
+source(TheContractor.dir .. "src/events/TCWorkerStatusChangedEvent.lua")
+source(TheContractor.dir .. "src/events/TCAllocateJobEvent.lua")
+source(TheContractor.dir .. "src/events/TCJobAllocatedEvent.lua")
+source(TheContractor.dir .. "src/events/TCDispatchFailedEvent.lua")
+source(TheContractor.dir .. "src/events/TCWatchdogInterventionEvent.lua")
 
 -- The top-level Contractor page itself stays always-visible (see Company.lua
 -- and MenuContractor's Overview tab): "Create Company" has to live somewhere
@@ -29,8 +63,14 @@ function TheContractor:loadMap()
 
     self.Reputation = TheContractorReputation.new()
     self.Jobs = TheContractorJobs.new()
+    self.JobGeneration = TheContractorJobGeneration.new()
     self.Staff = TheContractorStaff.new()
+    self.Allocation = TheContractorAllocation.new()
+    self.Dispatch = TheContractorDispatch.new()
+    self.Watchdog = TheContractorWatchdog.new()
     self.Company = TheContractorCompany.new()
+    self.Advertising = TheContractorAdvertising.new()
+    self.InboxHUD = TCInboxHUD.new()
 
     TheContractorDisableVanillaContracts.hideContractsTab()
 
@@ -47,6 +87,17 @@ function TheContractor:loadMap()
 
     self:loadFromXMLFile()
 
+    -- Tops the shared staff pool up if it's empty (fresh save, or an
+    -- existing save from before the pool existed) — see
+    -- TheContractorStaff:ensureInitialPool.
+    self.Staff:ensureInitialPool()
+
+    self.JobGeneration:startHourlyTick()
+    self.Advertising:startDailyTick()
+    self.Jobs:startDailyTick()
+    self.Staff:startDailyTick()
+    self.Dispatch:startListening()
+
     -- Cheat-gated, following FS25_RedTape's own rtAddPoints console command
     -- (RedTape.lua's consoleCommandAddPoints): easy manual testing of
     -- reputation-tier progression without waiting for 011/014/022/024 to
@@ -54,6 +105,18 @@ function TheContractor:loadMap()
     if g_addCheatCommands and g_currentMission:getIsServer() then
         addConsoleCommand("tcAddReputation",
             "Add or remove reputation points for current farm. Usage: tcAddReputation amount", "consoleCommandAddReputation", self)
+        addConsoleCommand("tcCreateTestJob",
+            "Create a test job for the current farm. Usage: tcCreateTestJob jobType fieldId requiredSkillLevel price targetPeriod targetDayInPeriod",
+            "consoleCommandCreateTestJob", self)
+        addConsoleCommand("tcSetJobState",
+            "Force a job's state for the current farm. Usage: tcSetJobState jobId state",
+            "consoleCommandSetJobState", self)
+        addConsoleCommand("tcListStaffPool",
+            "List candidates currently available to hire from the shared staff pool. Usage: tcListStaffPool",
+            "consoleCommandListStaffPool", self)
+        addConsoleCommand("tcHireWorker",
+            "Hire a candidate from the staff pool for the current farm. Usage: tcHireWorker candidateId",
+            "consoleCommandHireWorker", self)
     end
 
     Logging.info("TheContractor: loadMap")
@@ -74,6 +137,74 @@ function TheContractor:consoleCommandAddReputation(amount)
 
     g_client:getServerConnection():sendEvent(TCDebugAddReputationEvent.new(farm.farmId, numAmount))
     return string.format("Applied %d reputation to farm %d", numAmount, farm.farmId)
+end
+
+function TheContractor:consoleCommandCreateTestJob(jobType, fieldId, requiredSkillLevel, price, targetPeriod,
+                                                     targetDayInPeriod)
+    if not g_currentMission:getIsServer() then return "Server only" end
+
+    if jobType == nil or tonumber(fieldId) == nil or tonumber(requiredSkillLevel) == nil or tonumber(price) == nil
+        or tonumber(targetPeriod) == nil or tonumber(targetDayInPeriod) == nil then
+        return "Usage: tcCreateTestJob jobType fieldId requiredSkillLevel price targetPeriod targetDayInPeriod"
+    end
+
+    local farm = g_farmManager:getFarmByUserId(g_currentMission.playerUserId)
+    if farm == nil or farm.farmId == 0 then
+        return "Error: No farm found for current player"
+    end
+
+    g_client:getServerConnection():sendEvent(TCDebugCreateJobEvent.new(farm.farmId, jobType, tonumber(fieldId),
+        tonumber(requiredSkillLevel), tonumber(targetPeriod), tonumber(targetDayInPeriod), tonumber(price)))
+    return string.format("Requested job creation for farm %d", farm.farmId)
+end
+
+function TheContractor:consoleCommandSetJobState(jobId, state)
+    if not g_currentMission:getIsServer() then return "Server only" end
+
+    local numJobId = tonumber(jobId)
+    if numJobId == nil or state == nil then
+        return "Usage: tcSetJobState jobId state"
+    end
+
+    local farm = g_farmManager:getFarmByUserId(g_currentMission.playerUserId)
+    if farm == nil or farm.farmId == 0 then
+        return "Error: No farm found for current player"
+    end
+
+    g_client:getServerConnection():sendEvent(TCDebugSetJobStateEvent.new(farm.farmId, numJobId, state))
+    return string.format("Requested job %d -> %s for farm %d", numJobId, state, farm.farmId)
+end
+
+function TheContractor:consoleCommandListStaffPool()
+    local staff = g_currentMission.TheContractor.Staff
+    local pool = staff:getCandidatePool()
+    if #pool == 0 then
+        return "Staff pool is empty."
+    end
+
+    local lines = {}
+    for _, candidate in ipairs(pool) do
+        table.insert(lines, string.format("#%d %s - speed %d, cost %.0f, tiers: %s", candidate.id, candidate.name,
+            candidate.workSpeed, candidate.hireCost, TheContractorStaff.formatTierCapability(candidate.tierCapability)))
+    end
+    return table.concat(lines, "\n")
+end
+
+function TheContractor:consoleCommandHireWorker(candidateId)
+    if not g_currentMission:getIsServer() then return "Server only" end
+
+    local numCandidateId = tonumber(candidateId)
+    if numCandidateId == nil then
+        return "Usage: tcHireWorker candidateId (see tcListStaffPool)"
+    end
+
+    local farm = g_farmManager:getFarmByUserId(g_currentMission.playerUserId)
+    if farm == nil or farm.farmId == 0 then
+        return "Error: No farm found for current player"
+    end
+
+    g_client:getServerConnection():sendEvent(TCHireWorkerEvent.new(farm.farmId, numCandidateId))
+    return string.format("Requested hiring candidate %d for farm %d", numCandidateId, farm.farmId)
 end
 
 -- Called as a normal method (self == TheContractor) from loadMap, once the
@@ -99,6 +230,7 @@ function TheContractor:loadFromXMLFile()
     self.Jobs:loadFromXMLFile(xmlFile)
     self.Staff:loadFromXMLFile(xmlFile)
     self.Company:loadFromXMLFile(xmlFile)
+    self.Advertising:loadFromXMLFile(xmlFile)
 
     delete(xmlFile)
 end
@@ -121,6 +253,7 @@ function TheContractor:saveToXmlFile()
     tc.Jobs:saveToXmlFile(xmlFile)
     tc.Staff:saveToXmlFile(xmlFile)
     tc.Company:saveToXmlFile(xmlFile)
+    tc.Advertising:saveToXmlFile(xmlFile)
 
     saveXMLFile(xmlFile)
     delete(xmlFile)
@@ -164,8 +297,36 @@ end
 function TheContractor:deleteMap()
     Logging.info("TheContractor: deleteMap")
 
+    if self.JobGeneration ~= nil then
+        self.JobGeneration:stopHourlyTick()
+    end
+
+    if self.Advertising ~= nil then
+        self.Advertising:stopDailyTick()
+    end
+
+    if self.Jobs ~= nil then
+        self.Jobs:stopDailyTick()
+    end
+
+    if self.Staff ~= nil then
+        self.Staff:stopDailyTick()
+    end
+
+    if self.Dispatch ~= nil then
+        self.Dispatch:stopListening()
+    end
+
+    if self.InboxHUD ~= nil then
+        self.InboxHUD:delete()
+    end
+
     if g_addCheatCommands then
         removeConsoleCommand("tcAddReputation")
+        removeConsoleCommand("tcCreateTestJob")
+        removeConsoleCommand("tcSetJobState")
+        removeConsoleCommand("tcListStaffPool")
+        removeConsoleCommand("tcHireWorker")
     end
 
     if g_currentMission ~= nil and g_currentMission.TheContractor == self then
@@ -174,6 +335,21 @@ function TheContractor:deleteMap()
 end
 
 function TheContractor:update(dt)
+    if self.InboxHUD ~= nil then
+        self.InboxHUD:update(dt)
+    end
+
+    TCJobProgress.update(dt)
+
+    if self.Watchdog ~= nil then
+        self.Watchdog:update(dt)
+    end
+end
+
+function TheContractor:draw()
+    if self.InboxHUD ~= nil then
+        self.InboxHUD:draw()
+    end
 end
 
 TheContractor.installSaveHook()

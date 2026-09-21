@@ -1,0 +1,263 @@
+-- AI dispatch integration (020): when an `accepted` job is allocated (018)
+-- to a hired worker (not the player), programmatically starts and tracks
+-- the base game's real AI Helper job on the assigned vehicle — the exact
+-- same server-side API the `gsAIStart` console command and the AI Helper
+-- map UI both call
+-- (g_currentMission.aiJobTypeManager:createJob(AIJobType.FIELDWORK) +
+-- g_currentMission.aiSystem:startJob), not any faked UI interaction. Player
+-- self-allocated jobs (assignedWorkerId == nil) never go through this
+-- system at all — the player just drives normally, and 019's density-map
+-- progress tracking picks up their work the same way it does a hired
+-- worker's.
+--
+-- AISystem:startJob already asserts server-only (see AISystem:startJob in
+-- Reference/FS25_Lua/ai/AISystem.lua), and this is always triggered from
+-- TheContractorAllocation:allocateJob, itself already server-authoritative
+-- (018) — no additional TCFooEvent wrapper needed, per the ticket's own
+-- design note.
+--
+-- No state of its own to persist: the id<->AIJob lookup tables below only
+-- ever hold currently-running AIJob object/id references (not serializable,
+-- meaningless across a save/load boundary) — same "live cache, not
+-- persisted state" reasoning TCJobProgress's scan-state cache uses. A job's
+-- real, persisted state (allocated/in_progress/...) stays Job.lua's own
+-- field, moved via TheContractorJobs:transitionJobState like everything
+-- else does.
+
+TheContractorDispatch = {}
+TheContractorDispatch_mt = Class(TheContractorDispatch)
+
+function TheContractorDispatch.new()
+    local self = {}
+    setmetatable(self, TheContractorDispatch_mt)
+
+    -- ourJobId -> AIJob instance, populated the moment we hand a job to
+    -- AISystem:startJob, cleared once AI_JOB_REMOVED confirms it's gone.
+    self.aiJobByOurJobId = {}
+    -- AIJob instance -> ourJobId, the reverse lookup AI_JOB_STARTED/
+    -- AI_JOB_STOPPED hand back (they carry the AIJob object itself, not any
+    -- id of ours) needs to work from.
+    self.ourJobIdByAIJob = {}
+    -- AISystem's own numeric jobId (assigned inside AISystem:startJob, only
+    -- known once AI_JOB_STARTED fires) -> ourJobId, since AI_JOB_REMOVED
+    -- only ever hands back that numeric id, not the AIJob object.
+    self.ourJobIdByAISystemJobId = {}
+
+    return self
+end
+
+-- Server-only, same as every other subsystem's *Tick subscription — an AI
+-- job can only ever be started/tracked server-side (AISystem's own
+-- restriction), so there's nothing for a client to listen for here.
+function TheContractorDispatch:startListening()
+    if not g_currentMission:getIsServer() then
+        return
+    end
+
+    g_messageCenter:subscribe(MessageType.AI_JOB_STARTED, self.onAIJobStarted, self)
+    g_messageCenter:subscribe(MessageType.AI_JOB_STOPPED, self.onAIJobStopped, self)
+    g_messageCenter:subscribe(MessageType.AI_JOB_REMOVED, self.onAIJobRemoved, self)
+end
+
+function TheContractorDispatch:stopListening()
+    g_messageCenter:unsubscribe(MessageType.AI_JOB_STARTED, self)
+    g_messageCenter:unsubscribe(MessageType.AI_JOB_STOPPED, self)
+    g_messageCenter:unsubscribe(MessageType.AI_JOB_REMOVED, self)
+end
+
+-- Picks the one piece of allocated equipment (018) actually capable of
+-- being handed to AIJobFieldWork as its driving vehicle — the tractor, or,
+-- for a self-propelled job type like harvest, the combine itself. No
+-- separate tractor/implement disambiguation needed: getIsAvailableForVehicle
+-- already folds in vehicle:getCanStartFieldWork() (false for an implement
+-- with no engine of its own, or a tractor with nothing attached/lowered yet
+-- — AIFieldWorker:getCanStartFieldWork requires a real in-world attached
+-- implement, the same prerequisite the vanilla AI Helper UI has, and one
+-- this ticket doesn't attempt to automate) and vehicle:getIsAIJobSupported().
+-- Returns nil if nothing in the job's equipment currently qualifies.
+function TheContractorDispatch:findOperatingVehicle(aiJob, equipmentIds)
+    for _, vehicleId in ipairs(equipmentIds) do
+        local vehicle = NetworkUtil.getObject(vehicleId)
+        if vehicle ~= nil and aiJob:getIsAvailableForVehicle(vehicle) then
+            return vehicle
+        end
+    end
+    return nil
+end
+
+-- Called from TheContractorAllocation:allocateJob right after a job is
+-- successfully allocated to a hired worker (workerId ~= nil never reaches
+-- here for a player self-allocation, see Allocation.lua). Constructs an
+-- AIJobFieldWork against whichever assigned vehicle is actually ready,
+-- validates and checks startability exactly the way the base game's own AI
+-- Helper UI does, then starts it — surfacing a notification instead on any
+-- failure rather than silently leaving the job allocated-but-idle.
+function TheContractorDispatch:startJobForWorker(job, worker)
+    if not g_currentMission:getIsServer() then
+        return
+    end
+
+    local aiJob = g_currentMission.aiJobTypeManager:createJob(AIJobType.FIELDWORK)
+    local vehicle = self:findOperatingVehicle(aiJob, job.assignedEquipmentIds)
+    if vehicle == nil then
+        Logging.warning(
+            "TheContractor: farm %d job %d has no allocated equipment ready for AI dispatch (implement attached? tractor free?)",
+            job.farmId, job.id)
+        self:notifyDispatchFailed(job, g_i18n:getText("tc_dispatch_noVehicleReady"))
+        return
+    end
+
+    aiJob:applyCurrentState(vehicle, g_currentMission, job.farmId, false)
+    aiJob:setValues()
+
+    local isValid, validationError = aiJob:validate(job.farmId)
+    if not isValid then
+        Logging.warning("TheContractor: farm %d job %d AI job failed validation: %s", job.farmId, job.id,
+            tostring(validationError))
+        self:notifyDispatchFailed(job, tostring(validationError))
+        return
+    end
+
+    -- nil connection: this call isn't on behalf of any one client's request,
+    -- it's the server dispatching on its own initiative. FSBaseMission:
+    -- getHasPlayerPermission already treats a nil connection as "the server
+    -- itself" (an unconditional pass) when called on the server, so this
+    -- still genuinely enforces the two checks that matter here —
+    -- vehicle:getIsInUse() and AISystem:getAILimitedReached() — without us
+    -- having to fake up a connection for a farm that may not even have a
+    -- client attached to it (dedicated server, or the player simply not
+    -- looking at this vehicle).
+    local isStartable, startError = aiJob:getIsStartable(nil)
+    if not isStartable then
+        local errorText = AIJobFieldWork.getIsStartErrorText(startError)
+        Logging.warning("TheContractor: farm %d job %d AI job not startable: %s", job.farmId, job.id, errorText)
+        self:notifyDispatchFailed(job, errorText)
+        return
+    end
+
+    self.aiJobByOurJobId[job.id] = aiJob
+    self.ourJobIdByAIJob[aiJob] = job.id
+
+    g_currentMission.aiSystem:startJob(aiJob, job.farmId)
+
+    Logging.info("TheContractor: farm %d job %d dispatched to AI Helper on vehicle '%s' (worker %s)", job.farmId,
+        job.id, vehicle:getName(), worker ~= nil and worker.name or "?")
+end
+
+-- AI_JOB_STARTED fires synchronously from inside AISystem:startJob (see
+-- AISystem:startJobInternal), so this always runs within the same call
+-- stack as startJobForWorker's own call above — safe to look the AIJob
+-- straight back up in ourJobIdByAIJob. Ignores anything not ours (e.g. the
+-- player using the vanilla AI Helper map UI directly on one of their own
+-- vehicles, entirely outside our system) — that's the whole reason this
+-- tracks AIJob object identity rather than assuming every AI_JOB_STARTED is
+-- one of ours.
+function TheContractorDispatch:onAIJobStarted(aiJob, startedFarmId)
+    local ourJobId = self.ourJobIdByAIJob[aiJob]
+    if ourJobId == nil then
+        return
+    end
+
+    self.ourJobIdByAISystemJobId[aiJob.jobId] = ourJobId
+
+    g_currentMission.TheContractor.Jobs:transitionJobState(startedFarmId, ourJobId, TheContractorJob.STATE.IN_PROGRESS)
+end
+
+-- Distinguishes a clean finish (AIMessageType.OK/INFO — e.g.
+-- AIMessageSuccessFinishedJob) from a stuck/error condition
+-- (AIMessageType.ERROR), per the ticket's own acceptance criterion. Doesn't
+-- act on that distinction itself: 021 (stuck retry) and 022 (completion +
+-- payout, itself explicitly specified as triggered by "020's AI_JOB_STOPPED
+-- clean-finish signal, cross-checked against 019's completion percentage")
+-- aren't built yet, and landing their logic here would jump ahead of this
+-- codebase's one-ticket-at-a-time build order. This just logs the outcome
+-- clearly, so those tickets have a real signal to key off once they exist —
+-- the job's own state stays `in_progress` until one of them (or the
+-- existing missed-deadline daily tick, Jobs.lua's onDayChanged) moves it on.
+function TheContractorDispatch:onAIJobStopped(aiJob, aiMessage)
+    local ourJobId = self.ourJobIdByAIJob[aiJob]
+    if ourJobId == nil then
+        return
+    end
+
+    local isClean = aiMessage == nil or aiMessage:getType() ~= AIMessageType.ERROR
+    Logging.info("TheContractor: job %d AI job stopped (%s): %s", ourJobId, isClean and "clean" or "error",
+        aiMessage ~= nil and aiMessage:getMessage(aiJob) or "no message")
+end
+
+-- AI_JOB_REMOVED only ever hands back AISystem's own numeric jobId (see
+-- AISystem:delete/update), not the AIJob object the other two callbacks
+-- get — ourJobIdByAISystemJobId (populated in onAIJobStarted, once that id
+-- actually exists) is what bridges the two. This is where all three lookup
+-- tables actually get cleaned up, since removal is the AI job's genuine
+-- end-of-life (it can lag stop by a frame or more, per AISystem:update's own
+-- jobsToRemove queue).
+--
+-- Guarded by aiJob.jobId == aiSystemJobId (021 addition): stopJob below
+-- clears aiJobByOurJobId/ourJobIdByAIJob immediately rather than waiting for
+-- this lagged removal event, specifically so a caller that stops and
+-- immediately retriggers a fresh AI job for the same ourJobId (021's stuck
+-- watchdog does exactly this) doesn't have its brand-new aiJob entry
+-- clobbered when the old job's removal event finally arrives and looks
+-- itself up by ourJobId. Without the guard, this would blindly nil out
+-- whatever aiJob currently sits at that ourJobId — which could by then be
+-- the new one, not the one actually being removed.
+function TheContractorDispatch:onAIJobRemoved(aiSystemJobId)
+    local ourJobId = self.ourJobIdByAISystemJobId[aiSystemJobId]
+    if ourJobId == nil then
+        return
+    end
+
+    local aiJob = self.aiJobByOurJobId[ourJobId]
+    if aiJob ~= nil and aiJob.jobId == aiSystemJobId then
+        self.ourJobIdByAIJob[aiJob] = nil
+        self.aiJobByOurJobId[ourJobId] = nil
+    end
+
+    self.ourJobIdByAISystemJobId[aiSystemJobId] = nil
+end
+
+-- Stops the AI job currently tracked for ourJobId, if any (a no-op if the
+-- job already finished/was removed, or was never dispatched at all — e.g. a
+-- player self-allocated job, which never enters these lookup tables). Used
+-- by 021's stuck watchdog ahead of resetting the vehicle and retriggering a
+-- fresh AI job for the same job. aiMessage defaults to a generic unknown-
+-- error stop if the caller doesn't have anything more specific (AISystem:
+-- stopJob requires a non-nil AIMessage — see AISystem:delete's own
+-- AIMessageErrorUnknown.new() fallback for the same reason).
+--
+-- Clears this subsystem's own lookups for the stopped aiJob immediately,
+-- rather than waiting for AI_JOB_REMOVED (which can lag a frame or more) —
+-- see onAIJobRemoved's guard comment for why an immediate retrigger would
+-- otherwise be unsafe.
+function TheContractorDispatch:stopJob(jobId, aiMessage)
+    if not g_currentMission:getIsServer() then
+        return
+    end
+
+    local aiJob = self.aiJobByOurJobId[jobId]
+    if aiJob == nil then
+        return
+    end
+
+    g_currentMission.aiSystem:stopJob(aiJob, aiMessage or AIMessageErrorUnknown.new())
+
+    self.ourJobIdByAIJob[aiJob] = nil
+    self.aiJobByOurJobId[jobId] = nil
+end
+
+-- Notification plumbing --------------------------------------------------
+
+-- Surfaces a dispatch failure to the player (ticket AC: "surface a sensible
+-- error ... don't attempt to bypass" the base game's own gating). Applied
+-- directly here for the server/host's own local notification, then
+-- broadcast via TCDispatchFailedEvent for any other client on the farm —
+-- same "no SP loopback" shape TCJobMissedEvent already uses (see
+-- src/events/README.md).
+function TheContractorDispatch:notifyDispatchFailed(job, reasonText)
+    TCDispatchFailedEvent.showNotification(job.farmId, job.jobType, job.fieldId, reasonText)
+
+    if g_server ~= nil then
+        g_server:broadcastEvent(TCDispatchFailedEvent.new(job.farmId, job.jobType, job.fieldId, reasonText))
+    end
+end
