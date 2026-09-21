@@ -1,0 +1,63 @@
+-- Broadcast-only: fired by TheContractorJobs:missJob once a job's deadline
+-- has passed without it reaching `completed`. Purely an "show an ingame
+-- notification" signal — TCJobStateChangedEvent (broadcast alongside this
+-- one) is what actually syncs the job's state to `missed`. Needs its own
+-- event because the transition is asynchronous (a server-side day-changed
+-- tick, not a client action), so every affected client needs telling
+-- separately, including the host: g_server:broadcastEvent doesn't loop back
+-- to the local client in single-player (see src/events/README.md).
+--
+-- Full ticket 024 scope (proportional reputation loss reading 019's real
+-- progress, worker/equipment release via 018) is ahead of this mod's build
+-- order — see TheContractorJobs:missJob's comment. This event only owns the
+-- notification.
+
+TCJobMissedEvent = {}
+local TCJobMissedEvent_mt = Class(TCJobMissedEvent, Event)
+
+InitEventClass(TCJobMissedEvent, "TCJobMissedEvent")
+
+function TCJobMissedEvent.emptyNew()
+    return Event.new(TCJobMissedEvent_mt)
+end
+
+function TCJobMissedEvent.new(farmId, jobType, fieldId)
+    local self = TCJobMissedEvent.emptyNew()
+    self.farmId = farmId
+    self.jobType = jobType
+    self.fieldId = fieldId
+    return self
+end
+
+function TCJobMissedEvent:writeStream(streamId, connection)
+    streamWriteInt32(streamId, self.farmId)
+    streamWriteString(streamId, self.jobType)
+    streamWriteInt32(streamId, self.fieldId)
+end
+
+function TCJobMissedEvent:readStream(streamId, connection)
+    self.farmId = streamReadInt32(streamId)
+    self.jobType = streamReadString(streamId)
+    self.fieldId = streamReadInt32(streamId)
+    self:run(connection)
+end
+
+function TCJobMissedEvent:run(connection)
+    TCJobMissedEvent.showNotification(self.farmId, self.jobType, self.fieldId)
+end
+
+-- Shared by run() (remote clients) and TheContractorJobs:missJob (the
+-- server/host's own local notification — see this file's header comment on
+-- why that can't just rely on the broadcast).
+function TCJobMissedEvent.showNotification(farmId, jobType, fieldId)
+    if farmId ~= g_currentMission:getFarmId() then
+        return
+    end
+
+    local field = g_fieldManager:getFieldById(fieldId)
+    local fieldLabel = field ~= nil and field:getName() or tostring(fieldId)
+
+    g_currentMission:addIngameNotification(FSBaseMission.INGAME_NOTIFICATION_CRITICAL,
+        string.format(g_i18n:getText("tc_job_missedNotification"), g_i18n:getText("tc_jobType_" .. jobType),
+            fieldLabel))
+end

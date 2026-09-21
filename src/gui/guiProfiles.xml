@@ -15,4 +15,56 @@
         <textSize value="24px" />
         <textBold value="true" />
     </Profile>
+
+    <!-- Inbox (013) job list — same shape as FS25_RedTape/src/gui/guiProfiles.xml's
+         rt_table/rtTableListItem/rtListRowCell*/rtTableHeader, just renamed
+         tc_ for this mod. -->
+    <Profile name="tc_tableHeader" extends="baseReference">
+        <imageColor value="0 0 0 0" />
+        <textFocusedColor value="$preset_fs25_colorMainHighlight" />
+        <textHighlightedColor value="$preset_fs25_colorMainHighlight" />
+        <textSize value="16px" />
+        <textBold value="true" />
+        <textUpperCase value="true" />
+        <textColor value="$preset_colorWhite_50" />
+        <textAlignment value="left" />
+        <textDisabledColor value="$preset_colorDisabled" />
+    </Profile>
+    <Profile name="tc_tableListItem" extends="baseReference" with="anchorTopStretchingX alternating">
+        <height value="32px"/>
+        <imageColor value="$preset_fs25_colorGrey" />
+        <imageSelectedColor value="$preset_fs25_colorMainHighlight" />
+        <alternateBackgroundColor value="$preset_fs25_colorGreyDark_50" />
+    </Profile>
+    <Profile name="tc_listRowCellLeft" extends="baseReference" with="anchorStretchingYLeft">
+        <textBold value="false" />
+        <textSize value="15px" />
+        <textAlignment value="left" />
+        <textColor value="$preset_fs25_colorMainLight" />
+        <textSelectedColor value="$preset_fs25_colorMainDark" />
+        <textDisabledColor value="$preset_colorDisabled" />
+    </Profile>
+    <Profile name="tc_listRowCellRight" extends="tc_listRowCellLeft">
+        <textAlignment value="right" />
+    </Profile>
+    <Profile name="tc_table" extends="emptyPanel" with="anchorStretchingYLeft pivotTopLeft" />
+
+    <!-- Plain, non-stretching header row container. Deliberately NOT
+         fs25_statisticsHeaderBox (anchorTopStretchingX) — that mixin stretches
+         to the full page width and recalculates child position based on that
+         stretched width, which badly misaligns children when the box is also
+         given an explicit fixed size (as our 600px-wide tables need) instead
+         of actually spanning the page. anchorTopLeft keeps child "position"
+         values a literal pixel offset from this row's own top-left corner,
+         matching the coordinate space our SmoothList/ListItem cells already
+         use, so header labels land directly above their column's content. -->
+    <Profile name="tc_tableHeaderRow" extends="emptyPanel" with="anchorTopLeft" />
+    <Profile name="tc_slider_box" extends="fs25_listSliderBox" with="anchorTopLeft" />
+
+    <!-- Calendar (015) month selector — the same vanilla "< value >" chevron
+         widget FS25_RedTape uses for its Active/New scheme switcher
+         (rt_scheme_display_switcher extends fs25_subCategorySelector), so it
+         gets the game's own styling for free instead of a hand-rolled pair
+         of arrow buttons. -->
+    <Profile name="tc_calendarPeriodSwitcher" extends="fs25_subCategorySelector" with="anchorTopLeft" />
 </GUIProfiles>

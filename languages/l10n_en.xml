@@ -6,26 +6,126 @@
 		<text name="tc_header_calendar" text="Calendar"/>
 		<text name="tc_header_staff" text="Staff"/>
 		<text name="tc_header_overview" text="Overview"/>
-		<text name="tc_placeholder_inbox" text="Inbox coming soon."/>
-		<text name="tc_placeholder_calendar" text="Calendar coming soon."/>
-		<text name="tc_placeholder_staff" text="Staff coming soon."/>
 		<text name="tc_placeholder_locked" text="You haven't started a contracting company on this farm yet. Head to the Overview tab to create one."/>
 		<text name="tc_overview_noCompany" text="You haven't started a contracting company on this farm yet. Use the button below to create one."/>
 		<text name="tc_overview_rankMax" text="Max rank"/>
 		<text name="tc_overview_nextRank" text="Next Rank: %s"/>
 		<text name="tc_overview_nextRankNone" text="N/A"/>
-		<text name="tc_overview_actionsAvailable" text="More actions coming soon."/>
 		<text name="tc_overview_jobHistoryPlaceholder" text="Job history and reputation trends coming soon."/>
+		<text name="tc_overview_currentJobsHeading" text="Current Jobs"/>
+		<text name="tc_overview_currentJobsEmpty" text="No jobs currently allocated or in progress."/>
+		<text name="tc_overview_currentJobLine" text="Field %s: %s - %d%%"/>
 		<text name="tc_actions_createButton" text="Create Company"/>
 		<text name="tc_actions_createCompanyPrompt" text="Name your new contracting company (cost: %s):"/>
 		<text name="tc_actions_defaultCompanyName" text="Untitled Contracting Co."/>
 		<text name="tc_actions_cannotAfford" text="You can't afford to start a company right now."/>
 		<text name="tc_moneyType_companyCreation" text="Company creation"/>
+		<text name="finance_tcCompanyCreation" text="Company creation"/>
 		<text name="tc_reputationTier_unknownContractor" text="Unknown Contractor"/>
 		<text name="tc_reputationTier_localContractor" text="Local Contractor"/>
 		<text name="tc_reputationTier_establishedContractor" text="Established Contractor"/>
 		<text name="tc_reputationTier_regionalContractor" text="Regional Contractor"/>
 		<text name="tc_reputationTier_renownedContractor" text="Renowned Contractor"/>
 		<text name="tc_reputationTier_prestigiousContractor" text="Prestigious Contractor"/>
+		<text name="tc_advertising_heading" text="Advertising"/>
+		<text name="tc_advertising_none" text="No active advertising."/>
+		<text name="tc_advertising_active" text="Active: %s (%d days remaining)"/>
+		<text name="tc_advertising_confirmPrompt" text="Buy %s advertising for %s?"/>
+		<text name="tc_advertising_cannotPurchase" text="You can't buy that advertising right now — check your funds and reputation tier."/>
+		<text name="tc_advertising_buyButton_localNewspaper" text="Buy Local Ad"/>
+		<text name="tc_advertising_buyButton_regionalNewspaper" text="Buy Regional Ad"/>
+		<text name="tc_advertising_buyButton_tv" text="Buy TV Ad"/>
+		<text name="tc_advertising_localNewspaper" text="Local Newspaper"/>
+		<text name="tc_advertising_regionalNewspaper" text="Regional Newspaper"/>
+		<text name="tc_advertising_tv" text="TV"/>
+		<text name="tc_moneyType_advertising" text="Advertising"/>
+		<text name="finance_tcAdvertising" text="Advertising"/>
+		<text name="tc_jobType_harvest" text="Harvest"/>
+		<text name="tc_jobType_cultivate" text="Cultivate"/>
+		<text name="tc_jobType_sow" text="Sow"/>
+		<text name="tc_jobType_plow" text="Plow"/>
+		<text name="tc_inbox_empty" text="No job offers right now — check back later, or buy some advertising to bring more in."/>
+		<text name="tc_inbox_columnType" text="Type"/>
+		<text name="tc_inbox_columnField" text="Field"/>
+		<text name="tc_inbox_columnTargetDate" text="Target Date"/>
+		<text name="tc_inbox_columnPrice" text="Price"/>
+		<text name="tc_inbox_columnEquipment" text="Equip."/>
+		<text name="tc_inbox_acceptButton" text="Accept"/>
+		<text name="tc_inbox_declineButton" text="Decline"/>
+		<text name="tc_inbox_detailField" text="Field: %s"/>
+		<text name="tc_inbox_detailTargetDate" text="Target date: %s"/>
+		<text name="tc_inbox_detailSkill" text="Required skill level: %d"/>
+		<text name="tc_inbox_detailPrice" text="Offered price: %s"/>
+		<text name="tc_inbox_equipmentAvailable" text="You own the equipment needed for this job."/>
+		<text name="tc_inbox_equipmentMissing" text="You don't currently own equipment for this job."/>
+		<text name="tc_inbox_equipmentYes" text="Yes"/>
+		<text name="tc_inbox_equipmentNo" text="No"/>
+		<text name="tc_inbox_counterButton" text="Counter Offer"/>
+		<text name="tc_inbox_counterPrompt" text="They offered %s. Enter your counter price:"/>
+		<text name="tc_inbox_counterInvalid" text="Enter a valid price to counter with."/>
+		<text name="tc_inbox_negotiationAccepted" text="Deal! They accepted %s."/>
+		<text name="tc_inbox_negotiationDeclined" text="They've walked away from the negotiation."/>
+		<text name="tc_inbox_negotiationCountered" text="They won't do %s, but they'll do %s."/>
+		<text name="tc_inbox_jobAcceptedInfo" text="Job accepted: %s on Field %s for %s."/>
+		<text name="tc_inbox_jobRejectedInfo" text="Negotiation failed: they walked away from %s on Field %s."/>
+		<text name="tc_calendar_yearLabel" text="Year %d"/>
+		<text name="tc_calendar_columnDay" text="Day"/>
+		<text name="tc_calendar_columnJobs" text="Jobs"/>
+		<text name="tc_calendar_columnStatus" text="Status"/>
+		<text name="tc_calendar_todayMarker" text="%s (Today)"/>
+		<text name="tc_calendar_unallocatedCount" text="%d unallocated"/>
+		<text name="tc_calendar_missedCount" text="%d failed"/>
+		<text name="tc_calendar_allAllocated" text="Fully allocated"/>
+		<text name="tc_calendar_dayDetailTitle" text="Jobs due %s"/>
+		<text name="tc_calendar_dayEmpty" text="No jobs due this day."/>
+		<text name="tc_calendar_jobAllocated" text="Allocated"/>
+		<text name="tc_calendar_jobUnallocated" text="Not yet allocated"/>
+		<text name="tc_calendar_jobMissed" text="Failed"/>
+		<text name="tc_calendar_jumpToToday" text="Jump to Today"/>
+		<text name="tc_job_missedNotification" text="Missed deadline: %s on Field %s went uncompleted."/>
+		<text name="tc_dispatch_noVehicleReady" text="No allocated vehicle is ready to start (attach the implement and make sure it's free)."/>
+		<text name="tc_dispatch_failedNotification" text="Could not dispatch %s on Field %s: %s"/>
+		<text name="tc_watchdog_retriedNotification" text="Your worker got stuck on a %s job on Field %s - reset and dispatched again."/>
+		<text name="tc_watchdog_needsAttentionNotification" text="Your worker is stuck on a %s job on Field %s and needs your attention."/>
+		<text name="tc_moneyType_hiring" text="Staff hiring"/>
+		<text name="finance_tcHiring" text="Staff hiring"/>
+		<text name="tc_staff_viewRoster" text="Roster"/>
+		<text name="tc_staff_viewCandidates" text="Candidates"/>
+		<text name="tc_staff_columnName" text="Name"/>
+		<text name="tc_staff_columnWorkSpeed" text="Speed"/>
+		<text name="tc_staff_columnTier" text="Tiers (S/M/L)"/>
+		<text name="tc_staff_columnStatus" text="Status"/>
+		<text name="tc_staff_columnJob" text="Job"/>
+		<text name="tc_staff_columnCost" text="Cost"/>
+		<text name="tc_staff_rosterEmpty" text="No workers hired yet — switch to the Candidates view to hire your first worker."/>
+		<text name="tc_staff_candidatesEmpty" text="No candidates currently available to hire — check back later."/>
+		<text name="tc_staff_hireButton" text="Hire"/>
+		<text name="tc_staff_releaseButton" text="Release"/>
+		<text name="tc_staff_status_idle" text="Idle"/>
+		<text name="tc_staff_status_assigned" text="Assigned"/>
+		<text name="tc_staff_status_cooldown" text="Cooldown"/>
+		<text name="tc_staff_detailWorkSpeed" text="Work speed: %d/10"/>
+		<text name="tc_staff_detailTier" text="Tier capability: %s"/>
+		<text name="tc_staff_detailStatus" text="Status: %s"/>
+		<text name="tc_staff_detailCost" text="Hire cost: %s"/>
+		<text name="tc_staff_detailJob" text="Current job: %s"/>
+		<text name="tc_staff_detailJobNone" text="None"/>
+		<text name="tc_staff_jobLine" text="%s (Field %s)"/>
+		<text name="tc_staff_hireConfirm" text="Hire %s for %s?"/>
+		<text name="tc_staff_hireCannotAfford" text="You can't afford to hire this candidate right now."/>
+		<text name="tc_staff_releaseConfirm" text="Release %s from your roster? This cannot be undone."/>
+
+		<text name="tc_allocation_title" text="Allocate: %s"/>
+		<text name="tc_allocation_myself" text="Myself"/>
+		<text name="tc_allocation_workerHeading" text="Worker"/>
+		<text name="tc_allocation_equipmentHeading" text="Equipment"/>
+		<text name="tc_allocation_tractor" text="Tractor"/>
+		<text name="tc_allocation_implement" text="Implement"/>
+		<text name="tc_allocation_allocateButton" text="Allocate"/>
+		<text name="tc_allocation_confirmButton" text="Confirm"/>
+		<text name="tc_allocation_cancelButton" text="Cancel"/>
+		<text name="tc_allocation_missingEquipment" text="Select the required equipment before confirming."/>
+		<text name="tc_allocation_blockedWarning" text="This worker isn't certified for the required equipment tier."/>
+		<text name="tc_allocation_underqualifiedWarning" text="This worker is under-qualified for this job - expect a reduced reward."/>
 	</texts>
 </l10n>
