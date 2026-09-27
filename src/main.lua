@@ -7,6 +7,12 @@ source(TheContractor.dir .. "src/util/DisableVanillaContracts.lua")
 source(TheContractor.dir .. "src/util/TCEquipmentClass.lua")
 source(TheContractor.dir .. "src/util/TCCropPrediction.lua")
 source(TheContractor.dir .. "src/util/TCJobProgress.lua")
+source(TheContractor.dir .. "src/util/TCEquipmentVisibility.lua")
+source(TheContractor.dir .. "src/util/TCFieldPreparation.lua")
+source(TheContractor.dir .. "src/util/TCFieldAccess.lua")
+source(TheContractor.dir .. "src/util/TCVehicleLock.lua")
+source(TheContractor.dir .. "src/util/TCJobSiteSetup.lua")
+source(TheContractor.dir .. "src/util/TCHaulage.lua")
 source(TheContractor.dir .. "src/gui/MenuContractor.lua")
 source(TheContractor.dir .. "src/hud/TCInboxHUD.lua")
 source(TheContractor.dir .. "src/business/Reputation.lua")
@@ -19,6 +25,7 @@ source(TheContractor.dir .. "src/business/Staff.lua")
 source(TheContractor.dir .. "src/business/Allocation.lua")
 source(TheContractor.dir .. "src/business/Dispatch.lua")
 source(TheContractor.dir .. "src/business/Watchdog.lua")
+source(TheContractor.dir .. "src/business/Cooldown.lua")
 source(TheContractor.dir .. "src/business/Company.lua")
 source(TheContractor.dir .. "src/business/Advertising.lua")
 source(TheContractor.dir .. "src/events/TCInitialClientStateEvent.lua")
@@ -27,6 +34,8 @@ source(TheContractor.dir .. "src/events/TCReputationChangedEvent.lua")
 source(TheContractor.dir .. "src/events/TCDebugAddReputationEvent.lua")
 source(TheContractor.dir .. "src/events/TCJobCreatedEvent.lua")
 source(TheContractor.dir .. "src/events/TCJobStateChangedEvent.lua")
+source(TheContractor.dir .. "src/events/TCJobTravellingEvent.lua")
+source(TheContractor.dir .. "src/events/TCJobDeliveryEvent.lua")
 source(TheContractor.dir .. "src/events/TCJobMissedEvent.lua")
 source(TheContractor.dir .. "src/events/TCDebugCreateJobEvent.lua")
 source(TheContractor.dir .. "src/events/TCDebugSetJobStateEvent.lua")
@@ -44,8 +53,12 @@ source(TheContractor.dir .. "src/events/TCWorkerReleasedEvent.lua")
 source(TheContractor.dir .. "src/events/TCWorkerStatusChangedEvent.lua")
 source(TheContractor.dir .. "src/events/TCAllocateJobEvent.lua")
 source(TheContractor.dir .. "src/events/TCJobAllocatedEvent.lua")
+source(TheContractor.dir .. "src/events/TCJobCompletedEvent.lua")
 source(TheContractor.dir .. "src/events/TCDispatchFailedEvent.lua")
 source(TheContractor.dir .. "src/events/TCWatchdogInterventionEvent.lua")
+source(TheContractor.dir .. "src/events/TCEquipmentCooldownStartedEvent.lua")
+source(TheContractor.dir .. "src/events/TCEquipmentCooldownEndedEvent.lua")
+source(TheContractor.dir .. "src/events/TCEquipmentVisibilityEvent.lua")
 
 -- The top-level Contractor page itself stays always-visible (see Company.lua
 -- and MenuContractor's Overview tab): "Create Company" has to live somewhere
@@ -68,9 +81,15 @@ function TheContractor:loadMap()
     self.Allocation = TheContractorAllocation.new()
     self.Dispatch = TheContractorDispatch.new()
     self.Watchdog = TheContractorWatchdog.new()
+    self.Cooldown = TheContractorCooldown.new()
     self.Company = TheContractorCompany.new()
     self.Advertising = TheContractorAdvertising.new()
     self.InboxHUD = TCInboxHUD.new()
+
+    -- Module-level caches outlive a savegame; start each load clean.
+    TCFieldAccess.reset()
+    TCVehicleLock.reset()
+    TCHaulage.reset()
 
     TheContractorDisableVanillaContracts.hideContractsTab()
 
@@ -117,6 +136,9 @@ function TheContractor:loadMap()
         addConsoleCommand("tcHireWorker",
             "Hire a candidate from the staff pool for the current farm. Usage: tcHireWorker candidateId",
             "consoleCommandHireWorker", self)
+        addConsoleCommand("tcJobAvailability",
+            "Dry-run job generation for the current farm: eligible fields per job type right now (025). Usage: tcJobAvailability",
+            "consoleCommandJobAvailability", self)
     end
 
     Logging.info("TheContractor: loadMap")
@@ -207,6 +229,34 @@ function TheContractor:consoleCommandHireWorker(candidateId)
     return string.format("Requested hiring candidate %d for farm %d", numCandidateId, farm.farmId)
 end
 
+-- 025 investigation aid: what the hourly generator could offer this farm
+-- right now, per job type. Read-only, so no event round-trip — server-only
+-- because field state and generation both live there.
+function TheContractor:consoleCommandJobAvailability()
+    if not g_currentMission:getIsServer() then return "Server only" end
+
+    local farm = g_farmManager:getFarmByUserId(g_currentMission.playerUserId)
+    if farm == nil or farm.farmId == 0 then
+        return "Error: No farm found for current player"
+    end
+
+    local jobGeneration = self.JobGeneration
+    local environment = g_currentMission.environment
+    local hourlyChance = jobGeneration:getHourlyChance(farm.farmId)
+    local rollsPerPeriod = 24 * environment.daysPerPeriod
+
+    local lines = {
+        string.format("Farm %d, period %d day %d: hourly chance %.4f, ~%.1f generation hits per period (split evenly across %d job types)",
+            farm.farmId, environment.currentPeriod, environment.currentDayInPeriod, hourlyChance,
+            hourlyChance * rollsPerPeriod, #TheContractorJobGeneration.JOB_TYPE_KEYS),
+    }
+    for _, entry in ipairs(jobGeneration:getAvailabilitySnapshot(farm.farmId)) do
+        table.insert(lines, string.format("  %-9s eligible fields %3d, with target date %3d, equipment %s",
+            entry.jobType, entry.candidates, entry.datable, entry.canFulfill and "yes" or "NO"))
+    end
+    return table.concat(lines, "\n")
+end
+
 -- Called as a normal method (self == TheContractor) from loadMap, once the
 -- savegame directory is known.
 function TheContractor:loadFromXMLFile()
@@ -229,10 +279,17 @@ function TheContractor:loadFromXMLFile()
     self.Reputation:loadFromXMLFile(xmlFile)
     self.Jobs:loadFromXMLFile(xmlFile)
     self.Staff:loadFromXMLFile(xmlFile)
+    self.Cooldown:loadFromXMLFile(xmlFile)
     self.Company:loadFromXMLFile(xmlFile)
     self.Advertising:loadFromXMLFile(xmlFile)
 
     delete(xmlFile)
+
+    -- Vehicles always load fully visible/in-physics (base game default, see
+    -- Vehicle:onFinishedLoading) - re-hide anything still mid-buffer from a
+    -- prior session now that vehicles are actually resolvable (see
+    -- TheContractorCooldown:reapplyHidingAfterLoad).
+    self.Cooldown:reapplyHidingAfterLoad()
 end
 
 -- Appended onto FSBaseMission.saveSavegame (see installSaveHook below), so
@@ -252,6 +309,7 @@ function TheContractor:saveToXmlFile()
     tc.Reputation:saveToXmlFile(xmlFile)
     tc.Jobs:saveToXmlFile(xmlFile)
     tc.Staff:saveToXmlFile(xmlFile)
+    tc.Cooldown:saveToXmlFile(xmlFile)
     tc.Company:saveToXmlFile(xmlFile)
     tc.Advertising:saveToXmlFile(xmlFile)
 
@@ -327,6 +385,7 @@ function TheContractor:deleteMap()
         removeConsoleCommand("tcSetJobState")
         removeConsoleCommand("tcListStaffPool")
         removeConsoleCommand("tcHireWorker")
+        removeConsoleCommand("tcJobAvailability")
     end
 
     if g_currentMission ~= nil and g_currentMission.TheContractor == self then
@@ -340,9 +399,24 @@ function TheContractor:update(dt)
     end
 
     TCJobProgress.update(dt)
+    TCFieldAccess.update(dt)
+    TCVehicleLock.update(dt)
+    TCHaulage.update(dt)
+
+    if self.Dispatch ~= nil then
+        self.Dispatch:update(dt)
+    end
 
     if self.Watchdog ~= nil then
         self.Watchdog:update(dt)
+    end
+
+    if self.Jobs ~= nil then
+        self.Jobs:update(dt)
+    end
+
+    if self.Cooldown ~= nil then
+        self.Cooldown:update(dt)
     end
 end
 

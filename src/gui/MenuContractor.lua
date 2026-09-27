@@ -291,10 +291,34 @@ function MenuContractor:initialize()
             self:onClickCancelAllocation()
         end
     }
+    -- Selects/deselects the equipment row currently highlighted in
+    -- allocationEquipmentTable — one button for both, its label flipped by
+    -- updateAllocationEquipmentToggleButton. A bottom-bar action rather
+    -- than reacting to list clicks, so it works the same on a gamepad.
+    self.btnAllocateToggleEquipment = {
+        inputAction = InputAction.MENU_EXTRA_2,
+        text = g_i18n:getText("tc_allocation_selectEquipmentButton"),
+        callback = function()
+            self:onClickToggleAllocationEquipment()
+        end
+    }
     self.menuButtonInfoCalendarWithAllocatableJob = { self.btnBack, self.btnNextPage, self.btnPrevPage,
         self.btnCalendarToday, self.btnAllocateJob }
+    -- Same idea for allocationWorkerTable's highlighted row (035): workers
+    -- are picked with a button rather than by highlighting, since a
+    -- haulage job takes two of them. See onClickToggleAllocationWorker.
+    self.btnAllocateToggleWorker = {
+        inputAction = InputAction.MENU_CANCEL,
+        text = g_i18n:getText("tc_allocation_selectWorkerButton"),
+        callback = function()
+            self:onClickToggleAllocationWorker()
+        end
+    }
     self.menuButtonInfoCalendarAllocating = { self.btnBack, self.btnNextPage, self.btnPrevPage,
-        self.btnAllocateConfirm, self.btnAllocateCancel }
+        self.btnAllocateConfirm, self.btnAllocateCancel, self.btnAllocateToggleWorker }
+    self.menuButtonInfoCalendarAllocatingWithEquipment = { self.btnBack, self.btnNextPage, self.btnPrevPage,
+        self.btnAllocateConfirm, self.btnAllocateCancel, self.btnAllocateToggleWorker,
+        self.btnAllocateToggleEquipment }
 
     self.calendarPeriodOffset = 0
     self.selectedCalendarDay = nil
@@ -307,18 +331,21 @@ function MenuContractor:initialize()
     -- allocatingJobId means the day-detail panel shows the plain job list
     -- (calendarDayJobsContainer); non-nil swaps it for allocationContainer
     -- (see refreshAllocationState/onClickCancelAllocation). Worker selection
-    -- uses nil as the "do it myself" sentinel (row 1 of
-    -- allocationWorkerTable, matching Job.assignedWorkerId's own nil-means-
-    -- player convention) — real worker ids start at 1, so there's no
-    -- collision. Equipment selection is a set (vehicleId -> true), since a
-    -- job may need more than one piece of equipment (an implement plus a
-    -- tractor to pull it) and SmoothList only natively supports a single
-    -- highlighted index.
+    -- is an ordered list of worker ids (035 - a haulage job takes two), empty
+    -- meaning "do it myself" (row 1 of allocationWorkerTable, workerId nil,
+    -- matching Job.assignedWorkerId's own nil-means-player convention).
+    -- Equipment selection is a set keyed by row key (role:vehicleId - a
+    -- tractor can be listed both as a field tractor and as the haulage
+    -- tractor), since a job may need more than one piece of equipment (an
+    -- implement plus a tractor to pull it) and SmoothList only natively
+    -- supports a single highlighted index.
     self.allocatingJobId = nil
     self.allocationWorkerRows = {}
     self.allocationEquipmentRows = {}
-    self.allocationSelectedWorkerId = nil
-    self.allocationSelectedEquipmentIds = {}
+    self.allocationSelectedWorkerIds = {}
+    self.allocationSelectedEquipmentKeys = {}
+    self.allocationHighlightedWorkerIndex = nil
+    self.allocationHighlightedEquipmentIndex = nil
 
     self.inboxJobs = {}
     self.selectedInboxJobId = nil
@@ -379,6 +406,9 @@ function MenuContractor:getMenuButtonInfo()
 
     if state == MenuContractor.SUB_CATEGORY.CALENDAR and self:hasCompany() then
         if self.allocatingJobId ~= nil then
+            if self.allocationEquipmentRows[self.allocationHighlightedEquipmentIndex] ~= nil then
+                return self.menuButtonInfoCalendarAllocatingWithEquipment
+            end
             return self.menuButtonInfoCalendarAllocating
         end
 
@@ -529,8 +559,14 @@ function MenuContractor:refreshCurrentJobsState(farmId, jobs)
     for _, job in ipairs(activeJobs) do
         local field = g_fieldManager:getFieldById(job.fieldId)
         local fieldLabel = field ~= nil and field:getName() or tostring(job.fieldId)
-        table.insert(lines, string.format(g_i18n:getText("tc_overview_currentJobLine"), fieldLabel,
-            g_i18n:getText("tc_jobType_" .. job.jobType), math.floor(job.completionPercentage)))
+        local line = string.format(g_i18n:getText("tc_overview_currentJobLine"), fieldLabel,
+            job:getTypeText(), math.floor(job.completionPercentage))
+        -- Player-driven haulage (035): delivery counts towards done too.
+        if job:needsPlayerDelivery() and job.requiredLiters > 0 then
+            line = line .. string.format(g_i18n:getText("tc_overview_deliveredSuffix"),
+                math.floor(100 * job.deliveredLiters / job.requiredLiters))
+        end
+        table.insert(lines, line)
     end
     self.textCurrentJobs:setText(table.concat(lines, "\n"))
 end
@@ -619,16 +655,15 @@ function MenuContractor:getSelectedCandidate()
 end
 
 -- The job a worker is currently committed to, if any (allocated/in_progress
--- — mirrors refreshCurrentJobsState's own "current work" definition). 018
--- doesn't exist yet so nothing ever actually sets assignedWorkerId today,
--- but the query is real so the Staff UI is ready for it once it does.
+-- — mirrors refreshCurrentJobsState's own "current work" definition),
+-- whether operating or hauling (035).
 function MenuContractor:getAssignedJobLine(farmId, jobs, workerId)
     for _, job in ipairs(jobs:getAllJobs(farmId)) do
-        if job.assignedWorkerId == workerId and
+        if (job.assignedWorkerId == workerId or job.haulerWorkerId == workerId) and
             (job.state == TheContractorJob.STATE.ALLOCATED or job.state == TheContractorJob.STATE.IN_PROGRESS) then
             local field = g_fieldManager:getFieldById(job.fieldId)
             local fieldLabel = field ~= nil and field:getName() or tostring(job.fieldId)
-            return string.format(g_i18n:getText("tc_staff_jobLine"), g_i18n:getText("tc_jobType_" .. job.jobType),
+            return string.format(g_i18n:getText("tc_staff_jobLine"), job:getTypeText(),
                 fieldLabel)
         end
     end
@@ -818,7 +853,7 @@ function MenuContractor:updateInboxDetails()
         return
     end
 
-    self.inboxDetailTitle:setText(g_i18n:getText("tc_jobType_" .. job.jobType))
+    self.inboxDetailTitle:setText(job:getDisplayTitle())
 
     local field = g_fieldManager:getFieldById(job.fieldId)
     self.inboxDetailField:setText(string.format(g_i18n:getText("tc_inbox_detailField"),
@@ -832,8 +867,24 @@ function MenuContractor:updateInboxDetails()
     self.inboxDetailPrice:setText(string.format(g_i18n:getText("tc_inbox_detailPrice"),
         g_i18n:formatMoney(job.price, 0, true, true)))
 
-    self.inboxDetailEquipment:setText(job.equipmentAvailable and g_i18n:getText("tc_inbox_equipmentAvailable") or
-        g_i18n:getText("tc_inbox_equipmentMissing"))
+    -- Live against the current fleet rather than job.equipmentAvailable
+    -- (a snapshot from generation time), so buying the missing piece shows
+    -- up here straight away - and names exactly what's missing.
+    local missingOwned = g_currentMission.TheContractor.Allocation:getMissingEquipment(g_currentMission:getFarmId(), job)
+    if #missingOwned == 0 then
+        self.inboxDetailEquipment:setText(g_i18n:getText("tc_inbox_equipmentAvailable"))
+    else
+        self.inboxDetailEquipment:setText(string.format(g_i18n:getText("tc_inbox_equipmentMissing"),
+            TCEquipmentClass.getMissingEquipmentText(missingOwned, job.jobType, job:getCropTitle())))
+    end
+
+    -- Harvest & haul (035): where the crop has to go.
+    if job.includesHaulage then
+        self.inboxDetailHaulage:setText(string.format(g_i18n:getText("tc_inbox_detailHaulage"),
+            job.deliveryStationName or "?"))
+    else
+        self.inboxDetailHaulage:setText("")
+    end
 
     local history = self.negotiationHistory[job.id]
     local latestMessage = history ~= nil and history[#history] or nil
@@ -888,7 +939,7 @@ function MenuContractor:populateCellForItemInSection(list, section, index, cell)
         return
     end
 
-    cell:getAttribute("jobType"):setText(g_i18n:getText("tc_jobType_" .. job.jobType))
+    cell:getAttribute("jobType"):setText(job:getDisplayTitle())
 
     local field = g_fieldManager:getFieldById(job.fieldId)
     cell:getAttribute("field"):setText(field ~= nil and field:getName() or tostring(job.fieldId))
@@ -896,8 +947,11 @@ function MenuContractor:populateCellForItemInSection(list, section, index, cell)
     cell:getAttribute("targetDate"):setText(formatTargetDate(job.targetPeriod, job.targetDayInPeriod))
     cell:getAttribute("price"):setText(g_i18n:formatMoney(job.price, 0, true, true))
 
+    -- Live, same reasoning as updateInboxDetails.
+    local jobDef = TheContractorJobGeneration.JOB_TYPES[job.jobType]
     local equipmentCell = cell:getAttribute("equipment")
-    if job.equipmentAvailable then
+    if jobDef == nil or g_currentMission.TheContractor.JobGeneration:canFulfill(g_currentMission:getFarmId(), jobDef,
+            job:getFruitTypeIndex()) then
         equipmentCell:setText(g_i18n:getText("tc_inbox_equipmentYes"))
         equipmentCell:setTextColor(0.6, 1, 0.6, 1)
     else
@@ -921,32 +975,26 @@ function MenuContractor:onListSelectionChanged(list, section, index)
         return
     end
 
-    -- Allocation (018) worker picker: a plain single-select list, row 1 is
-    -- always the synthetic "Myself" entry (workerId nil).
+    -- Allocation (018) worker picker: row 1 is always the synthetic
+    -- "Myself" entry (workerId nil). Like the equipment picker below,
+    -- moving through the list only tracks the highlighted row - picking is
+    -- btnAllocateToggleWorker's job (035), and the same no-reload rule
+    -- applies.
     if list == self.allocationWorkerTable then
-        local row = self.allocationWorkerRows[index]
-        self.allocationSelectedWorkerId = row ~= nil and row.workerId or nil
-        self:updateAllocationWarning()
+        self.allocationHighlightedWorkerIndex = index
+        self:updateAllocationWorkerToggleButton()
         return
     end
 
-    -- Allocation (018) equipment picker: SmoothList only tracks one
-    -- highlighted index, but a job can need more than one piece of equipment
-    -- (an implement plus a tractor to pull it) — so this ignores the
-    -- widget's own selection concept and instead toggles membership in
-    -- allocationSelectedEquipmentIds, a set keyed by vehicle id, re-rendering
-    -- each row's "[X]/[ ]" prefix via populateAllocationEquipmentCell.
+    -- Allocation (018) equipment picker: moving through the list only
+    -- tracks which row is highlighted — selecting/deselecting it for the job
+    -- is btnAllocateToggleEquipment's job (see
+    -- onClickToggleAllocationEquipment). Must stay side-effect free:
+    -- SmoothListElement:reloadData re-raises this with the current index,
+    -- so reloading from here would recurse until stack overflow.
     if list == self.allocationEquipmentTable then
-        local row = self.allocationEquipmentRows[index]
-        if row ~= nil then
-            if self.allocationSelectedEquipmentIds[row.vehicleId] then
-                self.allocationSelectedEquipmentIds[row.vehicleId] = nil
-            else
-                self.allocationSelectedEquipmentIds[row.vehicleId] = true
-            end
-        end
-        self.allocationEquipmentTable:reloadData()
-        self:updateAllocationWarning()
+        self.allocationHighlightedEquipmentIndex = index
+        self:updateAllocationEquipmentToggleButton()
         return
     end
 
@@ -1132,7 +1180,7 @@ function MenuContractor:populateCalendarDayJobCell(index, cell)
         return
     end
 
-    cell:getAttribute("jobType"):setText(g_i18n:getText("tc_jobType_" .. job.jobType))
+    cell:getAttribute("jobType"):setText(job:getDisplayTitle())
 
     local field = g_fieldManager:getFieldById(job.fieldId)
     cell:getAttribute("field"):setText(field ~= nil and field:getName() or tostring(job.fieldId))
@@ -1148,7 +1196,10 @@ function MenuContractor:populateCalendarDayJobCell(index, cell)
     -- distinct "Failed" label (a darker red than the unallocated warning —
     -- TextElement has no runtime bold setter to lean on instead) rather than
     -- folding into either bucket — it's neither waiting on allocation nor
-    -- successfully allocated, it's over and done with.
+    -- successfully allocated, it's over and done with. A hired worker's job
+    -- then reads Allocated -> Travelling (Dispatch's transport wait) -> In
+    -- progress with the same live percentage the Overview's current-jobs
+    -- list shows.
     local statusCell = cell:getAttribute("status")
     if job.state == TheContractorJob.STATE.MISSED then
         statusCell:setText(g_i18n:getText("tc_calendar_jobMissed"))
@@ -1156,6 +1207,18 @@ function MenuContractor:populateCalendarDayJobCell(index, cell)
     elseif job.state == TheContractorJob.STATE.ACCEPTED then
         statusCell:setText(g_i18n:getText("tc_calendar_jobUnallocated"))
         statusCell:setTextColor(1, 0.45, 0.45, 1)
+    elseif job.state == TheContractorJob.STATE.IN_PROGRESS then
+        statusCell:setText(string.format(g_i18n:getText("tc_calendar_jobInProgress"),
+            math.floor(job.completionPercentage)))
+        statusCell:setTextColor(0.6, 1, 0.6, 1)
+    elseif job.isTravelling then
+        statusCell:setText(g_i18n:getText("tc_calendar_jobTravelling"))
+        statusCell:setTextColor(1, 0.85, 0.4, 1)
+    elseif job:needsPlayerDelivery() and job.requiredLiters > 0 and job.state == TheContractorJob.STATE.ALLOCATED then
+        -- Player-driven haulage (035): cut and delivered, both.
+        statusCell:setText(string.format(g_i18n:getText("tc_calendar_jobDelivering"),
+            math.floor(job.completionPercentage), math.floor(100 * job.deliveredLiters / job.requiredLiters)))
+        statusCell:setTextColor(0.6, 1, 0.6, 1)
     else
         statusCell:setText(g_i18n:getText("tc_calendar_jobAllocated"))
         statusCell:setTextColor(0.6, 1, 0.6, 1)
@@ -1178,8 +1241,8 @@ function MenuContractor:onClickOpenAllocation()
     end
 
     self.allocatingJobId = job.id
-    self.allocationSelectedWorkerId = nil
-    self.allocationSelectedEquipmentIds = {}
+    self.allocationSelectedWorkerIds = {}
+    self.allocationSelectedEquipmentKeys = {}
     self:refreshAllocationState()
 end
 
@@ -1195,10 +1258,7 @@ end
 -- nil, always valid per Q13 — see TheContractorAllocation:previewWorkerCapability),
 -- followed by the farm's idle roster workers (a busy worker can't be
 -- double-booked, same exclusivity the equipment freedom check enforces).
--- Equipment rows are the job type's eligible implements (009's category
--- match) followed by eligible tractors, only when the job type needs one to
--- pull the implement (JOB_TYPES.requiresTractor) — see
--- TheContractorAllocation:getEligibleImplements/getEligibleTractors.
+-- Equipment rows: see rebuildAllocationEquipmentRows.
 function MenuContractor:refreshAllocationState()
     local farmId = g_currentMission:getFarmId()
     local jobs = g_currentMission.TheContractor.Jobs
@@ -1212,34 +1272,162 @@ function MenuContractor:refreshAllocationState()
         return
     end
 
-    local allocation = g_currentMission.TheContractor.Allocation
     local staff = g_currentMission.TheContractor.Staff
-    local jobDef = TheContractorJobGeneration.JOB_TYPES[job.jobType]
-
-    self.allocationJobTitle:setText(string.format(g_i18n:getText("tc_allocation_title"),
-        g_i18n:getText("tc_jobType_" .. job.jobType)))
+    self.allocationJobTitle:setText(string.format(g_i18n:getText("tc_allocation_title"), job:getDisplayTitle()))
 
     self.allocationWorkerRows = { { workerId = nil, label = g_i18n:getText("tc_allocation_myself") } }
     for _, worker in ipairs(staff:getIdleWorkers(farmId)) do
         table.insert(self.allocationWorkerRows, { workerId = worker.id, label = worker.name })
     end
+    self.allocationHighlightedWorkerIndex = 1
     self.allocationWorkerTable:reloadData()
     self.allocationWorkerTable:setSelectedIndex(1)
 
-    self.allocationEquipmentRows = {}
-    for _, vehicle in ipairs(allocation:getEligibleImplements(farmId, job)) do
-        table.insert(self.allocationEquipmentRows,
-            { vehicleId = NetworkUtil.getObjectId(vehicle), label = vehicle:getFullName(), isTractor = false })
+    self.allocationHighlightedEquipmentIndex = nil
+    self:rebuildAllocationEquipmentRows(job)
+
+    self:updateAllocationWorkerToggleButton()
+    self:updateAllocationWarning()
+end
+
+-- Equipment rows are the job's eligible implements/harvesters/headers
+-- (labelled by role) followed by eligible tractors, only when something
+-- might need pulling — see TheContractorAllocation:getEligibleImplements/
+-- jobMayNeedTractor/getEligibleTractors. A haulage job crewed by workers
+-- (035) adds the haulage rig's candidates after those (haulTractor/trailer
+-- rows - getEligibleHaulageEquipment); they come and go as the crew
+-- changes, so this reruns from onClickToggleAllocationWorker, keeping
+-- whatever's still listed selected.
+function MenuContractor:rebuildAllocationEquipmentRows(job)
+    local farmId = g_currentMission:getFarmId()
+    local allocation = g_currentMission.TheContractor.Allocation
+
+    local rows = {}
+    local function addRow(vehicle, role)
+        local vehicleId = NetworkUtil.getObjectId(vehicle)
+        table.insert(rows, {
+            key = role .. ":" .. tostring(vehicleId),
+            vehicleId = vehicleId,
+            label = vehicle:getFullName(),
+            role = role,
+            isHaulage = role == "haulTractor" or role == "trailer",
+        })
     end
-    if jobDef ~= nil and jobDef.requiresTractor then
+
+    for _, entry in ipairs(allocation:getEligibleImplements(farmId, job)) do
+        addRow(entry.vehicle, entry.role)
+    end
+    if allocation:jobMayNeedTractor(farmId, job) then
         for _, vehicle in ipairs(allocation:getEligibleTractors(farmId)) do
-            table.insert(self.allocationEquipmentRows,
-                { vehicleId = NetworkUtil.getObjectId(vehicle), label = vehicle:getFullName(), isTractor = true })
+            addRow(vehicle, "tractor")
         end
     end
-    self.allocationEquipmentTable:reloadData()
+    if job.includesHaulage and #self.allocationSelectedWorkerIds > 0 then
+        for _, entry in ipairs(allocation:getEligibleHaulageEquipment(farmId, job)) do
+            addRow(entry.vehicle, entry.role)
+        end
+    end
 
+    local selectedKeys = {}
+    for _, row in ipairs(rows) do
+        if self.allocationSelectedEquipmentKeys[row.key] then
+            selectedKeys[row.key] = true
+        end
+    end
+    self.allocationSelectedEquipmentKeys = selectedKeys
+    self.allocationEquipmentRows = rows
+
+    if #rows == 0 then
+        self.allocationHighlightedEquipmentIndex = nil
+    else
+        self.allocationHighlightedEquipmentIndex = math.min(self.allocationHighlightedEquipmentIndex or 1, #rows)
+    end
+    self.allocationEquipmentTable:reloadData()
+    if self.allocationHighlightedEquipmentIndex ~= nil then
+        self.allocationEquipmentTable:setSelectedIndex(self.allocationHighlightedEquipmentIndex)
+    end
+    self:updateAllocationEquipmentToggleButton()
+end
+
+function MenuContractor:getAllocatingJob()
+    return g_currentMission.TheContractor.Jobs:getJob(g_currentMission:getFarmId(), self.allocatingJobId)
+end
+
+-- Picks/unpicks the highlighted worker row (035). "Myself" means the player
+-- alone, so picking it drops any workers, and a worker can't be picked
+-- alongside it. Otherwise up to the job's worker count
+-- (TheContractorAllocation.getRequiredWorkerCount - one, or two for a
+-- haulage job) can be picked; picking one more than that replaces the
+-- earliest pick. Unpicking the last worker falls back to "Myself".
+function MenuContractor:onClickToggleAllocationWorker()
+    local job = self:getAllocatingJob()
+    local row = self.allocationWorkerRows[self.allocationHighlightedWorkerIndex]
+    if job == nil or row == nil then
+        return
+    end
+
+    local selected = self.allocationSelectedWorkerIds
+    if row.workerId == nil then
+        selected = {}
+    elseif table.hasElement(selected, row.workerId) then
+        table.removeElement(selected, row.workerId)
+    else
+        table.insert(selected, row.workerId)
+        if #selected > TheContractorAllocation.getRequiredWorkerCount(job) then
+            table.remove(selected, 1)
+        end
+    end
+    self.allocationSelectedWorkerIds = selected
+
+    self.allocationWorkerTable:reloadData()
+    self:rebuildAllocationEquipmentRows(job)
+    self:updateAllocationWorkerToggleButton()
     self:updateAllocationWarning()
+end
+
+function MenuContractor:isAllocationWorkerRowSelected(row)
+    if row.workerId == nil then
+        return #self.allocationSelectedWorkerIds == 0
+    end
+    return table.hasElement(self.allocationSelectedWorkerIds, row.workerId)
+end
+
+function MenuContractor:updateAllocationWorkerToggleButton()
+    local row = self.allocationWorkerRows[self.allocationHighlightedWorkerIndex]
+    local isSelected = row ~= nil and row.workerId ~= nil and self:isAllocationWorkerRowSelected(row)
+    self.btnAllocateToggleWorker.text = g_i18n:getText(isSelected and "tc_allocation_deselectWorkerButton" or
+        "tc_allocation_selectWorkerButton")
+    self:setMenuButtonInfoDirty()
+end
+
+-- A job can need more than one piece of equipment (e.g. combine + header),
+-- so equipment selection is a set (allocationSelectedEquipmentKeys) rather
+-- than SmoothList's single highlighted index — this flips the highlighted
+-- row's membership and re-renders each row's "[X]/[ ]" prefix via
+-- populateAllocationEquipmentCell.
+function MenuContractor:onClickToggleAllocationEquipment()
+    local row = self.allocationEquipmentRows[self.allocationHighlightedEquipmentIndex]
+    if row == nil then
+        return
+    end
+
+    if self.allocationSelectedEquipmentKeys[row.key] then
+        self.allocationSelectedEquipmentKeys[row.key] = nil
+    else
+        self.allocationSelectedEquipmentKeys[row.key] = true
+    end
+
+    self.allocationEquipmentTable:reloadData()
+    self:updateAllocationEquipmentToggleButton()
+    self:updateAllocationWarning()
+end
+
+function MenuContractor:updateAllocationEquipmentToggleButton()
+    local row = self.allocationEquipmentRows[self.allocationHighlightedEquipmentIndex]
+    local isSelected = row ~= nil and self.allocationSelectedEquipmentKeys[row.key] == true
+    self.btnAllocateToggleEquipment.text = g_i18n:getText(isSelected and "tc_allocation_deselectEquipmentButton" or
+        "tc_allocation_selectEquipmentButton")
+    self:setMenuButtonInfoDirty()
 end
 
 function MenuContractor:populateAllocationWorkerCell(index, cell)
@@ -1247,7 +1435,7 @@ function MenuContractor:populateAllocationWorkerCell(index, cell)
     if row == nil then
         return
     end
-    cell:getAttribute("name"):setText(row.label)
+    cell:getAttribute("name"):setText((self:isAllocationWorkerRowSelected(row) and "[X] " or "[ ] ") .. row.label)
 end
 
 function MenuContractor:populateAllocationEquipmentCell(index, cell)
@@ -1256,20 +1444,62 @@ function MenuContractor:populateAllocationEquipmentCell(index, cell)
         return
     end
 
-    local checked = self.allocationSelectedEquipmentIds[row.vehicleId] == true
+    local checked = self.allocationSelectedEquipmentKeys[row.key] == true
     cell:getAttribute("name"):setText((checked and "[X] " or "[ ] ") .. row.label)
-    cell:getAttribute("kind"):setText(row.isTractor and g_i18n:getText("tc_allocation_tractor") or
-        g_i18n:getText("tc_allocation_implement"))
+    cell:getAttribute("kind"):setText(g_i18n:getText("tc_allocation_role_" .. row.role))
 end
 
-function MenuContractor:getSelectedAllocationEquipmentIds()
+-- Selected vehicle ids, field equipment or (isHaulage) the haulage rig.
+function MenuContractor:getSelectedAllocationEquipmentIds(isHaulage)
     local ids = {}
     for _, row in ipairs(self.allocationEquipmentRows) do
-        if self.allocationSelectedEquipmentIds[row.vehicleId] then
+        if row.isHaulage == (isHaulage == true) and self.allocationSelectedEquipmentKeys[row.key] then
             table.insert(ids, row.vehicleId)
         end
     end
     return ids
+end
+
+-- Everything in the current picks that stops the allocation going
+-- through, as a single player-facing line, or nil if it's good to go -
+-- shared by the live warning and the Confirm pre-check (the server
+-- re-validates regardless, see TheContractorAllocation:allocateJob).
+-- Returns text, isBlocking (false = just a heads-up, e.g. an
+-- under-qualified worker).
+function MenuContractor:getAllocationProblem(job)
+    local farmId = g_currentMission:getFarmId()
+    local allocation = g_currentMission.TheContractor.Allocation
+    local workerIds = self.allocationSelectedWorkerIds
+    local equipmentIds = self:getSelectedAllocationEquipmentIds(false)
+    local haulageIds = self:getSelectedAllocationEquipmentIds(true)
+    local cropTitle = job:getCropTitle()
+    local needsHaulageRig = job.includesHaulage and #workerIds > 0
+
+    local crewError = TheContractorAllocation.getCrewShapeError(job, workerIds)
+    if crewError ~= nil then
+        return g_i18n:getText(crewError), true
+    end
+
+    local _, _, capability = allocation:assignCrewRoles(farmId, job, workerIds, equipmentIds, haulageIds)
+    if capability == TheContractorAllocation.CAPABILITY.BLOCKED then
+        return g_i18n:getText("tc_allocation_blockedWarning"), true
+    end
+
+    local missing = allocation:getMissingFromSelection(job, equipmentIds)
+    if needsHaulageRig then
+        for _, key in ipairs(allocation:getMissingHaulageFromSelection(job, haulageIds)) do
+            table.insert(missing, key)
+        end
+    end
+    if #missing > 0 then
+        return string.format(g_i18n:getText("tc_allocation_selectWarning"),
+            TCEquipmentClass.getMissingEquipmentText(missing, job.jobType, cropTitle)), true
+    end
+
+    if capability == TheContractorAllocation.CAPABILITY.WARN then
+        return g_i18n:getText("tc_allocation_underqualifiedWarning"), false
+    end
+    return nil, false
 end
 
 -- Live capability preview (016 vs. 018's design decision) as the worker/
@@ -1287,17 +1517,56 @@ function MenuContractor:updateAllocationWarning()
         return
     end
 
-    local worker = self.allocationSelectedWorkerId ~= nil and
-        g_currentMission.TheContractor.Staff:getWorker(farmId, self.allocationSelectedWorkerId) or nil
-    local equipmentIds = self:getSelectedAllocationEquipmentIds()
+    local allocation = g_currentMission.TheContractor.Allocation
+    local cropTitle = job:getCropTitle()
 
-    local outcome = g_currentMission.TheContractor.Allocation:previewWorkerCapability(worker, job, equipmentIds)
-    if outcome == TheContractorAllocation.CAPABILITY.BLOCKED then
-        self.allocationWarningText:setText(g_i18n:getText("tc_allocation_blockedWarning"))
+    -- Equipment gaps first, most fundamental first: things the farm doesn't
+    -- own at all, then things it owns that are busy elsewhere/in cooldown
+    -- (so not listed in the picker), then what's wrong with the picks
+    -- themselves (getAllocationProblem). The haulage rig (035) only counts
+    -- once workers are picked for a haulage job - the player alone brings
+    -- their own.
+    local missingOwned, missingFree = allocation:getMissingEquipment(farmId, job)
+    if job.includesHaulage and #self.allocationSelectedWorkerIds > 0 then
+        local haulageOwned, haulageFree = allocation:getMissingHaulageEquipment(farmId, job)
+        for _, key in ipairs(haulageOwned) do
+            table.insert(missingOwned, key)
+        end
+        for _, key in ipairs(haulageFree) do
+            table.insert(missingFree, key)
+        end
+    end
+    local missingBusy = {}
+    for _, key in ipairs(missingFree) do
+        if not table.hasElement(missingOwned, key) then
+            table.insert(missingBusy, key)
+        end
+    end
+
+    local lines = {}
+    if #missingOwned > 0 then
+        table.insert(lines, string.format(g_i18n:getText("tc_allocation_notOwnedWarning"),
+            TCEquipmentClass.getMissingEquipmentText(missingOwned, job.jobType, cropTitle)))
+    end
+    if #missingBusy > 0 then
+        table.insert(lines, string.format(g_i18n:getText("tc_allocation_busyWarning"),
+            TCEquipmentClass.getMissingEquipmentText(missingBusy, job.jobType, cropTitle)))
+    end
+    if #lines > 0 then
+        self.allocationWarningText:setText(table.concat(lines, "\n"))
         self.allocationWarningText:setTextColor(1, 0.25, 0.25, 1)
-    elseif outcome == TheContractorAllocation.CAPABILITY.WARN then
-        self.allocationWarningText:setText(g_i18n:getText("tc_allocation_underqualifiedWarning"))
+        return
+    end
+
+    local problem = self:getAllocationProblem(job)
+    if problem ~= nil then
+        self.allocationWarningText:setText(problem)
         self.allocationWarningText:setTextColor(1, 0.75, 0.25, 1)
+    elseif job.includesHaulage and #self.allocationSelectedWorkerIds == 0 then
+        -- Player alone on a haulage job: they're doing the carting.
+        self.allocationWarningText:setText(string.format(g_i18n:getText("tc_allocation_haulYourself"),
+            job.deliveryStationName or "?"))
+        self.allocationWarningText:setTextColor(1, 1, 1, 1)
     else
         self.allocationWarningText:setText("")
     end
@@ -1315,36 +1584,19 @@ function MenuContractor:onClickConfirmAllocation()
         return
     end
 
-    local jobDef = TheContractorJobGeneration.JOB_TYPES[job.jobType]
-    local hasImplement = false
-    local hasTractor = false
-    for _, row in ipairs(self.allocationEquipmentRows) do
-        if self.allocationSelectedEquipmentIds[row.vehicleId] then
-            if row.isTractor then
-                hasTractor = true
-            else
-                hasImplement = true
-            end
-        end
-    end
-
-    if not hasImplement or (jobDef ~= nil and jobDef.requiresTractor and not hasTractor) then
-        InfoDialog.show(g_i18n:getText("tc_allocation_missingEquipment"))
+    local problem, isBlocking = self:getAllocationProblem(job)
+    if problem ~= nil and isBlocking then
+        InfoDialog.show(problem)
         return
     end
 
-    local equipmentIds = self:getSelectedAllocationEquipmentIds()
-    local worker = self.allocationSelectedWorkerId ~= nil and
-        g_currentMission.TheContractor.Staff:getWorker(farmId, self.allocationSelectedWorkerId) or nil
-
-    if g_currentMission.TheContractor.Allocation:previewWorkerCapability(worker, job, equipmentIds) ==
-        TheContractorAllocation.CAPABILITY.BLOCKED then
-        InfoDialog.show(g_i18n:getText("tc_allocation_blockedWarning"))
-        return
+    local haulageIds = {}
+    if job.includesHaulage and #self.allocationSelectedWorkerIds > 0 then
+        haulageIds = self:getSelectedAllocationEquipmentIds(true)
     end
 
-    g_client:getServerConnection():sendEvent(TCAllocateJobEvent.new(farmId, job.id, self.allocationSelectedWorkerId,
-        equipmentIds))
+    g_client:getServerConnection():sendEvent(TCAllocateJobEvent.new(farmId, job.id, self.allocationSelectedWorkerIds,
+        self:getSelectedAllocationEquipmentIds(false), haulageIds))
 
     self.allocatingJobId = nil
     -- Same "synchronous for host/SP, catches up on next refresh for a remote
@@ -1465,7 +1717,7 @@ function MenuContractor:showJobAcceptedNotification(job)
     local fieldLabel = field ~= nil and field:getName() or tostring(job.fieldId)
 
     InfoDialog.show(string.format(g_i18n:getText("tc_inbox_jobAcceptedInfo"),
-        g_i18n:getText("tc_jobType_" .. job.jobType), fieldLabel, g_i18n:formatMoney(job.price, 0, true, true)))
+        job:getTypeText(), fieldLabel, g_i18n:formatMoney(job.price, 0, true, true)))
 end
 
 -- Counterpart to showJobAcceptedNotification for the other terminal outcome
@@ -1478,7 +1730,7 @@ function MenuContractor:showJobRejectedNotification(job)
     local fieldLabel = field ~= nil and field:getName() or tostring(job.fieldId)
 
     InfoDialog.show(string.format(g_i18n:getText("tc_inbox_jobRejectedInfo"),
-        g_i18n:getText("tc_jobType_" .. job.jobType), fieldLabel))
+        job:getTypeText(), fieldLabel))
 end
 
 -- Negotiation (014): prompts for a counter price, then hands off to the

@@ -92,3 +92,55 @@ function TCCropPrediction.getEstimatedHarvestReadyDate(field)
 
     return nil
 end
+
+-- Whether the field's current crop will be harvest-ready on a given
+-- absolute (monotonic) day — used to check a job's deadline doesn't land
+-- after its crop has moved on (withered, or regrown past ready). Same
+-- growth-mapping walk as getEstimatedHarvestReadyDate, stepped day by day
+-- so period boundaries land exactly where the base game applies them (on
+-- the first day of each new period, using the mapping of the period that
+-- just ended). Conservative: anything it can't predict comes back false.
+function TCCropPrediction.isHarvestReadyOnDay(field, absoluteDay)
+    local fieldState = field ~= nil and field:getFieldState() or nil
+    if fieldState == nil or fieldState.fruitTypeIndex == FruitType.UNKNOWN then
+        return false
+    end
+
+    local fruitType = g_fruitTypeManager:getFruitTypeByIndex(fieldState.fruitTypeIndex)
+    if fruitType == nil then
+        return false
+    end
+
+    local environment = g_currentMission.environment
+    local today = environment.currentMonotonicDay
+    local state = fieldState.growthState
+
+    if absoluteDay <= today then
+        return fruitType:getIsHarvestReady(state)
+    end
+
+    local growthMode = g_currentMission.missionInfo.growthMode
+    if growthMode == GrowthMode.DISABLED then
+        return fruitType:getIsHarvestReady(state)
+    elseif growthMode ~= GrowthMode.SEASONAL then
+        return false
+    end
+
+    local growthData = fruitType:getSeasonalGrowthData()
+    if growthData == nil then
+        return false
+    end
+
+    for day = today + 1, absoluteDay do
+        if environment:getDayInPeriodFromDay(day) == 1 then
+            local periodInfo = growthData.periods[environment:getPeriodFromDay(day - 1)]
+            local nextState = periodInfo ~= nil and periodInfo.growthMapping ~= nil and periodInfo.growthMapping[state] or nil
+            if nextState == nil then
+                return false
+            end
+            state = nextState
+        end
+    end
+
+    return fruitType:getIsHarvestReady(state)
+end

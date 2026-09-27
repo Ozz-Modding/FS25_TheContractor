@@ -15,6 +15,7 @@
 		<text name="tc_overview_currentJobsHeading" text="Current Jobs"/>
 		<text name="tc_overview_currentJobsEmpty" text="No jobs currently allocated or in progress."/>
 		<text name="tc_overview_currentJobLine" text="Field %s: %s - %d%%"/>
+		<text name="tc_overview_deliveredSuffix" text=" (delivered %d%%)"/>
 		<text name="tc_actions_createButton" text="Create Company"/>
 		<text name="tc_actions_createCompanyPrompt" text="Name your new contracting company (cost: %s):"/>
 		<text name="tc_actions_defaultCompanyName" text="Untitled Contracting Co."/>
@@ -44,20 +45,22 @@
 		<text name="tc_jobType_cultivate" text="Cultivate"/>
 		<text name="tc_jobType_sow" text="Sow"/>
 		<text name="tc_jobType_plow" text="Plow"/>
+		<text name="tc_jobType_harvestHaul" text="Harvest &amp; Haul"/>
 		<text name="tc_inbox_empty" text="No job offers right now — check back later, or buy some advertising to bring more in."/>
 		<text name="tc_inbox_columnType" text="Type"/>
 		<text name="tc_inbox_columnField" text="Field"/>
-		<text name="tc_inbox_columnTargetDate" text="Target Date"/>
+		<text name="tc_inbox_columnTargetDate" text="Due By"/>
 		<text name="tc_inbox_columnPrice" text="Price"/>
 		<text name="tc_inbox_columnEquipment" text="Equip."/>
 		<text name="tc_inbox_acceptButton" text="Accept"/>
 		<text name="tc_inbox_declineButton" text="Decline"/>
 		<text name="tc_inbox_detailField" text="Field: %s"/>
-		<text name="tc_inbox_detailTargetDate" text="Target date: %s"/>
+		<text name="tc_inbox_detailTargetDate" text="Due by end of: %s"/>
 		<text name="tc_inbox_detailSkill" text="Required skill level: %d"/>
 		<text name="tc_inbox_detailPrice" text="Offered price: %s"/>
 		<text name="tc_inbox_equipmentAvailable" text="You own the equipment needed for this job."/>
-		<text name="tc_inbox_equipmentMissing" text="You don't currently own equipment for this job."/>
+		<text name="tc_inbox_equipmentMissing" text="You don't currently own: %s."/>
+		<text name="tc_inbox_detailHaulage" text="Harvest &amp; haul: the crop goes to %s. Needs two workers - one harvesting, one hauling - or you go and haul it yourself."/>
 		<text name="tc_inbox_equipmentYes" text="Yes"/>
 		<text name="tc_inbox_equipmentNo" text="No"/>
 		<text name="tc_inbox_counterButton" text="Counter Offer"/>
@@ -72,6 +75,10 @@
 		<text name="tc_calendar_columnDay" text="Day"/>
 		<text name="tc_calendar_columnJobs" text="Jobs"/>
 		<text name="tc_calendar_columnStatus" text="Status"/>
+		<text name="tc_calendar_columnJobType" text="Type"/>
+		<text name="tc_calendar_columnFarmland" text="Farmland"/>
+		<text name="tc_calendar_columnPrice" text="Price"/>
+		<text name="tc_calendar_columnAllocation" text="Allocation"/>
 		<text name="tc_calendar_todayMarker" text="%s (Today)"/>
 		<text name="tc_calendar_unallocatedCount" text="%d unallocated"/>
 		<text name="tc_calendar_missedCount" text="%d failed"/>
@@ -79,16 +86,21 @@
 		<text name="tc_calendar_dayDetailTitle" text="Jobs due %s"/>
 		<text name="tc_calendar_dayEmpty" text="No jobs due this day."/>
 		<text name="tc_calendar_jobAllocated" text="Allocated"/>
+		<text name="tc_calendar_jobTravelling" text="Travelling"/>
+		<text name="tc_calendar_jobInProgress" text="In progress - %d%%"/>
+		<text name="tc_calendar_jobDelivering" text="%d%% cut, %d%% delivered"/>
 		<text name="tc_calendar_jobUnallocated" text="Not yet allocated"/>
 		<text name="tc_calendar_jobMissed" text="Failed"/>
 		<text name="tc_calendar_jumpToToday" text="Jump to Today"/>
 		<text name="tc_job_missedNotification" text="Missed deadline: %s on Field %s went uncompleted."/>
-		<text name="tc_dispatch_noVehicleReady" text="No allocated vehicle is ready to start (attach the implement and make sure it's free)."/>
+		<text name="tc_dispatch_noVehicleReady" text="None of the allocated equipment can be driven by the worker (is it free, and can it do this job?)."/>
 		<text name="tc_dispatch_failedNotification" text="Could not dispatch %s on Field %s: %s"/>
 		<text name="tc_watchdog_retriedNotification" text="Your worker got stuck on a %s job on Field %s - reset and dispatched again."/>
 		<text name="tc_watchdog_needsAttentionNotification" text="Your worker is stuck on a %s job on Field %s and needs your attention."/>
 		<text name="tc_moneyType_hiring" text="Staff hiring"/>
 		<text name="finance_tcHiring" text="Staff hiring"/>
+		<text name="tc_moneyType_jobPayout" text="Job payout"/>
+		<text name="finance_tcJobPayout" text="Job payout"/>
 		<text name="tc_staff_viewRoster" text="Roster"/>
 		<text name="tc_staff_viewCandidates" text="Candidates"/>
 		<text name="tc_staff_columnName" text="Name"/>
@@ -119,12 +131,41 @@
 		<text name="tc_allocation_myself" text="Myself"/>
 		<text name="tc_allocation_workerHeading" text="Worker"/>
 		<text name="tc_allocation_equipmentHeading" text="Equipment"/>
-		<text name="tc_allocation_tractor" text="Tractor"/>
-		<text name="tc_allocation_implement" text="Implement"/>
+		<text name="tc_allocation_role_tractor" text="Tractor"/>
+		<text name="tc_allocation_role_implement" text="Implement"/>
+		<text name="tc_allocation_role_harvester" text="Harvester"/>
+		<text name="tc_allocation_role_header" text="Header"/>
+		<text name="tc_allocation_role_haulTractor" text="Haul tractor"/>
+		<text name="tc_allocation_role_trailer" text="Trailer"/>
 		<text name="tc_allocation_allocateButton" text="Allocate"/>
 		<text name="tc_allocation_confirmButton" text="Confirm"/>
 		<text name="tc_allocation_cancelButton" text="Cancel"/>
-		<text name="tc_allocation_missingEquipment" text="Select the required equipment before confirming."/>
+		<text name="tc_vehicleLock_busy" text="This vehicle is out on a contract job."/>
+		<text name="tc_dispatch_noAttachPoint" text="Couldn't hitch %s to %s - no compatible free attachment point."/>
+		<text name="tc_allocation_selectEquipmentButton" text="Select Equipment"/>
+		<text name="tc_allocation_deselectEquipmentButton" text="Deselect Equipment"/>
+		<text name="tc_allocation_selectWorkerButton" text="Select Worker"/>
+		<text name="tc_allocation_deselectWorkerButton" text="Deselect Worker"/>
+		<text name="tc_allocation_needsSecondWorker" text="Harvest &amp; haul needs two workers - one harvesting, one hauling. Or select Myself to go and haul it yourself."/>
+		<text name="tc_allocation_tooManyWorkers" text="This job only takes one worker."/>
+		<text name="tc_allocation_haulYourself" text="You will haul the crop yourself - deliver it to %s."/>
+		<text name="tc_allocation_selectWarning" text="Still to select: %s."/>
+		<text name="tc_allocation_notOwnedWarning" text="Can't allocate - you don't own: %s."/>
+		<text name="tc_allocation_busyWarning" text="Can't allocate - busy on another job or in cooldown: %s."/>
+
+		<text name="tc_equipment_missing_cutter" text="a header or harvester that can harvest %s"/>
+		<text name="tc_equipment_missing_cutterMismatch" text="a header for %s that fits the harvester"/>
+		<text name="tc_equipment_missing_extraCutter" text="just one header (deselect the others)"/>
+		<text name="tc_equipment_missing_haulTractor" text="a tractor for hauling"/>
+		<text name="tc_equipment_missing_trailer" text="a trailer that takes %s"/>
+		<text name="tc_equipment_missing_trailerHitch" text="a trailer that hitches to the haulage tractor"/>
+		<text name="tc_haulage_deliveryComplete" text="Delivery done for %s - any more crop you deliver sells as normal."/>
+		<text name="tc_equipment_anyCrop" text="this crop"/>
+		<text name="tc_equipment_missing_harvester" text="a harvester"/>
+		<text name="tc_equipment_missing_tractor" text="a tractor"/>
+		<text name="tc_equipment_missing_implement_cultivate" text="a cultivator"/>
+		<text name="tc_equipment_missing_implement_sow" text="a seeder or planter"/>
+		<text name="tc_equipment_missing_implement_plow" text="a plow"/>
 		<text name="tc_allocation_blockedWarning" text="This worker isn't certified for the required equipment tier."/>
 		<text name="tc_allocation_underqualifiedWarning" text="This worker is under-qualified for this job - expect a reduced reward."/>
 	</texts>

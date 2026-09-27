@@ -27,6 +27,53 @@
 TheContractorDispatch = {}
 TheContractorDispatch_mt = Class(TheContractorDispatch)
 
+-- Dispatch staging (see startJobForWorker): how long equipment stays hidden
+-- before it's rigged and moved, then how long after that before it's
+-- revealed on the field and the AI started - lets hitch joints and physics
+-- settle out of sight.
+TheContractorDispatch.HIDDEN_MS = 500
+TheContractorDispatch.SETTLE_MS = 1000
+
+-- Transport wait: how long the worker and equipment are "on the road"
+-- between leaving the yard and turning up on the field, in in-game minutes
+-- (counted down against the effective time scale, so it speeds up with
+-- it). Runs before HIDDEN_MS, so the equipment stays hidden for the whole
+-- trip. Made up of
+-- TRANSPORT_WAIT_FACTORS - each entry is a function(job, worker) returning
+-- that factor's contribution in minutes, summed by getTransportWaitMs. Add
+-- new factors (distance, equipment count, ...) by appending to the list.
+-- `worker` is the job's slowest worker (TheContractorJobs.getSlowestWorker)
+-- - a two-worker haulage job (035) travels at its slower half's pace.
+-- Placeholder numbers, same as Cooldown's - 026 owns the balance pass.
+TheContractorDispatch.TRANSPORT_MAX_MINUTES = 10
+TheContractorDispatch.TRANSPORT_MIN_MINUTES = 2
+
+TheContractorDispatch.TRANSPORT_WAIT_FACTORS = {
+    -- Worker speed (016): linear between a slowest worker's
+    -- TRANSPORT_MAX_MINUTES and a fastest worker's TRANSPORT_MIN_MINUTES.
+    {
+        name = "workerSpeed",
+        getMinutes = function(job, worker)
+            return TheContractorWorker.scaleBySpeed(worker, TheContractorDispatch.TRANSPORT_MAX_MINUTES,
+                TheContractorDispatch.TRANSPORT_MIN_MINUTES)
+        end,
+    },
+}
+
+function TheContractorDispatch.getTransportWaitMs(job)
+    local worker = TheContractorJobs.getSlowestWorker(job)
+    local minutes = 0
+    for _, factor in ipairs(TheContractorDispatch.TRANSPORT_WAIT_FACTORS) do
+        minutes = minutes + factor.getMinutes(job, worker)
+    end
+    return math.max(0, minutes) * 60000
+end
+
+TheContractorDispatch.STAGE = {
+    HIDDEN = "hidden",
+    RIGGED = "rigged",
+}
+
 function TheContractorDispatch.new()
     local self = {}
     setmetatable(self, TheContractorDispatch_mt)
@@ -42,6 +89,13 @@ function TheContractorDispatch.new()
     -- known once AI_JOB_STARTED fires) -> ourJobId, since AI_JOB_REMOVED
     -- only ever hands back that numeric id, not the AIJob object.
     self.ourJobIdByAISystemJobId = {}
+    -- ourJobId -> { stage, elapsedMs }, for jobs part-way through
+    -- startJobForWorker's hide -> rig/move -> reveal+start staging. Live
+    -- only, like the tables above: a save mid-staging is picked back up by
+    -- resumeJobsAfterLoad. The trip's own countdown lives on the job
+    -- (job.transportRemainingMs) instead, so it's saved with it.
+    self.pendingByJobId = {}
+    self.hasResumedAfterLoad = false
 
     return self
 end
@@ -67,14 +121,12 @@ end
 
 -- Picks the one piece of allocated equipment (018) actually capable of
 -- being handed to AIJobFieldWork as its driving vehicle — the tractor, or,
--- for a self-propelled job type like harvest, the combine itself. No
--- separate tractor/implement disambiguation needed: getIsAvailableForVehicle
--- already folds in vehicle:getCanStartFieldWork() (false for an implement
--- with no engine of its own, or a tractor with nothing attached/lowered yet
--- — AIFieldWorker:getCanStartFieldWork requires a real in-world attached
--- implement, the same prerequisite the vanilla AI Helper UI has, and one
--- this ticket doesn't attempt to automate) and vehicle:getIsAIJobSupported().
--- Returns nil if nothing in the job's equipment currently qualifies.
+-- for a self-propelled job type like harvest, the combine itself.
+-- getIsAvailableForVehicle folds in vehicle:getCanStartFieldWork() (false
+-- for an implement with no engine of its own, or a tractor with nothing
+-- attached) and vehicle:getIsAIJobSupported() - by the time this runs,
+-- TCJobSiteSetup has already hitched the job's implements on. Returns nil if
+-- nothing in the job's equipment currently qualifies.
 function TheContractorDispatch:findOperatingVehicle(aiJob, equipmentIds)
     for _, vehicleId in ipairs(equipmentIds) do
         local vehicle = NetworkUtil.getObject(vehicleId)
@@ -87,27 +139,172 @@ end
 
 -- Called from TheContractorAllocation:allocateJob right after a job is
 -- successfully allocated to a hired worker (workerId ~= nil never reaches
--- here for a player self-allocation, see Allocation.lua). Constructs an
--- AIJobFieldWork against whichever assigned vehicle is actually ready,
--- validates and checks startability exactly the way the base game's own AI
--- Helper UI does, then starts it — surfacing a notification instead on any
--- failure rather than silently leaving the job allocated-but-idle.
-function TheContractorDispatch:startJobForWorker(job, worker)
+-- here for a player self-allocation, see Allocation.lua), from 021's
+-- watchdog retry, and from resumeJobsAfterLoad. Workers don't drive to the
+-- field: the equipment is hidden straight away (it's "left the yard"), then
+-- staged through update() -
+--   HIDDEN  after the transport wait (game time) then HIDDEN_MS (real
+--           time): TCJobSiteSetup hitches
+--           the implements on and teleports the lot to the field's center,
+--           still hidden
+--   RIGGED  after SETTLE_MS: revealed on the field, AI job started
+-- skipTransport: the worker is already out on the field (a watchdog retry,
+-- or an in_progress job being resumed after load), so there's no trip to
+-- make - only the physics staging runs. Otherwise a trip left over from
+-- before a save/load (job.transportRemainingMs loaded with the job - 0 if
+-- the save landed after arrival but before the AI started) carries on where
+-- it left off rather than starting over.
+--
+-- A two-worker haulage job's tractor + trailer (035) are hidden here too,
+-- but never staged: the hauler is synthetic, so they stay out of sight in
+-- the yard, untouched, until the job's cooldown ends (or it's missed with
+-- no work done - see TheContractorJobs:releaseMissedJobResources).
+function TheContractorDispatch:startJobForWorker(job, skipTransport)
     if not g_currentMission:getIsServer() then
         return
     end
 
+    -- Remember where it all stood (it goes back there when the job's done),
+    -- and leave anything that isn't part of the job behind in the yard.
+    TCJobSiteSetup.recordHome(job)
+    TCJobSiteSetup.detachForeignImplements(job)
+
+    if #job.haulageEquipmentIds > 0 then
+        TCEquipmentVisibility.setVisibleEverywhere(job.haulageEquipmentIds, false)
+    end
+
+    if skipTransport then
+        job.transportRemainingMs = 0
+    elseif job.transportRemainingMs == nil then
+        job.transportRemainingMs = TheContractorDispatch.getTransportWaitMs(job)
+    end
+    if job.transportRemainingMs > 0 then
+        Logging.info("TheContractor: farm %d job %d on the road, arriving in %.1f min", job.farmId, job.id,
+            job.transportRemainingMs / 60000)
+    end
+
+    self.pendingByJobId[job.id] = { stage = TheContractorDispatch.STAGE.HIDDEN, elapsedMs = 0 }
+    TCEquipmentVisibility.setVisibleEverywhere(job.assignedEquipmentIds, false)
+    TCVehicleLock.refresh()
+
+    -- Shown as "Travelling" in the Calendar until the AI starts (or staging
+    -- is called off) - cleared in cancelPending.
+    if job.transportRemainingMs > 0 then
+        g_currentMission.TheContractor.Jobs:setJobTravelling(job.farmId, job.id, true)
+    end
+end
+
+-- Server-only, called every frame from TheContractor:update.
+function TheContractorDispatch:update(dt)
+    if not g_currentMission:getIsServer() then
+        return
+    end
+
+    if not self.hasResumedAfterLoad then
+        self.hasResumedAfterLoad = true
+        self:resumeJobsAfterLoad()
+    end
+
+    local jobs = g_currentMission.TheContractor.Jobs
+    for jobId, pending in pairs(self.pendingByJobId) do
+        local job = jobs:getJobById(jobId)
+        if job == nil or (job.state ~= TheContractorJob.STATE.ALLOCATED and
+                job.state ~= TheContractorJob.STATE.IN_PROGRESS) then
+            self:cancelPending(jobId, job)
+        else
+            -- The trip runs on game time (sped up by the time scale); the
+            -- physics staging after it runs on real time.
+            if job.transportRemainingMs > 0 then
+                job.transportRemainingMs = math.max(0,
+                    job.transportRemainingMs - dt * g_currentMission:getEffectiveTimeScale())
+            else
+                pending.elapsedMs = pending.elapsedMs + dt
+            end
+
+            if pending.stage == TheContractorDispatch.STAGE.HIDDEN and job.transportRemainingMs <= 0 and
+                pending.elapsedMs >= TheContractorDispatch.HIDDEN_MS then
+                local operatingVehicle, errorText = TCJobSiteSetup.rigAndPlace(job)
+                if operatingVehicle == nil then
+                    Logging.warning("TheContractor: farm %d job %d equipment couldn't be rigged: %s", job.farmId,
+                        job.id, tostring(errorText))
+                    self:cancelPending(jobId, job)
+                    self:notifyDispatchFailed(job, errorText)
+                else
+                    pending.stage = TheContractorDispatch.STAGE.RIGGED
+                    pending.elapsedMs = 0
+                end
+            elseif pending.stage == TheContractorDispatch.STAGE.RIGGED and
+                pending.elapsedMs >= TheContractorDispatch.SETTLE_MS then
+                self:cancelPending(jobId, job)
+                self:startAIJob(job)
+            end
+        end
+    end
+end
+
+-- Drops a job's staging and brings its equipment back into view, wherever
+-- staging got it to.
+function TheContractorDispatch:cancelPending(jobId, job)
+    self.pendingByJobId[jobId] = nil
+    if job ~= nil then
+        job.transportRemainingMs = nil
+        TCEquipmentVisibility.setVisibleEverywhere(job.assignedEquipmentIds, true)
+        g_currentMission.TheContractor.Jobs:setJobTravelling(job.farmId, job.id, false)
+    end
+end
+
+-- Base-game AI jobs don't survive a save/load, and a save can land
+-- mid-staging - so on the first update after load, every hired-worker job
+-- that should be out working gets dispatched again. An in_progress job was
+-- already on its field, so it skips the trip; an allocated one either
+-- carries on a saved trip (job.transportRemainingMs) or, with nothing
+-- saved (e.g. its dispatch had failed), sets off again from the yard.
+function TheContractorDispatch:resumeJobsAfterLoad()
+    local tc = g_currentMission.TheContractor
+    for _, farm in ipairs(g_farmManager:getFarms()) do
+        for _, job in ipairs(tc.Jobs:getAllJobs(farm.farmId)) do
+            if job.assignedWorkerId ~= nil and (job.state == TheContractorJob.STATE.ALLOCATED or
+                    job.state == TheContractorJob.STATE.IN_PROGRESS) and self.aiJobByOurJobId[job.id] == nil then
+                local worker = tc.Staff:getWorker(job.farmId, job.assignedWorkerId)
+                if worker ~= nil then
+                    Logging.info("TheContractor: farm %d job %d resuming AI dispatch after load", job.farmId, job.id)
+                    self:startJobForWorker(job, job.state == TheContractorJob.STATE.IN_PROGRESS)
+                end
+            end
+        end
+    end
+end
+
+-- The AI half of dispatch, once the equipment is rigged and on the field.
+-- Constructs an AIJobFieldWork against whichever assigned vehicle is
+-- actually ready, validates and checks startability exactly the way the
+-- base game's own AI Helper UI does, then starts it — surfacing a
+-- notification instead on any failure rather than silently leaving the job
+-- allocated-but-idle. Started as a direct start (isDirectStart = true), the
+-- same as a player switching the AI on from the driver's seat: fieldwork
+-- begins right where the vehicle stands, now inside the field
+-- (AIJobFieldWork:getStartTaskIndex). A non-direct start would reuse the
+-- vehicle's *previous* AI job's target position (AIJobFieldWork:
+-- applyCurrentState) and drive off to whatever field that was.
+function TheContractorDispatch:startAIJob(job)
+    local worker = g_currentMission.TheContractor.Staff:getWorker(job.farmId, job.assignedWorkerId)
+
     local aiJob = g_currentMission.aiJobTypeManager:createJob(AIJobType.FIELDWORK)
+    -- Our workers are paid staff wages, not the vanilla per-ms helper wage:
+    -- AIJob:updateCost (server-only, per active job) only charges - and only
+    -- runs its out-of-money stop - when getPricePerMs() > 0. Overridden on
+    -- this instance alone, so the player's own vanilla AI helpers still pay.
+    aiJob.getPricePerMs = TheContractorDispatch.getNoWagePricePerMs
     local vehicle = self:findOperatingVehicle(aiJob, job.assignedEquipmentIds)
     if vehicle == nil then
         Logging.warning(
-            "TheContractor: farm %d job %d has no allocated equipment ready for AI dispatch (implement attached? tractor free?)",
+            "TheContractor: farm %d job %d has no allocated equipment ready for AI dispatch after rigging",
             job.farmId, job.id)
         self:notifyDispatchFailed(job, g_i18n:getText("tc_dispatch_noVehicleReady"))
         return
     end
 
-    aiJob:applyCurrentState(vehicle, g_currentMission, job.farmId, false)
+    aiJob:applyCurrentState(vehicle, g_currentMission, job.farmId, true)
     aiJob:setValues()
 
     local isValid, validationError = aiJob:validate(job.farmId)
@@ -144,6 +341,10 @@ function TheContractorDispatch:startJobForWorker(job, worker)
         job.id, vehicle:getName(), worker ~= nil and worker.name or "?")
 end
 
+function TheContractorDispatch.getNoWagePricePerMs()
+    return 0
+end
+
 -- AI_JOB_STARTED fires synchronously from inside AISystem:startJob (see
 -- AISystem:startJobInternal), so this always runs within the same call
 -- stack as startJobForWorker's own call above — safe to look the AIJob
@@ -165,15 +366,15 @@ end
 
 -- Distinguishes a clean finish (AIMessageType.OK/INFO — e.g.
 -- AIMessageSuccessFinishedJob) from a stuck/error condition
--- (AIMessageType.ERROR), per the ticket's own acceptance criterion. Doesn't
--- act on that distinction itself: 021 (stuck retry) and 022 (completion +
--- payout, itself explicitly specified as triggered by "020's AI_JOB_STOPPED
--- clean-finish signal, cross-checked against 019's completion percentage")
--- aren't built yet, and landing their logic here would jump ahead of this
--- codebase's one-ticket-at-a-time build order. This just logs the outcome
--- clearly, so those tickets have a real signal to key off once they exist —
--- the job's own state stays `in_progress` until one of them (or the
--- existing missed-deadline daily tick, Jobs.lua's onDayChanged) moves it on.
+-- (AIMessageType.ERROR), per the ticket's own acceptance criterion. A clean
+-- finish is 022's AI-worked completion trigger — handed to
+-- TheContractorJobs:completeJob, which itself cross-checks against 019's
+-- completion percentage (a clean stop that didn't actually finish the
+-- field, e.g. the player manually stopping the AI Helper early, is a no-op
+-- there rather than a payout). An error stop is 021's stuck-retry concern,
+-- not this one's — left untouched here; the job's own state stays
+-- `in_progress` until 021, this clean-finish path, or the existing
+-- missed-deadline daily tick (Jobs.lua's onDayChanged) moves it on.
 function TheContractorDispatch:onAIJobStopped(aiJob, aiMessage)
     local ourJobId = self.ourJobIdByAIJob[aiJob]
     if ourJobId == nil then
@@ -183,6 +384,13 @@ function TheContractorDispatch:onAIJobStopped(aiJob, aiMessage)
     local isClean = aiMessage == nil or aiMessage:getType() ~= AIMessageType.ERROR
     Logging.info("TheContractor: job %d AI job stopped (%s): %s", ourJobId, isClean and "clean" or "error",
         aiMessage ~= nil and aiMessage:getMessage(aiJob) or "no message")
+
+    if isClean then
+        local job = g_currentMission.TheContractor.Jobs:getJobById(ourJobId)
+        if job ~= nil then
+            g_currentMission.TheContractor.Jobs:completeJob(job)
+        end
+    end
 end
 
 -- AI_JOB_REMOVED only ever hands back AISystem's own numeric jobId (see
@@ -219,9 +427,10 @@ end
 
 -- Stops the AI job currently tracked for ourJobId, if any (a no-op if the
 -- job already finished/was removed, or was never dispatched at all — e.g. a
--- player self-allocated job, which never enters these lookup tables). Used
--- by 021's stuck watchdog ahead of resetting the vehicle and retriggering a
--- fresh AI job for the same job. aiMessage defaults to a generic unknown-
+-- player self-allocated job, which never enters these lookup tables), or
+-- abandons its dispatch staging if it hasn't got that far yet. Used by
+-- 021's stuck watchdog ahead of retriggering a fresh dispatch for the same
+-- job, and by 024's missed-job release. aiMessage defaults to a generic unknown-
 -- error stop if the caller doesn't have anything more specific (AISystem:
 -- stopJob requires a non-nil AIMessage — see AISystem:delete's own
 -- AIMessageErrorUnknown.new() fallback for the same reason).
@@ -233,6 +442,11 @@ end
 function TheContractorDispatch:stopJob(jobId, aiMessage)
     if not g_currentMission:getIsServer() then
         return
+    end
+
+    -- Still mid-staging: nothing running yet, just un-hide the equipment.
+    if self.pendingByJobId[jobId] ~= nil then
+        self:cancelPending(jobId, g_currentMission.TheContractor.Jobs:getJobById(jobId))
     end
 
     local aiJob = self.aiJobByOurJobId[jobId]

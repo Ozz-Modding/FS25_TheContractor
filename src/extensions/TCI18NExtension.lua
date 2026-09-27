@@ -25,6 +25,8 @@ TCI18NExtension.theContractorTexts = {
     ["finance_tcAdvertising"] = true,
     ["tc_moneyType_hiring"] = true,
     ["finance_tcHiring"] = true,
+    ["tc_moneyType_jobPayout"] = true,
+    ["finance_tcJobPayout"] = true,
 }
 
 function TCI18NExtension:getText(superFunc, text, modEnv)
