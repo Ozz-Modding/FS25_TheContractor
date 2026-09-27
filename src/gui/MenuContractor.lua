@@ -144,34 +144,19 @@ function MenuContractor:initialize()
         end
     }
 
-    -- One button per 012 advertising level (see Advertising.lua's LEVELS).
-    -- `.disabled` is mutated in place from refreshCompanyState (funds/tier
-    -- gating can change at any time) — same pattern as FS25_RedTape's
-    -- btnSchemeAction.
-    self.btnBuyLocalAd = {
+    -- Opens the advertising purchase dialog (027), where level and duration
+    -- are picked. Always enabled once a company exists: the dialog itself
+    -- explains why a given choice can't be bought (tier lock, funds).
+    self.btnBuyAdvertising = {
         inputAction = InputAction.MENU_ACTIVATE,
-        text = g_i18n:getText("tc_advertising_buyButton_localNewspaper"),
+        text = g_i18n:getText("tc_advertising_buyButton"),
         callback = function()
-            self:onClickBuyAdvertising("localNewspaper")
-        end
-    }
-    self.btnBuyRegionalAd = {
-        inputAction = InputAction.MENU_EXTRA_1,
-        text = g_i18n:getText("tc_advertising_buyButton_regionalNewspaper"),
-        callback = function()
-            self:onClickBuyAdvertising("regionalNewspaper")
-        end
-    }
-    self.btnBuyTvAd = {
-        inputAction = InputAction.MENU_EXTRA_2,
-        text = g_i18n:getText("tc_advertising_buyButton_tv"),
-        callback = function()
-            self:onClickBuyAdvertising("tv")
+            self:onClickBuyAdvertising()
         end
     }
 
     -- Inbox (013) accept/decline — same bottom-bar pattern as the
-    -- advertising buttons above, only appended while a job row is selected
+    -- advertising button above, only appended while a job row is selected
     -- (see getMenuButtonInfo).
     self.btnAcceptJob = {
         inputAction = InputAction.MENU_ACTIVATE,
@@ -212,9 +197,9 @@ function MenuContractor:initialize()
     self.menuButtonInfoOverviewNoCompany = { self.btnBack, self.btnNextPage, self.btnPrevPage, self.btnCreateCompany }
 
     -- Once a company exists, the Create Company button is replaced by the
-    -- three advertising purchase buttons.
+    -- Buy Advertising button.
     self.menuButtonInfoOverviewWithCompany = { self.btnBack, self.btnNextPage, self.btnPrevPage,
-        self.btnBuyTvAd, self.btnBuyRegionalAd, self.btnBuyLocalAd }
+        self.btnBuyAdvertising }
 
     self.menuButtonInfoInboxWithSelection = { self.btnBack, self.btnNextPage, self.btnPrevPage,
         self.btnAcceptJob, self.btnDeclineJob, self.btnCounterOffer }
@@ -326,6 +311,13 @@ function MenuContractor:initialize()
     self.calendarDayJobs = {}
     self.selectedCalendarDayJobId = nil
 
+    -- Completed-jobs history under the day panel (029 follow-up): every
+    -- completed job, most recent first. The highlighted row's report shows
+    -- straight away (no button), so moving through the list on a gamepad is
+    -- all it takes.
+    self.completedJobs = {}
+    self.selectedCompletedJobId = nil
+
     -- Allocation (018): opened via btnAllocateJob against whichever job is
     -- selected in calendarDayJobsTable, closed via confirm/cancel. nil
     -- allocatingJobId means the day-detail panel shows the plain job list
@@ -374,6 +366,8 @@ function MenuContractor:initialize()
     self.calendarDayTable:setDelegate(self)
     self.calendarDayJobsTable:setDataSource(self)
     self.calendarDayJobsTable:setDelegate(self)
+    self.calendarCompletedTable:setDataSource(self)
+    self.calendarCompletedTable:setDelegate(self)
 
     self.allocationWorkerTable:setDataSource(self)
     self.allocationWorkerTable:setDelegate(self)
@@ -472,6 +466,8 @@ function MenuContractor:refreshCompanyState()
 
         self.calendarContainer:setVisible(false)
         self.calendarDayDetailsBox:setVisible(false)
+        self.calendarCompletedContainer:setVisible(false)
+        self.selectedCompletedJobId = nil
         self.selectedCalendarDay = nil
         self.selectedCalendarDayJobId = nil
         self.allocatingJobId = nil
@@ -487,7 +483,7 @@ function MenuContractor:refreshCompanyState()
 
     self.textAdvertisingHeading:setVisible(hasCompany)
     self.textAdvertisingStatus:setVisible(hasCompany)
-    self.textJobHistoryPlaceholder:setVisible(hasCompany)
+    self.textLastCompletedJob:setVisible(hasCompany)
     self.progressBox:setVisible(hasCompany)
     self.textCurrentJobsHeading:setVisible(hasCompany)
     self.textCurrentJobs:setVisible(hasCompany)
@@ -520,6 +516,7 @@ function MenuContractor:refreshCompanyState()
         self:refreshInboxState(farmId, tc.Jobs)
         self:refreshCalendarState(farmId, tc.Jobs)
         self:refreshCurrentJobsState(farmId, tc.Jobs)
+        self:refreshLastCompletedJobState(farmId, tc.Jobs)
         self:refreshStaffState(farmId, tc.Staff, tc.Jobs)
     end
 
@@ -531,6 +528,18 @@ function MenuContractor:refreshCompanyState()
     self.placeholderCalendar:setText(lockedText)
     self.placeholderStaff:setVisible(not hasCompany)
     self.placeholderStaff:setText(lockedText)
+end
+
+-- Overview tab's last-job line (029): the most recent completion summary,
+-- so one missed notification can still be looked up.
+function MenuContractor:refreshLastCompletedJobState(farmId, jobs)
+    local job = jobs:getLastCompletedJob(farmId)
+    if job == nil then
+        self.textLastCompletedJob:setText(g_i18n:getText("tc_overview_noCompletedJobs"))
+    else
+        self.textLastCompletedJob:setText(string.format(g_i18n:getText("tc_overview_lastCompletedJob"),
+            job:getSummaryText()))
+    end
 end
 
 -- Overview tab's at-a-glance work list, next to the reputation progress
@@ -710,6 +719,7 @@ function MenuContractor:updateStaffDetails()
     end
 
     self.staffDetailTitle:setText(worker.name)
+    self.staffDetailAge:setText(string.format(g_i18n:getText("tc_staff_detailAge"), worker.age))
     self.staffDetailWorkSpeed:setText(string.format(g_i18n:getText("tc_staff_detailWorkSpeed"), worker.workSpeed))
     self.staffDetailTier:setText(string.format(g_i18n:getText("tc_staff_detailTier"),
         TheContractorStaff.formatTierCapability(worker.tierCapability)))
@@ -906,6 +916,8 @@ function MenuContractor:getNumberOfItemsInSection(list, section)
         return #self.calendarDayRows
     elseif list == self.calendarDayJobsTable then
         return #self.calendarDayJobs
+    elseif list == self.calendarCompletedTable then
+        return #self.completedJobs
     elseif list == self.allocationWorkerTable then
         return #self.allocationWorkerRows
     elseif list == self.allocationEquipmentTable then
@@ -922,6 +934,9 @@ function MenuContractor:populateCellForItemInSection(list, section, index, cell)
         return
     elseif list == self.calendarDayJobsTable then
         self:populateCalendarDayJobCell(index, cell)
+        return
+    elseif list == self.calendarCompletedTable then
+        self:populateCompletedJobCell(index, cell)
         return
     elseif list == self.allocationWorkerTable then
         self:populateAllocationWorkerCell(index, cell)
@@ -972,6 +987,16 @@ function MenuContractor:onListSelectionChanged(list, section, index)
         local job = self.calendarDayJobs[index]
         self.selectedCalendarDayJobId = job ~= nil and job.id or nil
         self:setMenuButtonInfoDirty()
+        return
+    end
+
+    -- Just tracks the highlight and redraws the report text - must not
+    -- reload the list (reloadData re-raises this, see the equipment picker
+    -- note below).
+    if list == self.calendarCompletedTable then
+        local job = self.completedJobs[index]
+        self.selectedCompletedJobId = job ~= nil and job.id or nil
+        self:updateCompletedJobReport()
         return
     end
 
@@ -1122,6 +1147,122 @@ function MenuContractor:refreshCalendarState(farmId, jobs)
     end
 
     self:updateCalendarDayDetails()
+    self:refreshCompletedJobsState(farmId, jobs)
+end
+
+-- Completed jobs (029 follow-up) -----------------------------------------
+
+-- The absolute (monotonic) day a completed job finished on, as a calendar
+-- period/day/year, counted back from today. Assumes daysPerPeriod hasn't
+-- changed since, which is all we can do without storing the date itself.
+local function monotonicDayToCalendar(monotonicDay)
+    local environment = g_currentMission.environment
+    local daysPerPeriod = environment.daysPerPeriod
+    local yearLength = daysPerPeriod * Environment.PERIODS_IN_YEAR
+    local todayIndex = (environment.currentPeriod - 1) * daysPerPeriod + environment.currentDayInPeriod - 1
+    local index = todayIndex - (environment.currentMonotonicDay - monotonicDay)
+    local yearOffset = math.floor(index / yearLength)
+    local indexInYear = index - yearOffset * yearLength
+    return math.floor(indexInYear / daysPerPeriod) + 1, indexInYear % daysPerPeriod + 1,
+        environment.currentYear + yearOffset
+end
+
+local function formatCompletedAt(completedAt)
+    if completedAt == nil then
+        return "-"
+    end
+    local period, dayInPeriod, year = monotonicDayToCalendar(math.floor(completedAt / (24 * 60)))
+    return formatCalendarDate(period, dayInPeriod, year)
+end
+
+-- Same reload-then-show-the-wrapping-container shape as
+-- updateCalendarDayDetails (never toggle the SmoothList itself). Keeps the
+-- highlighted job if it's still listed, otherwise re-picks the newest.
+function MenuContractor:refreshCompletedJobsState(farmId, jobs)
+    self.completedJobs = jobs:getJobsByState(farmId, TheContractorJob.STATE.COMPLETED)
+    table.sort(self.completedJobs, function(a, b)
+        if (a.completedAt or -1) ~= (b.completedAt or -1) then
+            return (a.completedAt or -1) > (b.completedAt or -1)
+        end
+        return a.id > b.id
+    end)
+
+    self.calendarCompletedTable:reloadData()
+
+    local hasJobs = #self.completedJobs > 0
+    self.calendarCompletedContainer:setVisible(self.allocatingJobId == nil)
+    self.calendarCompletedEmptyText:setVisible(not hasJobs)
+    self.calendarCompletedListContainer:setVisible(hasJobs)
+
+    local selectedIndex = nil
+    for i, job in ipairs(self.completedJobs) do
+        if job.id == self.selectedCompletedJobId then
+            selectedIndex = i
+        end
+    end
+    if hasJobs then
+        selectedIndex = selectedIndex or 1
+        self.calendarCompletedTable:setSelectedIndex(selectedIndex)
+        self.selectedCompletedJobId = self.completedJobs[selectedIndex].id
+    else
+        self.selectedCompletedJobId = nil
+    end
+
+    self:updateCompletedJobReport()
+end
+
+function MenuContractor:populateCompletedJobCell(index, cell)
+    local job = self.completedJobs[index]
+    if job == nil then
+        return
+    end
+
+    cell:getAttribute("jobType"):setText(job:getDisplayTitle())
+
+    local field = g_fieldManager:getFieldById(job.fieldId)
+    cell:getAttribute("field"):setText(field ~= nil and field:getName() or tostring(job.fieldId))
+
+    cell:getAttribute("completed"):setText(formatCompletedAt(job.completedAt))
+    cell:getAttribute("quality"):setText(job.qualityScore ~= nil and string.format("%d%%", job.qualityScore) or "-")
+end
+
+-- Who did it: "You", or the worker(s) by name. A worker released since
+-- is no longer on the roster, so they're shown as a former employee.
+function MenuContractor:getCompletedJobCrewText(job)
+    local workerIds = job:getWorkerIds()
+    if #workerIds == 0 then
+        return g_i18n:getText("tc_allocation_myself")
+    end
+
+    local staff = g_currentMission.TheContractor.Staff
+    local names = {}
+    for _, workerId in ipairs(workerIds) do
+        local worker = staff:getWorker(job.farmId, workerId)
+        table.insert(names, worker ~= nil and worker.name or g_i18n:getText("tc_calendar_formerWorker"))
+    end
+    return table.concat(names, ", ")
+end
+
+function MenuContractor:updateCompletedJobReport()
+    local job = nil
+    for _, candidate in ipairs(self.completedJobs) do
+        if candidate.id == self.selectedCompletedJobId then
+            job = candidate
+        end
+    end
+
+    if job == nil then
+        self.calendarCompletedReport:setText("")
+        return
+    end
+
+    self.calendarCompletedReport:setText(string.format(g_i18n:getText("tc_calendar_completedReport"),
+        self:getCompletedJobCrewText(job),
+        g_i18n:formatMoney(job.paymentAmount or job.price, 0, true, true),
+        TheContractorJob.formatMinutes(job:getTimeTakenMinutes()),
+        g_i18n:formatMoney(job.fuelCost, 0, true, true), job.fuelUsedLiters,
+        job.qualityScore ~= nil and string.format("%d%%", job.qualityScore) or "-",
+        job.stuckInterventions))
 end
 
 function MenuContractor:getSelectedCalendarDayRow()
@@ -1249,6 +1390,7 @@ end
 function MenuContractor:onClickCancelAllocation()
     self.allocatingJobId = nil
     self.allocationContainer:setVisible(false)
+    self.calendarCompletedContainer:setVisible(true)
     self:updateCalendarDayDetails()
     self:setMenuButtonInfoDirty()
 end
@@ -1266,6 +1408,8 @@ function MenuContractor:refreshAllocationState()
 
     self.calendarDayJobsContainer:setVisible(false)
     self.allocationContainer:setVisible(job ~= nil)
+    -- The allocation panel runs down over the completed-jobs section.
+    self.calendarCompletedContainer:setVisible(false)
     self:setMenuButtonInfoDirty()
 
     if job == nil then
@@ -1791,6 +1935,7 @@ function MenuContractor:sendCounterOffer(jobId, counterPrice)
 
     local previousJob = jobs:getJob(farmId, jobId)
     local previousPrice = previousJob ~= nil and previousJob.price or nil
+    local previousRounds = previousJob ~= nil and previousJob.negotiationRounds or nil
 
     g_client:getServerConnection():sendEvent(TCCounterOfferEvent.new(farmId, jobId, counterPrice))
 
@@ -1798,7 +1943,7 @@ function MenuContractor:sendCounterOffer(jobId, counterPrice)
 
     local updatedJob = jobs:getJob(farmId, jobId)
     if updatedJob ~= nil and previousPrice ~= nil then
-        local message = self:describeNegotiationOutcome(previousPrice, updatedJob, counterPrice)
+        local message = self:describeNegotiationOutcome(previousPrice, previousRounds, updatedJob, counterPrice)
         if message ~= nil then
             self.negotiationHistory[jobId] = self.negotiationHistory[jobId] or {}
             table.insert(self.negotiationHistory[jobId], message)
@@ -1813,7 +1958,7 @@ function MenuContractor:sendCounterOffer(jobId, counterPrice)
     end
 end
 
-function MenuContractor:describeNegotiationOutcome(previousPrice, job, counterPrice)
+function MenuContractor:describeNegotiationOutcome(previousPrice, previousRounds, job, counterPrice)
     if job.state == TheContractorJob.STATE.ACCEPTED then
         return string.format(g_i18n:getText("tc_inbox_negotiationAccepted"),
             g_i18n:formatMoney(job.price, 0, true, true))
@@ -1822,14 +1967,17 @@ function MenuContractor:describeNegotiationOutcome(previousPrice, job, counterPr
     elseif job.price ~= previousPrice then
         return string.format(g_i18n:getText("tc_inbox_negotiationCountered"),
             g_i18n:formatMoney(counterPrice, 0, true, true), g_i18n:formatMoney(job.price, 0, true, true))
+    elseif job.negotiationRounds > previousRounds then
+        -- Countered at the price they'd already offered (026's negotiation
+        -- never lets their counter drop) - they're holding firm.
+        return string.format(g_i18n:getText("tc_inbox_negotiationHolding"),
+            g_i18n:formatMoney(job.price, 0, true, true))
     end
     return nil
 end
 
--- Active-ad status line, plus the three purchase buttons' disabled state
--- (funds/tier gating can change between frames, e.g. money spent elsewhere
--- or a reputation-tier-up) — same "mutate .disabled in place, then dirty
--- the button bar" pattern as FS25_RedTape's updateSchemeActionButton.
+-- Active-ad status line. Purchase gating lives in TCAdvertisingDialog now
+-- (027), so there's no button state to update here.
 function MenuContractor:refreshAdvertisingState(farmId, advertising)
     local activeLevel = advertising:getActiveLevel(farmId)
     if activeLevel ~= nil then
@@ -1838,11 +1986,6 @@ function MenuContractor:refreshAdvertisingState(farmId, advertising)
     else
         self.textAdvertisingStatus:setText(g_i18n:getText("tc_advertising_none"))
     end
-
-    self.btnBuyLocalAd.disabled = not advertising:canPurchase(farmId, "localNewspaper")
-    self.btnBuyRegionalAd.disabled = not advertising:canPurchase(farmId, "regionalNewspaper")
-    self.btnBuyTvAd.disabled = not advertising:canPurchase(farmId, "tv")
-    self:setMenuButtonInfoDirty()
 end
 
 function MenuContractor:onClickCreateCompany()
@@ -1877,31 +2020,12 @@ function MenuContractor:onClickCreateCompany()
     end, self, "", dialogPrompt, dialogPrompt, 30, g_i18n:getText("tc_actions_createButton"))
 end
 
--- Funds-check-then-prompt pattern (same as onClickCreateCompany), except
--- the gate is canPurchase() (funds AND reputation-tier) rather than funds
--- alone, and there's no name to collect so a plain YesNoDialog confirm is
--- enough instead of TextInputDialog.
-function MenuContractor:onClickBuyAdvertising(levelKey)
-    local farmId = g_currentMission:getFarmId()
-    local advertising = g_currentMission.TheContractor.Advertising
-
-    if not advertising:canPurchase(farmId, levelKey) then
-        InfoDialog.show(g_i18n:getText("tc_advertising_cannotPurchase"))
-        return
-    end
-
-    local levelDef = TheContractorAdvertising.LEVELS_BY_KEY[levelKey]
-    local dialogPrompt = string.format(g_i18n:getText("tc_advertising_confirmPrompt"),
-        g_i18n:getText("tc_advertising_" .. levelKey), g_i18n:formatMoney(levelDef.cost, 0, true, true))
-
-    YesNoDialog.show(function(target, clickOk)
-        if not clickOk then
-            return
-        end
-
-        g_client:getServerConnection():sendEvent(TCPurchaseAdvertisingEvent.new(farmId, levelKey))
+-- Level/duration choice, cost preview and the funds/tier checks all live in
+-- TCAdvertisingDialog (027), which sends the purchase event itself.
+function MenuContractor:onClickBuyAdvertising()
+    TCAdvertisingDialog.show(g_currentMission:getFarmId(), function(target)
         target:refreshCompanyState()
-    end, self, dialogPrompt)
+    end, self)
 end
 
 function MenuContractor:onClickInbox()

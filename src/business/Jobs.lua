@@ -13,23 +13,35 @@ TheContractorJobs_mt = Class(TheContractorJobs)
 table.insert(FinanceStats.statNames, "tcJobPayout")
 FinanceStats.statNameToIndex["tcJobPayout"] = #FinanceStats.statNames
 
--- Placeholder flat penalty for a missed deadline, scaled down by whatever
--- progress the job had made (see missJob) — 026 owns the real balance pass,
--- same as every other placeholder number in this codebase.
-TheContractorJobs.MISSED_JOB_REPUTATION_PENALTY = 10
+-- Missed-deadline penalty (026): MISSED_JOB_PENALTY_MULTIPLIER times what
+-- the job would have earned on completion (getBaseReputationReward), never
+-- less than MIN_MISSED_JOB_REPUTATION_PENALTY, then scaled down by whatever
+-- progress the job had made (see missJob). Tied to the job rather than a
+-- flat amount so a miss stings the same at every tier - a flat 10 is
+-- nothing to a company on thousands of points. Over 1x so taking on work
+-- you can't finish is a net loss, not a free roll.
+TheContractorJobs.MISSED_JOB_PENALTY_MULTIPLIER = 1.5
+TheContractorJobs.MIN_MISSED_JOB_REPUTATION_PENALTY = 10
 
 -- Completion reputation reward (022) is the field's area times the job
 -- type's reputationPerHa (JobGeneration's JOB_TYPES), scaled down by
 -- operator under-qualification (see calculateReputationReward). Never less
--- than MIN_COMPLETION_REPUTATION_REWARD, so a tiny field still counts. 026
--- owns the real balance pass, same as every other placeholder number in
--- this codebase.
+-- than MIN_COMPLETION_REPUTATION_REWARD, so a tiny field still counts.
 TheContractorJobs.MIN_COMPLETION_REPUTATION_REWARD = 1
 
 -- A job's field work counts as "finished" once 019's completionPercentage
 -- (0-100 scale, already normalized against AbstractMission.SUCCESS_FACTOR by
 -- TCJobProgress) reaches this.
 TheContractorJobs.COMPLETION_THRESHOLD_PERCENTAGE = 100
+
+-- Quality score (029), 0-100, set on completion (calculateQualityScore): a
+-- weighted blend of skill (the operator's qualification ratio, the same one
+-- that scales the reputation reward) and reliability (1 minus
+-- QUALITY_PENALTY_PER_INTERVENTION for each time 021's watchdog had to step
+-- in, floored at 0). The player driving personally always scores 100.
+TheContractorJobs.QUALITY_SKILL_WEIGHT = 0.7
+TheContractorJobs.QUALITY_RELIABILITY_WEIGHT = 0.3
+TheContractorJobs.QUALITY_PENALTY_PER_INTERVENTION = 0.5
 
 local function isMissableState(state)
     return state == TheContractorJob.STATE.ACCEPTED or state == TheContractorJob.STATE.ALLOCATED or
@@ -406,7 +418,9 @@ function TheContractorJobs:missJob(job)
     -- Reputation.lua's score is otherwise always an integer (tier thresholds,
     -- %d display formatting) — floor this rather than let a partial-progress
     -- job leave a fractional score behind.
-    local penalty = math.floor(TheContractorJobs.MISSED_JOB_REPUTATION_PENALTY * (1 - job.completionPercentage / 100))
+    local fullPenalty = math.max(TheContractorJobs.MIN_MISSED_JOB_REPUTATION_PENALTY,
+        TheContractorJobs.getBaseReputationReward(job) * TheContractorJobs.MISSED_JOB_PENALTY_MULTIPLIER)
+    local penalty = math.floor(fullPenalty * (1 - job.completionPercentage / 100))
     g_currentMission.TheContractor.Reputation:addReputation(job.farmId, -penalty)
 
     local wasAllocated = job.state ~= TheContractorJob.STATE.ACCEPTED
@@ -509,16 +523,107 @@ function TheContractorJobs:update(dt)
     self:checkForCompletions()
 end
 
+-- Also where a player-driven job's work start gets recorded (029): nothing
+-- dispatches it, so the first field progress seen is the best signal
+-- there is. A hired worker's job has normally been marked already, when
+-- Dispatch sent them off.
 function TheContractorJobs:checkForCompletions()
     for _, farm in ipairs(g_farmManager:getFarms()) do
         local farmId = farm.farmId
         for _, job in ipairs(self:getJobsByState(farmId, TheContractorJob.STATE.ALLOCATED)) do
+            if job.completionPercentage > 0 then
+                self:markWorkStarted(job)
+            end
             self:completeJob(job)
         end
         for _, job in ipairs(self:getJobsByState(farmId, TheContractorJob.STATE.IN_PROGRESS)) do
+            self:markWorkStarted(job)
             self:completeJob(job)
         end
     end
+end
+
+-- Absolute in-game minutes (monotonic across days/years) - what a job's
+-- workStartedAt/completedAt are measured in (029).
+function TheContractorJobs.getGameMinutes()
+    local environment = g_currentMission.environment
+    return environment.currentMonotonicDay * 24 * 60 + environment.dayTime / 60000
+end
+
+-- Server-only. First call wins, so it's safe from every path that might
+-- see work begin (Dispatch setting off, a resumed/retried dispatch, the
+-- completion sweep).
+function TheContractorJobs:markWorkStarted(job)
+    if not g_currentMission:getIsServer() or job.workStartedAt ~= nil then
+        return
+    end
+    job.workStartedAt = TheContractorJobs.getGameMinutes()
+end
+
+-- Job history (029): completed jobs stay in jobsByFarm (and the save) for
+-- good, so a worker's history is just the completed jobs they worked on -
+-- as operator or as hauler. Per-worker aggregation for a staff-history
+-- view builds on these two.
+function TheContractorJobs:getCompletedJobsForWorker(farmId, workerId)
+    local result = {}
+    for _, job in ipairs(self:getJobsByState(farmId, TheContractorJob.STATE.COMPLETED)) do
+        for _, id in ipairs(job:getWorkerIds()) do
+            if id == workerId then
+                table.insert(result, job)
+                break
+            end
+        end
+    end
+    table.sort(result, function(a, b)
+        return (a.completedAt or 0) < (b.completedAt or 0)
+    end)
+    return result
+end
+
+-- Average qualityScore over the worker's completed jobs that have one, and
+-- how many that was. nil, 0 for a worker with no scored jobs yet.
+function TheContractorJobs:getAverageQualityForWorker(farmId, workerId)
+    local total, count = 0, 0
+    for _, job in ipairs(self:getCompletedJobsForWorker(farmId, workerId)) do
+        if job.qualityScore ~= nil then
+            total = total + job.qualityScore
+            count = count + 1
+        end
+    end
+    if count == 0 then
+        return nil, 0
+    end
+    return total / count, count
+end
+
+-- The farm's most recently completed job with a recorded completion time
+-- (029), or nil.
+function TheContractorJobs:getLastCompletedJob(farmId)
+    local last = nil
+    for _, job in ipairs(self:getJobsByState(farmId, TheContractorJob.STATE.COMPLETED)) do
+        if job.completedAt ~= nil and (last == nil or job.completedAt > last.completedAt) then
+            last = job
+        end
+    end
+    return last
+end
+
+-- The allocated/in_progress job holding this vehicle (by network object
+-- id) whose work has started, or nil - what TCJobFuel charges fuel to.
+function TheContractorJobs:getWorkingJobForVehicle(vehicleId)
+    for _, farmJobs in pairs(self.jobsByFarm) do
+        for _, job in pairs(farmJobs) do
+            if job.workStartedAt ~= nil and (job.state == TheContractorJob.STATE.ALLOCATED or
+                    job.state == TheContractorJob.STATE.IN_PROGRESS) then
+                for _, id in ipairs(job:getAllEquipmentIds()) do
+                    if id == vehicleId then
+                        return job
+                    end
+                end
+            end
+        end
+    end
+    return nil
 end
 
 -- Cross-farm lookup by job id alone. Safe because ids are globally unique
@@ -598,6 +703,17 @@ function TheContractorJobs:getWorkerQualificationRatio(job, workerId, equipmentI
     return workerSkill / job.requiredSkillLevel
 end
 
+-- 0-100 (029), see QUALITY_SKILL_WEIGHT. Reuses 022's qualification ratio
+-- rather than a second skill formula.
+function TheContractorJobs:calculateQualityScore(job)
+    local skill = self:getReputationQualificationRatio(job)
+    local reliability = math.max(0,
+        1 - job.stuckInterventions * TheContractorJobs.QUALITY_PENALTY_PER_INTERVENTION)
+    local score = TheContractorJobs.QUALITY_SKILL_WEIGHT * skill +
+        TheContractorJobs.QUALITY_RELIABILITY_WEIGHT * reliability
+    return math.floor(math.max(0, math.min(1, score)) * 100 + 0.5)
+end
+
 -- Pays the full negotiated price and awards scaled reputation once a job's
 -- field work has actually finished (019's completionPercentage crossing
 -- COMPLETION_THRESHOLD_PERCENTAGE) - that check doubles as the "cross-
@@ -633,6 +749,11 @@ function TheContractorJobs:completeJob(job)
     local reputationReward = self:calculateReputationReward(job)
     g_currentMission.TheContractor.Reputation:addReputation(job.farmId, reputationReward)
 
+    -- Summary (029): computed here, alongside the payout, and sent to
+    -- clients in the TCJobCompletedEvent snapshot below.
+    job.completedAt = TheContractorJobs.getGameMinutes()
+    job.qualityScore = self:calculateQualityScore(job)
+
     job:transitionTo(TheContractorJob.STATE.COMPLETED)
 
     -- 023: worker + equipment don't go straight back to idle/available -
@@ -644,12 +765,22 @@ function TheContractorJobs:completeJob(job)
     TCJobProgress.clearJob(job.id)
     TCHaulage.stopDelivery(job)
 
-    Logging.info("TheContractor: farm %d job %d completed (%s, field %d) - paid %.0f, +%d reputation", job.farmId,
-        job.id, job.jobType, job.fieldId, job.paymentAmount, reputationReward)
+    Logging.info("TheContractor: farm %d job %d completed (%s, field %d) - paid %.0f, +%d reputation, %s taken, %.0f l fuel (%.0f), quality %d",
+        job.farmId, job.id, job.jobType, job.fieldId, job.paymentAmount, reputationReward,
+        TheContractorJob.formatMinutes(job:getTimeTakenMinutes()), job.fuelUsedLiters, job.fuelCost,
+        job.qualityScore)
+
+    -- The host's own notification - the broadcast below doesn't loop back
+    -- to it (see src/events/README.md).
+    TCJobCompletedEvent.showNotification(job)
 
     if g_server ~= nil then
         g_server:broadcastEvent(TCJobCompletedEvent.new(job))
     end
+
+    -- 030: the job's workers may grow from it. After the completion
+    -- broadcast so the "job complete" notification comes first.
+    g_currentMission.TheContractor.Staff:applyGrowthFromJob(job)
 end
 
 -- Wire serialization, shared by TCJobCreatedEvent and initial client state.
@@ -696,6 +827,15 @@ function TheContractorJobs.writeJob(streamId, job)
     streamWriteString(streamId, job.deliveryStationName or "")
     streamWriteFloat32(streamId, job.requiredLiters)
     streamWriteFloat32(streamId, job.deliveredLiters)
+    streamWriteFloat32(streamId, job.offeredPrice)
+
+    -- Completion summary (029). -1 stands in for "not recorded".
+    streamWriteFloat32(streamId, job.workStartedAt or -1)
+    streamWriteFloat32(streamId, job.completedAt or -1)
+    streamWriteFloat32(streamId, job.fuelUsedLiters)
+    streamWriteFloat32(streamId, job.fuelCost)
+    streamWriteInt32(streamId, job.stuckInterventions)
+    streamWriteInt32(streamId, job.qualityScore or -1)
 end
 
 function TheContractorJobs.readJob(streamId)
@@ -752,6 +892,17 @@ function TheContractorJobs.readJob(streamId)
     end
     job.requiredLiters = streamReadFloat32(streamId)
     job.deliveredLiters = streamReadFloat32(streamId)
+    job.offeredPrice = streamReadFloat32(streamId)
+
+    local workStartedAt = streamReadFloat32(streamId)
+    local completedAt = streamReadFloat32(streamId)
+    job.workStartedAt = workStartedAt >= 0 and workStartedAt or nil
+    job.completedAt = completedAt >= 0 and completedAt or nil
+    job.fuelUsedLiters = streamReadFloat32(streamId)
+    job.fuelCost = streamReadFloat32(streamId)
+    job.stuckInterventions = streamReadInt32(streamId)
+    local qualityScore = streamReadInt32(streamId)
+    job.qualityScore = qualityScore >= 0 and qualityScore or nil
 
     return job
 end
@@ -812,6 +963,9 @@ function TheContractorJobs:loadFromXMLFile(xmlFile)
             local job = TheContractorJob.new(id, farmId, jobType, fieldId, requiredSkillLevel, targetPeriod,
                 targetDayInPeriod, price)
 
+            -- Saves from before 026 have no offeredPrice - the current price
+            -- (Job.new's default) is the best baseline left.
+            job.offeredPrice = Utils.getNoNil(getXMLFloat(xmlFile, jobKey .. "#offeredPrice"), job.offeredPrice)
             job.state = Utils.getNoNil(getXMLString(xmlFile, jobKey .. "#state"), job.state)
             job.completionPercentage = Utils.getNoNil(getXMLFloat(xmlFile, jobKey .. "#completionPercentage"), 0)
             job.equipmentAvailable = Utils.getNoNil(getXMLBool(xmlFile, jobKey .. "#equipmentAvailable"), true)
@@ -840,6 +994,12 @@ function TheContractorJobs:loadFromXMLFile(xmlFile)
             job.deliveryStationName = getXMLString(xmlFile, jobKey .. ".delivery#stationName")
             job.requiredLiters = Utils.getNoNil(getXMLFloat(xmlFile, jobKey .. ".delivery#requiredLiters"), 0)
             job.deliveredLiters = Utils.getNoNil(getXMLFloat(xmlFile, jobKey .. ".delivery#deliveredLiters"), 0)
+            job.workStartedAt = getXMLFloat(xmlFile, jobKey .. ".summary#workStartedAt")
+            job.completedAt = getXMLFloat(xmlFile, jobKey .. ".summary#completedAt")
+            job.fuelUsedLiters = Utils.getNoNil(getXMLFloat(xmlFile, jobKey .. ".summary#fuelUsedLiters"), 0)
+            job.fuelCost = Utils.getNoNil(getXMLFloat(xmlFile, jobKey .. ".summary#fuelCost"), 0)
+            job.stuckInterventions = Utils.getNoNil(getXMLInt(xmlFile, jobKey .. ".summary#stuckInterventions"), 0)
+            job.qualityScore = getXMLInt(xmlFile, jobKey .. ".summary#qualityScore")
 
             self.jobsByFarm[farmId] = self.jobsByFarm[farmId] or {}
             self.jobsByFarm[farmId][id] = job
@@ -876,6 +1036,7 @@ function TheContractorJobs:saveToXmlFile(xmlFile)
             setXMLInt(xmlFile, jobKey .. "#targetPeriod", job.targetPeriod)
             setXMLInt(xmlFile, jobKey .. "#targetDayInPeriod", job.targetDayInPeriod)
             setXMLFloat(xmlFile, jobKey .. "#price", job.price)
+            setXMLFloat(xmlFile, jobKey .. "#offeredPrice", job.offeredPrice)
             setXMLString(xmlFile, jobKey .. "#state", job.state)
             setXMLFloat(xmlFile, jobKey .. "#completionPercentage", job.completionPercentage)
             setXMLBool(xmlFile, jobKey .. "#equipmentAvailable", job.equipmentAvailable)
@@ -925,6 +1086,23 @@ function TheContractorJobs:saveToXmlFile(xmlFile)
                 end
                 setXMLFloat(xmlFile, jobKey .. ".delivery#requiredLiters", job.requiredLiters)
                 setXMLFloat(xmlFile, jobKey .. ".delivery#deliveredLiters", job.deliveredLiters)
+            end
+
+            -- Completion summary (029) - written once work has started, so
+            -- offers and untouched jobs stay compact.
+            if job.workStartedAt ~= nil or job.completedAt ~= nil then
+                if job.workStartedAt ~= nil then
+                    setXMLFloat(xmlFile, jobKey .. ".summary#workStartedAt", job.workStartedAt)
+                end
+                if job.completedAt ~= nil then
+                    setXMLFloat(xmlFile, jobKey .. ".summary#completedAt", job.completedAt)
+                end
+                setXMLFloat(xmlFile, jobKey .. ".summary#fuelUsedLiters", job.fuelUsedLiters)
+                setXMLFloat(xmlFile, jobKey .. ".summary#fuelCost", job.fuelCost)
+                setXMLInt(xmlFile, jobKey .. ".summary#stuckInterventions", job.stuckInterventions)
+                if job.qualityScore ~= nil then
+                    setXMLInt(xmlFile, jobKey .. ".summary#qualityScore", job.qualityScore)
+                end
             end
 
             jobIndex = jobIndex + 1

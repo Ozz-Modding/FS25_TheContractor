@@ -77,6 +77,9 @@ function TheContractorJob.new(id, farmId, jobType, fieldId, requiredSkillLevel, 
     self.targetPeriod = targetPeriod
     self.targetDayInPeriod = targetDayInPeriod
     self.price = price
+    -- The price as first offered, before any negotiation (026): the
+    -- baseline TheContractorNegotiation measures counters against.
+    self.offeredPrice = price
 
     self.state = TheContractorJob.STATE.OFFERED
     self.assignedWorkerId = nil
@@ -86,10 +89,9 @@ function TheContractorJob.new(id, farmId, jobType, fieldId, requiredSkillLevel, 
 
     -- Hidden per-job negotiation mechanic (014) — never shown to the player.
     -- Degrades each negotiation round; hitting 0 means the NPC walks away
-    -- regardless of the counter offered. Initial value/degradation amount
-    -- are placeholders (see TheContractorNegotiation), exact formula
-    -- deferred to 026 — only the field and its lifecycle need to exist now.
-    self.eagerness = TheContractorNegotiation.INITIAL_EAGERNESS
+    -- regardless of the counter offered. See TheContractorNegotiation for
+    -- the starting range and degradation curve.
+    self.eagerness = TheContractorNegotiation.rollInitialEagerness()
     -- Rounds of counter-offers made so far, enforced against
     -- TheContractorNegotiation.MAX_ROUNDS regardless of eagerness (Q12's
     -- hard safety cap, keeping the negotiation finite even if the
@@ -165,7 +167,52 @@ function TheContractorJob.new(id, farmId, jobType, fieldId, requiredSkillLevel, 
     self.requiredLiters = 0
     self.deliveredLiters = 0
 
+    -- Completion summary (029), all server-authoritative and sent to
+    -- clients in the job snapshot. workStartedAt/completedAt are absolute
+    -- in-game minutes (TheContractorJobs.getGameMinutes): work starts when
+    -- a hired worker sets off (Dispatch) or, for a player-driven job, at
+    -- the first field progress seen. Fuel is what the job's own equipment
+    -- actually burned once work had started (TCJobFuel), priced as it was
+    -- burned. stuckInterventions counts 021's watchdog resets/escalations.
+    -- qualityScore (0-100) is set on completion - see
+    -- TheContractorJobs:calculateQualityScore.
+    self.workStartedAt = nil
+    self.completedAt = nil
+    self.fuelUsedLiters = 0
+    self.fuelCost = 0
+    self.stuckInterventions = 0
+    self.qualityScore = nil
+
     return self
+end
+
+-- In-game minutes from work starting to completion, or nil if either end
+-- wasn't recorded (e.g. completed before 029 existed).
+function TheContractorJob:getTimeTakenMinutes()
+    if self.workStartedAt == nil or self.completedAt == nil then
+        return nil
+    end
+    return math.max(0, self.completedAt - self.workStartedAt)
+end
+
+-- "2h 05m" style, or "-" when there's nothing to show.
+function TheContractorJob.formatMinutes(minutes)
+    if minutes == nil then
+        return "-"
+    end
+    local rounded = math.floor(minutes + 0.5)
+    return string.format(g_i18n:getText("tc_summary_duration"), math.floor(rounded / 60), rounded % 60)
+end
+
+-- One-line completion summary (029): "<title> on <field>: 2h 05m, fuel
+-- €340 (120 l), quality 86%". Shared by the completion notification and
+-- the Overview tab's last-job line.
+function TheContractorJob:getSummaryText()
+    local field = g_fieldManager:getFieldById(self.fieldId)
+    return string.format(g_i18n:getText("tc_summary_line"), self:getDisplayTitle(),
+        field ~= nil and field:getName() or tostring(self.fieldId),
+        TheContractorJob.formatMinutes(self:getTimeTakenMinutes()),
+        g_i18n:formatMoney(self.fuelCost, 0, true, true), self.fuelUsedLiters, self.qualityScore or 0)
 end
 
 -- The player's farm is doing the carting itself: a haulage job allocated

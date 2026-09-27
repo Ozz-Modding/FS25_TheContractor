@@ -25,8 +25,7 @@ TheContractorWatchdog_mt = Class(TheContractorWatchdog)
 
 -- Configurable tunable per the ticket's own AC ("expose as a tunable, not
 -- hardcoded deep in logic") — how long a job's completion percentage can go
--- unchanged before it's treated as stuck. 026 owns the real balance pass,
--- same as every other placeholder number in this codebase.
+-- unchanged before it's treated as stuck. Reviewed in 026 and kept.
 TheContractorWatchdog.STUCK_TIMEOUT_MINUTES = 5
 
 -- Retries attempted (reset + retrigger) before giving up and escalating to
@@ -145,6 +144,9 @@ end
 -- hits Jobs.lua's own missed-deadline sweep.
 function TheContractorWatchdog:handleStuckJob(job, entry)
     entry.retryCount = entry.retryCount + 1
+    -- Persisted on the job itself (unlike retryCount, which is live-only):
+    -- feeds its quality score at completion (029).
+    job.stuckInterventions = job.stuckInterventions + 1
 
     if entry.retryCount > TheContractorWatchdog.MAX_RETRIES_PER_JOB then
         entry.needsAttention = true

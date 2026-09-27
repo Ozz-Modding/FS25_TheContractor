@@ -44,9 +44,11 @@ TheContractorDispatch.SETTLE_MS = 1000
 -- new factors (distance, equipment count, ...) by appending to the list.
 -- `worker` is the job's slowest worker (TheContractorJobs.getSlowestWorker)
 -- - a two-worker haulage job (035) travels at its slower half's pace.
--- Placeholder numbers, same as Cooldown's - 026 owns the balance pass.
-TheContractorDispatch.TRANSPORT_MAX_MINUTES = 10
-TheContractorDispatch.TRANSPORT_MIN_MINUTES = 2
+-- 026: 30 in-game minutes for the slowest worker down to 10 for the
+-- fastest, a bit under Cooldown's buffer since that also covers unloading
+-- and cleaning down.
+TheContractorDispatch.TRANSPORT_MAX_MINUTES = 30
+TheContractorDispatch.TRANSPORT_MIN_MINUTES = 10
 
 TheContractorDispatch.TRANSPORT_WAIT_FACTORS = {
     -- Worker speed (016): linear between a slowest worker's
@@ -163,6 +165,11 @@ function TheContractorDispatch:startJobForWorker(job, skipTransport)
     if not g_currentMission:getIsServer() then
         return
     end
+
+    -- The job's clock (029) starts as the worker sets off, so a slow
+    -- worker's longer trip shows in their time taken. No-op when resuming
+    -- after a load or retrying after a watchdog reset.
+    g_currentMission.TheContractor.Jobs:markWorkStarted(job)
 
     -- Remember where it all stood (it goes back there when the job's done),
     -- and leave anything that isn't part of the job behind in the yard.

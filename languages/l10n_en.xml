@@ -11,7 +11,11 @@
 		<text name="tc_overview_rankMax" text="Max rank"/>
 		<text name="tc_overview_nextRank" text="Next Rank: %s"/>
 		<text name="tc_overview_nextRankNone" text="N/A"/>
-		<text name="tc_overview_jobHistoryPlaceholder" text="Job history and reputation trends coming soon."/>
+		<text name="tc_overview_noCompletedJobs" text="No completed jobs yet."/>
+		<text name="tc_overview_lastCompletedJob" text="Last job: %s"/>
+		<text name="tc_summary_notification" text="Job complete: %s"/>
+		<text name="tc_summary_line" text="%s on Field %s, %s, fuel %s (%.0f l), quality %d%%"/>
+		<text name="tc_summary_duration" text="%dh %02dm"/>
 		<text name="tc_overview_currentJobsHeading" text="Current Jobs"/>
 		<text name="tc_overview_currentJobsEmpty" text="No jobs currently allocated or in progress."/>
 		<text name="tc_overview_currentJobLine" text="Field %s: %s - %d%%"/>
@@ -31,14 +35,25 @@
 		<text name="tc_advertising_heading" text="Advertising"/>
 		<text name="tc_advertising_none" text="No active advertising."/>
 		<text name="tc_advertising_active" text="Active: %s (%d days remaining)"/>
-		<text name="tc_advertising_confirmPrompt" text="Buy %s advertising for %s?"/>
-		<text name="tc_advertising_cannotPurchase" text="You can't buy that advertising right now — check your funds and reputation tier."/>
-		<text name="tc_advertising_buyButton_localNewspaper" text="Buy Local Ad"/>
-		<text name="tc_advertising_buyButton_regionalNewspaper" text="Buy Regional Ad"/>
-		<text name="tc_advertising_buyButton_tv" text="Buy TV Ad"/>
+		<text name="tc_advertising_buyButton" text="Buy Advertising"/>
 		<text name="tc_advertising_localNewspaper" text="Local Newspaper"/>
-		<text name="tc_advertising_regionalNewspaper" text="Regional Newspaper"/>
-		<text name="tc_advertising_tv" text="TV"/>
+		<text name="tc_advertising_regionalMagazine" text="Regional Magazine"/>
+		<text name="tc_advertising_nationalMagazine" text="National Magazine"/>
+		<text name="tc_advertising_onlineAds" text="Online Ads"/>
+		<text name="tc_advertising_dialog_title" text="Buy Advertising"/>
+		<text name="tc_advertising_dialog_levelLabel" text="Advert"/>
+		<text name="tc_advertising_dialog_durationLabel" text="Duration"/>
+		<text name="tc_advertising_dialog_buy" text="Buy"/>
+		<text name="tc_advertising_dialog_levelLocked" text="%s (locked)"/>
+		<text name="tc_advertising_dialog_durationOne" text="1 month"/>
+		<text name="tc_advertising_dialog_durationMany" text="%d months"/>
+		<text name="tc_advertising_dialog_cost" text="%s per month, %s in total"/>
+		<text name="tc_advertising_dialog_effect" text="At your reputation, adverts work at %d%% of their full effect."/>
+		<text name="tc_advertising_dialog_locked" text="Needs %s reputation."/>
+		<text name="tc_advertising_dialog_cannotAfford" text="You can't afford this."/>
+		<text name="tc_advertising_dialog_runsFor" text="Runs for %d days."/>
+		<text name="tc_advertising_dialog_extends" text="Extends your current campaign from %d to %d days left."/>
+		<text name="tc_advertising_dialog_replaces" text="Replaces your %s campaign (%d days left). Runs for %d days."/>
 		<text name="tc_moneyType_advertising" text="Advertising"/>
 		<text name="finance_tcAdvertising" text="Advertising"/>
 		<text name="tc_jobType_harvest" text="Harvest"/>
@@ -69,6 +84,7 @@
 		<text name="tc_inbox_negotiationAccepted" text="Deal! They accepted %s."/>
 		<text name="tc_inbox_negotiationDeclined" text="They've walked away from the negotiation."/>
 		<text name="tc_inbox_negotiationCountered" text="They won't do %s, but they'll do %s."/>
+		<text name="tc_inbox_negotiationHolding" text="They won't go any higher than %s."/>
 		<text name="tc_inbox_jobAcceptedInfo" text="Job accepted: %s on Field %s for %s."/>
 		<text name="tc_inbox_jobRejectedInfo" text="Negotiation failed: they walked away from %s on Field %s."/>
 		<text name="tc_calendar_yearLabel" text="Year %d"/>
@@ -79,6 +95,11 @@
 		<text name="tc_calendar_columnFarmland" text="Farmland"/>
 		<text name="tc_calendar_columnPrice" text="Price"/>
 		<text name="tc_calendar_columnAllocation" text="Allocation"/>
+		<text name="tc_calendar_completedHeading" text="Completed jobs"/>
+		<text name="tc_calendar_columnCompleted" text="Completed"/>
+		<text name="tc_calendar_columnQuality" text="Quality"/>
+		<text name="tc_calendar_formerWorker" text="Former employee"/>
+		<text name="tc_calendar_completedReport" text="Done by: %s. Paid %s. Time taken %s. Fuel %s (%.0f l). Quality %s, stuck resets %d."/>
 		<text name="tc_calendar_todayMarker" text="%s (Today)"/>
 		<text name="tc_calendar_unallocatedCount" text="%d unallocated"/>
 		<text name="tc_calendar_missedCount" text="%d failed"/>
@@ -116,12 +137,19 @@
 		<text name="tc_staff_status_idle" text="Idle"/>
 		<text name="tc_staff_status_assigned" text="Assigned"/>
 		<text name="tc_staff_status_cooldown" text="Cooldown"/>
+		<text name="tc_staff_detailAge" text="Age: %d"/>
 		<text name="tc_staff_detailWorkSpeed" text="Work speed: %d/10"/>
 		<text name="tc_staff_detailTier" text="Tier capability: %s"/>
 		<text name="tc_staff_detailStatus" text="Status: %s"/>
 		<text name="tc_staff_detailCost" text="Hire cost: %s"/>
 		<text name="tc_staff_detailJob" text="Current job: %s"/>
 		<text name="tc_staff_detailJobNone" text="None"/>
+		<text name="tc_growth_improved" text="%s improved: %s %d to %d"/>
+		<text name="tc_growth_certified" text="%s is now certified on %s"/>
+		<text name="tc_growth_stat_workSpeed" text="work speed"/>
+		<text name="tc_growth_stat_small" text="small tractors"/>
+		<text name="tc_growth_stat_medium" text="medium tractors"/>
+		<text name="tc_growth_stat_large" text="large tractors"/>
 		<text name="tc_staff_jobLine" text="%s (Field %s)"/>
 		<text name="tc_staff_hireConfirm" text="Hire %s for %s?"/>
 		<text name="tc_staff_hireCannotAfford" text="You can't afford to hire this candidate right now."/>

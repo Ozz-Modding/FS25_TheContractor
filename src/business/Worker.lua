@@ -45,11 +45,11 @@ end
 -- shared candidate pool (see Staff.lua) — it's only set once a farm actually
 -- hires them, at which point they move into that farm's roster.
 --
--- Positional args, in this order, so 030 (age + potential ceiling) and 031
--- (sickness propensity) can each append one more hidden stat to the end of
--- this list without disturbing existing callers — see those tickets' notes
--- on this ticket. Neither is built yet; there is nothing to append today.
-function TheContractorWorker.new(id, farmId, name, workSpeed, tierCapability, hireCost)
+-- Positional args, in this order, so 031 (sickness propensity) can append
+-- one more hidden stat to the end of this list without disturbing existing
+-- callers, the same way 030 appended age/growthPotential.
+function TheContractorWorker.new(id, farmId, name, workSpeed, tierCapability, hireCost, age, growthPotential,
+                                 birthPeriod)
     local self = {}
     setmetatable(self, TheContractorWorker_mt)
 
@@ -61,6 +61,17 @@ function TheContractorWorker.new(id, farmId, name, workSpeed, tierCapability, hi
     -- this worker isn't certified on.
     self.tierCapability = tierCapability or {}
     self.hireCost = hireCost
+
+    -- 030: age is visible (the player's only hint at how much a worker can
+    -- still improve); growthPotential is the hidden number of stat points
+    -- they have left to gain from completed jobs, rolled from age at
+    -- creation (see TheContractorStaff.rollGrowthPotential). Server-only -
+    -- never sent to clients, so it stays 0 there.
+    self.age = age
+    self.growthPotential = growthPotential or 0
+    -- The period (1-12) they turn a year older in - see
+    -- TheContractorStaff:onPeriodChanged. Server-only, like growthPotential.
+    self.birthPeriod = birthPeriod
 
     -- Driven by 018 (allocation) / 023 (buffer/cooldown) — just a field here.
     self.status = TheContractorWorker.STATUS.IDLE
@@ -85,4 +96,21 @@ end
 
 function TheContractorWorker:isIdle()
     return self.status == TheContractorWorker.STATUS.IDLE
+end
+
+-- Growth (030) reads/writes one stat by name: "workSpeed" or a tier key
+-- ("small"/"medium"/"large"). A tier stat is nil while uncertified.
+function TheContractorWorker:getStat(stat)
+    if stat == "workSpeed" then
+        return self.workSpeed
+    end
+    return self.tierCapability[stat]
+end
+
+function TheContractorWorker:setStat(stat, value)
+    if stat == "workSpeed" then
+        self.workSpeed = value
+    else
+        self.tierCapability[stat] = value
+    end
 end

@@ -2,9 +2,9 @@
 -- (Job.lua's job.eagerness) rather than a fixed number of exchange rounds
 -- decides whether a counter offer is accepted, rejected outright, or
 -- countered back. Kept in its own file, mirroring how Advertising.lua
--- isolates 012's interest formula, so 026's balance pass has one place to
--- retune the math without touching the state-machine/event plumbing in
--- Jobs.lua that drives it.
+-- isolates 012's interest formula, so the balance math (026) lives in one
+-- place, apart from the state-machine/event plumbing in Jobs.lua that
+-- drives it.
 --
 -- Stateless: every function here takes the job (and a proposed price) and
 -- returns an outcome, it doesn't mutate anything or know about persistence/
@@ -18,24 +18,32 @@ TheContractorNegotiation = {}
 -- out. "Configurable constant" per the ticket's acceptance criteria.
 TheContractorNegotiation.MAX_ROUNDS = 5
 
--- Placeholder eagerness tuning — exact formula deferred to 026. 0-100 scale;
--- starts at full trust (round 1 gets the farm's full reputation-scaled
--- tolerance, see below) and degrades by a fixed amount every round
--- regardless of outcome, so later counters get squeezed harder.
-TheContractorNegotiation.INITIAL_EAGERNESS = 100
-TheContractorNegotiation.EAGERNESS_DEGRADE_PER_ROUND = 15
+-- Eagerness (026), 0-100 scale. Each offer starts somewhere between MIN and
+-- MAX_INITIAL_EAGERNESS (some clients are keener than others), then loses
+-- BASE_EAGERNESS_DEGRADE after the first round, EAGERNESS_DEGRADE_STEP
+-- more after each round after that (15, 20, 25, 30...) — haggling wears
+-- thin faster the longer it goes on. Roughly four rounds from a keen start
+-- before they walk away, so MAX_ROUNDS rarely has to step in.
+TheContractorNegotiation.MIN_INITIAL_EAGERNESS = 70
+TheContractorNegotiation.MAX_INITIAL_EAGERNESS = 100
+TheContractorNegotiation.BASE_EAGERNESS_DEGRADE = 15
+TheContractorNegotiation.EAGERNESS_DEGRADE_STEP = 5
 
--- Placeholder tolerance-band math: at full eagerness the NPC will accept a
--- counter up to this percentage above the current price; below that band
--- they counter back partway, more than double it and they walk away
--- outright. The ceiling itself is reputation-scaled (a brand new, no-
--- reputation company gets far less room to push price up than an
--- established one — same MIN/MAX/cap-score shape as JobGeneration's own
--- reputation price scaling, for consistency) rather than a flat 0.5 for
--- every farm regardless of standing. 026 owns the real curve.
-TheContractorNegotiation.MIN_TOLERANCE_PERCENT = 0.06
-TheContractorNegotiation.MAX_TOLERANCE_PERCENT = 0.5
-TheContractorNegotiation.REPUTATION_TOLERANCE_CAP_SCORE = 5000
+-- How far above the *original* offer (job.offeredPrice) the client will go
+-- (026). maxTolerance runs linearly on Reputation:getStanding from MIN
+-- (a brand new company: +5%) to MAX (a prestigious one: +25%), scaled by
+-- eagerness/100 into this round's tolerance. Then, against the original
+-- offer:
+--   up to +tolerance                        accepted
+--   past +tolerance * WALKAWAY_MULTIPLIER   they walk away
+--   in between                              they counter at +tolerance
+-- Measured from the original offer rather than the current price so
+-- repeated counters can't ratchet the price up round after round — the
+-- ceiling only ever shrinks as eagerness drops, so the best counter is the
+-- first one.
+TheContractorNegotiation.MIN_TOLERANCE_PERCENT = 0.05
+TheContractorNegotiation.MAX_TOLERANCE_PERCENT = 0.25
+TheContractorNegotiation.WALKAWAY_MULTIPLIER = 2
 
 TheContractorNegotiation.OUTCOME = {
     ACCEPTED = "accepted",
@@ -43,38 +51,49 @@ TheContractorNegotiation.OUTCOME = {
     COUNTERED = "countered",
 }
 
--- Resolves a single round of negotiation against the job's current price and
--- eagerness. Does not mutate the job or degrade eagerness — see
--- TheContractorJobs:proposeCounterOffer for that. Returns outcome, resultPrice
--- (the price to accept at, or the NPC's counter — irrelevant on reject).
-function TheContractorNegotiation.resolveCounterOffer(job, counterPrice)
-    local basePrice = job.price
-    local percentIncrease = (counterPrice - basePrice) / basePrice
-
-    -- Asking for the same or less than the current price is always taken.
-    if percentIncrease <= 0 then
-        return TheContractorNegotiation.OUTCOME.ACCEPTED, counterPrice
-    end
-
-    local reputationScore = g_currentMission.TheContractor.Reputation:getReputationScore(job.farmId)
-    local reputationRatio = math.min(reputationScore / TheContractorNegotiation.REPUTATION_TOLERANCE_CAP_SCORE, 1)
-    local maxTolerance = TheContractorNegotiation.MIN_TOLERANCE_PERCENT +
-        reputationRatio * (TheContractorNegotiation.MAX_TOLERANCE_PERCENT - TheContractorNegotiation.MIN_TOLERANCE_PERCENT)
-
-    local tolerance = maxTolerance * (job.eagerness / 100)
-
-    if percentIncrease <= tolerance then
-        return TheContractorNegotiation.OUTCOME.ACCEPTED, counterPrice
-    end
-
-    if percentIncrease > tolerance * 2 then
-        return TheContractorNegotiation.OUTCOME.REJECTED, basePrice
-    end
-
-    local counterBack = basePrice + (counterPrice - basePrice) * 0.5
-    return TheContractorNegotiation.OUTCOME.COUNTERED, counterBack
+function TheContractorNegotiation.rollInitialEagerness()
+    return math.random(TheContractorNegotiation.MIN_INITIAL_EAGERNESS, TheContractorNegotiation.MAX_INITIAL_EAGERNESS)
 end
 
+-- This round's tolerance, as a fraction of the original offer.
+function TheContractorNegotiation.getTolerance(job)
+    local standing = g_currentMission.TheContractor.Reputation:getStanding(job.farmId)
+    local maxTolerance = TheContractorNegotiation.MIN_TOLERANCE_PERCENT +
+        standing * (TheContractorNegotiation.MAX_TOLERANCE_PERCENT - TheContractorNegotiation.MIN_TOLERANCE_PERCENT)
+    return maxTolerance * (job.eagerness / 100)
+end
+
+-- Resolves a single round of negotiation against the job's original offer
+-- and current eagerness. Does not mutate the job or degrade eagerness — see
+-- TheContractorJobs:proposeCounterOffer for that. Returns outcome,
+-- resultPrice (the price to accept at, or the client's counter — irrelevant
+-- on reject). The counter never drops below the current price: once
+-- they've offered a figure they stand by it, even after eagerness shrinks
+-- their ceiling below it.
+function TheContractorNegotiation.resolveCounterOffer(job, counterPrice)
+    -- Asking for the same or less than the current price is always taken.
+    if counterPrice <= job.price then
+        return TheContractorNegotiation.OUTCOME.ACCEPTED, counterPrice
+    end
+
+    local offeredPrice = job.offeredPrice or job.price
+    local tolerance = TheContractorNegotiation.getTolerance(job)
+    local ceiling = math.floor(offeredPrice * (1 + tolerance))
+
+    if counterPrice <= ceiling then
+        return TheContractorNegotiation.OUTCOME.ACCEPTED, counterPrice
+    end
+
+    if counterPrice > offeredPrice * (1 + tolerance * TheContractorNegotiation.WALKAWAY_MULTIPLIER) then
+        return TheContractorNegotiation.OUTCOME.REJECTED, job.price
+    end
+
+    return TheContractorNegotiation.OUTCOME.COUNTERED, math.max(job.price, ceiling)
+end
+
+-- Call after job.negotiationRounds has been incremented for this round.
 function TheContractorNegotiation.degradeEagerness(job)
-    job.eagerness = math.max(0, job.eagerness - TheContractorNegotiation.EAGERNESS_DEGRADE_PER_ROUND)
+    local degrade = TheContractorNegotiation.BASE_EAGERNESS_DEGRADE +
+        TheContractorNegotiation.EAGERNESS_DEGRADE_STEP * math.max(0, job.negotiationRounds - 1)
+    job.eagerness = math.max(0, job.eagerness - degrade)
 end

@@ -67,4 +67,16 @@
          gets the game's own styling for free instead of a hand-rolled pair
          of arrow buttons. -->
     <Profile name="tc_calendarPeriodSwitcher" extends="fs25_subCategorySelector" with="anchorTopLeft" />
+
+    <!-- Advertising purchase dialog (027). anchorTopCenter so positions
+         resolve against the dialog content container's top-centre, like
+         fs25_dialogText's labels (same approach as FS25_RealisticLivestock's
+         rl_filterDialog_picker). -->
+    <Profile name="tc_adDialogPicker" extends="fs25_multiTextOption" with="anchorTopCenter">
+        <size value="340px 36px" />
+    </Profile>
+    <Profile name="tc_adDialogInfoText" extends="fs25_dialogText" with="anchorTopCenter">
+        <size value="680px 28px" />
+        <textAlignment value="center" />
+    </Profile>
 </GUIProfiles>
