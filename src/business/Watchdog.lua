@@ -160,43 +160,18 @@ function TheContractorWatchdog:handleStuckJob(job, entry)
         job.farmId, job.id, TheContractorWatchdog.STUCK_TIMEOUT_MINUTES, entry.retryCount,
         TheContractorWatchdog.MAX_RETRIES_PER_JOB)
 
+    -- A fresh dispatch re-rigs the equipment and teleports it back to the
+    -- field's center (TCJobSiteSetup) before restarting the AI.
     g_currentMission.TheContractor.Dispatch:stopJob(job.id, AIMessageErrorBlockedByObject.new())
-    self:resetEquipmentToFieldCenter(job)
 
     local worker = g_currentMission.TheContractor.Staff:getWorker(job.farmId, job.assignedWorkerId)
     if worker ~= nil then
-        g_currentMission.TheContractor.Dispatch:startJobForWorker(job, worker)
+        g_currentMission.TheContractor.Dispatch:startJobForWorker(job, true)
     end
 
     entry.elapsedStuckMs = 0
 
     self:notify(job, false)
-end
-
--- Repositions every piece of the job's allocated equipment (008) to the
--- field's center point, same as the brief's own "reset them to the middle
--- of the field" description. Deliberately moves all assigned vehicles
--- (tractor and implement alike), not just whichever one 020's Dispatch
--- picked as the AI's driving vehicle - a stuck tractor+implement pair can
--- otherwise be left visibly torn apart, and the AI job's own applyCurrentState
--- (called right after, from startJobForWorker) re-derives a fresh transform
--- for the driving vehicle from this new position anyway.
-function TheContractorWatchdog:resetEquipmentToFieldCenter(job)
-    local field = g_fieldManager:getFieldById(job.fieldId)
-    if field == nil then
-        return
-    end
-
-    local centerX, centerZ = field:getCenterOfFieldWorldPosition()
-    local centerY = getTerrainHeightAtWorldPos(g_terrainNode, centerX, 300, centerZ)
-
-    for _, vehicleId in ipairs(job.assignedEquipmentIds) do
-        local vehicle = NetworkUtil.getObject(vehicleId)
-        if vehicle ~= nil and vehicle.setWorldPosition ~= nil then
-            local _, currentYRot, _ = getRotation(vehicle.rootNode)
-            vehicle:setWorldPosition(centerX, centerY, centerZ, 0, currentYRot, 0, 0, true)
-        end
-    end
 end
 
 -- Applies directly here for the server/host's own local notification, then

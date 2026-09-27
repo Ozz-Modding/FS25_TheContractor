@@ -183,7 +183,15 @@ local function getOrCreateState(job)
     }
 
     if handler.fruitTypeSource ~= nil then
-        local fruitTypeIndex = resolveTargetFruitType(field, handler.fruitTypeSource)
+        -- A harvest job's own crop wins over the live field state, which
+        -- can lag behind TCFieldPreparation's forced update for a moment.
+        local fruitTypeIndex = nil
+        if handler.fruitTypeSource == "current" then
+            fruitTypeIndex = job:getFruitTypeIndex()
+        end
+        if fruitTypeIndex == nil then
+            fruitTypeIndex = resolveTargetFruitType(field, handler.fruitTypeSource)
+        end
         if fruitTypeIndex == nil then
             return nil
         end

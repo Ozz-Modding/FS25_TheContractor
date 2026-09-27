@@ -22,6 +22,25 @@ TheContractorWorker.STATUS = {
 
 TheContractorWorker.TIERS = { "small", "medium", "large" }
 
+TheContractorWorker.MIN_WORK_SPEED = 1
+TheContractorWorker.MAX_WORK_SPEED = 10
+
+-- A player driving personally is implicitly max-capable (Q13) - there's no
+-- Worker to read a workSpeed from for a self-driven job, so anything scaled
+-- by work speed treats "no worker" as the best possible one.
+TheContractorWorker.PLAYER_WORK_SPEED = TheContractorWorker.MAX_WORK_SPEED
+
+-- Linear by work speed between slowestValue (speed 1) and fastestValue
+-- (speed 10). worker may be nil (player-driven, see PLAYER_WORK_SPEED).
+-- Shared by the speed-scaled wait factors (Dispatch's transport wait,
+-- Cooldown's post-job gap) so they all use the same curve.
+function TheContractorWorker.scaleBySpeed(worker, slowestValue, fastestValue)
+    local workSpeed = worker ~= nil and worker.workSpeed or TheContractorWorker.PLAYER_WORK_SPEED
+    local minSpeed, maxSpeed = TheContractorWorker.MIN_WORK_SPEED, TheContractorWorker.MAX_WORK_SPEED
+    local t = (math.max(minSpeed, math.min(maxSpeed, workSpeed)) - minSpeed) / (maxSpeed - minSpeed)
+    return slowestValue + t * (fastestValue - slowestValue)
+end
+
 -- farmId is nil while a worker is sitting unhired in TheContractorStaff's
 -- shared candidate pool (see Staff.lua) — it's only set once a farm actually
 -- hires them, at which point they move into that farm's roster.

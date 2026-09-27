@@ -10,11 +10,10 @@
 -- nothing here a joining client needs replayed beyond the already-covered
 -- Jobs/Staff state it mutates.
 --
--- Equipment "freedom" (criterion: not in cooldown, not assigned elsewhere) is
--- scoped down to "not currently assigned to another allocated/in_progress
--- job" per the ticket's own note — 023 owns real cooldown/hiding once it
--- exists; this reads the same assignedEquipmentIds job field that'll still
--- be the source of truth then.
+-- Equipment "freedom" (criterion: not in cooldown, not assigned elsewhere):
+-- not currently assigned to another allocated/in_progress job (reads
+-- assignedEquipmentIds directly), and not sitting in 023's post-completion
+-- buffer (TheContractorCooldown:isVehicleInCooldown).
 
 TheContractorAllocation = {}
 TheContractorAllocation_mt = Class(TheContractorAllocation)
@@ -38,19 +37,23 @@ local function isOwnedByFarm(vehicle, farmId)
 end
 
 -- A vehicle counts as free if it isn't sitting in another of this farm's
--- allocated/in_progress jobs' assignedEquipmentIds (008) — the scoped-down
--- freedom check per the ticket's own design note (023 owns real
--- cooldown/hiding).
+-- allocated/in_progress jobs' equipment (008 - field and haulage equipment
+-- alike), and isn't currently sitting in 023's post-completion buffer
+-- (still physically hidden).
 function TheContractorAllocation:isVehicleFree(farmId, vehicle)
     local vehicleId = NetworkUtil.getObjectId(vehicle)
     if vehicleId == nil then
         return false
     end
 
+    if g_currentMission.TheContractor.Cooldown:isVehicleInCooldown(vehicleId) then
+        return false
+    end
+
     local jobs = g_currentMission.TheContractor.Jobs
     for _, job in ipairs(jobs:getAllJobs(farmId)) do
         if job.state == TheContractorJob.STATE.ALLOCATED or job.state == TheContractorJob.STATE.IN_PROGRESS then
-            for _, id in ipairs(job.assignedEquipmentIds) do
+            for _, id in ipairs(job:getAllEquipmentIds()) do
                 if id == vehicleId then
                     return false
                 end
@@ -61,8 +64,10 @@ function TheContractorAllocation:isVehicleFree(farmId, vehicle)
     return true
 end
 
--- Farm-owned, free vehicles in the job type's required store category (009) —
--- the combine for a harvest job, the cultivator/seeder/plow for the others.
+-- Farm-owned, free vehicles that can play a non-tractor part in this job
+-- (TCEquipmentClass.getJobRole) — the cultivator/seeder/plow, or for
+-- harvest the combine/header/combined harvester able to take this crop.
+-- Returned as { vehicle, role } pairs so the picker can label them.
 function TheContractorAllocation:getEligibleImplements(farmId, job)
     local jobDef = TheContractorJobGeneration.JOB_TYPES[job.jobType]
     local result = {}
@@ -70,18 +75,95 @@ function TheContractorAllocation:getEligibleImplements(farmId, job)
         return result
     end
 
+    local fruitTypeIndex = job:getFruitTypeIndex()
     for _, vehicle in ipairs(g_currentMission.vehicleSystem.vehicles) do
-        if isOwnedByFarm(vehicle, farmId) and TCEquipmentClass.getCategory(vehicle) == jobDef.requiredCategory and
-            self:isVehicleFree(farmId, vehicle) then
-            table.insert(result, vehicle)
+        if isOwnedByFarm(vehicle, farmId) then
+            local role = TCEquipmentClass.getJobRole(vehicle, jobDef, fruitTypeIndex)
+            if role ~= nil and role ~= "tractor" and self:isVehicleFree(farmId, vehicle) then
+                table.insert(result, { vehicle = vehicle, role = role })
+            end
         end
     end
 
     return result
 end
 
+-- Whether the picker should offer tractors at all: always for pulled
+-- implements, and for harvest only if one of the eligible harvesters is
+-- trailed (no engine of its own).
+function TheContractorAllocation:jobMayNeedTractor(farmId, job)
+    local jobDef = TheContractorJobGeneration.JOB_TYPES[job.jobType]
+    if jobDef == nil then
+        return false
+    end
+    if jobDef.requiresTractor then
+        return true
+    end
+
+    for _, entry in ipairs(self:getEligibleImplements(farmId, job)) do
+        if entry.role == "harvester" and not TCEquipmentClass.isSelfPropelled(entry.vehicle) then
+            return true
+        end
+    end
+    return false
+end
+
+-- Missing-equipment keys (TCEquipmentClass.getMissingEquipment) for this
+-- job against the farm's whole fleet, and against only what's free right
+-- now — the difference is equipment the farm owns but that's busy on
+-- another job or in cooldown (023), worth telling the player apart from
+-- "you don't own one".
+function TheContractorAllocation:getMissingEquipment(farmId, job)
+    local jobDef = TheContractorJobGeneration.JOB_TYPES[job.jobType]
+    if jobDef == nil then
+        return {}, {}
+    end
+
+    local owned = TheContractorJobGeneration.getFarmVehicles(farmId)
+    local free = {}
+    for _, vehicle in ipairs(owned) do
+        if self:isVehicleFree(farmId, vehicle) then
+            table.insert(free, vehicle)
+        end
+    end
+
+    local fruitTypeIndex = job:getFruitTypeIndex()
+    return TCEquipmentClass.getMissingEquipment(owned, jobDef, fruitTypeIndex),
+        TCEquipmentClass.getMissingEquipment(free, jobDef, fruitTypeIndex)
+end
+
+-- Missing-equipment keys for a specific chosen set of vehicle ids. On top
+-- of getMissingEquipment, a selection can have too many headers
+-- ("extraCutter"): a harvester only takes one, and the rigging would fail
+-- to find anywhere to hitch the rest.
+function TheContractorAllocation:getMissingFromSelection(job, equipmentIds)
+    local jobDef = TheContractorJobGeneration.JOB_TYPES[job.jobType]
+    if jobDef == nil then
+        return {}
+    end
+
+    local fruitTypeIndex = job:getFruitTypeIndex()
+    local vehicles = {}
+    local cutterCount = 0
+    for _, vehicleId in ipairs(equipmentIds) do
+        local vehicle = NetworkUtil.getObject(vehicleId)
+        if vehicle ~= nil then
+            table.insert(vehicles, vehicle)
+            if jobDef.cropDependent and TCEquipmentClass.isStandaloneCutter(vehicle, fruitTypeIndex) then
+                cutterCount = cutterCount + 1
+            end
+        end
+    end
+
+    local missing = TCEquipmentClass.getMissingEquipment(vehicles, jobDef, fruitTypeIndex)
+    if cutterCount > 1 then
+        table.insert(missing, "extraCutter")
+    end
+    return missing
+end
+
 -- Farm-owned, free tractors of any size tier — only relevant for job types
--- that need one to pull the implement (see JOB_TYPES.requiresTractor).
+-- that need one to pull the implement (see jobMayNeedTractor).
 function TheContractorAllocation:getEligibleTractors(farmId)
     local result = {}
 
@@ -140,16 +222,152 @@ function TheContractorAllocation:previewWorkerCapability(worker, job, equipmentI
     return TheContractorAllocation.CAPABILITY.OK
 end
 
+-- Crew (035) ----------------------------------------------------------------
+--
+-- A job goes to either the player alone (no workers) or hired workers: one
+-- for an ordinary job, exactly two for a haulage job - one on the field
+-- equipment, one hauling with the haulage tractor + trailer. The player
+-- can't be mixed with a worker: a player-driven haulage job means the
+-- player does the carting themselves (TCHaulage's delivery), and there's no
+-- way yet to have a worker drive alongside them (a later integration with
+-- other AI-driving mods might add one).
+
+local CAPABILITY_RANK = {
+    [TheContractorAllocation.CAPABILITY.OK] = 1,
+    [TheContractorAllocation.CAPABILITY.WARN] = 2,
+    [TheContractorAllocation.CAPABILITY.BLOCKED] = 3,
+}
+
+local function worseCapability(a, b)
+    return CAPABILITY_RANK[a] >= CAPABILITY_RANK[b] and a or b
+end
+
+-- How many workers the job needs if it isn't the player alone.
+function TheContractorAllocation.getRequiredWorkerCount(job)
+    return job.includesHaulage and 2 or 1
+end
+
+-- nil if workerIds is a valid crew shape for the job, else a player-facing
+-- l10n key. Empty workerIds = the player alone, always valid.
+function TheContractorAllocation.getCrewShapeError(job, workerIds)
+    if #workerIds == 0 then
+        return nil
+    end
+    local required = TheContractorAllocation.getRequiredWorkerCount(job)
+    if #workerIds < required then
+        return "tc_allocation_needsSecondWorker"
+    end
+    if #workerIds > required then
+        return "tc_allocation_tooManyWorkers"
+    end
+    return nil
+end
+
+-- Which of two workers operates the field equipment and which hauls: each
+-- is judged against their own equipment's tier (previewWorkerCapability),
+-- and the pairing whose worse half comes out best wins, so a worker only
+-- certified for the haulage tractor's tier ends up hauling. Returns
+-- operatorId, haulerId, capability. A one-worker (or no-worker) crew just
+-- gets its operator checked.
+function TheContractorAllocation:assignCrewRoles(farmId, job, workerIds, equipmentIds, haulageEquipmentIds)
+    local staff = g_currentMission.TheContractor.Staff
+
+    if #workerIds < 2 then
+        local operatorId = workerIds[1]
+        local operator = operatorId ~= nil and staff:getWorker(farmId, operatorId) or nil
+        return operatorId, nil, self:previewWorkerCapability(operator, job, equipmentIds)
+    end
+
+    local best = nil
+    for _, pairing in ipairs({ { workerIds[1], workerIds[2] }, { workerIds[2], workerIds[1] } }) do
+        local operator = staff:getWorker(farmId, pairing[1])
+        local hauler = staff:getWorker(farmId, pairing[2])
+        local capability = worseCapability(self:previewWorkerCapability(operator, job, equipmentIds),
+            self:previewWorkerCapability(hauler, job, haulageEquipmentIds))
+        if best == nil or CAPABILITY_RANK[capability] < CAPABILITY_RANK[best.capability] then
+            best = { operatorId = pairing[1], haulerId = pairing[2], capability = capability }
+        end
+    end
+    return best.operatorId, best.haulerId, best.capability
+end
+
+-- Farm-owned, free vehicles for a two-worker haulage rig: any tractor, and
+-- trailers that take the job's crop. Returned as { vehicle, role } pairs,
+-- role "haulTractor" | "trailer".
+function TheContractorAllocation:getEligibleHaulageEquipment(farmId, job)
+    local result = {}
+    if not job.includesHaulage then
+        return result
+    end
+
+    local fillTypeIndex = self:getJobFillTypeIndex(job)
+    for _, vehicle in ipairs(g_currentMission.vehicleSystem.vehicles) do
+        if isOwnedByFarm(vehicle, farmId) and self:isVehicleFree(farmId, vehicle) then
+            if TCEquipmentClass.isTractor(vehicle) then
+                table.insert(result, { vehicle = vehicle, role = "haulTractor" })
+            elseif TCEquipmentClass.isTrailerFor(vehicle, fillTypeIndex) then
+                table.insert(result, { vehicle = vehicle, role = "trailer" })
+            end
+        end
+    end
+    return result
+end
+
+function TheContractorAllocation:getJobFillTypeIndex(job)
+    local fruitTypeIndex = job:getFruitTypeIndex()
+    return fruitTypeIndex ~= nil and g_fruitTypeManager:getFillTypeIndexByFruitTypeIndex(fruitTypeIndex) or nil
+end
+
+-- Missing haulage-rig keys (TCEquipmentClass.getMissingHaulageEquipment)
+-- against the farm's whole fleet and against only what's free - same
+-- owned-vs-busy split as getMissingEquipment.
+function TheContractorAllocation:getMissingHaulageEquipment(farmId, job)
+    local fillTypeIndex = self:getJobFillTypeIndex(job)
+    local owned = TheContractorJobGeneration.getFarmVehicles(farmId)
+    local free = {}
+    for _, vehicle in ipairs(owned) do
+        if self:isVehicleFree(farmId, vehicle) then
+            table.insert(free, vehicle)
+        end
+    end
+    return TCEquipmentClass.getMissingHaulageEquipment(owned, fillTypeIndex),
+        TCEquipmentClass.getMissingHaulageEquipment(free, fillTypeIndex)
+end
+
+function TheContractorAllocation:getMissingHaulageFromSelection(job, haulageEquipmentIds)
+    local vehicles = {}
+    for _, vehicleId in ipairs(haulageEquipmentIds) do
+        local vehicle = NetworkUtil.getObject(vehicleId)
+        if vehicle ~= nil then
+            table.insert(vehicles, vehicle)
+        end
+    end
+    return TCEquipmentClass.getMissingHaulageEquipment(vehicles, self:getJobFillTypeIndex(job))
+end
+
 -- Allocation (server-authoritative) ----------------------------------------
 
--- Assigns workerId (nil for "do it myself", per Q25's decoupled
--- acceptance/allocation and the player's unrestricted-skill status) plus
--- equipmentIds to an `accepted` job, flipping it to `allocated`. Re-validates
--- everything fresh against current server state (the MP double-booking race
--- point between clients on the same farm — first request processed wins,
--- same "re-check membership, no lock needed" shape as
--- TheContractorStaff:hireWorker). Returns true on success.
-function TheContractorAllocation:allocateJob(farmId, jobId, workerId, equipmentIds)
+local function checkVehicles(self, farmId, vehicleIds, seen)
+    for _, vehicleId in ipairs(vehicleIds) do
+        local vehicle = NetworkUtil.getObject(vehicleId)
+        if vehicle == nil or seen[vehicleId] or not isOwnedByFarm(vehicle, farmId) or
+            not self:isVehicleFree(farmId, vehicle) then
+            return false
+        end
+        seen[vehicleId] = true
+    end
+    return true
+end
+
+-- Assigns a crew (workerIds - empty for "do it myself", per Q25's
+-- decoupled acceptance/allocation and the player's unrestricted-skill
+-- status; see Crew above) plus equipmentIds, and for a two-worker haulage
+-- job haulageEquipmentIds, to an `accepted` job, flipping it to
+-- `allocated`. Re-validates everything fresh against current server state
+-- (the MP double-booking race point between clients on the same farm —
+-- first request processed wins, same "re-check membership, no lock needed"
+-- shape as TheContractorStaff:hireWorker). Returns true on success.
+function TheContractorAllocation:allocateJob(farmId, jobId, workerIds, equipmentIds, haulageEquipmentIds)
     if not g_currentMission:getIsServer() then
         return false
     end
@@ -160,75 +378,100 @@ function TheContractorAllocation:allocateJob(farmId, jobId, workerId, equipmentI
         return false
     end
 
+    workerIds = workerIds or {}
+    haulageEquipmentIds = haulageEquipmentIds or {}
     if equipmentIds == nil or #equipmentIds == 0 then
+        return false
+    end
+
+    if TheContractorAllocation.getCrewShapeError(job, workerIds) ~= nil then
+        return false
+    end
+    local needsHaulageRig = job.includesHaulage and #workerIds > 0
+    if needsHaulageRig ~= (#haulageEquipmentIds > 0) then
         return false
     end
 
     -- Re-derived server-side rather than trusting the client's UI-level
     -- filtering (TheContractorAllocation:getEligibleImplements/
-    -- getEligibleTractors already restrict what a well-behaved client would
-    -- ever offer, but the server is what actually enforces it): every
-    -- submitted id must own/free-check clean, and together they must cover
-    -- at least one vehicle in the job type's required store category (009)
-    -- plus, if the job type needs one, a tractor of any size tier.
-    local jobDef = TheContractorJobGeneration.JOB_TYPES[job.jobType]
-    if jobDef == nil then
+    -- getEligibleTractors/getEligibleHaulageEquipment already restrict what
+    -- a well-behaved client would ever offer, but the server is what
+    -- actually enforces it): every submitted id must own/free-check clean
+    -- and appear only once, and together they must cover the job's
+    -- equipment requirements (TCEquipmentClass.getMissingEquipment/
+    -- getMissingHaulageEquipment).
+    if TheContractorJobGeneration.JOB_TYPES[job.jobType] == nil then
         return false
     end
 
-    local hasImplement = false
-    local hasTractor = false
-    for _, vehicleId in ipairs(equipmentIds) do
-        local vehicle = NetworkUtil.getObject(vehicleId)
-        if vehicle == nil or not isOwnedByFarm(vehicle, farmId) or not self:isVehicleFree(farmId, vehicle) then
-            return false
-        end
-
-        if TCEquipmentClass.getCategory(vehicle) == jobDef.requiredCategory then
-            hasImplement = true
-        end
-        if TCEquipmentClass.getSizeTier(vehicle) ~= nil then
-            hasTractor = true
-        end
+    local seen = {}
+    if not checkVehicles(self, farmId, equipmentIds, seen) or not checkVehicles(self, farmId, haulageEquipmentIds, seen) then
+        return false
     end
 
-    if not hasImplement or (jobDef.requiresTractor and not hasTractor) then
+    if #self:getMissingFromSelection(job, equipmentIds) > 0 then
+        return false
+    end
+    if needsHaulageRig and #self:getMissingHaulageFromSelection(job, haulageEquipmentIds) > 0 then
         return false
     end
 
     local staff = g_currentMission.TheContractor.Staff
-    local worker = nil
-    if workerId ~= nil then
-        worker = staff:getWorker(farmId, workerId)
+    for i, workerId in ipairs(workerIds) do
+        local worker = staff:getWorker(farmId, workerId)
         if worker == nil or not worker:isIdle() then
             return false
         end
-
-        if self:previewWorkerCapability(worker, job, equipmentIds) == TheContractorAllocation.CAPABILITY.BLOCKED then
-            return false
+        for j = 1, i - 1 do
+            if workerIds[j] == workerId then
+                return false
+            end
         end
     end
 
-    job.assignedWorkerId = workerId
-    job.assignedEquipmentIds = equipmentIds
-    if not job:transitionTo(TheContractorJob.STATE.ALLOCATED) then
+    local operatorId, haulerId, capability = self:assignCrewRoles(farmId, job, workerIds, equipmentIds,
+        haulageEquipmentIds)
+    if capability == TheContractorAllocation.CAPABILITY.BLOCKED then
         return false
     end
 
-    Logging.info("TheContractor: farm %d job %d allocated (worker=%s, equipment=%s)", farmId, jobId,
-        tostring(workerId), TheContractorJobs.encodeIdList(equipmentIds))
+    if not job:canTransitionTo(TheContractorJob.STATE.ALLOCATED) then
+        return false
+    end
+
+    -- The job has to be doable from here, whatever the field has done since
+    -- it was offered - and none of its "done" state can count as our work.
+    TCFieldPreparation.prepareFieldForJob(job)
+    TCJobProgress.clearJob(job.id)
+    job.completionPercentage = 0
+
+    job.assignedWorkerId = operatorId
+    job.haulerWorkerId = haulerId
+    job.assignedEquipmentIds = equipmentIds
+    job.haulageEquipmentIds = haulageEquipmentIds
+    job:transitionTo(TheContractorJob.STATE.ALLOCATED)
+    TCFieldAccess.refresh()
+
+    -- Player-driven haulage: they'll be delivering the crop themselves.
+    TCHaulage.startDelivery(job)
+
+    Logging.info("TheContractor: farm %d job %d allocated (worker=%s, hauler=%s, equipment=%s, haulage=%s)", farmId,
+        jobId, tostring(operatorId), tostring(haulerId), TheContractorJobs.encodeIdList(equipmentIds),
+        TheContractorJobs.encodeIdList(haulageEquipmentIds))
 
     if g_server ~= nil then
         g_server:broadcastEvent(TCJobAllocatedEvent.new(job))
     end
 
-    if worker ~= nil then
-        staff:setWorkerStatus(farmId, workerId, TheContractorWorker.STATUS.ASSIGNED)
+    if operatorId ~= nil then
+        for _, workerId in ipairs(job:getWorkerIds()) do
+            staff:setWorkerStatus(farmId, workerId, TheContractorWorker.STATUS.ASSIGNED)
+        end
 
         -- 020: only a hired worker's allocation goes through the AI Helper
-        -- dispatch system — a player self-allocation (workerId == nil) just
+        -- dispatch system — a player self-allocation (no workers) just
         -- means the player drives it themselves, no AI job involved (Q7).
-        g_currentMission.TheContractor.Dispatch:startJobForWorker(job, worker)
+        g_currentMission.TheContractor.Dispatch:startJobForWorker(job)
     end
 
     return true

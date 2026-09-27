@@ -7,9 +7,8 @@
 -- separately, including the host: g_server:broadcastEvent doesn't loop back
 -- to the local client in single-player (see src/events/README.md).
 --
--- Full ticket 024 scope (proportional reputation loss reading 019's real
--- progress, worker/equipment release via 018) is ahead of this mod's build
--- order — see TheContractorJobs:missJob's comment. This event only owns the
+-- Reputation loss and worker/equipment release are TheContractorJobs:missJob's
+-- concern (synced via their own events) — this event only owns the
 -- notification.
 
 TCJobMissedEvent = {}
