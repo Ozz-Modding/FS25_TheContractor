@@ -36,10 +36,12 @@ TheContractorCooldown_mt = Class(TheContractorCooldown)
 -- BUFFER_FACTORS - each entry is a function(job, worker) returning that
 -- factor's contribution in minutes (worker nil for a player-driven job),
 -- summed by getBufferDurationMs. Add new factors (distance home, equipment
--- count, ...) by appending to the list. Q20: mechanism settled now, exact
--- numbers are a 026 balance-pass concern.
-TheContractorCooldown.MAX_BUFFER_MINUTES = 15
-TheContractorCooldown.MIN_BUFFER_MINUTES = 3
+-- count, ...) by appending to the list. 026: 45 in-game minutes for the
+-- slowest worker down to 15 for the fastest (or the player) - long enough
+-- to read as driving back and cleaning down, short enough that a worker
+-- can still fit a second job into the same day.
+TheContractorCooldown.MAX_BUFFER_MINUTES = 45
+TheContractorCooldown.MIN_BUFFER_MINUTES = 15
 
 TheContractorCooldown.BUFFER_FACTORS = {
     -- Worker speed (016): linear between a slowest worker's

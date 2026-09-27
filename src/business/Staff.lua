@@ -16,16 +16,17 @@
 -- farm's id) and moves into that farm's own roster — the roster itself
 -- *is* farm-scoped, same as everything else in this mod.
 --
--- Roll magnitudes, pool sizing, and the daily add/remove odds are
--- placeholders (026 owns the real balance pass), same as every other
--- placeholder number in this codebase.
+-- Hire cost (026) is a one-off signing fee: roughly one early job's pay for
+-- an average candidate (~7k), up to ~13.5k for the best possible one, so
+-- hiring is a real decision but not a wall. Pool sizing and the daily
+-- add/remove odds were reviewed in 026 and kept.
 
 TheContractorStaff = {}
 TheContractorStaff_mt = Class(TheContractorStaff)
 
-TheContractorStaff.BASE_HIRE_COST = 300
-TheContractorStaff.COST_PER_WORK_SPEED = 50
-TheContractorStaff.COST_PER_TIER_POINT = 20
+TheContractorStaff.BASE_HIRE_COST = 2000
+TheContractorStaff.COST_PER_WORK_SPEED = 400
+TheContractorStaff.COST_PER_TIER_POINT = 250
 
 -- Independent per-tier roll: each tier has this chance of the worker being
 -- certified on it at all (a random 1-10 rating), otherwise "not certified"
@@ -43,6 +44,40 @@ TheContractorStaff.INITIAL_POOL_SIZE = 4
 TheContractorStaff.POOL_MAX_SIZE = 8
 TheContractorStaff.POOL_DAILY_ADD_CHANCE = 0.5
 TheContractorStaff.POOL_DAILY_REMOVE_CHANCE = 0.15
+
+-- Age and growth (030). Every worker gets a visible age and a hidden pool of
+-- growthPotential points, rolled together at creation: the younger the
+-- worker, the bigger the pool can be (MAX_GROWTH_POTENTIAL at MIN_AGE,
+-- nothing from GROWTH_POTENTIAL_ZERO_AGE on), times a random
+-- GROWTH_POTENTIAL_MIN_ROLL-1 so two workers of the same age still differ.
+-- Hire cost ignores both - pay follows current ability (user's call).
+TheContractorStaff.MIN_AGE = 18
+TheContractorStaff.MAX_AGE = 60
+TheContractorStaff.MAX_GROWTH_POTENTIAL = 12
+TheContractorStaff.GROWTH_POTENTIAL_ZERO_AGE = 55
+TheContractorStaff.GROWTH_POTENTIAL_MIN_ROLL = 0.4
+
+-- Each completed job gives every worker on it one growth roll:
+-- GROWTH_BASE_CHANCE x the job's quality (029, 0-1) x how much the job
+-- stretched them. At or under the job's requiredSkillLevel on the tier they
+-- drove is a stretch; more than GROWTH_EASY_MARGIN above it is easy work.
+-- A successful roll spends one growthPotential point on one stat, picked by
+-- GROWTH_WEIGHTS among those that can still move: +1 workSpeed, +1 on the
+-- tier driven, or - once that tier is at CERTIFY_THRESHOLD - a new
+-- certification on the next tier up, starting at CERTIFY_START_RATING.
+-- About 3 in 10 good jobs grow a worker, so a young worker's full pool
+-- takes around 40 jobs to use up.
+TheContractorStaff.GROWTH_BASE_CHANCE = 0.3
+TheContractorStaff.GROWTH_STRETCH_MULTIPLIER = 1.5
+TheContractorStaff.GROWTH_EASY_MULTIPLIER = 0.5
+TheContractorStaff.GROWTH_EASY_MARGIN = 2
+TheContractorStaff.CERTIFY_THRESHOLD = 7
+TheContractorStaff.CERTIFY_START_RATING = 2
+TheContractorStaff.GROWTH_WEIGHTS = {
+    tier = 0.5,
+    workSpeed = 0.3,
+    certify = 0.2,
+}
 
 TheContractorStaff.FIRST_NAMES = {
     "James", "Mary", "John", "Sarah", "Robert", "Emma", "Michael", "Olivia",
@@ -148,6 +183,22 @@ function TheContractorStaff.rollTierCapability()
     return tierCapability
 end
 
+function TheContractorStaff.rollAge()
+    return math.random(TheContractorStaff.MIN_AGE, TheContractorStaff.MAX_AGE)
+end
+
+function TheContractorStaff.rollBirthPeriod()
+    return math.random(1, Environment.PERIODS_IN_YEAR)
+end
+
+function TheContractorStaff.rollGrowthPotential(age)
+    local zeroAge, minAge = TheContractorStaff.GROWTH_POTENTIAL_ZERO_AGE, TheContractorStaff.MIN_AGE
+    local ageFactor = math.max(0, math.min(1, (zeroAge - age) / (zeroAge - minAge)))
+    local minRoll = TheContractorStaff.GROWTH_POTENTIAL_MIN_ROLL
+    local roll = minRoll + (1 - minRoll) * math.random()
+    return math.floor(TheContractorStaff.MAX_GROWTH_POTENTIAL * ageFactor * roll + 0.5)
+end
+
 function TheContractorStaff.getHireCost(workSpeed, tierCapability)
     local cost = TheContractorStaff.BASE_HIRE_COST + workSpeed * TheContractorStaff.COST_PER_WORK_SPEED
 
@@ -202,16 +253,21 @@ function TheContractorStaff:addCandidateToPool()
     local tierCapability = TheContractorStaff.rollTierCapability()
     local hireCost = TheContractorStaff.getHireCost(workSpeed, tierCapability)
     local name = TheContractorStaff.generateName()
+    local age = TheContractorStaff.rollAge()
+    local growthPotential = TheContractorStaff.rollGrowthPotential(age)
+    local birthPeriod = TheContractorStaff.rollBirthPeriod()
 
-    local candidate = TheContractorWorker.new(id, nil, name, workSpeed, tierCapability, hireCost)
+    local candidate = TheContractorWorker.new(id, nil, name, workSpeed, tierCapability, hireCost, age,
+        growthPotential, birthPeriod)
     self:applyCandidateAdded(candidate)
 
     if g_server ~= nil then
         g_server:broadcastEvent(TCStaffCandidateAddedEvent.new(candidate))
     end
 
-    Logging.info("TheContractor: staff pool gained candidate %d (%s, speed %d, cost %.0f)", candidate.id,
-        candidate.name, candidate.workSpeed, candidate.hireCost)
+    Logging.info("TheContractor: staff pool gained candidate %d (%s, age %d, speed %d, potential %d, cost %.0f)",
+        candidate.id, candidate.name, candidate.age, candidate.workSpeed, candidate.growthPotential,
+        candidate.hireCost)
 
     return candidate
 end
@@ -261,10 +317,12 @@ function TheContractorStaff:startDailyTick()
     end
 
     g_messageCenter:subscribe(MessageType.DAY_CHANGED, self.onDayChanged, self)
+    g_messageCenter:subscribe(MessageType.PERIOD_CHANGED, self.onPeriodChanged, self)
 end
 
 function TheContractorStaff:stopDailyTick()
     g_messageCenter:unsubscribe(MessageType.DAY_CHANGED, self)
+    g_messageCenter:unsubscribe(MessageType.PERIOD_CHANGED, self)
 end
 
 function TheContractorStaff:onDayChanged()
@@ -280,6 +338,65 @@ function TheContractorStaff:onDayChanged()
 
     if math.random() < TheContractorStaff.POOL_DAILY_ADD_CHANCE then
         self:addCandidateToPool()
+    end
+end
+
+-- Birthdays (030 follow-up): everyone whose birthPeriod is the period just
+-- starting - pool candidates and hired workers alike - turns a year older.
+-- growthPotential is left alone; it's rolled from age once, at creation.
+-- One broadcast for the whole batch.
+function TheContractorStaff:onPeriodChanged()
+    local period = g_currentMission.environment.currentPeriod
+    local aged = {}
+
+    local function ageIfBirthday(worker)
+        if worker.birthPeriod == period then
+            worker.age = worker.age + 1
+            table.insert(aged, { id = worker.id, age = worker.age })
+        end
+    end
+
+    for _, candidate in pairs(self.candidatePool) do
+        ageIfBirthday(candidate)
+    end
+    for _, farmWorkers in pairs(self.workersByFarm) do
+        for _, worker in pairs(farmWorkers) do
+            ageIfBirthday(worker)
+        end
+    end
+
+    if #aged == 0 then
+        return
+    end
+
+    Logging.info("TheContractor: %d staff/candidates had a birthday in period %d", #aged, period)
+
+    if g_server ~= nil then
+        g_server:broadcastEvent(TCWorkersAgedEvent.new(aged))
+    end
+end
+
+-- Worker ids are unique across the pool and every roster (one shared
+-- nextWorkerId), so an id alone finds them wherever they are.
+function TheContractorStaff:findWorkerById(workerId)
+    local candidate = self.candidatePool[workerId]
+    if candidate ~= nil then
+        return candidate
+    end
+    for _, farmWorkers in pairs(self.workersByFarm) do
+        if farmWorkers[workerId] ~= nil then
+            return farmWorkers[workerId]
+        end
+    end
+    return nil
+end
+
+-- Run on clients receiving TCWorkersAgedEvent (the server already applied
+-- it in onPeriodChanged).
+function TheContractorStaff:applyWorkerAged(workerId, age)
+    local worker = self:findWorkerById(workerId)
+    if worker ~= nil then
+        worker.age = age
     end
 end
 
@@ -444,6 +561,137 @@ function TheContractorStaff:applyWorkerStatusChanged(farmId, workerId, status)
     worker.status = status
 end
 
+-- Growth (030, server-authoritative) ----------------------------------------
+
+-- Called from TheContractorJobs:completeJob once the job's qualityScore is
+-- set. Each hired worker on the job (operator, and hauler on a haulage job,
+-- 035) gets one growth roll against the tier of the equipment they drove.
+-- A player-driven job has no worker, so nothing grows.
+function TheContractorStaff:applyGrowthFromJob(job)
+    if not g_currentMission:getIsServer() then
+        return
+    end
+
+    if job.assignedWorkerId ~= nil then
+        self:rollWorkerGrowth(job, job.assignedWorkerId, job.assignedEquipmentIds)
+    end
+    if job.haulerWorkerId ~= nil then
+        self:rollWorkerGrowth(job, job.haulerWorkerId, job.haulageEquipmentIds)
+    end
+end
+
+function TheContractorStaff:rollWorkerGrowth(job, workerId, equipmentIds)
+    local worker = self:getWorker(job.farmId, workerId)
+    if worker == nil or worker.growthPotential <= 0 then
+        return
+    end
+
+    local tier = g_currentMission.TheContractor.Allocation:getRequiredTier(equipmentIds)
+    local rating = tier ~= nil and worker:getTierCapability(tier) or nil
+
+    local stretch = 1
+    if rating ~= nil then
+        if rating <= job.requiredSkillLevel then
+            stretch = TheContractorStaff.GROWTH_STRETCH_MULTIPLIER
+        elseif rating > job.requiredSkillLevel + TheContractorStaff.GROWTH_EASY_MARGIN then
+            stretch = TheContractorStaff.GROWTH_EASY_MULTIPLIER
+        end
+    end
+
+    local quality = (job.qualityScore or 100) / 100
+    if math.random() >= TheContractorStaff.GROWTH_BASE_CHANCE * stretch * quality then
+        return
+    end
+
+    local stat, value = TheContractorStaff.pickGrowth(worker, tier, rating)
+    if stat == nil then
+        -- Nothing left that can move (everything maxed); the leftover
+        -- potential just goes unused.
+        return
+    end
+
+    local oldValue = worker:getStat(stat)
+    worker.growthPotential = worker.growthPotential - 1
+    self:applyWorkerGrowth(job.farmId, workerId, stat, value)
+
+    Logging.info("TheContractor: farm %d worker %d (%s) grew %s %s -> %d, %d potential left", job.farmId,
+        workerId, worker.name, stat, tostring(oldValue), value, worker.growthPotential)
+
+    -- The host's own notification - the broadcast below doesn't loop back
+    -- to it (see src/events/README.md).
+    TCWorkerGrewEvent.showNotification(worker, stat, oldValue, value)
+
+    if g_server ~= nil then
+        g_server:broadcastEvent(TCWorkerGrewEvent.new(job.farmId, workerId, stat, value))
+    end
+end
+
+-- Weighted pick (GROWTH_WEIGHTS) among the growths still possible for this
+-- worker after a job on `tier` (nil if the equipment had no tier). Returns
+-- stat, newValue - or nil if none are possible.
+function TheContractorStaff.pickGrowth(worker, tier, rating)
+    local weights = TheContractorStaff.GROWTH_WEIGHTS
+    local options = {}
+
+    if worker.workSpeed < TheContractorWorker.MAX_WORK_SPEED then
+        table.insert(options, { stat = "workSpeed", value = worker.workSpeed + 1, weight = weights.workSpeed })
+    end
+
+    if rating ~= nil then
+        if rating < TheContractorWorker.MAX_WORK_SPEED then
+            table.insert(options, { stat = tier, value = rating + 1, weight = weights.tier })
+        end
+
+        local nextTier = TheContractorStaff.getNextTier(tier)
+        if rating >= TheContractorStaff.CERTIFY_THRESHOLD and nextTier ~= nil and
+                not worker:isCapableOfTier(nextTier) then
+            table.insert(options, { stat = nextTier, value = TheContractorStaff.CERTIFY_START_RATING,
+                weight = weights.certify })
+        end
+    end
+
+    local totalWeight = 0
+    for _, option in ipairs(options) do
+        totalWeight = totalWeight + option.weight
+    end
+    if totalWeight <= 0 then
+        return nil
+    end
+
+    local roll = math.random() * totalWeight
+    for _, option in ipairs(options) do
+        roll = roll - option.weight
+        if roll < 0 then
+            return option.stat, option.value
+        end
+    end
+    local last = options[#options]
+    return last.stat, last.value
+end
+
+-- small -> medium -> large -> nil.
+function TheContractorStaff.getNextTier(tier)
+    local tiers = TheContractorWorker.TIERS
+    for i, t in ipairs(tiers) do
+        if t == tier then
+            return tiers[i + 1]
+        end
+    end
+    return nil
+end
+
+-- The actual stat change, run on whichever machine (server, or a client
+-- receiving TCWorkerGrewEvent) is applying it. growthPotential is only
+-- tracked on the server, so it isn't touched here.
+function TheContractorStaff:applyWorkerGrowth(farmId, workerId, stat, value)
+    local worker = self:getWorker(farmId, workerId)
+    if worker == nil then
+        return
+    end
+
+    worker:setStat(stat, value)
+end
+
 -- Wire serialization, shared by the pool/hire events and initial client
 -- state. Self-contained (carries its own farmId) so callers don't need to
 -- track it separately. farmId 0 is used as the "no farm" sentinel for a
@@ -457,6 +705,8 @@ function TheContractorStaff.writeWorker(streamId, worker)
     streamWriteInt32(streamId, worker.workSpeed)
     streamWriteFloat32(streamId, worker.hireCost)
     streamWriteString(streamId, worker.status)
+    -- 030: age only - growthPotential stays server-side (it's hidden).
+    streamWriteInt32(streamId, worker.age)
 
     for _, tier in ipairs(TheContractorWorker.TIERS) do
         local rating = worker.tierCapability[tier]
@@ -477,6 +727,7 @@ function TheContractorStaff.readWorker(streamId)
     local workSpeed = streamReadInt32(streamId)
     local hireCost = streamReadFloat32(streamId)
     local status = streamReadString(streamId)
+    local age = streamReadInt32(streamId)
 
     local tierCapability = {}
     for _, tier in ipairs(TheContractorWorker.TIERS) do
@@ -485,7 +736,7 @@ function TheContractorStaff.readWorker(streamId)
         end
     end
 
-    local worker = TheContractorWorker.new(id, farmId, name, workSpeed, tierCapability, hireCost)
+    local worker = TheContractorWorker.new(id, farmId, name, workSpeed, tierCapability, hireCost, age)
     worker.status = status
 
     return worker
@@ -499,6 +750,9 @@ function TheContractorStaff.writeWorkerXML(xmlFile, key, worker)
     setXMLInt(xmlFile, key .. "#workSpeed", worker.workSpeed)
     setXMLFloat(xmlFile, key .. "#hireCost", worker.hireCost)
     setXMLString(xmlFile, key .. "#status", worker.status)
+    setXMLInt(xmlFile, key .. "#age", worker.age)
+    setXMLInt(xmlFile, key .. "#growthPotential", worker.growthPotential)
+    setXMLInt(xmlFile, key .. "#birthPeriod", worker.birthPeriod)
 
     for _, tier in ipairs(TheContractorWorker.TIERS) do
         local rating = worker.tierCapability[tier]
@@ -522,7 +776,18 @@ function TheContractorStaff.readWorkerXML(xmlFile, key, farmId)
         tierCapability[tier] = getXMLInt(xmlFile, key .. "#tier" .. tier)
     end
 
-    local worker = TheContractorWorker.new(id, farmId, name, workSpeed, tierCapability, hireCost)
+    -- A worker saved before 030 has neither: roll them now, as if they'd
+    -- just joined the pool.
+    local age = getXMLInt(xmlFile, key .. "#age")
+    local growthPotential = getXMLInt(xmlFile, key .. "#growthPotential")
+    if age == nil then
+        age = TheContractorStaff.rollAge()
+        growthPotential = TheContractorStaff.rollGrowthPotential(age)
+    end
+    local birthPeriod = getXMLInt(xmlFile, key .. "#birthPeriod") or TheContractorStaff.rollBirthPeriod()
+
+    local worker = TheContractorWorker.new(id, farmId, name, workSpeed, tierCapability, hireCost, age,
+        growthPotential, birthPeriod)
     worker.status = Utils.getNoNil(getXMLString(xmlFile, key .. "#status"), worker.status)
 
     return worker

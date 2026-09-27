@@ -16,18 +16,26 @@
 TheContractorReputation = {}
 TheContractorReputation_mt = Class(TheContractorReputation)
 
--- Placeholder cutoffs — exact numbers are a 026 balance-pass concern.
--- Ordered ascending; getReputationTier() picks the highest one the score
--- has reached. Gaps widen sharply going up (per user feedback): reaching
--- localContractor should be easy (a handful of jobs), while the top tiers
--- are a long-haul grind — each successive gap is roughly 3-4x the last.
+-- Tier cutoffs (026). Ordered ascending; getReputationTier() picks the
+-- highest one the score has reached. Gaps widen going up (per user
+-- feedback): localContractor takes a handful of jobs, the top tiers are a
+-- long-haul grind, each gap roughly 3-4x the last. Sized against the
+-- completion reward (JobGeneration's reputationPerHa, ~8-10 per ha): about
+-- 3 small jobs to localContractor, ~10 to established, ~30 to regional,
+-- then larger fields carry the rest - roughly year 1/2/3/4-5 at the
+-- generation rates JobGeneration sets.
+--
+-- maxPreferredFieldHa is the job size each tier unlocks: generation
+-- (JobGeneration:pickField) strongly prefers fields up to this size, so a
+-- new company gets small fields and larger ones open up with standing. nil
+-- means no limit.
 TheContractorReputation.TIERS = {
-    { key = "unknownContractor",     minScore = 0 },
-    { key = "localContractor",       minScore = 20 },
-    { key = "establishedContractor", minScore = 100 },
-    { key = "regionalContractor",    minScore = 400 },
-    { key = "renownedContractor",    minScore = 1500 },
-    { key = "prestigiousContractor", minScore = 5000 },
+    { key = "unknownContractor",     minScore = 0,    maxPreferredFieldHa = 3 },
+    { key = "localContractor",       minScore = 50,   maxPreferredFieldHa = 5 },
+    { key = "establishedContractor", minScore = 200,  maxPreferredFieldHa = 8 },
+    { key = "regionalContractor",    minScore = 750,  maxPreferredFieldHa = 15 },
+    { key = "renownedContractor",    minScore = 2500, maxPreferredFieldHa = 30 },
+    { key = "prestigiousContractor", minScore = 7500, maxPreferredFieldHa = nil },
 }
 
 function TheContractorReputation.new()
@@ -48,7 +56,7 @@ function TheContractorReputation:getReputationTier(farmId)
 end
 
 -- Drives the Overview tab's rank/progress bar (see MenuContractor.lua).
--- Returns { score, tier, nextTier, progressPercentage } — nextTier is nil
+-- Returns { score, tier, tierIndex, nextTier, progressPercentage } — nextTier is nil
 -- once the top tier is reached, and progressPercentage is then 1.
 function TheContractorReputation:getProgress(farmId)
     local score = self:getReputationScore(farmId)
@@ -72,9 +80,25 @@ function TheContractorReputation:getProgress(farmId)
     return {
         score = score,
         tier = tier,
+        tierIndex = tierIndex,
         nextTier = nextTier,
         progressPercentage = progressPercentage,
     }
+end
+
+-- Standing (026): reputation as a 0-1 curve, shared by everything that
+-- scales with reputation (offer frequency, pay, negotiation room, required
+-- skill) so they all move together with the tier the player can see. Each
+-- tier step is an equal share of the curve, interpolated by progress
+-- through the current tier: 0 at unknownContractor, 1 at
+-- prestigiousContractor. A raw linear score ratio would leave most of the
+-- game near 0, since the top cutoff is so far above the rest.
+function TheContractorReputation:getStanding(farmId)
+    local progress = self:getProgress(farmId)
+    if progress.nextTier == nil then
+        return 1
+    end
+    return (progress.tierIndex - 1 + progress.progressPercentage) / (#TheContractorReputation.TIERS - 1)
 end
 
 -- Server-authoritative entry point for every later consumer (011/012/014/

@@ -42,7 +42,7 @@
             <Text profile="tc_overviewHeading" id="textAdvertisingHeading" text="$l10n_tc_advertising_heading" position="40px -430px" width="900px"/>
             <Text profile="tc_placeholderText" id="textAdvertisingStatus" text="" position="40px -470px" width="900px"/>
 
-            <Text profile="tc_placeholderText" id="textJobHistoryPlaceholder" text="$l10n_tc_overview_jobHistoryPlaceholder" position="40px -520px" width="900px"/>
+            <Text profile="tc_placeholderText" id="textLastCompletedJob" text="" position="40px -520px" width="900px"/>
 
             <Text profile="tc_overviewHeading" id="textCurrentJobsHeading" text="$l10n_tc_overview_currentJobsHeading" position="860px -110px" width="500px"/>
             <Text profile="tc_placeholderText" id="textCurrentJobs" text="" position="860px -150px" width="500px" textMaxNumLines="12"/>
@@ -121,7 +121,7 @@
                         <Button profile="tc_tableHeader" position="310px 0px" text="$l10n_tc_calendar_columnPrice" handleFocus="false"/>
                         <Button profile="tc_tableHeader" position="410px 0px" text="$l10n_tc_calendar_columnAllocation" handleFocus="false"/>
                     </GuiElement>
-                    <SmoothList id="calendarDayJobsTable" profile="tc_table" position="0px -40px" size="550px 440px">
+                    <SmoothList id="calendarDayJobsTable" profile="tc_table" position="0px -40px" size="550px 200px">
                         <ListItem profile="tc_tableListItem">
                             <Text profile="tc_listRowCellLeft" position="10px 0px" size="195px 32px" name="jobType"/>
                             <Text profile="tc_listRowCellLeft" position="210px 0px" size="95px 32px" name="field"/>
@@ -153,6 +153,38 @@
                     </SmoothList>
 
                     <Text profile="tc_placeholderText" id="allocationWarningText" text="" position="0px -350px" width="550px" textMaxNumLines="4"/>
+                </GuiElement>
+            </GuiElement>
+
+            <!-- Completed jobs (029 follow-up): every completed job, most
+                 recent first, independent of the month selector (the
+                 calendar only pages forward). The highlighted row's summary
+                 shows in calendarCompletedReport. Hidden while allocating,
+                 since the allocation panel overlaps it. -->
+            <GuiElement id="calendarCompletedContainer" position="700px -340px">
+                <Text profile="tc_overviewHeading" text="$l10n_tc_calendar_completedHeading" position="0px 0px" width="550px"/>
+                <Text profile="tc_placeholderText" id="calendarCompletedEmptyText" text="$l10n_tc_overview_noCompletedJobs" position="0px -40px" width="550px"/>
+
+                <GuiElement id="calendarCompletedListContainer" position="0px -40px">
+                    <GuiElement profile="tc_tableHeaderRow" position="0px 0px" size="550px 30px">
+                        <Button profile="tc_tableHeader" position="10px 0px" text="$l10n_tc_calendar_columnJobType" handleFocus="false"/>
+                        <Button profile="tc_tableHeader" position="210px 0px" text="$l10n_tc_calendar_columnFarmland" handleFocus="false"/>
+                        <Button profile="tc_tableHeader" position="310px 0px" text="$l10n_tc_calendar_columnCompleted" handleFocus="false"/>
+                        <Button profile="tc_tableHeader" position="460px 0px" text="$l10n_tc_calendar_columnQuality" handleFocus="false"/>
+                    </GuiElement>
+                    <SmoothList id="calendarCompletedTable" profile="tc_table" position="0px -40px" size="550px 160px">
+                        <ListItem profile="tc_tableListItem">
+                            <Text profile="tc_listRowCellLeft" position="10px 0px" size="195px 32px" name="jobType"/>
+                            <Text profile="tc_listRowCellLeft" position="210px 0px" size="95px 32px" name="field"/>
+                            <Text profile="tc_listRowCellLeft" position="310px 0px" size="145px 32px" name="completed"/>
+                            <Text profile="tc_listRowCellLeft" position="460px 0px" size="85px 32px" name="quality"/>
+                        </ListItem>
+                    </SmoothList>
+                    <ThreePartBitmap profile="tc_slider_box" position="556px -40px" size="6px 160px">
+                        <Slider profile="fs25_listSlider" dataElementId="calendarCompletedTable"/>
+                    </ThreePartBitmap>
+
+                    <Text profile="tc_placeholderText" id="calendarCompletedReport" text="" position="0px -210px" width="550px" textMaxNumLines="4"/>
                 </GuiElement>
             </GuiElement>
         </GuiElement>
@@ -188,10 +220,11 @@
 
             <GuiElement id="staffDetailsBox" position="700px -40px">
                 <Text profile="tc_overviewHeading" id="staffDetailTitle" text="" position="0px 0px" width="280px"/>
-                <Text profile="tc_placeholderText" id="staffDetailWorkSpeed" text="" position="0px -40px" width="280px"/>
-                <Text profile="tc_placeholderText" id="staffDetailTier" text="" position="0px -70px" width="280px" textMaxNumLines="3"/>
-                <Text profile="tc_placeholderText" id="staffDetailStatusOrCost" text="" position="0px -140px" width="280px"/>
-                <Text profile="tc_placeholderText" id="staffDetailJob" text="" position="0px -170px" width="280px"/>
+                <Text profile="tc_placeholderText" id="staffDetailAge" text="" position="0px -40px" width="280px"/>
+                <Text profile="tc_placeholderText" id="staffDetailWorkSpeed" text="" position="0px -70px" width="280px"/>
+                <Text profile="tc_placeholderText" id="staffDetailTier" text="" position="0px -100px" width="280px" textMaxNumLines="3"/>
+                <Text profile="tc_placeholderText" id="staffDetailStatusOrCost" text="" position="0px -170px" width="280px"/>
+                <Text profile="tc_placeholderText" id="staffDetailJob" text="" position="0px -200px" width="280px"/>
             </GuiElement>
         </GuiElement>
     </GuiElement>

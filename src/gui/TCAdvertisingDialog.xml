@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8" standalone="no" ?>
+<!-- Advertising purchase dialog (027), see TCAdvertisingDialog.lua. Layout
+     follows FS25_RealisticLivestock's rlFilterConditionDialog.xml:
+     fs25_dialogBg + 3-part bg + fs25_dialogContentContainer +
+     fs25_dialogButtonBox, label + picker rows positioned against the
+     content container's top-centre (tc_adDialog* profiles in
+     guiProfiles.xml carry the anchorTopCenter trait, since element-level
+     `with=` is ignored by the GUI loader). -->
+<GUI onOpen="onOpen" onClose="onClose" onCreate="onCreate">
+    <GuiElement profile="newLayer"/>
+    <Bitmap profile="dialogFullscreenBg" id="dialogBg"/>
+    <GuiElement profile="fs25_dialogBg" id="dialogElement" size="760px 420px">
+        <ThreePartBitmap profile="fs25_dialogBgMiddle"/>
+        <ThreePartBitmap profile="fs25_dialogBgTop"/>
+        <ThreePartBitmap profile="fs25_dialogBgBottom"/>
+        <GuiElement profile="fs25_dialogContentContainer">
+
+            <Text profile="fs25_dialogTitle" id="dialogTitleElement" position="0px -30px" text="$l10n_tc_advertising_dialog_title"/>
+
+            <Text profile="fs25_dialogText" size="200px 28px" textAlignment="right" position="-230px -110px" text="$l10n_tc_advertising_dialog_levelLabel"/>
+            <MultiTextOption profile="tc_adDialogPicker" id="levelOption" position="60px -110px" onClick="onClickLevel" focusInit="onOpen">
+                <Text profile="fs25_multiTextOptionText" width="300px" name="text"/>
+            </MultiTextOption>
+
+            <Text profile="fs25_dialogText" size="200px 28px" textAlignment="right" position="-230px -170px" text="$l10n_tc_advertising_dialog_durationLabel"/>
+            <MultiTextOption profile="tc_adDialogPicker" id="durationOption" position="60px -170px" onClick="onClickDuration">
+                <Text profile="fs25_multiTextOptionText" width="300px" name="text"/>
+            </MultiTextOption>
+
+            <Text profile="tc_adDialogInfoText" id="costText" position="0px -240px" text=""/>
+            <Text profile="tc_adDialogInfoText" id="effectText" position="0px -280px" text=""/>
+            <Text profile="tc_adDialogInfoText" id="statusText" position="0px -320px" text=""/>
+        </GuiElement>
+
+        <BoxLayout profile="fs25_dialogButtonBox">
+            <Button profile="buttonOK" text="$l10n_tc_advertising_dialog_buy" onClick="onClickOk" id="buyButton"/>
+            <Bitmap profile="fs25_dialogButtonBoxSeparator"/>
+            <Button profile="buttonBack" text="$l10n_button_back" onClick="onClickBack" id="backButton"/>
+        </BoxLayout>
+    </GuiElement>
+</GUI>
