@@ -484,6 +484,7 @@ function MenuContractor:refreshCompanyState()
     self.textAdvertisingHeading:setVisible(hasCompany)
     self.textAdvertisingStatus:setVisible(hasCompany)
     self.textLastCompletedJob:setVisible(hasCompany)
+    self.textSalaryBill:setVisible(hasCompany)
     self.progressBox:setVisible(hasCompany)
     self.textCurrentJobsHeading:setVisible(hasCompany)
     self.textCurrentJobs:setVisible(hasCompany)
@@ -517,6 +518,7 @@ function MenuContractor:refreshCompanyState()
         self:refreshCalendarState(farmId, tc.Jobs)
         self:refreshCurrentJobsState(farmId, tc.Jobs)
         self:refreshLastCompletedJobState(farmId, tc.Jobs)
+        self:refreshSalaryBillState(farmId, tc.Staff)
         self:refreshStaffState(farmId, tc.Staff, tc.Jobs)
     end
 
@@ -540,6 +542,12 @@ function MenuContractor:refreshLastCompletedJobState(farmId, jobs)
         self.textLastCompletedJob:setText(string.format(g_i18n:getText("tc_overview_lastCompletedJob"),
             job:getSummaryText()))
     end
+end
+
+-- Overview tab's salary line (036): what the roster costs every period.
+function MenuContractor:refreshSalaryBillState(farmId, staff)
+    self.textSalaryBill:setText(string.format(g_i18n:getText("tc_staff_salaryBill"),
+        g_i18n:formatMoney(staff:getTotalSalary(farmId), 0, true, true), #staff:getRoster(farmId)))
 end
 
 -- Overview tab's at-a-glance work list, next to the reputation progress
@@ -575,6 +583,10 @@ function MenuContractor:refreshCurrentJobsState(farmId, jobs)
             line = line .. string.format(g_i18n:getText("tc_overview_deliveredSuffix"),
                 math.floor(100 * job.deliveredLiters / job.requiredLiters))
         end
+        -- On hold for supplies (032).
+        if job:isWaitingForSupplies() then
+            line = line .. string.format(g_i18n:getText("tc_overview_supplySuffix"), job:getSupplyStatusText())
+        end
         table.insert(lines, line)
     end
     self.textCurrentJobs:setText(table.concat(lines, "\n"))
@@ -607,7 +619,7 @@ function MenuContractor:refreshStaffState(farmId, staff, jobs)
     -- Job column only makes sense for the roster view (candidates were never
     -- assigned anything) — blank it out entirely in the candidates view
     -- rather than showing a column full of "None".
-    self.staffHeaderCol4:setText(self.staffView == "candidates" and g_i18n:getText("tc_staff_columnCost") or
+    self.staffHeaderCol4:setText(self.staffView == "candidates" and g_i18n:getText("tc_staff_columnSalary") or
         g_i18n:getText("tc_staff_columnStatus"))
     self.staffHeaderCol5:setText(self.staffView == "candidates" and "" or g_i18n:getText("tc_staff_columnJob"))
 
@@ -689,7 +701,7 @@ function MenuContractor:populateStaffCell(index, cell)
         cell:getAttribute("name"):setText(candidate.name)
         cell:getAttribute("workSpeed"):setText(tostring(candidate.workSpeed))
         cell:getAttribute("tier"):setText(formatTierListCell(candidate.tierCapability))
-        cell:getAttribute("col4"):setText(g_i18n:formatMoney(candidate.hireCost, 0, true, true))
+        cell:getAttribute("col4"):setText(g_i18n:formatMoney(candidate.salary, 0, true, true))
         cell:getAttribute("col5"):setText("")
         return
     end
@@ -724,12 +736,14 @@ function MenuContractor:updateStaffDetails()
     self.staffDetailTier:setText(string.format(g_i18n:getText("tc_staff_detailTier"),
         TheContractorStaff.formatTierCapability(worker.tierCapability)))
 
+    self.staffDetailSalary:setText(string.format(g_i18n:getText("tc_staff_detailSalary"),
+        g_i18n:formatMoney(worker.salary, 0, true, true)))
+
     if self.staffView == "candidates" then
-        self.staffDetailStatusOrCost:setText(string.format(g_i18n:getText("tc_staff_detailCost"),
-            g_i18n:formatMoney(worker.hireCost, 0, true, true)))
+        self.staffDetailStatus:setText("")
         self.staffDetailJob:setText("")
     else
-        self.staffDetailStatusOrCost:setText(string.format(g_i18n:getText("tc_staff_detailStatus"),
+        self.staffDetailStatus:setText(string.format(g_i18n:getText("tc_staff_detailStatus"),
             g_i18n:getText("tc_staff_status_" .. worker.status)))
 
         local farmId = g_currentMission:getFarmId()
@@ -766,13 +780,13 @@ function MenuContractor:onClickHireWorker()
     local farmId = g_currentMission:getFarmId()
     local staff = g_currentMission.TheContractor.Staff
 
-    if not staff:canAffordHire(farmId, candidate.hireCost) then
+    if not staff:canAffordHire(farmId, candidate.salary) then
         InfoDialog.show(g_i18n:getText("tc_staff_hireCannotAfford"))
         return
     end
 
     local dialogPrompt = string.format(g_i18n:getText("tc_staff_hireConfirm"), candidate.name,
-        g_i18n:formatMoney(candidate.hireCost, 0, true, true))
+        g_i18n:formatMoney(candidate.salary, 0, true, true))
 
     YesNoDialog.show(function(target, clickOk)
         if not clickOk then
@@ -896,10 +910,57 @@ function MenuContractor:updateInboxDetails()
         self.inboxDetailHaulage:setText("")
     end
 
+    -- Supplies (032): what the job uses up and how much the farm has in -
+    -- never shown alongside haulage (harvest jobs use no supplies), so it
+    -- shares that line.
+    self.inboxDetailSupplies:setText(self:getSuppliesText(job) or "")
+
     local history = self.negotiationHistory[job.id]
     local latestMessage = history ~= nil and history[#history] or nil
     self.inboxNegotiationLog:setText(latestMessage or "")
     self.inboxNegotiationLog:setVisible(latestMessage ~= nil)
+end
+
+-- Supplies (032): the products a job would draw from the farm's stock
+-- with this equipment, and whether the farm has any of them.
+local function getSupplyStock(job, vehicles)
+    local jobDef = TheContractorJobGeneration.JOB_TYPES[job.jobType]
+    local farmId = g_currentMission:getFarmId()
+    local entries, anyInStock = {}, false
+    for _, fillTypeIndex in ipairs(TCJobSupplies.getRequiredFillTypes(jobDef, vehicles)) do
+        local stock = TCJobSupplies.getFarmStock(farmId, fillTypeIndex)
+        table.insert(entries, { fillTypeIndex = fillTypeIndex, stock = stock })
+        if stock > 0 then
+            anyInStock = true
+        end
+    end
+    return entries, anyInStock
+end
+
+local function joinSupplyTitles(entries)
+    local titles = {}
+    for _, entry in ipairs(entries) do
+        table.insert(titles, g_fillTypeManager:getFillTypeTitleByIndex(entry.fillTypeIndex))
+    end
+    return table.concat(titles, g_i18n:getText("tc_supplies_or"))
+end
+
+-- The Inbox's supplies line: what the farm's equipment for the job would
+-- use and how much of it's in stock, or nil for a job that uses nothing.
+function MenuContractor:getSuppliesText(job)
+    local entries, anyInStock = getSupplyStock(job, TheContractorJobGeneration.getFarmVehicles(g_currentMission:getFarmId()))
+    if #entries == 0 then
+        return nil
+    end
+    if not anyInStock then
+        return string.format(g_i18n:getText("tc_inbox_detailSuppliesNone"), joinSupplyTitles(entries))
+    end
+
+    local parts = {}
+    for _, entry in ipairs(entries) do
+        table.insert(parts, TCJobSupplies.formatAmount(entry.fillTypeIndex, entry.stock))
+    end
+    return string.format(g_i18n:getText("tc_inbox_detailSupplies"), table.concat(parts, ", "))
 end
 
 -- SmoothList dataSource/delegate, shared across inboxTable, calendarDayTable,
@@ -1341,10 +1402,16 @@ function MenuContractor:populateCalendarDayJobCell(index, cell)
     -- then reads Allocated -> Travelling (Dispatch's transport wait) -> In
     -- progress with the same live percentage the Overview's current-jobs
     -- list shows.
+    -- On hold for supplies (032) beats every other working state: nothing
+    -- moves until the player restocks (or empties the wrong product out).
     local statusCell = cell:getAttribute("status")
     if job.state == TheContractorJob.STATE.MISSED then
         statusCell:setText(g_i18n:getText("tc_calendar_jobMissed"))
         statusCell:setTextColor(1, 0.25, 0.25, 1)
+    elseif job:isWaitingForSupplies() and (job.state == TheContractorJob.STATE.ALLOCATED or
+            job.state == TheContractorJob.STATE.IN_PROGRESS) then
+        statusCell:setText(job:getSupplyStatusText())
+        statusCell:setTextColor(1, 0.45, 0.45, 1)
     elseif job.state == TheContractorJob.STATE.ACCEPTED then
         statusCell:setText(g_i18n:getText("tc_calendar_jobUnallocated"))
         statusCell:setTextColor(1, 0.45, 0.45, 1)
@@ -1702,9 +1769,25 @@ function MenuContractor:updateAllocationWarning()
         return
     end
 
+    -- Supplies (032): the picked equipment needs something the farm has
+    -- none of - allowed (stock may arrive before the job starts), but the
+    -- job will sit on hold until it does.
+    local selectedVehicles = {}
+    for _, vehicleId in ipairs(self:getSelectedAllocationEquipmentIds(false)) do
+        local vehicle = NetworkUtil.getObject(vehicleId)
+        if vehicle ~= nil then
+            table.insert(selectedVehicles, vehicle)
+        end
+    end
+    local supplyEntries, anySupplyInStock = getSupplyStock(job, selectedVehicles)
+
     local problem = self:getAllocationProblem(job)
     if problem ~= nil then
         self.allocationWarningText:setText(problem)
+        self.allocationWarningText:setTextColor(1, 0.75, 0.25, 1)
+    elseif #supplyEntries > 0 and not anySupplyInStock then
+        self.allocationWarningText:setText(string.format(g_i18n:getText("tc_allocation_noSuppliesWarning"),
+            joinSupplyTitles(supplyEntries)))
         self.allocationWarningText:setTextColor(1, 0.75, 0.25, 1)
     elseif job.includesHaulage and #self.allocationSelectedWorkerIds == 0 then
         -- Player alone on a haulage job: they're doing the carting.

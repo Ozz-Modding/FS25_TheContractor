@@ -57,19 +57,21 @@ function TCDebugCreateJobEvent:run(connection)
         -- Inbox's Equip. column regardless of what the farm actually owned,
         -- which is misleading for testing that exact column.
         local jobDef = TheContractorJobGeneration.JOB_TYPES[self.jobType]
+        local field = g_fieldManager:getFieldById(self.fieldId)
         local equipmentAvailable = nil
         local fruitTypeName = nil
+        local startState = nil
         if jobDef ~= nil then
-            if jobDef.cropDependent then
-                fruitTypeName = TheContractorJobGeneration.getFieldFruitTypeName(
-                    g_fieldManager:getFieldById(self.fieldId))
+            if jobDef.recordsCrop then
+                fruitTypeName = TheContractorJobGeneration.getFieldFruitTypeName(field)
             end
+            startState = TheContractorJobGeneration.getFieldStartState(field, jobDef)
             equipmentAvailable = g_currentMission.TheContractor.JobGeneration:canFulfill(self.farmId, jobDef,
                 TheContractorJobGeneration.getFruitTypeIndexByName(fruitTypeName))
         end
 
         g_currentMission.TheContractor.Jobs:createJob(self.farmId, self.jobType, self.fieldId,
             self.requiredSkillLevel, self.targetPeriod, self.targetDayInPeriod, self.price, equipmentAvailable,
-            fruitTypeName)
+            fruitTypeName, nil, nil, nil, startState)
     end
 end

@@ -18,6 +18,8 @@ TheContractorWorker.STATUS = {
     IDLE = "idle",
     ASSIGNED = "assigned",
     COOLDOWN = "cooldown",
+    -- 031: off sick for a few days - can't be allocated until they're back.
+    SICK = "sick",
 }
 
 TheContractorWorker.TIERS = { "small", "medium", "large" }
@@ -45,11 +47,11 @@ end
 -- shared candidate pool (see Staff.lua) — it's only set once a farm actually
 -- hires them, at which point they move into that farm's roster.
 --
--- Positional args, in this order, so 031 (sickness propensity) can append
--- one more hidden stat to the end of this list without disturbing existing
--- callers, the same way 030 appended age/growthPotential.
-function TheContractorWorker.new(id, farmId, name, workSpeed, tierCapability, hireCost, age, growthPotential,
-                                 birthPeriod)
+-- Positional args, in this order - new hidden stats get appended to the end
+-- so existing callers aren't disturbed (030 appended age/growthPotential/
+-- birthPeriod, 031 sicknessPropensity).
+function TheContractorWorker.new(id, farmId, name, workSpeed, tierCapability, salary, age, growthPotential,
+                                 birthPeriod, sicknessPropensity)
     local self = {}
     setmetatable(self, TheContractorWorker_mt)
 
@@ -60,7 +62,8 @@ function TheContractorWorker.new(id, farmId, name, workSpeed, tierCapability, hi
     -- { small = 1-10, medium = 1-10, large = 1-10 }, keys absent for tiers
     -- this worker isn't certified on.
     self.tierCapability = tierCapability or {}
-    self.hireCost = hireCost
+    -- 036: per period, derived from the stats (TheContractorStaff.getSalary).
+    self.salary = salary
 
     -- 030: age is visible (the player's only hint at how much a worker can
     -- still improve); growthPotential is the hidden number of stat points
@@ -72,6 +75,15 @@ function TheContractorWorker.new(id, farmId, name, workSpeed, tierCapability, hi
     -- The period (1-12) they turn a year older in - see
     -- TheContractorStaff:onPeriodChanged. Server-only, like growthPotential.
     self.birthPeriod = birthPeriod
+
+    -- 031: hidden 0-1 chance-of-falling-sick factor (see
+    -- TheContractorStaff:updateSickness), how many more days a sick worker
+    -- is off for, and the days off still to come for one who fell ill while
+    -- out on a job (starts when they're back). All server-only, like
+    -- growthPotential - clients just see the SICK status.
+    self.sicknessPropensity = sicknessPropensity or 0
+    self.sickDaysRemaining = 0
+    self.pendingSickDays = 0
 
     -- Driven by 018 (allocation) / 023 (buffer/cooldown) — just a field here.
     self.status = TheContractorWorker.STATUS.IDLE

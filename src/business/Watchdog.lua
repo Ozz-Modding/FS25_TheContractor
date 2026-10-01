@@ -84,9 +84,12 @@ function TheContractorWatchdog:checkActiveJobs()
 
     local activeJobIds = {}
 
+    -- A job on hold for supplies (032) isn't stuck, it's waiting on the
+    -- farm - left out, so it gets a fresh grace period once it's back at
+    -- work.
     for _, farm in ipairs(g_farmManager:getFarms()) do
         for _, job in ipairs(tc.Jobs:getJobsByState(farm.farmId, TheContractorJob.STATE.IN_PROGRESS)) do
-            if job.assignedWorkerId ~= nil then
+            if job.assignedWorkerId ~= nil and not job:isWaitingForSupplies() then
                 activeJobIds[job.id] = true
                 self:checkJob(job)
             end

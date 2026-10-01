@@ -16,17 +16,20 @@
 -- farm's id) and moves into that farm's own roster — the roster itself
 -- *is* farm-scoped, same as everything else in this mod.
 --
--- Hire cost (026) is a one-off signing fee: roughly one early job's pay for
--- an average candidate (~7k), up to ~13.5k for the best possible one, so
--- hiring is a real decision but not a wall. Pool sizing and the daily
--- add/remove odds were reviewed in 026 and kept.
+-- Salary (036, replacing 026's one-off hire fee) is charged per period, on
+-- PERIOD_CHANGED, for every hired worker whatever their status: about one
+-- small job's pay for an average worker (~4k), up to 7k for the best
+-- possible one. The first period is paid up front at hire, so hiring just
+-- after a period change and releasing just before the next isn't free. No
+-- refund on release, no proration. Pool sizing and the daily add/remove odds
+-- were reviewed in 026 and kept.
 
 TheContractorStaff = {}
 TheContractorStaff_mt = Class(TheContractorStaff)
 
-TheContractorStaff.BASE_HIRE_COST = 2000
-TheContractorStaff.COST_PER_WORK_SPEED = 400
-TheContractorStaff.COST_PER_TIER_POINT = 250
+TheContractorStaff.BASE_SALARY = 1500
+TheContractorStaff.SALARY_PER_WORK_SPEED = 250
+TheContractorStaff.SALARY_PER_TIER_POINT = 100
 
 -- Independent per-tier roll: each tier has this chance of the worker being
 -- certified on it at all (a random 1-10 rating), otherwise "not certified"
@@ -50,7 +53,7 @@ TheContractorStaff.POOL_DAILY_REMOVE_CHANCE = 0.15
 -- worker, the bigger the pool can be (MAX_GROWTH_POTENTIAL at MIN_AGE,
 -- nothing from GROWTH_POTENTIAL_ZERO_AGE on), times a random
 -- GROWTH_POTENTIAL_MIN_ROLL-1 so two workers of the same age still differ.
--- Hire cost ignores both - pay follows current ability (user's call).
+-- Salary ignores both - pay follows current ability (user's call).
 TheContractorStaff.MIN_AGE = 18
 TheContractorStaff.MAX_AGE = 60
 TheContractorStaff.MAX_GROWTH_POTENTIAL = 12
@@ -79,6 +82,20 @@ TheContractorStaff.GROWTH_WEIGHTS = {
     certify = 0.2,
 }
 
+-- Sickness (031). Every worker gets a hidden 0-1 sicknessPropensity at
+-- creation, rolled as random()^2 so most are fairly healthy and a few are
+-- sickly. At the start of each day, every hired worker who isn't already
+-- off sick has SICK_MAX_DAILY_CHANCE x propensity chance to fall sick,
+-- tuned so the sickliest fifth average one bout every 7 days. A bout is 1
+-- day, with SICK_EXTRA_DAY_CHANCE of each further day up to SICK_MAX_DAYS
+-- (so 80% one day, 16% two, ~4% three or more). A worker who's out on a job
+-- or in its cooldown when they fall ill finishes it first and goes off sick
+-- once they're back (pendingSickDays) - sickness never pulls anyone off a
+-- job or causes a missed one (024) by itself.
+TheContractorStaff.SICK_MAX_DAILY_CHANCE = 0.21
+TheContractorStaff.SICK_EXTRA_DAY_CHANCE = 0.2
+TheContractorStaff.SICK_MAX_DAYS = 5
+
 TheContractorStaff.FIRST_NAMES = {
     "James", "Mary", "John", "Sarah", "Robert", "Emma", "Michael", "Olivia",
     "David", "Sophie", "Daniel", "Grace", "Thomas", "Amy", "Peter", "Laura",
@@ -88,8 +105,13 @@ TheContractorStaff.LAST_NAMES = {
     "Roberts", "Green", "Hall", "Wood", "Baker", "Clarke", "Turner", "Hughes",
 }
 
+-- tcHiring is unused since 036 (salaries replaced the hire fee) but stays
+-- registered: old saves' finance history may reference it, and dropping it
+-- would shift every later stat's index.
 table.insert(FinanceStats.statNames, "tcHiring")
 FinanceStats.statNameToIndex["tcHiring"] = #FinanceStats.statNames
+table.insert(FinanceStats.statNames, "tcWages")
+FinanceStats.statNameToIndex["tcWages"] = #FinanceStats.statNames
 
 function TheContractorStaff.new()
     local self = {}
@@ -106,6 +128,8 @@ function TheContractorStaff.new()
     self.nextWorkerId = 1
 
     MoneyType.TC_HIRING = MoneyType.register("tcHiring", "tc_moneyType_hiring")
+    MoneyType.LAST_ID = MoneyType.LAST_ID + 1
+    MoneyType.TC_WAGES = MoneyType.register("tcWages", "tc_moneyType_wages")
     MoneyType.LAST_ID = MoneyType.LAST_ID + 1
 
     return self
@@ -130,6 +154,16 @@ function TheContractorStaff:getRoster(farmId)
         end
     end
     return result
+end
+
+-- The farm's salary bill per period (036): every hired worker, whatever
+-- their status.
+function TheContractorStaff:getTotalSalary(farmId)
+    local total = 0
+    for _, worker in ipairs(self:getRoster(farmId)) do
+        total = total + worker.salary
+    end
+    return total
 end
 
 function TheContractorStaff:getIdleWorkers(farmId)
@@ -199,17 +233,24 @@ function TheContractorStaff.rollGrowthPotential(age)
     return math.floor(TheContractorStaff.MAX_GROWTH_POTENTIAL * ageFactor * roll + 0.5)
 end
 
-function TheContractorStaff.getHireCost(workSpeed, tierCapability)
-    local cost = TheContractorStaff.BASE_HIRE_COST + workSpeed * TheContractorStaff.COST_PER_WORK_SPEED
+function TheContractorStaff.rollSicknessPropensity()
+    return math.random() ^ 2
+end
+
+-- Per period (036). Always derived from current stats: recomputed on load
+-- and whenever a worker grows (applyWorkerGrowth), so a better worker costs
+-- more.
+function TheContractorStaff.getSalary(workSpeed, tierCapability)
+    local salary = TheContractorStaff.BASE_SALARY + workSpeed * TheContractorStaff.SALARY_PER_WORK_SPEED
 
     for _, tier in ipairs(TheContractorWorker.TIERS) do
         local rating = tierCapability[tier]
         if rating ~= nil then
-            cost = cost + rating * TheContractorStaff.COST_PER_TIER_POINT
+            salary = salary + rating * TheContractorStaff.SALARY_PER_TIER_POINT
         end
     end
 
-    return cost
+    return salary
 end
 
 function TheContractorStaff.generateName()
@@ -251,23 +292,24 @@ function TheContractorStaff:addCandidateToPool()
 
     local workSpeed = TheContractorStaff.rollWorkSpeed()
     local tierCapability = TheContractorStaff.rollTierCapability()
-    local hireCost = TheContractorStaff.getHireCost(workSpeed, tierCapability)
+    local salary = TheContractorStaff.getSalary(workSpeed, tierCapability)
     local name = TheContractorStaff.generateName()
     local age = TheContractorStaff.rollAge()
     local growthPotential = TheContractorStaff.rollGrowthPotential(age)
     local birthPeriod = TheContractorStaff.rollBirthPeriod()
+    local sicknessPropensity = TheContractorStaff.rollSicknessPropensity()
 
-    local candidate = TheContractorWorker.new(id, nil, name, workSpeed, tierCapability, hireCost, age,
-        growthPotential, birthPeriod)
+    local candidate = TheContractorWorker.new(id, nil, name, workSpeed, tierCapability, salary, age,
+        growthPotential, birthPeriod, sicknessPropensity)
     self:applyCandidateAdded(candidate)
 
     if g_server ~= nil then
         g_server:broadcastEvent(TCStaffCandidateAddedEvent.new(candidate))
     end
 
-    Logging.info("TheContractor: staff pool gained candidate %d (%s, age %d, speed %d, potential %d, cost %.0f)",
+    Logging.info("TheContractor: staff pool gained candidate %d (%s, age %d, speed %d, potential %d, salary %.0f)",
         candidate.id, candidate.name, candidate.age, candidate.workSpeed, candidate.growthPotential,
-        candidate.hireCost)
+        candidate.salary)
 
     return candidate
 end
@@ -339,13 +381,89 @@ function TheContractorStaff:onDayChanged()
     if math.random() < TheContractorStaff.POOL_DAILY_ADD_CHANCE then
         self:addCandidateToPool()
     end
+
+    self:updateSickness()
+end
+
+-- Sickness (031, server-only, from the daily tick): sick workers count down
+-- a day and come back idle when it runs out, then every other hired worker
+-- rolls to fall sick (see the SICK_* tunables). Idle ones go off sick
+-- straight away; busy ones get pendingSickDays, applied in setWorkerStatus
+-- when they're next set idle. toRoll is gathered before anyone recovers, so
+-- someone who only just got better doesn't roll the same day, and anyone
+-- with sickness already pending doesn't roll again.
+function TheContractorStaff:updateSickness()
+    local sickStatus = TheContractorWorker.STATUS.SICK
+
+    for farmId, farmWorkers in pairs(self.workersByFarm) do
+        local toRecover, toRoll = {}, {}
+        for workerId, worker in pairs(farmWorkers) do
+            if worker.status == sickStatus then
+                worker.sickDaysRemaining = worker.sickDaysRemaining - 1
+                if worker.sickDaysRemaining <= 0 then
+                    table.insert(toRecover, workerId)
+                end
+            elseif worker.pendingSickDays == 0 then
+                table.insert(toRoll, worker)
+            end
+        end
+
+        for _, workerId in ipairs(toRecover) do
+            self:setWorkerStatus(farmId, workerId, TheContractorWorker.STATUS.IDLE)
+        end
+
+        for _, worker in ipairs(toRoll) do
+            if math.random() < TheContractorStaff.SICK_MAX_DAILY_CHANCE * worker.sicknessPropensity then
+                local days = TheContractorStaff.rollSickDays()
+
+                if worker:isIdle() then
+                    Logging.info("TheContractor: farm %d worker %d (%s) off sick for %d day(s)", farmId, worker.id,
+                        worker.name, days)
+                    worker.sickDaysRemaining = days
+                    self:setWorkerStatus(farmId, worker.id, sickStatus)
+                else
+                    Logging.info("TheContractor: farm %d worker %d (%s) fell ill on a job, off sick for %d day(s) once back",
+                        farmId, worker.id, worker.name, days)
+                    worker.pendingSickDays = days
+                end
+            end
+        end
+    end
+end
+
+-- 1 day, plus SICK_EXTRA_DAY_CHANCE of each further day up to SICK_MAX_DAYS.
+function TheContractorStaff.rollSickDays()
+    local days = 1
+    while days < TheContractorStaff.SICK_MAX_DAYS and math.random() < TheContractorStaff.SICK_EXTRA_DAY_CHANCE do
+        days = days + 1
+    end
+    return days
+end
+
+function TheContractorStaff:onPeriodChanged()
+    self:paySalaries()
+    self:ageWorkers()
+end
+
+-- Salaries (036, server-only, from the period tick): one charge per farm for
+-- its whole roster. Charged even if the farm can't afford it - it just goes
+-- negative, like any vanilla expense. Money syncs through vanilla, so no
+-- event of our own.
+function TheContractorStaff:paySalaries()
+    for farmId in pairs(self.workersByFarm) do
+        local total = self:getTotalSalary(farmId)
+        if total > 0 and g_farmManager:getFarmById(farmId) ~= nil then
+            g_currentMission:addMoney(-total, farmId, MoneyType.TC_WAGES, true, true)
+            Logging.info("TheContractor: farm %d paid %.0f in staff salaries", farmId, total)
+        end
+    end
 end
 
 -- Birthdays (030 follow-up): everyone whose birthPeriod is the period just
 -- starting - pool candidates and hired workers alike - turns a year older.
 -- growthPotential is left alone; it's rolled from age once, at creation.
 -- One broadcast for the whole batch.
-function TheContractorStaff:onPeriodChanged()
+function TheContractorStaff:ageWorkers()
     local period = g_currentMission.environment.currentPeriod
     local aged = {}
 
@@ -426,18 +544,21 @@ end
 
 -- Hiring (server-authoritative) -------------------------------------------
 
-function TheContractorStaff:canAffordHire(farmId, hireCost)
+-- Hiring pays the first period's salary up front (036), so that's what has
+-- to be affordable.
+function TheContractorStaff:canAffordHire(farmId, salary)
     local farm = g_farmManager:getFarmById(farmId)
     if farm == nil then
         return false
     end
 
-    return farm:getBalance() >= hireCost
+    return farm:getBalance() >= salary
 end
 
 -- Hires a candidate currently in the pool for farmId: checks the candidate
 -- is still there (the MP race — first request the server processes wins,
--- see file header) and the farm can afford their cost, deducts it, moves
+-- see file header) and the farm can afford their first period's salary
+-- (036), charges it, moves
 -- them out of the pool and into the farm's roster, then broadcasts the
 -- result. Only the server may hire — see TCHireWorkerEvent for the client-
 -- request side. Returns the hired TheContractorWorker, or nil if the
@@ -452,11 +573,11 @@ function TheContractorStaff:hireWorker(farmId, candidateId)
         return nil
     end
 
-    if not self:canAffordHire(farmId, candidate.hireCost) then
+    if not self:canAffordHire(farmId, candidate.salary) then
         return nil
     end
 
-    g_currentMission:addMoney(-candidate.hireCost, farmId, MoneyType.TC_HIRING, true, true)
+    g_currentMission:addMoney(-candidate.salary, farmId, MoneyType.TC_WAGES, true, true)
 
     candidate.farmId = farmId
     self:applyWorkerHired(candidate)
@@ -485,8 +606,8 @@ function TheContractorStaff:registerWorker(worker)
         self.nextWorkerId = worker.id + 1
     end
 
-    Logging.info("TheContractor: farm %d hired worker %d (%s, speed %d, cost %.0f)", worker.farmId, worker.id,
-        worker.name, worker.workSpeed, worker.hireCost)
+    Logging.info("TheContractor: farm %d hired worker %d (%s, speed %d, salary %.0f)", worker.farmId, worker.id,
+        worker.name, worker.workSpeed, worker.salary)
 end
 
 -- Releasing (server-authoritative) ----------------------------------------
@@ -532,7 +653,7 @@ end
 
 -- Worker status (server-authoritative) -------------------------------------
 
--- Flips a hired worker's status (idle/assigned/cooldown) and broadcasts it —
+-- Flips a hired worker's status (idle/assigned/cooldown/sick) and broadcasts it —
 -- first driven by allocation (018, idle -> assigned on a successful
 -- allocateJob), later tickets (022/023) will flip it back on
 -- completion/cooldown. Broadcasts just the changed field
@@ -543,7 +664,22 @@ function TheContractorStaff:setWorkerStatus(farmId, workerId, status)
         return
     end
 
-    self:applyWorkerStatusChanged(farmId, workerId, status)
+    -- 031: someone who fell ill while out on a job goes off sick, not idle,
+    -- when they get back.
+    local worker = self:getWorker(farmId, workerId)
+    if worker ~= nil and status == TheContractorWorker.STATUS.IDLE and worker.pendingSickDays > 0 then
+        Logging.info("TheContractor: farm %d worker %d (%s) back from their job, now off sick for %d day(s)", farmId,
+            workerId, worker.name, worker.pendingSickDays)
+        worker.sickDaysRemaining = worker.pendingSickDays
+        worker.pendingSickDays = 0
+        status = TheContractorWorker.STATUS.SICK
+    end
+
+    local oldStatus = self:applyWorkerStatusChanged(farmId, workerId, status)
+
+    -- The host's own notification - the broadcast below doesn't loop back
+    -- to it (see src/events/README.md).
+    TCWorkerStatusChangedEvent.showNotification(self:getWorker(farmId, workerId), oldStatus, status)
 
     if g_server ~= nil then
         g_server:broadcastEvent(TCWorkerStatusChangedEvent.new(farmId, workerId, status))
@@ -551,14 +687,17 @@ function TheContractorStaff:setWorkerStatus(farmId, workerId, status)
 end
 
 -- The actual field flip, run on whichever machine (server, or a client
--- receiving TCWorkerStatusChangedEvent) is applying it.
+-- receiving TCWorkerStatusChangedEvent) is applying it. Returns the status
+-- the worker had before (nil if there's no such worker).
 function TheContractorStaff:applyWorkerStatusChanged(farmId, workerId, status)
     local worker = self:getWorker(farmId, workerId)
     if worker == nil then
-        return
+        return nil
     end
 
+    local oldStatus = worker.status
     worker.status = status
+    return oldStatus
 end
 
 -- Growth (030, server-authoritative) ----------------------------------------
@@ -682,7 +821,8 @@ end
 
 -- The actual stat change, run on whichever machine (server, or a client
 -- receiving TCWorkerGrewEvent) is applying it. growthPotential is only
--- tracked on the server, so it isn't touched here.
+-- tracked on the server, so it isn't touched here. Salary follows the new
+-- stats (036); every machine recomputes it the same way.
 function TheContractorStaff:applyWorkerGrowth(farmId, workerId, stat, value)
     local worker = self:getWorker(farmId, workerId)
     if worker == nil then
@@ -690,6 +830,7 @@ function TheContractorStaff:applyWorkerGrowth(farmId, workerId, stat, value)
     end
 
     worker:setStat(stat, value)
+    worker.salary = TheContractorStaff.getSalary(worker.workSpeed, worker.tierCapability)
 end
 
 -- Wire serialization, shared by the pool/hire events and initial client
@@ -703,9 +844,10 @@ function TheContractorStaff.writeWorker(streamId, worker)
     streamWriteInt32(streamId, worker.id)
     streamWriteString(streamId, worker.name)
     streamWriteInt32(streamId, worker.workSpeed)
-    streamWriteFloat32(streamId, worker.hireCost)
+    streamWriteFloat32(streamId, worker.salary)
     streamWriteString(streamId, worker.status)
-    -- 030: age only - growthPotential stays server-side (it's hidden).
+    -- 030: age only - growthPotential stays server-side (it's hidden), as
+    -- do 031's sicknessPropensity/sickDaysRemaining/pendingSickDays.
     streamWriteInt32(streamId, worker.age)
 
     for _, tier in ipairs(TheContractorWorker.TIERS) do
@@ -725,7 +867,7 @@ function TheContractorStaff.readWorker(streamId)
     local id = streamReadInt32(streamId)
     local name = streamReadString(streamId)
     local workSpeed = streamReadInt32(streamId)
-    local hireCost = streamReadFloat32(streamId)
+    local salary = streamReadFloat32(streamId)
     local status = streamReadString(streamId)
     local age = streamReadInt32(streamId)
 
@@ -736,7 +878,7 @@ function TheContractorStaff.readWorker(streamId)
         end
     end
 
-    local worker = TheContractorWorker.new(id, farmId, name, workSpeed, tierCapability, hireCost, age)
+    local worker = TheContractorWorker.new(id, farmId, name, workSpeed, tierCapability, salary, age)
     worker.status = status
 
     return worker
@@ -748,11 +890,19 @@ function TheContractorStaff.writeWorkerXML(xmlFile, key, worker)
     setXMLInt(xmlFile, key .. "#id", worker.id)
     setXMLString(xmlFile, key .. "#name", worker.name)
     setXMLInt(xmlFile, key .. "#workSpeed", worker.workSpeed)
-    setXMLFloat(xmlFile, key .. "#hireCost", worker.hireCost)
+    -- Informational only: readWorkerXML recomputes it from the stats.
+    setXMLFloat(xmlFile, key .. "#salary", worker.salary)
     setXMLString(xmlFile, key .. "#status", worker.status)
     setXMLInt(xmlFile, key .. "#age", worker.age)
     setXMLInt(xmlFile, key .. "#growthPotential", worker.growthPotential)
     setXMLInt(xmlFile, key .. "#birthPeriod", worker.birthPeriod)
+    setXMLFloat(xmlFile, key .. "#sicknessPropensity", worker.sicknessPropensity)
+    if worker.status == TheContractorWorker.STATUS.SICK then
+        setXMLInt(xmlFile, key .. "#sickDaysRemaining", worker.sickDaysRemaining)
+    end
+    if worker.pendingSickDays > 0 then
+        setXMLInt(xmlFile, key .. "#pendingSickDays", worker.pendingSickDays)
+    end
 
     for _, tier in ipairs(TheContractorWorker.TIERS) do
         local rating = worker.tierCapability[tier]
@@ -769,12 +919,15 @@ function TheContractorStaff.readWorkerXML(xmlFile, key, farmId)
     local id = getXMLInt(xmlFile, key .. "#id")
     local name = getXMLString(xmlFile, key .. "#name")
     local workSpeed = getXMLInt(xmlFile, key .. "#workSpeed")
-    local hireCost = getXMLFloat(xmlFile, key .. "#hireCost")
 
     local tierCapability = {}
     for _, tier in ipairs(TheContractorWorker.TIERS) do
         tierCapability[tier] = getXMLInt(xmlFile, key .. "#tier" .. tier)
     end
+
+    -- Always recomputed (036), so a pre-036 save's #hireCost is simply
+    -- ignored and a retuned formula applies to existing workers too.
+    local salary = TheContractorStaff.getSalary(workSpeed, tierCapability)
 
     -- A worker saved before 030 has neither: roll them now, as if they'd
     -- just joined the pool.
@@ -785,10 +938,17 @@ function TheContractorStaff.readWorkerXML(xmlFile, key, farmId)
         growthPotential = TheContractorStaff.rollGrowthPotential(age)
     end
     local birthPeriod = getXMLInt(xmlFile, key .. "#birthPeriod") or TheContractorStaff.rollBirthPeriod()
+    -- Likewise a worker saved before 031.
+    local sicknessPropensity = getXMLFloat(xmlFile, key .. "#sicknessPropensity") or
+        TheContractorStaff.rollSicknessPropensity()
 
-    local worker = TheContractorWorker.new(id, farmId, name, workSpeed, tierCapability, hireCost, age,
-        growthPotential, birthPeriod)
+    local worker = TheContractorWorker.new(id, farmId, name, workSpeed, tierCapability, salary, age,
+        growthPotential, birthPeriod, sicknessPropensity)
     worker.status = Utils.getNoNil(getXMLString(xmlFile, key .. "#status"), worker.status)
+    if worker.status == TheContractorWorker.STATUS.SICK then
+        worker.sickDaysRemaining = math.max(1, getXMLInt(xmlFile, key .. "#sickDaysRemaining") or 1)
+    end
+    worker.pendingSickDays = getXMLInt(xmlFile, key .. "#pendingSickDays") or 0
 
     return worker
 end

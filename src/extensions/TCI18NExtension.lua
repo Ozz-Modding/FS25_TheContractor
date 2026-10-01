@@ -25,6 +25,8 @@ TCI18NExtension.theContractorTexts = {
     ["finance_tcAdvertising"] = true,
     ["tc_moneyType_hiring"] = true,
     ["finance_tcHiring"] = true,
+    ["tc_moneyType_wages"] = true,
+    ["finance_tcWages"] = true,
     ["tc_moneyType_jobPayout"] = true,
     ["finance_tcJobPayout"] = true,
 }

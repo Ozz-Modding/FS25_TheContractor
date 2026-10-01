@@ -43,6 +43,7 @@
             <Text profile="tc_placeholderText" id="textAdvertisingStatus" text="" position="40px -470px" width="900px"/>
 
             <Text profile="tc_placeholderText" id="textLastCompletedJob" text="" position="40px -520px" width="900px"/>
+            <Text profile="tc_placeholderText" id="textSalaryBill" text="" position="40px -560px" width="900px"/>
 
             <Text profile="tc_overviewHeading" id="textCurrentJobsHeading" text="$l10n_tc_overview_currentJobsHeading" position="860px -110px" width="500px"/>
             <Text profile="tc_placeholderText" id="textCurrentJobs" text="" position="860px -150px" width="500px" textMaxNumLines="12"/>
@@ -83,6 +84,7 @@
                 <Text profile="tc_placeholderText" id="inboxDetailPrice" text="" position="0px -130px" width="280px"/>
                 <Text profile="tc_placeholderText" id="inboxDetailEquipment" text="" position="0px -170px" width="280px" textMaxNumLines="3"/>
                 <Text profile="tc_placeholderText" id="inboxDetailHaulage" text="" position="0px -260px" width="280px" textMaxNumLines="3"/>
+                <Text profile="tc_placeholderText" id="inboxDetailSupplies" text="" position="0px -260px" width="280px" textMaxNumLines="3"/>
                 <Text profile="tc_placeholderText" id="inboxNegotiationLog" text="" position="0px -350px" width="280px" textMaxNumLines="4"/>
             </GuiElement>
         </GuiElement>
@@ -223,8 +225,9 @@
                 <Text profile="tc_placeholderText" id="staffDetailAge" text="" position="0px -40px" width="280px"/>
                 <Text profile="tc_placeholderText" id="staffDetailWorkSpeed" text="" position="0px -70px" width="280px"/>
                 <Text profile="tc_placeholderText" id="staffDetailTier" text="" position="0px -100px" width="280px" textMaxNumLines="3"/>
-                <Text profile="tc_placeholderText" id="staffDetailStatusOrCost" text="" position="0px -170px" width="280px"/>
-                <Text profile="tc_placeholderText" id="staffDetailJob" text="" position="0px -200px" width="280px"/>
+                <Text profile="tc_placeholderText" id="staffDetailSalary" text="" position="0px -170px" width="280px"/>
+                <Text profile="tc_placeholderText" id="staffDetailStatus" text="" position="0px -200px" width="280px"/>
+                <Text profile="tc_placeholderText" id="staffDetailJob" text="" position="0px -230px" width="280px"/>
             </GuiElement>
         </GuiElement>
     </GuiElement>

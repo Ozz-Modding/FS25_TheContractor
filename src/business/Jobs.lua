@@ -132,9 +132,11 @@ end
 -- that only have a period/day (debug creation) get the next occurrence of
 -- that date (getNextOccurrenceDay). includesHaulage/deliveryStation
 -- (an unloading station object) are harvest-only and optional (035).
+-- startState is the field state the job starts from, for job types that
+-- record one (032, JOB_TYPES' startState).
 function TheContractorJobs:createJob(farmId, jobType, fieldId, requiredSkillLevel, targetPeriod, targetDayInPeriod,
                                       price, equipmentAvailable, fruitTypeName, deadlineDay, includesHaulage,
-                                      deliveryStation)
+                                      deliveryStation, startState)
     if not g_currentMission:getIsServer() then
         return nil
     end
@@ -150,6 +152,7 @@ function TheContractorJobs:createJob(farmId, jobType, fieldId, requiredSkillLeve
         job.equipmentAvailable = equipmentAvailable
     end
     job.fruitTypeName = fruitTypeName
+    job.startState = startState
     job.deadlineDay = deadlineDay or TheContractorJobs.getNextOccurrenceDay(targetPeriod, targetDayInPeriod)
     if includesHaulage and deliveryStation ~= nil then
         job.includesHaulage = true
@@ -331,6 +334,57 @@ function TheContractorJobs:applyJobDelivery(farmId, jobId, deliveredLiters, requ
     end
 end
 
+-- Server-only (032): puts a job on hold for supplies (status "noStock" or
+-- "wrongFill", fillTypeName the product concerned) or takes it off hold
+-- (nil), applies locally, then broadcasts - see TCJobSupplies.
+function TheContractorJobs:setJobSupplyStatus(job, status, fillTypeName)
+    if not g_currentMission:getIsServer() then
+        return
+    end
+    if job.supplyStatus == status and job.supplyFillTypeName == fillTypeName then
+        return
+    end
+
+    self:applyJobSupplyStatus(job.farmId, job.id, status, fillTypeName)
+
+    if g_server ~= nil then
+        g_server:broadcastEvent(TCJobSupplyStatusEvent.new(job.farmId, job.id, status, fillTypeName))
+    end
+end
+
+-- The actual status change, run on whichever machine (server, or a client
+-- receiving TCJobSupplyStatusEvent) is applying it. Going on hold tells the
+-- farm's player what's missing, since nothing else moves until they sort
+-- it.
+function TheContractorJobs:applyJobSupplyStatus(farmId, jobId, status, fillTypeName)
+    local job = self:getJob(farmId, jobId)
+    if job == nil then
+        return
+    end
+
+    local wasWaiting = job:isWaitingForSupplies()
+    job.supplyStatus = status
+    job.supplyFillTypeName = fillTypeName
+
+    if status ~= nil and not wasWaiting and g_client ~= nil and g_currentMission:getFarmId() == farmId and
+        isMissableState(job.state) then
+        local field = g_fieldManager:getFieldById(job.fieldId)
+        g_currentMission:addIngameNotification(FSBaseMission.INGAME_NOTIFICATION_CRITICAL,
+            string.format(g_i18n:getText("tc_supplies_onHold"), job:getTypeText(),
+                field ~= nil and field:getName() or tostring(job.fieldId), job:getSupplyStatusText()))
+    end
+end
+
+-- Progress on a serverMeasured job (032), run on a client receiving
+-- TCJobProgressEvent - the server keeps its own copy live itself
+-- (TCJobProgress).
+function TheContractorJobs:applyJobProgress(farmId, jobId, completionPercentage)
+    local job = self:getJob(farmId, jobId)
+    if job ~= nil then
+        job.completionPercentage = completionPercentage
+    end
+end
+
 -- The slowest of a job's hired workers (by workSpeed), or nil for a
 -- player-driven job - what the speed-scaled waits (Dispatch's transport,
 -- Cooldown's buffer) go by, since a two-worker job can only move as fast
@@ -460,6 +514,8 @@ function TheContractorJobs:releaseMissedJobResources(job)
     g_currentMission.TheContractor.Dispatch:stopJob(job.id, AIMessageSuccessStoppedByUser.new())
     TCJobProgress.clearJob(job.id)
     TCHaulage.stopDelivery(job)
+    TCFieldPreparation.clearUpAfterJob(job)
+    self:setJobSupplyStatus(job, nil, nil)
 
     if job.completionPercentage > 0 then
         g_currentMission.TheContractor.Cooldown:startCooldown(job)
@@ -641,6 +697,21 @@ function TheContractorJobs:getJobById(jobId)
     return nil
 end
 
+-- True while any farm has a non-terminal job (offers included) on the
+-- field - what keeps vanilla's NPC fieldwork off it (034, TCFreezeNPCFieldwork).
+-- A plain scan rather than a cached set: it only runs once per field per
+-- period, plus once per queued NPC task.
+function TheContractorJobs:isFieldProtected(fieldId)
+    for _, farmJobs in pairs(self.jobsByFarm) do
+        for _, job in pairs(farmJobs) do
+            if job.fieldId == fieldId and not job:isTerminal() then
+                return true
+            end
+        end
+    end
+    return false
+end
+
 -- Full (fully-qualified operator) reputation reward before rounding: field
 -- area times the job type's reputationPerHa, scaled up for a haulage job
 -- (035).
@@ -648,7 +719,7 @@ function TheContractorJobs.getBaseReputationReward(job)
     local jobDef = TheContractorJobGeneration.JOB_TYPES[job.jobType]
     local field = g_fieldManager:getFieldById(job.fieldId)
     local areaHa = field ~= nil and field:getAreaHa() or 1
-    local reputationPerHa = jobDef ~= nil and jobDef.reputationPerHa or 0
+    local reputationPerHa = jobDef ~= nil and TheContractorJobGeneration.getReputationPerHa(jobDef) or 0
     local haulageMultiplier = job.includesHaulage and TheContractorJobGeneration.HAULAGE_REPUTATION_MULTIPLIER or 1
     return reputationPerHa * areaHa * haulageMultiplier
 end
@@ -764,6 +835,8 @@ function TheContractorJobs:completeJob(job)
 
     TCJobProgress.clearJob(job.id)
     TCHaulage.stopDelivery(job)
+    TCFieldPreparation.clearUpAfterJob(job)
+    self:setJobSupplyStatus(job, nil, nil)
 
     Logging.info("TheContractor: farm %d job %d completed (%s, field %d) - paid %.0f, +%d reputation, %s taken, %.0f l fuel (%.0f), quality %d",
         job.farmId, job.id, job.jobType, job.fieldId, job.paymentAmount, reputationReward,
@@ -836,6 +909,11 @@ function TheContractorJobs.writeJob(streamId, job)
     streamWriteFloat32(streamId, job.fuelCost)
     streamWriteInt32(streamId, job.stuckInterventions)
     streamWriteInt32(streamId, job.qualityScore or -1)
+
+    -- 032. -1 stands in for "no start state".
+    streamWriteInt32(streamId, job.startState or -1)
+    streamWriteString(streamId, job.supplyStatus or "")
+    streamWriteString(streamId, job.supplyFillTypeName or "")
 end
 
 function TheContractorJobs.readJob(streamId)
@@ -903,6 +981,13 @@ function TheContractorJobs.readJob(streamId)
     job.stuckInterventions = streamReadInt32(streamId)
     local qualityScore = streamReadInt32(streamId)
     job.qualityScore = qualityScore >= 0 and qualityScore or nil
+
+    local startState = streamReadInt32(streamId)
+    job.startState = startState >= 0 and startState or nil
+    local supplyStatus = streamReadString(streamId)
+    local supplyFillTypeName = streamReadString(streamId)
+    job.supplyStatus = supplyStatus ~= "" and supplyStatus or nil
+    job.supplyFillTypeName = supplyFillTypeName ~= "" and supplyFillTypeName or nil
 
     return job
 end
@@ -1000,6 +1085,17 @@ function TheContractorJobs:loadFromXMLFile(xmlFile)
             job.fuelCost = Utils.getNoNil(getXMLFloat(xmlFile, jobKey .. ".summary#fuelCost"), 0)
             job.stuckInterventions = Utils.getNoNil(getXMLInt(xmlFile, jobKey .. ".summary#stuckInterventions"), 0)
             job.qualityScore = getXMLInt(xmlFile, jobKey .. ".summary#qualityScore")
+            job.startState = getXMLInt(xmlFile, jobKey .. "#startState")
+            job.workTotal = getXMLFloat(xmlFile, jobKey .. "#workTotal")
+            local baleIndex = 0
+            while true do
+                local baleKey = string.format("%s.spawnedBale(%d)", jobKey, baleIndex)
+                if not hasXMLProperty(xmlFile, baleKey) then
+                    break
+                end
+                table.insert(job.spawnedBaleIds, getXMLString(xmlFile, baleKey .. "#uniqueId"))
+                baleIndex = baleIndex + 1
+            end
 
             self.jobsByFarm[farmId] = self.jobsByFarm[farmId] or {}
             self.jobsByFarm[farmId][id] = job
@@ -1047,6 +1143,15 @@ function TheContractorJobs:saveToXmlFile(xmlFile)
             end
             if job.deadlineDay ~= nil then
                 setXMLInt(xmlFile, jobKey .. "#deadlineDay", job.deadlineDay)
+            end
+            if job.startState ~= nil then
+                setXMLInt(xmlFile, jobKey .. "#startState", job.startState)
+            end
+            if job.workTotal ~= nil then
+                setXMLFloat(xmlFile, jobKey .. "#workTotal", job.workTotal)
+            end
+            for i, uniqueId in ipairs(job.spawnedBaleIds) do
+                setXMLString(xmlFile, string.format("%s.spawnedBale(%d)#uniqueId", jobKey, i - 1), uniqueId)
             end
 
             if job.assignedWorkerId ~= nil then

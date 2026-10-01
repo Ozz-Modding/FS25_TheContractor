@@ -88,20 +88,13 @@ function TheContractorAllocation:getEligibleImplements(farmId, job)
     return result
 end
 
--- Whether the picker should offer tractors at all: always for pulled
--- implements, and for harvest only if one of the eligible harvesters is
--- trailed (no engine of its own).
+-- Whether the picker should offer tractors at all: only if one of the
+-- eligible harvesters/implements has no engine of its own (a trailed
+-- harvester, a pulled plow - but not a self-propelled sprayer or mower).
 function TheContractorAllocation:jobMayNeedTractor(farmId, job)
-    local jobDef = TheContractorJobGeneration.JOB_TYPES[job.jobType]
-    if jobDef == nil then
-        return false
-    end
-    if jobDef.requiresTractor then
-        return true
-    end
-
     for _, entry in ipairs(self:getEligibleImplements(farmId, job)) do
-        if entry.role == "harvester" and not TCEquipmentClass.isSelfPropelled(entry.vehicle) then
+        if (entry.role == "harvester" or entry.role == "implement") and
+            not TCEquipmentClass.isSelfPropelled(entry.vehicle) then
             return true
         end
     end
@@ -252,6 +245,11 @@ end
 function TheContractorAllocation.getCrewShapeError(job, workerIds)
     if #workerIds == 0 then
         return nil
+    end
+    -- 032: work the AI Helper can't do (bale wrapping) is the player's.
+    local jobDef = TheContractorJobGeneration.JOB_TYPES[job.jobType]
+    if jobDef ~= nil and jobDef.playerOnly then
+        return "tc_allocation_playerOnly"
     end
     local required = TheContractorAllocation.getRequiredWorkerCount(job)
     if #workerIds < required then
@@ -439,18 +437,28 @@ function TheContractorAllocation:allocateJob(farmId, jobId, workerIds, equipment
         return false
     end
 
-    -- The job has to be doable from here, whatever the field has done since
-    -- it was offered - and none of its "done" state can count as our work.
-    TCFieldPreparation.prepareFieldForJob(job)
-    TCJobProgress.clearJob(job.id)
-    job.completionPercentage = 0
-
     job.assignedWorkerId = operatorId
     job.haulerWorkerId = haulerId
     job.assignedEquipmentIds = equipmentIds
     job.haulageEquipmentIds = haulageEquipmentIds
+
+    -- The job has to be doable from here, whatever the field has done since
+    -- it was offered - and none of its "done" state can count as our work.
+    -- After the equipment's recorded: a bale wrap job lays out bales its
+    -- wrapper takes.
+    TCFieldPreparation.prepareFieldForJob(job)
+    TCJobProgress.clearJob(job.id)
+    job.completionPercentage = 0
+
     job:transitionTo(TheContractorJob.STATE.ALLOCATED)
     TCFieldAccess.refresh()
+
+    -- 032: a player-driven job's supplies go straight in, in the yard - the
+    -- player drives it all out themselves. A hired worker's are loaded as
+    -- they set off (Dispatch).
+    if operatorId == nil then
+        TCJobSupplies.topUp(job)
+    end
 
     -- Player-driven haulage: they'll be delivering the crop themselves.
     TCHaulage.startDelivery(job)

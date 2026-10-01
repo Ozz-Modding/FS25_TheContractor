@@ -4,6 +4,7 @@ TheContractor.SaveKey = "TheContractor"
 
 source(TheContractor.dir .. "src/extensions/TCI18NExtension.lua")
 source(TheContractor.dir .. "src/util/DisableVanillaContracts.lua")
+source(TheContractor.dir .. "src/util/TCFreezeNPCFieldwork.lua")
 source(TheContractor.dir .. "src/util/TCEquipmentClass.lua")
 source(TheContractor.dir .. "src/util/TCCropPrediction.lua")
 source(TheContractor.dir .. "src/util/TCJobProgress.lua")
@@ -14,6 +15,7 @@ source(TheContractor.dir .. "src/util/TCFieldAccess.lua")
 source(TheContractor.dir .. "src/util/TCVehicleLock.lua")
 source(TheContractor.dir .. "src/util/TCJobSiteSetup.lua")
 source(TheContractor.dir .. "src/util/TCHaulage.lua")
+source(TheContractor.dir .. "src/util/TCJobSupplies.lua")
 source(TheContractor.dir .. "src/gui/MenuContractor.lua")
 source(TheContractor.dir .. "src/gui/TCAdvertisingDialog.lua")
 source(TheContractor.dir .. "src/hud/TCInboxHUD.lua")
@@ -38,6 +40,8 @@ source(TheContractor.dir .. "src/events/TCJobCreatedEvent.lua")
 source(TheContractor.dir .. "src/events/TCJobStateChangedEvent.lua")
 source(TheContractor.dir .. "src/events/TCJobTravellingEvent.lua")
 source(TheContractor.dir .. "src/events/TCJobDeliveryEvent.lua")
+source(TheContractor.dir .. "src/events/TCJobProgressEvent.lua")
+source(TheContractor.dir .. "src/events/TCJobSupplyStatusEvent.lua")
 source(TheContractor.dir .. "src/events/TCJobMissedEvent.lua")
 source(TheContractor.dir .. "src/events/TCDebugCreateJobEvent.lua")
 source(TheContractor.dir .. "src/events/TCDebugSetJobStateEvent.lua")
@@ -94,6 +98,8 @@ function TheContractor:loadMap()
     TCFieldAccess.reset()
     TCVehicleLock.reset()
     TCHaulage.reset()
+    TCFieldPreparation.reset()
+    TCJobSupplies.reset()
 
     TheContractorDisableVanillaContracts.hideContractsTab()
 
@@ -142,7 +148,7 @@ function TheContractor:loadMap()
             "Hire a candidate from the staff pool for the current farm. Usage: tcHireWorker candidateId",
             "consoleCommandHireWorker", self)
         addConsoleCommand("tcJobAvailability",
-            "Dry-run job generation for the current farm: eligible fields per job type right now (025). Usage: tcJobAvailability",
+            "Dry-run job generation for the current farm: eligible, datable and fulfillable fields per job type right now (025, 033). Usage: tcJobAvailability",
             "consoleCommandJobAvailability", self)
     end
 
@@ -211,8 +217,8 @@ function TheContractor:consoleCommandListStaffPool()
 
     local lines = {}
     for _, candidate in ipairs(pool) do
-        table.insert(lines, string.format("#%d %s - speed %d, cost %.0f, tiers: %s", candidate.id, candidate.name,
-            candidate.workSpeed, candidate.hireCost, TheContractorStaff.formatTierCapability(candidate.tierCapability)))
+        table.insert(lines, string.format("#%d %s - speed %d, salary %.0f, tiers: %s", candidate.id, candidate.name,
+            candidate.workSpeed, candidate.salary, TheContractorStaff.formatTierCapability(candidate.tierCapability)))
     end
     return table.concat(lines, "\n")
 end
@@ -250,14 +256,39 @@ function TheContractor:consoleCommandJobAvailability()
     local hourlyChance = jobGeneration:getHourlyChance(farm.farmId)
     local rollsPerPeriod = 24 * environment.daysPerPeriod
 
+    local snapshot = jobGeneration:getAvailabilitySnapshot(farm.farmId)
+    local datableTypes, fulfillableTypes = 0, 0
+    for _, entry in ipairs(snapshot) do
+        if entry.datable > 0 then
+            datableTypes = datableTypes + 1
+        end
+        if entry.fulfillable > 0 then
+            fulfillableTypes = fulfillableTypes + 1
+        end
+    end
+
+    local hitsPerPeriod = hourlyChance * rollsPerPeriod
+    local split
+    if datableTypes == 0 then
+        split = "no job type has a datable field - every hit is wasted"
+    elseif fulfillableTypes == 0 then
+        split = string.format("nothing fulfillable - split evenly across the %d types with datable fields",
+            datableTypes)
+    else
+        local share = TheContractorJobGeneration.FULFILLABLE_TYPE_SHARE
+        split = string.format("%d%% evenly across the %d fulfillable types, %d%% across all %d types with datable fields; ~%.1f fulfillable offers per period",
+            math.floor(share * 100 + 0.5), fulfillableTypes, math.floor((1 - share) * 100 + 0.5), datableTypes,
+            hitsPerPeriod * (share + (1 - share) * fulfillableTypes / datableTypes))
+    end
+
     local lines = {
-        string.format("Farm %d, period %d day %d: hourly chance %.4f, ~%.1f generation hits per period (split evenly across %d job types)",
-            farm.farmId, environment.currentPeriod, environment.currentDayInPeriod, hourlyChance,
-            hourlyChance * rollsPerPeriod, #TheContractorJobGeneration.JOB_TYPE_KEYS),
+        string.format("Farm %d, period %d day %d: hourly chance %.4f, ~%.1f generation hits per period (%s)",
+            farm.farmId, environment.currentPeriod, environment.currentDayInPeriod, hourlyChance, hitsPerPeriod,
+            split),
     }
-    for _, entry in ipairs(jobGeneration:getAvailabilitySnapshot(farm.farmId)) do
-        table.insert(lines, string.format("  %-9s eligible fields %3d, with target date %3d, equipment %s",
-            entry.jobType, entry.candidates, entry.datable, entry.canFulfill and "yes" or "NO"))
+    for _, entry in ipairs(snapshot) do
+        table.insert(lines, string.format("  %-9s eligible fields %3d, with target date %3d, fulfillable %3d",
+            entry.jobType, entry.candidates, entry.datable, entry.fulfillable))
     end
     return table.concat(lines, "\n")
 end
@@ -407,6 +438,8 @@ function TheContractor:update(dt)
     TCFieldAccess.update(dt)
     TCVehicleLock.update(dt)
     TCHaulage.update(dt)
+    TCFieldPreparation.update(dt)
+    TCJobSupplies.update(dt)
 
     if self.Dispatch ~= nil then
         self.Dispatch:update(dt)
