@@ -60,6 +60,15 @@ TheContractorDispatch.TRANSPORT_WAIT_FACTORS = {
                 TheContractorDispatch.TRANSPORT_MIN_MINUTES)
         end,
     },
+    -- Supplies (032): loading the seed/fertilizer/... the job needs from the
+    -- farm's stock before setting off (TCJobSupplies.getLoadingMinutes) -
+    -- job.suppliesLoaded is what startJobForWorker just loaded.
+    {
+        name = "supplies",
+        getMinutes = function(job, worker)
+            return TCJobSupplies.getLoadingMinutes(job.suppliesLoaded)
+        end,
+    },
 }
 
 function TheContractorDispatch.getTransportWaitMs(job)
@@ -98,6 +107,10 @@ function TheContractorDispatch.new()
     -- (job.transportRemainingMs) instead, so it's saved with it.
     self.pendingByJobId = {}
     self.hasResumedAfterLoad = false
+    -- ourJobId -> true for jobs whose AI stopped itself on an empty tank
+    -- (032) - TCJobSupplies' poll picks them up (takeRanOutOfFill) to refill
+    -- and restart, or put them on hold. Live only, like the tables above.
+    self.ranOutOfFillJobIds = {}
 
     return self
 end
@@ -165,6 +178,18 @@ function TheContractorDispatch:startJobForWorker(job, skipTransport)
     if not g_currentMission:getIsServer() then
         return
     end
+
+    -- 032: the job's supplies go on first, out of the farm's stock. With a
+    -- tank still empty (nothing in stock) or holding the wrong product, the
+    -- worker doesn't go anywhere: the job's on hold until TCJobSupplies'
+    -- poll finds the farm restocked and calls this again.
+    local loaded, supplyStatus, supplyFillTypeName = TCJobSupplies.topUp(job)
+    local jobs = g_currentMission.TheContractor.Jobs
+    jobs:setJobSupplyStatus(job, supplyStatus, supplyFillTypeName)
+    if supplyStatus ~= nil then
+        return
+    end
+    job.suppliesLoaded = loaded
 
     -- The job's clock (029) starts as the worker sets off, so a slow
     -- worker's longer trip shows in their time taken. No-op when resuming
@@ -392,6 +417,19 @@ function TheContractorDispatch:onAIJobStopped(aiJob, aiMessage)
     Logging.info("TheContractor: job %d AI job stopped (%s): %s", ourJobId, isClean and "clean" or "error",
         aiMessage ~= nil and aiMessage:getMessage(aiJob) or "no message")
 
+    -- 032: an empty tank isn't the watchdog's business - it's a supplies
+    -- problem. Forgotten here straight away (like stopJob does) so the job
+    -- reads as not working, and left for TCJobSupplies' poll to refill and
+    -- restart, or put on hold.
+    if not isClean and aiMessage.isa ~= nil and aiMessage:isa(AIMessageErrorOutOfFill) then
+        self.ourJobIdByAIJob[aiJob] = nil
+        if self.aiJobByOurJobId[ourJobId] == aiJob then
+            self.aiJobByOurJobId[ourJobId] = nil
+        end
+        self.ranOutOfFillJobIds[ourJobId] = true
+        return
+    end
+
     if isClean then
         local job = g_currentMission.TheContractor.Jobs:getJobById(ourJobId)
         if job ~= nil then
@@ -465,6 +503,36 @@ function TheContractorDispatch:stopJob(jobId, aiMessage)
 
     self.ourJobIdByAIJob[aiJob] = nil
     self.aiJobByOurJobId[jobId] = nil
+end
+
+-- Supplies (032) ------------------------------------------------------------
+
+-- Whether a job has a worker out: its equipment on the road/being staged,
+-- or its AI Helper running.
+function TheContractorDispatch:isJobActive(job)
+    return self.pendingByJobId[job.id] ~= nil or self.aiJobByOurJobId[job.id] ~= nil
+end
+
+-- Whether a job's AI Helper is running (past staging, actually working).
+function TheContractorDispatch:isJobWorking(job)
+    return self.pendingByJobId[job.id] == nil and self.aiJobByOurJobId[job.id] ~= nil
+end
+
+-- Server-only: stops a working job's AI Helper for want of supplies - the
+-- worker stays on the field, the job in_progress, until TCJobSupplies'
+-- poll restarts it (startJobForWorker, skipping the trip).
+function TheContractorDispatch:pauseForSupplies(job)
+    Logging.info("TheContractor: farm %d job %d on hold for supplies (%s %s)", job.farmId, job.id,
+        tostring(job.supplyStatus), tostring(job.supplyFillTypeName))
+    self:stopJob(job.id, AIMessageErrorOutOfFill.new())
+    self.ranOutOfFillJobIds[job.id] = nil
+end
+
+-- Whether a job's AI stopped itself on an empty tank since last asked.
+function TheContractorDispatch:takeRanOutOfFill(jobId)
+    local ranOut = self.ranOutOfFillJobIds[jobId] == true
+    self.ranOutOfFillJobIds[jobId] = nil
+    return ranOut
 end
 
 -- Notification plumbing --------------------------------------------------

@@ -106,9 +106,10 @@ function TheContractorJob.new(id, farmId, jobType, fieldId, requiredSkillLevel, 
     -- toward buying better equipment, not a gate on offer creation.
     self.equipmentAvailable = true
 
-    -- Crop-dependent jobs (harvest) only: the crop on the field when the
-    -- job was generated, by fruit type name. nil for everything else, and
-    -- for harvest jobs saved before this existed (see getFruitTypeIndex).
+    -- Job types that record their crop (JOB_TYPES' recordsCrop - harvest,
+    -- mow, bale) only: the crop on the field when the job was generated, by
+    -- fruit type name. nil for everything else, and for harvest jobs saved
+    -- before this existed (see getFruitTypeIndex).
     self.fruitTypeName = nil
 
     -- Absolute (monotonic, never wraps) day the job is due by the end of —
@@ -136,6 +137,11 @@ function TheContractorJob.new(id, farmId, jobType, fieldId, requiredSkillLevel, 
     -- otherwise). Server-only, never sent to clients; saved with the job so
     -- a save mid-trip resumes rather than restarting it.
     self.transportRemainingMs = nil
+
+    -- Hired-worker jobs only (032): how much supply the worker just loaded
+    -- setting off (TCJobSupplies.topUp), which the trip's loading time is
+    -- worked out from. Server-only, transient.
+    self.suppliesLoaded = nil
 
     -- Harvest jobs only (035): the client wants the crop carted away too,
     -- not just the field combined - a two-person job. Rolled at generation,
@@ -183,7 +189,52 @@ function TheContractorJob.new(id, farmId, jobType, fieldId, requiredSkillLevel, 
     self.stuckInterventions = 0
     self.qualityScore = nil
 
+    -- 032: the field state the job starts from, for job types that record
+    -- one (JOB_TYPES' startState - fertilize's spray level, the weed state
+    -- for herbicide/weed/hoe). Recorded at generation, put back at
+    -- allocation (TCFieldPreparation), and what fertilize/herbicide
+    -- progress is measured against, so it's sent to clients too.
+    self.startState = nil
+
+    -- 032, server-only, saved: the baseline a serverMeasured job's progress
+    -- is measured against, set once its field has been prepared at
+    -- allocation - litres of windrow spawned (tedder/bale), weed area at the
+    -- start (weed/hoe), bales spawned (bale wrap). nil until then.
+    self.workTotal = nil
+    -- Bale wrap only (server-only, saved): uniqueIds of the bales spawned
+    -- for the job, removed again once it's over.
+    self.spawnedBaleIds = {}
+
+    -- 032: why work is on hold for supplies, or nil - "noStock" (the farm
+    -- is out of what the job's equipment needs) or "wrongFill" (a tank
+    -- holds something else). supplyFillTypeName is the product concerned.
+    -- Server-authoritative, re-derived every TCJobSupplies poll (so not
+    -- saved), synced via TCJobSupplyStatusEvent.
+    self.supplyStatus = nil
+    self.supplyFillTypeName = nil
+
     return self
+end
+
+-- Whether work on the job is on hold waiting for supplies (032).
+function TheContractorJob:isWaitingForSupplies()
+    return self.supplyStatus ~= nil
+end
+
+-- "Seeds", "Liquid fertilizer" - the product a supply status is about.
+function TheContractorJob:getSupplyFillTypeTitle()
+    local fillTypeIndex = self.supplyFillTypeName ~= nil and
+        g_fillTypeManager:getFillTypeIndexByName(self.supplyFillTypeName) or nil
+    return fillTypeIndex ~= nil and g_fillTypeManager:getFillTypeTitleByIndex(fillTypeIndex) or
+        tostring(self.supplyFillTypeName)
+end
+
+-- Player-facing "Waiting for Seeds" / "Tank holds Herbicide" line.
+function TheContractorJob:getSupplyStatusText()
+    if self.supplyStatus == nil then
+        return nil
+    end
+    return string.format(g_i18n:getText("tc_supplies_status_" .. self.supplyStatus), self:getSupplyFillTypeTitle())
 end
 
 -- In-game minutes from work starting to completion, or nil if either end
@@ -269,7 +320,8 @@ function TheContractorJob:getCropTitle()
     return fillType ~= nil and fillType.title or nil
 end
 
--- "Harvest", "Cultivate", ... - or "Harvest & Haul" for a haulage job.
+-- "Harvest", "Cultivate", "Mow", ... - or "Harvest & Haul" for a haulage
+-- job.
 function TheContractorJob:getTypeText()
     return g_i18n:getText("tc_jobType_" .. self.jobType .. (self.includesHaulage and "Haul" or ""))
 end
@@ -288,6 +340,12 @@ end
 function TheContractorJob:canTransitionTo(newState)
     local allowed = TheContractorJob.VALID_TRANSITIONS[self.state]
     return allowed ~= nil and allowed[newState] == true
+end
+
+-- completed/declined/missed - the states with no way out.
+function TheContractorJob:isTerminal()
+    local allowed = TheContractorJob.VALID_TRANSITIONS[self.state]
+    return allowed == nil or next(allowed) == nil
 end
 
 -- Flips state if legal, returns true/false. Callers (TheContractorJobs) own

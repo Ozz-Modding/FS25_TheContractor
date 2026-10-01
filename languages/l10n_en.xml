@@ -20,6 +20,7 @@
 		<text name="tc_overview_currentJobsEmpty" text="No jobs currently allocated or in progress."/>
 		<text name="tc_overview_currentJobLine" text="Field %s: %s - %d%%"/>
 		<text name="tc_overview_deliveredSuffix" text=" (delivered %d%%)"/>
+		<text name="tc_overview_supplySuffix" text=" - %s"/>
 		<text name="tc_actions_createButton" text="Create Company"/>
 		<text name="tc_actions_createCompanyPrompt" text="Name your new contracting company (cost: %s):"/>
 		<text name="tc_actions_defaultCompanyName" text="Untitled Contracting Co."/>
@@ -61,6 +62,15 @@
 		<text name="tc_jobType_sow" text="Sow"/>
 		<text name="tc_jobType_plow" text="Plow"/>
 		<text name="tc_jobType_harvestHaul" text="Harvest &amp; Haul"/>
+		<text name="tc_jobType_mow" text="Mow"/>
+		<text name="tc_jobType_tedder" text="Ted"/>
+		<text name="tc_jobType_bale" text="Bale"/>
+		<text name="tc_jobType_baleWrap" text="Wrap Bales"/>
+		<text name="tc_jobType_fertilize" text="Fertilize"/>
+		<text name="tc_jobType_herbicide" text="Spray Herbicide"/>
+		<text name="tc_jobType_weed" text="Weed"/>
+		<text name="tc_jobType_hoe" text="Hoe"/>
+		<text name="tc_jobType_stonePick" text="Pick Stones"/>
 		<text name="tc_inbox_empty" text="No job offers right now — check back later, or buy some advertising to bring more in."/>
 		<text name="tc_inbox_columnType" text="Type"/>
 		<text name="tc_inbox_columnField" text="Field"/>
@@ -76,6 +86,8 @@
 		<text name="tc_inbox_equipmentAvailable" text="You own the equipment needed for this job."/>
 		<text name="tc_inbox_equipmentMissing" text="You don't currently own: %s."/>
 		<text name="tc_inbox_detailHaulage" text="Harvest &amp; haul: the crop goes to %s. Needs two workers - one harvesting, one hauling - or you go and haul it yourself."/>
+		<text name="tc_inbox_detailSupplies" text="Supplies in stock: %s."/>
+		<text name="tc_inbox_detailSuppliesNone" text="Needs %s - you have none in stock. The job will wait until you do."/>
 		<text name="tc_inbox_equipmentYes" text="Yes"/>
 		<text name="tc_inbox_equipmentNo" text="No"/>
 		<text name="tc_inbox_counterButton" text="Counter Offer"/>
@@ -120,6 +132,8 @@
 		<text name="tc_watchdog_needsAttentionNotification" text="Your worker is stuck on a %s job on Field %s and needs your attention."/>
 		<text name="tc_moneyType_hiring" text="Staff hiring"/>
 		<text name="finance_tcHiring" text="Staff hiring"/>
+		<text name="tc_moneyType_wages" text="Staff wages"/>
+		<text name="finance_tcWages" text="Staff wages"/>
 		<text name="tc_moneyType_jobPayout" text="Job payout"/>
 		<text name="finance_tcJobPayout" text="Job payout"/>
 		<text name="tc_staff_viewRoster" text="Roster"/>
@@ -129,7 +143,7 @@
 		<text name="tc_staff_columnTier" text="Tiers (S/M/L)"/>
 		<text name="tc_staff_columnStatus" text="Status"/>
 		<text name="tc_staff_columnJob" text="Job"/>
-		<text name="tc_staff_columnCost" text="Cost"/>
+		<text name="tc_staff_columnSalary" text="Salary"/>
 		<text name="tc_staff_rosterEmpty" text="No workers hired yet — switch to the Candidates view to hire your first worker."/>
 		<text name="tc_staff_candidatesEmpty" text="No candidates currently available to hire — check back later."/>
 		<text name="tc_staff_hireButton" text="Hire"/>
@@ -137,11 +151,12 @@
 		<text name="tc_staff_status_idle" text="Idle"/>
 		<text name="tc_staff_status_assigned" text="Assigned"/>
 		<text name="tc_staff_status_cooldown" text="Cooldown"/>
+		<text name="tc_staff_status_sick" text="Off sick"/>
 		<text name="tc_staff_detailAge" text="Age: %d"/>
 		<text name="tc_staff_detailWorkSpeed" text="Work speed: %d/10"/>
 		<text name="tc_staff_detailTier" text="Tier capability: %s"/>
 		<text name="tc_staff_detailStatus" text="Status: %s"/>
-		<text name="tc_staff_detailCost" text="Hire cost: %s"/>
+		<text name="tc_staff_detailSalary" text="Salary: %s per period"/>
 		<text name="tc_staff_detailJob" text="Current job: %s"/>
 		<text name="tc_staff_detailJobNone" text="None"/>
 		<text name="tc_growth_improved" text="%s improved: %s %d to %d"/>
@@ -150,9 +165,12 @@
 		<text name="tc_growth_stat_small" text="small tractors"/>
 		<text name="tc_growth_stat_medium" text="medium tractors"/>
 		<text name="tc_growth_stat_large" text="large tractors"/>
+		<text name="tc_sickness_offSick" text="%s has called in sick and can't take jobs for a few days"/>
+		<text name="tc_sickness_recovered" text="%s is back at work after being off sick"/>
 		<text name="tc_staff_jobLine" text="%s (Field %s)"/>
-		<text name="tc_staff_hireConfirm" text="Hire %s for %s?"/>
-		<text name="tc_staff_hireCannotAfford" text="You can't afford to hire this candidate right now."/>
+		<text name="tc_staff_hireConfirm" text="Hire %s for %s per period? The salary is charged at the start of every period while they're on your roster. The first period is paid now."/>
+		<text name="tc_staff_hireCannotAfford" text="You can't afford this candidate's first period of salary right now."/>
+		<text name="tc_staff_salaryBill" text="Salary bill: %s per period (%d workers)"/>
 		<text name="tc_staff_releaseConfirm" text="Release %s from your roster? This cannot be undone."/>
 
 		<text name="tc_allocation_title" text="Allocate: %s"/>
@@ -165,6 +183,7 @@
 		<text name="tc_allocation_role_header" text="Header"/>
 		<text name="tc_allocation_role_haulTractor" text="Haul tractor"/>
 		<text name="tc_allocation_role_trailer" text="Trailer"/>
+		<text name="tc_allocation_role_seedTank" text="Seed tank"/>
 		<text name="tc_allocation_allocateButton" text="Allocate"/>
 		<text name="tc_allocation_confirmButton" text="Confirm"/>
 		<text name="tc_allocation_cancelButton" text="Cancel"/>
@@ -177,6 +196,8 @@
 		<text name="tc_allocation_needsSecondWorker" text="Harvest &amp; haul needs two workers - one harvesting, one hauling. Or select Myself to go and haul it yourself."/>
 		<text name="tc_allocation_tooManyWorkers" text="This job only takes one worker."/>
 		<text name="tc_allocation_haulYourself" text="You will haul the crop yourself - deliver it to %s."/>
+		<text name="tc_allocation_playerOnly" text="Workers can't do this job - only you can. Select Myself."/>
+		<text name="tc_allocation_noSuppliesWarning" text="You have no %s in stock - the job will be on hold until you do."/>
 		<text name="tc_allocation_selectWarning" text="Still to select: %s."/>
 		<text name="tc_allocation_notOwnedWarning" text="Can't allocate - you don't own: %s."/>
 		<text name="tc_allocation_busyWarning" text="Can't allocate - busy on another job or in cooldown: %s."/>
@@ -194,6 +215,21 @@
 		<text name="tc_equipment_missing_implement_cultivate" text="a cultivator"/>
 		<text name="tc_equipment_missing_implement_sow" text="a seeder or planter"/>
 		<text name="tc_equipment_missing_implement_plow" text="a plow"/>
+		<text name="tc_equipment_missing_implement_mow" text="a mower"/>
+		<text name="tc_equipment_missing_implement_tedder" text="a tedder"/>
+		<text name="tc_equipment_missing_implement_bale" text="a baler"/>
+		<text name="tc_equipment_missing_implement_baleWrap" text="a bale wrapper"/>
+		<text name="tc_equipment_missing_implement_fertilize" text="a fertilizer spreader, sprayer or manure spreader"/>
+		<text name="tc_equipment_missing_implement_herbicide" text="a sprayer that takes herbicide"/>
+		<text name="tc_equipment_missing_implement_weed" text="a weeder"/>
+		<text name="tc_equipment_missing_implement_hoe" text="a hoe"/>
+		<text name="tc_equipment_missing_implement_stonePick" text="a stone picker"/>
+		<text name="tc_equipment_missing_seedTank" text="a seed tank (front hopper) - the seeder has no hopper of its own"/>
+		<text name="tc_equipment_missing_seedTankHitch" text="a seed tank that fits the tractor (a front hopper needs front linkage)"/>
+		<text name="tc_supplies_status_noStock" text="Waiting for %s"/>
+		<text name="tc_supplies_status_wrongFill" text="Tank holds %s - empty it"/>
+		<text name="tc_supplies_onHold" text="%s on %s is on hold: %s."/>
+		<text name="tc_supplies_or" text=" or "/>
 		<text name="tc_allocation_blockedWarning" text="This worker isn't certified for the required equipment tier."/>
 		<text name="tc_allocation_underqualifiedWarning" text="This worker is under-qualified for this job - expect a reduced reward."/>
 	</texts>

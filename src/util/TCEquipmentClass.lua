@@ -142,9 +142,75 @@ function TCEquipmentClass.isCutterCompatible(harvester, cutter)
     return harvester:getIsCutterCompatible(spec.outputFillTypes) and TCEquipmentClass.canHitch(harvester, cutter)
 end
 
+-- Whether `vehicle` is the implement a non-harvest job type needs (032):
+-- it carries the job's implementSpec, and on top of that a weeder has to be
+-- the right kind (a hoe for hoeing, a tine weeder for weeding - vanilla's
+-- WeedMission/HoeMission tell them apart by Weeder's isHoeWeeder), and a
+-- sprayer has to take one of the job's products (fertilizer or herbicide -
+-- the same sprayer spec covers fertilizer spreaders, manure spreaders and
+-- slurry tankers).
+function TCEquipmentClass.isJobImplement(vehicle, jobDef)
+    if jobDef.implementSpec == nil or vehicle[jobDef.implementSpec] == nil then
+        return false
+    end
+
+    if jobDef.weederType ~= nil then
+        return (vehicle.spec_weeder.isHoeWeeder == true) == (jobDef.weederType == "hoe")
+    end
+
+    if jobDef.implementSpec == "spec_sprayer" and jobDef.supplyFillTypeNames ~= nil then
+        local fillUnitIndex = vehicle.spec_sprayer.fillUnitIndex
+        if fillUnitIndex == nil or vehicle.getFillUnitSupportsFillType == nil then
+            return false
+        end
+        for _, fillTypeName in ipairs(jobDef.supplyFillTypeNames) do
+            local fillTypeIndex = g_fillTypeManager:getFillTypeIndexByName(fillTypeName)
+            if fillTypeIndex ~= nil and vehicle:getFillUnitSupportsFillType(fillUnitIndex, fillTypeIndex) then
+                return true
+            end
+        end
+        return false
+    end
+
+    return true
+end
+
+-- Seed tanks (032 follow-up): some seeders have no hopper of their own
+-- (capacity 0) and are fed from a separate tank - typically a front hopper
+-- on the tractor's front linkage. Vanilla draws their seed from any vehicle
+-- in the same rig with a fill unit that takes the seed
+-- (SowingMachine:onStateChange -> FillUnit.addFillTypeSources), so that's
+-- what counts as a seed tank here: something hitchable, not itself a
+-- seeder, trailer or pallet, with a fill unit that takes SEED_TANK_FILL_TYPE.
+TCEquipmentClass.SEED_TANK_FILL_TYPE = FillType.SEEDS
+
+-- Whether a seeder has no hopper of its own to sow from (a seeder that uses
+-- up a consumable instead - a tree planter's saplings - doesn't count).
+function TCEquipmentClass.needsSeedTank(vehicle)
+    local spec = vehicle.spec_sowingMachine
+    if spec == nil or spec.consumableName ~= nil or vehicle.getFillUnitCapacity == nil then
+        return false
+    end
+    local capacity = vehicle:getFillUnitCapacity(spec.fillUnitIndex)
+    return capacity == nil or capacity <= 0
+end
+
+function TCEquipmentClass.isSeedTank(vehicle)
+    if vehicle.spec_sowingMachine ~= nil or vehicle.spec_trailer ~= nil or vehicle.isPallet or
+        vehicle.spec_motorized ~= nil or vehicle.getInputAttacherJoints == nil or vehicle.spec_fillUnit == nil then
+        return false
+    end
+    for _, fillUnit in pairs(vehicle.spec_fillUnit.fillUnits) do
+        if fillUnit.capacity > 0 and fillUnit.supportedFillTypes[TCEquipmentClass.SEED_TANK_FILL_TYPE] then
+            return true
+        end
+    end
+    return false
+end
+
 -- What part a vehicle can play in a job, or nil if none:
--- "harvester" | "header" | "implement" | "tractor". jobDef is a
--- TheContractorJobGeneration.JOB_TYPES entry.
+-- "harvester" | "header" | "implement" | "seedTank" | "tractor". jobDef is
+-- a TheContractorJobGeneration.JOB_TYPES entry.
 function TCEquipmentClass.getJobRole(vehicle, jobDef, fruitTypeIndex)
     if jobDef.cropDependent then
         if TCEquipmentClass.isHarvester(vehicle) and
@@ -154,8 +220,10 @@ function TCEquipmentClass.getJobRole(vehicle, jobDef, fruitTypeIndex)
         if TCEquipmentClass.canCutFruit(vehicle, fruitTypeIndex) then
             return "header"
         end
-    elseif vehicle[jobDef.implementSpec] ~= nil then
+    elseif TCEquipmentClass.isJobImplement(vehicle, jobDef) then
         return "implement"
+    elseif jobDef.implementSpec == "spec_sowingMachine" and TCEquipmentClass.isSeedTank(vehicle) then
+        return "seedTank"
     end
 
     if TCEquipmentClass.isTractor(vehicle) then
@@ -171,12 +239,20 @@ end
 --   "harvester" harvest: nothing that can harvest (no spec_combine)
 --   "cutterMismatch" harvest: headers and harvesters both there, but no
 --               header fits any of the harvesters (isCutterCompatible)
---   "implement" non-harvest: no plow/cultivator/seeder (per jobDef)
---   "tractor"   something needs pulling and there's no tractor
+--   "implement" non-harvest: no plow/cultivator/seeder/... (isJobImplement)
+--   "tractor"   something needs pulling and there's no tractor - a job
+--               needs one unless its harvester/implement is self-propelled
+--   "seedTank"  sow: the seeders have no hopper of their own (needsSeedTank)
+--               and there's no seed tank to feed them
+--   "seedTankHitch" sow: seed tanks there, but none hitches to any of the
+--               tractors (a front hopper needs front linkage)
 -- See getMissingEquipmentText for the player-facing wording.
 function TCEquipmentClass.getMissingEquipment(vehicles, jobDef, fruitTypeIndex)
     local hasCutter, hasHarvester, hasSelfPropelledHarvester, hasImplement, hasTractor = false, false, false, false,
         false
+    local hasSelfPropelledImplement = false
+    local hasSeederWithHopper, hasSeederNeedingTank = false, false
+    local seedTanks, tractors = {}, {}
     local hasPairing = false
     local harvesters, cutters = {}, {}
 
@@ -200,12 +276,25 @@ function TCEquipmentClass.getMissingEquipment(vehicles, jobDef, fruitTypeIndex)
                     hasSelfPropelledHarvester = true
                 end
             end
-        elseif vehicle[jobDef.implementSpec] ~= nil then
+        elseif TCEquipmentClass.isJobImplement(vehicle, jobDef) then
             hasImplement = true
+            if TCEquipmentClass.isSelfPropelled(vehicle) then
+                hasSelfPropelledImplement = true
+            end
+            if vehicle.spec_sowingMachine ~= nil then
+                if TCEquipmentClass.needsSeedTank(vehicle) then
+                    hasSeederNeedingTank = true
+                else
+                    hasSeederWithHopper = true
+                end
+            end
+        elseif jobDef.implementSpec == "spec_sowingMachine" and TCEquipmentClass.isSeedTank(vehicle) then
+            table.insert(seedTanks, vehicle)
         end
 
         if TCEquipmentClass.isTractor(vehicle) then
             hasTractor = true
+            table.insert(tractors, vehicle)
         end
     end
 
@@ -239,8 +328,25 @@ function TCEquipmentClass.getMissingEquipment(vehicles, jobDef, fruitTypeIndex)
         if not hasImplement then
             table.insert(missing, "implement")
         end
-        if jobDef.requiresTractor and not hasTractor then
+        if not hasSelfPropelledImplement and not hasTractor then
             table.insert(missing, "tractor")
+        end
+        if hasSeederNeedingTank and not hasSeederWithHopper then
+            if #seedTanks == 0 then
+                table.insert(missing, "seedTank")
+            elseif #tractors > 0 then
+                local canHitchTank = false
+                for _, tank in ipairs(seedTanks) do
+                    for _, tractor in ipairs(tractors) do
+                        if TCEquipmentClass.canHitch(tractor, tank) then
+                            canHitchTank = true
+                        end
+                    end
+                end
+                if not canHitchTank then
+                    table.insert(missing, "seedTankHitch")
+                end
+            end
         end
     end
     return missing

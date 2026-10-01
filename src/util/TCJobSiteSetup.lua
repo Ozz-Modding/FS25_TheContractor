@@ -166,12 +166,19 @@ function TCJobSiteSetup.rigAndPlace(job)
     -- rigged fails without leaving equipment half-unhitched. Multiple
     -- passes let a header find a trailed harvester that's itself only
     -- hitched earlier in the same plan.
+    -- Seed tanks (a seeder's front hopper, 032) are planned last, so the
+    -- seeder gets first pick of the (preferred) rear linkage and the tank
+    -- takes what's left - the front.
     local toHitch = {}
+    local seedTanks = {}
     for _, vehicle in ipairs(vehicles) do
         if vehicle ~= operatingVehicle and vehicle.getInputAttacherJoints ~= nil and
             not vehicle:getIsAttachedTo(operatingVehicle) then
-            table.insert(toHitch, vehicle)
+            table.insert(TCEquipmentClass.isSeedTank(vehicle) and seedTanks or toHitch, vehicle)
         end
+    end
+    for _, vehicle in ipairs(seedTanks) do
+        table.insert(toHitch, vehicle)
     end
 
     local attachers = { operatingVehicle }

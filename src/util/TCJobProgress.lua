@@ -15,6 +15,14 @@
 -- computes it independently and locally from its own synced density-map
 -- state, same as vanilla missions do — no event/broadcast needed for the
 -- percentage itself.
+--
+-- Except (032) for job types marked serverMeasured in JobGeneration's
+-- JOB_TYPES: tedder/bale (litres of windrow left, against what was spawned
+-- at allocation), weed/hoe (weed area left, against what was there at
+-- allocation) and bale wrap (the spawned bales' wrapping) are measured
+-- against a baseline only the server has (job.workTotal/spawnedBaleIds),
+-- so only the server measures them, and sends the result to clients
+-- (TCJobProgressEvent) whenever it moves by a whole percent.
 
 TCJobProgress = {}
 
@@ -32,12 +40,16 @@ TCJobProgress.POLL_INTERVAL_MS = 3000
 
 -- jobId -> { completionModifier, completionFilter, isMulti, matchingPixels,
 --            fruitTypeIndex, partitions, currentPartitionIndex,
---            fieldPercentageDone, isInitialized }
+--            fieldPercentageDone, isInitialized, ... }
 -- Scan state is keyed by job id, not stored on the job itself — Job.lua
 -- deliberately only owns plain serializable state (see its header), and
 -- DensityMapModifier/Filter objects are neither serializable nor
 -- meaningful across a save/load boundary.
 local progressStateByJobId = {}
+
+-- Server-only: jobId -> the whole percentage last sent to clients for a
+-- serverMeasured job.
+local sentPercentageByJobId = {}
 
 local accumulatedMs = 0
 
@@ -73,12 +85,9 @@ local function createPlowModifier()
     return createGroundTypeModifier(plowedValue, nil)
 end
 
--- Mirrors SowMission:createModifier, against the fruit locked into `state`
--- by resolveTargetFruitType below. growthState 1 is SowMission's own
--- default (freshly sown, before any real growth tick) — the same value
--- vanilla checks for a completed sow pass.
-local function createSowModifier(state)
-    local fruitType = g_fruitTypeManager:getFruitTypeByIndex(state.fruitTypeIndex)
+-- A fruit plane at exactly one growth state.
+local function createFruitStateModifier(fruitTypeIndex, growthState)
+    local fruitType = g_fruitTypeManager:getFruitTypeByIndex(fruitTypeIndex)
     if fruitType == nil or fruitType.terrainDataPlaneId == nil then
         return nil
     end
@@ -86,9 +95,26 @@ local function createSowModifier(state)
     local modifier = DensityMapModifier.new(fruitType.terrainDataPlaneId, fruitType.startStateChannel,
         fruitType.numStateChannels, g_terrainNode)
     local filter = DensityMapFilter.new(modifier)
-    filter:setValueCompareParams(DensityValueCompareType.EQUAL, 1)
+    filter:setValueCompareParams(DensityValueCompareType.EQUAL, growthState)
 
     return modifier, filter
+end
+
+-- Mirrors SowMission:createModifier, against the fruit locked into `state`
+-- by resolveTargetFruitType below. growthState 1 is SowMission's own
+-- default (freshly sown, before any real growth tick) — the same value
+-- vanilla checks for a completed sow pass.
+local function createSowModifier(state)
+    return createFruitStateModifier(state.fruitTypeIndex, 1)
+end
+
+-- Mirrors MowMission:createModifier — the crop at its cut state.
+local function createMowModifier(state)
+    local fruitType = g_fruitTypeManager:getFruitTypeByIndex(state.fruitTypeIndex)
+    if fruitType == nil or fruitType.cutState == nil then
+        return nil
+    end
+    return createFruitStateModifier(state.fruitTypeIndex, fruitType.cutState)
 end
 
 -- Mirrors HarvestMission:createModifier — a DensityMapMultiModifier summing
@@ -112,7 +138,7 @@ local function createHarvestModifier(state)
     local multiModifier = DensityMapMultiModifier.new()
     for cutState, _ in pairs(fruitType.cutStates) do
         baseFilter:setValueCompareParams(DensityValueCompareType.EQUAL, cutState)
-        multiModifier:addExecuteGet("cutState", baseModifier, baseFilter)
+        multiModifier:addExecuteGet("done", baseModifier, baseFilter)
     end
     baseFilter:setValueCompareParams(DensityValueCompareType.GREATER, 0)
     multiModifier:addExecuteGet("totalArea", baseModifier, baseFilter)
@@ -123,20 +149,165 @@ local function createHarvestModifier(state)
     return multiModifier, nil
 end
 
--- One entry per generatable job type (JobGeneration.JOB_TYPE_KEYS) — the
--- modifier factory, and whether it needs a target fruit type resolved
--- first (and from where: sow reads the field's planned fruit, harvest
--- reads whatever fruit is actually standing there). Job.lua doesn't carry
--- a fruitTypeIndex of its own (008 never added one, since it's not needed
--- for anything except this scan), so this reads the live field instead and
--- locks the result the first time a given job is scanned — the same "fixed
--- at creation" behaviour vanilla's SowMission/HarvestMission get for free
--- by storing fruitTypeIndex on the mission object.
+-- Mirrors TedderMission/BaleMission:createModifier — the windrow of the
+-- job's fill type lying on the height map. What's left is read as litres
+-- (see updateFieldPercentageDone's "remainingLiters").
+local function createWindrowModifier(state, job)
+    local fillTypeIndex = TCFieldPreparation.getJobWindrowFillType(job)
+    local heightType = fillTypeIndex ~= nil and
+        g_densityMapHeightManager:getDensityMapHeightTypeByFillTypeIndex(fillTypeIndex) or nil
+    if heightType == nil then
+        return nil
+    end
+
+    local modifier = DensityMapModifier.new(DensityMapHeightUtil.terrainDetailHeightId,
+        DensityMapHeightUtil.heightFirstChannel, DensityMapHeightUtil.heightNumChannels)
+    local filter = DensityMapFilter.new(DensityMapHeightUtil.terrainDetailHeightId,
+        DensityMapHeightUtil.typeFirstChannel, DensityMapHeightUtil.typeNumChannels)
+    filter:setValueCompareParams(DensityValueCompareType.EQUAL, heightType.index)
+
+    state.minValidLiters = g_densityMapHeightManager:getMinValidLiterValue(fillTypeIndex)
+    return modifier, filter
+end
+
+-- Mirrors FertilizeMission:createModifier — the spray level one up from
+-- where the job started (FertilizeMission.tryGenerateMission's target).
+local function createFertilizeModifier(state, job)
+    if job.startState == nil then
+        return nil
+    end
+    local mapId, firstChannel, numChannels = g_currentMission.fieldGroundSystem:getDensityMapData(FieldDensityMap
+        .SPRAY_LEVEL)
+    local modifier = DensityMapModifier.new(mapId, firstChannel, numChannels, g_terrainNode)
+    local filter = DensityMapFilter.new(modifier)
+    filter:setValueCompareParams(DensityValueCompareType.EQUAL, job.startState + 1)
+    return modifier, filter
+end
+
+-- Mirrors HerbicideMission:createModifier — the weed state herbicide turns
+-- the starting weeds into (the weed system's herbicide replacements), over
+-- all weeded area.
+local function createHerbicideModifier(state, job)
+    if job.startState == nil then
+        return nil
+    end
+    local replacements = g_currentMission.weedSystem:getHerbicideReplacements().weed.replacements
+    local targetState = replacements[job.startState]
+    if targetState == nil or targetState == 0 then
+        return nil
+    end
+
+    local mapId, firstChannel, numChannels = g_currentMission.weedSystem:getDensityMapData()
+    local modifier = DensityMapModifier.new(mapId, firstChannel, numChannels, g_terrainNode)
+    local filter = DensityMapFilter.new(modifier)
+
+    local multiModifier = DensityMapMultiModifier.new()
+    filter:setValueCompareParams(DensityValueCompareType.EQUAL, targetState)
+    multiModifier:addExecuteGet("done", modifier, filter)
+    filter:setValueCompareParams(DensityValueCompareType.GREATER, 0)
+    multiModifier:addExecuteGet("totalArea", modifier, filter)
+
+    state.matchingPixels = {}
+    state.isMulti = true
+
+    return multiModifier, nil
+end
+
+-- Mirrors WeedMission/HoeMission:createModifier — weeds still standing.
+-- What's left is read against the weed area at the start (see
+-- updateFieldPercentageDone's "remainingArea").
+local function createWeedModifier()
+    local mapId, firstChannel, numChannels = g_currentMission.weedSystem:getDensityMapData()
+    local modifier = DensityMapModifier.new(mapId, firstChannel, numChannels, g_terrainNode)
+    local filter = DensityMapFilter.new(modifier)
+    filter:setValueCompareParams(DensityValueCompareType.GREATER, 0)
+    return modifier, filter
+end
+
+-- Mirrors StonePickMission:createModifier — picked stone area within the
+-- stone mask, less the unmasked area (StonePickMission:
+-- getPartitionCompletion, see getPartitionCompletion below).
+local function createStonePickModifier(state)
+    local mapId, firstChannel, numChannels = g_currentMission.stoneSystem:getDensityMapData()
+    local _, maxValue = g_currentMission.stoneSystem:getMinMaxValues()
+
+    local modifier = DensityMapModifier.new(mapId, firstChannel, numChannels, g_terrainNode)
+    local filter = DensityMapFilter.new(modifier)
+    filter:setValueCompareParams(DensityValueCompareType.NOTEQUAL, maxValue)
+    local maskedFilter = DensityMapFilter.new(modifier)
+    maskedFilter:setValueCompareParams(DensityValueCompareType.GREATER, 0)
+
+    local unmaskedModifier = DensityMapModifier.new(mapId, firstChannel, numChannels, g_terrainNode)
+    local unmaskedFilter = DensityMapFilter.new(unmaskedModifier)
+    unmaskedFilter:setValueCompareParams(DensityValueCompareType.EQUAL, 0)
+
+    state.maskedFilter = maskedFilter
+    state.unmaskedModifier = unmaskedModifier
+    state.unmaskedFilter = unmaskedFilter
+
+    return modifier, filter
+end
+
+-- Bale wrap (server-only, see file header) — BaleWrapMission:getCompletion:
+-- the spawned bales' average wrapping, only counting as done once every
+-- one is fully wrapped and back on the ground. A spawned bale that's gone
+-- (sold, destroyed) counts as unwrapped, against the number laid out.
+local function getBaleWrapCompletion(job)
+    if job.workTotal == nil or job.workTotal <= 0 then
+        return 0
+    end
+
+    local wrapSum = 0
+    local allDropped = true
+    local count = 0
+    for _, uniqueId in ipairs(job.spawnedBaleIds) do
+        local bale = g_currentMission.itemSystem:getItemByUniqueId(uniqueId)
+        if bale ~= nil then
+            count = count + 1
+            wrapSum = wrapSum + (bale.wrappingState or 0)
+            if bale:getIsMounted() then
+                allDropped = false
+            end
+        end
+    end
+
+    local wrapped = wrapSum / job.workTotal
+    if wrapped >= 1 and count >= job.workTotal and allDropped then
+        return 1
+    end
+    return math.min(0.99, wrapped * 0.99)
+end
+
+-- One entry per generatable job type (JobGeneration.JOB_TYPE_KEYS):
+--   createModifier(state, job)  builds the scan's modifier/filter
+--   fruitTypeSource  a target fruit type has to be resolved first, and
+--                    from where: sow reads the field's planned fruit,
+--                    harvest/mow whatever's actually standing there. Job.lua
+--                    doesn't carry a fruitTypeIndex of its own for sow, so
+--                    this reads the live field instead and locks the result
+--                    the first time a given job is scanned — the same "fixed
+--                    at creation" behaviour vanilla's SowMission/
+--                    HarvestMission get for free by storing fruitTypeIndex
+--                    on the mission object.
+--   measure          how the scan turns into a fraction done: "area" (the
+--                    default - matching area over the field's), or against
+--                    job.workTotal, "remainingLiters" (windrow left) or
+--                    "remainingArea" (weeds left)
+--   getCompletion(job)  a measure that isn't a density-map scan at all
 local JOB_TYPE_HANDLERS = {
     cultivate = { createModifier = createCultivateModifier },
     plow = { createModifier = createPlowModifier },
     sow = { createModifier = createSowModifier, fruitTypeSource = "planned" },
     harvest = { createModifier = createHarvestModifier, fruitTypeSource = "current" },
+    mow = { createModifier = createMowModifier, fruitTypeSource = "current" },
+    tedder = { createModifier = createWindrowModifier, measure = "remainingLiters" },
+    bale = { createModifier = createWindrowModifier, measure = "remainingLiters" },
+    baleWrap = { getCompletion = getBaleWrapCompletion },
+    fertilize = { createModifier = createFertilizeModifier },
+    herbicide = { createModifier = createHerbicideModifier },
+    weed = { createModifier = createWeedModifier, measure = "remainingArea" },
+    hoe = { createModifier = createWeedModifier, measure = "remainingArea" },
+    stonePick = { createModifier = createStonePickModifier },
 }
 
 local function resolveTargetFruitType(field, source)
@@ -156,8 +327,9 @@ local function resolveTargetFruitType(field, source)
 end
 
 -- Builds (and caches) this job's scan state. Returns nil if it can't be
--- built yet (unknown job type, missing field, or a fruit-dependent job
--- whose target fruit can't be resolved this soon) — callers treat that as
+-- built yet (unknown job type, missing field, a fruit-dependent job whose
+-- target fruit can't be resolved this soon, or a job measured against a
+-- baseline its field preparation hasn't set yet) — callers treat that as
 -- "0% for now, try again next poll" rather than an error, since e.g. a
 -- freshly-offered sow job may not have a planned fruit type set yet.
 local function getOrCreateState(job)
@@ -167,7 +339,10 @@ local function getOrCreateState(job)
     end
 
     local handler = JOB_TYPE_HANDLERS[job.jobType]
-    if handler == nil then
+    if handler == nil or handler.createModifier == nil then
+        return nil
+    end
+    if handler.measure ~= nil and job.workTotal == nil then
         return nil
     end
 
@@ -180,10 +355,11 @@ local function getOrCreateState(job)
         fieldPercentageDone = 0,
         currentPartitionIndex = 1,
         isInitialized = false,
+        measure = handler.measure or "area",
     }
 
     if handler.fruitTypeSource ~= nil then
-        -- A harvest job's own crop wins over the live field state, which
+        -- A job's own recorded crop wins over the live field state, which
         -- can lag behind TCFieldPreparation's forced update for a moment.
         local fruitTypeIndex = nil
         if handler.fruitTypeSource == "current" then
@@ -198,7 +374,7 @@ local function getOrCreateState(job)
         state.fruitTypeIndex = fruitTypeIndex
     end
 
-    local modifier, filter = handler.createModifier(state)
+    local modifier, filter = handler.createModifier(state, job)
     if modifier == nil then
         return nil
     end
@@ -215,11 +391,14 @@ end
 -- getPartitionCompletion can scan one band at a time.
 local function initializePartitions(state, field)
     field:getDensityMapPolygon():applyToModifier(state.completionModifier)
+    if state.unmaskedModifier ~= nil then
+        field:getDensityMapPolygon():applyToModifier(state.unmaskedModifier)
+    end
     state.partitions = {}
 
     local minZ, maxZ = state.completionModifier:getPolygonMinMaxZ()
     if minZ == nil then
-        table.insert(state.partitions, { wasCalculated = false, area = 0, totalArea = 0 })
+        table.insert(state.partitions, { wasCalculated = false, sumPixels = 0, area = 0, totalArea = 0 })
         return
     end
 
@@ -231,6 +410,7 @@ local function initializePartitions(state, field)
         local currentMaxZ = i == numPartitions and maxZ or math.min(math.ceil(currentMinZ + regionPerPartition), maxZ)
         table.insert(state.partitions, {
             wasCalculated = false,
+            sumPixels = 0,
             area = 0,
             totalArea = 0,
             minZ = currentMinZ,
@@ -244,25 +424,44 @@ local function setPartitionRegion(state, partitionIndex)
     if #state.partitions ~= 1 then
         local partition = state.partitions[partitionIndex]
         state.completionModifier:setPolygonClipRegion(partition.minZ, partition.maxZ)
+        if state.unmaskedModifier ~= nil then
+            state.unmaskedModifier:setPolygonClipRegion(partition.minZ, partition.maxZ)
+        end
     end
 end
 
--- Mirrors AbstractFieldMission:getPartitionCompletion, with HarvestMission's
--- override folded in for the multi-modifier (cut-state) case.
+-- Mirrors AbstractFieldMission:getPartitionCompletion, with HarvestMission/
+-- HerbicideMission's override folded in for the multi-modifier case and
+-- StonePickMission's for the stone mask. Returns sumPixels, area,
+-- totalArea.
 local function getPartitionCompletion(state, partitionIndex)
     setPartitionRegion(state, partitionIndex)
 
     if state.isMulti then
         state.completionModifier:resetStats()
         state.completionModifier:execute(nil, state.matchingPixels, nil)
-        return 0, state.matchingPixels.cutState, state.matchingPixels.totalArea
+        return 0, state.matchingPixels.done, state.matchingPixels.totalArea
+    end
+
+    if state.unmaskedModifier ~= nil then
+        local sumPixels, area, totalArea = state.completionModifier:executeGet(state.completionFilter,
+            state.maskedFilter)
+        local _, unmaskedArea = state.unmaskedModifier:executeGet(state.unmaskedFilter)
+        return sumPixels, area, totalArea - unmaskedArea
     end
 
     return state.completionModifier:executeGet(state.completionFilter)
 end
 
--- Mirrors AbstractFieldMission:updateFieldPercentageDone.
-local function updateFieldPercentageDone(state, totalArea)
+-- Mirrors AbstractFieldMission:updateFieldPercentageDone, plus the
+-- overrides for measures read against the job's baseline:
+--   remainingLiters  TedderMission/BaleMission:getFieldCompletion - 1 minus
+--                    the windrow left (sumPixels, in min-valid-litre steps)
+--                    over what was spawned
+--   remainingArea    WeedMission/HoeMission:updateFieldPercentageDone - 1
+--                    minus the weed area left over what there was
+local function updateFieldPercentageDone(state, totalArea, job)
+    local sumPixels = 0
     local areaDone = 0
     local areaTotal = 0
     local allCalculated = true
@@ -271,6 +470,7 @@ local function updateFieldPercentageDone(state, totalArea)
         if not partition.wasCalculated then
             allCalculated = false
         end
+        sumPixels = sumPixels + partition.sumPixels
         if totalArea > 0 then
             areaDone = areaDone + partition.area
         else
@@ -279,7 +479,16 @@ local function updateFieldPercentageDone(state, totalArea)
         areaTotal = areaTotal + partition.totalArea
     end
 
-    if allCalculated then
+    if not allCalculated then
+        return
+    end
+
+    if state.measure == "remainingLiters" then
+        state.fieldPercentageDone = job.workTotal > 0 and
+            math.clamp(1 - sumPixels * state.minValidLiters / job.workTotal, 0, 1) or 0
+    elseif state.measure == "remainingArea" then
+        state.fieldPercentageDone = job.workTotal > 0 and math.clamp(1 - areaDone / job.workTotal, 0, 1) or 0
+    else
         state.fieldPercentageDone = areaTotal > 0 and (areaDone / areaTotal) or 0
     end
 end
@@ -290,6 +499,15 @@ end
 -- partition's worth of density-map reads happens per call. Returns 0 for a
 -- job whose scan state can't be built yet (see getOrCreateState).
 function TCJobProgress.getCompletion(job)
+    local handler = JOB_TYPE_HANDLERS[job.jobType]
+    if handler ~= nil and handler.getCompletion ~= nil then
+        return handler.getCompletion(job)
+    end
+
+    if TCFieldPreparation.isPreparing(job) then
+        return 0
+    end
+
     local state = getOrCreateState(job)
     if state == nil then
         return 0
@@ -304,15 +522,16 @@ function TCJobProgress.getCompletion(job)
         state.isInitialized = true
     end
 
-    local _, area, totalArea = getPartitionCompletion(state, state.currentPartitionIndex)
+    local sumPixels, area, totalArea = getPartitionCompletion(state, state.currentPartitionIndex)
     if area ~= nil then
         local partition = state.partitions[state.currentPartitionIndex]
         partition.wasCalculated = true
+        partition.sumPixels = sumPixels or 0
         partition.area = area
         partition.totalArea = totalArea
     end
 
-    updateFieldPercentageDone(state, totalArea)
+    updateFieldPercentageDone(state, totalArea or 0, job)
 
     state.currentPartitionIndex = state.currentPartitionIndex + 1
     if state.currentPartitionIndex > #state.partitions then
@@ -332,6 +551,33 @@ end
 -- deleted outright) that wants a job's scan state gone immediately.
 function TCJobProgress.clearJob(jobId)
     progressStateByJobId[jobId] = nil
+    sentPercentageByJobId[jobId] = nil
+end
+
+local function isServerMeasured(job)
+    local jobDef = TheContractorJobGeneration.JOB_TYPES[job.jobType]
+    return jobDef ~= nil and jobDef.serverMeasured == true
+end
+
+-- Keeps one job's completionPercentage current - measured locally, except
+-- a serverMeasured job on a client, which waits for the server's reading
+-- (TCJobProgressEvent). The server sends that whenever the whole percent
+-- changes.
+local function refreshJob(job, isServer)
+    local serverMeasured = isServerMeasured(job)
+    if serverMeasured and not isServer then
+        return
+    end
+
+    job.completionPercentage = TCJobProgress.getCompletion(job) * 100
+
+    if serverMeasured and g_server ~= nil then
+        local whole = math.floor(job.completionPercentage)
+        if sentPercentageByJobId[job.id] ~= whole then
+            sentPercentageByJobId[job.id] = whole
+            g_server:broadcastEvent(TCJobProgressEvent.new(job.farmId, job.id, job.completionPercentage))
+        end
+    end
 end
 
 -- Background tracker: every POLL_INTERVAL_MS, refresh completionPercentage
@@ -339,9 +585,10 @@ end
 -- allocated/in_progress job across every farm, on whichever machine this
 -- runs on. No server/client gating needed — density-map state is already
 -- simulation-replicated, so every machine derives the same answer locally,
--- same as vanilla AbstractFieldMission's own per-machine update(). Runs for
--- every farm rather than just the local player's, since the server needs
--- accurate completionPercentage for all farms' missed-job checks (Jobs.lua's
+-- same as vanilla AbstractFieldMission's own per-machine update() (bar
+-- serverMeasured jobs, see refreshJob). Runs for every farm rather than
+-- just the local player's, since the server needs accurate
+-- completionPercentage for all farms' missed-job checks (Jobs.lua's
 -- missJob), not just whichever farm happens to be local on the server
 -- machine.
 local function refreshActiveJobs()
@@ -350,17 +597,18 @@ local function refreshActiveJobs()
         return
     end
 
+    local isServer = g_currentMission:getIsServer()
     local activeJobIds = {}
 
     for _, farm in ipairs(g_farmManager:getFarms()) do
         local farmId = farm.farmId
         for _, job in ipairs(tc.Jobs:getJobsByState(farmId, TheContractorJob.STATE.ALLOCATED)) do
             activeJobIds[job.id] = true
-            job.completionPercentage = TCJobProgress.getCompletion(job) * 100
+            refreshJob(job, isServer)
         end
         for _, job in ipairs(tc.Jobs:getJobsByState(farmId, TheContractorJob.STATE.IN_PROGRESS)) do
             activeJobIds[job.id] = true
-            job.completionPercentage = TCJobProgress.getCompletion(job) * 100
+            refreshJob(job, isServer)
         end
     end
 
@@ -370,6 +618,11 @@ local function refreshActiveJobs()
     for jobId in pairs(progressStateByJobId) do
         if not activeJobIds[jobId] then
             progressStateByJobId[jobId] = nil
+        end
+    end
+    for jobId in pairs(sentPercentageByJobId) do
+        if not activeJobIds[jobId] then
+            sentPercentageByJobId[jobId] = nil
         end
     end
 end
