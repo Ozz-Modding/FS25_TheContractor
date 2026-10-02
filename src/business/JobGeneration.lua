@@ -259,9 +259,15 @@ end
 -- dropped and the type re-picked (033), so a roll only generates nothing
 -- when no type has an eligible field with a workable deadline — and then
 -- generation just skips a beat rather than forcing a bad offer out.
-function TheContractorJobGeneration:tryGenerateJob(farmId)
-    local options = self:getJobTypeOptions(farmId)
-    local preferFulfillable = math.random() < TheContractorJobGeneration.FULFILLABLE_TYPE_SHARE
+--
+-- onlyJobType (the tcOfferJob console command) restricts the roll to that
+-- one type and always prefers a field the farm can fulfill, falling back
+-- to any of the type's fields - same rules otherwise, so a forced offer is
+-- still one the generator could have made on its own.
+function TheContractorJobGeneration:tryGenerateJob(farmId, onlyJobType)
+    local options = self:getJobTypeOptions(farmId, onlyJobType)
+    local preferFulfillable = onlyJobType ~= nil or
+        math.random() < TheContractorJobGeneration.FULFILLABLE_TYPE_SHARE
     local field, deadlineDay, option
     while deadlineDay == nil do
         local candidates
@@ -328,6 +334,20 @@ function TheContractorJobGeneration.getFieldFruitTypeName(field)
     return g_fruitTypeManager:getFruitTypeNameByIndex(fieldState.fruitTypeIndex)
 end
 
+-- The JOB_TYPE_KEYS entry matching `name`, case-insensitively (console
+-- input), or nil.
+function TheContractorJobGeneration.findJobType(name)
+    if name == nil then
+        return nil
+    end
+    for _, jobType in ipairs(TheContractorJobGeneration.JOB_TYPE_KEYS) do
+        if jobType:lower() == name:lower() then
+            return jobType
+        end
+    end
+    return nil
+end
+
 function TheContractorJobGeneration.getFruitTypeIndexByName(fruitTypeName)
     if fruitTypeName == nil then
         return nil
@@ -343,13 +363,15 @@ end
 -- With thirteen types, most of which only fit a field at certain points in
 -- its year (and weeding not at all on a save with weeds off), drawing from
 -- every type would waste most rolls on types with nothing to offer and cut
--- the offer rate to a fraction of 026's tuning.
-function TheContractorJobGeneration:getJobTypeOptions(farmId)
+-- the offer rate to a fraction of 026's tuning. onlyJobType limits it to
+-- that one type (see tryGenerateJob).
+function TheContractorJobGeneration:getJobTypeOptions(farmId, onlyJobType)
     local vehicles = TheContractorJobGeneration.getFarmVehicles(farmId)
     local options = {}
     for _, jobType in ipairs(TheContractorJobGeneration.JOB_TYPE_KEYS) do
         local jobDef = TheContractorJobGeneration.JOB_TYPES[jobType]
-        local candidates = self:getCandidateFields(farmId, jobDef)
+        local candidates = (onlyJobType == nil or onlyJobType == jobType) and
+            self:getCandidateFields(farmId, jobDef) or {}
         if #candidates > 0 then
             table.insert(options, {
                 jobType = jobType,

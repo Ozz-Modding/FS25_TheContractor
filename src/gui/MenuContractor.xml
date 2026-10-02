@@ -234,6 +234,7 @@
                 <Text profile="tc_placeholderText" id="staffDetailStatus" text="" position="0px -200px" width="280px"/>
                 <Text profile="tc_placeholderText" id="staffDetailJob" text="" position="0px -230px" width="280px"/>
                 <Text profile="tc_placeholderText" id="staffDetailRetirement" text="" position="0px -260px" width="280px" textMaxNumLines="2"/>
+                <Text profile="tc_placeholderText" id="staffDetailHoliday" text="" position="0px -320px" width="280px" textMaxNumLines="3"/>
             </GuiElement>
         </GuiElement>
     </GuiElement>

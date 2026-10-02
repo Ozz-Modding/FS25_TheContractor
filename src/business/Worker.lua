@@ -23,6 +23,8 @@ TheContractorWorker.STATUS = {
     -- 037: driving a vehicle under AutoDrive/Courseplay (see Drivers.lua) -
     -- can't be allocated or released until the vehicle stops.
     DRIVING = "driving",
+    -- 040: on a booked holiday - can't be allocated until they're back.
+    HOLIDAY = "holiday",
 }
 
 TheContractorWorker.TIERS = { "small", "medium", "large" }
@@ -103,7 +105,34 @@ function TheContractorWorker.new(id, farmId, name, workSpeed, tierCapability, sa
     self.retiresAtPeriod = nil
     self.retirementNoticeId = nil
 
+    -- 040: holiday allowance left this year, as a fraction of a period (1 =
+    -- a whole month, i.e. daysPerPeriod days - see Holidays.lua), and the
+    -- one booked holiday, if any: holidayStartDay (a monotonic day) and
+    -- holidayDays. All three are visible, so they're sent to clients.
+    -- holidayYear (the year the allowance is for - nil until it's first
+    -- granted) and holidayDaysPerPeriod (the days per period the booking
+    -- was made at) are server-only.
+    self.holidayAllowance = 0
+    self.holidayYear = nil
+    self.holidayStartDay = nil
+    self.holidayDays = 0
+    self.holidayDaysPerPeriod = nil
+
     return self
+end
+
+function TheContractorWorker:hasHolidayBooked()
+    return self.holidayStartDay ~= nil
+end
+
+-- The monotonic day their booked holiday ends on (inclusive).
+function TheContractorWorker:getHolidayEndDay()
+    return self.holidayStartDay + self.holidayDays - 1
+end
+
+function TheContractorWorker:isHolidayOn(monotonicDay)
+    return self.holidayStartDay ~= nil and monotonicDay >= self.holidayStartDay and
+        monotonicDay <= self:getHolidayEndDay()
 end
 
 function TheContractorWorker:isRetiring()

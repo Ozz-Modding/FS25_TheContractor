@@ -263,5 +263,16 @@
 		<text name="tc_staff_detailRetiring" text="Retiring: start of %s (%d months)"/>
 		<text name="tc_staff_detailRetiringNextMonth" text="Retiring: start of %s (next month)"/>
 		<text name="tc_staff_detailRetiringDue" text="Retiring as soon as they're back"/>
+		<text name="tc_staff_status_holiday" text="Holiday"/>
+		<text name="tc_staff_detailHolidayLeft" text="Holiday left this year: %d day(s)"/>
+		<text name="tc_staff_detailHolidayBooked" text="Holiday booked: %s"/>
+		<text name="tc_staff_detailHolidayNow" text="On holiday: %s"/>
+		<text name="tc_holiday_booked" text="%s has booked a holiday: %s"/>
+		<text name="tc_holiday_cancelled" text="%s's holiday was cancelled because the days per month setting changed. They'll book another."/>
+		<text name="tc_holiday_started" text="%s is on holiday until %s"/>
+		<text name="tc_holiday_startedNoDate" text="%s is on holiday"/>
+		<text name="tc_holiday_ended" text="%s is back from holiday"/>
+		<text name="tc_holiday_noticeOne" text="%s: %s on holiday"/>
+		<text name="tc_holiday_noticeMany" text="%s: %d workers on holiday (%s)"/>
 	</texts>
 </l10n>

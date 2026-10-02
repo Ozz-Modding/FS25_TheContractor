@@ -22,6 +22,7 @@ function TCInitialClientStateEvent:writeStream(streamId, connection)
     tc.Advertising:writeInitialClientState(streamId, connection)
     tc.Drivers:writeInitialClientState(streamId, connection)
     tc.Notices:writeInitialClientState(streamId, connection)
+    tc.Holidays:writeInitialClientState(streamId, connection)
 end
 
 function TCInitialClientStateEvent:readStream(streamId, connection)
@@ -35,6 +36,7 @@ function TCInitialClientStateEvent:readStream(streamId, connection)
     tc.Advertising:readInitialClientState(streamId, connection)
     tc.Drivers:readInitialClientState(streamId, connection)
     tc.Notices:readInitialClientState(streamId, connection)
+    tc.Holidays:readInitialClientState(streamId, connection)
 
     self:run(connection)
 end

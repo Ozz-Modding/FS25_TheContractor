@@ -42,12 +42,28 @@ function TCWorkerStatusChangedEvent:run(connection)
 end
 
 -- 031: tells the worker's own farm when someone goes off sick or comes
--- back. Other status changes are already visible through the job they
+-- back (and 040, on holiday or back). Other status changes are already visible through the job they
 -- belong to, so they stay silent. Shared by run() (remote clients) and
 -- TheContractorStaff:setWorkerStatus (the host's own copy, since the
 -- broadcast doesn't loop back to it).
 function TCWorkerStatusChangedEvent.showNotification(worker, oldStatus, newStatus)
     if worker == nil or worker.farmId ~= g_currentMission:getFarmId() or oldStatus == newStatus then
+        return
+    end
+
+    -- 040: going on/back from holiday. Checked first, because a sick worker
+    -- can go straight onto a holiday - that isn't "back at work".
+    local holiday = TheContractorWorker.STATUS.HOLIDAY
+    if newStatus == holiday then
+        local text = worker:hasHolidayBooked() and
+            string.format(g_i18n:getText("tc_holiday_started"), worker.name,
+                TCCalendar.formatDay(worker:getHolidayEndDay())) or
+            string.format(g_i18n:getText("tc_holiday_startedNoDate"), worker.name)
+        g_currentMission:addIngameNotification(FSBaseMission.INGAME_NOTIFICATION_INFO, text)
+        return
+    elseif oldStatus == holiday then
+        g_currentMission:addIngameNotification(FSBaseMission.INGAME_NOTIFICATION_OK,
+            string.format(g_i18n:getText("tc_holiday_ended"), worker.name))
         return
     end
 
