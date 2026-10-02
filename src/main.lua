@@ -16,8 +16,12 @@ source(TheContractor.dir .. "src/util/TCVehicleLock.lua")
 source(TheContractor.dir .. "src/util/TCJobSiteSetup.lua")
 source(TheContractor.dir .. "src/util/TCHaulage.lua")
 source(TheContractor.dir .. "src/util/TCJobSupplies.lua")
+source(TheContractor.dir .. "src/util/TCAutoDrive.lua")
+source(TheContractor.dir .. "src/util/TCCourseplay.lua")
+source(TheContractor.dir .. "src/util/TCCalendar.lua")
 source(TheContractor.dir .. "src/gui/MenuContractor.lua")
 source(TheContractor.dir .. "src/gui/TCAdvertisingDialog.lua")
+source(TheContractor.dir .. "src/gui/TCDriverPickerDialog.lua")
 source(TheContractor.dir .. "src/hud/TCInboxHUD.lua")
 source(TheContractor.dir .. "src/business/Reputation.lua")
 source(TheContractor.dir .. "src/business/Negotiation.lua")
@@ -32,6 +36,8 @@ source(TheContractor.dir .. "src/business/Watchdog.lua")
 source(TheContractor.dir .. "src/business/Cooldown.lua")
 source(TheContractor.dir .. "src/business/Company.lua")
 source(TheContractor.dir .. "src/business/Advertising.lua")
+source(TheContractor.dir .. "src/business/Drivers.lua")
+source(TheContractor.dir .. "src/business/Notices.lua")
 source(TheContractor.dir .. "src/events/TCInitialClientStateEvent.lua")
 source(TheContractor.dir .. "src/events/TCCreateCompanyEvent.lua")
 source(TheContractor.dir .. "src/events/TCReputationChangedEvent.lua")
@@ -67,6 +73,13 @@ source(TheContractor.dir .. "src/events/TCWatchdogInterventionEvent.lua")
 source(TheContractor.dir .. "src/events/TCEquipmentCooldownStartedEvent.lua")
 source(TheContractor.dir .. "src/events/TCEquipmentCooldownEndedEvent.lua")
 source(TheContractor.dir .. "src/events/TCEquipmentVisibilityEvent.lua")
+source(TheContractor.dir .. "src/events/TCAssignDriverEvent.lua")
+source(TheContractor.dir .. "src/events/TCDriverBindingEvent.lua")
+source(TheContractor.dir .. "src/events/TCDriverNoticeEvent.lua")
+source(TheContractor.dir .. "src/events/TCNoticePublishedEvent.lua")
+source(TheContractor.dir .. "src/events/TCNoticeRemovedEvent.lua")
+source(TheContractor.dir .. "src/events/TCWorkerRetirementAnnouncedEvent.lua")
+source(TheContractor.dir .. "src/events/TCWorkerRetiredEvent.lua")
 
 -- The top-level Contractor page itself stays always-visible (see Company.lua
 -- and MenuContractor's Overview tab): "Create Company" has to live somewhere
@@ -92,6 +105,8 @@ function TheContractor:loadMap()
     self.Cooldown = TheContractorCooldown.new()
     self.Company = TheContractorCompany.new()
     self.Advertising = TheContractorAdvertising.new()
+    self.Drivers = TheContractorDrivers.new()
+    self.Notices = TheContractorNotices.new()
     self.InboxHUD = TCInboxHUD.new()
 
     -- Module-level caches outlive a savegame; start each load clean.
@@ -103,8 +118,13 @@ function TheContractor:loadMap()
 
     TheContractorDisableVanillaContracts.hideContractsTab()
 
+    -- 037: AutoDrive/Courseplay staff-driver hooks, for whichever of the two
+    -- is loaded.
+    TheContractorDrivers.installHooks()
+
     g_gui:loadProfiles(TheContractor.dir .. "src/gui/guiProfiles.xml")
     TCAdvertisingDialog.register()
+    TCDriverPickerDialog.register()
 
     local menuContractor = MenuContractor.new(g_i18n)
     g_gui:loadGui(TheContractor.dir .. "src/gui/MenuContractor.xml", "menuContractor", menuContractor, true)
@@ -127,6 +147,7 @@ function TheContractor:loadMap()
     self.Jobs:startDailyTick()
     self.Staff:startDailyTick()
     self.Dispatch:startListening()
+    self.Notices:startPeriodTick()
 
     -- Cheat-gated, following FS25_RedTape's own rtAddPoints console command
     -- (RedTape.lua's consoleCommandAddPoints): easy manual testing of
@@ -150,6 +171,15 @@ function TheContractor:loadMap()
         addConsoleCommand("tcJobAvailability",
             "Dry-run job generation for the current farm: eligible, datable and fulfillable fields per job type right now (025, 033). Usage: tcJobAvailability",
             "consoleCommandJobAvailability", self)
+        addConsoleCommand("tcRetireWorker",
+            "Make a hired worker on the current farm hand in their retirement notice (039). Usage: tcRetireWorker workerId [noticeMonths, default 6, 0 = now]",
+            "consoleCommandRetireWorker", self)
+        addConsoleCommand("tcPublishNotice",
+            "Publish a notice to the current farm's Overview board (038). Usage: tcPublishNotice ttlMonths|none text...",
+            "consoleCommandPublishNotice", self)
+        addConsoleCommand("tcRemoveNotice",
+            "Remove a notice from the Overview board by id (038). Usage: tcRemoveNotice noticeId",
+            "consoleCommandRemoveNotice", self)
     end
 
     Logging.info("TheContractor: loadMap")
@@ -293,6 +323,65 @@ function TheContractor:consoleCommandJobAvailability()
     return table.concat(lines, "\n")
 end
 
+-- The retirement/notice commands below act on the server directly, like
+-- tcJobAvailability: they're server-only anyway, and the subsystems
+-- broadcast their own changes.
+function TheContractor:consoleCommandRetireWorker(workerId, noticeMonths)
+    if not g_currentMission:getIsServer() then return "Server only" end
+
+    local numWorkerId = tonumber(workerId)
+    local numNoticeMonths = tonumber(noticeMonths or TheContractorStaff.RETIREMENT_NOTICE_MONTHS)
+    if numWorkerId == nil or numNoticeMonths == nil or numNoticeMonths < 0 then
+        return "Usage: tcRetireWorker workerId [noticeMonths]"
+    end
+
+    local farm = g_farmManager:getFarmByUserId(g_currentMission.playerUserId)
+    if farm == nil or farm.farmId == 0 then
+        return "Error: No farm found for current player"
+    end
+
+    local worker = self.Staff:getWorker(farm.farmId, numWorkerId)
+    if worker == nil then
+        return string.format("Error: farm %d has no worker %d", farm.farmId, numWorkerId)
+    end
+    if worker:isRetiring() then
+        return string.format("%s is already retiring (period %d)", worker.name, worker.retiresAtPeriod)
+    end
+
+    self.Staff:announceRetirement(farm.farmId, numWorkerId, math.floor(numNoticeMonths))
+    return string.format("%s handed in their notice (%d month(s))", worker.name, math.floor(numNoticeMonths))
+end
+
+function TheContractor:consoleCommandPublishNotice(ttlMonths, ...)
+    if not g_currentMission:getIsServer() then return "Server only" end
+
+    local text = table.concat({ ... }, " ")
+    local numTtl = tonumber(ttlMonths)
+    if text == "" or (numTtl == nil and ttlMonths ~= "none") then
+        return "Usage: tcPublishNotice ttlMonths|none text..."
+    end
+
+    local farm = g_farmManager:getFarmByUserId(g_currentMission.playerUserId)
+    if farm == nil or farm.farmId == 0 then
+        return "Error: No farm found for current player"
+    end
+
+    local noticeId = self.Notices:publish(farm.farmId, text, numTtl)
+    return string.format("Published notice %d", noticeId)
+end
+
+function TheContractor:consoleCommandRemoveNotice(noticeId)
+    if not g_currentMission:getIsServer() then return "Server only" end
+
+    local numNoticeId = tonumber(noticeId)
+    if numNoticeId == nil or self.Notices:getNotice(numNoticeId) == nil then
+        return "Usage: tcRemoveNotice noticeId (no such notice)"
+    end
+
+    self.Notices:remove(numNoticeId)
+    return string.format("Removed notice %d", numNoticeId)
+end
+
 -- Called as a normal method (self == TheContractor) from loadMap, once the
 -- savegame directory is known.
 function TheContractor:loadFromXMLFile()
@@ -313,11 +402,15 @@ function TheContractor:loadFromXMLFile()
     local xmlFile = loadXMLFile(TheContractor.SaveKey, filePath)
 
     self.Reputation:loadFromXMLFile(xmlFile)
+    -- Before Staff/Drivers: loading can retire a worker (039), which takes
+    -- their notice down.
+    self.Notices:loadFromXMLFile(xmlFile)
     self.Jobs:loadFromXMLFile(xmlFile)
     self.Staff:loadFromXMLFile(xmlFile)
     self.Cooldown:loadFromXMLFile(xmlFile)
     self.Company:loadFromXMLFile(xmlFile)
     self.Advertising:loadFromXMLFile(xmlFile)
+    self.Drivers:loadFromXMLFile(xmlFile)
 
     delete(xmlFile)
 
@@ -348,6 +441,8 @@ function TheContractor:saveToXmlFile()
     tc.Cooldown:saveToXmlFile(xmlFile)
     tc.Company:saveToXmlFile(xmlFile)
     tc.Advertising:saveToXmlFile(xmlFile)
+    tc.Drivers:saveToXmlFile(xmlFile)
+    tc.Notices:saveToXmlFile(xmlFile)
 
     saveXMLFile(xmlFile)
     delete(xmlFile)
@@ -411,6 +506,10 @@ function TheContractor:deleteMap()
         self.Dispatch:stopListening()
     end
 
+    if self.Notices ~= nil then
+        self.Notices:stopPeriodTick()
+    end
+
     if self.InboxHUD ~= nil then
         self.InboxHUD:delete()
     end
@@ -422,6 +521,9 @@ function TheContractor:deleteMap()
         removeConsoleCommand("tcListStaffPool")
         removeConsoleCommand("tcHireWorker")
         removeConsoleCommand("tcJobAvailability")
+        removeConsoleCommand("tcRetireWorker")
+        removeConsoleCommand("tcPublishNotice")
+        removeConsoleCommand("tcRemoveNotice")
     end
 
     if g_currentMission ~= nil and g_currentMission.TheContractor == self then
@@ -455,6 +557,10 @@ function TheContractor:update(dt)
 
     if self.Cooldown ~= nil then
         self.Cooldown:update(dt)
+    end
+
+    if self.Drivers ~= nil then
+        self.Drivers:update(dt)
     end
 end
 

@@ -377,6 +377,13 @@ function TheContractorDispatch.getNoWagePricePerMs()
     return 0
 end
 
+-- Whether an AIJob is one of ours (a contract job's AI Helper). It's
+-- registered before AISystem:startJob is called, so this already holds
+-- inside a startJob hook (037's TheContractorDrivers leaves these alone).
+function TheContractorDispatch:isOurAIJob(aiJob)
+    return self.ourJobIdByAIJob[aiJob] ~= nil
+end
+
 -- AI_JOB_STARTED fires synchronously from inside AISystem:startJob (see
 -- AISystem:startJobInternal), so this always runs within the same call
 -- stack as startJobForWorker's own call above — safe to look the AIJob

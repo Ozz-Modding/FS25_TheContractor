@@ -20,6 +20,9 @@ TheContractorWorker.STATUS = {
     COOLDOWN = "cooldown",
     -- 031: off sick for a few days - can't be allocated until they're back.
     SICK = "sick",
+    -- 037: driving a vehicle under AutoDrive/Courseplay (see Drivers.lua) -
+    -- can't be allocated or released until the vehicle stops.
+    DRIVING = "driving",
 }
 
 TheContractorWorker.TIERS = { "small", "medium", "large" }
@@ -88,7 +91,29 @@ function TheContractorWorker.new(id, farmId, name, workSpeed, tierCapability, sa
     -- Driven by 018 (allocation) / 023 (buffer/cooldown) — just a field here.
     self.status = TheContractorWorker.STATUS.IDLE
 
+    -- 037: network object id of the root vehicle they're DRIVING, set on
+    -- every machine by TheContractorDrivers' binding apply/clear - nil
+    -- otherwise.
+    self.drivingVehicleId = nil
+
+    -- 039: the TCCalendar period index they retire at the start of, once
+    -- they've handed in their notice - nil otherwise. Visible, so it's sent
+    -- to clients. retirementNoticeId is the Overview notice (038) announcing
+    -- it, taken down when they leave - server-only.
+    self.retiresAtPeriod = nil
+    self.retirementNoticeId = nil
+
     return self
+end
+
+function TheContractorWorker:isRetiring()
+    return self.retiresAtPeriod ~= nil
+end
+
+-- Past their retirement date but still here: they were out on a job (or
+-- driving) when it came, and leave the moment they're set idle.
+function TheContractorWorker:isRetirementDue()
+    return self.retiresAtPeriod ~= nil and self.retiresAtPeriod <= TCCalendar.getPeriodIndex()
 end
 
 -- nil tier means the job doesn't require a tractor at all (e.g. a job whose
