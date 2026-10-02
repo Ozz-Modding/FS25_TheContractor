@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8" standalone="no" ?>
+<!-- Staff driver picker (037), see TCDriverPickerDialog.lua. Same dialog
+     frame as TCAdvertisingDialog.xml; the worker list and its column
+     headings use anchorTopCenter profiles (tc_driverPicker* in
+     guiProfiles.xml), so x positions are each element's centre relative to
+     the content container's top-centre. The list spans -320px..320px; the
+     headings sit over its cells' columns (name 10px, speed 320px, tiers
+     430px in from the list's left edge). -->
+<GUI onOpen="onOpen" onClose="onClose" onCreate="onCreate">
+    <GuiElement profile="newLayer"/>
+    <Bitmap profile="dialogFullscreenBg" id="dialogBg"/>
+    <GuiElement profile="fs25_dialogBg" id="dialogElement" size="760px 520px">
+        <ThreePartBitmap profile="fs25_dialogBgMiddle"/>
+        <ThreePartBitmap profile="fs25_dialogBgTop"/>
+        <ThreePartBitmap profile="fs25_dialogBgBottom"/>
+        <GuiElement profile="fs25_dialogContentContainer">
+
+            <Text profile="fs25_dialogTitle" id="dialogTitleElement" position="0px -30px" text="$l10n_tc_drivers_picker_title"/>
+            <Text profile="tc_adDialogInfoText" id="headingText" position="0px -80px" text=""/>
+
+            <Text profile="tc_driverPickerColumn" size="300px 28px" position="-160px -120px" text="$l10n_tc_drivers_picker_columnName"/>
+            <Text profile="tc_driverPickerColumn" size="100px 28px" position="50px -120px" text="$l10n_tc_drivers_picker_columnSpeed"/>
+            <Text profile="tc_driverPickerColumn" size="200px 28px" position="210px -120px" text="$l10n_tc_drivers_picker_columnTiers"/>
+
+            <SmoothList id="workerList" profile="tc_driverPickerList" position="0px -150px" size="640px 288px">
+                <ListItem profile="tc_tableListItem">
+                    <Text profile="tc_listRowCellLeft" position="10px 0px" size="300px 32px" name="name"/>
+                    <Text profile="tc_listRowCellLeft" position="320px 0px" size="100px 32px" name="workSpeed"/>
+                    <Text profile="tc_listRowCellLeft" position="430px 0px" size="200px 32px" name="tier"/>
+                </ListItem>
+            </SmoothList>
+        </GuiElement>
+
+        <BoxLayout profile="fs25_dialogButtonBox">
+            <Button profile="buttonOK" text="$l10n_tc_drivers_picker_assign" onClick="onClickOk" id="assignButton"/>
+            <Bitmap profile="fs25_dialogButtonBoxSeparator"/>
+            <Button profile="buttonBack" text="$l10n_button_back" onClick="onClickBack" id="backButton"/>
+        </BoxLayout>
+    </GuiElement>
+</GUI>

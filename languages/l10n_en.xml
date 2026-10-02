@@ -172,6 +172,28 @@
 		<text name="tc_staff_hireCannotAfford" text="You can't afford this candidate's first period of salary right now."/>
 		<text name="tc_staff_salaryBill" text="Salary bill: %s per period (%d workers)"/>
 		<text name="tc_staff_releaseConfirm" text="Release %s from your roster? This cannot be undone."/>
+		<text name="tc_staff_status_driving" text="Driving"/>
+		<text name="tc_staff_drivingLine" text="Driving %s"/>
+		<text name="tc_staff_releaseDriving" text="%s is out driving. Stop their vehicle before releasing them."/>
+
+		<text name="tc_drivers_picker_title" text="Choose a Driver"/>
+		<text name="tc_drivers_picker_heading" text="Who's driving %s? (%s)"/>
+		<text name="tc_drivers_picker_tier_small" text="small tractor"/>
+		<text name="tc_drivers_picker_tier_medium" text="medium tractor"/>
+		<text name="tc_drivers_picker_tier_large" text="large tractor"/>
+		<text name="tc_drivers_picker_tier_none" text="no tractor tier"/>
+		<text name="tc_drivers_picker_columnName" text="Name"/>
+		<text name="tc_drivers_picker_columnSpeed" text="Speed"/>
+		<text name="tc_drivers_picker_columnTiers" text="Tiers (S/M/L)"/>
+		<text name="tc_drivers_picker_assign" text="Assign"/>
+		<text name="tc_drivers_noIdleStaff" text="None of your staff are free to drive. Your company's vehicles need a staff driver for AutoDrive and Courseplay."/>
+		<text name="tc_drivers_contractorEquipmentDialog" text="This vehicle is out on a contract job, so AutoDrive and Courseplay can't drive it."/>
+		<text name="tc_drivers_contractorEquipment" text="%s is out on a contract job, so AutoDrive and Courseplay can't drive it."/>
+		<text name="tc_drivers_stoppedNoDriver" text="%s stopped: your company's vehicles need a staff driver. Start it again to pick one."/>
+		<text name="tc_drivers_notYourVehicle" text="Couldn't assign a driver to %s: it isn't your farm's vehicle."/>
+		<text name="tc_drivers_noCompany" text="Couldn't assign a driver to %s: you don't have a company."/>
+		<text name="tc_drivers_alreadyHasDriver" text="%s already has a driver."/>
+		<text name="tc_drivers_workerUnavailable" text="Couldn't assign a driver to %s: that worker isn't free any more."/>
 
 		<text name="tc_allocation_title" text="Allocate: %s"/>
 		<text name="tc_allocation_myself" text="Myself"/>
@@ -232,5 +254,14 @@
 		<text name="tc_supplies_or" text=" or "/>
 		<text name="tc_allocation_blockedWarning" text="This worker isn't certified for the required equipment tier."/>
 		<text name="tc_allocation_underqualifiedWarning" text="This worker is under-qualified for this job - expect a reduced reward."/>
+		<text name="tc_overview_noticesHeading" text="Important"/>
+		<text name="tc_overview_noticesEmpty" text="Nothing to report."/>
+		<text name="tc_overview_noticeLine" text="- %s"/>
+		<text name="tc_retirement_notice" text="%s retires at the start of %s."/>
+		<text name="tc_retirement_announced" text="%s has handed in their notice and will retire at the start of %s"/>
+		<text name="tc_retirement_retired" text="%s has retired and left your roster"/>
+		<text name="tc_staff_detailRetiring" text="Retiring: start of %s (%d months)"/>
+		<text name="tc_staff_detailRetiringNextMonth" text="Retiring: start of %s (next month)"/>
+		<text name="tc_staff_detailRetiringDue" text="Retiring as soon as they're back"/>
 	</texts>
 </l10n>

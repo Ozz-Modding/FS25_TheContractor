@@ -46,7 +46,12 @@
             <Text profile="tc_placeholderText" id="textSalaryBill" text="" position="40px -560px" width="900px"/>
 
             <Text profile="tc_overviewHeading" id="textCurrentJobsHeading" text="$l10n_tc_overview_currentJobsHeading" position="860px -110px" width="500px"/>
-            <Text profile="tc_placeholderText" id="textCurrentJobs" text="" position="860px -150px" width="500px" textMaxNumLines="12"/>
+            <Text profile="tc_placeholderText" id="textCurrentJobs" text="" position="860px -150px" width="500px" textMaxNumLines="11"/>
+
+            <!-- Important notices (038): anything published to
+                 TheContractorNotices for this farm, newest first. -->
+            <Text profile="tc_overviewHeading" id="textNoticesHeading" text="$l10n_tc_overview_noticesHeading" position="860px -430px" width="500px"/>
+            <Text profile="tc_placeholderText" id="textNotices" text="" position="860px -470px" width="500px" textMaxNumLines="6"/>
         </GuiElement>
         <GuiElement profile="fs25_subCategorySelectorTabbedContainer" id="subCategoryPages[2]">
             <Text profile="tc_placeholderText" id="placeholderInbox" text="$l10n_tc_placeholder_locked" position="40px -40px" width="900px"/>
@@ -228,6 +233,7 @@
                 <Text profile="tc_placeholderText" id="staffDetailSalary" text="" position="0px -170px" width="280px"/>
                 <Text profile="tc_placeholderText" id="staffDetailStatus" text="" position="0px -200px" width="280px"/>
                 <Text profile="tc_placeholderText" id="staffDetailJob" text="" position="0px -230px" width="280px"/>
+                <Text profile="tc_placeholderText" id="staffDetailRetirement" text="" position="0px -260px" width="280px" textMaxNumLines="2"/>
             </GuiElement>
         </GuiElement>
     </GuiElement>

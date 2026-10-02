@@ -84,6 +84,8 @@ local function formatTierListCell(tierCapability)
     end
     return table.concat(parts, " ")
 end
+-- Also used by TCDriverPickerDialog's worker list (037).
+MenuContractor.formatTierListCell = formatTierListCell
 
 -- Calendar (015): jobs whose state means "on the calendar, worth showing
 -- against a date" — accepted/allocated/in_progress (still committed to it)
@@ -488,6 +490,8 @@ function MenuContractor:refreshCompanyState()
     self.progressBox:setVisible(hasCompany)
     self.textCurrentJobsHeading:setVisible(hasCompany)
     self.textCurrentJobs:setVisible(hasCompany)
+    self.textNoticesHeading:setVisible(hasCompany)
+    self.textNotices:setVisible(hasCompany)
 
     if hasCompany then
         local farmId = g_currentMission:getFarmId()
@@ -519,6 +523,7 @@ function MenuContractor:refreshCompanyState()
         self:refreshCurrentJobsState(farmId, tc.Jobs)
         self:refreshLastCompletedJobState(farmId, tc.Jobs)
         self:refreshSalaryBillState(farmId, tc.Staff)
+        self:refreshNoticesState(farmId, tc.Notices)
         self:refreshStaffState(farmId, tc.Staff, tc.Jobs)
     end
 
@@ -548,6 +553,22 @@ end
 function MenuContractor:refreshSalaryBillState(farmId, staff)
     self.textSalaryBill:setText(string.format(g_i18n:getText("tc_staff_salaryBill"),
         g_i18n:formatMoney(staff:getTotalSalary(farmId), 0, true, true), #staff:getRoster(farmId)))
+end
+
+-- Overview tab's important-notices panel (038): whatever's been published
+-- to the farm's board, newest first.
+function MenuContractor:refreshNoticesState(farmId, notices)
+    local farmNotices = notices:getNotices(farmId)
+    if #farmNotices == 0 then
+        self.textNotices:setText(g_i18n:getText("tc_overview_noticesEmpty"))
+        return
+    end
+
+    local lines = {}
+    for _, notice in ipairs(farmNotices) do
+        table.insert(lines, string.format(g_i18n:getText("tc_overview_noticeLine"), notice.text))
+    end
+    self.textNotices:setText(table.concat(lines, "\n"))
 end
 
 -- Overview tab's at-a-glance work list, next to the reputation progress
@@ -688,6 +709,12 @@ function MenuContractor:getAssignedJobLine(farmId, jobs, workerId)
                 fieldLabel)
         end
     end
+
+    -- 037: out driving under AutoDrive/Courseplay.
+    local vehicle = g_currentMission.TheContractor.Drivers:getVehicleDrivenBy(farmId, workerId)
+    if vehicle ~= nil then
+        return string.format(g_i18n:getText("tc_staff_drivingLine"), vehicle:getFullName())
+    end
     return nil
 end
 
@@ -739,6 +766,8 @@ function MenuContractor:updateStaffDetails()
     self.staffDetailSalary:setText(string.format(g_i18n:getText("tc_staff_detailSalary"),
         g_i18n:formatMoney(worker.salary, 0, true, true)))
 
+    self.staffDetailRetirement:setText(self.staffView == "roster" and self:getRetirementLine(worker) or "")
+
     if self.staffView == "candidates" then
         self.staffDetailStatus:setText("")
         self.staffDetailJob:setText("")
@@ -751,6 +780,24 @@ function MenuContractor:updateStaffDetails()
         self.staffDetailJob:setText(string.format(g_i18n:getText("tc_staff_detailJob"),
             jobLine or g_i18n:getText("tc_staff_detailJobNone")))
     end
+end
+
+-- 039: when a worker who's handed in their notice leaves, counted from
+-- today. "" if they aren't retiring.
+function MenuContractor:getRetirementLine(worker)
+    if not worker:isRetiring() then
+        return ""
+    end
+    if worker:isRetirementDue() then
+        return g_i18n:getText("tc_staff_detailRetiringDue")
+    end
+
+    local monthsLeft = worker.retiresAtPeriod - TCCalendar.getPeriodIndex()
+    local date = TCCalendar.formatPeriodIndex(worker.retiresAtPeriod)
+    if monthsLeft == 1 then
+        return string.format(g_i18n:getText("tc_staff_detailRetiringNextMonth"), date)
+    end
+    return string.format(g_i18n:getText("tc_staff_detailRetiring"), date, monthsLeft)
 end
 
 -- The only way to switch between Roster and Candidates — same "in-page
@@ -805,6 +852,12 @@ end
 function MenuContractor:onClickReleaseWorker()
     local worker = self:getSelectedRosterWorker()
     if worker == nil then
+        return
+    end
+
+    -- 037: the server refuses it too (TheContractorStaff:releaseWorker).
+    if worker.status == TheContractorWorker.STATUS.DRIVING then
+        InfoDialog.show(string.format(g_i18n:getText("tc_staff_releaseDriving"), worker.name))
         return
     end
 

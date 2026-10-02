@@ -79,4 +79,15 @@
         <size value="680px 28px" />
         <textAlignment value="center" />
     </Profile>
+
+    <!-- Staff driver picker dialog (037). anchorTopCenter for the same
+         reason as the advertising dialog's profiles above. -->
+    <Profile name="tc_driverPickerList" extends="emptyPanel" with="anchorTopCenter" />
+    <Profile name="tc_driverPickerColumn" extends="fs25_dialogText" with="anchorTopCenter">
+        <textSize value="16px" />
+        <textBold value="true" />
+        <textUpperCase value="true" />
+        <textAlignment value="left" />
+        <textColor value="$preset_colorWhite_50" />
+    </Profile>
 </GUIProfiles>

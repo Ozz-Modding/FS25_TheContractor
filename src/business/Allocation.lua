@@ -12,8 +12,9 @@
 --
 -- Equipment "freedom" (criterion: not in cooldown, not assigned elsewhere):
 -- not currently assigned to another allocated/in_progress job (reads
--- assignedEquipmentIds directly), and not sitting in 023's post-completion
--- buffer (TheContractorCooldown:isVehicleInCooldown).
+-- assignedEquipmentIds directly), not sitting in 023's post-completion
+-- buffer (TheContractorCooldown:isVehicleInCooldown), and not out with a
+-- staff driver under AutoDrive/Courseplay (037).
 
 TheContractorAllocation = {}
 TheContractorAllocation_mt = Class(TheContractorAllocation)
@@ -47,6 +48,11 @@ function TheContractorAllocation:isVehicleFree(farmId, vehicle)
     end
 
     if g_currentMission.TheContractor.Cooldown:isVehicleInCooldown(vehicleId) then
+        return false
+    end
+
+    -- 037: out driving with a staff member under AutoDrive/Courseplay.
+    if g_currentMission.TheContractor.Drivers:hasDriver(vehicle) then
         return false
     end
 
