@@ -38,6 +38,7 @@ source(TheContractor.dir .. "src/business/Company.lua")
 source(TheContractor.dir .. "src/business/Advertising.lua")
 source(TheContractor.dir .. "src/business/Drivers.lua")
 source(TheContractor.dir .. "src/business/Notices.lua")
+source(TheContractor.dir .. "src/business/Holidays.lua")
 source(TheContractor.dir .. "src/events/TCInitialClientStateEvent.lua")
 source(TheContractor.dir .. "src/events/TCCreateCompanyEvent.lua")
 source(TheContractor.dir .. "src/events/TCReputationChangedEvent.lua")
@@ -80,6 +81,7 @@ source(TheContractor.dir .. "src/events/TCNoticePublishedEvent.lua")
 source(TheContractor.dir .. "src/events/TCNoticeRemovedEvent.lua")
 source(TheContractor.dir .. "src/events/TCWorkerRetirementAnnouncedEvent.lua")
 source(TheContractor.dir .. "src/events/TCWorkerRetiredEvent.lua")
+source(TheContractor.dir .. "src/events/TCWorkerHolidayChangedEvent.lua")
 
 -- The top-level Contractor page itself stays always-visible (see Company.lua
 -- and MenuContractor's Overview tab): "Create Company" has to live somewhere
@@ -107,6 +109,7 @@ function TheContractor:loadMap()
     self.Advertising = TheContractorAdvertising.new()
     self.Drivers = TheContractorDrivers.new()
     self.Notices = TheContractorNotices.new()
+    self.Holidays = TheContractorHolidays.new()
     self.InboxHUD = TCInboxHUD.new()
 
     -- Module-level caches outlive a savegame; start each load clean.
@@ -171,9 +174,15 @@ function TheContractor:loadMap()
         addConsoleCommand("tcJobAvailability",
             "Dry-run job generation for the current farm: eligible, datable and fulfillable fields per job type right now (025, 033). Usage: tcJobAvailability",
             "consoleCommandJobAvailability", self)
+        addConsoleCommand("tcOfferJob",
+            "Offer the current farm a job of the given type right now, through the normal generator. No type lists the types. Usage: tcOfferJob [jobType]",
+            "consoleCommandOfferJob", self)
         addConsoleCommand("tcRetireWorker",
             "Make a hired worker on the current farm hand in their retirement notice (039). Usage: tcRetireWorker workerId [noticeMonths, default 6, 0 = now]",
             "consoleCommandRetireWorker", self)
+        addConsoleCommand("tcBookHoliday",
+            "Book a holiday for a hired worker on the current farm, skipping the notice and allowance rules (040). Usage: tcBookHoliday workerId [daysFromNow, default 0] [days, default 1]",
+            "consoleCommandBookHoliday", self)
         addConsoleCommand("tcPublishNotice",
             "Publish a notice to the current farm's Overview board (038). Usage: tcPublishNotice ttlMonths|none text...",
             "consoleCommandPublishNotice", self)
@@ -323,6 +332,55 @@ function TheContractor:consoleCommandJobAvailability()
     return table.concat(lines, "\n")
 end
 
+-- Forces one generation hit for a single job type (tryGenerateJob's
+-- onlyJobType): a real offer on a real field, priced and dated by the same
+-- rules as the hourly roll, so it's safe for testing and for scripting a
+-- storyline. Acts on the server directly, like tcJobAvailability - Jobs
+-- broadcasts the new job itself. Fails only when no field qualifies for the
+-- type right now, or none that does has a workable deadline.
+function TheContractor:consoleCommandOfferJob(jobTypeName)
+    if not g_currentMission:getIsServer() then return "Server only" end
+
+    local typeList = table.concat(TheContractorJobGeneration.JOB_TYPE_KEYS, ", ")
+    if jobTypeName == nil then
+        return "Usage: tcOfferJob jobType\nJob types: " .. typeList
+    end
+    local jobType = TheContractorJobGeneration.findJobType(jobTypeName)
+    if jobType == nil then
+        return string.format("Unknown job type '%s'. Job types: %s", jobTypeName, typeList)
+    end
+
+    local farm = g_farmManager:getFarmByUserId(g_currentMission.playerUserId)
+    if farm == nil or farm.farmId == 0 then
+        return "Error: No farm found for current player"
+    end
+    if not self.Company:hasCompany(farm.farmId) then
+        return string.format("Error: farm %d has no company yet", farm.farmId)
+    end
+
+    local job = self.JobGeneration:tryGenerateJob(farm.farmId, jobType)
+    if job ~= nil then
+        return string.format("Offered %s job %d on field %d to farm %d (%s, due period %d day %d, skill %d%s)",
+            jobType, job.id, job.fieldId, farm.farmId, g_i18n:formatMoney(job.price, 0, true, true),
+            job.targetPeriod, job.targetDayInPeriod, job.requiredSkillLevel,
+            job.equipmentAvailable and "" or ", farm lacks the equipment")
+    end
+
+    local jobDef = TheContractorJobGeneration.JOB_TYPES[jobType]
+    if jobDef.requiresWeeds and not TheContractorJobGeneration.getHasWeeds() then
+        return string.format("No %s job possible: weeds are off for this save or map", jobType)
+    end
+    if jobDef.requiresStones and g_currentMission.missionInfo.stonesEnabled == false then
+        return string.format("No %s job possible: stones are switched off for this save", jobType)
+    end
+    local candidates = #self.JobGeneration:getCandidateFields(farm.farmId, jobDef)
+    if candidates == 0 then
+        return string.format("No %s job possible right now: no field the farm doesn't own qualifies for it", jobType)
+    end
+    return string.format("No %s job possible right now: %d field(s) qualify, but none has a workable deadline (crop not ready/predictable in time, or out of season)",
+        jobType, candidates)
+end
+
 -- The retirement/notice commands below act on the server directly, like
 -- tcJobAvailability: they're server-only anyway, and the subsystems
 -- broadcast their own changes.
@@ -350,6 +408,36 @@ function TheContractor:consoleCommandRetireWorker(workerId, noticeMonths)
 
     self.Staff:announceRetirement(farm.farmId, numWorkerId, math.floor(numNoticeMonths))
     return string.format("%s handed in their notice (%d month(s))", worker.name, math.floor(numNoticeMonths))
+end
+
+function TheContractor:consoleCommandBookHoliday(workerId, daysFromNow, days)
+    if not g_currentMission:getIsServer() then return "Server only" end
+
+    local numWorkerId = tonumber(workerId)
+    local numDaysFromNow = tonumber(daysFromNow or 0)
+    local numDays = tonumber(days or 1)
+    if numWorkerId == nil or numDaysFromNow == nil or numDaysFromNow < 0 or numDays == nil or numDays < 1 then
+        return "Usage: tcBookHoliday workerId [daysFromNow] [days]"
+    end
+
+    local farm = g_farmManager:getFarmByUserId(g_currentMission.playerUserId)
+    if farm == nil or farm.farmId == 0 then
+        return "Error: No farm found for current player"
+    end
+
+    local worker = self.Staff:getWorker(farm.farmId, numWorkerId)
+    if worker == nil then
+        return string.format("Error: farm %d has no worker %d", farm.farmId, numWorkerId)
+    end
+    if worker:hasHolidayBooked() then
+        return string.format("%s already has a holiday booked (%s)", worker.name,
+            TCCalendar.formatDayRange(worker.holidayStartDay, worker:getHolidayEndDay()))
+    end
+
+    local startDay = g_currentMission.environment.currentMonotonicDay + math.floor(numDaysFromNow)
+    self.Holidays:bookHoliday(worker, startDay, math.floor(numDays))
+    return string.format("%s booked a holiday: %s", worker.name,
+        TCCalendar.formatDayRange(worker.holidayStartDay, worker:getHolidayEndDay()))
 end
 
 function TheContractor:consoleCommandPublishNotice(ttlMonths, ...)
@@ -411,6 +499,8 @@ function TheContractor:loadFromXMLFile()
     self.Company:loadFromXMLFile(xmlFile)
     self.Advertising:loadFromXMLFile(xmlFile)
     self.Drivers:loadFromXMLFile(xmlFile)
+    -- After Notices, so it can drop notice ids no longer on the board.
+    self.Holidays:loadFromXMLFile(xmlFile)
 
     delete(xmlFile)
 
@@ -443,6 +533,7 @@ function TheContractor:saveToXmlFile()
     tc.Advertising:saveToXmlFile(xmlFile)
     tc.Drivers:saveToXmlFile(xmlFile)
     tc.Notices:saveToXmlFile(xmlFile)
+    tc.Holidays:saveToXmlFile(xmlFile)
 
     saveXMLFile(xmlFile)
     delete(xmlFile)
@@ -521,7 +612,9 @@ function TheContractor:deleteMap()
         removeConsoleCommand("tcListStaffPool")
         removeConsoleCommand("tcHireWorker")
         removeConsoleCommand("tcJobAvailability")
+        removeConsoleCommand("tcOfferJob")
         removeConsoleCommand("tcRetireWorker")
+        removeConsoleCommand("tcBookHoliday")
         removeConsoleCommand("tcPublishNotice")
         removeConsoleCommand("tcRemoveNotice")
     end

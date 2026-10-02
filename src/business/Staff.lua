@@ -399,6 +399,10 @@ function TheContractorStaff:onDayChanged()
     end
 
     self:updateSickness()
+
+    -- 040: holidays start, end and get booked after sickness, so a worker
+    -- who's just recovered can go straight onto a holiday.
+    g_currentMission.TheContractor.Holidays:onDayChanged()
 end
 
 -- Sickness (031, server-only, from the daily tick): sick workers count down
@@ -407,7 +411,8 @@ end
 -- straight away; busy ones get pendingSickDays, applied in setWorkerStatus
 -- when they're next set idle. toRoll is gathered before anyone recovers, so
 -- someone who only just got better doesn't roll the same day, and anyone
--- with sickness already pending doesn't roll again.
+-- with sickness already pending doesn't roll again. Neither does anyone on
+-- holiday (040).
 function TheContractorStaff:updateSickness()
     local sickStatus = TheContractorWorker.STATUS.SICK
 
@@ -419,7 +424,7 @@ function TheContractorStaff:updateSickness()
                 if worker.sickDaysRemaining <= 0 then
                     table.insert(toRecover, workerId)
                 end
-            elseif worker.pendingSickDays == 0 then
+            elseif worker.pendingSickDays == 0 and worker.status ~= TheContractorWorker.STATUS.HOLIDAY then
                 table.insert(toRoll, worker)
             end
         end
@@ -572,7 +577,7 @@ function TheContractorStaff:announceRetirement(farmId, workerId, noticeMonths)
     end
 
     -- Already due (noticeMonths 0) and free to go.
-    if worker.status == TheContractorWorker.STATUS.IDLE or worker.status == TheContractorWorker.STATUS.SICK then
+    if TheContractorStaff.canLeaveNow(worker) then
         self:retireDueWorkers()
     end
 end
@@ -584,15 +589,21 @@ function TheContractorStaff:applyRetirementAnnounced(farmId, workerId, retiresAt
     end
 end
 
--- From the period tick: everyone past their date who's idle or off sick
--- leaves now. Anyone out on a job or driving goes once they're set idle
--- (setWorkerStatus).
+-- Idle, off sick or on holiday (040) - not out on a job or driving.
+function TheContractorStaff.canLeaveNow(worker)
+    local status = worker.status
+    return status == TheContractorWorker.STATUS.IDLE or status == TheContractorWorker.STATUS.SICK or
+        status == TheContractorWorker.STATUS.HOLIDAY
+end
+
+-- From the period tick: everyone past their date who's idle, off sick or on
+-- holiday leaves now. Anyone out on a job or driving goes once they're set
+-- idle (setWorkerStatus).
 function TheContractorStaff:retireDueWorkers()
     local due = {}
     for farmId, farmWorkers in pairs(self.workersByFarm) do
         for workerId, worker in pairs(farmWorkers) do
-            if worker:isRetirementDue() and (worker.status == TheContractorWorker.STATUS.IDLE or
-                    worker.status == TheContractorWorker.STATUS.SICK) then
+            if worker:isRetirementDue() and TheContractorStaff.canLeaveNow(worker) then
                 table.insert(due, { farmId = farmId, workerId = workerId })
             end
         end
@@ -625,6 +636,9 @@ function TheContractorStaff:retireWorker(farmId, workerId)
     if g_server ~= nil then
         g_server:broadcastEvent(TCWorkerRetiredEvent.new(farmId, workerId))
     end
+
+    -- 040: any holiday they'd booked comes off the Overview.
+    g_currentMission.TheContractor.Holidays:refreshNotices(farmId)
 end
 
 -- Worker ids are unique across the pool and every roster (one shared
@@ -713,6 +727,8 @@ function TheContractorStaff:hireWorker(farmId, candidateId)
     g_currentMission:addMoney(-candidate.salary, farmId, MoneyType.TC_WAGES, true, true)
 
     candidate.farmId = farmId
+    -- 040: before the broadcast, so the allowance goes out with them.
+    TheContractorHolidays.grantInitialAllowance(candidate)
     self:applyWorkerHired(candidate)
 
     if g_server ~= nil then
@@ -777,6 +793,9 @@ function TheContractorStaff:releaseWorker(farmId, workerId)
         g_server:broadcastEvent(TCWorkerReleasedEvent.new(farmId, workerId))
     end
 
+    -- 040: any holiday they'd booked comes off the Overview.
+    g_currentMission.TheContractor.Holidays:refreshNotices(farmId)
+
     Logging.info("TheContractor: farm %d released worker %d (%s)", farmId, workerId, worker.name)
 
     return true
@@ -795,7 +814,7 @@ end
 
 -- Worker status (server-authoritative) -------------------------------------
 
--- Flips a hired worker's status (idle/assigned/cooldown/sick/driving) and broadcasts it —
+-- Flips a hired worker's status (idle/assigned/cooldown/sick/driving/holiday) and broadcasts it —
 -- first driven by allocation (018, idle -> assigned on a successful
 -- allocateJob), later tickets (022/023) will flip it back on
 -- completion/cooldown. Broadcasts just the changed field
@@ -812,6 +831,17 @@ function TheContractorStaff:setWorkerStatus(farmId, workerId, status)
     if worker ~= nil and status == TheContractorWorker.STATUS.IDLE and worker:isRetirementDue() then
         self:retireWorker(farmId, workerId)
         return
+    end
+
+    -- 040: someone back from a job (or driving) during their booked holiday
+    -- goes straight on it, for whatever's left. The holiday takes over from
+    -- any sickness they picked up on the job.
+    if worker ~= nil and status == TheContractorWorker.STATUS.IDLE and
+            worker:isHolidayOn(g_currentMission.environment.currentMonotonicDay) then
+        Logging.info("TheContractor: farm %d worker %d (%s) back during their holiday, now on holiday", farmId,
+            workerId, worker.name)
+        worker.pendingSickDays = 0
+        status = TheContractorWorker.STATUS.HOLIDAY
     end
 
     -- 031: someone who fell ill while out on a job goes off sick, not idle,
@@ -1014,6 +1044,11 @@ function TheContractorStaff.writeWorker(streamId, worker)
     streamWriteInt32(streamId, worker.age)
     -- 039: 0 = not retiring (period indexes start at 1).
     streamWriteInt32(streamId, worker.retiresAtPeriod or 0)
+    -- 040: holidayStartDay 0 = nothing booked (monotonic days start at 1).
+    -- holidayYear/holidayDaysPerPeriod stay server-side.
+    streamWriteFloat32(streamId, worker.holidayAllowance)
+    streamWriteInt32(streamId, worker.holidayStartDay or 0)
+    streamWriteInt32(streamId, worker.holidayDays)
 
     for _, tier in ipairs(TheContractorWorker.TIERS) do
         local rating = worker.tierCapability[tier]
@@ -1036,6 +1071,9 @@ function TheContractorStaff.readWorker(streamId)
     local status = streamReadString(streamId)
     local age = streamReadInt32(streamId)
     local retiresAtPeriod = streamReadInt32(streamId)
+    local holidayAllowance = streamReadFloat32(streamId)
+    local holidayStartDay = streamReadInt32(streamId)
+    local holidayDays = streamReadInt32(streamId)
 
     local tierCapability = {}
     for _, tier in ipairs(TheContractorWorker.TIERS) do
@@ -1049,6 +1087,8 @@ function TheContractorStaff.readWorker(streamId)
     if retiresAtPeriod > 0 then
         worker.retiresAtPeriod = retiresAtPeriod
     end
+    TheContractorHolidays.applyHolidayChanged(worker, holidayAllowance,
+        holidayStartDay > 0 and holidayStartDay or nil, holidayDays)
 
     return worker
 end
@@ -1077,6 +1117,16 @@ function TheContractorStaff.writeWorkerXML(xmlFile, key, worker)
     end
     if worker.retirementNoticeId ~= nil then
         setXMLInt(xmlFile, key .. "#retirementNoticeId", worker.retirementNoticeId)
+    end
+    -- 040: hired workers only - a candidate has no allowance yet.
+    if worker.holidayYear ~= nil then
+        setXMLFloat(xmlFile, key .. "#holidayAllowance", worker.holidayAllowance)
+        setXMLInt(xmlFile, key .. "#holidayYear", worker.holidayYear)
+    end
+    if worker:hasHolidayBooked() then
+        setXMLInt(xmlFile, key .. "#holidayStartDay", worker.holidayStartDay)
+        setXMLInt(xmlFile, key .. "#holidayDays", worker.holidayDays)
+        setXMLInt(xmlFile, key .. "#holidayDaysPerPeriod", worker.holidayDaysPerPeriod)
     end
 
     for _, tier in ipairs(TheContractorWorker.TIERS) do
@@ -1126,6 +1176,18 @@ function TheContractorStaff.readWorkerXML(xmlFile, key, farmId)
     worker.pendingSickDays = getXMLInt(xmlFile, key .. "#pendingSickDays") or 0
     worker.retiresAtPeriod = getXMLInt(xmlFile, key .. "#retiresAtPeriod")
     worker.retirementNoticeId = getXMLInt(xmlFile, key .. "#retirementNoticeId")
+    -- 040: a worker from a save made before 040 has no holidayYear, and
+    -- gets their allowance at the next day change (Holidays:onDayChanged).
+    worker.holidayYear = getXMLInt(xmlFile, key .. "#holidayYear")
+    worker.holidayAllowance = getXMLFloat(xmlFile, key .. "#holidayAllowance") or 0
+    local holidayStartDay = getXMLInt(xmlFile, key .. "#holidayStartDay")
+    local holidayDays = getXMLInt(xmlFile, key .. "#holidayDays")
+    local holidayDaysPerPeriod = getXMLInt(xmlFile, key .. "#holidayDaysPerPeriod")
+    if holidayStartDay ~= nil and holidayDays ~= nil and holidayDays > 0 and holidayDaysPerPeriod ~= nil then
+        worker.holidayStartDay = holidayStartDay
+        worker.holidayDays = holidayDays
+        worker.holidayDaysPerPeriod = holidayDaysPerPeriod
+    end
 
     return worker
 end

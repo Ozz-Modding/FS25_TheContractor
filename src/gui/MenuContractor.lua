@@ -767,6 +767,7 @@ function MenuContractor:updateStaffDetails()
         g_i18n:formatMoney(worker.salary, 0, true, true)))
 
     self.staffDetailRetirement:setText(self.staffView == "roster" and self:getRetirementLine(worker) or "")
+    self.staffDetailHoliday:setText(self.staffView == "roster" and self:getHolidayLine(worker) or "")
 
     if self.staffView == "candidates" then
         self.staffDetailStatus:setText("")
@@ -798,6 +799,26 @@ function MenuContractor:getRetirementLine(worker)
         return string.format(g_i18n:getText("tc_staff_detailRetiringNextMonth"), date)
     end
     return string.format(g_i18n:getText("tc_staff_detailRetiring"), date, monthsLeft)
+end
+
+-- 040: holiday days left this year at the days per period in force now,
+-- and the booked holiday, if any.
+function MenuContractor:getHolidayLine(worker)
+    local environment = g_currentMission.environment
+    local lines = {
+        string.format(g_i18n:getText("tc_staff_detailHolidayLeft"),
+            TheContractorHolidays.getAllowanceDays(worker.holidayAllowance, environment.daysPerPeriod)),
+    }
+
+    if worker:hasHolidayBooked() then
+        local dates = TCCalendar.formatDayRange(math.max(worker.holidayStartDay, environment.currentMonotonicDay),
+            worker:getHolidayEndDay())
+        local key = worker.status == TheContractorWorker.STATUS.HOLIDAY and "tc_staff_detailHolidayNow" or
+            "tc_staff_detailHolidayBooked"
+        table.insert(lines, string.format(g_i18n:getText(key), dates))
+    end
+
+    return table.concat(lines, "\n")
 end
 
 -- The only way to switch between Roster and Candidates — same "in-page
