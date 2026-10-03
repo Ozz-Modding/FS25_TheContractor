@@ -436,8 +436,42 @@ function MenuContractor:onFrameOpen()
     self.subCategoryPaging:setTexts(texts)
     self.subCategoryPaging:setSize(self.subCategoryBox.maxFlowSize + 140 * g_pixelSizeScaledX)
 
+    self.isFrameOpen = true
     self:updateContent()
     self:setMenuButtonInfoDirty()
+end
+
+-- 042: the portrait's scene and character only live while the menu's open.
+function MenuContractor:onFrameClose()
+    MenuContractor:superClass().onFrameClose(self)
+
+    self.isFrameOpen = false
+    if self.workerPortrait ~= nil then
+        self.workerPortrait:destroy()
+    end
+end
+
+function MenuContractor:update(dt)
+    MenuContractor:superClass().update(self, dt)
+
+    if self.workerPortrait ~= nil then
+        self.workerPortrait:update(dt)
+    end
+end
+
+-- 042: shows the highlighted worker's portrait while the Staff tab is the
+-- one showing, nothing otherwise.
+function MenuContractor:updateWorkerPortrait()
+    if self.workerPortrait == nil then
+        self.workerPortrait = TCWorkerPortrait.new(self.staffPortraitRender)
+    end
+
+    local worker = nil
+    if self.isFrameOpen and self.subCategoryPaging:getState() == MenuContractor.SUB_CATEGORY.STAFF and
+            self:hasCompany() then
+        worker = self.staffView == "roster" and self:getSelectedRosterWorker() or self:getSelectedCandidate()
+    end
+    self.workerPortrait:setWorker(worker)
 end
 
 function MenuContractor:hasCompany()
@@ -753,6 +787,7 @@ function MenuContractor:updateStaffDetails()
 
     local worker = self.staffView == "roster" and self:getSelectedRosterWorker() or self:getSelectedCandidate()
     self.staffDetailsBox:setVisible(worker ~= nil)
+    self:updateWorkerPortrait()
     if worker == nil then
         return
     end
@@ -2250,6 +2285,7 @@ function MenuContractor:updateContent()
     end
 
     self:refreshCompanyState()
+    self:updateWorkerPortrait()
 
     if state == MenuContractor.SUB_CATEGORY.INBOX then
         self:markInboxSeen()

@@ -118,6 +118,14 @@ function TheContractorWorker.new(id, farmId, name, workSpeed, tierCapability, sa
     self.holidayDays = 0
     self.holidayDaysPerPeriod = nil
 
+    -- 041: "male"/"female" (their first name matches it) and their look in
+    -- the cab, rolled once at creation - appearance data, see
+    -- TCWorkerAppearance. Both visible, so they're sent to clients.
+    -- playerStyle is the PlayerStyle built from it, cached per machine.
+    self.gender = TCWorkerAppearance.GENDER.MALE
+    self.appearance = nil
+    self.playerStyle = nil
+
     return self
 end
 
