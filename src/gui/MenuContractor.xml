@@ -235,6 +235,8 @@
                 <Text profile="tc_placeholderText" id="staffDetailJob" text="" position="0px -230px" width="280px"/>
                 <Text profile="tc_placeholderText" id="staffDetailRetirement" text="" position="0px -260px" width="280px" textMaxNumLines="2"/>
                 <Text profile="tc_placeholderText" id="staffDetailHoliday" text="" position="0px -320px" width="280px" textMaxNumLines="3"/>
+                <!-- 042: live portrait, driven by TCWorkerPortrait (it sets the scene). -->
+                <Render profile="tc_workerPortrait" id="staffPortraitRender" position="300px 0px"/>
             </GuiElement>
         </GuiElement>
     </GuiElement>

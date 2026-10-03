@@ -112,9 +112,16 @@ TheContractorStaff.RETIREMENT_MIN_CHANCE = 0.02
 TheContractorStaff.RETIREMENT_CURVE_EXPONENT = 3
 TheContractorStaff.RETIREMENT_NOTICE_MONTHS = 6
 
+-- First names by gender (041), so the name matches the look in the cab.
 TheContractorStaff.FIRST_NAMES = {
-    "James", "Mary", "John", "Sarah", "Robert", "Emma", "Michael", "Olivia",
-    "David", "Sophie", "Daniel", "Grace", "Thomas", "Amy", "Peter", "Laura",
+    male = {
+        "James", "John", "Robert", "Michael", "David", "Daniel", "Thomas", "Peter",
+        "Mark", "Paul", "Andrew", "Richard",
+    },
+    female = {
+        "Mary", "Sarah", "Emma", "Olivia", "Sophie", "Grace", "Amy", "Laura",
+        "Hannah", "Rachel", "Lucy", "Kate",
+    },
 }
 TheContractorStaff.LAST_NAMES = {
     "Smith", "Jones", "Taylor", "Brown", "Wilson", "Evans", "Walker", "White",
@@ -269,10 +276,25 @@ function TheContractorStaff.getSalary(workSpeed, tierCapability)
     return salary
 end
 
-function TheContractorStaff.generateName()
-    local firstName = TheContractorStaff.FIRST_NAMES[math.random(#TheContractorStaff.FIRST_NAMES)]
+function TheContractorStaff.generateName(gender)
+    local firstNames = TheContractorStaff.FIRST_NAMES[gender] or TheContractorStaff.FIRST_NAMES.male
+    local firstName = firstNames[math.random(#firstNames)]
     local lastName = TheContractorStaff.LAST_NAMES[math.random(#TheContractorStaff.LAST_NAMES)]
     return firstName .. " " .. lastName
+end
+
+-- A worker saved before 041 has a name but no gender: go by their first
+-- name, or roll one if it's not in either list.
+function TheContractorStaff.guessGender(name)
+    local firstName = string.match(name or "", "^(%S+)")
+    for gender, firstNames in pairs(TheContractorStaff.FIRST_NAMES) do
+        for _, candidate in ipairs(firstNames) do
+            if candidate == firstName then
+                return gender
+            end
+        end
+    end
+    return TCWorkerAppearance.rollGender()
 end
 
 function TheContractorStaff.formatTierCapability(tierCapability)
@@ -309,7 +331,8 @@ function TheContractorStaff:addCandidateToPool()
     local workSpeed = TheContractorStaff.rollWorkSpeed()
     local tierCapability = TheContractorStaff.rollTierCapability()
     local salary = TheContractorStaff.getSalary(workSpeed, tierCapability)
-    local name = TheContractorStaff.generateName()
+    local gender = TCWorkerAppearance.rollGender()
+    local name = TheContractorStaff.generateName(gender)
     local age = TheContractorStaff.rollAge()
     local growthPotential = TheContractorStaff.rollGrowthPotential(age)
     local birthPeriod = TheContractorStaff.rollBirthPeriod()
@@ -317,6 +340,8 @@ function TheContractorStaff:addCandidateToPool()
 
     local candidate = TheContractorWorker.new(id, nil, name, workSpeed, tierCapability, salary, age,
         growthPotential, birthPeriod, sicknessPropensity)
+    candidate.gender = gender
+    candidate.appearance = TCWorkerAppearance.roll(gender)
     self:applyCandidateAdded(candidate)
 
     if g_server ~= nil then
@@ -1049,6 +1074,9 @@ function TheContractorStaff.writeWorker(streamId, worker)
     streamWriteFloat32(streamId, worker.holidayAllowance)
     streamWriteInt32(streamId, worker.holidayStartDay or 0)
     streamWriteInt32(streamId, worker.holidayDays)
+    -- 041: every machine builds the cab look itself (TCWorkerAppearance).
+    streamWriteString(streamId, worker.gender)
+    TCWorkerAppearance.writeStream(streamId, worker.appearance)
 
     for _, tier in ipairs(TheContractorWorker.TIERS) do
         local rating = worker.tierCapability[tier]
@@ -1074,6 +1102,8 @@ function TheContractorStaff.readWorker(streamId)
     local holidayAllowance = streamReadFloat32(streamId)
     local holidayStartDay = streamReadInt32(streamId)
     local holidayDays = streamReadInt32(streamId)
+    local gender = streamReadString(streamId)
+    local appearance = TCWorkerAppearance.readStream(streamId)
 
     local tierCapability = {}
     for _, tier in ipairs(TheContractorWorker.TIERS) do
@@ -1084,6 +1114,8 @@ function TheContractorStaff.readWorker(streamId)
 
     local worker = TheContractorWorker.new(id, farmId, name, workSpeed, tierCapability, salary, age)
     worker.status = status
+    worker.gender = gender
+    worker.appearance = appearance
     if retiresAtPeriod > 0 then
         worker.retiresAtPeriod = retiresAtPeriod
     end
@@ -1106,6 +1138,8 @@ function TheContractorStaff.writeWorkerXML(xmlFile, key, worker)
     setXMLInt(xmlFile, key .. "#growthPotential", worker.growthPotential)
     setXMLInt(xmlFile, key .. "#birthPeriod", worker.birthPeriod)
     setXMLFloat(xmlFile, key .. "#sicknessPropensity", worker.sicknessPropensity)
+    setXMLString(xmlFile, key .. "#gender", worker.gender)
+    TCWorkerAppearance.writeXML(xmlFile, key .. ".appearance", worker.appearance)
     if worker.status == TheContractorWorker.STATUS.SICK then
         setXMLInt(xmlFile, key .. "#sickDaysRemaining", worker.sickDaysRemaining)
     end
@@ -1170,6 +1204,14 @@ function TheContractorStaff.readWorkerXML(xmlFile, key, farmId)
     local worker = TheContractorWorker.new(id, farmId, name, workSpeed, tierCapability, salary, age,
         growthPotential, birthPeriod, sicknessPropensity)
     worker.status = Utils.getNoNil(getXMLString(xmlFile, key .. "#status"), worker.status)
+    -- 041: a worker saved before 041 gets a gender from their name and a new
+    -- look, as does one whose saved look can't be rebuilt any more.
+    worker.gender = getXMLString(xmlFile, key .. "#gender") or TheContractorStaff.guessGender(name)
+    worker.appearance = TCWorkerAppearance.readXML(xmlFile, key .. ".appearance")
+    if TCWorkerAppearance.needsReroll(worker) then
+        worker.appearance = TCWorkerAppearance.roll(worker.gender)
+        worker.playerStyle = nil
+    end
     if worker.status == TheContractorWorker.STATUS.SICK then
         worker.sickDaysRemaining = math.max(1, getXMLInt(xmlFile, key .. "#sickDaysRemaining") or 1)
     end

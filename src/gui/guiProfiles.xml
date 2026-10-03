@@ -90,4 +90,13 @@
         <textAlignment value="left" />
         <textColor value="$preset_colorWhite_50" />
     </Profile>
+
+    <!-- Staff tab worker portrait (042). No filename: TCWorkerPortrait loads
+         the scene itself, by full mod path. cameraNode indexes
+         workerPortrait.i3d (root TransformGroup's second child). -->
+    <Profile name="tc_workerPortrait" extends="baseReference" with="anchorTopLeft">
+        <size value="260px 320px"/>
+        <cameraNode value="0|1"/>
+        <superSamplingFactor value="2"/>
+    </Profile>
 </GUIProfiles>
