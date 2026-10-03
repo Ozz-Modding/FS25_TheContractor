@@ -24,7 +24,9 @@
 
             <SmoothList id="workerList" profile="tc_driverPickerList" position="0px -150px" size="640px 288px">
                 <ListItem profile="tc_tableListItem">
-                    <Text profile="tc_listRowCellLeft" position="10px 0px" size="300px 32px" name="name"/>
+                    <RoundCorner profile="tc_tableRowSurface"/>
+                    <Bitmap profile="tc_tableRowAccent"/>
+                    <Text profile="tc_listRowCellLeft" position="14px 0px" size="296px 32px" name="name"/>
                     <Text profile="tc_listRowCellLeft" position="320px 0px" size="100px 32px" name="workSpeed"/>
                     <Text profile="tc_listRowCellLeft" position="430px 0px" size="200px 32px" name="tier"/>
                 </ListItem>
