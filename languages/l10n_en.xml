@@ -6,13 +6,71 @@
 		<text name="tc_header_calendar" text="Calendar"/>
 		<text name="tc_header_staff" text="Staff"/>
 		<text name="tc_header_overview" text="Overview"/>
+		<text name="tc_overview_companyHeading" text="Company"/>
+		<text name="tc_overview_businessHeading" text="Business"/>
+		<text name="tc_inbox_negotiationHeading" text="Negotiation"/>
+		<text name="tc_detail_nextRank" text="Next rank"/>
+		<text name="tc_detail_advertising" text="Advertising"/>
+		<text name="tc_detail_salaryBill" text="Salary bill"/>
+		<text name="tc_detail_lastJob" text="Last job"/>
+		<text name="tc_detail_field" text="Field"/>
+		<text name="tc_detail_dueBy" text="Due by end of"/>
+		<text name="tc_detail_skill" text="Required skill"/>
+		<text name="tc_detail_price" text="Offered price"/>
+		<text name="tc_detail_crew" text="Crew"/>
+		<text name="tc_detail_deliverTo" text="Deliver to"/>
+		<text name="tc_detail_supplies" text="Supplies"/>
+		<text name="tc_inbox_equipmentHeading" text="Equipment needed"/>
+		<text name="tc_inbox_fieldValue" text="%s (%s)"/>
+		<text name="tc_inbox_skillValue" text="%d / 10 in the equipment's size class"/>
+		<text name="tc_inbox_crewOne" text="1 worker, or yourself"/>
+		<text name="tc_inbox_crewHaul" text="2 workers (one harvesting, one hauling), or haul it yourself"/>
+		<text name="tc_inbox_crewPlayerOnly" text="Yourself only - workers can't do this job"/>
+		<text name="tc_inbox_suppliesInStock" text="In stock"/>
+		<text name="tc_inbox_suppliesNone" text="None"/>
+		<text name="tc_inbox_suppliesNeeded" text="Needs %s - the job waits until you have some"/>
+		<text name="tc_inbox_equipmentStatusOwned" text="Owned"/>
+		<text name="tc_inbox_equipmentStatusBusy" text="Busy"/>
+		<text name="tc_inbox_equipmentStatusMissing" text="Missing"/>
+		<text name="tc_equipment_need_cutter" text="Header or harvester for %s"/>
+		<text name="tc_equipment_need_harvester" text="Harvester"/>
+		<text name="tc_equipment_need_cutterMismatch" text="Header for %s that fits the harvester"/>
+		<text name="tc_equipment_need_tractor" text="Tractor"/>
+		<text name="tc_equipment_need_seedTank" text="Seed tank (the seeder has no hopper of its own)"/>
+		<text name="tc_equipment_need_seedTankHitch" text="Seed tank that fits the tractor"/>
+		<text name="tc_equipment_need_haulTractor" text="Tractor for hauling"/>
+		<text name="tc_equipment_need_trailer" text="Trailer that takes %s"/>
+		<text name="tc_equipment_need_trailerHitch" text="Trailer that hitches to the haulage tractor"/>
+		<text name="tc_equipment_need_haulageSuffix" text="%s (if a worker hauls)"/>
+		<text name="tc_equipment_need_implement_cultivate" text="Cultivator"/>
+		<text name="tc_equipment_need_implement_sow" text="Seeder or planter"/>
+		<text name="tc_equipment_need_implement_plow" text="Plow"/>
+		<text name="tc_equipment_need_implement_mow" text="Mower"/>
+		<text name="tc_equipment_need_implement_tedder" text="Tedder"/>
+		<text name="tc_equipment_need_implement_bale" text="Baler"/>
+		<text name="tc_equipment_need_implement_baleWrap" text="Bale wrapper"/>
+		<text name="tc_equipment_need_implement_fertilize" text="Fertilizer spreader, sprayer or manure spreader"/>
+		<text name="tc_equipment_need_implement_herbicide" text="Sprayer that takes herbicide"/>
+		<text name="tc_equipment_need_implement_weed" text="Weeder"/>
+		<text name="tc_equipment_need_implement_hoe" text="Hoe"/>
+		<text name="tc_equipment_need_implement_stonePick" text="Stone picker"/>
+		<text name="tc_detail_age" text="Age"/>
+		<text name="tc_detail_workSpeed" text="Work speed"/>
+		<text name="tc_detail_tiers" text="Job sizes"/>
+		<text name="tc_detail_salary" text="Salary"/>
+		<text name="tc_detail_status" text="Status"/>
+		<text name="tc_detail_currentJob" text="Current job"/>
+		<text name="tc_detail_retiring" text="Retiring"/>
+		<text name="tc_detail_holidayLeft" text="Holiday left"/>
+		<text name="tc_detail_holiday" text="Holiday"/>
+		<text name="tc_staff_tier_small" text="Small"/>
+		<text name="tc_staff_tier_medium" text="Medium"/>
+		<text name="tc_staff_tier_large" text="Large"/>
 		<text name="tc_placeholder_locked" text="You haven't started a contracting company on this farm yet. Head to the Overview tab to create one."/>
 		<text name="tc_overview_noCompany" text="You haven't started a contracting company on this farm yet. Use the button below to create one."/>
 		<text name="tc_overview_rankMax" text="Max rank"/>
-		<text name="tc_overview_nextRank" text="Next Rank: %s"/>
 		<text name="tc_overview_nextRankNone" text="N/A"/>
 		<text name="tc_overview_noCompletedJobs" text="No completed jobs yet."/>
-		<text name="tc_overview_lastCompletedJob" text="Last job: %s"/>
 		<text name="tc_summary_notification" text="Job complete: %s"/>
 		<text name="tc_summary_line" text="%s on Field %s, %s, fuel %s (%.0f l), quality %d%%"/>
 		<text name="tc_summary_duration" text="%dh %02dm"/>
@@ -33,9 +91,8 @@
 		<text name="tc_reputationTier_regionalContractor" text="Regional Contractor"/>
 		<text name="tc_reputationTier_renownedContractor" text="Renowned Contractor"/>
 		<text name="tc_reputationTier_prestigiousContractor" text="Prestigious Contractor"/>
-		<text name="tc_advertising_heading" text="Advertising"/>
-		<text name="tc_advertising_none" text="No active advertising."/>
-		<text name="tc_advertising_active" text="Active: %s (%d days remaining)"/>
+		<text name="tc_advertising_none" text="None"/>
+		<text name="tc_advertising_active" text="%s - %d days left"/>
 		<text name="tc_advertising_buyButton" text="Buy Advertising"/>
 		<text name="tc_advertising_localNewspaper" text="Local Newspaper"/>
 		<text name="tc_advertising_regionalMagazine" text="Regional Magazine"/>
@@ -79,15 +136,6 @@
 		<text name="tc_inbox_columnEquipment" text="Equip."/>
 		<text name="tc_inbox_acceptButton" text="Accept"/>
 		<text name="tc_inbox_declineButton" text="Decline"/>
-		<text name="tc_inbox_detailField" text="Field: %s"/>
-		<text name="tc_inbox_detailTargetDate" text="Due by end of: %s"/>
-		<text name="tc_inbox_detailSkill" text="Required skill level: %d"/>
-		<text name="tc_inbox_detailPrice" text="Offered price: %s"/>
-		<text name="tc_inbox_equipmentAvailable" text="You own the equipment needed for this job."/>
-		<text name="tc_inbox_equipmentMissing" text="You don't currently own: %s."/>
-		<text name="tc_inbox_detailHaulage" text="Harvest &amp; haul: the crop goes to %s. Needs two workers - one harvesting, one hauling - or you go and haul it yourself."/>
-		<text name="tc_inbox_detailSupplies" text="Supplies in stock: %s."/>
-		<text name="tc_inbox_detailSuppliesNone" text="Needs %s - you have none in stock. The job will wait until you do."/>
 		<text name="tc_inbox_equipmentYes" text="Yes"/>
 		<text name="tc_inbox_equipmentNo" text="No"/>
 		<text name="tc_inbox_counterButton" text="Counter Offer"/>
@@ -152,12 +200,8 @@
 		<text name="tc_staff_status_assigned" text="Assigned"/>
 		<text name="tc_staff_status_cooldown" text="Cooldown"/>
 		<text name="tc_staff_status_sick" text="Off sick"/>
-		<text name="tc_staff_detailAge" text="Age: %d"/>
-		<text name="tc_staff_detailWorkSpeed" text="Work speed: %d/10"/>
-		<text name="tc_staff_detailTier" text="Tier capability: %s"/>
-		<text name="tc_staff_detailStatus" text="Status: %s"/>
-		<text name="tc_staff_detailSalary" text="Salary: %s per period"/>
-		<text name="tc_staff_detailJob" text="Current job: %s"/>
+		<text name="tc_staff_detailWorkSpeed" text="%d / 10"/>
+		<text name="tc_staff_detailSalary" text="%s per period"/>
 		<text name="tc_staff_detailJobNone" text="None"/>
 		<text name="tc_growth_improved" text="%s improved: %s %d to %d"/>
 		<text name="tc_growth_certified" text="%s is now certified on %s"/>
@@ -170,7 +214,7 @@
 		<text name="tc_staff_jobLine" text="%s (Field %s)"/>
 		<text name="tc_staff_hireConfirm" text="Hire %s for %s per period? The salary is charged at the start of every period while they're on your roster. The first period is paid now."/>
 		<text name="tc_staff_hireCannotAfford" text="You can't afford this candidate's first period of salary right now."/>
-		<text name="tc_staff_salaryBill" text="Salary bill: %s per period (%d workers)"/>
+		<text name="tc_staff_salaryBill" text="%s per period (%d workers)"/>
 		<text name="tc_staff_releaseConfirm" text="Release %s from your roster? This cannot be undone."/>
 		<text name="tc_staff_status_driving" text="Driving"/>
 		<text name="tc_staff_drivingLine" text="Driving %s"/>
@@ -260,13 +304,13 @@
 		<text name="tc_retirement_notice" text="%s retires at the start of %s."/>
 		<text name="tc_retirement_announced" text="%s has handed in their notice and will retire at the start of %s"/>
 		<text name="tc_retirement_retired" text="%s has retired and left your roster"/>
-		<text name="tc_staff_detailRetiring" text="Retiring: start of %s (%d months)"/>
-		<text name="tc_staff_detailRetiringNextMonth" text="Retiring: start of %s (next month)"/>
-		<text name="tc_staff_detailRetiringDue" text="Retiring as soon as they're back"/>
+		<text name="tc_staff_detailRetiring" text="Start of %s (%d months)"/>
+		<text name="tc_staff_detailRetiringNextMonth" text="Start of %s (next month)"/>
+		<text name="tc_staff_detailRetiringDue" text="As soon as they're back"/>
 		<text name="tc_staff_status_holiday" text="Holiday"/>
-		<text name="tc_staff_detailHolidayLeft" text="Holiday left this year: %d day(s)"/>
-		<text name="tc_staff_detailHolidayBooked" text="Holiday booked: %s"/>
-		<text name="tc_staff_detailHolidayNow" text="On holiday: %s"/>
+		<text name="tc_staff_detailHolidayLeft" text="%d day(s) this year"/>
+		<text name="tc_staff_detailHolidayBooked" text="Booked: %s"/>
+		<text name="tc_staff_detailHolidayNow" text="On holiday now: %s"/>
 		<text name="tc_holiday_booked" text="%s has booked a holiday: %s"/>
 		<text name="tc_holiday_cancelled" text="%s's holiday was cancelled because the days per month setting changed. They'll book another."/>
 		<text name="tc_holiday_started" text="%s is on holiday until %s"/>

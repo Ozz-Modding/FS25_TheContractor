@@ -87,6 +87,72 @@ end
 -- Also used by TCDriverPickerDialog's worker list (037).
 MenuContractor.formatTierListCell = formatTierListCell
 
+-- Status chips (043): the fill for each tone. Deep, muted fills under a
+-- white label, after FS25_AdvancedDamageSystem's value badges — they replace
+-- the old coloured status text, which read poorly on the grey rows.
+MenuContractor.CHIP_COLORS = {
+    good = { 0.12, 0.36, 0.08, 1 },
+    info = { 0.08, 0.24, 0.40, 1 },
+    warn = { 0.45, 0.30, 0.03, 1 },
+    bad = { 0.45, 0.09, 0.06, 1 },
+    neutral = { 0.17, 0.17, 0.18, 1 },
+}
+
+-- Shows text on a chip (a RoundCorner plus the Text over it) in the given
+-- tone, or hides the chip for nil/"". The chip profiles have no per-state
+-- colours, so setting .color covers selected/highlighted rows too.
+local function setChip(chip, chipText, text, tone)
+    local visible = text ~= nil and text ~= ""
+    chip:setVisible(visible)
+    chipText:setVisible(visible)
+    if visible then
+        chip.color = MenuContractor.CHIP_COLORS[tone] or MenuContractor.CHIP_COLORS.neutral
+        chipText:setText(text)
+    end
+end
+
+-- Allocation pickers' tick box (replaces the old "[X] " / "[ ] " prefix):
+-- bright green when picked, an empty grey square when not.
+local CHECKBOX_ON_COLOR = { 0.30, 0.62, 0.06, 1 }
+local CHECKBOX_OFF_COLOR = { 0.22, 0.22, 0.23, 1 }
+local function setAllocationCheckBox(checkBox, checked)
+    checkBox.color = checked and CHECKBOX_ON_COLOR or CHECKBOX_OFF_COLOR
+end
+
+local STATUS_CHIP_TONES = {
+    idle = "neutral",
+    assigned = "good",
+    driving = "info",
+    cooldown = "neutral",
+    sick = "bad",
+    holiday = "info",
+}
+
+local function getWorkerStatusTone(status)
+    return STATUS_CHIP_TONES[status] or "neutral"
+end
+
+-- Tier ratings are 1-10, nil when the worker can't do that size at all.
+local function getTierChipTone(rating)
+    if rating == nil then
+        return "neutral"
+    elseif rating >= 7 then
+        return "good"
+    elseif rating >= 4 then
+        return "info"
+    end
+    return "warn"
+end
+
+local function getQualityChipTone(qualityScore)
+    if qualityScore >= 80 then
+        return "good"
+    elseif qualityScore >= 50 then
+        return "warn"
+    end
+    return "bad"
+end
+
 -- Calendar (015): jobs whose state means "on the calendar, worth showing
 -- against a date" — accepted/allocated/in_progress (still committed to it)
 -- plus missed (committed to it and then blew the deadline — worth keeping
@@ -491,8 +557,7 @@ function MenuContractor:refreshCompanyState()
     local hasCompany = self:hasCompany()
 
     self.textNoCompany:setVisible(not hasCompany)
-    self.textCompanyName:setVisible(hasCompany)
-    self.nextRankText:setVisible(hasCompany)
+    self.overviewContent:setVisible(hasCompany)
 
     if not hasCompany then
         self.inboxListContainer:setVisible(false)
@@ -517,16 +582,6 @@ function MenuContractor:refreshCompanyState()
         self.selectedCandidateId = nil
     end
 
-    self.textAdvertisingHeading:setVisible(hasCompany)
-    self.textAdvertisingStatus:setVisible(hasCompany)
-    self.textLastCompletedJob:setVisible(hasCompany)
-    self.textSalaryBill:setVisible(hasCompany)
-    self.progressBox:setVisible(hasCompany)
-    self.textCurrentJobsHeading:setVisible(hasCompany)
-    self.textCurrentJobs:setVisible(hasCompany)
-    self.textNoticesHeading:setVisible(hasCompany)
-    self.textNotices:setVisible(hasCompany)
-
     if hasCompany then
         local farmId = g_currentMission:getFarmId()
         local tc = g_currentMission.TheContractor
@@ -538,12 +593,10 @@ function MenuContractor:refreshCompanyState()
 
         if progress.nextTier ~= nil then
             self.progressText:setText(string.format("%d/%d", progress.score, progress.nextTier.minScore))
-            self.nextRankText:setText(string.format(g_i18n:getText("tc_overview_nextRank"),
-                g_i18n:getText("tc_reputationTier_" .. progress.nextTier.key)))
+            self.nextRankText:setText(g_i18n:getText("tc_reputationTier_" .. progress.nextTier.key))
         else
             self.progressText:setText(g_i18n:getText("tc_overview_rankMax"))
-            self.nextRankText:setText(string.format(g_i18n:getText("tc_overview_nextRank"),
-                g_i18n:getText("tc_overview_nextRankNone")))
+            self.nextRankText:setText(g_i18n:getText("tc_overview_nextRankNone"))
         end
 
         local fullWidth = self.progressBarBg.size[1] - self.progressBar.margin[1] * 2
@@ -559,6 +612,11 @@ function MenuContractor:refreshCompanyState()
         self:refreshSalaryBillState(farmId, tc.Staff)
         self:refreshNoticesState(farmId, tc.Notices)
         self:refreshStaffState(farmId, tc.Staff, tc.Jobs)
+
+        -- The row BoxLayouts only place their rows when told to: the
+        -- layout run at GUI setup leaves them unplaced (seen in-game, 043).
+        self.overviewCompanyRows:invalidateLayout()
+        self.overviewBusinessRows:invalidateLayout()
     end
 
     self.placeholderInbox:setVisible(not hasCompany)
@@ -578,8 +636,7 @@ function MenuContractor:refreshLastCompletedJobState(farmId, jobs)
     if job == nil then
         self.textLastCompletedJob:setText(g_i18n:getText("tc_overview_noCompletedJobs"))
     else
-        self.textLastCompletedJob:setText(string.format(g_i18n:getText("tc_overview_lastCompletedJob"),
-            job:getSummaryText()))
+        self.textLastCompletedJob:setText(job:getSummaryText())
     end
 end
 
@@ -763,6 +820,8 @@ function MenuContractor:populateStaffCell(index, cell)
         cell:getAttribute("workSpeed"):setText(tostring(candidate.workSpeed))
         cell:getAttribute("tier"):setText(formatTierListCell(candidate.tierCapability))
         cell:getAttribute("col4"):setText(g_i18n:formatMoney(candidate.salary, 0, true, true))
+        cell:getAttribute("col4"):setVisible(true)
+        setChip(cell:getAttribute("statusChip"), cell:getAttribute("statusChipText"), nil)
         cell:getAttribute("col5"):setText("")
         return
     end
@@ -778,7 +837,11 @@ function MenuContractor:populateStaffCell(index, cell)
     cell:getAttribute("name"):setText(worker.name)
     cell:getAttribute("workSpeed"):setText(tostring(worker.workSpeed))
     cell:getAttribute("tier"):setText(formatTierListCell(worker.tierCapability))
-    cell:getAttribute("col4"):setText(g_i18n:getText("tc_staff_status_" .. worker.status))
+    -- Roster view: column 4 is the status chip, the salary text is the
+    -- candidates view's.
+    cell:getAttribute("col4"):setVisible(false)
+    setChip(cell:getAttribute("statusChip"), cell:getAttribute("statusChipText"),
+        g_i18n:getText("tc_staff_status_" .. worker.status), getWorkerStatusTone(worker.status))
     cell:getAttribute("col5"):setText(jobLine or "")
 end
 
@@ -793,36 +856,47 @@ function MenuContractor:updateStaffDetails()
     end
 
     self.staffDetailTitle:setText(worker.name)
-    self.staffDetailAge:setText(string.format(g_i18n:getText("tc_staff_detailAge"), worker.age))
+    self.staffDetailAge:setText(tostring(worker.age))
     self.staffDetailWorkSpeed:setText(string.format(g_i18n:getText("tc_staff_detailWorkSpeed"), worker.workSpeed))
-    self.staffDetailTier:setText(string.format(g_i18n:getText("tc_staff_detailTier"),
-        TheContractorStaff.formatTierCapability(worker.tierCapability)))
-
     self.staffDetailSalary:setText(string.format(g_i18n:getText("tc_staff_detailSalary"),
         g_i18n:formatMoney(worker.salary, 0, true, true)))
 
-    self.staffDetailRetirement:setText(self.staffView == "roster" and self:getRetirementLine(worker) or "")
-    self.staffDetailHoliday:setText(self.staffView == "roster" and self:getHolidayLine(worker) or "")
+    -- One chip per tier: "Small 7", "Medium -", ...
+    for i, tier in ipairs(TheContractorWorker.TIERS) do
+        local rating = worker.tierCapability[tier]
+        setChip(self["staffDetailTierChip" .. i], self["staffDetailTierChipText" .. i],
+            string.format("%s %s", g_i18n:getText("tc_staff_tier_" .. tier), rating ~= nil and tostring(rating) or "-"),
+            getTierChipTone(rating))
+    end
 
-    if self.staffView == "candidates" then
-        self.staffDetailStatus:setText("")
-        self.staffDetailJob:setText("")
-    else
-        self.staffDetailStatus:setText(string.format(g_i18n:getText("tc_staff_detailStatus"),
-            g_i18n:getText("tc_staff_status_" .. worker.status)))
+    -- Roster-only rows; the BoxLayout closes up around the hidden ones.
+    local isRoster = self.staffView == "roster"
+    local retirementText = isRoster and self:getRetirementLine(worker) or nil
+    self.staffRowStatus:setVisible(isRoster)
+    self.staffRowJob:setVisible(isRoster)
+    self.staffRowRetirement:setVisible(retirementText ~= nil)
+    self.staffRowHolidayLeft:setVisible(isRoster)
+    self.staffRowHoliday:setVisible(isRoster and worker:hasHolidayBooked())
+
+    if isRoster then
+        setChip(self.staffDetailStatusChip, self.staffDetailStatusChipText,
+            g_i18n:getText("tc_staff_status_" .. worker.status), getWorkerStatusTone(worker.status))
 
         local farmId = g_currentMission:getFarmId()
         local jobLine = self:getAssignedJobLine(farmId, g_currentMission.TheContractor.Jobs, worker.id)
-        self.staffDetailJob:setText(string.format(g_i18n:getText("tc_staff_detailJob"),
-            jobLine or g_i18n:getText("tc_staff_detailJobNone")))
+        self.staffDetailJob:setText(jobLine or g_i18n:getText("tc_staff_detailJobNone"))
+        self.staffDetailRetirement:setText(retirementText or "")
+        self:updateHolidayDetails(worker)
     end
+
+    self.staffDetailRows:invalidateLayout()
 end
 
 -- 039: when a worker who's handed in their notice leaves, counted from
--- today. "" if they aren't retiring.
+-- today. nil if they aren't retiring.
 function MenuContractor:getRetirementLine(worker)
     if not worker:isRetiring() then
-        return ""
+        return nil
     end
     if worker:isRetirementDue() then
         return g_i18n:getText("tc_staff_detailRetiringDue")
@@ -837,23 +911,20 @@ function MenuContractor:getRetirementLine(worker)
 end
 
 -- 040: holiday days left this year at the days per period in force now,
--- and the booked holiday, if any.
-function MenuContractor:getHolidayLine(worker)
+-- and the booked holiday, if any (its row is hidden otherwise, see
+-- updateStaffDetails).
+function MenuContractor:updateHolidayDetails(worker)
     local environment = g_currentMission.environment
-    local lines = {
-        string.format(g_i18n:getText("tc_staff_detailHolidayLeft"),
-            TheContractorHolidays.getAllowanceDays(worker.holidayAllowance, environment.daysPerPeriod)),
-    }
+    self.staffDetailHolidayLeft:setText(string.format(g_i18n:getText("tc_staff_detailHolidayLeft"),
+        TheContractorHolidays.getAllowanceDays(worker.holidayAllowance, environment.daysPerPeriod)))
 
     if worker:hasHolidayBooked() then
         local dates = TCCalendar.formatDayRange(math.max(worker.holidayStartDay, environment.currentMonotonicDay),
             worker:getHolidayEndDay())
         local key = worker.status == TheContractorWorker.STATUS.HOLIDAY and "tc_staff_detailHolidayNow" or
             "tc_staff_detailHolidayBooked"
-        table.insert(lines, string.format(g_i18n:getText(key), dates))
+        self.staffDetailHoliday:setText(string.format(g_i18n:getText(key), dates))
     end
-
-    return table.concat(lines, "\n")
 end
 
 -- The only way to switch between Roster and Candidates — same "in-page
@@ -989,45 +1060,44 @@ function MenuContractor:updateInboxDetails()
     self.inboxDetailTitle:setText(job:getDisplayTitle())
 
     local field = g_fieldManager:getFieldById(job.fieldId)
-    self.inboxDetailField:setText(string.format(g_i18n:getText("tc_inbox_detailField"),
-        field ~= nil and field:getName() or tostring(job.fieldId)))
-
-    self.inboxDetailTargetDate:setText(string.format(g_i18n:getText("tc_inbox_detailTargetDate"),
-        formatTargetDate(job.targetPeriod, job.targetDayInPeriod)))
-
-    self.inboxDetailSkill:setText(string.format(g_i18n:getText("tc_inbox_detailSkill"), job.requiredSkillLevel))
-
-    self.inboxDetailPrice:setText(string.format(g_i18n:getText("tc_inbox_detailPrice"),
-        g_i18n:formatMoney(job.price, 0, true, true)))
-
-    -- Live against the current fleet rather than job.equipmentAvailable
-    -- (a snapshot from generation time), so buying the missing piece shows
-    -- up here straight away - and names exactly what's missing.
-    local missingOwned = g_currentMission.TheContractor.Allocation:getMissingEquipment(g_currentMission:getFarmId(), job)
-    if #missingOwned == 0 then
-        self.inboxDetailEquipment:setText(g_i18n:getText("tc_inbox_equipmentAvailable"))
-    else
-        self.inboxDetailEquipment:setText(string.format(g_i18n:getText("tc_inbox_equipmentMissing"),
-            TCEquipmentClass.getMissingEquipmentText(missingOwned, job.jobType, job:getCropTitle())))
+    local fieldText = field ~= nil and field:getName() or tostring(job.fieldId)
+    if field ~= nil and field:getAreaHa() ~= nil then
+        fieldText = string.format(g_i18n:getText("tc_inbox_fieldValue"), fieldText,
+            g_i18n:formatArea(field:getAreaHa(), 2))
     end
+    self.inboxDetailField:setText(fieldText)
+    self.inboxDetailTargetDate:setText(formatTargetDate(job.targetPeriod, job.targetDayInPeriod))
+    self.inboxDetailPrice:setText(g_i18n:formatMoney(job.price, 0, true, true))
+    self.inboxDetailCrew:setText(self:getInboxCrewText(job))
+    self.inboxDetailSkill:setText(string.format(g_i18n:getText("tc_inbox_skillValue"), job.requiredSkillLevel))
 
     -- Harvest & haul (035): where the crop has to go.
-    if job.includesHaulage then
-        self.inboxDetailHaulage:setText(string.format(g_i18n:getText("tc_inbox_detailHaulage"),
-            job.deliveryStationName or "?"))
-    else
-        self.inboxDetailHaulage:setText("")
-    end
+    self.inboxRowDelivery:setVisible(job.includesHaulage)
+    self.inboxDetailDelivery:setText(job.deliveryStationName or "?")
 
-    -- Supplies (032): what the job uses up and how much the farm has in -
-    -- never shown alongside haulage (harvest jobs use no supplies), so it
-    -- shares that line.
-    self.inboxDetailSupplies:setText(self:getSuppliesText(job) or "")
+    self:updateInboxSupplies(job)
+    self:updateInboxEquipment(job)
 
     local history = self.negotiationHistory[job.id]
     local latestMessage = history ~= nil and history[#history] or nil
     self.inboxNegotiationLog:setText(latestMessage or "")
-    self.inboxNegotiationLog:setVisible(latestMessage ~= nil)
+    self.inboxNegotiationBox:setVisible(latestMessage ~= nil)
+
+    self.inboxDetailRows:invalidateLayout()
+end
+
+-- Who can do the job: one worker (or the player), two for harvest & haul
+-- (035) unless the player hauls, or the player alone for work the AI
+-- helper can't do (032's playerOnly, bale wrapping).
+function MenuContractor:getInboxCrewText(job)
+    local jobDef = TheContractorJobGeneration.JOB_TYPES[job.jobType]
+    if jobDef ~= nil and jobDef.playerOnly then
+        return g_i18n:getText("tc_inbox_crewPlayerOnly")
+    end
+    if TheContractorAllocation.getRequiredWorkerCount(job) > 1 then
+        return g_i18n:getText("tc_inbox_crewHaul")
+    end
+    return g_i18n:getText("tc_inbox_crewOne")
 end
 
 -- Supplies (032): the products a job would draw from the farm's stock
@@ -1054,22 +1124,131 @@ local function joinSupplyTitles(entries)
     return table.concat(titles, g_i18n:getText("tc_supplies_or"))
 end
 
--- The Inbox's supplies line: what the farm's equipment for the job would
--- use and how much of it's in stock, or nil for a job that uses nothing.
-function MenuContractor:getSuppliesText(job)
-    local entries, anyInStock = getSupplyStock(job, TheContractorJobGeneration.getFarmVehicles(g_currentMission:getFarmId()))
+-- The Inbox's supplies row: what the farm's equipment for the job would
+-- use and how much of it's in stock; hidden for a job that uses nothing.
+function MenuContractor:updateInboxSupplies(job)
+    local entries, anyInStock = getSupplyStock(job,
+        TheContractorJobGeneration.getFarmVehicles(g_currentMission:getFarmId()))
+    self.inboxRowSupplies:setVisible(#entries > 0)
     if #entries == 0 then
-        return nil
+        return
     end
+
     if not anyInStock then
-        return string.format(g_i18n:getText("tc_inbox_detailSuppliesNone"), joinSupplyTitles(entries))
+        setChip(self.inboxDetailSuppliesChip, self.inboxDetailSuppliesChipText,
+            g_i18n:getText("tc_inbox_suppliesNone"), "warn")
+        self.inboxDetailSupplies:setText(string.format(g_i18n:getText("tc_inbox_suppliesNeeded"),
+            joinSupplyTitles(entries)))
+        return
     end
 
     local parts = {}
     for _, entry in ipairs(entries) do
         table.insert(parts, TCJobSupplies.formatAmount(entry.fillTypeIndex, entry.stock))
     end
-    return string.format(g_i18n:getText("tc_inbox_detailSupplies"), table.concat(parts, ", "))
+    setChip(self.inboxDetailSuppliesChip, self.inboxDetailSuppliesChipText,
+        g_i18n:getText("tc_inbox_suppliesInStock"), "good")
+    self.inboxDetailSupplies:setText(table.concat(parts, ", "))
+end
+
+-- inboxEquipRow1..N in MenuContractor.xml.
+MenuContractor.INBOX_EQUIPMENT_SLOTS = 6
+
+-- The equipment a job needs, as { key, isHaulage } in display order, keyed
+-- like TCEquipmentClass.getMissingEquipment/getMissingHaulageEquipment so
+-- each row can be checked off against those. The core pieces always show;
+-- the conditional ones (a tractor, a seed tank, a matching header, a
+-- trailer that hitches) only when they're actually needed - the missing
+-- lists name them when they're a problem, jobMayNeedTractor when the
+-- farm's own kit has to be towed.
+function MenuContractor:getInboxEquipmentRows(job, missingFree, haulageMissingFree)
+    local jobDef = TheContractorJobGeneration.JOB_TYPES[job.jobType]
+    local rows = {}
+    if jobDef == nil then
+        return rows
+    end
+
+    local function add(key, isHaulage)
+        for _, row in ipairs(rows) do
+            if row.key == key and row.isHaulage == isHaulage then
+                return
+            end
+        end
+        table.insert(rows, { key = key, isHaulage = isHaulage })
+    end
+
+    if jobDef.cropDependent then
+        add("cutter", false)
+        add("harvester", false)
+    else
+        add("implement", false)
+    end
+    for _, key in ipairs(missingFree) do
+        add(key, false)
+    end
+    if g_currentMission.TheContractor.Allocation:jobMayNeedTractor(g_currentMission:getFarmId(), job) then
+        add("tractor", false)
+    end
+
+    if job.includesHaulage then
+        add("haulTractor", true)
+        add("trailer", true)
+        for _, key in ipairs(haulageMissingFree) do
+            add(key, true)
+        end
+    end
+    return rows
+end
+
+-- Player-facing name of one equipment row, e.g. "Header or harvester for
+-- Canola", "Plow", "Trailer that takes Wheat (if a worker hauls)".
+local function getEquipmentNeedText(key, isHaulage, job)
+    local text
+    if key == "implement" then
+        text = g_i18n:getText("tc_equipment_need_implement_" .. job.jobType)
+    elseif key == "cutter" or key == "cutterMismatch" or key == "trailer" then
+        text = string.format(g_i18n:getText("tc_equipment_need_" .. key),
+            job:getCropTitle() or g_i18n:getText("tc_equipment_anyCrop"))
+    else
+        text = g_i18n:getText("tc_equipment_need_" .. key)
+    end
+    if isHaulage then
+        text = string.format(g_i18n:getText("tc_equipment_need_haulageSuffix"), text)
+    end
+    return text
+end
+
+-- One row per piece of equipment with an Owned / Busy (owned, but out on
+-- another job or in cooldown) / Missing chip - live against the current
+-- fleet rather than job.equipmentAvailable (a snapshot from generation
+-- time), so buying the missing piece shows up here straight away.
+function MenuContractor:updateInboxEquipment(job)
+    local farmId = g_currentMission:getFarmId()
+    local allocation = g_currentMission.TheContractor.Allocation
+    local missingOwned, missingFree = allocation:getMissingEquipment(farmId, job)
+    local haulageOwned, haulageFree = {}, {}
+    if job.includesHaulage then
+        haulageOwned, haulageFree = allocation:getMissingHaulageEquipment(farmId, job)
+    end
+
+    local rows = self:getInboxEquipmentRows(job, missingFree, haulageFree)
+    for i = 1, MenuContractor.INBOX_EQUIPMENT_SLOTS do
+        local row = rows[i]
+        self["inboxEquipRow" .. i]:setVisible(row ~= nil)
+        if row ~= nil then
+            local owned = row.isHaulage and haulageOwned or missingOwned
+            local free = row.isHaulage and haulageFree or missingFree
+            local chip, chipText = self["inboxEquipChip" .. i], self["inboxEquipChipText" .. i]
+            if table.hasElement(owned, row.key) then
+                setChip(chip, chipText, g_i18n:getText("tc_inbox_equipmentStatusMissing"), "bad")
+            elseif table.hasElement(free, row.key) then
+                setChip(chip, chipText, g_i18n:getText("tc_inbox_equipmentStatusBusy"), "warn")
+            else
+                setChip(chip, chipText, g_i18n:getText("tc_inbox_equipmentStatusOwned"), "good")
+            end
+            self["inboxEquipName" .. i]:setText(getEquipmentNeedText(row.key, row.isHaulage, job))
+        end
+    end
 end
 
 -- SmoothList dataSource/delegate, shared across inboxTable, calendarDayTable,
@@ -1134,14 +1313,12 @@ function MenuContractor:populateCellForItemInSection(list, section, index, cell)
 
     -- Live, same reasoning as updateInboxDetails.
     local jobDef = TheContractorJobGeneration.JOB_TYPES[job.jobType]
-    local equipmentCell = cell:getAttribute("equipment")
+    local chip, chipText = cell:getAttribute("equipmentChip"), cell:getAttribute("equipmentChipText")
     if jobDef == nil or g_currentMission.TheContractor.JobGeneration:canFulfill(g_currentMission:getFarmId(), jobDef,
             job:getFruitTypeIndex()) then
-        equipmentCell:setText(g_i18n:getText("tc_inbox_equipmentYes"))
-        equipmentCell:setTextColor(0.6, 1, 0.6, 1)
+        setChip(chip, chipText, g_i18n:getText("tc_inbox_equipmentYes"), "good")
     else
-        equipmentCell:setText(g_i18n:getText("tc_inbox_equipmentNo"))
-        equipmentCell:setTextColor(1, 0.45, 0.45, 1)
+        setChip(chip, chipText, g_i18n:getText("tc_inbox_equipmentNo"), "bad")
     end
 end
 
@@ -1393,7 +1570,13 @@ function MenuContractor:populateCompletedJobCell(index, cell)
     cell:getAttribute("field"):setText(field ~= nil and field:getName() or tostring(job.fieldId))
 
     cell:getAttribute("completed"):setText(formatCompletedAt(job.completedAt))
-    cell:getAttribute("quality"):setText(job.qualityScore ~= nil and string.format("%d%%", job.qualityScore) or "-")
+
+    local chip, chipText = cell:getAttribute("qualityChip"), cell:getAttribute("qualityChipText")
+    if job.qualityScore ~= nil then
+        setChip(chip, chipText, string.format("%d%%", job.qualityScore), getQualityChipTone(job.qualityScore))
+    else
+        setChip(chip, chipText, "-", "neutral")
+    end
 end
 
 -- Who did it: "You", or the worker(s) by name. A worker released since
@@ -1470,18 +1653,16 @@ function MenuContractor:populateCalendarDayCell(index, cell)
     -- already blew its deadline is a bigger deal than one still merely
     -- waiting on allocation, and they're mutually exclusive states anyway
     -- (see Job.lua's transition table) so a day is never both at once.
-    local statusCell = cell:getAttribute("status")
+    local chip, chipText = cell:getAttribute("statusChip"), cell:getAttribute("statusChipText")
     if #row.jobs == 0 then
-        statusCell:setText("")
+        setChip(chip, chipText, nil)
     elseif row.missedCount > 0 then
-        statusCell:setText(string.format(g_i18n:getText("tc_calendar_missedCount"), row.missedCount))
-        statusCell:setTextColor(1, 0.25, 0.25, 1)
+        setChip(chip, chipText, string.format(g_i18n:getText("tc_calendar_missedCount"), row.missedCount), "bad")
     elseif row.unallocatedCount > 0 then
-        statusCell:setText(string.format(g_i18n:getText("tc_calendar_unallocatedCount"), row.unallocatedCount))
-        statusCell:setTextColor(1, 0.45, 0.45, 1)
+        setChip(chip, chipText, string.format(g_i18n:getText("tc_calendar_unallocatedCount"), row.unallocatedCount),
+            "warn")
     else
-        statusCell:setText(g_i18n:getText("tc_calendar_allAllocated"))
-        statusCell:setTextColor(0.6, 1, 0.6, 1)
+        setChip(chip, chipText, g_i18n:getText("tc_calendar_allAllocated"), "good")
     end
 end
 
@@ -1504,41 +1685,32 @@ function MenuContractor:populateCalendarDayJobCell(index, cell)
     -- that appears whenever the selected job is still `accepted` (see
     -- getMenuButtonInfo/onClickOpenAllocation), not a button in this list.
     -- Missed (024, scoped down — see TheContractorJobs:missJob) is its own
-    -- distinct "Failed" label (a darker red than the unallocated warning —
-    -- TextElement has no runtime bold setter to lean on instead) rather than
-    -- folding into either bucket — it's neither waiting on allocation nor
-    -- successfully allocated, it's over and done with. A hired worker's job
-    -- then reads Allocated -> Travelling (Dispatch's transport wait) -> In
-    -- progress with the same live percentage the Overview's current-jobs
-    -- list shows.
+    -- distinct "Failed" chip rather than folding into either bucket — it's
+    -- neither waiting on allocation nor successfully allocated, it's over
+    -- and done with. A hired worker's job then reads Allocated (info) ->
+    -- Travelling (info, Dispatch's transport wait) -> In progress (good)
+    -- with the same live percentage the Overview's current-jobs list shows.
     -- On hold for supplies (032) beats every other working state: nothing
     -- moves until the player restocks (or empties the wrong product out).
-    local statusCell = cell:getAttribute("status")
+    local chip, chipText = cell:getAttribute("statusChip"), cell:getAttribute("statusChipText")
     if job.state == TheContractorJob.STATE.MISSED then
-        statusCell:setText(g_i18n:getText("tc_calendar_jobMissed"))
-        statusCell:setTextColor(1, 0.25, 0.25, 1)
+        setChip(chip, chipText, g_i18n:getText("tc_calendar_jobMissed"), "bad")
     elseif job:isWaitingForSupplies() and (job.state == TheContractorJob.STATE.ALLOCATED or
             job.state == TheContractorJob.STATE.IN_PROGRESS) then
-        statusCell:setText(job:getSupplyStatusText())
-        statusCell:setTextColor(1, 0.45, 0.45, 1)
+        setChip(chip, chipText, job:getSupplyStatusText(), "warn")
     elseif job.state == TheContractorJob.STATE.ACCEPTED then
-        statusCell:setText(g_i18n:getText("tc_calendar_jobUnallocated"))
-        statusCell:setTextColor(1, 0.45, 0.45, 1)
+        setChip(chip, chipText, g_i18n:getText("tc_calendar_jobUnallocated"), "warn")
     elseif job.state == TheContractorJob.STATE.IN_PROGRESS then
-        statusCell:setText(string.format(g_i18n:getText("tc_calendar_jobInProgress"),
-            math.floor(job.completionPercentage)))
-        statusCell:setTextColor(0.6, 1, 0.6, 1)
+        setChip(chip, chipText, string.format(g_i18n:getText("tc_calendar_jobInProgress"),
+            math.floor(job.completionPercentage)), "good")
     elseif job.isTravelling then
-        statusCell:setText(g_i18n:getText("tc_calendar_jobTravelling"))
-        statusCell:setTextColor(1, 0.85, 0.4, 1)
+        setChip(chip, chipText, g_i18n:getText("tc_calendar_jobTravelling"), "info")
     elseif job:needsPlayerDelivery() and job.requiredLiters > 0 and job.state == TheContractorJob.STATE.ALLOCATED then
         -- Player-driven haulage (035): cut and delivered, both.
-        statusCell:setText(string.format(g_i18n:getText("tc_calendar_jobDelivering"),
-            math.floor(job.completionPercentage), math.floor(100 * job.deliveredLiters / job.requiredLiters)))
-        statusCell:setTextColor(0.6, 1, 0.6, 1)
+        setChip(chip, chipText, string.format(g_i18n:getText("tc_calendar_jobDelivering"),
+            math.floor(job.completionPercentage), math.floor(100 * job.deliveredLiters / job.requiredLiters)), "good")
     else
-        statusCell:setText(g_i18n:getText("tc_calendar_jobAllocated"))
-        statusCell:setTextColor(0.6, 1, 0.6, 1)
+        setChip(chip, chipText, g_i18n:getText("tc_calendar_jobAllocated"), "info")
     end
 end
 
@@ -1755,7 +1927,8 @@ function MenuContractor:populateAllocationWorkerCell(index, cell)
     if row == nil then
         return
     end
-    cell:getAttribute("name"):setText((self:isAllocationWorkerRowSelected(row) and "[X] " or "[ ] ") .. row.label)
+    setAllocationCheckBox(cell:getAttribute("checkBox"), self:isAllocationWorkerRowSelected(row))
+    cell:getAttribute("name"):setText(row.label)
 end
 
 function MenuContractor:populateAllocationEquipmentCell(index, cell)
@@ -1764,8 +1937,8 @@ function MenuContractor:populateAllocationEquipmentCell(index, cell)
         return
     end
 
-    local checked = self.allocationSelectedEquipmentKeys[row.key] == true
-    cell:getAttribute("name"):setText((checked and "[X] " or "[ ] ") .. row.label)
+    setAllocationCheckBox(cell:getAttribute("checkBox"), self.allocationSelectedEquipmentKeys[row.key] == true)
+    cell:getAttribute("name"):setText(row.label)
     cell:getAttribute("kind"):setText(g_i18n:getText("tc_allocation_role_" .. row.role))
 end
 

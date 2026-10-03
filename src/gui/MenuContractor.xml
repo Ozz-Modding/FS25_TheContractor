@@ -1,4 +1,10 @@
 <?xml version="1.0" encoding="utf-8" standalone="no" ?>
+<!-- Layout (043): lists sit on the page as card rows (tc_tableRowSurface +
+     tc_tableRowAccent first in every ListItem); details and overview
+     sections sit in tc_panel cards with a green tc_sectionTitle, a
+     tc_divider, and label/value rows stacked by a tc_detailRows BoxLayout.
+     Status columns are chips (tc_rowChip/tc_chip), filled at runtime by
+     MenuContractor's setChip. Lists span x 40..616, panels x 680..1480. -->
 <GUI name="menuContractor">
     <GuiElement profile="fs25_menuContainer">
         <GuiElement profile="fs25_menuHeaderPanel">
@@ -24,116 +30,253 @@
         <ThreePartBitmap profile="fs25_lineSeparatorTopHighlighted" position="0px -57px"/>
         <MultiTextOption profile="fs25_subCategorySelectorTabbed" id="subCategoryPaging" position="0px -10px" onClick="updateSubCategoryPages"/>
 
+        <!-- Overview ======================================================= -->
         <GuiElement profile="fs25_subCategorySelectorTabbedContainer" id="subCategoryPages[1]">
-            <Text profile="tc_placeholderText" id="textNoCompany" text="$l10n_tc_overview_noCompany" position="40px -40px" width="900px"/>
+            <Text profile="tc_emptyStateText" id="textNoCompany" text="$l10n_tc_overview_noCompany" position="40px -250px" size="1440px 60px" textMaxNumLines="2"/>
 
-            <Text profile="tc_overviewHeading" id="textCompanyName" text="" position="40px -40px" width="900px"/>
+            <GuiElement id="overviewContent" position="0px 0px">
+                <!-- Company and reputation -->
+                <RoundCorner profile="tc_panel" position="30px -20px" size="800px 300px"/>
+                <Text profile="tc_sectionTitle" text="$l10n_tc_overview_companyHeading" position="54px -36px" size="752px 24px"/>
+                <Bitmap profile="tc_divider" position="54px -64px" size="752px 1px"/>
+                <Text profile="tc_panelHeading" id="textCompanyName" text="" position="54px -76px" size="752px 32px"/>
 
-            <GuiElement profile="fs25_contractsProgressBox" id="progressBox" position="40px -110px">
-                <Text profile="fs25_contractsContentTitle" id="rankTierText"/>
-                <Text profile="fs25_contractsContentValue" id="progressText"/>
-                <ThreePartBitmap profile="fs25_contractsProgressBarBg" id="progressBarBg">
-                    <ThreePartBitmap profile="fs25_contractsProgressBar" id="progressBar"/>
-                </ThreePartBitmap>
+                <GuiElement profile="tc_progressBox" id="progressBox" position="54px -122px">
+                    <Text profile="tc_progressTitle" id="rankTierText"/>
+                    <Text profile="tc_progressValue" id="progressText"/>
+                    <ThreePartBitmap profile="fs25_contractsProgressBarBg" id="progressBarBg" position="0px -34px">
+                        <ThreePartBitmap profile="fs25_contractsProgressBar" id="progressBar"/>
+                    </ThreePartBitmap>
+                </GuiElement>
+
+                <BoxLayout profile="tc_detailRows" id="overviewCompanyRows" position="54px -212px" size="752px 34px">
+                    <GuiElement profile="tc_detailRow" size="752px 34px">
+                        <Text profile="tc_detailLabel" text="$l10n_tc_detail_nextRank" position="0px 0px"/>
+                        <Text profile="tc_detailValue" id="nextRankText" text="" position="220px 0px" size="532px 34px"/>
+                    </GuiElement>
+                </BoxLayout>
+
+                <!-- Business: advertising, wages, last job -->
+                <RoundCorner profile="tc_panel" position="30px -340px" size="800px 290px"/>
+                <Text profile="tc_sectionTitle" text="$l10n_tc_overview_businessHeading" position="54px -356px" size="752px 24px"/>
+                <Bitmap profile="tc_divider" position="54px -384px" size="752px 1px"/>
+                <BoxLayout profile="tc_detailRows" id="overviewBusinessRows" position="54px -392px" size="752px 200px">
+                    <GuiElement profile="tc_detailRow" size="752px 34px">
+                        <Text profile="tc_detailLabel" text="$l10n_tc_detail_advertising" position="0px 0px"/>
+                        <Text profile="tc_detailValue" id="textAdvertisingStatus" text="" position="220px 0px" size="532px 34px"/>
+                        <Bitmap profile="tc_detailRowDivider"/>
+                    </GuiElement>
+                    <GuiElement profile="tc_detailRow" size="752px 34px">
+                        <Text profile="tc_detailLabel" text="$l10n_tc_detail_salaryBill" position="0px 0px"/>
+                        <Text profile="tc_detailValue" id="textSalaryBill" text="" position="220px 0px" size="532px 34px"/>
+                        <Bitmap profile="tc_detailRowDivider"/>
+                    </GuiElement>
+                    <GuiElement profile="tc_detailRowTall" size="752px 74px">
+                        <Text profile="tc_detailLabel" text="$l10n_tc_detail_lastJob" position="0px 0px"/>
+                        <Text profile="tc_detailValueTall" id="textLastCompletedJob" text="" position="220px -6px" size="532px 64px" textMaxNumLines="3"/>
+                    </GuiElement>
+                </BoxLayout>
+
+                <!-- Current jobs (allocated/in progress) -->
+                <RoundCorner profile="tc_panel" position="850px -20px" size="630px 300px"/>
+                <Text profile="tc_sectionTitle" text="$l10n_tc_overview_currentJobsHeading" position="874px -36px" size="582px 24px"/>
+                <Bitmap profile="tc_divider" position="874px -64px" size="582px 1px"/>
+                <Text profile="tc_panelText" id="textCurrentJobs" text="" position="874px -76px" size="582px 230px" textMaxNumLines="10"/>
+
+                <!-- Important notices (038): anything published to
+                     TheContractorNotices for this farm, newest first. -->
+                <RoundCorner profile="tc_panel" position="850px -340px" size="630px 290px"/>
+                <Text profile="tc_sectionTitle" text="$l10n_tc_overview_noticesHeading" position="874px -356px" size="582px 24px"/>
+                <Bitmap profile="tc_divider" position="874px -384px" size="582px 1px"/>
+                <Text profile="tc_panelText" id="textNotices" text="" position="874px -396px" size="582px 220px" textMaxNumLines="9"/>
             </GuiElement>
-
-            <Text profile="tc_placeholderText" id="nextRankText" text="" position="40px -370px" width="900px"/>
-
-            <Text profile="tc_overviewHeading" id="textAdvertisingHeading" text="$l10n_tc_advertising_heading" position="40px -430px" width="900px"/>
-            <Text profile="tc_placeholderText" id="textAdvertisingStatus" text="" position="40px -470px" width="900px"/>
-
-            <Text profile="tc_placeholderText" id="textLastCompletedJob" text="" position="40px -520px" width="900px"/>
-            <Text profile="tc_placeholderText" id="textSalaryBill" text="" position="40px -560px" width="900px"/>
-
-            <Text profile="tc_overviewHeading" id="textCurrentJobsHeading" text="$l10n_tc_overview_currentJobsHeading" position="860px -110px" width="500px"/>
-            <Text profile="tc_placeholderText" id="textCurrentJobs" text="" position="860px -150px" width="500px" textMaxNumLines="11"/>
-
-            <!-- Important notices (038): anything published to
-                 TheContractorNotices for this farm, newest first. -->
-            <Text profile="tc_overviewHeading" id="textNoticesHeading" text="$l10n_tc_overview_noticesHeading" position="860px -430px" width="500px"/>
-            <Text profile="tc_placeholderText" id="textNotices" text="" position="860px -470px" width="500px" textMaxNumLines="6"/>
         </GuiElement>
+
+        <!-- Inbox ========================================================== -->
         <GuiElement profile="fs25_subCategorySelectorTabbedContainer" id="subCategoryPages[2]">
-            <Text profile="tc_placeholderText" id="placeholderInbox" text="$l10n_tc_placeholder_locked" position="40px -40px" width="900px"/>
+            <Text profile="tc_emptyStateText" id="placeholderInbox" text="$l10n_tc_placeholder_locked" position="40px -250px" size="1440px 60px" textMaxNumLines="2"/>
+            <Text profile="tc_emptyStateText" id="inboxEmptyText" text="$l10n_tc_inbox_empty" position="40px -250px" size="1440px 60px" textMaxNumLines="2"/>
 
-            <Text profile="tc_placeholderText" id="inboxEmptyText" text="$l10n_tc_inbox_empty" position="40px -40px" width="900px"/>
-
-            <GuiElement id="inboxListContainer" position="40px -40px">
+            <GuiElement id="inboxListContainer" position="40px -20px">
                 <GuiElement profile="tc_tableHeaderRow" position="0px 0px" size="600px 30px">
-                    <Button profile="tc_tableHeader" position="10px 0px" text="$l10n_tc_inbox_columnType" handleFocus="false"/>
+                    <Button profile="tc_tableHeader" position="14px 0px" text="$l10n_tc_inbox_columnType" handleFocus="false"/>
                     <Button profile="tc_tableHeader" position="210px 0px" text="$l10n_tc_inbox_columnField" handleFocus="false"/>
                     <Button profile="tc_tableHeader" position="310px 0px" text="$l10n_tc_inbox_columnTargetDate" handleFocus="false"/>
                     <Button profile="tc_tableHeader" position="450px 0px" text="$l10n_tc_inbox_columnPrice" handleFocus="false"/>
-                    <Button profile="tc_tableHeader" position="550px 0px" text="$l10n_tc_inbox_columnEquipment" handleFocus="false"/>
+                    <Button profile="tc_tableHeader" position="546px 0px" text="$l10n_tc_inbox_columnEquipment" handleFocus="false"/>
+                    <Bitmap profile="tc_tableHeaderDivider"/>
                 </GuiElement>
 
-                <SmoothList id="inboxTable" profile="tc_table" position="0px -40px" size="600px 560px">
+                <SmoothList id="inboxTable" profile="tc_table" position="0px -36px" size="600px 570px">
                     <ListItem profile="tc_tableListItem">
-                        <Text profile="tc_listRowCellLeft" position="10px 0px" size="195px 32px" name="jobType"/>
-                        <Text profile="tc_listRowCellLeft" position="210px 0px" size="100px 32px" name="field"/>
-                        <Text profile="tc_listRowCellLeft" position="310px 0px" size="140px 32px" name="targetDate"/>
-                        <Text profile="tc_listRowCellLeft" position="450px 0px" size="90px 32px" name="price"/>
-                        <Text profile="tc_listRowCellLeft" position="550px 0px" size="50px 32px" name="equipment"/>
+                        <RoundCorner profile="tc_tableRowSurface"/>
+                        <Bitmap profile="tc_tableRowAccent"/>
+                        <Text profile="tc_listRowCellLeft" position="14px 0px" size="191px 32px" name="jobType"/>
+                        <Text profile="tc_listRowCellLeft" position="210px 0px" size="95px 32px" name="field"/>
+                        <Text profile="tc_listRowCellLeft" position="310px 0px" size="135px 32px" name="targetDate"/>
+                        <Text profile="tc_listRowCellLeft" position="450px 0px" size="92px 32px" name="price"/>
+                        <RoundCorner profile="tc_rowChip" position="546px 0px" size="48px 20px" name="equipmentChip"/>
+                        <Text profile="tc_rowChipText" position="546px 0px" size="48px 20px" name="equipmentChipText"/>
                     </ListItem>
                 </SmoothList>
-                <ThreePartBitmap profile="tc_slider_box" position="610px -40px" size="6px 560px">
+                <ThreePartBitmap profile="tc_slider_box" position="610px -36px" size="6px 570px">
                     <Slider profile="fs25_listSlider" dataElementId="inboxTable"/>
                 </ThreePartBitmap>
             </GuiElement>
 
-            <GuiElement id="inboxDetailsBox" position="700px -40px">
-                <Text profile="tc_overviewHeading" id="inboxDetailTitle" text="" position="0px 0px" width="280px"/>
-                <Text profile="tc_placeholderText" id="inboxDetailField" text="" position="0px -40px" width="280px"/>
-                <Text profile="tc_placeholderText" id="inboxDetailTargetDate" text="" position="0px -70px" width="280px"/>
-                <Text profile="tc_placeholderText" id="inboxDetailSkill" text="" position="0px -100px" width="280px"/>
-                <Text profile="tc_placeholderText" id="inboxDetailPrice" text="" position="0px -130px" width="280px"/>
-                <Text profile="tc_placeholderText" id="inboxDetailEquipment" text="" position="0px -170px" width="280px" textMaxNumLines="3"/>
-                <Text profile="tc_placeholderText" id="inboxDetailHaulage" text="" position="0px -260px" width="280px" textMaxNumLines="3"/>
-                <Text profile="tc_placeholderText" id="inboxDetailSupplies" text="" position="0px -260px" width="280px" textMaxNumLines="3"/>
-                <Text profile="tc_placeholderText" id="inboxNegotiationLog" text="" position="0px -350px" width="280px" textMaxNumLines="4"/>
+            <!-- Inbox details (043): one BoxLayout, so optional rows (delivery,
+                 supplies, unused equipment slots, negotiation) close up when
+                 hidden - updateInboxDetails calls invalidateLayout. Equipment
+                 rows are fixed slots filled in order by getInboxEquipmentRows. -->
+            <GuiElement id="inboxDetailsBox" position="680px -20px">
+                <RoundCorner profile="tc_panel" position="0px 0px" size="800px 615px"/>
+                <Text profile="tc_panelHeading" id="inboxDetailTitle" text="" position="24px -16px" size="752px 32px"/>
+                <Bitmap profile="tc_divider" position="24px -56px" size="752px 1px"/>
+
+                <BoxLayout profile="tc_detailRows" id="inboxDetailRows" position="24px -60px" size="752px 545px">
+                    <GuiElement profile="tc_detailRow" size="752px 34px">
+                        <Text profile="tc_detailLabel" text="$l10n_tc_detail_field" position="0px 0px"/>
+                        <Text profile="tc_detailValue" id="inboxDetailField" text="" position="220px 0px" size="532px 34px"/>
+                        <Bitmap profile="tc_detailRowDivider"/>
+                    </GuiElement>
+                    <GuiElement profile="tc_detailRow" size="752px 34px">
+                        <Text profile="tc_detailLabel" text="$l10n_tc_detail_dueBy" position="0px 0px"/>
+                        <Text profile="tc_detailValue" id="inboxDetailTargetDate" text="" position="220px 0px" size="532px 34px"/>
+                        <Bitmap profile="tc_detailRowDivider"/>
+                    </GuiElement>
+                    <GuiElement profile="tc_detailRow" size="752px 34px">
+                        <Text profile="tc_detailLabel" text="$l10n_tc_detail_price" position="0px 0px"/>
+                        <Text profile="tc_detailValue" id="inboxDetailPrice" text="" position="220px 0px" size="532px 34px"/>
+                        <Bitmap profile="tc_detailRowDivider"/>
+                    </GuiElement>
+                    <GuiElement profile="tc_detailRow" size="752px 34px">
+                        <Text profile="tc_detailLabel" text="$l10n_tc_detail_crew" position="0px 0px"/>
+                        <Text profile="tc_detailValue" id="inboxDetailCrew" text="" position="220px 0px" size="532px 34px"/>
+                        <Bitmap profile="tc_detailRowDivider"/>
+                    </GuiElement>
+                    <GuiElement profile="tc_detailRow" size="752px 34px">
+                        <Text profile="tc_detailLabel" text="$l10n_tc_detail_skill" position="0px 0px"/>
+                        <Text profile="tc_detailValue" id="inboxDetailSkill" text="" position="220px 0px" size="532px 34px"/>
+                        <Bitmap profile="tc_detailRowDivider"/>
+                    </GuiElement>
+                    <GuiElement profile="tc_detailRow" id="inboxRowDelivery" size="752px 34px">
+                        <Text profile="tc_detailLabel" text="$l10n_tc_detail_deliverTo" position="0px 0px"/>
+                        <Text profile="tc_detailValue" id="inboxDetailDelivery" text="" position="220px 0px" size="532px 34px"/>
+                        <Bitmap profile="tc_detailRowDivider"/>
+                    </GuiElement>
+                    <GuiElement profile="tc_detailRow" id="inboxRowSupplies" size="752px 34px">
+                        <Text profile="tc_detailLabel" text="$l10n_tc_detail_supplies" position="0px 0px"/>
+                        <RoundCorner profile="tc_chip" id="inboxDetailSuppliesChip" position="220px -7px" size="110px 20px"/>
+                        <Text profile="tc_chipText" id="inboxDetailSuppliesChipText" position="220px -7px" size="110px 20px"/>
+                        <Text profile="tc_detailValue" id="inboxDetailSupplies" text="" position="345px 0px" size="407px 34px"/>
+                    </GuiElement>
+
+                    <GuiElement profile="tc_detailRow" size="752px 46px">
+                        <Text profile="tc_sectionTitle" text="$l10n_tc_inbox_equipmentHeading" position="0px -14px" size="752px 24px"/>
+                        <Bitmap profile="tc_divider" position="0px -42px" size="752px 1px"/>
+                    </GuiElement>
+                    <GuiElement profile="tc_detailRow" id="inboxEquipRow1" size="752px 32px">
+                        <Text profile="tc_detailValue" id="inboxEquipName1" text="" position="0px 0px" size="600px 32px"/>
+                        <RoundCorner profile="tc_chip" id="inboxEquipChip1" position="632px -6px"/>
+                        <Text profile="tc_chipText" id="inboxEquipChipText1" position="632px -6px"/>
+                        <Bitmap profile="tc_detailRowDivider"/>
+                    </GuiElement>
+                    <GuiElement profile="tc_detailRow" id="inboxEquipRow2" size="752px 32px">
+                        <Text profile="tc_detailValue" id="inboxEquipName2" text="" position="0px 0px" size="600px 32px"/>
+                        <RoundCorner profile="tc_chip" id="inboxEquipChip2" position="632px -6px"/>
+                        <Text profile="tc_chipText" id="inboxEquipChipText2" position="632px -6px"/>
+                        <Bitmap profile="tc_detailRowDivider"/>
+                    </GuiElement>
+                    <GuiElement profile="tc_detailRow" id="inboxEquipRow3" size="752px 32px">
+                        <Text profile="tc_detailValue" id="inboxEquipName3" text="" position="0px 0px" size="600px 32px"/>
+                        <RoundCorner profile="tc_chip" id="inboxEquipChip3" position="632px -6px"/>
+                        <Text profile="tc_chipText" id="inboxEquipChipText3" position="632px -6px"/>
+                        <Bitmap profile="tc_detailRowDivider"/>
+                    </GuiElement>
+                    <GuiElement profile="tc_detailRow" id="inboxEquipRow4" size="752px 32px">
+                        <Text profile="tc_detailValue" id="inboxEquipName4" text="" position="0px 0px" size="600px 32px"/>
+                        <RoundCorner profile="tc_chip" id="inboxEquipChip4" position="632px -6px"/>
+                        <Text profile="tc_chipText" id="inboxEquipChipText4" position="632px -6px"/>
+                        <Bitmap profile="tc_detailRowDivider"/>
+                    </GuiElement>
+                    <GuiElement profile="tc_detailRow" id="inboxEquipRow5" size="752px 32px">
+                        <Text profile="tc_detailValue" id="inboxEquipName5" text="" position="0px 0px" size="600px 32px"/>
+                        <RoundCorner profile="tc_chip" id="inboxEquipChip5" position="632px -6px"/>
+                        <Text profile="tc_chipText" id="inboxEquipChipText5" position="632px -6px"/>
+                        <Bitmap profile="tc_detailRowDivider"/>
+                    </GuiElement>
+                    <GuiElement profile="tc_detailRow" id="inboxEquipRow6" size="752px 32px">
+                        <Text profile="tc_detailValue" id="inboxEquipName6" text="" position="0px 0px" size="600px 32px"/>
+                        <RoundCorner profile="tc_chip" id="inboxEquipChip6" position="632px -6px"/>
+                        <Text profile="tc_chipText" id="inboxEquipChipText6" position="632px -6px"/>
+                        <Bitmap profile="tc_detailRowDivider"/>
+                    </GuiElement>
+
+                    <GuiElement profile="tc_detailRow" id="inboxNegotiationBox" size="752px 130px">
+                        <Text profile="tc_sectionTitle" text="$l10n_tc_inbox_negotiationHeading" position="0px -14px" size="752px 24px"/>
+                        <Bitmap profile="tc_divider" position="0px -42px" size="752px 1px"/>
+                        <Text profile="tc_panelNote" id="inboxNegotiationLog" text="" position="0px -50px" size="752px 80px" textMaxNumLines="4"/>
+                    </GuiElement>
+                </BoxLayout>
             </GuiElement>
         </GuiElement>
-        <GuiElement profile="fs25_subCategorySelectorTabbedContainer" id="subCategoryPages[3]">
-            <Text profile="tc_placeholderText" id="placeholderCalendar" text="$l10n_tc_placeholder_locked" position="40px -40px" width="900px"/>
 
-            <GuiElement id="calendarContainer" position="40px -40px">
+        <!-- Calendar ======================================================= -->
+        <GuiElement profile="fs25_subCategorySelectorTabbedContainer" id="subCategoryPages[3]">
+            <Text profile="tc_emptyStateText" id="placeholderCalendar" text="$l10n_tc_placeholder_locked" position="40px -250px" size="1440px 60px" textMaxNumLines="2"/>
+
+            <GuiElement id="calendarContainer" position="40px -20px">
+                <!-- The right-hand panel behind both the day details and the
+                     completed-jobs list; it lives here so it shows whenever
+                     the calendar does, selected day or not. -->
+                <RoundCorner profile="tc_panel" position="640px 0px" size="800px 615px"/>
+
                 <MultiTextOption profile="tc_calendarPeriodSwitcher" id="calendarPeriodSelector" onClick="onClickCalendarPeriodSelector" wrap="false" size="380px 32px" position="0px 0px"/>
 
                 <GuiElement profile="tc_tableHeaderRow" position="0px -50px" size="600px 30px">
-                    <Button profile="tc_tableHeader" position="10px 0px" text="$l10n_tc_calendar_columnDay" handleFocus="false"/>
+                    <Button profile="tc_tableHeader" position="14px 0px" text="$l10n_tc_calendar_columnDay" handleFocus="false"/>
                     <Button profile="tc_tableHeader" position="150px 0px" text="$l10n_tc_calendar_columnJobs" handleFocus="false"/>
                     <Button profile="tc_tableHeader" position="300px 0px" text="$l10n_tc_calendar_columnStatus" handleFocus="false"/>
+                    <Bitmap profile="tc_tableHeaderDivider"/>
                 </GuiElement>
 
-                <SmoothList id="calendarDayTable" profile="tc_table" position="0px -90px" size="600px 500px">
+                <SmoothList id="calendarDayTable" profile="tc_table" position="0px -86px" size="600px 520px">
                     <ListItem profile="tc_tableListItem">
-                        <Text profile="tc_listRowCellLeft" position="10px 0px" size="120px 32px" name="day"/>
+                        <RoundCorner profile="tc_tableRowSurface"/>
+                        <Bitmap profile="tc_tableRowAccent"/>
+                        <Text profile="tc_listRowCellLeft" position="14px 0px" size="130px 32px" name="day"/>
                         <Text profile="tc_listRowCellLeft" position="150px 0px" size="140px 32px" name="jobCount"/>
-                        <Text profile="tc_listRowCellLeft" position="300px 0px" size="290px 32px" name="status"/>
+                        <RoundCorner profile="tc_rowChip" position="300px 0px" size="170px 20px" name="statusChip"/>
+                        <Text profile="tc_rowChipText" position="300px 0px" size="170px 20px" name="statusChipText"/>
                     </ListItem>
                 </SmoothList>
-                <ThreePartBitmap profile="tc_slider_box" position="610px -90px" size="6px 500px">
+                <ThreePartBitmap profile="tc_slider_box" position="610px -86px" size="6px 520px">
                     <Slider profile="fs25_listSlider" dataElementId="calendarDayTable"/>
                 </ThreePartBitmap>
             </GuiElement>
 
-            <GuiElement id="calendarDayDetailsBox" position="700px -40px">
-                <Text profile="tc_overviewHeading" id="calendarDayDetailTitle" text="" position="0px 0px" width="550px"/>
-                <Text profile="tc_placeholderText" id="calendarDayEmptyText" text="$l10n_tc_calendar_dayEmpty" position="0px -40px" width="550px"/>
+            <GuiElement id="calendarDayDetailsBox" position="680px -20px">
+                <Text profile="tc_panelHeading" id="calendarDayDetailTitle" text="" position="24px -16px" size="752px 32px"/>
+                <Bitmap profile="tc_divider" position="24px -56px" size="752px 1px"/>
+                <Text profile="tc_panelNote" id="calendarDayEmptyText" text="$l10n_tc_calendar_dayEmpty" position="24px -68px" size="752px 30px"/>
 
-                <GuiElement id="calendarDayJobsContainer" position="0px -40px">
-                    <GuiElement profile="tc_tableHeaderRow" position="0px 0px" size="550px 30px">
-                        <Button profile="tc_tableHeader" position="10px 0px" text="$l10n_tc_calendar_columnJobType" handleFocus="false"/>
-                        <Button profile="tc_tableHeader" position="210px 0px" text="$l10n_tc_calendar_columnFarmland" handleFocus="false"/>
-                        <Button profile="tc_tableHeader" position="310px 0px" text="$l10n_tc_calendar_columnPrice" handleFocus="false"/>
-                        <Button profile="tc_tableHeader" position="410px 0px" text="$l10n_tc_calendar_columnAllocation" handleFocus="false"/>
+                <GuiElement id="calendarDayJobsContainer" position="24px -68px">
+                    <GuiElement profile="tc_tableHeaderRow" position="0px 0px" size="752px 30px">
+                        <Button profile="tc_tableHeader" position="14px 0px" text="$l10n_tc_calendar_columnJobType" handleFocus="false"/>
+                        <Button profile="tc_tableHeader" position="260px 0px" text="$l10n_tc_calendar_columnFarmland" handleFocus="false"/>
+                        <Button profile="tc_tableHeader" position="380px 0px" text="$l10n_tc_calendar_columnPrice" handleFocus="false"/>
+                        <Button profile="tc_tableHeader" position="500px 0px" text="$l10n_tc_calendar_columnAllocation" handleFocus="false"/>
+                        <Bitmap profile="tc_tableHeaderDivider"/>
                     </GuiElement>
-                    <SmoothList id="calendarDayJobsTable" profile="tc_table" position="0px -40px" size="550px 200px">
+                    <SmoothList id="calendarDayJobsTable" profile="tc_table" position="0px -36px" size="752px 190px">
                         <ListItem profile="tc_tableListItem">
-                            <Text profile="tc_listRowCellLeft" position="10px 0px" size="195px 32px" name="jobType"/>
-                            <Text profile="tc_listRowCellLeft" position="210px 0px" size="95px 32px" name="field"/>
-                            <Text profile="tc_listRowCellLeft" position="310px 0px" size="95px 32px" name="price"/>
-                            <Text profile="tc_listRowCellLeft" position="410px 0px" size="140px 32px" name="status"/>
+                            <RoundCorner profile="tc_tableRowSurface"/>
+                            <Bitmap profile="tc_tableRowAccent"/>
+                            <Text profile="tc_listRowCellLeft" position="14px 0px" size="240px 32px" name="jobType"/>
+                            <Text profile="tc_listRowCellLeft" position="260px 0px" size="115px 32px" name="field"/>
+                            <Text profile="tc_listRowCellLeft" position="380px 0px" size="115px 32px" name="price"/>
+                            <RoundCorner profile="tc_rowChip" position="500px 0px" size="240px 20px" name="statusChip"/>
+                            <Text profile="tc_rowChipText" position="500px 0px" size="240px 20px" name="statusChipText"/>
                         </ListItem>
                     </SmoothList>
                 </GuiElement>
@@ -141,25 +284,32 @@
                 <!-- Allocation (018): swapped in for calendarDayJobsContainer while
                      self.allocatingJobId is set (see refreshAllocationState/
                      onClickCancelAllocation) -->
-                <GuiElement id="allocationContainer" position="0px -40px">
-                    <Text profile="tc_overviewHeading" id="allocationJobTitle" text="" position="0px 0px" width="550px"/>
+                <GuiElement id="allocationContainer" position="24px -68px">
+                    <Text profile="tc_sectionTitle" id="allocationJobTitle" text="" position="0px 0px" size="752px 24px"/>
+                    <Bitmap profile="tc_divider" position="0px -28px" size="752px 1px"/>
 
-                    <Text profile="tc_placeholderText" id="allocationWorkerLabel" text="$l10n_tc_allocation_workerHeading" position="0px -40px" width="260px"/>
-                    <SmoothList id="allocationWorkerTable" profile="tc_table" position="0px -70px" size="260px 260px">
+                    <Text profile="tc_detailLabel" id="allocationWorkerLabel" text="$l10n_tc_allocation_workerHeading" position="0px -36px" size="360px 30px"/>
+                    <SmoothList id="allocationWorkerTable" profile="tc_table" position="0px -70px" size="360px 300px">
                         <ListItem profile="tc_tableListItem">
-                            <Text profile="tc_listRowCellLeft" position="10px 0px" size="240px 32px" name="name"/>
+                            <RoundCorner profile="tc_tableRowSurface"/>
+                            <Bitmap profile="tc_tableRowAccent"/>
+                            <RoundCorner profile="tc_rowCheckBox" name="checkBox"/>
+                            <Text profile="tc_listRowCellLeft" position="36px 0px" size="314px 32px" name="name"/>
                         </ListItem>
                     </SmoothList>
 
-                    <Text profile="tc_placeholderText" id="allocationEquipmentLabel" text="$l10n_tc_allocation_equipmentHeading" position="280px -40px" width="270px"/>
-                    <SmoothList id="allocationEquipmentTable" profile="tc_table" position="280px -70px" size="270px 260px">
+                    <Text profile="tc_detailLabel" id="allocationEquipmentLabel" text="$l10n_tc_allocation_equipmentHeading" position="384px -36px" size="368px 30px"/>
+                    <SmoothList id="allocationEquipmentTable" profile="tc_table" position="384px -70px" size="368px 300px">
                         <ListItem profile="tc_tableListItem">
-                            <Text profile="tc_listRowCellLeft" position="10px 0px" size="170px 32px" name="name"/>
-                            <Text profile="tc_listRowCellLeft" position="185px 0px" size="80px 32px" name="kind"/>
+                            <RoundCorner profile="tc_tableRowSurface"/>
+                            <Bitmap profile="tc_tableRowAccent"/>
+                            <RoundCorner profile="tc_rowCheckBox" name="checkBox"/>
+                            <Text profile="tc_listRowCellLeft" position="36px 0px" size="220px 32px" name="name"/>
+                            <Text profile="tc_listRowCellLeft" position="262px 0px" size="100px 32px" name="kind"/>
                         </ListItem>
                     </SmoothList>
 
-                    <Text profile="tc_placeholderText" id="allocationWarningText" text="" position="0px -350px" width="550px" textMaxNumLines="4"/>
+                    <Text profile="tc_panelText" id="allocationWarningText" text="" position="0px -385px" size="752px 100px" textMaxNumLines="4"/>
                 </GuiElement>
             </GuiElement>
 
@@ -168,75 +318,136 @@
                  calendar only pages forward). The highlighted row's summary
                  shows in calendarCompletedReport. Hidden while allocating,
                  since the allocation panel overlaps it. -->
-            <GuiElement id="calendarCompletedContainer" position="700px -340px">
-                <Text profile="tc_overviewHeading" text="$l10n_tc_calendar_completedHeading" position="0px 0px" width="550px"/>
-                <Text profile="tc_placeholderText" id="calendarCompletedEmptyText" text="$l10n_tc_overview_noCompletedJobs" position="0px -40px" width="550px"/>
+            <GuiElement id="calendarCompletedContainer" position="704px -340px">
+                <Text profile="tc_sectionTitle" text="$l10n_tc_calendar_completedHeading" position="0px 0px" size="752px 24px"/>
+                <Bitmap profile="tc_divider" position="0px -28px" size="752px 1px"/>
+                <Text profile="tc_panelNote" id="calendarCompletedEmptyText" text="$l10n_tc_overview_noCompletedJobs" position="0px -38px" size="752px 30px"/>
 
-                <GuiElement id="calendarCompletedListContainer" position="0px -40px">
-                    <GuiElement profile="tc_tableHeaderRow" position="0px 0px" size="550px 30px">
-                        <Button profile="tc_tableHeader" position="10px 0px" text="$l10n_tc_calendar_columnJobType" handleFocus="false"/>
-                        <Button profile="tc_tableHeader" position="210px 0px" text="$l10n_tc_calendar_columnFarmland" handleFocus="false"/>
-                        <Button profile="tc_tableHeader" position="310px 0px" text="$l10n_tc_calendar_columnCompleted" handleFocus="false"/>
-                        <Button profile="tc_tableHeader" position="460px 0px" text="$l10n_tc_calendar_columnQuality" handleFocus="false"/>
+                <GuiElement id="calendarCompletedListContainer" position="0px -38px">
+                    <GuiElement profile="tc_tableHeaderRow" position="0px 0px" size="752px 30px">
+                        <Button profile="tc_tableHeader" position="14px 0px" text="$l10n_tc_calendar_columnJobType" handleFocus="false"/>
+                        <Button profile="tc_tableHeader" position="260px 0px" text="$l10n_tc_calendar_columnFarmland" handleFocus="false"/>
+                        <Button profile="tc_tableHeader" position="380px 0px" text="$l10n_tc_calendar_columnCompleted" handleFocus="false"/>
+                        <Button profile="tc_tableHeader" position="640px 0px" text="$l10n_tc_calendar_columnQuality" handleFocus="false"/>
+                        <Bitmap profile="tc_tableHeaderDivider"/>
                     </GuiElement>
-                    <SmoothList id="calendarCompletedTable" profile="tc_table" position="0px -40px" size="550px 160px">
+                    <SmoothList id="calendarCompletedTable" profile="tc_table" position="0px -36px" size="740px 150px">
                         <ListItem profile="tc_tableListItem">
-                            <Text profile="tc_listRowCellLeft" position="10px 0px" size="195px 32px" name="jobType"/>
-                            <Text profile="tc_listRowCellLeft" position="210px 0px" size="95px 32px" name="field"/>
-                            <Text profile="tc_listRowCellLeft" position="310px 0px" size="145px 32px" name="completed"/>
-                            <Text profile="tc_listRowCellLeft" position="460px 0px" size="85px 32px" name="quality"/>
+                            <RoundCorner profile="tc_tableRowSurface"/>
+                            <Bitmap profile="tc_tableRowAccent"/>
+                            <Text profile="tc_listRowCellLeft" position="14px 0px" size="240px 32px" name="jobType"/>
+                            <Text profile="tc_listRowCellLeft" position="260px 0px" size="115px 32px" name="field"/>
+                            <Text profile="tc_listRowCellLeft" position="380px 0px" size="250px 32px" name="completed"/>
+                            <RoundCorner profile="tc_rowChip" position="640px 0px" size="90px 20px" name="qualityChip"/>
+                            <Text profile="tc_rowChipText" position="640px 0px" size="90px 20px" name="qualityChipText"/>
                         </ListItem>
                     </SmoothList>
-                    <ThreePartBitmap profile="tc_slider_box" position="556px -40px" size="6px 160px">
+                    <ThreePartBitmap profile="tc_slider_box" position="746px -36px" size="6px 150px">
                         <Slider profile="fs25_listSlider" dataElementId="calendarCompletedTable"/>
                     </ThreePartBitmap>
 
-                    <Text profile="tc_placeholderText" id="calendarCompletedReport" text="" position="0px -210px" width="550px" textMaxNumLines="4"/>
+                    <Text profile="tc_panelNote" id="calendarCompletedReport" text="" position="0px -194px" size="752px 60px" textMaxNumLines="3"/>
                 </GuiElement>
             </GuiElement>
         </GuiElement>
+
+        <!-- Staff ========================================================== -->
         <GuiElement profile="fs25_subCategorySelectorTabbedContainer" id="subCategoryPages[4]">
-            <Text profile="tc_placeholderText" id="placeholderStaff" text="$l10n_tc_placeholder_locked" position="40px -40px" width="900px"/>
+            <Text profile="tc_emptyStateText" id="placeholderStaff" text="$l10n_tc_placeholder_locked" position="40px -250px" size="1440px 60px" textMaxNumLines="2"/>
 
-            <MultiTextOption profile="tc_calendarPeriodSwitcher" id="staffViewSelector" position="40px -40px" onClick="onClickStaffView" wrap="true" size="380px 32px"/>
+            <MultiTextOption profile="tc_calendarPeriodSwitcher" id="staffViewSelector" position="40px -20px" onClick="onClickStaffView" wrap="true" size="380px 32px"/>
 
-            <GuiElement profile="tc_tableHeaderRow" id="staffHeaderRow" position="40px -90px" size="600px 30px">
-                <Button profile="tc_tableHeader" id="staffHeaderCol1" position="10px 0px" text="$l10n_tc_staff_columnName" handleFocus="false"/>
-                <Button profile="tc_tableHeader" id="staffHeaderCol2" position="150px 0px" text="$l10n_tc_staff_columnWorkSpeed" handleFocus="false"/>
-                <Button profile="tc_tableHeader" id="staffHeaderCol3" position="270px 0px" text="$l10n_tc_staff_columnTier" handleFocus="false"/>
-                <Button profile="tc_tableHeader" id="staffHeaderCol4" position="430px 0px" text="$l10n_tc_staff_columnStatus" handleFocus="false"/>
-                <Button profile="tc_tableHeader" id="staffHeaderCol5" position="520px 0px" text="$l10n_tc_staff_columnJob" handleFocus="false"/>
+            <GuiElement profile="tc_tableHeaderRow" id="staffHeaderRow" position="40px -70px" size="600px 30px">
+                <Button profile="tc_tableHeader" id="staffHeaderCol1" position="14px 0px" text="$l10n_tc_staff_columnName" handleFocus="false"/>
+                <Button profile="tc_tableHeader" id="staffHeaderCol2" position="170px 0px" text="$l10n_tc_staff_columnWorkSpeed" handleFocus="false"/>
+                <Button profile="tc_tableHeader" id="staffHeaderCol3" position="236px 0px" text="$l10n_tc_staff_columnTier" handleFocus="false"/>
+                <Button profile="tc_tableHeader" id="staffHeaderCol4" position="350px 0px" text="$l10n_tc_staff_columnStatus" handleFocus="false"/>
+                <Button profile="tc_tableHeader" id="staffHeaderCol5" position="456px 0px" text="$l10n_tc_staff_columnJob" handleFocus="false"/>
+                <Bitmap profile="tc_tableHeaderDivider"/>
             </GuiElement>
 
-            <Text profile="tc_placeholderText" id="staffEmptyText" text="$l10n_tc_staff_rosterEmpty" position="40px -130px" width="600px"/>
+            <Text profile="tc_emptyStateText" id="staffEmptyText" text="$l10n_tc_staff_rosterEmpty" position="40px -250px" size="1440px 60px" textMaxNumLines="2"/>
 
-            <GuiElement id="staffListContainer" position="40px -130px">
-                <SmoothList id="staffTable" profile="tc_table" position="0px 0px" size="600px 460px">
+            <GuiElement id="staffListContainer" position="40px -106px">
+                <SmoothList id="staffTable" profile="tc_table" position="0px 0px" size="600px 500px">
                     <ListItem profile="tc_tableListItem">
-                        <Text profile="tc_listRowCellLeft" position="10px 0px" size="140px 32px" name="name"/>
-                        <Text profile="tc_listRowCellLeft" position="150px 0px" size="110px 32px" name="workSpeed"/>
-                        <Text profile="tc_listRowCellLeft" position="270px 0px" size="150px 32px" name="tier"/>
-                        <Text profile="tc_listRowCellLeft" position="430px 0px" size="90px 32px" name="col4"/>
-                        <Text profile="tc_listRowCellLeft" position="520px 0px" size="70px 32px" name="col5"/>
+                        <RoundCorner profile="tc_tableRowSurface"/>
+                        <Bitmap profile="tc_tableRowAccent"/>
+                        <Text profile="tc_listRowCellLeft" position="14px 0px" size="150px 32px" name="name"/>
+                        <Text profile="tc_listRowCellLeft" position="170px 0px" size="60px 32px" name="workSpeed"/>
+                        <Text profile="tc_listRowCellLeft" position="236px 0px" size="108px 32px" name="tier"/>
+                        <Text profile="tc_listRowCellLeft" position="350px 0px" size="100px 32px" name="col4"/>
+                        <RoundCorner profile="tc_rowChip" position="350px 0px" size="96px 20px" name="statusChip"/>
+                        <Text profile="tc_rowChipText" position="350px 0px" size="96px 20px" name="statusChipText"/>
+                        <Text profile="tc_listRowCellLeft" position="456px 0px" size="140px 32px" name="col5"/>
                     </ListItem>
                 </SmoothList>
-                <ThreePartBitmap profile="tc_slider_box" position="610px 0px" size="6px 460px">
+                <ThreePartBitmap profile="tc_slider_box" position="610px 0px" size="6px 500px">
                     <Slider profile="fs25_listSlider" dataElementId="staffTable"/>
                 </ThreePartBitmap>
             </GuiElement>
 
-            <GuiElement id="staffDetailsBox" position="700px -40px">
-                <Text profile="tc_overviewHeading" id="staffDetailTitle" text="" position="0px 0px" width="280px"/>
-                <Text profile="tc_placeholderText" id="staffDetailAge" text="" position="0px -40px" width="280px"/>
-                <Text profile="tc_placeholderText" id="staffDetailWorkSpeed" text="" position="0px -70px" width="280px"/>
-                <Text profile="tc_placeholderText" id="staffDetailTier" text="" position="0px -100px" width="280px" textMaxNumLines="3"/>
-                <Text profile="tc_placeholderText" id="staffDetailSalary" text="" position="0px -170px" width="280px"/>
-                <Text profile="tc_placeholderText" id="staffDetailStatus" text="" position="0px -200px" width="280px"/>
-                <Text profile="tc_placeholderText" id="staffDetailJob" text="" position="0px -230px" width="280px"/>
-                <Text profile="tc_placeholderText" id="staffDetailRetirement" text="" position="0px -260px" width="280px" textMaxNumLines="2"/>
-                <Text profile="tc_placeholderText" id="staffDetailHoliday" text="" position="0px -320px" width="280px" textMaxNumLines="3"/>
+            <GuiElement id="staffDetailsBox" position="680px -20px">
+                <RoundCorner profile="tc_panel" position="0px 0px" size="800px 610px"/>
+                <Text profile="tc_panelHeading" id="staffDetailTitle" text="" position="24px -16px" size="752px 32px"/>
+                <Bitmap profile="tc_divider" position="24px -56px" size="752px 1px"/>
+
+                <BoxLayout profile="tc_detailRows" id="staffDetailRows" position="24px -64px" size="480px 330px">
+                    <GuiElement profile="tc_detailRow" size="480px 34px">
+                        <Text profile="tc_detailLabel" text="$l10n_tc_detail_age" position="0px 0px" size="170px 34px"/>
+                        <Text profile="tc_detailValue" id="staffDetailAge" text="" position="170px 0px" size="310px 34px"/>
+                        <Bitmap profile="tc_detailRowDivider"/>
+                    </GuiElement>
+                    <GuiElement profile="tc_detailRow" size="480px 34px">
+                        <Text profile="tc_detailLabel" text="$l10n_tc_detail_workSpeed" position="0px 0px" size="170px 34px"/>
+                        <Text profile="tc_detailValue" id="staffDetailWorkSpeed" text="" position="170px 0px" size="310px 34px"/>
+                        <Bitmap profile="tc_detailRowDivider"/>
+                    </GuiElement>
+                    <!-- One chip per job size tier (small/medium/large). -->
+                    <GuiElement profile="tc_detailRow" size="480px 34px">
+                        <Text profile="tc_detailLabel" text="$l10n_tc_detail_tiers" position="0px 0px" size="170px 34px"/>
+                        <RoundCorner profile="tc_chip" id="staffDetailTierChip1" position="170px -7px" size="96px 20px"/>
+                        <Text profile="tc_chipText" id="staffDetailTierChipText1" position="170px -7px" size="96px 20px"/>
+                        <RoundCorner profile="tc_chip" id="staffDetailTierChip2" position="272px -7px" size="96px 20px"/>
+                        <Text profile="tc_chipText" id="staffDetailTierChipText2" position="272px -7px" size="96px 20px"/>
+                        <RoundCorner profile="tc_chip" id="staffDetailTierChip3" position="374px -7px" size="96px 20px"/>
+                        <Text profile="tc_chipText" id="staffDetailTierChipText3" position="374px -7px" size="96px 20px"/>
+                        <Bitmap profile="tc_detailRowDivider"/>
+                    </GuiElement>
+                    <GuiElement profile="tc_detailRow" size="480px 34px">
+                        <Text profile="tc_detailLabel" text="$l10n_tc_detail_salary" position="0px 0px" size="170px 34px"/>
+                        <Text profile="tc_detailValue" id="staffDetailSalary" text="" position="170px 0px" size="310px 34px"/>
+                        <Bitmap profile="tc_detailRowDivider"/>
+                    </GuiElement>
+                    <GuiElement profile="tc_detailRow" id="staffRowStatus" size="480px 34px">
+                        <Text profile="tc_detailLabel" text="$l10n_tc_detail_status" position="0px 0px" size="170px 34px"/>
+                        <RoundCorner profile="tc_chip" id="staffDetailStatusChip" position="170px -7px"/>
+                        <Text profile="tc_chipText" id="staffDetailStatusChipText" position="170px -7px"/>
+                        <Bitmap profile="tc_detailRowDivider"/>
+                    </GuiElement>
+                    <GuiElement profile="tc_detailRow" id="staffRowJob" size="480px 34px">
+                        <Text profile="tc_detailLabel" text="$l10n_tc_detail_currentJob" position="0px 0px" size="170px 34px"/>
+                        <Text profile="tc_detailValue" id="staffDetailJob" text="" position="170px 0px" size="310px 34px"/>
+                        <Bitmap profile="tc_detailRowDivider"/>
+                    </GuiElement>
+                    <GuiElement profile="tc_detailRow" id="staffRowRetirement" size="480px 34px">
+                        <Text profile="tc_detailLabel" text="$l10n_tc_detail_retiring" position="0px 0px" size="170px 34px"/>
+                        <Text profile="tc_detailValue" id="staffDetailRetirement" text="" position="170px 0px" size="310px 34px"/>
+                        <Bitmap profile="tc_detailRowDivider"/>
+                    </GuiElement>
+                    <GuiElement profile="tc_detailRow" id="staffRowHolidayLeft" size="480px 34px">
+                        <Text profile="tc_detailLabel" text="$l10n_tc_detail_holidayLeft" position="0px 0px" size="170px 34px"/>
+                        <Text profile="tc_detailValue" id="staffDetailHolidayLeft" text="" position="170px 0px" size="310px 34px"/>
+                        <Bitmap profile="tc_detailRowDivider"/>
+                    </GuiElement>
+                    <GuiElement profile="tc_detailRow" id="staffRowHoliday" size="480px 34px">
+                        <Text profile="tc_detailLabel" text="$l10n_tc_detail_holiday" position="0px 0px" size="170px 34px"/>
+                        <Text profile="tc_detailValue" id="staffDetailHoliday" text="" position="170px 0px" size="310px 34px"/>
+                    </GuiElement>
+                </BoxLayout>
+
                 <!-- 042: live portrait, driven by TCWorkerPortrait (it sets the scene). -->
-                <Render profile="tc_workerPortrait" id="staffPortraitRender" position="300px 0px"/>
+                <Render profile="tc_workerPortrait" id="staffPortraitRender" position="520px -68px"/>
             </GuiElement>
         </GuiElement>
     </GuiElement>

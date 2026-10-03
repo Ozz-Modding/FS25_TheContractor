@@ -1,19 +1,170 @@
 <?xml version="1.0" encoding="utf-8" standalone="no" ?>
 <GUIProfiles>
-    <Profile name="tc_placeholderText" extends="fs25_textGrey" with="anchorTopLeft">
-        <textSize value="18px" />
+    <!-- Panel kit (043, modelled on FS25_AdvancedDamageSystem's menus): one
+         palette for the whole Contractor page. Lists sit on the page as
+         card rows; everything else (details, overview sections) sits in a
+         dark panel with a green section title, a hairline divider, and
+         muted-label / bright-value rows. Status is shown as coloured chips
+         (tones in MenuContractor.CHIP_COLORS), not coloured text. -->
+    <Presets>
+        <Preset name="tc_panelSurface" value="0.018 0.018 0.018 0.94"/>
+        <Preset name="tc_rowSurface" value="0.03 0.03 0.03 0.96"/>
+        <Preset name="tc_rowFocused" value="0.06 0.066 0.048 1"/>
+        <Preset name="tc_rowSelected" value="0.13 0.17 0.05 1"/>
+        <Preset name="tc_divider" value="0.13 0.13 0.14 1"/>
+        <Preset name="tc_headerDivider" value="0.3 0.3 0.3 1"/>
+        <Preset name="tc_mutedText" value="0.45 0.45 0.45 1"/>
+        <Preset name="tc_valueText" value="0.88 0.88 0.88 1"/>
+    </Presets>
+
+    <Profile name="tc_panel" extends="baseReference" with="anchorTopLeft">
+        <color value="$preset_tc_panelSurface"/>
+        <cornerSize value="0.3"/>
     </Profile>
-    <!-- Plain anchorTopLeft heading, deliberately not based on
-         fs25_statisticsHeaderText (which bakes in an extra 40px
-         textOffset meant for its own table-header layout) or
-         fs25_contractsContentTitle (anchorTopStretchingX, which stretches
-         to whatever container it's placed in and reads as centered when
-         that container is much wider than the vanilla Contracts frame's
-         narrow progress box it was designed for) — see tickets/007's
-         Outcome for the indentation bug this replaced. -->
-    <Profile name="tc_overviewHeading" extends="fs25_textDefault" with="anchorTopLeft">
-        <textSize value="24px" />
-        <textBold value="true" />
+    <!-- Green uppercase section title with a hairline under it. -->
+    <Profile name="tc_sectionTitle" extends="fs25_textDefault" with="anchorTopLeft">
+        <size value="600px 24px"/>
+        <textSize value="16px"/>
+        <textBold value="true"/>
+        <textUpperCase value="true"/>
+        <textColor value="$preset_fs25_colorMainHighlight"/>
+        <textAlignment value="left"/>
+        <textVerticalAlignment value="middle"/>
+    </Profile>
+    <Profile name="tc_divider" extends="baseReference" with="anchorTopLeft">
+        <size value="600px 1px"/>
+        <imageSliceId value="gui.colorPreset"/>
+        <imageColor value="$preset_tc_divider"/>
+    </Profile>
+    <!-- Big name at the top of a details panel (job, worker, company). -->
+    <Profile name="tc_panelHeading" extends="fs25_textDefault" with="anchorTopLeft">
+        <size value="600px 32px"/>
+        <textSize value="22px"/>
+        <textBold value="true"/>
+        <textColor value="$preset_tc_valueText"/>
+        <textAlignment value="left"/>
+        <textVerticalAlignment value="middle"/>
+        <textLayoutMode value="truncate"/>
+    </Profile>
+    <!-- Paragraph text inside a panel (warnings, notes, multi-line lists). -->
+    <Profile name="tc_panelText" extends="fs25_textDefault" with="anchorTopLeft">
+        <textSize value="15px"/>
+        <textColor value="$preset_tc_valueText"/>
+        <textAlignment value="left"/>
+        <textVerticalAlignment value="top"/>
+    </Profile>
+    <Profile name="tc_panelNote" extends="tc_panelText">
+        <textColor value="$preset_tc_mutedText"/>
+    </Profile>
+    <!-- Centered, muted message for an empty list or a locked tab. -->
+    <Profile name="tc_emptyStateText" extends="fs25_textDefault" with="anchorTopLeft">
+        <textSize value="20px"/>
+        <textBold value="true"/>
+        <textColor value="$preset_colorDisabled"/>
+        <textAlignment value="center"/>
+    </Profile>
+
+    <!-- Label/value rows. Rows are stacked by a vertical BoxLayout, so a
+         hidden row closes up (call invalidateLayout after toggling one). -->
+    <Profile name="tc_detailRows" extends="emptyPanel" with="anchorTopLeft">
+        <flowDirection value="vertical"/>
+        <alignmentY value="top"/>
+        <fillDirectionY value="topToBottom"/>
+    </Profile>
+    <Profile name="tc_detailRow" extends="emptyPanel">
+        <size value="500px 34px"/>
+    </Profile>
+    <Profile name="tc_detailRowTall" extends="tc_detailRow">
+        <size value="500px 54px"/>
+    </Profile>
+    <Profile name="tc_detailRowDivider" extends="baseReference" with="anchorBottomStretchingX">
+        <height value="1px"/>
+        <imageSliceId value="gui.colorPreset"/>
+        <imageColor value="$preset_tc_divider"/>
+    </Profile>
+    <Profile name="tc_detailLabel" extends="fs25_textDefault" with="anchorTopLeft">
+        <size value="200px 34px"/>
+        <textSize value="13px"/>
+        <textBold value="true"/>
+        <textUpperCase value="true"/>
+        <textColor value="$preset_tc_mutedText"/>
+        <textAlignment value="left"/>
+        <textVerticalAlignment value="middle"/>
+    </Profile>
+    <Profile name="tc_detailValue" extends="fs25_textDefault" with="anchorTopLeft">
+        <size value="300px 34px"/>
+        <textSize value="16px"/>
+        <textColor value="$preset_tc_valueText"/>
+        <textAlignment value="left"/>
+        <textVerticalAlignment value="middle"/>
+        <textLayoutMode value="truncate"/>
+    </Profile>
+    <Profile name="tc_detailValueTall" extends="tc_detailValue">
+        <size value="300px 54px"/>
+        <textSize value="15px"/>
+        <textMaxNumLines value="2"/>
+        <textLayoutMode value="truncate"/>
+    </Profile>
+
+    <!-- Status chip: a filled pill with a white label. The fill is set at
+         runtime (MenuContractor's setChip); the label keeps white in every
+         row state so it reads on a selected row too. -->
+    <Profile name="tc_chip" extends="baseReference" with="anchorTopLeft">
+        <size value="120px 20px"/>
+        <color value="0.16 0.16 0.17 1"/>
+        <cornerSize value="0.3"/>
+    </Profile>
+    <Profile name="tc_chipText" extends="baseReference" with="anchorTopLeft">
+        <size value="120px 20px"/>
+        <textSize value="11px"/>
+        <textBold value="true"/>
+        <textUpperCase value="true"/>
+        <textLayoutMode value="resize"/>
+        <textColor value="1 1 1 1"/>
+        <textSelectedColor value="1 1 1 1"/>
+        <textFocusedColor value="1 1 1 1"/>
+        <textHighlightedColor value="1 1 1 1"/>
+        <textDisabledColor value="1 1 1 1"/>
+        <textAlignment value="center"/>
+        <textVerticalAlignment value="middle"/>
+    </Profile>
+    <!-- Chips inside a list row: vertically centred in the 32px row. -->
+    <Profile name="tc_rowChip" extends="tc_chip" with="anchorMiddleLeft">
+        <size value="100px 20px"/>
+    </Profile>
+    <Profile name="tc_rowChipText" extends="tc_chipText" with="anchorMiddleLeft">
+        <size value="100px 20px"/>
+    </Profile>
+    <!-- Allocation picker tick box (replaces the old "[X] " text prefix). -->
+    <Profile name="tc_rowCheckBox" extends="tc_chip" with="anchorMiddleLeft">
+        <size value="16px 16px"/>
+        <position value="10px 0px"/>
+    </Profile>
+
+    <!-- Overview reputation bar: tier name left, score right, then vanilla's
+         contracts progress bar (fs25_contractsProgressBarBg is
+         anchorTopCenter, so it centres in this box). Own title/value
+         profiles rather than fs25_contractsContentTitle, which stretches to
+         its container and reads as centred (see tickets/007's Outcome). -->
+    <Profile name="tc_progressBox" extends="emptyPanel" with="anchorTopLeft">
+        <size value="752px 80px"/>
+    </Profile>
+    <Profile name="tc_progressTitle" extends="fs25_textDefault" with="anchorTopLeft">
+        <size value="500px 26px"/>
+        <textSize value="16px"/>
+        <textBold value="true"/>
+        <textUpperCase value="true"/>
+        <textColor value="$preset_tc_valueText"/>
+        <textAlignment value="left"/>
+        <textVerticalAlignment value="middle"/>
+    </Profile>
+    <Profile name="tc_progressValue" extends="fs25_textDefault" with="anchorTopRight">
+        <size value="250px 26px"/>
+        <textSize value="16px"/>
+        <textBold value="true"/>
+        <textColor value="$preset_fs25_colorMainHighlight"/>
+        <textAlignment value="right"/>
+        <textVerticalAlignment value="middle"/>
     </Profile>
 
     <!-- Inbox (013) job list — same shape as FS25_RedTape/src/gui/guiProfiles.xml's
@@ -30,24 +181,54 @@
         <textAlignment value="left" />
         <textDisabledColor value="$preset_colorDisabled" />
     </Profile>
-    <Profile name="tc_tableListItem" extends="baseReference" with="anchorTopStretchingX alternating">
+    <!-- Card rows (043): the ListItem itself is transparent; every row
+         template starts with a tc_tableRowSurface (the rounded card, tinted
+         when highlighted/selected) and a tc_tableRowAccent (a green bar down
+         the left edge, only visible on the selected row, so the highlighted
+         row stands out on a gamepad). -->
+    <Profile name="tc_tableListItem" extends="baseReference" with="anchorTopStretchingX">
         <height value="32px"/>
-        <imageColor value="$preset_fs25_colorGrey" />
-        <imageSelectedColor value="$preset_fs25_colorMainHighlight" />
-        <alternateBackgroundColor value="$preset_fs25_colorGreyDark_50" />
+        <imageColor value="0 0 0 0" />
+        <imageSelectedColor value="0 0 0 0" />
+        <imageFocusedColor value="0 0 0 0" />
+        <imageHighlightedColor value="0 0 0 0" />
+    </Profile>
+    <Profile name="tc_tableRowSurface" extends="baseReference" with="anchorStretchingYStretchingX">
+        <color value="$preset_tc_rowSurface"/>
+        <colorFocused value="$preset_tc_rowFocused"/>
+        <colorHighlighted value="$preset_tc_rowFocused"/>
+        <colorSelected value="$preset_tc_rowSelected"/>
+        <cornerSize value="0.2"/>
+    </Profile>
+    <Profile name="tc_tableRowAccent" extends="baseReference" with="anchorStretchingYLeft">
+        <width value="4px"/>
+        <imageSliceId value="gui.colorPreset"/>
+        <imageColor value="0 0 0 0"/>
+        <imageFocusedColor value="0 0 0 0"/>
+        <imageHighlightedColor value="0 0 0 0"/>
+        <imageSelectedColor value="$preset_fs25_colorMainHighlight"/>
     </Profile>
     <Profile name="tc_listRowCellLeft" extends="baseReference" with="anchorStretchingYLeft">
         <textBold value="false" />
         <textSize value="15px" />
         <textAlignment value="left" />
+        <textVerticalAlignment value="middle" />
         <textColor value="$preset_fs25_colorMainLight" />
-        <textSelectedColor value="$preset_fs25_colorMainDark" />
+        <textSelectedColor value="1 1 1 1" />
         <textDisabledColor value="$preset_colorDisabled" />
     </Profile>
     <Profile name="tc_listRowCellRight" extends="tc_listRowCellLeft">
         <textAlignment value="right" />
     </Profile>
-    <Profile name="tc_table" extends="emptyPanel" with="anchorStretchingYLeft pivotTopLeft" />
+    <Profile name="tc_table" extends="emptyPanel" with="anchorStretchingYLeft pivotTopLeft">
+        <listItemSpacing value="3px"/>
+    </Profile>
+    <!-- Hairline under a table's column headings. -->
+    <Profile name="tc_tableHeaderDivider" extends="baseReference" with="anchorBottomStretchingX">
+        <height value="1px"/>
+        <imageSliceId value="gui.colorPreset"/>
+        <imageColor value="$preset_tc_headerDivider"/>
+    </Profile>
 
     <!-- Plain, non-stretching header row container. Deliberately NOT
          fs25_statisticsHeaderBox (anchorTopStretchingX) — that mixin stretches
