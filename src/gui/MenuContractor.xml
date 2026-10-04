@@ -360,9 +360,8 @@
             <GuiElement profile="tc_tableHeaderRow" id="staffHeaderRow" position="40px -70px" size="600px 30px">
                 <Button profile="tc_tableHeader" id="staffHeaderCol1" position="14px 0px" text="$l10n_tc_staff_columnName" handleFocus="false"/>
                 <Button profile="tc_tableHeader" id="staffHeaderCol2" position="170px 0px" text="$l10n_tc_staff_columnWorkSpeed" handleFocus="false"/>
-                <Button profile="tc_tableHeader" id="staffHeaderCol3" position="236px 0px" text="$l10n_tc_staff_columnTier" handleFocus="false"/>
-                <Button profile="tc_tableHeader" id="staffHeaderCol4" position="350px 0px" text="$l10n_tc_staff_columnStatus" handleFocus="false"/>
-                <Button profile="tc_tableHeader" id="staffHeaderCol5" position="456px 0px" text="$l10n_tc_staff_columnJob" handleFocus="false"/>
+                <Button profile="tc_tableHeader" id="staffHeaderCol4" position="236px 0px" text="$l10n_tc_staff_columnStatus" handleFocus="false"/>
+                <Button profile="tc_tableHeader" id="staffHeaderCol5" position="342px 0px" text="$l10n_tc_staff_columnJob" handleFocus="false"/>
                 <Bitmap profile="tc_tableHeaderDivider"/>
             </GuiElement>
 
@@ -375,11 +374,10 @@
                         <Bitmap profile="tc_tableRowAccent"/>
                         <Text profile="tc_listRowCellLeft" position="14px 0px" size="150px 32px" name="name"/>
                         <Text profile="tc_listRowCellLeft" position="170px 0px" size="60px 32px" name="workSpeed"/>
-                        <Text profile="tc_listRowCellLeft" position="236px 0px" size="108px 32px" name="tier"/>
-                        <Text profile="tc_listRowCellLeft" position="350px 0px" size="100px 32px" name="col4"/>
-                        <RoundCorner profile="tc_rowChip" position="350px 0px" size="96px 20px" name="statusChip"/>
-                        <Text profile="tc_rowChipText" position="350px 0px" size="96px 20px" name="statusChipText"/>
-                        <Text profile="tc_listRowCellLeft" position="456px 0px" size="140px 32px" name="col5"/>
+                        <Text profile="tc_listRowCellLeft" position="236px 0px" size="100px 32px" name="col4"/>
+                        <RoundCorner profile="tc_rowChip" position="236px 0px" size="96px 20px" name="statusChip"/>
+                        <Text profile="tc_rowChipText" position="236px 0px" size="96px 20px" name="statusChipText"/>
+                        <Text profile="tc_listRowCellLeft" position="342px 0px" size="254px 32px" name="col5"/>
                     </ListItem>
                 </SmoothList>
                 <ThreePartBitmap profile="tc_slider_box" position="610px 0px" size="6px 500px">
@@ -392,7 +390,7 @@
                 <Text profile="tc_panelHeading" id="staffDetailTitle" text="" position="24px -16px" size="752px 32px"/>
                 <Bitmap profile="tc_divider" position="24px -56px" size="752px 1px"/>
 
-                <BoxLayout profile="tc_detailRows" id="staffDetailRows" position="24px -64px" size="480px 330px">
+                <BoxLayout profile="tc_detailRows" id="staffDetailRows" position="24px -64px" size="480px 340px">
                     <GuiElement profile="tc_detailRow" size="480px 34px">
                         <Text profile="tc_detailLabel" text="$l10n_tc_detail_age" position="0px 0px" size="170px 34px"/>
                         <Text profile="tc_detailValue" id="staffDetailAge" text="" position="170px 0px" size="310px 34px"/>
@@ -400,10 +398,11 @@
                     </GuiElement>
                     <GuiElement profile="tc_detailRow" size="480px 34px">
                         <Text profile="tc_detailLabel" text="$l10n_tc_detail_workSpeed" position="0px 0px" size="170px 34px"/>
-                        <Text profile="tc_detailValue" id="staffDetailWorkSpeed" text="" position="170px 0px" size="310px 34px"/>
+                        <RoundCorner profile="tc_chip" id="staffDetailWorkSpeedChip" position="170px -7px" size="96px 20px"/>
+                        <Text profile="tc_chipText" id="staffDetailWorkSpeedChipText" position="170px -7px" size="96px 20px"/>
                         <Bitmap profile="tc_detailRowDivider"/>
                     </GuiElement>
-                    <!-- One chip per job size tier (small/medium/large). -->
+                    <!-- Tractor experience: one chip per tractor size (small/medium/large). -->
                     <GuiElement profile="tc_detailRow" size="480px 34px">
                         <Text profile="tc_detailLabel" text="$l10n_tc_detail_tiers" position="0px 0px" size="170px 34px"/>
                         <RoundCorner profile="tc_chip" id="staffDetailTierChip1" position="170px -7px" size="96px 20px"/>
@@ -417,6 +416,12 @@
                     <GuiElement profile="tc_detailRow" size="480px 34px">
                         <Text profile="tc_detailLabel" text="$l10n_tc_detail_salary" position="0px 0px" size="170px 34px"/>
                         <Text profile="tc_detailValue" id="staffDetailSalary" text="" position="170px 0px" size="310px 34px"/>
+                        <Bitmap profile="tc_detailRowDivider"/>
+                    </GuiElement>
+                    <GuiElement profile="tc_detailRow" size="480px 34px">
+                        <Text profile="tc_detailLabel" text="$l10n_tc_detail_cleanliness" position="0px 0px" size="170px 34px"/>
+                        <RoundCorner profile="tc_chip" id="staffDetailCleanlinessChip" position="170px -7px" size="96px 20px"/>
+                        <Text profile="tc_chipText" id="staffDetailCleanlinessChipText" position="170px -7px" size="96px 20px"/>
                         <Bitmap profile="tc_detailRowDivider"/>
                     </GuiElement>
                     <GuiElement profile="tc_detailRow" id="staffRowStatus" size="480px 34px">
@@ -445,6 +450,26 @@
                         <Text profile="tc_detailValue" id="staffDetailHoliday" text="" position="170px 0px" size="310px 34px"/>
                     </GuiElement>
                 </BoxLayout>
+
+                <!-- 044: operation skills, one chip each in TheContractorWorker.SKILLS order, four to a row. -->
+                <Text profile="tc_sectionTitle" text="$l10n_tc_staff_skillsHeading" position="24px -418px" size="752px 24px"/>
+                <Bitmap profile="tc_divider" position="24px -446px" size="752px 1px"/>
+                <RoundCorner profile="tc_chip" id="staffDetailSkillChip1" position="24px -460px" size="180px 22px"/>
+                <Text profile="tc_chipText" id="staffDetailSkillChipText1" position="24px -460px" size="180px 22px"/>
+                <RoundCorner profile="tc_chip" id="staffDetailSkillChip2" position="214px -460px" size="180px 22px"/>
+                <Text profile="tc_chipText" id="staffDetailSkillChipText2" position="214px -460px" size="180px 22px"/>
+                <RoundCorner profile="tc_chip" id="staffDetailSkillChip3" position="404px -460px" size="180px 22px"/>
+                <Text profile="tc_chipText" id="staffDetailSkillChipText3" position="404px -460px" size="180px 22px"/>
+                <RoundCorner profile="tc_chip" id="staffDetailSkillChip4" position="594px -460px" size="180px 22px"/>
+                <Text profile="tc_chipText" id="staffDetailSkillChipText4" position="594px -460px" size="180px 22px"/>
+                <RoundCorner profile="tc_chip" id="staffDetailSkillChip5" position="24px -492px" size="180px 22px"/>
+                <Text profile="tc_chipText" id="staffDetailSkillChipText5" position="24px -492px" size="180px 22px"/>
+                <RoundCorner profile="tc_chip" id="staffDetailSkillChip6" position="214px -492px" size="180px 22px"/>
+                <Text profile="tc_chipText" id="staffDetailSkillChipText6" position="214px -492px" size="180px 22px"/>
+                <RoundCorner profile="tc_chip" id="staffDetailSkillChip7" position="404px -492px" size="180px 22px"/>
+                <Text profile="tc_chipText" id="staffDetailSkillChipText7" position="404px -492px" size="180px 22px"/>
+                <RoundCorner profile="tc_chip" id="staffDetailSkillChip8" position="594px -492px" size="180px 22px"/>
+                <Text profile="tc_chipText" id="staffDetailSkillChipText8" position="594px -492px" size="180px 22px"/>
 
                 <!-- 042: live portrait, driven by TCWorkerPortrait (it sets the scene). -->
                 <Render profile="tc_workerPortrait" id="staffPortraitRender" position="520px -68px"/>

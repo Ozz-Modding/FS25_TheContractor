@@ -50,4 +50,9 @@ function TCJobCompletedEvent.showNotification(job)
 
     g_currentMission:addIngameNotification(FSBaseMission.INGAME_NOTIFICATION_OK,
         string.format(g_i18n:getText("tc_summary_notification"), job:getSummaryText()))
+
+    -- 045: what the workers did to the machines.
+    for _, line in ipairs(TCJobConsequences.getReportLines(job)) do
+        g_currentMission:addIngameNotification(FSBaseMission.INGAME_NOTIFICATION_INFO, line)
+    end
 end

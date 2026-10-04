@@ -153,6 +153,7 @@ function TheContractorJobs:createJob(farmId, jobType, fieldId, requiredSkillLeve
     end
     job.fruitTypeName = fruitTypeName
     job.startState = startState
+    job.operationSkill = TheContractorJobGeneration.getOperationSkill(jobType, fieldId)
     job.deadlineDay = deadlineDay or TheContractorJobs.getNextOccurrenceDay(targetPeriod, targetDayInPeriod)
     if includesHaulage and deliveryStation ~= nil then
         job.includesHaulage = true
@@ -729,11 +730,10 @@ end
 -- personally, or a hired worker who meets/exceeds the requirement, gets the
 -- full base reward; an under-qualified-but-still-assignable worker (018
 -- already allows this, just warns - see TheContractorAllocation.CAPABILITY.
--- WARN) gets it scaled down linearly by workerSkill/requiredSkillLevel. A
--- job whose equipment carries no size tier at all (e.g. a self-propelled
--- combine with no tractor) has no tier to compare against, so it's treated
--- as always fully qualified, same as TheContractorAllocation:
--- previewWorkerCapability already does for that case.
+-- WARN) gets it scaled down linearly by workerSkill/requiredSkillLevel,
+-- workerSkill being the weaker of their tractor rating and operation skill
+-- for the job (044). A job with no tractor (e.g. a self-propelled combine)
+-- is judged on the operation skill alone.
 function TheContractorJobs:calculateReputationReward(job)
     local reward = TheContractorJobs.getBaseReputationReward(job) * self:getReputationQualificationRatio(job)
     return math.max(TheContractorJobs.MIN_COMPLETION_REPUTATION_REWARD, math.floor(reward))
@@ -741,17 +741,18 @@ end
 
 -- 1 for a fully-qualified operator (see calculateReputationReward), else
 -- workerSkill/requiredSkillLevel. On a two-worker haulage job (035) each
--- worker is judged against their own equipment's tier and the weaker ratio
--- counts.
+-- worker is judged against their own equipment's tier and their own
+-- operation skill (haulage for the hauler), and the weaker ratio counts.
 function TheContractorJobs:getReputationQualificationRatio(job)
-    local ratio = self:getWorkerQualificationRatio(job, job.assignedWorkerId, job.assignedEquipmentIds)
+    local ratio = self:getWorkerQualificationRatio(job, job.assignedWorkerId, job.assignedEquipmentIds, false)
     if job.haulerWorkerId ~= nil then
-        ratio = math.min(ratio, self:getWorkerQualificationRatio(job, job.haulerWorkerId, job.haulageEquipmentIds))
+        ratio = math.min(ratio,
+            self:getWorkerQualificationRatio(job, job.haulerWorkerId, job.haulageEquipmentIds, true))
     end
     return ratio
 end
 
-function TheContractorJobs:getWorkerQualificationRatio(job, workerId, equipmentIds)
+function TheContractorJobs:getWorkerQualificationRatio(job, workerId, equipmentIds, isHauler)
     if workerId == nil then
         return 1
     end
@@ -761,12 +762,15 @@ function TheContractorJobs:getWorkerQualificationRatio(job, workerId, equipmentI
         return 1
     end
 
-    local requiredTier = g_currentMission.TheContractor.Allocation:getRequiredTier(equipmentIds)
-    if requiredTier == nil then
-        return 1
+    local ratings = g_currentMission.TheContractor.Allocation:getWorkerJobRatings(worker, job, equipmentIds,
+        isHauler)
+    -- Allocation never lets an uncertified worker take the tractor, so a
+    -- missing tractor rating here means nothing to judge, not a zero.
+    if ratings.tractorRating == nil then
+        ratings.tractorTier = nil
     end
 
-    local workerSkill = worker:getTierCapability(requiredTier)
+    local workerSkill = TheContractorAllocation.getWeakestRating(ratings)
     if workerSkill == nil or workerSkill >= job.requiredSkillLevel then
         return 1
     end
@@ -824,6 +828,11 @@ function TheContractorJobs:completeJob(job)
     -- clients in the TCJobCompletedEvent snapshot below.
     job.completedAt = TheContractorJobs.getGameMinutes()
     job.qualityScore = self:calculateQualityScore(job)
+
+    -- 045: extra wear from skill gaps, dirt, and whether the workers wash
+    -- the equipment - before the cooldown (it adds the washing time) and
+    -- the broadcast (it carries the reports).
+    TCJobConsequences.applyOnCompletion(job)
 
     job:transitionTo(TheContractorJob.STATE.COMPLETED)
 
@@ -914,6 +923,12 @@ function TheContractorJobs.writeJob(streamId, job)
     streamWriteInt32(streamId, job.startState or -1)
     streamWriteString(streamId, job.supplyStatus or "")
     streamWriteString(streamId, job.supplyFillTypeName or "")
+
+    -- 044. getOperationSkill fills it in for a job from an older save.
+    streamWriteString(streamId, job:getOperationSkill() or "")
+
+    -- 045.
+    TCJobConsequences.writeReports(streamId, job)
 end
 
 function TheContractorJobs.readJob(streamId)
@@ -988,6 +1003,11 @@ function TheContractorJobs.readJob(streamId)
     local supplyFillTypeName = streamReadString(streamId)
     job.supplyStatus = supplyStatus ~= "" and supplyStatus or nil
     job.supplyFillTypeName = supplyFillTypeName ~= "" and supplyFillTypeName or nil
+
+    local operationSkill = streamReadString(streamId)
+    job.operationSkill = operationSkill ~= "" and operationSkill or nil
+
+    job.workerReports = TCJobConsequences.readReports(streamId)
 
     return job
 end
@@ -1086,6 +1106,10 @@ function TheContractorJobs:loadFromXMLFile(xmlFile)
             job.stuckInterventions = Utils.getNoNil(getXMLInt(xmlFile, jobKey .. ".summary#stuckInterventions"), 0)
             job.qualityScore = getXMLInt(xmlFile, jobKey .. ".summary#qualityScore")
             job.startState = getXMLInt(xmlFile, jobKey .. "#startState")
+            -- 044: nil for a job saved before it existed - getOperationSkill
+            -- works it out on first use.
+            job.operationSkill = getXMLString(xmlFile, jobKey .. "#operationSkill")
+            TCJobConsequences.loadFromXML(xmlFile, jobKey, job)
             job.workTotal = getXMLFloat(xmlFile, jobKey .. "#workTotal")
             local baleIndex = 0
             while true do
@@ -1147,6 +1171,10 @@ function TheContractorJobs:saveToXmlFile(xmlFile)
             if job.startState ~= nil then
                 setXMLInt(xmlFile, jobKey .. "#startState", job.startState)
             end
+            if job.operationSkill ~= nil then
+                setXMLString(xmlFile, jobKey .. "#operationSkill", job.operationSkill)
+            end
+            TCJobConsequences.saveToXML(xmlFile, jobKey, job)
             if job.workTotal ~= nil then
                 setXMLFloat(xmlFile, jobKey .. "#workTotal", job.workTotal)
             end

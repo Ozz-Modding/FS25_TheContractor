@@ -30,6 +30,13 @@ TCWorkerAppearance.GENDER = {
 TCWorkerAppearance.FEMALE_CHANCE = 0.5
 TCWorkerAppearance.BEARD_CHANCE = 0.5
 
+-- Wardrobe presets (by name) too costume-like for a hired hand.
+TCWorkerAppearance.BLOCKED_PRESETS = {
+    horsebackRider = true,
+    motorbikeRacer = true,
+    beekeeper = true,
+}
+
 -- Every wardrobe slot, in a fixed order for the network stream.
 TCWorkerAppearance.CONFIG_NAMES = {
     "hairStyle", "glasses", "headgear", "facegear", "face", "beard", "top", "gloves", "bottom", "footwear",
@@ -83,11 +90,16 @@ end
 
 -- Outfits come from the model's own wardrobe presets - complete,
 -- matching sets - rather than random tops and bottoms. Only ones the
--- wardrobe offers to everyone (no DLC/extra content).
+-- wardrobe offers to everyone (no DLC/extra content), minus BLOCKED_PRESETS.
+local function isPresetEligible(preset)
+    return preset.isSelectable and preset.extraContentId == nil
+        and not TCWorkerAppearance.BLOCKED_PRESETS[preset.name]
+end
+
 local function rollOutfit(style)
     local presets = {}
     for _, preset in ipairs(style:getPresets()) do
-        if preset.isSelectable and preset.extraContentId == nil then
+        if isPresetEligible(preset) then
             table.insert(presets, preset)
         end
     end
@@ -110,6 +122,36 @@ local function rollOutfit(style)
     if configs.footwear.selectedItemIndex == 0 and not style.disabledOptionsForSelection.footwear then
         rollItem(configs.footwear)
     end
+end
+
+-- TEMP: dumps every player model's wardrobe presets (the pool rollOutfit
+-- picks from) to the log, for vetting which outfits are daft. Remove when done.
+function TCWorkerAppearance.debugPrintOutfits()
+    print("TheContractor: ---- worker outfit presets ----")
+    for _, entry in ipairs(PlayerSystem.PLAYER_STYLES) do
+        local style = entry.style
+        if style == nil or not style.isConfigurationLoaded then
+            print(string.format("  model %s (%s): not loaded", tostring(entry.filename), tostring(entry.gender)))
+        else
+            print(string.format("  model %s (%s)", tostring(style.xmlFilename), tostring(entry.gender)))
+            for i, preset in ipairs(style:getPresets()) do
+                local eligible = isPresetEligible(preset)
+                local slots = {}
+                for _, configName in ipairs(TCWorkerAppearance.CONFIG_NAMES) do
+                    local slot = preset.configs[configName]
+                    if slot ~= nil then
+                        table.insert(slots, string.format("%s=%s(%s)", configName, tostring(slot.selectionName),
+                            tostring(slot.selectionColorIndex)))
+                    end
+                end
+                print(string.format("    [%d] %s %q text=%s brand=%s selectable=%s extra=%s -> %s",
+                    i, eligible and "PICKABLE" or "skipped ", tostring(preset.name), tostring(preset.text),
+                    tostring(preset.brandName), tostring(preset.isSelectable), tostring(preset.extraContentId),
+                    table.concat(slots, " ")))
+            end
+        end
+    end
+    print("TheContractor: ---- end outfit presets ----")
 end
 
 -- A new look for a worker of `gender`, as appearance data (see toData), or

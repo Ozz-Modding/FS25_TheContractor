@@ -67,6 +67,11 @@ function TCDriverPickerDialog:onOpen()
     local tier = TheContractorDrivers.getVehicleTier(self.vehicle)
     local tierText = tier ~= nil and g_i18n:getText("tc_drivers_picker_tier_" .. tier) or
         g_i18n:getText("tc_drivers_picker_tier_none")
+    -- 044: and the kind of work it does, if any - shown against each worker.
+    self.operationSkill = TheContractorDrivers.getVehicleOperationSkill(self.vehicle)
+    if self.operationSkill ~= nil then
+        tierText = string.format("%s, %s", tierText, g_i18n:getText("tc_skill_" .. self.operationSkill))
+    end
     self.headingText:setText(string.format(g_i18n:getText("tc_drivers_picker_heading"), self.vehicle:getFullName(),
         tierText))
 
@@ -97,7 +102,12 @@ function TCDriverPickerDialog:populateCellForItemInSection(list, section, index,
 
     cell:getAttribute("name"):setText(worker.name)
     cell:getAttribute("workSpeed"):setText(tostring(worker.workSpeed))
-    cell:getAttribute("tier"):setText(MenuContractor.formatTierListCell(worker.tierCapability))
+    local text = MenuContractor.formatTierListCell(worker.tierCapability)
+    if self.operationSkill ~= nil then
+        text = string.format("%s  %s", text,
+            MenuContractor.formatSkill(self.operationSkill, worker:getSkill(self.operationSkill)))
+    end
+    cell:getAttribute("tier"):setText(text)
 end
 
 -- Side-effect free - SmoothList's reloadData re-fires it.

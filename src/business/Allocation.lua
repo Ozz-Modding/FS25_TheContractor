@@ -193,28 +193,65 @@ function TheContractorAllocation:getRequiredTier(equipmentIds)
     return nil
 end
 
+-- 044: the two ratings a worker is judged on for their part of a job -
+-- tractor experience for the tractor among equipmentIds (tractorTier nil if
+-- there's no tractor, e.g. a self-propelled combine; tractorRating nil if
+-- they aren't certified on it), and the operation skill the work uses (the
+-- job's own, or haulage for the hauler on a haulage job, 035).
+function TheContractorAllocation:getWorkerJobRatings(worker, job, equipmentIds, isHauler)
+    local tractorTier = self:getRequiredTier(equipmentIds)
+    local operationSkill = isHauler and "haulage" or job:getOperationSkill()
+    return {
+        tractorTier = tractorTier,
+        tractorRating = tractorTier ~= nil and worker:getTierCapability(tractorTier) or nil,
+        operationSkill = operationSkill,
+        operationRating = operationSkill ~= nil and worker:getSkill(operationSkill) or nil,
+    }
+end
+
+-- The lower of the ratings that apply (an uncertified tractor counts as 0),
+-- and which stat it is (a tier or skill key) - nil, nil if neither applies.
+function TheContractorAllocation.getWeakestRating(ratings)
+    local rating, stat = nil, nil
+    if ratings.tractorTier ~= nil then
+        rating, stat = ratings.tractorRating or 0, ratings.tractorTier
+    end
+    if ratings.operationRating ~= nil and (rating == nil or ratings.operationRating < rating) then
+        rating, stat = ratings.operationRating, ratings.operationSkill
+    end
+    return rating, stat
+end
+
+-- getWeakestRating for a worker's part of a job, as a plain number for
+-- comparing crews - no worker (or nothing to judge) counts as the best.
+function TheContractorAllocation:getWeakestRatingFor(worker, job, equipmentIds, isHauler)
+    if worker == nil then
+        return TheContractorWorker.MAX_SKILL
+    end
+    local rating = TheContractorAllocation.getWeakestRating(self:getWorkerJobRatings(worker, job, equipmentIds,
+        isHauler))
+    return rating or TheContractorWorker.MAX_SKILL
+end
+
 -- Worker capability check (016 vs. 018's design decision): a worker with no
--- rating at all for the equipment's tier is blocked outright; a worker who's
--- certified but whose rating falls short of the job's requiredSkillLevel is
--- merely warned about (still allowed — reduced reputation reward is 022's
--- concern, not enforced here). No tier requirement (nil, e.g. a
--- self-propelled combine) or no worker at all (the player doing it
--- themselves, always unrestricted per Q13) always comes back "ok".
-function TheContractorAllocation:previewWorkerCapability(worker, job, equipmentIds)
+-- rating at all for the equipment's tractor tier is blocked outright; a
+-- worker whose tractor rating or operation skill (044) falls short of the
+-- job's requiredSkillLevel is merely warned about (still allowed — reduced
+-- reputation reward is 022's concern, extra wear 045's, not enforced
+-- here). Operation skills never block. No worker at all (the player doing
+-- it themselves, always unrestricted per Q13) always comes back "ok".
+function TheContractorAllocation:previewWorkerCapability(worker, job, equipmentIds, isHauler)
     if worker == nil then
         return TheContractorAllocation.CAPABILITY.OK
     end
 
-    local requiredTier = self:getRequiredTier(equipmentIds)
-    if requiredTier == nil then
-        return TheContractorAllocation.CAPABILITY.OK
-    end
-
-    if not worker:isCapableOfTier(requiredTier) then
+    local ratings = self:getWorkerJobRatings(worker, job, equipmentIds, isHauler)
+    if ratings.tractorTier ~= nil and ratings.tractorRating == nil then
         return TheContractorAllocation.CAPABILITY.BLOCKED
     end
 
-    if worker:getTierCapability(requiredTier) < job.requiredSkillLevel then
+    local rating = TheContractorAllocation.getWeakestRating(ratings)
+    if rating ~= nil and rating < job.requiredSkillLevel then
         return TheContractorAllocation.CAPABILITY.WARN
     end
 
@@ -268,7 +305,8 @@ function TheContractorAllocation.getCrewShapeError(job, workerIds)
 end
 
 -- Which of two workers operates the field equipment and which hauls: each
--- is judged against their own equipment's tier (previewWorkerCapability),
+-- is judged against their own equipment's tier and their own operation
+-- skill (previewWorkerCapability - the hauler on haulage, 044),
 -- and the pairing whose worse half comes out best wins, so a worker only
 -- certified for the haulage tractor's tier ends up hauling. Returns
 -- operatorId, haulerId, capability. A one-worker (or no-worker) crew just
@@ -279,17 +317,22 @@ function TheContractorAllocation:assignCrewRoles(farmId, job, workerIds, equipme
     if #workerIds < 2 then
         local operatorId = workerIds[1]
         local operator = operatorId ~= nil and staff:getWorker(farmId, operatorId) or nil
-        return operatorId, nil, self:previewWorkerCapability(operator, job, equipmentIds)
+        return operatorId, nil, self:previewWorkerCapability(operator, job, equipmentIds, false)
     end
 
     local best = nil
     for _, pairing in ipairs({ { workerIds[1], workerIds[2] }, { workerIds[2], workerIds[1] } }) do
         local operator = staff:getWorker(farmId, pairing[1])
         local hauler = staff:getWorker(farmId, pairing[2])
-        local capability = worseCapability(self:previewWorkerCapability(operator, job, equipmentIds),
-            self:previewWorkerCapability(hauler, job, haulageEquipmentIds))
-        if best == nil or CAPABILITY_RANK[capability] < CAPABILITY_RANK[best.capability] then
-            best = { operatorId = pairing[1], haulerId = pairing[2], capability = capability }
+        local capability = worseCapability(self:previewWorkerCapability(operator, job, equipmentIds, false),
+            self:previewWorkerCapability(hauler, job, haulageEquipmentIds, true))
+        -- 044: between two equally capable pairings, the one whose weaker
+        -- half is better rated (e.g. the better harvester on the combine).
+        local weakest = math.min(self:getWeakestRatingFor(operator, job, equipmentIds, false),
+            self:getWeakestRatingFor(hauler, job, haulageEquipmentIds, true))
+        if best == nil or CAPABILITY_RANK[capability] < CAPABILITY_RANK[best.capability] or
+            (capability == best.capability and weakest > best.weakest) then
+            best = { operatorId = pairing[1], haulerId = pairing[2], capability = capability, weakest = weakest }
         end
     end
     return best.operatorId, best.haulerId, best.capability

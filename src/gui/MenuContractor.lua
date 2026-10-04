@@ -71,10 +71,10 @@ local function formatCalendarDate(period, dayInPeriod, year)
         formatYear(year))
 end
 
--- Staff (017) — compact per-tier rating for the roster/candidate list column
--- (e.g. "S5 M- L8"), as opposed to Staff.lua's own formatTierCapability
--- (used for the verbose details-panel line instead), which spells out each
--- tier name in full and wouldn't fit a table cell.
+-- Compact per-tier tractor rating for a list cell (e.g. "S5 M- L8"), as
+-- opposed to Staff.lua's own formatTierCapability (console/log), which
+-- spells out each tier name in full. The Staff tab's own list dropped this
+-- column (044 follow-up) - the details panel's tractor chips show it.
 local TIER_ABBREVIATIONS = { small = "S", medium = "M", large = "L" }
 local function formatTierListCell(tierCapability)
     local parts = {}
@@ -86,6 +86,26 @@ local function formatTierListCell(tierCapability)
 end
 -- Also used by TCDriverPickerDialog's worker list (037).
 MenuContractor.formatTierListCell = formatTierListCell
+
+-- 044: "Planting 6" - one operation skill and its rating.
+local function formatSkill(skill, rating)
+    return string.format("%s %d", g_i18n:getText("tc_skill_" .. skill), rating)
+end
+MenuContractor.formatSkill = formatSkill
+
+-- 044: a worker's best operation skill for a list cell, e.g. "Baling 9" -
+-- the column only has room for one; the whole set is in the details panel.
+local LIST_SKILL_COUNT = 1
+local function formatBestSkillsCell(worker)
+    local parts = {}
+    for i, entry in ipairs(worker:getSkillsByRating()) do
+        if i > LIST_SKILL_COUNT then
+            break
+        end
+        table.insert(parts, formatSkill(entry.skill, entry.rating))
+    end
+    return table.concat(parts, ", ")
+end
 
 -- Status chips (043): the fill for each tone. Deep, muted fills under a
 -- white label, after FS25_AdvancedDamageSystem's value badges — they replace
@@ -733,7 +753,8 @@ function MenuContractor:refreshStaffState(farmId, staff, jobs)
     -- rather than showing a column full of "None".
     self.staffHeaderCol4:setText(self.staffView == "candidates" and g_i18n:getText("tc_staff_columnSalary") or
         g_i18n:getText("tc_staff_columnStatus"))
-    self.staffHeaderCol5:setText(self.staffView == "candidates" and "" or g_i18n:getText("tc_staff_columnJob"))
+    self.staffHeaderCol5:setText(self.staffView == "candidates" and g_i18n:getText("tc_staff_columnBestSkills") or
+        g_i18n:getText("tc_staff_columnJob"))
 
     local list = self.staffView == "candidates" and self.candidateList or self.rosterWorkers
     local hasItems = #list > 0
@@ -818,11 +839,10 @@ function MenuContractor:populateStaffCell(index, cell)
 
         cell:getAttribute("name"):setText(candidate.name)
         cell:getAttribute("workSpeed"):setText(tostring(candidate.workSpeed))
-        cell:getAttribute("tier"):setText(formatTierListCell(candidate.tierCapability))
         cell:getAttribute("col4"):setText(g_i18n:formatMoney(candidate.salary, 0, true, true))
         cell:getAttribute("col4"):setVisible(true)
         setChip(cell:getAttribute("statusChip"), cell:getAttribute("statusChipText"), nil)
-        cell:getAttribute("col5"):setText("")
+        cell:getAttribute("col5"):setText(formatBestSkillsCell(candidate))
         return
     end
 
@@ -836,7 +856,6 @@ function MenuContractor:populateStaffCell(index, cell)
 
     cell:getAttribute("name"):setText(worker.name)
     cell:getAttribute("workSpeed"):setText(tostring(worker.workSpeed))
-    cell:getAttribute("tier"):setText(formatTierListCell(worker.tierCapability))
     -- Roster view: column 4 is the status chip, the salary text is the
     -- candidates view's.
     cell:getAttribute("col4"):setVisible(false)
@@ -857,15 +876,28 @@ function MenuContractor:updateStaffDetails()
 
     self.staffDetailTitle:setText(worker.name)
     self.staffDetailAge:setText(tostring(worker.age))
-    self.staffDetailWorkSpeed:setText(string.format(g_i18n:getText("tc_staff_detailWorkSpeed"), worker.workSpeed))
+    -- Chips are plain numbers - every rating is out of 10.
+    setChip(self.staffDetailWorkSpeedChip, self.staffDetailWorkSpeedChipText, tostring(worker.workSpeed),
+        getTierChipTone(worker.workSpeed))
     self.staffDetailSalary:setText(string.format(g_i18n:getText("tc_staff_detailSalary"),
         g_i18n:formatMoney(worker.salary, 0, true, true)))
+    -- 045: a chip, same tones as the skills.
+    setChip(self.staffDetailCleanlinessChip, self.staffDetailCleanlinessChipText,
+        tostring(worker.cleanliness),
+        getTierChipTone(worker.cleanliness))
 
     -- One chip per tier: "Small 7", "Medium -", ...
     for i, tier in ipairs(TheContractorWorker.TIERS) do
         local rating = worker.tierCapability[tier]
         setChip(self["staffDetailTierChip" .. i], self["staffDetailTierChipText" .. i],
             string.format("%s %s", g_i18n:getText("tc_staff_tier_" .. tier), rating ~= nil and tostring(rating) or "-"),
+            getTierChipTone(rating))
+    end
+
+    -- 044: one chip per operation skill: "Harvesting 3", "Baling 8", ...
+    for i, skill in ipairs(TheContractorWorker.SKILLS) do
+        local rating = worker:getSkill(skill)
+        setChip(self["staffDetailSkillChip" .. i], self["staffDetailSkillChipText" .. i], formatSkill(skill, rating),
             getTierChipTone(rating))
     end
 
@@ -1069,7 +1101,8 @@ function MenuContractor:updateInboxDetails()
     self.inboxDetailTargetDate:setText(formatTargetDate(job.targetPeriod, job.targetDayInPeriod))
     self.inboxDetailPrice:setText(g_i18n:formatMoney(job.price, 0, true, true))
     self.inboxDetailCrew:setText(self:getInboxCrewText(job))
-    self.inboxDetailSkill:setText(string.format(g_i18n:getText("tc_inbox_skillValue"), job.requiredSkillLevel))
+    self.inboxDetailSkill:setText(string.format(g_i18n:getText("tc_inbox_skillValue"),
+        job:getOperationSkillText() or "-", job.requiredSkillLevel))
 
     -- Harvest & haul (035): where the crop has to go.
     self.inboxRowDelivery:setVisible(job.includesHaulage)
@@ -1973,9 +2006,10 @@ function MenuContractor:getAllocationProblem(job)
         return g_i18n:getText(crewError), true
     end
 
-    local _, _, capability = allocation:assignCrewRoles(farmId, job, workerIds, equipmentIds, haulageIds)
+    local operatorId, haulerId, capability = allocation:assignCrewRoles(farmId, job, workerIds, equipmentIds,
+        haulageIds)
     if capability == TheContractorAllocation.CAPABILITY.BLOCKED then
-        return g_i18n:getText("tc_allocation_blockedWarning"), true
+        return self:getCrewWeaknessText(job, operatorId, haulerId, equipmentIds, haulageIds), true
     end
 
     local missing = allocation:getMissingFromSelection(job, equipmentIds)
@@ -1990,9 +2024,49 @@ function MenuContractor:getAllocationProblem(job)
     end
 
     if capability == TheContractorAllocation.CAPABILITY.WARN then
-        return g_i18n:getText("tc_allocation_underqualifiedWarning"), false
+        return self:getCrewWeaknessText(job, operatorId, haulerId, equipmentIds, haulageIds), false
     end
     return nil, false
+end
+
+-- 044: the allocation warning for a crew that's blocked or under-qualified,
+-- naming who and what - an uncertified tractor size first ("Amy Hall isn't
+-- certified on large tractors."), else the weakest rating that falls short
+-- ("Amy Hall: Planting 3, the job needs 6 - ...").
+function MenuContractor:getCrewWeaknessText(job, operatorId, haulerId, equipmentIds, haulageIds)
+    local farmId = g_currentMission:getFarmId()
+    local staff = g_currentMission.TheContractor.Staff
+    local allocation = g_currentMission.TheContractor.Allocation
+
+    local crew = { { workerId = operatorId, equipmentIds = equipmentIds, isHauler = false } }
+    if haulerId ~= nil then
+        table.insert(crew, { workerId = haulerId, equipmentIds = haulageIds, isHauler = true })
+    end
+
+    local weakest = nil
+    for _, member in ipairs(crew) do
+        local worker = member.workerId ~= nil and staff:getWorker(farmId, member.workerId) or nil
+        if worker ~= nil then
+            local ratings = allocation:getWorkerJobRatings(worker, job, member.equipmentIds, member.isHauler)
+            if ratings.tractorTier ~= nil and ratings.tractorRating == nil then
+                return string.format(g_i18n:getText("tc_allocation_blockedWarning"), worker.name,
+                    g_i18n:getText("tc_growth_stat_" .. ratings.tractorTier))
+            end
+            local rating, stat = TheContractorAllocation.getWeakestRating(ratings)
+            if rating ~= nil and (weakest == nil or rating < weakest.rating) then
+                weakest = { worker = worker, rating = rating, stat = stat }
+            end
+        end
+    end
+
+    if weakest == nil or weakest.rating >= job.requiredSkillLevel then
+        return nil
+    end
+
+    local statText = TheContractorWorker.IS_SKILL[weakest.stat] and g_i18n:getText("tc_skill_" .. weakest.stat) or
+        g_i18n:getText("tc_staff_tierTractor_" .. weakest.stat)
+    return string.format(g_i18n:getText("tc_allocation_underqualifiedWarning"), weakest.worker.name, statText,
+        weakest.rating, job.requiredSkillLevel)
 end
 
 -- Live capability preview (016 vs. 018's design decision) as the worker/
@@ -2428,6 +2502,10 @@ function MenuContractor:onClickOverview()
 end
 
 function MenuContractor:updateSubCategoryPages(subCategoryIndex)
+    -- TEMP: outfit preset dump for vetting worker looks - remove when done.
+    if self.subCategoryPaging:getState() == MenuContractor.SUB_CATEGORY.STAFF then
+        TCWorkerAppearance.debugPrintOutfits()
+    end
     self:updateContent()
     self:setMenuButtonInfoDirty()
 end

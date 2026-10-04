@@ -54,6 +54,15 @@ TheContractorCooldown.BUFFER_FACTORS = {
                 TheContractorCooldown.MIN_BUFFER_MINUTES)
         end,
     },
+    -- 045: washing the equipment down, if the workers chose to - worked
+    -- out by TCJobConsequences.applyOnCompletion just before this (the
+    -- slower worker's time, on a two-worker job). 0 if nobody washed.
+    {
+        name = "washing",
+        getMinutes = function(job, worker)
+            return job.washMinutes or 0
+        end,
+    },
 }
 
 function TheContractorCooldown.new()
@@ -175,6 +184,8 @@ function TheContractorCooldown:endCooldown(farmId, cooldownId)
         local job = g_currentMission.TheContractor.Jobs:getJobById(pendingEntry.jobId)
         if job ~= nil then
             TCJobSiteSetup.returnHome(job)
+            -- 045: and comes out clean, if it was washed.
+            TCJobConsequences.washEquipment(job)
         end
     end
 

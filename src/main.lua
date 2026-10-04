@@ -16,6 +16,8 @@ source(TheContractor.dir .. "src/util/TCVehicleLock.lua")
 source(TheContractor.dir .. "src/util/TCJobSiteSetup.lua")
 source(TheContractor.dir .. "src/util/TCHaulage.lua")
 source(TheContractor.dir .. "src/util/TCJobSupplies.lua")
+source(TheContractor.dir .. "src/util/TCJobConsequences.lua")
+source(TheContractor.dir .. "src/util/TCWorkerFieldSpeed.lua")
 source(TheContractor.dir .. "src/util/TCAutoDrive.lua")
 source(TheContractor.dir .. "src/util/TCCourseplay.lua")
 source(TheContractor.dir .. "src/util/TCCalendar.lua")
@@ -258,8 +260,10 @@ function TheContractor:consoleCommandListStaffPool()
 
     local lines = {}
     for _, candidate in ipairs(pool) do
-        table.insert(lines, string.format("#%d %s - speed %d, salary %.0f, tiers: %s", candidate.id, candidate.name,
-            candidate.workSpeed, candidate.salary, TheContractorStaff.formatTierCapability(candidate.tierCapability)))
+        table.insert(lines, string.format("#%d %s - speed %d, salary %.0f, tractors: %s, skills: %s", candidate.id,
+            candidate.name, candidate.workSpeed, candidate.salary,
+            TheContractorStaff.formatTierCapability(candidate.tierCapability),
+            TheContractorStaff.formatSkills(candidate.skills)))
     end
     return table.concat(lines, "\n")
 end

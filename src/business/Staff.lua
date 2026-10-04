@@ -18,7 +18,7 @@
 --
 -- Salary (036, replacing 026's one-off hire fee) is charged per period, on
 -- PERIOD_CHANGED, for every hired worker whatever their status: about one
--- small job's pay for an average worker (~4k), up to 7k for the best
+-- small job's pay for an average worker (~5k), up to 8.5k for the best
 -- possible one. The first period is paid up front at hire, so hiring just
 -- after a period change and releasing just before the next isn't free. No
 -- refund on release, no proration. Pool sizing and the daily add/remove odds
@@ -30,11 +30,26 @@ TheContractorStaff_mt = Class(TheContractorStaff)
 TheContractorStaff.BASE_SALARY = 1500
 TheContractorStaff.SALARY_PER_WORK_SPEED = 250
 TheContractorStaff.SALARY_PER_TIER_POINT = 100
+-- 044: only a worker's SALARIED_SKILL_COUNT best operation skills are paid
+-- for - you pay for their specialisms, not for being average at everything.
+TheContractorStaff.SALARY_PER_SKILL_POINT = 75
+TheContractorStaff.SALARIED_SKILL_COUNT = 2
 
 -- Independent per-tier roll: each tier has this chance of the worker being
 -- certified on it at all (a random 1-10 rating), otherwise "not certified"
 -- (the key stays absent from tierCapability, per Worker.lua's convention).
 TheContractorStaff.TIER_CERTIFICATION_CHANCE = 0.65
+
+-- 044: operation skills. Every skill gets a SKILL_BASE_MIN-SKILL_BASE_MAX
+-- base roll, then SPECIALISMS_MIN-SPECIALISMS_MAX of them, picked at random,
+-- are re-rolled as specialisms (SPECIALISM_MIN-SPECIALISM_MAX), so each
+-- worker has something they're clearly good at.
+TheContractorStaff.SKILL_BASE_MIN = 1
+TheContractorStaff.SKILL_BASE_MAX = 4
+TheContractorStaff.SPECIALISM_MIN = 5
+TheContractorStaff.SPECIALISM_MAX = 10
+TheContractorStaff.SPECIALISMS_MIN = 1
+TheContractorStaff.SPECIALISMS_MAX = 2
 
 -- Pool lifecycle: seeded up to INITIAL_POOL_SIZE candidates on first ever
 -- load (or if an existing save's pool is found empty, e.g. upgrading a save
@@ -62,14 +77,15 @@ TheContractorStaff.GROWTH_POTENTIAL_MIN_ROLL = 0.4
 
 -- Each completed job gives every worker on it one growth roll:
 -- GROWTH_BASE_CHANCE x the job's quality (029, 0-1) x how much the job
--- stretched them. At or under the job's requiredSkillLevel on the tier they
--- drove is a stretch; more than GROWTH_EASY_MARGIN above it is easy work.
--- A successful roll spends one growthPotential point on one stat, picked by
--- GROWTH_WEIGHTS among those that can still move: +1 workSpeed, +1 on the
--- tier driven, or - once that tier is at CERTIFY_THRESHOLD - a new
--- certification on the next tier up, starting at CERTIFY_START_RATING.
--- About 3 in 10 good jobs grow a worker, so a young worker's full pool
--- takes around 40 jobs to use up.
+-- stretched them. At or under the job's requiredSkillLevel on their weaker
+-- rating for the job (tractor or operation skill, 044) is a stretch; more
+-- than GROWTH_EASY_MARGIN above it is easy work. A successful roll spends
+-- one growthPotential point on one stat, picked by GROWTH_WEIGHTS among
+-- those that can still move: +1 workSpeed, +1 on the operation skill used
+-- (044), +1 on the tractor tier driven, or - once that tier is at
+-- CERTIFY_THRESHOLD - a new certification on the next tier up, starting at
+-- CERTIFY_START_RATING. About 3 in 10 good jobs grow a worker, so a young
+-- worker's full pool takes around 40 jobs to use up.
 TheContractorStaff.GROWTH_BASE_CHANCE = 0.3
 TheContractorStaff.GROWTH_STRETCH_MULTIPLIER = 1.5
 TheContractorStaff.GROWTH_EASY_MULTIPLIER = 0.5
@@ -77,9 +93,10 @@ TheContractorStaff.GROWTH_EASY_MARGIN = 2
 TheContractorStaff.CERTIFY_THRESHOLD = 7
 TheContractorStaff.CERTIFY_START_RATING = 2
 TheContractorStaff.GROWTH_WEIGHTS = {
-    tier = 0.5,
-    workSpeed = 0.3,
-    certify = 0.2,
+    skill = 0.35,
+    tier = 0.3,
+    workSpeed = 0.2,
+    certify = 0.15,
 }
 
 -- Sickness (031). Every worker gets a hidden 0-1 sicknessPropensity at
@@ -240,6 +257,27 @@ function TheContractorStaff.rollTierCapability()
     return tierCapability
 end
 
+-- 044: see SKILL_BASE_MIN/SPECIALISM_MIN above.
+function TheContractorStaff.rollSkills()
+    local skills = {}
+    for _, skill in ipairs(TheContractorWorker.SKILLS) do
+        skills[skill] = math.random(TheContractorStaff.SKILL_BASE_MIN, TheContractorStaff.SKILL_BASE_MAX)
+    end
+
+    local remaining = table.clone(TheContractorWorker.SKILLS)
+    local specialisms = math.random(TheContractorStaff.SPECIALISMS_MIN, TheContractorStaff.SPECIALISMS_MAX)
+    for _ = 1, specialisms do
+        local skill = table.remove(remaining, math.random(#remaining))
+        skills[skill] = math.random(TheContractorStaff.SPECIALISM_MIN, TheContractorStaff.SPECIALISM_MAX)
+    end
+    return skills
+end
+
+-- 045: uniform - a trait, not a skill.
+function TheContractorStaff.rollCleanliness()
+    return math.random(TheContractorWorker.MIN_CLEANLINESS, TheContractorWorker.MAX_CLEANLINESS)
+end
+
 function TheContractorStaff.rollAge()
     return math.random(TheContractorStaff.MIN_AGE, TheContractorStaff.MAX_AGE)
 end
@@ -263,7 +301,7 @@ end
 -- Per period (036). Always derived from current stats: recomputed on load
 -- and whenever a worker grows (applyWorkerGrowth), so a better worker costs
 -- more.
-function TheContractorStaff.getSalary(workSpeed, tierCapability)
+function TheContractorStaff.getSalary(workSpeed, tierCapability, skills)
     local salary = TheContractorStaff.BASE_SALARY + workSpeed * TheContractorStaff.SALARY_PER_WORK_SPEED
 
     for _, tier in ipairs(TheContractorWorker.TIERS) do
@@ -271,6 +309,16 @@ function TheContractorStaff.getSalary(workSpeed, tierCapability)
         if rating ~= nil then
             salary = salary + rating * TheContractorStaff.SALARY_PER_TIER_POINT
         end
+    end
+
+    -- 044: the best SALARIED_SKILL_COUNT operation skills only.
+    local ratings = {}
+    for _, skill in ipairs(TheContractorWorker.SKILLS) do
+        table.insert(ratings, (skills or {})[skill] or TheContractorWorker.MIN_SKILL)
+    end
+    table.sort(ratings, function(a, b) return a > b end)
+    for i = 1, math.min(TheContractorStaff.SALARIED_SKILL_COUNT, #ratings) do
+        salary = salary + ratings[i] * TheContractorStaff.SALARY_PER_SKILL_POINT
     end
 
     return salary
@@ -306,6 +354,15 @@ function TheContractorStaff.formatTierCapability(tierCapability)
     return table.concat(parts, ", ")
 end
 
+-- 044, console/log only: "harvesting=3, baling=8, ...".
+function TheContractorStaff.formatSkills(skills)
+    local parts = {}
+    for _, skill in ipairs(TheContractorWorker.SKILLS) do
+        table.insert(parts, skill .. "=" .. tostring(skills[skill]))
+    end
+    return table.concat(parts, ", ")
+end
+
 -- Candidate pool lifecycle (server-authoritative) ------------------------
 
 -- Rolls a brand new candidate and adds it to the pool, applying locally and
@@ -330,16 +387,18 @@ function TheContractorStaff:addCandidateToPool()
 
     local workSpeed = TheContractorStaff.rollWorkSpeed()
     local tierCapability = TheContractorStaff.rollTierCapability()
-    local salary = TheContractorStaff.getSalary(workSpeed, tierCapability)
+    local skills = TheContractorStaff.rollSkills()
+    local salary = TheContractorStaff.getSalary(workSpeed, tierCapability, skills)
     local gender = TCWorkerAppearance.rollGender()
     local name = TheContractorStaff.generateName(gender)
     local age = TheContractorStaff.rollAge()
     local growthPotential = TheContractorStaff.rollGrowthPotential(age)
     local birthPeriod = TheContractorStaff.rollBirthPeriod()
     local sicknessPropensity = TheContractorStaff.rollSicknessPropensity()
+    local cleanliness = TheContractorStaff.rollCleanliness()
 
     local candidate = TheContractorWorker.new(id, nil, name, workSpeed, tierCapability, salary, age,
-        growthPotential, birthPeriod, sicknessPropensity)
+        growthPotential, birthPeriod, sicknessPropensity, skills, cleanliness)
     candidate.gender = gender
     candidate.appearance = TCWorkerAppearance.roll(gender)
     self:applyCandidateAdded(candidate)
@@ -908,29 +967,31 @@ end
 
 -- Called from TheContractorJobs:completeJob once the job's qualityScore is
 -- set. Each hired worker on the job (operator, and hauler on a haulage job,
--- 035) gets one growth roll against the tier of the equipment they drove.
--- A player-driven job has no worker, so nothing grows.
+-- 035) gets one growth roll against their ratings for it (044: the tractor
+-- tier they drove and the operation skill the job used). A player-driven
+-- job has no worker, so nothing grows.
 function TheContractorStaff:applyGrowthFromJob(job)
     if not g_currentMission:getIsServer() then
         return
     end
 
     if job.assignedWorkerId ~= nil then
-        self:rollWorkerGrowth(job, job.assignedWorkerId, job.assignedEquipmentIds)
+        self:rollWorkerGrowth(job, job.assignedWorkerId, job.assignedEquipmentIds, false)
     end
     if job.haulerWorkerId ~= nil then
-        self:rollWorkerGrowth(job, job.haulerWorkerId, job.haulageEquipmentIds)
+        self:rollWorkerGrowth(job, job.haulerWorkerId, job.haulageEquipmentIds, true)
     end
 end
 
-function TheContractorStaff:rollWorkerGrowth(job, workerId, equipmentIds)
+function TheContractorStaff:rollWorkerGrowth(job, workerId, equipmentIds, isHauler)
     local worker = self:getWorker(job.farmId, workerId)
     if worker == nil or worker.growthPotential <= 0 then
         return
     end
 
-    local tier = g_currentMission.TheContractor.Allocation:getRequiredTier(equipmentIds)
-    local rating = tier ~= nil and worker:getTierCapability(tier) or nil
+    local ratings = g_currentMission.TheContractor.Allocation:getWorkerJobRatings(worker, job, equipmentIds,
+        isHauler)
+    local rating = TheContractorAllocation.getWeakestRating(ratings)
 
     local stretch = 1
     if rating ~= nil then
@@ -946,21 +1007,22 @@ function TheContractorStaff:rollWorkerGrowth(job, workerId, equipmentIds)
         return
     end
 
-    self:growWorker(job.farmId, workerId, tier)
+    self:growWorker(job.farmId, workerId, ratings.tractorTier, ratings.operationSkill)
 end
 
 -- A successful growth roll, wherever it came from (a completed job above,
 -- or driving under AutoDrive/Courseplay - 037's TheContractorDrivers):
 -- spends one growthPotential point on a stat picked by pickGrowth for
--- `tier` (nil if the equipment had no tier), and tells everyone.
-function TheContractorStaff:growWorker(farmId, workerId, tier)
+-- `tier` (nil if the equipment had no tier) and operation `skill` (044,
+-- nil if the work didn't map to one), and tells everyone.
+function TheContractorStaff:growWorker(farmId, workerId, tier, skill)
     local worker = self:getWorker(farmId, workerId)
     if worker == nil or worker.growthPotential <= 0 then
         return
     end
 
     local rating = tier ~= nil and worker:getTierCapability(tier) or nil
-    local stat, value = TheContractorStaff.pickGrowth(worker, tier, rating)
+    local stat, value = TheContractorStaff.pickGrowth(worker, tier, rating, skill)
     if stat == nil then
         -- Nothing left that can move (everything maxed); the leftover
         -- potential just goes unused.
@@ -984,14 +1046,19 @@ function TheContractorStaff:growWorker(farmId, workerId, tier)
 end
 
 -- Weighted pick (GROWTH_WEIGHTS) among the growths still possible for this
--- worker after a job on `tier` (nil if the equipment had no tier). Returns
--- stat, newValue - or nil if none are possible.
-function TheContractorStaff.pickGrowth(worker, tier, rating)
+-- worker after a job on `tier` (nil if the equipment had no tier) using
+-- operation `skill` (nil if none). Returns stat, newValue - or nil if none
+-- are possible.
+function TheContractorStaff.pickGrowth(worker, tier, rating, skill)
     local weights = TheContractorStaff.GROWTH_WEIGHTS
     local options = {}
 
     if worker.workSpeed < TheContractorWorker.MAX_WORK_SPEED then
         table.insert(options, { stat = "workSpeed", value = worker.workSpeed + 1, weight = weights.workSpeed })
+    end
+
+    if skill ~= nil and worker:getSkill(skill) < TheContractorWorker.MAX_SKILL then
+        table.insert(options, { stat = skill, value = worker:getSkill(skill) + 1, weight = weights.skill })
     end
 
     if rating ~= nil then
@@ -1048,7 +1115,7 @@ function TheContractorStaff:applyWorkerGrowth(farmId, workerId, stat, value)
     end
 
     worker:setStat(stat, value)
-    worker.salary = TheContractorStaff.getSalary(worker.workSpeed, worker.tierCapability)
+    worker.salary = TheContractorStaff.getSalary(worker.workSpeed, worker.tierCapability, worker.skills)
 end
 
 -- Wire serialization, shared by the pool/hire events and initial client
@@ -1085,6 +1152,13 @@ function TheContractorStaff.writeWorker(streamId, worker)
             streamWriteInt32(streamId, rating)
         end
     end
+
+    -- 044: every worker has every skill.
+    for _, skill in ipairs(TheContractorWorker.SKILLS) do
+        streamWriteUInt8(streamId, worker:getSkill(skill))
+    end
+    -- 045.
+    streamWriteUInt8(streamId, worker.cleanliness)
 end
 
 function TheContractorStaff.readWorker(streamId)
@@ -1112,7 +1186,14 @@ function TheContractorStaff.readWorker(streamId)
         end
     end
 
-    local worker = TheContractorWorker.new(id, farmId, name, workSpeed, tierCapability, salary, age)
+    local skills = {}
+    for _, skill in ipairs(TheContractorWorker.SKILLS) do
+        skills[skill] = streamReadUInt8(streamId)
+    end
+    local cleanliness = streamReadUInt8(streamId)
+
+    local worker = TheContractorWorker.new(id, farmId, name, workSpeed, tierCapability, salary, age, nil, nil, nil,
+        skills, cleanliness)
     worker.status = status
     worker.gender = gender
     worker.appearance = appearance
@@ -1169,6 +1250,11 @@ function TheContractorStaff.writeWorkerXML(xmlFile, key, worker)
             setXMLInt(xmlFile, key .. "#tier" .. tier, rating)
         end
     end
+
+    for _, skill in ipairs(TheContractorWorker.SKILLS) do
+        setXMLInt(xmlFile, key .. "#skill_" .. skill, worker:getSkill(skill))
+    end
+    setXMLInt(xmlFile, key .. "#cleanliness", worker.cleanliness)
 end
 
 -- farmId is passed in explicitly (nil for a pool candidate) rather than read
@@ -1184,9 +1270,32 @@ function TheContractorStaff.readWorkerXML(xmlFile, key, farmId)
         tierCapability[tier] = getXMLInt(xmlFile, key .. "#tier" .. tier)
     end
 
+    -- 044: a worker saved before 044 has no skills - roll them now, as if
+    -- they'd just joined the pool (and a skill added later gets a base roll).
+    local skills = {}
+    local hasSkills = false
+    for _, skill in ipairs(TheContractorWorker.SKILLS) do
+        skills[skill] = getXMLInt(xmlFile, key .. "#skill_" .. skill)
+        hasSkills = hasSkills or skills[skill] ~= nil
+    end
+    if not hasSkills then
+        skills = TheContractorStaff.rollSkills()
+    end
+    for _, skill in ipairs(TheContractorWorker.SKILLS) do
+        if skills[skill] == nil then
+            skills[skill] = math.random(TheContractorStaff.SKILL_BASE_MIN, TheContractorStaff.SKILL_BASE_MAX)
+        end
+        skills[skill] = math.max(TheContractorWorker.MIN_SKILL, math.min(TheContractorWorker.MAX_SKILL, skills[skill]))
+    end
+
+    -- 045: likewise a worker saved before 045.
+    local cleanliness = getXMLInt(xmlFile, key .. "#cleanliness") or TheContractorStaff.rollCleanliness()
+    cleanliness = math.max(TheContractorWorker.MIN_CLEANLINESS,
+        math.min(TheContractorWorker.MAX_CLEANLINESS, cleanliness))
+
     -- Always recomputed (036), so a pre-036 save's #hireCost is simply
     -- ignored and a retuned formula applies to existing workers too.
-    local salary = TheContractorStaff.getSalary(workSpeed, tierCapability)
+    local salary = TheContractorStaff.getSalary(workSpeed, tierCapability, skills)
 
     -- A worker saved before 030 has neither: roll them now, as if they'd
     -- just joined the pool.
@@ -1202,7 +1311,7 @@ function TheContractorStaff.readWorkerXML(xmlFile, key, farmId)
         TheContractorStaff.rollSicknessPropensity()
 
     local worker = TheContractorWorker.new(id, farmId, name, workSpeed, tierCapability, salary, age,
-        growthPotential, birthPeriod, sicknessPropensity)
+        growthPotential, birthPeriod, sicknessPropensity, skills, cleanliness)
     worker.status = Utils.getNoNil(getXMLString(xmlFile, key .. "#status"), worker.status)
     -- 041: a worker saved before 041 gets a gender from their name and a new
     -- look, as does one whose saved look can't be rebuilt any more.

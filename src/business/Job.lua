@@ -213,7 +213,42 @@ function TheContractorJob.new(id, farmId, jobType, fieldId, requiredSkillLevel, 
     self.supplyStatus = nil
     self.supplyFillTypeName = nil
 
+    -- 044: the worker operation skill the work uses (a
+    -- TheContractorWorker.SKILLS key), decided once at creation by
+    -- TheContractorJobGeneration.getOperationSkill - a sow job's seeding or
+    -- planting depends on the field's planned crop, which could change
+    -- later. Sent to clients; see getOperationSkill for older saves.
+    self.operationSkill = nil
+
+    -- 045 (see TCJobConsequences): hired-worker jobs only. startCondition
+    -- is each piece of equipment's damage/wear when the worker set off -
+    -- { [vehicleId] = { damage, wear } } - server-only, saved while the job
+    -- runs. workerReports is what each worker did to the machines (extra
+    -- wear, washed or not), set on completion, sent to clients and saved.
+    -- washVehicleIds (server-only, saved) is what gets washed when the
+    -- cooldown ends; washMinutes (server-only, transient) the washing time
+    -- the cooldown adds.
+    self.startCondition = nil
+    self.workerReports = {}
+    self.washVehicleIds = nil
+    self.washMinutes = nil
+
     return self
+end
+
+-- 044: operationSkill, worked out on first use for a job from before it
+-- was recorded.
+function TheContractorJob:getOperationSkill()
+    if self.operationSkill == nil then
+        self.operationSkill = TheContractorJobGeneration.getOperationSkill(self.jobType, self.fieldId)
+    end
+    return self.operationSkill
+end
+
+-- 044: "Planting", "Harvesting", ... or nil if the job type has no skill.
+function TheContractorJob:getOperationSkillText()
+    local skill = self:getOperationSkill()
+    return skill ~= nil and g_i18n:getText("tc_skill_" .. skill) or nil
 end
 
 -- Whether work on the job is on hold waiting for supplies (032).
