@@ -4,8 +4,8 @@
      headings use anchorTopCenter profiles (tc_driverPicker* in
      guiProfiles.xml), so x positions are each element's centre relative to
      the content container's top-centre. The list spans -320px..320px; the
-     headings sit over its cells' columns (name 10px, speed 320px, tiers
-     430px in from the list's left edge). -->
+     headings sit over its cells' columns (name 10px, speed 220px, tractors
+     and skill 300px in from the list's left edge). -->
 <GUI onOpen="onOpen" onClose="onClose" onCreate="onCreate">
     <GuiElement profile="newLayer"/>
     <Bitmap profile="dialogFullscreenBg" id="dialogBg"/>
@@ -18,17 +18,17 @@
             <Text profile="fs25_dialogTitle" id="dialogTitleElement" position="0px -30px" text="$l10n_tc_drivers_picker_title"/>
             <Text profile="tc_adDialogInfoText" id="headingText" position="0px -80px" text=""/>
 
-            <Text profile="tc_driverPickerColumn" size="300px 28px" position="-160px -120px" text="$l10n_tc_drivers_picker_columnName"/>
-            <Text profile="tc_driverPickerColumn" size="100px 28px" position="50px -120px" text="$l10n_tc_drivers_picker_columnSpeed"/>
-            <Text profile="tc_driverPickerColumn" size="200px 28px" position="210px -120px" text="$l10n_tc_drivers_picker_columnTiers"/>
+            <Text profile="tc_driverPickerColumn" size="200px 28px" position="-210px -120px" text="$l10n_tc_drivers_picker_columnName"/>
+            <Text profile="tc_driverPickerColumn" size="100px 28px" position="-50px -120px" text="$l10n_tc_drivers_picker_columnSpeed"/>
+            <Text profile="tc_driverPickerColumn" size="330px 28px" position="145px -120px" text="$l10n_tc_drivers_picker_columnTiers"/>
 
             <SmoothList id="workerList" profile="tc_driverPickerList" position="0px -150px" size="640px 288px">
                 <ListItem profile="tc_tableListItem">
                     <RoundCorner profile="tc_tableRowSurface"/>
                     <Bitmap profile="tc_tableRowAccent"/>
-                    <Text profile="tc_listRowCellLeft" position="14px 0px" size="296px 32px" name="name"/>
-                    <Text profile="tc_listRowCellLeft" position="320px 0px" size="100px 32px" name="workSpeed"/>
-                    <Text profile="tc_listRowCellLeft" position="430px 0px" size="200px 32px" name="tier"/>
+                    <Text profile="tc_listRowCellLeft" position="14px 0px" size="200px 32px" name="name"/>
+                    <Text profile="tc_listRowCellLeft" position="220px 0px" size="76px 32px" name="workSpeed"/>
+                    <Text profile="tc_listRowCellLeft" position="300px 0px" size="330px 32px" name="tier"/>
                 </ListItem>
             </SmoothList>
         </GuiElement>

@@ -352,6 +352,65 @@ function TCEquipmentClass.getMissingEquipment(vehicles, jobDef, fruitTypeIndex)
     return missing
 end
 
+-- Operation skills (044) ------------------------------------------------
+--
+-- What kind of work a single vehicle does, as a worker operation skill
+-- (TheContractorWorker.SKILLS), from its specializations - or nil for
+-- something that does no work of its own (a plain tractor). Used where
+-- there's no job to say (AutoDrive/Courseplay driving, 037 - see
+-- getOperationSkillForVehicles). A sowing machine is planting when the
+-- seed it's set to is a planted crop
+-- (TheContractorJobGeneration.isPlantingFruitType), seeding otherwise.
+TCEquipmentClass.OPERATION_SKILL_SPECS = {
+    { spec = "spec_combine", skill = "harvesting" },
+    { spec = "spec_cutter", skill = "harvesting" },
+    { spec = "spec_baler", skill = "baling" },
+    { spec = "spec_baleWrapper", skill = "baling" },
+    { spec = "spec_mower", skill = "grassland" },
+    { spec = "spec_tedder", skill = "grassland" },
+    { spec = "spec_windrower", skill = "grassland" },
+    { spec = "spec_plow", skill = "tillage" },
+    { spec = "spec_cultivator", skill = "tillage" },
+    { spec = "spec_stonePicker", skill = "tillage" },
+    { spec = "spec_sowingMachine", skill = "seeding" },
+    { spec = "spec_sprayer", skill = "cropCare" },
+    { spec = "spec_weeder", skill = "cropCare" },
+    { spec = "spec_trailer", skill = "haulage" },
+}
+
+function TCEquipmentClass.getOperationSkill(vehicle)
+    for _, entry in ipairs(TCEquipmentClass.OPERATION_SKILL_SPECS) do
+        if vehicle[entry.spec] ~= nil then
+            if entry.spec == "spec_sowingMachine" then
+                local spec = vehicle.spec_sowingMachine
+                local seeds = spec.seeds
+                if seeds ~= nil and spec.currentSeed ~= nil and
+                    TheContractorJobGeneration.isPlantingFruitType(seeds[spec.currentSeed]) then
+                    return "planting"
+                end
+            end
+            return entry.skill
+        end
+    end
+    return nil
+end
+
+-- The skill for a whole rig (a tractor and what's hitched to it): the
+-- first vehicle doing real work wins over a trailer, so a seeder with a
+-- trailer behind it is still seeding. nil if nothing in it does any work.
+function TCEquipmentClass.getOperationSkillForVehicles(vehicles)
+    local haulage = nil
+    for _, vehicle in pairs(vehicles) do
+        local skill = TCEquipmentClass.getOperationSkill(vehicle)
+        if skill == "haulage" then
+            haulage = skill
+        elseif skill ~= nil then
+            return skill
+        end
+    end
+    return haulage
+end
+
 -- Haulage (035): a trailer the crop can go in - a tipping trailer
 -- (spec_trailer) with a fill unit that takes the crop's fill type.
 function TCEquipmentClass.isTrailerFor(vehicle, fillTypeIndex)

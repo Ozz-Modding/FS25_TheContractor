@@ -52,6 +52,9 @@ TheContractorJobGeneration_mt = Class(TheContractorJobGeneration)
 --                    spawned bales) - see TCJobProgress.
 --   playerOnly       no hired worker can do it: the AI Helper can't drive a
 --                    standalone bale wrapper.
+--   skill            the worker operation skill the work uses (044, see
+--                    TheContractorWorker.SKILLS). Sow says "seeding", but
+--                    is split by crop - see getOperationSkill.
 --   rewardPerHa      the pricing anchor, vanilla's own per-mission-type
 --                    loadMapData default (plow 2800, cultivate 2300, sow
 --                    2000, harvest 2500, mow 2500, tedder 1500, bale 2200,
@@ -67,34 +70,36 @@ TheContractorJobGeneration_mt = Class(TheContractorJobGeneration)
 -- rewardPerHa (REPUTATION_PER_REWARD), since those already reflect how
 -- slow/laborious each job is.
 TheContractorJobGeneration.JOB_TYPES = {
-    harvest = { cropDependent = true, recordsCrop = true, rewardPerHa = 2500, reputationPerHa = 8.5 },
+    harvest = { cropDependent = true, recordsCrop = true, rewardPerHa = 2500, reputationPerHa = 8.5,
+        skill = "harvesting" },
     cultivate = { implementSpec = "spec_cultivator", vanillaMission = CultivateMission, rewardPerHa = 2300,
-        reputationPerHa = 7.8 },
+        reputationPerHa = 7.8, skill = "tillage" },
     sow = { implementSpec = "spec_sowingMachine", vanillaMission = SowMission, rewardPerHa = 2000,
-        reputationPerHa = 6.8 },
-    plow = { implementSpec = "spec_plow", vanillaMission = PlowMission, rewardPerHa = 2800, reputationPerHa = 9.5 },
+        reputationPerHa = 6.8, skill = "seeding" },
+    plow = { implementSpec = "spec_plow", vanillaMission = PlowMission, rewardPerHa = 2800, reputationPerHa = 9.5,
+        skill = "tillage" },
     mow = { implementSpec = "spec_mower", vanillaMission = MowMission, recordsCrop = true,
-        seasonRule = "noWinterOrEarlySpring", rewardPerHa = 2500, reputationPerHa = 8.5 },
+        seasonRule = "noWinterOrEarlySpring", rewardPerHa = 2500, reputationPerHa = 8.5, skill = "grassland" },
     tedder = { implementSpec = "spec_tedder", vanillaMission = TedderMission, seasonRule = "noWinterOrEarlySpring",
-        serverMeasured = true, rewardPerHa = 1500, reputationPerHa = 5.1 },
+        serverMeasured = true, rewardPerHa = 1500, reputationPerHa = 5.1, skill = "grassland" },
     bale = { implementSpec = "spec_baler", vanillaMission = BaleMission, recordsCrop = true, seasonRule = "noWinter",
-        serverMeasured = true, rewardPerHa = 2200, reputationPerHa = 7.5 },
+        serverMeasured = true, rewardPerHa = 2200, reputationPerHa = 7.5, skill = "baling" },
     baleWrap = { implementSpec = "spec_baleWrapper", vanillaMission = BaleWrapMission, seasonRule = "noWinter",
-        serverMeasured = true, playerOnly = true, rewardPerBale = 300 },
+        serverMeasured = true, playerOnly = true, rewardPerBale = 300, skill = "baling" },
     fertilize = { implementSpec = "spec_sprayer", vanillaMission = FertilizeMission, startState = "sprayLevel",
         supplyFillTypeNames = { "FERTILIZER", "LIQUIDFERTILIZER", "MANURE", "LIQUIDMANURE" }, seasonRule = "noWinter",
-        rewardPerHa = 1500, reputationPerHa = 5.1 },
+        rewardPerHa = 1500, reputationPerHa = 5.1, skill = "cropCare" },
     herbicide = { implementSpec = "spec_sprayer", vanillaMission = HerbicideMission, startState = "weedState",
         supplyFillTypeNames = { "HERBICIDE" }, seasonRule = "noWinter", requiresWeeds = true, rewardPerHa = 1500,
-        reputationPerHa = 5.1 },
+        reputationPerHa = 5.1, skill = "cropCare" },
     weed = { implementSpec = "spec_weeder", weederType = "weed", vanillaMission = WeedMission,
         startState = "weedState", seasonRule = "noWinter", requiresWeeds = true, serverMeasured = true,
-        rewardPerHa = 2000, reputationPerHa = 6.8 },
+        rewardPerHa = 2000, reputationPerHa = 6.8, skill = "cropCare" },
     hoe = { implementSpec = "spec_weeder", weederType = "hoe", vanillaMission = HoeMission, startState = "weedState",
         seasonRule = "noWinter", requiresWeeds = true, serverMeasured = true, rewardPerHa = 1500,
-        reputationPerHa = 5.1 },
+        reputationPerHa = 5.1, skill = "cropCare" },
     stonePick = { implementSpec = "spec_stonePicker", vanillaMission = StonePickMission, seasonRule = "noWinter",
-        requiresStones = true, rewardPerHa = 2200, reputationPerHa = 7.5 },
+        requiresStones = true, rewardPerHa = 2200, reputationPerHa = 7.5, skill = "tillage" },
 }
 TheContractorJobGeneration.JOB_TYPE_KEYS = { "harvest", "cultivate", "sow", "plow", "mow", "tedder", "bale",
     "baleWrap", "fertilize", "herbicide", "weed", "hoe", "stonePick" }
@@ -346,6 +351,63 @@ function TheContractorJobGeneration.findJobType(name)
         end
     end
     return nil
+end
+
+-- 044: sowing is two skills - drilling (wheat, barley, canola, ...) is
+-- seeding, row crops put in with a planter (maize, sunflower, beet,
+-- potatoes, ...) are planting. Decided by the map's own fruit type category
+-- for planters (PLANTER_FRUIT_TYPE_CATEGORY - what planters list in their
+-- seedFruitTypeCategories, so mod crops come along for free), plus a
+-- fallback list of crops vanilla plants with dedicated machines that may
+-- sit outside that category (potatoes, sugarcane, poplar).
+TheContractorJobGeneration.PLANTER_FRUIT_TYPE_CATEGORY = "PLANTER"
+TheContractorJobGeneration.PLANTING_FRUIT_TYPE_NAMES = { "MAIZE", "SUNFLOWER", "SOYBEAN", "SUGARBEET", "POTATO",
+    "SUGARCANE", "COTTON", "POPLAR" }
+
+function TheContractorJobGeneration.isPlantingFruitType(fruitTypeIndex)
+    if fruitTypeIndex == nil or fruitTypeIndex == FruitType.UNKNOWN then
+        return false
+    end
+
+    local fruitType = g_fruitTypeManager:getFruitTypeByIndex(fruitTypeIndex)
+    if fruitType == nil then
+        return false
+    end
+    for _, name in ipairs(TheContractorJobGeneration.PLANTING_FRUIT_TYPE_NAMES) do
+        if fruitType.name == name then
+            return true
+        end
+    end
+
+    -- No warning argument, so a map without the category stays quiet.
+    if g_fruitTypeManager.categories[TheContractorJobGeneration.PLANTER_FRUIT_TYPE_CATEGORY] ~= nil then
+        for _, index in ipairs(g_fruitTypeManager:getFruitTypeIndicesByCategoryNames(
+            TheContractorJobGeneration.PLANTER_FRUIT_TYPE_CATEGORY)) do
+            if index == fruitTypeIndex then
+                return true
+            end
+        end
+    end
+    return false
+end
+
+-- 044: the worker operation skill a job of this type on this field uses -
+-- JOB_TYPES' skill, except that sow is planting when the field's planned
+-- crop (what vanilla's SowMission sows) is a planted one. Worked out once,
+-- at creation (TheContractorJobs:createJob), and kept on the job.
+function TheContractorJobGeneration.getOperationSkill(jobType, fieldId)
+    local jobDef = TheContractorJobGeneration.JOB_TYPES[jobType]
+    if jobDef == nil then
+        return nil
+    end
+
+    if jobDef.implementSpec == "spec_sowingMachine" then
+        local field = fieldId ~= nil and g_fieldManager:getFieldById(fieldId) or nil
+        if field ~= nil and TheContractorJobGeneration.isPlantingFruitType(field:getPlannedFruitTypeIndex()) then
+            return "planting"
+        end
+    end
+    return jobDef.skill
 end
 
 function TheContractorJobGeneration.getFruitTypeIndexByName(fruitTypeName)

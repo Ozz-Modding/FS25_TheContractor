@@ -195,6 +195,8 @@ function TheContractorDispatch:startJobForWorker(job, skipTransport)
     -- worker's longer trip shows in their time taken. No-op when resuming
     -- after a load or retrying after a watchdog reset.
     g_currentMission.TheContractor.Jobs:markWorkStarted(job)
+    -- 045: and the condition it set off in, for the skill-gap wear.
+    TCJobConsequences.recordStartCondition(job)
 
     -- Remember where it all stood (it goes back there when the job's done),
     -- and leave anything that isn't part of the job behind in the yard.
@@ -327,6 +329,10 @@ function TheContractorDispatch:startAIJob(job)
     -- runs its out-of-money stop - when getPricePerMs() > 0. Overridden on
     -- this instance alone, so the player's own vanilla AI helpers still pay.
     aiJob.getPricePerMs = TheContractorDispatch.getNoWagePricePerMs
+    -- 046: and drive below the equipment's working speed by the operator's
+    -- workSpeed (TCWorkerFieldSpeed). The operator's own, not the slowest
+    -- worker's - a haulage job's hauler (035) never drives the field.
+    aiJob.tcFieldSpeedFactor = TCWorkerFieldSpeed.getFactor(worker)
     local vehicle = self:findOperatingVehicle(aiJob, job.assignedEquipmentIds)
     if vehicle == nil then
         Logging.warning(
@@ -369,8 +375,8 @@ function TheContractorDispatch:startAIJob(job)
 
     g_currentMission.aiSystem:startJob(aiJob, job.farmId)
 
-    Logging.info("TheContractor: farm %d job %d dispatched to AI Helper on vehicle '%s' (worker %s)", job.farmId,
-        job.id, vehicle:getName(), worker ~= nil and worker.name or "?")
+    Logging.info("TheContractor: farm %d job %d dispatched to AI Helper on vehicle '%s' (worker %s, %d%% field speed)",
+        job.farmId, job.id, vehicle:getName(), worker ~= nil and worker.name or "?", aiJob.tcFieldSpeedFactor * 100)
 end
 
 function TheContractorDispatch.getNoWagePricePerMs()

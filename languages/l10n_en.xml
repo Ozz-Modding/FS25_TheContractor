@@ -22,7 +22,7 @@
 		<text name="tc_detail_supplies" text="Supplies"/>
 		<text name="tc_inbox_equipmentHeading" text="Equipment needed"/>
 		<text name="tc_inbox_fieldValue" text="%s (%s)"/>
-		<text name="tc_inbox_skillValue" text="%d / 10 in the equipment's size class"/>
+		<text name="tc_inbox_skillValue" text="%s %d / 10"/>
 		<text name="tc_inbox_crewOne" text="1 worker, or yourself"/>
 		<text name="tc_inbox_crewHaul" text="2 workers (one harvesting, one hauling), or haul it yourself"/>
 		<text name="tc_inbox_crewPlayerOnly" text="Yourself only - workers can't do this job"/>
@@ -56,7 +56,8 @@
 		<text name="tc_equipment_need_implement_stonePick" text="Stone picker"/>
 		<text name="tc_detail_age" text="Age"/>
 		<text name="tc_detail_workSpeed" text="Work speed"/>
-		<text name="tc_detail_tiers" text="Job sizes"/>
+		<text name="tc_detail_tiers" text="Tractors"/>
+		<text name="tc_detail_cleanliness" text="Cleanliness"/>
 		<text name="tc_detail_salary" text="Salary"/>
 		<text name="tc_detail_status" text="Status"/>
 		<text name="tc_detail_currentJob" text="Current job"/>
@@ -66,6 +67,18 @@
 		<text name="tc_staff_tier_small" text="Small"/>
 		<text name="tc_staff_tier_medium" text="Medium"/>
 		<text name="tc_staff_tier_large" text="Large"/>
+		<text name="tc_staff_tierTractor_small" text="Small tractors"/>
+		<text name="tc_staff_tierTractor_medium" text="Medium tractors"/>
+		<text name="tc_staff_tierTractor_large" text="Large tractors"/>
+		<text name="tc_staff_skillsHeading" text="Skills"/>
+		<text name="tc_skill_harvesting" text="Harvesting"/>
+		<text name="tc_skill_baling" text="Baling"/>
+		<text name="tc_skill_grassland" text="Grassland"/>
+		<text name="tc_skill_tillage" text="Tillage"/>
+		<text name="tc_skill_seeding" text="Seeding"/>
+		<text name="tc_skill_planting" text="Planting"/>
+		<text name="tc_skill_cropCare" text="Crop care"/>
+		<text name="tc_skill_haulage" text="Haulage"/>
 		<text name="tc_placeholder_locked" text="You haven't started a contracting company on this farm yet. Head to the Overview tab to create one."/>
 		<text name="tc_overview_noCompany" text="You haven't started a contracting company on this farm yet. Use the button below to create one."/>
 		<text name="tc_overview_rankMax" text="Max rank"/>
@@ -188,7 +201,7 @@
 		<text name="tc_staff_viewCandidates" text="Candidates"/>
 		<text name="tc_staff_columnName" text="Name"/>
 		<text name="tc_staff_columnWorkSpeed" text="Speed"/>
-		<text name="tc_staff_columnTier" text="Tiers (S/M/L)"/>
+		<text name="tc_staff_columnBestSkills" text="Best skill"/>
 		<text name="tc_staff_columnStatus" text="Status"/>
 		<text name="tc_staff_columnJob" text="Job"/>
 		<text name="tc_staff_columnSalary" text="Salary"/>
@@ -200,8 +213,7 @@
 		<text name="tc_staff_status_assigned" text="Assigned"/>
 		<text name="tc_staff_status_cooldown" text="Cooldown"/>
 		<text name="tc_staff_status_sick" text="Off sick"/>
-		<text name="tc_staff_detailWorkSpeed" text="%d / 10"/>
-		<text name="tc_staff_detailSalary" text="%s per period"/>
+		<text name="tc_staff_detailSalary" text="%s per month"/>
 		<text name="tc_staff_detailJobNone" text="None"/>
 		<text name="tc_growth_improved" text="%s improved: %s %d to %d"/>
 		<text name="tc_growth_certified" text="%s is now certified on %s"/>
@@ -209,12 +221,24 @@
 		<text name="tc_growth_stat_small" text="small tractors"/>
 		<text name="tc_growth_stat_medium" text="medium tractors"/>
 		<text name="tc_growth_stat_large" text="large tractors"/>
+		<text name="tc_growth_stat_harvesting" text="harvesting"/>
+		<text name="tc_growth_stat_baling" text="baling"/>
+		<text name="tc_growth_stat_grassland" text="grassland"/>
+		<text name="tc_growth_stat_tillage" text="tillage"/>
+		<text name="tc_growth_stat_seeding" text="seeding"/>
+		<text name="tc_growth_stat_planting" text="planting"/>
+		<text name="tc_growth_stat_cropCare" text="crop care"/>
+		<text name="tc_growth_stat_haulage" text="haulage"/>
+		<text name="tc_consequences_washed" text="%s washed the equipment before bringing it back."/>
+		<text name="tc_consequences_unwashed" text="%s brought the equipment back unwashed."/>
+		<text name="tc_consequences_extraWear" text="Extra wear from %s's skill gaps: %s"/>
+		<text name="tc_consequences_unknownWorker" text="A former worker"/>
 		<text name="tc_sickness_offSick" text="%s has called in sick and can't take jobs for a few days"/>
 		<text name="tc_sickness_recovered" text="%s is back at work after being off sick"/>
 		<text name="tc_staff_jobLine" text="%s (Field %s)"/>
-		<text name="tc_staff_hireConfirm" text="Hire %s for %s per period? The salary is charged at the start of every period while they're on your roster. The first period is paid now."/>
-		<text name="tc_staff_hireCannotAfford" text="You can't afford this candidate's first period of salary right now."/>
-		<text name="tc_staff_salaryBill" text="%s per period (%d workers)"/>
+		<text name="tc_staff_hireConfirm" text="Hire %s for %s per month? The salary is charged at the start of every month while they're on your roster. The first month is paid now."/>
+		<text name="tc_staff_hireCannotAfford" text="You can't afford this candidate's first month of salary right now."/>
+		<text name="tc_staff_salaryBill" text="%s per month (%d workers)"/>
 		<text name="tc_staff_releaseConfirm" text="Release %s from your roster? This cannot be undone."/>
 		<text name="tc_staff_status_driving" text="Driving"/>
 		<text name="tc_staff_drivingLine" text="Driving %s"/>
@@ -228,7 +252,7 @@
 		<text name="tc_drivers_picker_tier_none" text="no tractor tier"/>
 		<text name="tc_drivers_picker_columnName" text="Name"/>
 		<text name="tc_drivers_picker_columnSpeed" text="Speed"/>
-		<text name="tc_drivers_picker_columnTiers" text="Tiers (S/M/L)"/>
+		<text name="tc_drivers_picker_columnTiers" text="Tractors (S/M/L) / skill"/>
 		<text name="tc_drivers_picker_assign" text="Assign"/>
 		<text name="tc_drivers_noIdleStaff" text="None of your staff are free to drive. Your company's vehicles need a staff driver for AutoDrive and Courseplay."/>
 		<text name="tc_drivers_contractorEquipmentDialog" text="This vehicle is out on a contract job, so AutoDrive and Courseplay can't drive it."/>
@@ -296,8 +320,8 @@
 		<text name="tc_supplies_status_wrongFill" text="Tank holds %s - empty it"/>
 		<text name="tc_supplies_onHold" text="%s on %s is on hold: %s."/>
 		<text name="tc_supplies_or" text=" or "/>
-		<text name="tc_allocation_blockedWarning" text="This worker isn't certified for the required equipment tier."/>
-		<text name="tc_allocation_underqualifiedWarning" text="This worker is under-qualified for this job - expect a reduced reward."/>
+		<text name="tc_allocation_blockedWarning" text="%s isn't certified on %s."/>
+		<text name="tc_allocation_underqualifiedWarning" text="%s is under-qualified: %s %d, the job needs %d - expect a reduced reward and extra wear on the machines."/>
 		<text name="tc_overview_noticesHeading" text="Important"/>
 		<text name="tc_overview_noticesEmpty" text="Nothing to report."/>
 		<text name="tc_overview_noticeLine" text="- %s"/>

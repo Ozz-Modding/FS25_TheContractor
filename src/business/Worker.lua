@@ -1,15 +1,19 @@
--- Single hired-staff entity (016). Skill is modeled as two independent axes
+-- Single hired-staff entity (016). Skill is modeled as independent axes
 -- rather than one collapsed number (Q8/Q13/Q14): workSpeed is a flat 1-10
--- scalar affecting time-to-complete, while tierCapability is a *per-size-class*
--- rating (009's small/medium/large split) so a worker can specialize (great on
--- small tractors, mediocre on large) instead of being forced onto one linear
--- score. Only hired workers carry these stats at all — the player, operating
--- personally, is implicitly max-capable/unrestricted (Q13), so there is no
--- equivalent Worker for "the player."
+-- scalar affecting time-to-complete, tierCapability is *tractor experience*
+-- per size class (009's small/medium/large tractor split - it's about the
+-- tractor driven, not the size of the job) so a worker can specialize (great
+-- on small tractors, mediocre on large), and skills (044) rate the kind of
+-- work itself - harvesting, baling, tillage, ... (see SKILLS). Only hired
+-- workers carry these stats at all — the player, operating personally, is
+-- implicitly max-capable/unrestricted (Q13), so there is no equivalent
+-- Worker for "the player."
 --
 -- tierCapability follows the same "presence IS the fact" convention as
 -- Company.lua's companyNames: a tier key absent from the table means "not
--- certified" for that tier, not a separate boolean/sentinel string.
+-- certified" on that tractor size, not a separate boolean/sentinel string.
+-- skills is the opposite: every worker has every key, 1-10 - a low rating
+-- never stops a worker being allocated, it just costs reward/quality.
 
 TheContractorWorker = {}
 TheContractorWorker_mt = Class(TheContractorWorker)
@@ -28,6 +32,24 @@ TheContractorWorker.STATUS = {
 }
 
 TheContractorWorker.TIERS = { "small", "medium", "large" }
+
+-- 044: operation skills, in display order. Which one a job uses is decided
+-- by TheContractorJobGeneration.getOperationSkill (the hauler on a haulage
+-- job always uses haulage).
+TheContractorWorker.SKILLS = { "harvesting", "baling", "grassland", "tillage", "seeding", "planting", "cropCare",
+    "haulage" }
+TheContractorWorker.IS_SKILL = {}
+for _, skill in ipairs(TheContractorWorker.SKILLS) do
+    TheContractorWorker.IS_SKILL[skill] = true
+end
+TheContractorWorker.MIN_SKILL = 1
+TheContractorWorker.MAX_SKILL = 10
+
+-- 045: cleanliness, a fixed 1-10 trait (never grows, not paid for) - how
+-- much extra dirt they bring equipment back with, whether they wash it
+-- before it's back in the yard and how quickly. See TCJobConsequences.
+TheContractorWorker.MIN_CLEANLINESS = 1
+TheContractorWorker.MAX_CLEANLINESS = 10
 
 TheContractorWorker.MIN_WORK_SPEED = 1
 TheContractorWorker.MAX_WORK_SPEED = 10
@@ -54,9 +76,9 @@ end
 --
 -- Positional args, in this order - new hidden stats get appended to the end
 -- so existing callers aren't disturbed (030 appended age/growthPotential/
--- birthPeriod, 031 sicknessPropensity).
+-- birthPeriod, 031 sicknessPropensity, 044 skills, 045 cleanliness).
 function TheContractorWorker.new(id, farmId, name, workSpeed, tierCapability, salary, age, growthPotential,
-                                 birthPeriod, sicknessPropensity)
+                                 birthPeriod, sicknessPropensity, skills, cleanliness)
     local self = {}
     setmetatable(self, TheContractorWorker_mt)
 
@@ -67,6 +89,10 @@ function TheContractorWorker.new(id, farmId, name, workSpeed, tierCapability, sa
     -- { small = 1-10, medium = 1-10, large = 1-10 }, keys absent for tiers
     -- this worker isn't certified on.
     self.tierCapability = tierCapability or {}
+    -- 044: { harvesting = 1-10, baling = 1-10, ... }, every SKILLS key.
+    self.skills = skills or {}
+    -- 045: visible, so it's sent to clients.
+    self.cleanliness = cleanliness or TheContractorWorker.MIN_CLEANLINESS
     -- 036: per period, derived from the stats (TheContractorStaff.getSalary).
     self.salary = salary
 
@@ -168,15 +194,38 @@ function TheContractorWorker:getTierCapability(tier)
     return self.tierCapability[tier]
 end
 
+-- 044: the 1-10 rating for an operation skill (MIN_SKILL if somehow unset).
+function TheContractorWorker:getSkill(skill)
+    return self.skills[skill] or TheContractorWorker.MIN_SKILL
+end
+
+-- 044: their skills, best first (ties in SKILLS order) - { {skill, rating}, ... }.
+function TheContractorWorker:getSkillsByRating()
+    local sorted = {}
+    for i, skill in ipairs(TheContractorWorker.SKILLS) do
+        table.insert(sorted, { skill = skill, rating = self:getSkill(skill), order = i })
+    end
+    table.sort(sorted, function(a, b)
+        if a.rating ~= b.rating then
+            return a.rating > b.rating
+        end
+        return a.order < b.order
+    end)
+    return sorted
+end
+
 function TheContractorWorker:isIdle()
     return self.status == TheContractorWorker.STATUS.IDLE
 end
 
--- Growth (030) reads/writes one stat by name: "workSpeed" or a tier key
--- ("small"/"medium"/"large"). A tier stat is nil while uncertified.
+-- Growth (030) reads/writes one stat by name: "workSpeed", a tier key
+-- ("small"/"medium"/"large") or a skill key (044). A tier stat is nil while
+-- uncertified.
 function TheContractorWorker:getStat(stat)
     if stat == "workSpeed" then
         return self.workSpeed
+    elseif TheContractorWorker.IS_SKILL[stat] then
+        return self.skills[stat]
     end
     return self.tierCapability[stat]
 end
@@ -184,6 +233,8 @@ end
 function TheContractorWorker:setStat(stat, value)
     if stat == "workSpeed" then
         self.workSpeed = value
+    elseif TheContractorWorker.IS_SKILL[stat] then
+        self.skills[stat] = value
     else
         self.tierCapability[stat] = value
     end

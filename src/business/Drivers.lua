@@ -201,6 +201,12 @@ function TheContractorDrivers.getVehicleTier(vehicle)
     return nil
 end
 
+-- 044: operation skill (TCEquipmentClass) of what was driven - nil if the
+-- chain does no work of its own (a tractor on its own).
+function TheContractorDrivers.getVehicleOperationSkill(vehicle)
+    return TCEquipmentClass.getOperationSkillForVehicles(getVehicleChain(vehicle))
+end
+
 -- Query API (every machine) ---------------------------------------------------
 
 function TheContractorDrivers:getBinding(vehicle)
@@ -443,7 +449,7 @@ function TheContractorDrivers:rollDrivingGrowth(binding, vehicle)
     end
 
     g_currentMission.TheContractor.Staff:growWorker(binding.farmId, binding.workerId,
-        TheContractorDrivers.getVehicleTier(vehicle))
+        TheContractorDrivers.getVehicleTier(vehicle), TheContractorDrivers.getVehicleOperationSkill(vehicle))
 end
 
 -- Notifications --------------------------------------------------------------
