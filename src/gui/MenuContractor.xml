@@ -26,6 +26,9 @@
             <Button profile="fs25_subCategorySelectorTabbedTab" id="subCategoryTabs[4]" text="$l10n_tc_header_staff" onClick="onClickStaff">
                 <ThreePartBitmap profile="fs25_subCategorySelectorTabbedTabBg" name="background"/>
             </Button>
+            <Button profile="fs25_subCategorySelectorTabbedTab" id="subCategoryTabs[5]" text="$l10n_tc_header_finances" onClick="onClickFinances">
+                <ThreePartBitmap profile="fs25_subCategorySelectorTabbedTabBg" name="background"/>
+            </Button>
         </BoxLayout>
         <ThreePartBitmap profile="fs25_lineSeparatorTopHighlighted" position="0px -57px"/>
         <MultiTextOption profile="fs25_subCategorySelectorTabbed" id="subCategoryPaging" position="0px -10px" onClick="updateSubCategoryPages"/>
@@ -117,6 +120,10 @@
                         <Text profile="tc_listRowCellLeft" position="450px 0px" size="92px 32px" name="price"/>
                         <RoundCorner profile="tc_rowChip" position="546px 0px" size="48px 20px" name="equipmentChip"/>
                         <Text profile="tc_rowChipText" position="546px 0px" size="48px 20px" name="equipmentChipText"/>
+                        <!-- 050: message rows - type chip and title, in place of the job cells. -->
+                        <RoundCorner profile="tc_rowChip" position="14px 0px" size="80px 20px" name="kindChip"/>
+                        <Text profile="tc_rowChipText" position="14px 0px" size="80px 20px" name="kindChipText"/>
+                        <Text profile="tc_listRowCellLeft" position="104px 0px" size="490px 32px" name="messageTitle"/>
                     </ListItem>
                 </SmoothList>
                 <ThreePartBitmap profile="tc_slider_box" position="610px -36px" size="6px 570px">
@@ -216,6 +223,36 @@
                         <Text profile="tc_sectionTitle" text="$l10n_tc_inbox_negotiationHeading" position="0px -14px" size="752px 24px"/>
                         <Bitmap profile="tc_divider" position="0px -42px" size="752px 1px"/>
                         <Text profile="tc_panelNote" id="inboxNegotiationLog" text="" position="0px -50px" size="752px 80px" textMaxNumLines="4"/>
+                    </GuiElement>
+                </BoxLayout>
+            </GuiElement>
+
+            <!-- Inbox message details (050), in the same spot as the job
+                 details - only one of the two shows. -->
+            <GuiElement id="inboxMessageBox" position="680px -20px">
+                <RoundCorner profile="tc_panel" position="0px 0px" size="800px 615px"/>
+                <Text profile="tc_panelHeading" id="inboxMessageTitle" text="" position="24px -16px" size="752px 32px"/>
+                <Bitmap profile="tc_divider" position="24px -56px" size="752px 1px"/>
+
+                <BoxLayout profile="tc_detailRows" id="inboxMessageRows" position="24px -60px" size="752px 545px">
+                    <GuiElement profile="tc_detailRow" size="752px 34px">
+                        <Text profile="tc_detailLabel" text="$l10n_tc_detail_messageType" position="0px 0px"/>
+                        <RoundCorner profile="tc_chip" id="inboxMessageChip" position="220px -7px" size="110px 20px"/>
+                        <Text profile="tc_chipText" id="inboxMessageChipText" position="220px -7px" size="110px 20px"/>
+                        <Bitmap profile="tc_detailRowDivider"/>
+                    </GuiElement>
+                    <GuiElement profile="tc_detailRow" size="752px 34px">
+                        <Text profile="tc_detailLabel" text="$l10n_tc_detail_received" position="0px 0px"/>
+                        <Text profile="tc_detailValue" id="inboxMessageReceived" text="" position="220px 0px" size="532px 34px"/>
+                        <Bitmap profile="tc_detailRowDivider"/>
+                    </GuiElement>
+                    <GuiElement profile="tc_detailRow" id="inboxMessageRowExpires" size="752px 34px">
+                        <Text profile="tc_detailLabel" text="$l10n_tc_detail_replyBy" position="0px 0px"/>
+                        <Text profile="tc_detailValue" id="inboxMessageExpires" text="" position="220px 0px" size="532px 34px"/>
+                        <Bitmap profile="tc_detailRowDivider"/>
+                    </GuiElement>
+                    <GuiElement profile="tc_detailRow" size="752px 400px">
+                        <Text profile="tc_panelText" id="inboxMessageBody" text="" position="0px -16px" size="752px 384px" textMaxNumLines="18"/>
                     </GuiElement>
                 </BoxLayout>
             </GuiElement>
@@ -473,6 +510,145 @@
 
                 <!-- 042: live portrait, driven by TCWorkerPortrait (it sets the scene). -->
                 <Render profile="tc_workerPortrait" id="staffPortraitRender" position="520px -68px"/>
+            </GuiElement>
+        </GuiElement>
+
+        <!-- Finances (049) ================================================= -->
+        <GuiElement profile="fs25_subCategorySelectorTabbedContainer" id="subCategoryPages[5]">
+            <Text profile="tc_emptyStateText" id="placeholderFinances" text="$l10n_tc_placeholder_locked" position="40px -250px" size="1440px 60px" textMaxNumLines="2"/>
+
+            <GuiElement id="financesContent" position="0px 0px">
+                <!-- Unpaid invoices: outstanding, overdue and written off. -->
+                <GuiElement id="financesListContainer" position="40px -20px">
+                    <GuiElement profile="tc_tableHeaderRow" position="0px 0px" size="600px 30px">
+                        <Button profile="tc_tableHeader" position="14px 0px" text="$l10n_tc_finances_columnJob" handleFocus="false"/>
+                        <Button profile="tc_tableHeader" position="200px 0px" text="$l10n_tc_finances_columnField" handleFocus="false"/>
+                        <Button profile="tc_tableHeader" position="270px 0px" text="$l10n_tc_finances_columnAmount" handleFocus="false"/>
+                        <Button profile="tc_tableHeader" position="380px 0px" text="$l10n_tc_finances_columnDue" handleFocus="false"/>
+                        <Button profile="tc_tableHeader" position="490px 0px" text="$l10n_tc_finances_columnStatus" handleFocus="false"/>
+                        <Bitmap profile="tc_tableHeaderDivider"/>
+                    </GuiElement>
+
+                    <SmoothList id="financesInvoiceTable" profile="tc_table" position="0px -36px" size="600px 300px">
+                        <ListItem profile="tc_tableListItem">
+                            <RoundCorner profile="tc_tableRowSurface"/>
+                            <Bitmap profile="tc_tableRowAccent"/>
+                            <Text profile="tc_listRowCellLeft" position="14px 0px" size="180px 32px" name="job"/>
+                            <Text profile="tc_listRowCellLeft" position="200px 0px" size="65px 32px" name="field"/>
+                            <Text profile="tc_listRowCellLeft" position="270px 0px" size="105px 32px" name="amount"/>
+                            <Text profile="tc_listRowCellLeft" position="380px 0px" size="105px 32px" name="due"/>
+                            <RoundCorner profile="tc_rowChip" position="490px 0px" size="100px 20px" name="statusChip"/>
+                            <Text profile="tc_rowChipText" position="490px 0px" size="100px 20px" name="statusChipText"/>
+                        </ListItem>
+                    </SmoothList>
+                    <ThreePartBitmap profile="tc_slider_box" position="610px -36px" size="6px 300px">
+                        <Slider profile="fs25_listSlider" dataElementId="financesInvoiceTable"/>
+                    </ThreePartBitmap>
+                </GuiElement>
+                <Text profile="tc_panelNote" id="financesListEmptyText" text="$l10n_tc_finances_noInvoices" position="54px -36px" size="572px 30px"/>
+
+                <!-- This year so far -->
+                <RoundCorner profile="tc_panel" position="30px -380px" size="620px 255px"/>
+                <Text profile="tc_sectionTitle" id="financesYearTitle" text="" position="54px -396px" size="572px 24px"/>
+                <Bitmap profile="tc_divider" position="54px -424px" size="572px 1px"/>
+                <BoxLayout profile="tc_detailRows" id="financesYearRows" position="54px -432px" size="572px 136px">
+                    <GuiElement profile="tc_detailRow" size="572px 34px">
+                        <Text profile="tc_detailLabel" text="$l10n_tc_finances_invoiced" position="0px 0px"/>
+                        <Text profile="tc_detailValue" id="financesYearInvoiced" text="" position="220px 0px" size="352px 34px"/>
+                        <Bitmap profile="tc_detailRowDivider"/>
+                    </GuiElement>
+                    <GuiElement profile="tc_detailRow" size="572px 34px">
+                        <Text profile="tc_detailLabel" text="$l10n_tc_finances_received" position="0px 0px"/>
+                        <Text profile="tc_detailValue" id="financesYearReceived" text="" position="220px 0px" size="352px 34px"/>
+                        <Bitmap profile="tc_detailRowDivider"/>
+                    </GuiElement>
+                    <GuiElement profile="tc_detailRow" size="572px 34px">
+                        <Text profile="tc_detailLabel" text="$l10n_tc_finances_writtenOff" position="0px 0px"/>
+                        <Text profile="tc_detailValue" id="financesYearWrittenOff" text="" position="220px 0px" size="352px 34px"/>
+                        <Bitmap profile="tc_detailRowDivider"/>
+                    </GuiElement>
+                    <GuiElement profile="tc_detailRow" size="572px 34px">
+                        <Text profile="tc_detailLabel" text="$l10n_tc_finances_wages" position="0px 0px"/>
+                        <Text profile="tc_detailValue" id="financesYearWages" text="" position="220px 0px" size="352px 34px"/>
+                    </GuiElement>
+                </BoxLayout>
+
+                <!-- Highlighted invoice -->
+                <RoundCorner profile="tc_panel" position="680px -20px" size="800px 270px"/>
+                <Text profile="tc_panelHeading" id="financesInvoiceTitle" text="" position="704px -36px" size="752px 32px"/>
+                <Bitmap profile="tc_divider" position="704px -76px" size="752px 1px"/>
+                <Text profile="tc_panelNote" id="financesInvoiceEmptyText" text="$l10n_tc_finances_noInvoiceSelected" position="704px -88px" size="752px 30px"/>
+                <BoxLayout profile="tc_detailRows" id="financesInvoiceRows" position="704px -84px" size="752px 200px">
+                    <GuiElement profile="tc_detailRow" size="752px 34px">
+                        <Text profile="tc_detailLabel" text="$l10n_tc_finances_amount" position="0px 0px"/>
+                        <Text profile="tc_detailValue" id="financesInvoiceAmount" text="" position="220px 0px" size="532px 34px"/>
+                        <Bitmap profile="tc_detailRowDivider"/>
+                    </GuiElement>
+                    <GuiElement profile="tc_detailRow" size="752px 34px">
+                        <Text profile="tc_detailLabel" text="$l10n_tc_finances_issued" position="0px 0px"/>
+                        <Text profile="tc_detailValue" id="financesInvoiceIssued" text="" position="220px 0px" size="532px 34px"/>
+                        <Bitmap profile="tc_detailRowDivider"/>
+                    </GuiElement>
+                    <GuiElement profile="tc_detailRow" size="752px 34px">
+                        <Text profile="tc_detailLabel" text="$l10n_tc_finances_due" position="0px 0px"/>
+                        <Text profile="tc_detailValue" id="financesInvoiceDue" text="" position="220px 0px" size="532px 34px"/>
+                        <Bitmap profile="tc_detailRowDivider"/>
+                    </GuiElement>
+                    <GuiElement profile="tc_detailRow" size="752px 34px">
+                        <Text profile="tc_detailLabel" text="$l10n_tc_finances_status" position="0px 0px"/>
+                        <RoundCorner profile="tc_chip" id="financesInvoiceStatusChip" position="220px -7px" size="110px 20px"/>
+                        <Text profile="tc_chipText" id="financesInvoiceStatusChipText" position="220px -7px" size="110px 20px"/>
+                        <Text profile="tc_detailValue" id="financesInvoiceStatusNote" text="" position="345px 0px" size="407px 34px"/>
+                        <Bitmap profile="tc_detailRowDivider"/>
+                    </GuiElement>
+                    <GuiElement profile="tc_detailRowTall" size="752px 64px">
+                        <Text profile="tc_detailLabel" text="$l10n_tc_finances_job" position="0px 0px"/>
+                        <Text profile="tc_detailValueTall" id="financesInvoiceJob" text="" position="220px -6px" size="532px 58px" textMaxNumLines="2"/>
+                    </GuiElement>
+                </BoxLayout>
+
+                <!-- Cash flow and the forecast -->
+                <RoundCorner profile="tc_panel" position="680px -310px" size="800px 325px"/>
+                <Text profile="tc_sectionTitle" text="$l10n_tc_finances_cashFlowHeading" position="704px -326px" size="752px 24px"/>
+                <Bitmap profile="tc_divider" position="704px -354px" size="752px 1px"/>
+                <BoxLayout profile="tc_detailRows" id="financesCashFlowRows" position="704px -362px" size="752px 238px">
+                    <GuiElement profile="tc_detailRow" size="752px 34px">
+                        <Text profile="tc_detailLabel" text="$l10n_tc_finances_balance" position="0px 0px"/>
+                        <Text profile="tc_detailValue" id="financesBalance" text="" position="220px 0px" size="532px 34px"/>
+                        <Bitmap profile="tc_detailRowDivider"/>
+                    </GuiElement>
+                    <GuiElement profile="tc_detailRow" size="752px 34px">
+                        <Text profile="tc_detailLabel" text="$l10n_tc_finances_outstanding" position="0px 0px"/>
+                        <Text profile="tc_detailValue" id="financesOutstanding" text="" position="220px 0px" size="532px 34px"/>
+                        <Bitmap profile="tc_detailRowDivider"/>
+                    </GuiElement>
+                    <GuiElement profile="tc_detailRow" size="752px 34px">
+                        <Text profile="tc_detailLabel" text="$l10n_tc_finances_overdue" position="0px 0px"/>
+                        <Text profile="tc_detailValue" id="financesOverdue" text="" position="220px 0px" size="532px 34px"/>
+                        <Bitmap profile="tc_detailRowDivider"/>
+                    </GuiElement>
+                    <GuiElement profile="tc_detailRow" size="752px 34px">
+                        <Text profile="tc_detailLabel" text="$l10n_tc_detail_salaryBill" position="0px 0px"/>
+                        <Text profile="tc_detailValue" id="financesSalaryBill" text="" position="220px 0px" size="532px 34px"/>
+                        <Bitmap profile="tc_detailRowDivider"/>
+                    </GuiElement>
+                    <!-- Forecast: this month and the next two (TheContractorFinances.FORECAST_PERIODS). -->
+                    <GuiElement profile="tc_detailRow" size="752px 34px">
+                        <Text profile="tc_detailLabel" id="financesForecastLabel1" text="" position="0px 0px"/>
+                        <Text profile="tc_detailValue" id="financesForecastValue1" text="" position="220px 0px" size="532px 34px"/>
+                        <Bitmap profile="tc_detailRowDivider"/>
+                    </GuiElement>
+                    <GuiElement profile="tc_detailRow" size="752px 34px">
+                        <Text profile="tc_detailLabel" id="financesForecastLabel2" text="" position="0px 0px"/>
+                        <Text profile="tc_detailValue" id="financesForecastValue2" text="" position="220px 0px" size="532px 34px"/>
+                        <Bitmap profile="tc_detailRowDivider"/>
+                    </GuiElement>
+                    <GuiElement profile="tc_detailRow" size="752px 34px">
+                        <Text profile="tc_detailLabel" id="financesForecastLabel3" text="" position="0px 0px"/>
+                        <Text profile="tc_detailValue" id="financesForecastValue3" text="" position="220px 0px" size="532px 34px"/>
+                    </GuiElement>
+                </BoxLayout>
+                <Text profile="tc_panelNote" text="$l10n_tc_finances_forecastNote" position="704px -604px" size="752px 24px"/>
             </GuiElement>
         </GuiElement>
     </GuiElement>

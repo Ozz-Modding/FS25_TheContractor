@@ -31,6 +31,11 @@ local function formatYear(periodIndex)
     return string.format(g_i18n:getText("tc_calendar_yearLabel"), TCCalendar.getYearOfPeriodIndex(periodIndex))
 end
 
+-- e.g. "September" (049's forecast rows).
+function TCCalendar.formatMonth(periodIndex)
+    return getMonthName(periodIndex)
+end
+
 -- e.g. "September, Year 3".
 function TCCalendar.formatPeriodIndex(periodIndex)
     return string.format("%s, %s", getMonthName(periodIndex), formatYear(periodIndex))
@@ -106,6 +111,11 @@ end
 function TCCalendar.formatDay(monotonicDay)
     local periodIndex, dayInPeriod, daysPerPeriod = TCCalendar.getDayInfo(monotonicDay)
     return string.format("%s, %s", formatMonthDay(periodIndex, dayInPeriod, daysPerPeriod), formatYear(periodIndex))
+end
+
+-- e.g. "June 10" - formatDay without the year, for a list column (049).
+function TCCalendar.formatDayShort(monotonicDay)
+    return formatMonthDay(TCCalendar.getDayInfo(monotonicDay))
 end
 
 -- e.g. "June 10-14, Year 2", "June 30 - July 2, Year 2", or one day as

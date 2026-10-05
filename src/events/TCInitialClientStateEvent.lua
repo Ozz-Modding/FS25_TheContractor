@@ -14,6 +14,7 @@ end
 function TCInitialClientStateEvent:writeStream(streamId, connection)
     local tc = g_currentMission.TheContractor
 
+    tc.Settings:writeInitialClientState(streamId, connection)
     tc.Reputation:writeInitialClientState(streamId, connection)
     tc.Jobs:writeInitialClientState(streamId, connection)
     tc.Staff:writeInitialClientState(streamId, connection)
@@ -23,11 +24,14 @@ function TCInitialClientStateEvent:writeStream(streamId, connection)
     tc.Drivers:writeInitialClientState(streamId, connection)
     tc.Notices:writeInitialClientState(streamId, connection)
     tc.Holidays:writeInitialClientState(streamId, connection)
+    tc.Finances:writeInitialClientState(streamId, connection)
+    tc.Inbox:writeInitialClientState(streamId, connection)
 end
 
 function TCInitialClientStateEvent:readStream(streamId, connection)
     local tc = g_currentMission.TheContractor
 
+    tc.Settings:readInitialClientState(streamId, connection)
     tc.Reputation:readInitialClientState(streamId, connection)
     tc.Jobs:readInitialClientState(streamId, connection)
     tc.Staff:readInitialClientState(streamId, connection)
@@ -37,6 +41,8 @@ function TCInitialClientStateEvent:readStream(streamId, connection)
     tc.Drivers:readInitialClientState(streamId, connection)
     tc.Notices:readInitialClientState(streamId, connection)
     tc.Holidays:readInitialClientState(streamId, connection)
+    tc.Finances:readInitialClientState(streamId, connection)
+    tc.Inbox:readInitialClientState(streamId, connection)
 
     self:run(connection)
 end

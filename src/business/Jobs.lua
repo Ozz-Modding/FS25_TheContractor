@@ -789,7 +789,8 @@ function TheContractorJobs:calculateQualityScore(job)
     return math.floor(math.max(0, math.min(1, score)) * 100 + 0.5)
 end
 
--- Pays the full negotiated price and awards scaled reputation once a job's
+-- Bills the full negotiated price (an invoice since 049) and awards scaled
+-- reputation once a job's
 -- field work has actually finished (019's completionPercentage crossing
 -- COMPLETION_THRESHOLD_PERCENTAGE) - that check doubles as the "cross-
 -- checked against 019's completion percentage" guard the ticket calls for
@@ -818,8 +819,11 @@ function TheContractorJobs:completeJob(job)
         return
     end
 
+    -- 049: invoiced rather than paid, unless late/unpaid invoices are
+    -- switched off - see TheContractorFinances:invoiceJob. Sets
+    -- job.invoiceDueDay before the completion broadcast below carries it.
     job.paymentAmount = job.price
-    g_currentMission:addMoney(job.paymentAmount, job.farmId, MoneyType.TC_JOB_PAYOUT, true, true)
+    g_currentMission.TheContractor.Finances:invoiceJob(job)
 
     local reputationReward = self:calculateReputationReward(job)
     g_currentMission.TheContractor.Reputation:addReputation(job.farmId, reputationReward)
@@ -847,7 +851,7 @@ function TheContractorJobs:completeJob(job)
     TCFieldPreparation.clearUpAfterJob(job)
     self:setJobSupplyStatus(job, nil, nil)
 
-    Logging.info("TheContractor: farm %d job %d completed (%s, field %d) - paid %.0f, +%d reputation, %s taken, %.0f l fuel (%.0f), quality %d",
+    Logging.info("TheContractor: farm %d job %d completed (%s, field %d) - billed %.0f, +%d reputation, %s taken, %.0f l fuel (%.0f), quality %d",
         job.farmId, job.id, job.jobType, job.fieldId, job.paymentAmount, reputationReward,
         TheContractorJob.formatMinutes(job:getTimeTakenMinutes()), job.fuelUsedLiters, job.fuelCost,
         job.qualityScore)
@@ -929,6 +933,9 @@ function TheContractorJobs.writeJob(streamId, job)
 
     -- 045.
     TCJobConsequences.writeReports(streamId, job)
+
+    -- 049. -1 stands in for "paid on completion".
+    streamWriteInt32(streamId, job.invoiceDueDay or -1)
 end
 
 function TheContractorJobs.readJob(streamId)
@@ -1009,6 +1016,9 @@ function TheContractorJobs.readJob(streamId)
 
     job.workerReports = TCJobConsequences.readReports(streamId)
 
+    local invoiceDueDay = streamReadInt32(streamId)
+    job.invoiceDueDay = invoiceDueDay >= 0 and invoiceDueDay or nil
+
     return job
 end
 
@@ -1088,6 +1098,7 @@ function TheContractorJobs:loadFromXMLFile(xmlFile)
             job.assignedEquipmentIds = TheContractorJobs.decodeIdList(getXMLString(xmlFile,
                 jobKey .. "#assignedEquipmentIds"))
             job.paymentAmount = getXMLFloat(xmlFile, jobKey .. "#paymentAmount")
+            job.invoiceDueDay = getXMLInt(xmlFile, jobKey .. "#invoiceDueDay")
             job.equipmentHome = TCJobSiteSetup.loadHomeFromXML(xmlFile, jobKey .. ".equipmentHome")
             job.transportRemainingMs = getXMLFloat(xmlFile, jobKey .. "#transportRemainingMs")
             job.includesHaulage = Utils.getNoNil(getXMLBool(xmlFile, jobKey .. "#includesHaulage"), false)
@@ -1191,6 +1202,9 @@ function TheContractorJobs:saveToXmlFile(xmlFile)
 
             if job.paymentAmount ~= nil then
                 setXMLFloat(xmlFile, jobKey .. "#paymentAmount", job.paymentAmount)
+            end
+            if job.invoiceDueDay ~= nil then
+                setXMLInt(xmlFile, jobKey .. "#invoiceDueDay", job.invoiceDueDay)
             end
 
             if job.equipmentHome ~= nil then

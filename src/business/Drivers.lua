@@ -1,6 +1,8 @@
--- AutoDrive & Courseplay staff drivers (037). While a farm has a company,
--- every vehicle driven by AutoDrive (AD) or Courseplay (CP) needs one of the
--- farm's staff behind the wheel: starting either one opens a picker
+-- AI Helper, AutoDrive & Courseplay staff drivers (037). While a farm has a
+-- company, every vehicle driven by a vanilla AI Helper, AutoDrive (AD) or
+-- Courseplay (CP) needs one of the farm's staff behind the wheel (our own
+-- contract jobs excepted - Dispatch already has their operator): starting
+-- any of them opens a picker
 -- (TCDriverPickerDialog) for an idle worker, and a start that skips the
 -- picker is stopped/refused here on the server. Without a company nothing
 -- is intercepted - both mods behave exactly as they do without this one.
@@ -84,35 +86,69 @@ end
 -- flagged on the table it wraps and goes on once per game session; they
 -- look the live subsystem up through getInstance.
 function TheContractorDrivers.installHooks()
-    local hasAutoDrive = TCAutoDrive.install()
-    local hasCourseplay = TCCourseplay.install()
+    TCAutoDrive.install()
+    TCCourseplay.install()
 
-    if (hasAutoDrive or hasCourseplay) and not AISystem.tcDriverHookInstalled then
+    if not AISystem.tcDriverHookInstalled then
         AISystem.startJob = Utils.overwrittenFunction(AISystem.startJob, function(...)
             return TheContractorDrivers.onAISystemStartJob(...)
         end)
         AISystem.tcDriverHookInstalled = true
     end
+
+    -- Every player AI start - vanilla's H key (AIJobVehicle:toggleAIVehicle),
+    -- the map's "Create job" tab, and all of CP's start paths (see
+    -- TCCourseplay) - ends the same way on the client: AIJobStartRequestEvent
+    -- sent to the server. So the client gate sits on that one send.
+    if not Connection.tcDriverHookInstalled then
+        Connection.sendEvent = Utils.overwrittenFunction(Connection.sendEvent, function(...)
+            return TheContractorDrivers.onSendEvent(...)
+        end)
+        Connection.tcDriverHookInstalled = true
+    end
 end
 
--- Server, every AI job start: CP's own jobs, any vanilla AI job AD hands a
--- vehicle over to, and our own contract jobs (left alone). A CP job on a
--- vehicle that mustn't be driven is refused - the client gate should have
--- caught it, but anything that skips the picker ends up here. A job on a
--- vehicle with a staff driver pays no wage (and so never stops itself for
+local function isPlayerAIStartRequest(connection, event)
+    return event ~= nil and event.job ~= nil and g_client ~= nil and connection == g_client:getServerConnection() and
+        event.isa ~= nil and event:isa(AIJobStartRequestEvent)
+end
+
+-- Client gate: holds an AI start request back until a driver's picked, then
+-- sends it as it was.
+function TheContractorDrivers.onSendEvent(connection, superFunc, event, deleteEvent, force)
+    if isPlayerAIStartRequest(connection, event) then
+        local drivers = TheContractorDrivers.getInstance()
+        local vehicle = TheContractorDrivers.getAIJobVehicle(event.job)
+        if drivers ~= nil and vehicle ~= nil then
+            local handled = drivers:gateClientStart(vehicle, function()
+                superFunc(connection, event, deleteEvent, force)
+            end)
+            if handled then
+                return
+            end
+        end
+    end
+
+    return superFunc(connection, event, deleteEvent, force)
+end
+
+-- Server, every AI job start: vanilla AI Helpers, CP's own jobs, any AI job
+-- AD hands a vehicle over to, and our own contract jobs (left alone). A job
+-- on a vehicle that mustn't be driven is refused - the client gate should
+-- have caught it, but anything that skips the picker ends up here. A job on
+-- a vehicle with a staff driver pays no wage (and so never stops itself for
 -- want of money, see AIJob:updateCost).
 function TheContractorDrivers.onAISystemStartJob(aiSystem, superFunc, job, startFarmId)
     local drivers = TheContractorDrivers.getInstance()
     local vehicle = TheContractorDrivers.getAIJobVehicle(job)
 
     if drivers ~= nil and vehicle ~= nil and not g_currentMission.TheContractor.Dispatch:isOurAIJob(job) then
-        if TCCourseplay.isCpJob(job) then
-            local refusal = drivers:getServerStartRefusal(vehicle)
-            if refusal ~= nil then
-                Logging.info("TheContractor: refused Courseplay start on '%s' (%s)", vehicle:getFullName(), refusal)
-                drivers:notify(vehicle:getOwnerFarmId(), refusal, vehicle)
-                return
-            end
+        local refusal = drivers:getServerStartRefusal(vehicle)
+        if refusal ~= nil then
+            Logging.info("TheContractor: refused %s start on '%s' (%s)",
+                TCCourseplay.isCpJob(job) and "Courseplay" or "AI Helper", vehicle:getFullName(), refusal)
+            drivers:notify(vehicle:getOwnerFarmId(), refusal, vehicle)
+            return
         end
 
         if drivers:hasDriver(vehicle) then
@@ -255,8 +291,8 @@ function TheContractorDrivers:getServerStartRefusal(vehicle)
     return nil
 end
 
--- Client gate, shared by every player start path (TCAutoDrive,
--- TCCourseplay). startFunc runs the original start. Returns true if it took
+-- Client gate, shared by every player start path (AI start requests -
+-- vanilla and CP - and TCAutoDrive). startFunc runs the original start. Returns true if it took
 -- the start over - the picker runs startFunc once a driver's chosen (or
 -- never, if cancelled) - and false if the caller should just go ahead.
 function TheContractorDrivers:gateClientStart(vehicle, startFunc)

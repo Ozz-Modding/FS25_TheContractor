@@ -182,6 +182,14 @@ TheContractorJobGeneration.SKILL_PRICE_PREMIUM = 0.04
 TheContractorJobGeneration.MIN_PRICE_VARIANCE = 0.9
 TheContractorJobGeneration.MAX_PRICE_VARIANCE = 1.1
 
+-- Job pay rate (048): the whole price is then scaled by the "Job pay rate"
+-- setting (TheContractorSettings, 50-500%), where 100% is JOB_PAY_BASELINE
+-- of the vanilla-scale price above. Vanilla mission pay is roughly 20-35x
+-- real UK contractor rates, and wages are 1x UK since 047; the right level
+-- is still being found in play - retune this once it is. Reputation isn't
+-- scaled (reputationPerHa / REPUTATION_PER_REWARD use rewardPerHa).
+TheContractorJobGeneration.JOB_PAY_BASELINE = 0.5
+
 -- Harvest & haul (035): the share of harvest offers where the client wants
 -- the crop carted to a selling point as well as the field combined - a
 -- two-person job, worth more money and reputation than a plain harvest.
@@ -307,6 +315,11 @@ function TheContractorJobGeneration:tryGenerateJob(farmId, onlyJobType)
             price = math.floor(price * TheContractorJobGeneration.HAULAGE_PRICE_MULTIPLIER)
         end
     end
+
+    local settings = g_currentMission.TheContractor.Settings
+    Logging.info("TheContractor: priced %s on field %d at %.0f (%.2f/ha, job pay rate %d%% = %.2fx vanilla)",
+        jobType, field:getId(), price, price / math.max(field:getAreaHa() or 1, 0.01), settings:get("jobPayRate"),
+        settings:getJobPayMultiplier())
 
     local environment = g_currentMission.environment
     return g_currentMission.TheContractor.Jobs:createJob(farmId, jobType, field:getId(), requiredSkillLevel,
@@ -753,7 +766,9 @@ function TheContractorJobGeneration:estimatePrice(field, jobDef, farmId, require
     local randomMultiplier = TheContractorJobGeneration.MIN_PRICE_VARIANCE +
         math.random() * (TheContractorJobGeneration.MAX_PRICE_VARIANCE - TheContractorJobGeneration.MIN_PRICE_VARIANCE)
 
-    return math.floor(basePrice * reputationMultiplier * skillMultiplier * randomMultiplier)
+    local payMultiplier = g_currentMission.TheContractor.Settings:getJobPayMultiplier()
+
+    return math.floor(basePrice * reputationMultiplier * skillMultiplier * randomMultiplier * payMultiplier)
 end
 
 -- The job type's rewardPerHa, or for bale wrap (paid per bale in vanilla,

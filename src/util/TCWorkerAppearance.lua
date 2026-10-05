@@ -124,36 +124,6 @@ local function rollOutfit(style)
     end
 end
 
--- TEMP: dumps every player model's wardrobe presets (the pool rollOutfit
--- picks from) to the log, for vetting which outfits are daft. Remove when done.
-function TCWorkerAppearance.debugPrintOutfits()
-    print("TheContractor: ---- worker outfit presets ----")
-    for _, entry in ipairs(PlayerSystem.PLAYER_STYLES) do
-        local style = entry.style
-        if style == nil or not style.isConfigurationLoaded then
-            print(string.format("  model %s (%s): not loaded", tostring(entry.filename), tostring(entry.gender)))
-        else
-            print(string.format("  model %s (%s)", tostring(style.xmlFilename), tostring(entry.gender)))
-            for i, preset in ipairs(style:getPresets()) do
-                local eligible = isPresetEligible(preset)
-                local slots = {}
-                for _, configName in ipairs(TCWorkerAppearance.CONFIG_NAMES) do
-                    local slot = preset.configs[configName]
-                    if slot ~= nil then
-                        table.insert(slots, string.format("%s=%s(%s)", configName, tostring(slot.selectionName),
-                            tostring(slot.selectionColorIndex)))
-                    end
-                end
-                print(string.format("    [%d] %s %q text=%s brand=%s selectable=%s extra=%s -> %s",
-                    i, eligible and "PICKABLE" or "skipped ", tostring(preset.name), tostring(preset.text),
-                    tostring(preset.brandName), tostring(preset.isSelectable), tostring(preset.extraContentId),
-                    table.concat(slots, " ")))
-            end
-        end
-    end
-    print("TheContractor: ---- end outfit presets ----")
-end
-
 -- A new look for a worker of `gender`, as appearance data (see toData), or
 -- nil if no valid one could be made - the worker then just gets vanilla's
 -- random helper look in the cab.
@@ -343,9 +313,10 @@ end
 
 -- In the cab ---------------------------------------------------------------------
 
--- The hired worker on a vehicle, on any machine: its AutoDrive/Courseplay
--- driver (037), or the operator of a contract job it's assigned to. nil for
--- anything else - the player's own vanilla helpers, a player-driven job.
+-- The hired worker on a vehicle, on any machine: its staff driver (037 -
+-- AI Helper, AutoDrive or Courseplay), or the operator of a contract job
+-- it's assigned to. nil for anything else - a helper on a vehicle of a farm
+-- with no company, a player-driven job.
 function TCWorkerAppearance.getWorkerOnVehicle(vehicle)
     local tc = g_currentMission ~= nil and g_currentMission.TheContractor or nil
     if tc == nil or tc.Staff == nil then
