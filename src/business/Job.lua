@@ -86,6 +86,10 @@ function TheContractorJob.new(id, farmId, jobType, fieldId, requiredSkillLevel, 
     self.assignedEquipmentIds = {}
     self.completionPercentage = 0
     self.paymentAmount = nil
+    -- 049: the day the job's invoice is expected to be paid (monotonic),
+    -- shown in its summary. nil when it was paid on completion (late/unpaid
+    -- invoices switched off, or a job from before invoices existed).
+    self.invoiceDueDay = nil
 
     -- Hidden per-job negotiation mechanic (014) — never shown to the player.
     -- Degrades each negotiation round; hitting 0 means the NPC walks away
@@ -299,6 +303,16 @@ function TheContractorJob:getSummaryText()
         field ~= nil and field:getName() or tostring(self.fieldId),
         TheContractorJob.formatMinutes(self:getTimeTakenMinutes()),
         g_i18n:formatMoney(self.fuelCost, 0, true, true), self.fuelUsedLiters, self.qualityScore or 0)
+end
+
+-- 049: "Invoiced £X, expected around June 10, Year 2", or "Paid £X" for a
+-- job paid on completion.
+function TheContractorJob:getPaymentText()
+    local amount = g_i18n:formatMoney(self.paymentAmount or self.price, 0, true, true)
+    if self.invoiceDueDay ~= nil then
+        return string.format(g_i18n:getText("tc_summary_invoiced"), amount, TCCalendar.formatDay(self.invoiceDueDay))
+    end
+    return string.format(g_i18n:getText("tc_summary_paid"), amount)
 end
 
 -- The player's farm is doing the carting itself: a haulage job allocated

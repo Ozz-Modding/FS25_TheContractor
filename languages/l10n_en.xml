@@ -2,10 +2,16 @@
 <l10n>
 	<translationContributors/>
 	<texts>
+		<text name="tc_settings_header" text="The Contractor"/>
+		<text name="tc_setting_jobPayRate" text="Job pay rate"/>
+		<text name="tc_setting_lateInvoices" text="Late/unpaid invoices"/>
+		<text name="tc_toolTip_lateInvoices" text="On: completed jobs are invoiced and paid up to three months later, some late and a few never. Off: jobs pay in full on completion. Invoices already sent still run their course."/>
+		<text name="tc_toolTip_jobPayRate" text="Scales what new contract offers pay. 100% is half of base-game contract pay. Jobs already offered or accepted keep their price."/>
 		<text name="tc_header_inbox" text="Inbox"/>
 		<text name="tc_header_calendar" text="Calendar"/>
 		<text name="tc_header_staff" text="Staff"/>
 		<text name="tc_header_overview" text="Overview"/>
+		<text name="tc_header_finances" text="Finances"/>
 		<text name="tc_overview_companyHeading" text="Company"/>
 		<text name="tc_overview_businessHeading" text="Business"/>
 		<text name="tc_inbox_negotiationHeading" text="Negotiation"/>
@@ -20,6 +26,9 @@
 		<text name="tc_detail_crew" text="Crew"/>
 		<text name="tc_detail_deliverTo" text="Deliver to"/>
 		<text name="tc_detail_supplies" text="Supplies"/>
+		<text name="tc_detail_messageType" text="Type"/>
+		<text name="tc_detail_received" text="Received"/>
+		<text name="tc_detail_replyBy" text="Reply by"/>
 		<text name="tc_inbox_equipmentHeading" text="Equipment needed"/>
 		<text name="tc_inbox_fieldValue" text="%s (%s)"/>
 		<text name="tc_inbox_skillValue" text="%s %d / 10"/>
@@ -85,6 +94,8 @@
 		<text name="tc_overview_nextRankNone" text="N/A"/>
 		<text name="tc_overview_noCompletedJobs" text="No completed jobs yet."/>
 		<text name="tc_summary_notification" text="Job complete: %s"/>
+		<text name="tc_summary_invoiced" text="Invoiced %s, expected around %s"/>
+		<text name="tc_summary_paid" text="Paid %s"/>
 		<text name="tc_summary_line" text="%s on Field %s, %s, fuel %s (%.0f l), quality %d%%"/>
 		<text name="tc_summary_duration" text="%dh %02dm"/>
 		<text name="tc_overview_currentJobsHeading" text="Current Jobs"/>
@@ -141,7 +152,7 @@
 		<text name="tc_jobType_weed" text="Weed"/>
 		<text name="tc_jobType_hoe" text="Hoe"/>
 		<text name="tc_jobType_stonePick" text="Pick Stones"/>
-		<text name="tc_inbox_empty" text="No job offers right now — check back later, or buy some advertising to bring more in."/>
+		<text name="tc_inbox_empty" text="Nothing in your inbox right now — check back later, or buy some advertising to bring more in."/>
 		<text name="tc_inbox_columnType" text="Type"/>
 		<text name="tc_inbox_columnField" text="Field"/>
 		<text name="tc_inbox_columnTargetDate" text="Due By"/>
@@ -160,6 +171,8 @@
 		<text name="tc_inbox_negotiationHolding" text="They won't go any higher than %s."/>
 		<text name="tc_inbox_jobAcceptedInfo" text="Job accepted: %s on Field %s for %s."/>
 		<text name="tc_inbox_jobRejectedInfo" text="Negotiation failed: they walked away from %s on Field %s."/>
+		<text name="tc_inbox_dismissButton" text="Dismiss"/>
+		<text name="tc_inbox_chipMessage" text="Message"/>
 		<text name="tc_calendar_yearLabel" text="Year %d"/>
 		<text name="tc_calendar_columnDay" text="Day"/>
 		<text name="tc_calendar_columnJobs" text="Jobs"/>
@@ -172,7 +185,7 @@
 		<text name="tc_calendar_columnCompleted" text="Completed"/>
 		<text name="tc_calendar_columnQuality" text="Quality"/>
 		<text name="tc_calendar_formerWorker" text="Former employee"/>
-		<text name="tc_calendar_completedReport" text="Done by: %s. Paid %s. Time taken %s. Fuel %s (%.0f l). Quality %s, stuck resets %d."/>
+		<text name="tc_calendar_completedReport" text="Done by: %s. %s. Time taken %s. Fuel %s (%.0f l). Quality %s, stuck resets %d."/>
 		<text name="tc_calendar_todayMarker" text="%s (Today)"/>
 		<text name="tc_calendar_unallocatedCount" text="%d unallocated"/>
 		<text name="tc_calendar_missedCount" text="%d failed"/>
@@ -254,9 +267,9 @@
 		<text name="tc_drivers_picker_columnSpeed" text="Speed"/>
 		<text name="tc_drivers_picker_columnTiers" text="Tractors (S/M/L) / skill"/>
 		<text name="tc_drivers_picker_assign" text="Assign"/>
-		<text name="tc_drivers_noIdleStaff" text="None of your staff are free to drive. Your company's vehicles need a staff driver for AutoDrive and Courseplay."/>
-		<text name="tc_drivers_contractorEquipmentDialog" text="This vehicle is out on a contract job, so AutoDrive and Courseplay can't drive it."/>
-		<text name="tc_drivers_contractorEquipment" text="%s is out on a contract job, so AutoDrive and Courseplay can't drive it."/>
+		<text name="tc_drivers_noIdleStaff" text="None of your staff are free to drive. Your company's vehicles need a staff driver for AI helpers, AutoDrive and Courseplay."/>
+		<text name="tc_drivers_contractorEquipmentDialog" text="This vehicle is out on a contract job, so AI helpers, AutoDrive and Courseplay can't drive it."/>
+		<text name="tc_drivers_contractorEquipment" text="%s is out on a contract job, so AI helpers, AutoDrive and Courseplay can't drive it."/>
 		<text name="tc_drivers_stoppedNoDriver" text="%s stopped: your company's vehicles need a staff driver. Start it again to pick one."/>
 		<text name="tc_drivers_notYourVehicle" text="Couldn't assign a driver to %s: it isn't your farm's vehicle."/>
 		<text name="tc_drivers_noCompany" text="Couldn't assign a driver to %s: you don't have a company."/>
@@ -342,5 +355,45 @@
 		<text name="tc_holiday_ended" text="%s is back from holiday"/>
 		<text name="tc_holiday_noticeOne" text="%s: %s on holiday"/>
 		<text name="tc_holiday_noticeMany" text="%s: %d workers on holiday (%s)"/>
+		<!-- Finances (049) -->
+		<text name="tc_finances_columnJob" text="Job"/>
+		<text name="tc_finances_columnField" text="Field"/>
+		<text name="tc_finances_columnAmount" text="Amount"/>
+		<text name="tc_finances_columnDue" text="Due"/>
+		<text name="tc_finances_columnStatus" text="Status"/>
+		<text name="tc_finances_status_outstanding" text="Outstanding"/>
+		<text name="tc_finances_status_overdue" text="Overdue"/>
+		<text name="tc_finances_status_writtenOff" text="Written off"/>
+		<text name="tc_finances_status_paid" text="Paid"/>
+		<text name="tc_finances_noInvoices" text="No unpaid invoices."/>
+		<text name="tc_finances_invoiceHeading" text="Invoice"/>
+		<text name="tc_finances_noInvoiceSelected" text="Completed jobs are invoiced here until the customer pays."/>
+		<text name="tc_finances_invoiceTitle" text="%s on Field %s"/>
+		<text name="tc_finances_unknownJob" text="Job %d"/>
+		<text name="tc_finances_amount" text="Amount"/>
+		<text name="tc_finances_issued" text="Issued"/>
+		<text name="tc_finances_due" text="Due"/>
+		<text name="tc_finances_status" text="Status"/>
+		<text name="tc_finances_job" text="Job"/>
+		<text name="tc_finances_dueInDays" text="Due in %d day(s)"/>
+		<text name="tc_finances_dueToday" text="Due today"/>
+		<text name="tc_finances_overdueDays" text="%d day(s) overdue"/>
+		<text name="tc_finances_writtenOffOn" text="Written off %s"/>
+		<text name="tc_finances_cashFlowHeading" text="Cash flow"/>
+		<text name="tc_finances_balance" text="Balance"/>
+		<text name="tc_finances_outstanding" text="Outstanding"/>
+		<text name="tc_finances_overdue" text="Overdue"/>
+		<text name="tc_finances_forecastThisMonth" text="%s (rest)"/>
+		<text name="tc_finances_forecastLine" text="Invoices %s, wages %s, net %s"/>
+		<text name="tc_finances_forecastNote" text="Forecast by due date. Overdue invoices aren't counted; wages are charged at the start of each month."/>
+		<text name="tc_finances_yearHeading" text="This year so far (Year %d)"/>
+		<text name="tc_finances_invoiced" text="Invoiced"/>
+		<text name="tc_finances_received" text="Received"/>
+		<text name="tc_finances_writtenOff" text="Written off"/>
+		<text name="tc_finances_wages" text="Wages"/>
+		<text name="tc_finances_writeOffButton" text="Write off"/>
+		<text name="tc_finances_writeOffConfirm" text="Write off the invoice for %s (%s)? It will be treated as never paid."/>
+		<text name="tc_finances_paidNotification" text="Invoice paid: %s (%s)"/>
+		<text name="tc_finances_writtenOffNotice" text="Invoice for %s (%s) written off: the customer never paid."/>
 	</texts>
 </l10n>

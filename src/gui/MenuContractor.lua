@@ -1,6 +1,5 @@
--- Top-level "Contractor" in-game menu page: four sub-tabs (Overview, Inbox,
--- Calendar, Staff) — Inbox/Calendar/Staff are placeholders later tickets
--- fill in. Structure mirrors FS25_RedTape/src/gui/MenuRedTape.lua's own
+-- Top-level "Contractor" in-game menu page: five sub-tabs (Overview, Inbox,
+-- Calendar, Staff, Finances). Structure mirrors FS25_RedTape/src/gui/MenuRedTape.lua's own
 -- top-level page + subCategory-tab pattern.
 
 MenuContractor = {}
@@ -17,6 +16,7 @@ MenuContractor.SUB_CATEGORY = {
     INBOX = 2,
     CALENDAR = 3,
     STAFF = 4,
+    FINANCES = 5,
 }
 
 MenuContractor.HEADER_SLICES = {
@@ -24,6 +24,7 @@ MenuContractor.HEADER_SLICES = {
     [MenuContractor.SUB_CATEGORY.CALENDAR] = "gui.icon_ingameMenu_calendar",
     [MenuContractor.SUB_CATEGORY.STAFF] = "gui.icon_ingameMenu_animals",
     [MenuContractor.SUB_CATEGORY.OVERVIEW] = "gui.icon_ingameMenu_finances",
+    [MenuContractor.SUB_CATEGORY.FINANCES] = "gui.icon_ingameMenu_prices",
 }
 
 MenuContractor.HEADER_TITLES = {
@@ -31,6 +32,7 @@ MenuContractor.HEADER_TITLES = {
     [MenuContractor.SUB_CATEGORY.CALENDAR] = "tc_header_calendar",
     [MenuContractor.SUB_CATEGORY.STAFF] = "tc_header_staff",
     [MenuContractor.SUB_CATEGORY.OVERVIEW] = "tc_header_overview",
+    [MenuContractor.SUB_CATEGORY.FINANCES] = "tc_header_finances",
 }
 
 -- Same period->month convention as FS25_RedTape/src/RedTape.lua's
@@ -164,6 +166,13 @@ local function getTierChipTone(rating)
     return "warn"
 end
 
+-- 049: invoice status chips. Paid invoices aren't listed.
+local INVOICE_STATUS_TONES = {
+    outstanding = "info",
+    overdue = "warn",
+    writtenOff = "bad",
+}
+
 local function getQualityChipTone(qualityScore)
     if qualityScore >= 80 then
         return "good"
@@ -184,6 +193,14 @@ end
 -- MenuContractor.lua is sourced before Job.lua (see main.lua's source
 -- order) — TheContractorJob.STATE wouldn't exist yet if this ran at load
 -- time instead of lazily per call.
+-- Inbox message (050) action buttons, in the order of the message's
+-- actions - TheContractorInbox.MAX_ACTIONS of them.
+MenuContractor.MESSAGE_ACTION_INPUTS = {
+    InputAction.MENU_ACTIVATE,
+    InputAction.MENU_EXTRA_1,
+    InputAction.MENU_EXTRA_2,
+}
+
 local function isCalendarVisibleState(state)
     return state == TheContractorJob.STATE.ACCEPTED or state == TheContractorJob.STATE.ALLOCATED or
         state == TheContractorJob.STATE.IN_PROGRESS or state == TheContractorJob.STATE.MISSED
@@ -292,6 +309,20 @@ function MenuContractor:initialize()
     self.menuButtonInfoInboxWithSelection = { self.btnBack, self.btnNextPage, self.btnPrevPage,
         self.btnAcceptJob, self.btnDeclineJob, self.btnCounterOffer }
 
+    -- Inbox messages (050): one button per action of the highlighted
+    -- message, labelled and listed by updateInboxMessageDetails.
+    self.btnMessageActions = {}
+    for i, inputAction in ipairs(MenuContractor.MESSAGE_ACTION_INPUTS) do
+        self.btnMessageActions[i] = {
+            inputAction = inputAction,
+            text = "",
+            callback = function()
+                self:onClickMessageAction(i)
+            end
+        }
+    end
+    self.menuButtonInfoInboxMessage = self.menuButtonInfoDefault
+
     -- Staff (017) — hire a selected candidate, or release a selected roster
     -- worker. Mutually exclusive: selecting in one of staffTable's two views
     -- (see onClickStaffView) always clears the other view's selection, so
@@ -315,6 +346,18 @@ function MenuContractor:initialize()
         self.btnHireWorker }
     self.menuButtonInfoStaffWithRosterSelection = { self.btnBack, self.btnNextPage, self.btnPrevPage,
         self.btnReleaseWorker }
+
+    -- Finances (049) - write off the highlighted invoice, only while it's
+    -- overdue (see getMenuButtonInfo).
+    self.btnWriteOffInvoice = {
+        inputAction = InputAction.MENU_ACTIVATE,
+        text = g_i18n:getText("tc_finances_writeOffButton"),
+        callback = function()
+            self:onClickWriteOffInvoice()
+        end
+    }
+    self.menuButtonInfoFinancesWithOverdue = { self.btnBack, self.btnNextPage, self.btnPrevPage,
+        self.btnWriteOffInvoice }
 
 -- Jumps straight back to the current in-game month regardless of how far
     -- forward the player paged via the in-page "< Month Year >" selector
@@ -429,6 +472,9 @@ function MenuContractor:initialize()
 
     self.inboxJobs = {}
     self.selectedInboxJobId = nil
+    -- 050: messages head the list, above the job offers.
+    self.inboxMessages = {}
+    self.selectedInboxMessageId = nil
     -- Client-side-only transcript of negotiation exchanges, keyed by job id —
     -- flavor text derived from each round's outcome, not synced/persisted
     -- (same "not tracked as durable state" treatment 013 gives the HUD's
@@ -464,6 +510,13 @@ function MenuContractor:initialize()
 
     self.staffTable:setDataSource(self)
     self.staffTable:setDelegate(self)
+
+    -- Finances (049): the farm's unpaid invoices, oldest due first.
+    self.invoiceList = {}
+    self.selectedInvoiceId = nil
+
+    self.financesInvoiceTable:setDataSource(self)
+    self.financesInvoiceTable:setDelegate(self)
 end
 
 function MenuContractor:getMenuButtonInfo()
@@ -474,6 +527,10 @@ function MenuContractor:getMenuButtonInfo()
             return self.menuButtonInfoOverviewNoCompany
         end
         return self.menuButtonInfoOverviewWithCompany
+    end
+
+    if state == MenuContractor.SUB_CATEGORY.INBOX and self.selectedInboxMessageId ~= nil then
+        return self.menuButtonInfoInboxMessage
     end
 
     if state == MenuContractor.SUB_CATEGORY.INBOX and self.selectedInboxJobId ~= nil then
@@ -506,6 +563,13 @@ function MenuContractor:getMenuButtonInfo()
         end
         if self.staffView == "roster" and self.selectedRosterWorkerId ~= nil then
             return self.menuButtonInfoStaffWithRosterSelection
+        end
+    end
+
+    if state == MenuContractor.SUB_CATEGORY.FINANCES and self:hasCompany() then
+        local invoice = self:getSelectedInvoice()
+        if invoice ~= nil and invoice.status == TheContractorFinances.STATUS.OVERDUE then
+            return self.menuButtonInfoFinancesWithOverdue
         end
     end
 
@@ -583,7 +647,9 @@ function MenuContractor:refreshCompanyState()
         self.inboxListContainer:setVisible(false)
         self.inboxEmptyText:setVisible(false)
         self.inboxDetailsBox:setVisible(false)
+        self.inboxMessageBox:setVisible(false)
         self.selectedInboxJobId = nil
+        self.selectedInboxMessageId = nil
 
         self.calendarContainer:setVisible(false)
         self.calendarDayDetailsBox:setVisible(false)
@@ -600,6 +666,9 @@ function MenuContractor:refreshCompanyState()
         self.staffDetailsBox:setVisible(false)
         self.selectedRosterWorkerId = nil
         self.selectedCandidateId = nil
+
+        self.financesContent:setVisible(false)
+        self.selectedInvoiceId = nil
     end
 
     if hasCompany then
@@ -632,6 +701,7 @@ function MenuContractor:refreshCompanyState()
         self:refreshSalaryBillState(farmId, tc.Staff)
         self:refreshNoticesState(farmId, tc.Notices)
         self:refreshStaffState(farmId, tc.Staff, tc.Jobs)
+        self:refreshFinancesState(farmId, tc.Finances)
 
         -- The row BoxLayouts only place their rows when told to: the
         -- layout run at GUI setup leaves them unplaced (seen in-game, 043).
@@ -647,6 +717,8 @@ function MenuContractor:refreshCompanyState()
     self.placeholderCalendar:setText(lockedText)
     self.placeholderStaff:setVisible(not hasCompany)
     self.placeholderStaff:setText(lockedText)
+    self.placeholderFinances:setVisible(not hasCompany)
+    self.placeholderFinances:setText(lockedText)
 end
 
 -- Overview tab's last-job line (029): the most recent completion summary,
@@ -1039,7 +1111,11 @@ end
 -- the ticket leaves the exact ordering as a non-architectural decision) and
 -- refreshes the selected job's detail panel. Called on frame open, tab
 -- switch (updateContent), and after accept/decline locally applies.
+-- Inbox messages (050) go above the jobs, newest first.
 function MenuContractor:refreshInboxState(farmId, jobs)
+    local inbox = g_currentMission.TheContractor.Inbox
+    self.inboxMessages = inbox:getMessages(farmId)
+
     self.inboxJobs = {}
     for _, job in ipairs(jobs:getJobsByState(farmId, TheContractorJob.STATE.OFFERED)) do
         table.insert(self.inboxJobs, job)
@@ -1051,9 +1127,9 @@ function MenuContractor:refreshInboxState(farmId, jobs)
         return a.id > b.id
     end)
 
-    local hasJobs = #self.inboxJobs > 0
-    self.inboxListContainer:setVisible(hasJobs)
-    self.inboxEmptyText:setVisible(not hasJobs)
+    local hasItems = #self.inboxJobs + #self.inboxMessages > 0
+    self.inboxListContainer:setVisible(hasItems)
+    self.inboxEmptyText:setVisible(not hasItems)
     self.inboxTable:reloadData()
 
     -- Keep the current selection if that job is still in the list (e.g. a
@@ -1068,7 +1144,68 @@ function MenuContractor:refreshInboxState(farmId, jobs)
         self.selectedInboxJobId = nil
     end
 
+    if self.selectedInboxMessageId ~= nil and inbox:getMessage(self.selectedInboxMessageId) == nil then
+        self.selectedInboxMessageId = nil
+    end
+
     self:updateInboxDetails()
+end
+
+function MenuContractor:getSelectedInboxMessage()
+    for _, message in ipairs(self.inboxMessages) do
+        if message.id == self.selectedInboxMessageId then
+            return message
+        end
+    end
+    return nil
+end
+
+-- 050: the highlighted message's panel, and its actions on the bottom bar.
+function MenuContractor:updateInboxMessageDetails()
+    local message = self:getSelectedInboxMessage()
+    self.inboxMessageBox:setVisible(message ~= nil)
+
+    if message == nil then
+        self.menuButtonInfoInboxMessage = self.menuButtonInfoDefault
+        return
+    end
+
+    local inbox = g_currentMission.TheContractor.Inbox
+    self.inboxMessageTitle:setText(TheContractorInbox.getTitle(message))
+    local chipText, chipTone = inbox:getChip(message)
+    setChip(self.inboxMessageChip, self.inboxMessageChipText, chipText, chipTone)
+    self.inboxMessageReceived:setText(TCCalendar.formatDay(message.createdDay))
+    self.inboxMessageRowExpires:setVisible(message.expiresDay ~= nil)
+    if message.expiresDay ~= nil then
+        self.inboxMessageExpires:setText(TCCalendar.formatDay(message.expiresDay))
+    end
+    self.inboxMessageBody:setText(TheContractorInbox.getBody(message))
+    self.inboxMessageRows:invalidateLayout()
+
+    self.menuButtonInfoInboxMessage = { self.btnBack, self.btnNextPage, self.btnPrevPage }
+    for i, action in ipairs(message.actions) do
+        local button = self.btnMessageActions[i]
+        if button ~= nil then
+            button.text = g_i18n:getText(action.textKey)
+            table.insert(self.menuButtonInfoInboxMessage, button)
+        end
+    end
+end
+
+function MenuContractor:onClickMessageAction(index)
+    local message = self:getSelectedInboxMessage()
+    local action = message ~= nil and message.actions[index] or nil
+    if action == nil then
+        return
+    end
+
+    local farmId = g_currentMission:getFarmId()
+    g_client:getServerConnection():sendEvent(TCMessageActionEvent.new(farmId, message.id, action.key))
+
+    -- Same "already applied on the server, catches up next visit on a
+    -- remote client" caveat as respondToSelectedInboxJob.
+    self.selectedInboxMessageId = nil
+    self:refreshInboxState(farmId, g_currentMission.TheContractor.Jobs)
 end
 
 function MenuContractor:getSelectedInboxJob()
@@ -1081,6 +1218,8 @@ function MenuContractor:getSelectedInboxJob()
 end
 
 function MenuContractor:updateInboxDetails()
+    self:updateInboxMessageDetails()
+
     local job = self:getSelectedInboxJob()
     self.inboxDetailsBox:setVisible(job ~= nil)
     self:setMenuButtonInfoDirty()
@@ -1306,8 +1445,10 @@ function MenuContractor:getNumberOfItemsInSection(list, section)
         return #self.allocationEquipmentRows
     elseif list == self.staffTable then
         return self.staffView == "candidates" and #self.candidateList or #self.rosterWorkers
+    elseif list == self.financesInvoiceTable then
+        return #self.invoiceList
     end
-    return #self.inboxJobs
+    return #self.inboxMessages + #self.inboxJobs
 end
 
 function MenuContractor:populateCellForItemInSection(list, section, index, cell)
@@ -1329,9 +1470,29 @@ function MenuContractor:populateCellForItemInSection(list, section, index, cell)
     elseif list == self.staffTable then
         self:populateStaffCell(index, cell)
         return
+    elseif list == self.financesInvoiceTable then
+        self:populateInvoiceCell(index, cell)
+        return
     end
 
-    local job = self.inboxJobs[index]
+    -- 050: message rows first, then job rows. Cells are reused, so each
+    -- kind of row shows its own cells and hides the other's.
+    local message = self.inboxMessages[index]
+    local isMessage = message ~= nil
+    for _, name in ipairs({ "jobType", "field", "targetDate", "price" }) do
+        cell:getAttribute(name):setVisible(not isMessage)
+    end
+    cell:getAttribute("messageTitle"):setVisible(isMessage)
+    if isMessage then
+        local chipText, chipTone = g_currentMission.TheContractor.Inbox:getChip(message)
+        setChip(cell:getAttribute("kindChip"), cell:getAttribute("kindChipText"), chipText, chipTone)
+        cell:getAttribute("messageTitle"):setText(TheContractorInbox.getTitle(message))
+        setChip(cell:getAttribute("equipmentChip"), cell:getAttribute("equipmentChipText"), nil)
+        return
+    end
+    setChip(cell:getAttribute("kindChip"), cell:getAttribute("kindChipText"), nil)
+
+    local job = self.inboxJobs[index - #self.inboxMessages]
     if job == nil then
         return
     end
@@ -1415,12 +1576,22 @@ function MenuContractor:onListSelectionChanged(list, section, index)
         return
     end
 
+    -- Like the completed-jobs list: just tracks the highlight, no reload.
+    if list == self.financesInvoiceTable then
+        local invoice = self.invoiceList[index]
+        self.selectedInvoiceId = invoice ~= nil and invoice.id or nil
+        self:updateInvoiceDetails()
+        return
+    end
+
     if list ~= self.inboxTable then
         return
     end
 
-    local job = self.inboxJobs[index]
-    self.selectedInboxJobId = job ~= nil and job.id or nil
+    local message = self.inboxMessages[index]
+    local job = self.inboxJobs[index - #self.inboxMessages]
+    self.selectedInboxMessageId = message ~= nil and message.id or nil
+    self.selectedInboxJobId = message == nil and job ~= nil and job.id or nil
     self:updateInboxDetails()
 end
 
@@ -1644,7 +1815,7 @@ function MenuContractor:updateCompletedJobReport()
 
     self.calendarCompletedReport:setText(string.format(g_i18n:getText("tc_calendar_completedReport"),
         self:getCompletedJobCrewText(job),
-        g_i18n:formatMoney(job.paymentAmount or job.price, 0, true, true),
+        job:getPaymentText(),
         TheContractorJob.formatMinutes(job:getTimeTakenMinutes()),
         g_i18n:formatMoney(job.fuelCost, 0, true, true), job.fuelUsedLiters,
         job.qualityScore ~= nil and string.format("%d%%", job.qualityScore) or "-",
@@ -2417,6 +2588,170 @@ end
 
 -- Active-ad status line. Purchase gating lives in TCAdvertisingDialog now
 -- (027), so there's no button state to update here.
+-- Finances (049) -----------------------------------------------------------
+
+local function formatMoney(amount)
+    return g_i18n:formatMoney(amount, 0, true, true)
+end
+
+-- Rebuilds the invoice list (keeping the highlighted invoice if it's still
+-- listed, otherwise picking the first, like refreshCompletedJobsState) and
+-- the cash-flow and year-to-date cards.
+function MenuContractor:refreshFinancesState(farmId, finances)
+    self.financesContent:setVisible(true)
+
+    self.invoiceList = finances:getUnpaidInvoices(farmId)
+    self.financesInvoiceTable:reloadData()
+
+    local hasInvoices = #self.invoiceList > 0
+    self.financesListContainer:setVisible(hasInvoices)
+    self.financesListEmptyText:setVisible(not hasInvoices)
+
+    local selectedIndex = nil
+    for i, invoice in ipairs(self.invoiceList) do
+        if invoice.id == self.selectedInvoiceId then
+            selectedIndex = i
+        end
+    end
+    if hasInvoices then
+        selectedIndex = selectedIndex or 1
+        self.financesInvoiceTable:setSelectedIndex(selectedIndex)
+        self.selectedInvoiceId = self.invoiceList[selectedIndex].id
+    else
+        self.selectedInvoiceId = nil
+    end
+    self:updateInvoiceDetails()
+
+    self:refreshCashFlowState(farmId, finances)
+    self:refreshFinanceYearState(farmId, finances)
+end
+
+function MenuContractor:refreshCashFlowState(farmId, finances)
+    local farm = g_farmManager:getFarmById(farmId)
+    self.financesBalance:setText(farm ~= nil and formatMoney(farm:getBalance()) or "-")
+    self.financesOutstanding:setText(formatMoney(finances:getTotal(farmId, TheContractorFinances.STATUS.OUTSTANDING)))
+    self.financesOverdue:setText(formatMoney(finances:getTotal(farmId, TheContractorFinances.STATUS.OVERDUE)))
+    self.financesSalaryBill:setText(formatMoney(g_currentMission.TheContractor.Staff:getTotalSalary(farmId)))
+
+    for i, row in ipairs(finances:getForecast(farmId)) do
+        local month = TCCalendar.formatMonth(row.periodIndex)
+        self["financesForecastLabel" .. i]:setText(i == 1 and
+            string.format(g_i18n:getText("tc_finances_forecastThisMonth"), month) or month)
+        self["financesForecastValue" .. i]:setText(string.format(g_i18n:getText("tc_finances_forecastLine"),
+            formatMoney(row.income), formatMoney(row.wages), formatMoney(row.income - row.wages)))
+    end
+
+    self.financesCashFlowRows:invalidateLayout()
+end
+
+function MenuContractor:refreshFinanceYearState(farmId, finances)
+    local stats = finances:getYearStats(farmId)
+    self.financesYearTitle:setText(string.format(g_i18n:getText("tc_finances_yearHeading"), stats.year))
+    self.financesYearInvoiced:setText(formatMoney(stats.invoiced))
+    self.financesYearReceived:setText(formatMoney(stats.received))
+    self.financesYearWrittenOff:setText(formatMoney(stats.writtenOff))
+    self.financesYearWages:setText(formatMoney(stats.wages))
+
+    self.financesYearRows:invalidateLayout()
+end
+
+function MenuContractor:getSelectedInvoice()
+    for _, invoice in ipairs(self.invoiceList) do
+        if invoice.id == self.selectedInvoiceId then
+            return invoice
+        end
+    end
+    return nil
+end
+
+function MenuContractor:populateInvoiceCell(index, cell)
+    local invoice = self.invoiceList[index]
+    if invoice == nil then
+        return
+    end
+
+    local job = g_currentMission.TheContractor.Jobs:getJob(invoice.farmId, invoice.jobId)
+    local fieldText = "-"
+    if job ~= nil then
+        local field = g_fieldManager:getFieldById(job.fieldId)
+        fieldText = field ~= nil and field:getName() or tostring(job.fieldId)
+    end
+    cell:getAttribute("job"):setText(job ~= nil and job:getDisplayTitle() or "-")
+    cell:getAttribute("field"):setText(fieldText)
+    cell:getAttribute("amount"):setText(formatMoney(invoice.amount))
+    cell:getAttribute("due"):setText(TCCalendar.formatDayShort(invoice.dueDay))
+    setChip(cell:getAttribute("statusChip"), cell:getAttribute("statusChipText"),
+        g_i18n:getText("tc_finances_status_" .. invoice.status), INVOICE_STATUS_TONES[invoice.status])
+end
+
+-- What the status means for this invoice: how long until it's due, how late
+-- it is, or when it was written off.
+local function getInvoiceStatusNote(invoice)
+    local today = g_currentMission.environment.currentMonotonicDay
+    if invoice.status == TheContractorFinances.STATUS.OVERDUE then
+        return string.format(g_i18n:getText("tc_finances_overdueDays"), today - invoice.dueDay)
+    elseif invoice.status == TheContractorFinances.STATUS.WRITTEN_OFF then
+        return invoice.settledDay ~= nil and
+            string.format(g_i18n:getText("tc_finances_writtenOffOn"), TCCalendar.formatDay(invoice.settledDay)) or ""
+    end
+    local daysLeft = invoice.dueDay - today
+    if daysLeft <= 0 then
+        return g_i18n:getText("tc_finances_dueToday")
+    end
+    return string.format(g_i18n:getText("tc_finances_dueInDays"), daysLeft)
+end
+
+function MenuContractor:updateInvoiceDetails()
+    self:setMenuButtonInfoDirty()
+
+    local invoice = self:getSelectedInvoice()
+    self.financesInvoiceRows:setVisible(invoice ~= nil)
+    self.financesInvoiceEmptyText:setVisible(invoice == nil)
+    if invoice == nil then
+        self.financesInvoiceTitle:setText(g_i18n:getText("tc_finances_invoiceHeading"))
+        return
+    end
+
+    local finances = g_currentMission.TheContractor.Finances
+    self.financesInvoiceTitle:setText(finances:getInvoiceTitle(invoice))
+    self.financesInvoiceAmount:setText(formatMoney(invoice.amount))
+    self.financesInvoiceIssued:setText(TCCalendar.formatDay(invoice.issuedDay))
+    self.financesInvoiceDue:setText(TCCalendar.formatDay(invoice.dueDay))
+    setChip(self.financesInvoiceStatusChip, self.financesInvoiceStatusChipText,
+        g_i18n:getText("tc_finances_status_" .. invoice.status), INVOICE_STATUS_TONES[invoice.status])
+    self.financesInvoiceStatusNote:setText(getInvoiceStatusNote(invoice))
+
+    local job = g_currentMission.TheContractor.Jobs:getJob(invoice.farmId, invoice.jobId)
+    self.financesInvoiceJob:setText(job ~= nil and job:getSummaryText() or "-")
+
+    self.financesInvoiceRows:invalidateLayout()
+end
+
+-- Confirm, then ask the server; it re-checks the invoice is still overdue.
+function MenuContractor:onClickWriteOffInvoice()
+    local invoice = self:getSelectedInvoice()
+    if invoice == nil or invoice.status ~= TheContractorFinances.STATUS.OVERDUE then
+        return
+    end
+
+    local farmId = g_currentMission:getFarmId()
+    local finances = g_currentMission.TheContractor.Finances
+    local dialogPrompt = string.format(g_i18n:getText("tc_finances_writeOffConfirm"), finances:getInvoiceTitle(invoice),
+        formatMoney(invoice.amount))
+
+    YesNoDialog.show(function(target, clickOk)
+        if not clickOk then
+            return
+        end
+
+        g_client:getServerConnection():sendEvent(TCWriteOffInvoiceEvent.new(farmId, invoice.id))
+
+        -- Same "synchronous for host/SP, catches up on next refresh for a
+        -- remote client" caveat as onClickHireWorker.
+        target:refreshFinancesState(farmId, g_currentMission.TheContractor.Finances)
+    end, self, dialogPrompt)
+end
+
 function MenuContractor:refreshAdvertisingState(farmId, advertising)
     local activeLevel = advertising:getActiveLevel(farmId)
     if activeLevel ~= nil then
@@ -2496,16 +2831,17 @@ function MenuContractor:onClickStaff()
     self:setMenuButtonInfoDirty()
 end
 
+function MenuContractor:onClickFinances()
+    self.subCategoryPaging:setState(MenuContractor.SUB_CATEGORY.FINANCES, true)
+    self:setMenuButtonInfoDirty()
+end
+
 function MenuContractor:onClickOverview()
     self.subCategoryPaging:setState(MenuContractor.SUB_CATEGORY.OVERVIEW, true)
     self:setMenuButtonInfoDirty()
 end
 
 function MenuContractor:updateSubCategoryPages(subCategoryIndex)
-    -- TEMP: outfit preset dump for vetting worker looks - remove when done.
-    if self.subCategoryPaging:getState() == MenuContractor.SUB_CATEGORY.STAFF then
-        TCWorkerAppearance.debugPrintOutfits()
-    end
     self:updateContent()
     self:setMenuButtonInfoDirty()
 end

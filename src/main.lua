@@ -24,9 +24,11 @@ source(TheContractor.dir .. "src/util/TCCalendar.lua")
 source(TheContractor.dir .. "src/util/TCWorkerAppearance.lua")
 source(TheContractor.dir .. "src/gui/TCWorkerPortrait.lua")
 source(TheContractor.dir .. "src/gui/MenuContractor.lua")
+source(TheContractor.dir .. "src/gui/TCSettingsMenu.lua")
 source(TheContractor.dir .. "src/gui/TCAdvertisingDialog.lua")
 source(TheContractor.dir .. "src/gui/TCDriverPickerDialog.lua")
 source(TheContractor.dir .. "src/hud/TCInboxHUD.lua")
+source(TheContractor.dir .. "src/business/Settings.lua")
 source(TheContractor.dir .. "src/business/Reputation.lua")
 source(TheContractor.dir .. "src/business/Negotiation.lua")
 source(TheContractor.dir .. "src/business/Job.lua")
@@ -43,7 +45,10 @@ source(TheContractor.dir .. "src/business/Advertising.lua")
 source(TheContractor.dir .. "src/business/Drivers.lua")
 source(TheContractor.dir .. "src/business/Notices.lua")
 source(TheContractor.dir .. "src/business/Holidays.lua")
+source(TheContractor.dir .. "src/business/Finances.lua")
+source(TheContractor.dir .. "src/business/Inbox.lua")
 source(TheContractor.dir .. "src/events/TCInitialClientStateEvent.lua")
+source(TheContractor.dir .. "src/events/TCSettingsEvent.lua")
 source(TheContractor.dir .. "src/events/TCCreateCompanyEvent.lua")
 source(TheContractor.dir .. "src/events/TCReputationChangedEvent.lua")
 source(TheContractor.dir .. "src/events/TCDebugAddReputationEvent.lua")
@@ -86,6 +91,13 @@ source(TheContractor.dir .. "src/events/TCNoticeRemovedEvent.lua")
 source(TheContractor.dir .. "src/events/TCWorkerRetirementAnnouncedEvent.lua")
 source(TheContractor.dir .. "src/events/TCWorkerRetiredEvent.lua")
 source(TheContractor.dir .. "src/events/TCWorkerHolidayChangedEvent.lua")
+source(TheContractor.dir .. "src/events/TCInvoiceIssuedEvent.lua")
+source(TheContractor.dir .. "src/events/TCInvoiceStatusChangedEvent.lua")
+source(TheContractor.dir .. "src/events/TCWriteOffInvoiceEvent.lua")
+source(TheContractor.dir .. "src/events/TCFinanceYearStatsEvent.lua")
+source(TheContractor.dir .. "src/events/TCMessagePostedEvent.lua")
+source(TheContractor.dir .. "src/events/TCMessageRemovedEvent.lua")
+source(TheContractor.dir .. "src/events/TCMessageActionEvent.lua")
 
 -- The top-level Contractor page itself stays always-visible (see Company.lua
 -- and MenuContractor's Overview tab): "Create Company" has to live somewhere
@@ -101,6 +113,7 @@ end
 function TheContractor:loadMap()
     g_currentMission.TheContractor = self
 
+    self.Settings = TheContractorSettings.new()
     self.Reputation = TheContractorReputation.new()
     self.Jobs = TheContractorJobs.new()
     self.JobGeneration = TheContractorJobGeneration.new()
@@ -114,6 +127,8 @@ function TheContractor:loadMap()
     self.Drivers = TheContractorDrivers.new()
     self.Notices = TheContractorNotices.new()
     self.Holidays = TheContractorHolidays.new()
+    self.Finances = TheContractorFinances.new()
+    self.Inbox = TheContractorInbox.new()
     self.InboxHUD = TCInboxHUD.new()
 
     -- Module-level caches outlive a savegame; start each load clean.
@@ -125,8 +140,8 @@ function TheContractor:loadMap()
 
     TheContractorDisableVanillaContracts.hideContractsTab()
 
-    -- 037: AutoDrive/Courseplay staff-driver hooks, for whichever of the two
-    -- is loaded.
+    -- 037: staff-driver hooks - vanilla AI Helper starts always, plus
+    -- AutoDrive/Courseplay for whichever of the two is loaded.
     TheContractorDrivers.installHooks()
 
     g_gui:loadProfiles(TheContractor.dir .. "src/gui/guiProfiles.xml")
@@ -144,6 +159,9 @@ function TheContractor:loadMap()
 
     self:loadFromXMLFile()
 
+    -- 048: after loading, so the controls start on the saved values.
+    TCSettingsMenu.inject()
+
     -- Tops the shared staff pool up if it's empty (fresh save, or an
     -- existing save from before the pool existed) — see
     -- TheContractorStaff:ensureInitialPool.
@@ -155,6 +173,8 @@ function TheContractor:loadMap()
     self.Staff:startDailyTick()
     self.Dispatch:startListening()
     self.Notices:startPeriodTick()
+    self.Finances:startDailyTick()
+    self.Inbox:startDailyTick()
 
     -- Cheat-gated, following FS25_RedTape's own rtAddPoints console command
     -- (RedTape.lua's consoleCommandAddPoints): easy manual testing of
@@ -193,6 +213,9 @@ function TheContractor:loadMap()
         addConsoleCommand("tcRemoveNotice",
             "Remove a notice from the Overview board by id (038). Usage: tcRemoveNotice noticeId",
             "consoleCommandRemoveNotice", self)
+        addConsoleCommand("tcListInvoices",
+            "List the current farm's invoices, including the hidden late/bad-debt rolls (049). Usage: tcListInvoices",
+            "consoleCommandListInvoices", self)
     end
 
     Logging.info("TheContractor: loadMap")
@@ -476,6 +499,33 @@ function TheContractor:consoleCommandRemoveNotice(noticeId)
     return string.format("Removed notice %d", numNoticeId)
 end
 
+-- Server-only, since it shows what clients never get: when (or whether)
+-- each invoice will really be paid.
+function TheContractor:consoleCommandListInvoices()
+    if not g_currentMission:getIsServer() then return "Server only" end
+
+    local farm = g_farmManager:getFarmByUserId(g_currentMission.playerUserId)
+    if farm == nil or farm.farmId == 0 then
+        return "Error: No farm found for current player"
+    end
+
+    local lines = { string.format("Farm %d invoices (today is day %d):", farm.farmId,
+        g_currentMission.environment.currentMonotonicDay) }
+    for _, invoice in pairs(self.Finances.invoicesById) do
+        if invoice.farmId == farm.farmId then
+            local outcome = "pays on time"
+            if invoice.isBadDebt then
+                outcome = "bad debt, never pays"
+            elseif invoice.isLate then
+                outcome = string.format("late, pays day %d", invoice.paymentDay)
+            end
+            table.insert(lines, string.format("#%d job %d: %.0f, issued day %d, due day %d, %s (%s)", invoice.id,
+                invoice.jobId, invoice.amount, invoice.issuedDay, invoice.dueDay, invoice.status, outcome))
+        end
+    end
+    return table.concat(lines, "\n")
+end
+
 -- Called as a normal method (self == TheContractor) from loadMap, once the
 -- savegame directory is known.
 function TheContractor:loadFromXMLFile()
@@ -495,6 +545,7 @@ function TheContractor:loadFromXMLFile()
 
     local xmlFile = loadXMLFile(TheContractor.SaveKey, filePath)
 
+    self.Settings:loadFromXMLFile(xmlFile)
     self.Reputation:loadFromXMLFile(xmlFile)
     -- Before Staff/Drivers: loading can retire a worker (039), which takes
     -- their notice down.
@@ -507,6 +558,8 @@ function TheContractor:loadFromXMLFile()
     self.Drivers:loadFromXMLFile(xmlFile)
     -- After Notices, so it can drop notice ids no longer on the board.
     self.Holidays:loadFromXMLFile(xmlFile)
+    self.Finances:loadFromXMLFile(xmlFile)
+    self.Inbox:loadFromXMLFile(xmlFile)
 
     delete(xmlFile)
 
@@ -531,6 +584,7 @@ function TheContractor:saveToXmlFile()
     local xmlFile = createXMLFile(TheContractor.SaveKey, savegameFolderPath .. TheContractor.SaveKey .. ".xml",
         TheContractor.SaveKey)
 
+    tc.Settings:saveToXmlFile(xmlFile)
     tc.Reputation:saveToXmlFile(xmlFile)
     tc.Jobs:saveToXmlFile(xmlFile)
     tc.Staff:saveToXmlFile(xmlFile)
@@ -540,6 +594,8 @@ function TheContractor:saveToXmlFile()
     tc.Drivers:saveToXmlFile(xmlFile)
     tc.Notices:saveToXmlFile(xmlFile)
     tc.Holidays:saveToXmlFile(xmlFile)
+    tc.Finances:saveToXmlFile(xmlFile)
+    tc.Inbox:saveToXmlFile(xmlFile)
 
     saveXMLFile(xmlFile)
     delete(xmlFile)
@@ -607,6 +663,14 @@ function TheContractor:deleteMap()
         self.Notices:stopPeriodTick()
     end
 
+    if self.Finances ~= nil then
+        self.Finances:stopDailyTick()
+    end
+
+    if self.Inbox ~= nil then
+        self.Inbox:stopDailyTick()
+    end
+
     if self.InboxHUD ~= nil then
         self.InboxHUD:delete()
     end
@@ -623,6 +687,7 @@ function TheContractor:deleteMap()
         removeConsoleCommand("tcBookHoliday")
         removeConsoleCommand("tcPublishNotice")
         removeConsoleCommand("tcRemoveNotice")
+        removeConsoleCommand("tcListInvoices")
     end
 
     if g_currentMission ~= nil and g_currentMission.TheContractor == self then

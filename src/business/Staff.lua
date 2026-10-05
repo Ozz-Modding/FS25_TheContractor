@@ -17,9 +17,11 @@
 -- *is* farm-scoped, same as everything else in this mod.
 --
 -- Salary (036, replacing 026's one-off hire fee) is charged per period, on
--- PERIOD_CHANGED, for every hired worker whatever their status: about one
--- small job's pay for an average worker (~5k), up to 8.5k for the best
--- possible one. The first period is paid up front at hire, so hiring just
+-- PERIOD_CHANGED, for every hired worker whatever their status. 047
+-- re-baselined it to real UK monthly pay (a period is a month): ~2.2k for
+-- the weakest possible worker (about the National Living Wage full time),
+-- ~2.8k for an average one (~33k a year), up to ~3.55k for the best. The
+-- first period is paid up front at hire, so hiring just
 -- after a period change and releasing just before the next isn't free. No
 -- refund on release, no proration. Pool sizing and the daily add/remove odds
 -- were reviewed in 026 and kept.
@@ -27,12 +29,12 @@
 TheContractorStaff = {}
 TheContractorStaff_mt = Class(TheContractorStaff)
 
-TheContractorStaff.BASE_SALARY = 1500
-TheContractorStaff.SALARY_PER_WORK_SPEED = 250
-TheContractorStaff.SALARY_PER_TIER_POINT = 100
+TheContractorStaff.BASE_SALARY = 2050
+TheContractorStaff.SALARY_PER_WORK_SPEED = 35
+TheContractorStaff.SALARY_PER_TIER_POINT = 25
 -- 044: only a worker's SALARIED_SKILL_COUNT best operation skills are paid
 -- for - you pay for their specialisms, not for being average at everything.
-TheContractorStaff.SALARY_PER_SKILL_POINT = 75
+TheContractorStaff.SALARY_PER_SKILL_POINT = 20
 TheContractorStaff.SALARIED_SKILL_COUNT = 2
 
 -- Independent per-tier roll: each tier has this chance of the worker being
@@ -562,6 +564,7 @@ function TheContractorStaff:paySalaries()
         local total = self:getTotalSalary(farmId)
         if total > 0 and g_farmManager:getFarmById(farmId) ~= nil then
             g_currentMission:addMoney(-total, farmId, MoneyType.TC_WAGES, true, true)
+            g_currentMission.TheContractor.Finances:recordWages(farmId, total)
             Logging.info("TheContractor: farm %d paid %.0f in staff salaries", farmId, total)
         end
     end
@@ -809,6 +812,7 @@ function TheContractorStaff:hireWorker(farmId, candidateId)
     end
 
     g_currentMission:addMoney(-candidate.salary, farmId, MoneyType.TC_WAGES, true, true)
+    g_currentMission.TheContractor.Finances:recordWages(farmId, candidate.salary)
 
     candidate.farmId = farmId
     -- 040: before the broadcast, so the allowance goes out with them.

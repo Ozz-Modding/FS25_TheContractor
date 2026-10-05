@@ -17,6 +17,9 @@
 -- player). Sound only fires for genuinely new arrivals (TheContractorJobs:
 -- registerJob's isNewArrival flag), never for the historical jobs replayed
 -- into a newly joining client via TCInitialClientStateEvent.
+--
+-- Inbox messages (050) count the same way: every message on the farm the
+-- player hasn't seen yet, with the sound on a genuinely new one.
 
 TCInboxHUD = {}
 TCInboxHUD_mt = Class(TCInboxHUD)
@@ -37,6 +40,7 @@ function TCInboxHUD.new()
     setmetatable(self, TCInboxHUD_mt)
 
     self.seenJobIds = {}
+    self.seenMessageIds = {}
     self.unreadCount = 0
     self.syncTime = 0
 
@@ -62,12 +66,24 @@ function TCInboxHUD:onJobOffered(job)
     g_gui.guiSoundPlayer:playSample(GuiSoundPlayer.SOUND_SAMPLES.NOTIFICATION)
 end
 
--- Marks every currently-offered job for farmId as seen — called when the
+-- Same, for an inbox message (050, TheContractorInbox:applyMessagePosted).
+function TCInboxHUD:onMessagePosted(message)
+    if message.farmId ~= g_currentMission:getFarmId() then
+        return
+    end
+
+    g_gui.guiSoundPlayer:playSample(GuiSoundPlayer.SOUND_SAMPLES.NOTIFICATION)
+end
+
+-- Marks every currently-offered job and message for farmId as seen — called when the
 -- player opens the Inbox tab (see MenuContractor:onClickInbox/updateContent).
 function TCInboxHUD:markAllSeen(farmId)
     local tc = g_currentMission.TheContractor
     for _, job in ipairs(tc.Jobs:getJobsByState(farmId, TheContractorJob.STATE.OFFERED)) do
         self.seenJobIds[job.id] = true
+    end
+    for _, message in ipairs(tc.Inbox:getMessages(farmId)) do
+        self.seenMessageIds[message.id] = true
     end
     self:syncUnreadCount()
 end
@@ -89,6 +105,13 @@ function TCInboxHUD:syncUnreadCount()
     for _, job in ipairs(tc.Jobs:getJobsByState(farmId, TheContractorJob.STATE.OFFERED)) do
         if not self.seenJobIds[job.id] then
             count = count + 1
+        end
+    end
+    if tc.Inbox ~= nil then
+        for _, message in ipairs(tc.Inbox:getMessages(farmId)) do
+            if not self.seenMessageIds[message.id] then
+                count = count + 1
+            end
         end
     end
 
