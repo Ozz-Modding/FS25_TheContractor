@@ -225,3 +225,61 @@ function TheContractorNotices:readInitialClientState(streamId, connection)
         self:applyNoticePublished(TheContractorNotices.readNotice(streamId))
     end
 end
+
+-- Console commands (tcCompany - see TCConsole) -----------------------------------------
+
+function TheContractorNotices.registerConsoleCommands()
+    -- The board doesn't show ids, and removeNotice needs one. Read-only.
+    TCConsole.register("company", "notices", {
+        description = "The notices on your Overview board, with their ids",
+        serverOnly = false,
+        run = function(farmId, args)
+            local notices = g_currentMission.TheContractor.Notices:getNotices(farmId)
+            if #notices == 0 then
+                return string.format("Farm %d has no notices.", farmId)
+            end
+
+            local lines = { string.format("Farm %d notices:", farmId) }
+            for _, notice in ipairs(notices) do
+                table.insert(lines, string.format("#%d (%s) %s", notice.id, notice.expiresAtPeriod ~= nil and
+                    ("until " .. TCCalendar.formatPeriodIndex(notice.expiresAtPeriod)) or "no expiry", notice.text))
+            end
+            return table.concat(lines, "\n")
+        end,
+    })
+
+    TCConsole.register("company", "notice", {
+        args = "<months|none> <text...>",
+        description = "Put a notice on your Overview board, for that many months or until removed",
+        run = function(farmId, args)
+            local ttl = args[1] ~= nil and string.lower(args[1]) or nil
+            local months = TCConsole.toCount(ttl, nil)
+            local text = table.concat(args, " ", 2)
+            if text == "" or (months == nil and ttl ~= "none") then
+                return false
+            end
+
+            local noticeId = g_currentMission.TheContractor.Notices:publish(farmId, text, months)
+            return string.format("Published notice %d", noticeId)
+        end,
+    })
+
+    TCConsole.register("company", "removeNotice", {
+        args = "<noticeId>",
+        description = "Take a notice off the board (tcCompany notices shows the ids)",
+        run = function(farmId, args)
+            local noticeId = tonumber(args[1])
+            if noticeId == nil then
+                return false
+            end
+            local notices = g_currentMission.TheContractor.Notices
+            local notice = notices:getNotice(noticeId)
+            if notice == nil or notice.farmId ~= farmId then
+                return string.format("Error: your farm has no notice %d", noticeId)
+            end
+
+            notices:remove(noticeId)
+            return string.format("Removed notice %d", noticeId)
+        end,
+    })
+end

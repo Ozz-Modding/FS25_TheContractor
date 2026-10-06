@@ -19,7 +19,8 @@
 -- args, actions = { { key, textKey }, ... }, payload } - days are
 -- monotonic, expiresDay nil for no expiry. Title and body are l10n keys
 -- formatted with args on each client, so everyone reads their own
--- language; a string arg starting "$l10n_" is translated too. args and
+-- language; a string arg starting "$l10n_" is translated too, and one
+-- starting "$money_" (then a number) is formatted as money. args and
 -- payload hold plain values only (numbers, strings, booleans) - never a
 -- node (see src/events/README.md). A message with no actions gets a single
 -- Dismiss. Ids are unique across all farms.
@@ -95,6 +96,8 @@ local function resolveArgs(args)
     for i, arg in ipairs(args) do
         if type(arg) == "string" and string.sub(arg, 1, 6) == "$l10n_" then
             resolved[i] = g_i18n:getText(string.sub(arg, 7))
+        elseif type(arg) == "string" and string.sub(arg, 1, 7) == "$money_" then
+            resolved[i] = g_i18n:formatMoney(tonumber(string.sub(arg, 8)) or 0, 0, true, true)
         else
             resolved[i] = arg
         end

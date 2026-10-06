@@ -148,6 +148,7 @@ local STATUS_CHIP_TONES = {
     cooldown = "neutral",
     sick = "bad",
     holiday = "info",
+    training = "info",
 }
 
 local function getWorkerStatusTone(status)
@@ -171,6 +172,17 @@ local INVOICE_STATUS_TONES = {
     outstanding = "info",
     overdue = "warn",
     writtenOff = "bad",
+    pursuing = "info",
+}
+
+-- 051: overhead status chips (see getOverheadStatus).
+local OVERHEAD_STATUS_TONES = {
+    active = "good",
+    mandatory = "info",
+    cancelled = "warn",
+    lapsing = "warn",
+    notNeeded = "neutral",
+    notTaken = "neutral",
 }
 
 local function getQualityChipTone(qualityScore)
@@ -200,6 +212,9 @@ MenuContractor.MESSAGE_ACTION_INPUTS = {
     InputAction.MENU_EXTRA_1,
     InputAction.MENU_EXTRA_2,
 }
+
+-- 054: the certificate the Staff tab shows and books - the only one so far.
+MenuContractor.TRAINING_CERT = "spraying"
 
 local function isCalendarVisibleState(state)
     return state == TheContractorJob.STATE.ACCEPTED or state == TheContractorJob.STATE.ALLOCATED or
@@ -342,10 +357,31 @@ function MenuContractor:initialize()
             self:onClickReleaseWorker()
         end
     }
+    -- 056: a one-off bonus for the highlighted roster worker.
+    self.btnGiveBonus = {
+        inputAction = InputAction.MENU_EXTRA_2,
+        text = g_i18n:getText("tc_morale_bonusButton"),
+        callback = function()
+            self:onClickGiveBonus()
+        end
+    }
     self.menuButtonInfoStaffWithCandidateSelection = { self.btnBack, self.btnNextPage, self.btnPrevPage,
         self.btnHireWorker }
     self.menuButtonInfoStaffWithRosterSelection = { self.btnBack, self.btnNextPage, self.btnPrevPage,
-        self.btnReleaseWorker }
+        self.btnReleaseWorker, self.btnGiveBonus }
+
+    -- 054: book the highlighted worker on the spraying course (or its
+    -- retake), only while they're ready, uncertified and not booked - see
+    -- getMenuButtonInfo. The label says which (updateStaffDetails).
+    self.btnBookTraining = {
+        inputAction = InputAction.MENU_EXTRA_1,
+        text = g_i18n:getText("tc_training_bookCourseButton"),
+        callback = function()
+            self:onClickBookTraining()
+        end
+    }
+    self.menuButtonInfoStaffWithTrainableWorker = { self.btnBack, self.btnNextPage, self.btnPrevPage,
+        self.btnReleaseWorker, self.btnBookTraining, self.btnGiveBonus }
 
     -- Finances (049) - write off the highlighted invoice, only while it's
     -- overdue (see getMenuButtonInfo).
@@ -356,8 +392,85 @@ function MenuContractor:initialize()
             self:onClickWriteOffInvoice()
         end
     }
+    -- 053: or pursue it, with legal cover or a solicitor.
+    self.btnPursueInvoice = {
+        inputAction = InputAction.MENU_EXTRA_1,
+        text = g_i18n:getText("tc_legal_pursueButton"),
+        callback = function()
+            self:onClickPursueInvoice()
+        end
+    }
     self.menuButtonInfoFinancesWithOverdue = { self.btnBack, self.btnNextPage, self.btnPrevPage,
-        self.btnWriteOffInvoice }
+        self.btnWriteOffInvoice, self.btnPursueInvoice }
+
+    -- Overheads (051), acting on the highlighted overhead: take one out
+    -- (annual or monthly), cancel it, undo a cancel, or switch its billing
+    -- from the next renewal. Which ones show depends on its state (see
+    -- getMenuButtonInfo); the switch button's label says which way.
+    self.btnEnableOverheadAnnual = {
+        inputAction = InputAction.MENU_ACTIVATE,
+        text = g_i18n:getText("tc_overheads_enableAnnualButton"),
+        callback = function()
+            self:onClickEnableOverhead(TheContractorOverheads.BILLING.ANNUAL)
+        end
+    }
+    self.btnEnableOverheadMonthly = {
+        inputAction = InputAction.MENU_EXTRA_1,
+        text = g_i18n:getText("tc_overheads_enableMonthlyButton"),
+        callback = function()
+            self:onClickEnableOverhead(TheContractorOverheads.BILLING.MONTHLY)
+        end
+    }
+    self.btnCancelOverhead = {
+        inputAction = InputAction.MENU_ACTIVATE,
+        text = g_i18n:getText("tc_overheads_cancelButton"),
+        callback = function()
+            self:onClickCancelOverhead()
+        end
+    }
+    self.btnKeepOverhead = {
+        inputAction = InputAction.MENU_ACTIVATE,
+        text = g_i18n:getText("tc_overheads_keepButton"),
+        callback = function()
+            self:onClickKeepOverhead()
+        end
+    }
+    self.btnSwitchOverheadBilling = {
+        inputAction = InputAction.MENU_EXTRA_1,
+        text = "",
+        callback = function()
+            self:onClickSwitchOverheadBilling()
+        end
+    }
+    self.menuButtonInfoOverheadNotTaken = { self.btnBack, self.btnNextPage, self.btnPrevPage,
+        self.btnEnableOverheadAnnual, self.btnEnableOverheadMonthly }
+    self.menuButtonInfoOverheadActive = { self.btnBack, self.btnNextPage, self.btnPrevPage,
+        self.btnCancelOverhead, self.btnSwitchOverheadBilling }
+    self.menuButtonInfoOverheadMandatory = { self.btnBack, self.btnNextPage, self.btnPrevPage,
+        self.btnSwitchOverheadBilling }
+    self.menuButtonInfoOverheadCancelled = { self.btnBack, self.btnNextPage, self.btnPrevPage,
+        self.btnKeepOverhead }
+
+    -- 057: the office administrator's row in the same list - hire one, or
+    -- release the one employed.
+    self.btnHireAdministrator = {
+        inputAction = InputAction.MENU_ACTIVATE,
+        text = g_i18n:getText("tc_admin_hireButton"),
+        callback = function()
+            self:onClickHireAdministrator()
+        end
+    }
+    self.btnReleaseAdministrator = {
+        inputAction = InputAction.MENU_ACTIVATE,
+        text = g_i18n:getText("tc_admin_releaseButton"),
+        callback = function()
+            self:onClickReleaseAdministrator()
+        end
+    }
+    self.menuButtonInfoAdministratorVacant = { self.btnBack, self.btnNextPage, self.btnPrevPage,
+        self.btnHireAdministrator }
+    self.menuButtonInfoAdministratorEmployed = { self.btnBack, self.btnNextPage, self.btnPrevPage,
+        self.btnReleaseAdministrator }
 
 -- Jumps straight back to the current in-game month regardless of how far
     -- forward the player paged via the in-page "< Month Year >" selector
@@ -517,6 +630,16 @@ function MenuContractor:initialize()
 
     self.financesInvoiceTable:setDataSource(self)
     self.financesInvoiceTable:setDelegate(self)
+
+    -- 051: the Finances list shows invoices or overheads (financesView,
+    -- switched by financesViewSelector), like the Staff tab's two views.
+    -- overheadRows is every registered overhead, in registration order.
+    self.financesView = "invoices"
+    self.overheadRows = {}
+    self.selectedOverheadKey = nil
+
+    self.financesOverheadTable:setDataSource(self)
+    self.financesOverheadTable:setDelegate(self)
 end
 
 function MenuContractor:getMenuButtonInfo()
@@ -562,14 +685,26 @@ function MenuContractor:getMenuButtonInfo()
             return self.menuButtonInfoStaffWithCandidateSelection
         end
         if self.staffView == "roster" and self.selectedRosterWorkerId ~= nil then
+            local worker = self:getSelectedRosterWorker()
+            if worker ~= nil and
+                    TheContractorTraining.getBookingProblem(worker, MenuContractor.TRAINING_CERT) == nil then
+                return self.menuButtonInfoStaffWithTrainableWorker
+            end
             return self.menuButtonInfoStaffWithRosterSelection
         end
     end
 
     if state == MenuContractor.SUB_CATEGORY.FINANCES and self:hasCompany() then
-        local invoice = self:getSelectedInvoice()
-        if invoice ~= nil and invoice.status == TheContractorFinances.STATUS.OVERDUE then
-            return self.menuButtonInfoFinancesWithOverdue
+        if self.financesView == "overheads" then
+            local buttons = self:getOverheadButtonInfo()
+            if buttons ~= nil then
+                return buttons
+            end
+        else
+            local invoice = self:getSelectedInvoice()
+            if invoice ~= nil and invoice.status == TheContractorFinances.STATUS.OVERDUE then
+                return self.menuButtonInfoFinancesWithOverdue
+            end
         end
     end
 
@@ -660,6 +795,7 @@ function MenuContractor:refreshCompanyState()
         self.allocatingJobId = nil
 
         self.staffViewSelector:setVisible(false)
+        setChip(self.staffHealthSafetyChip, self.staffHealthSafetyChipText, nil)
         self.staffHeaderRow:setVisible(false)
         self.staffEmptyText:setVisible(false)
         self.staffListContainer:setVisible(false)
@@ -669,6 +805,7 @@ function MenuContractor:refreshCompanyState()
 
         self.financesContent:setVisible(false)
         self.selectedInvoiceId = nil
+        self.selectedOverheadKey = nil
     end
 
     if hasCompany then
@@ -819,6 +956,12 @@ function MenuContractor:refreshStaffState(farmId, staff, jobs)
     self.staffViewSelector:setState(self.staffView == "candidates" and 2 or 1)
     self.staffViewSelector:setVisible(true)
     self.staffHeaderRow:setVisible(true)
+
+    -- 055: so the player can see why sickness has changed.
+    local hasHealthSafety = g_currentMission.TheContractor.HealthSafety:isActive(farmId)
+    setChip(self.staffHealthSafetyChip, self.staffHealthSafetyChipText,
+        g_i18n:getText(hasHealthSafety and "tc_healthSafety_chipActive" or "tc_healthSafety_chipInactive"),
+        hasHealthSafety and "good" or "warn")
 
     -- Job column only makes sense for the roster view (candidates were never
     -- assigned anything) — blank it out entirely in the candidates view
@@ -974,40 +1117,106 @@ function MenuContractor:updateStaffDetails()
     end
 
     -- Roster-only rows; the BoxLayout closes up around the hidden ones.
+    -- Holiday left is hidden for a worker who's leaving (there's only room
+    -- for ten rows, and they won't use it).
     local isRoster = self.staffView == "roster"
-    local retirementText = isRoster and self:getRetirementLine(worker) or nil
+    local leavingText = isRoster and self:getLeavingLine(worker) or nil
     self.staffRowStatus:setVisible(isRoster)
+    self.staffRowMorale:setVisible(isRoster)
     self.staffRowJob:setVisible(isRoster)
-    self.staffRowRetirement:setVisible(retirementText ~= nil)
-    self.staffRowHolidayLeft:setVisible(isRoster)
+    self.staffRowRetirement:setVisible(leavingText ~= nil)
+    self.staffRowHolidayLeft:setVisible(isRoster and leavingText == nil)
     self.staffRowHoliday:setVisible(isRoster and worker:hasHolidayBooked())
 
     if isRoster then
         setChip(self.staffDetailStatusChip, self.staffDetailStatusChipText,
             g_i18n:getText("tc_staff_status_" .. worker.status), getWorkerStatusTone(worker.status))
+        -- 056.
+        local moraleText, moraleTone = TheContractorMorale.getChip(worker.morale)
+        setChip(self.staffDetailMoraleChip, self.staffDetailMoraleChipText, moraleText, moraleTone)
 
         local farmId = g_currentMission:getFarmId()
         local jobLine = self:getAssignedJobLine(farmId, g_currentMission.TheContractor.Jobs, worker.id)
         self.staffDetailJob:setText(jobLine or g_i18n:getText("tc_staff_detailJobNone"))
-        self.staffDetailRetirement:setText(retirementText or "")
+        self.staffDetailRetirementLabel:setText(g_i18n:getText(worker.isQuitting and "tc_detail_quitting" or
+            "tc_detail_retiring"))
+        self.staffDetailRetirement:setText(leavingText or "")
         self:updateHolidayDetails(worker)
     end
+
+    self:updateCertificationDetails(worker, isRoster)
 
     self.staffDetailRows:invalidateLayout()
 end
 
--- 039: when a worker who's handed in their notice leaves, counted from
--- today. nil if they aren't retiring.
-function MenuContractor:getRetirementLine(worker)
-    if not worker:isRetiring() then
+-- 054: the spraying certificate's chip - certified, in training or not -
+-- and, on the roster, a note on where they stand: the booked dates, or
+-- whether they're ready to train and what it costs.
+function MenuContractor:updateCertificationDetails(worker, isRoster)
+    local cert = MenuContractor.TRAINING_CERT
+    local certName = TheContractorTraining.getCertName(cert)
+
+    local chipKey, tone = "tc_training_chipNotCertified", "neutral"
+    if worker:hasCertification(cert) then
+        chipKey, tone = "tc_training_chipCertified", "good"
+    elseif worker.trainingCert == cert then
+        chipKey, tone = "tc_training_chipInTraining", "info"
+    end
+    setChip(self.staffDetailCertChip, self.staffDetailCertChipText, string.format(g_i18n:getText(chipKey), certName),
+        tone)
+
+    local note = ""
+    if isRoster then
+        note = self:getCertificationNote(worker, cert) or ""
+    end
+    self.staffDetailCertNote:setText(note)
+
+    -- The bottom-bar button says whether it's the course or a retake.
+    self.btnBookTraining.text = g_i18n:getText(TheContractorTraining.isRetake(worker, cert) and
+        "tc_training_bookRetakeButton" or "tc_training_bookCourseButton")
+end
+
+function MenuContractor:getCertificationNote(worker, cert)
+    local definition = TheContractorTraining.getDefinition(cert)
+
+    if worker:hasCertification(cert) then
         return nil
     end
-    if worker:isRetirementDue() then
+
+    if worker.trainingCert == cert then
+        local courseDates = TheContractorTraining.formatCourseDates(worker)
+        local assessment = TCCalendar.formatDay(worker.assessmentDay)
+        if courseDates ~= nil then
+            return string.format(g_i18n:getText("tc_training_noteCourse"), courseDates, assessment)
+        end
+        return string.format(g_i18n:getText("tc_training_noteAssessment"), assessment)
+    end
+
+    if not TheContractorTraining.isReady(worker, cert) then
+        return string.format(g_i18n:getText("tc_training_noteNotReady"), g_i18n:getText("tc_skill_" .. definition.skill),
+            definition.readySkill, worker:getSkill(definition.skill))
+    end
+
+    local price = TheContractorTraining.formatPrice(TheContractorTraining.getPrice(g_currentMission:getFarmId(),
+        worker, cert))
+    if TheContractorTraining.isRetake(worker, cert) then
+        return string.format(g_i18n:getText("tc_training_noteRetake"), price)
+    end
+    return string.format(g_i18n:getText("tc_training_noteReady"), price)
+end
+
+-- 039: when a worker who's handed in their notice (retiring, or 056
+-- quitting) leaves, counted from today. nil if they aren't leaving.
+function MenuContractor:getLeavingLine(worker)
+    if not worker:isLeaving() then
+        return nil
+    end
+    if worker:isLeaveDue() then
         return g_i18n:getText("tc_staff_detailRetiringDue")
     end
 
-    local monthsLeft = worker.retiresAtPeriod - TCCalendar.getPeriodIndex()
-    local date = TCCalendar.formatPeriodIndex(worker.retiresAtPeriod)
+    local monthsLeft = worker.leavesAtPeriod - TCCalendar.getPeriodIndex()
+    local date = TCCalendar.formatPeriodIndex(worker.leavesAtPeriod)
     if monthsLeft == 1 then
         return string.format(g_i18n:getText("tc_staff_detailRetiringNextMonth"), date)
     end
@@ -1093,7 +1302,6 @@ function MenuContractor:onClickReleaseWorker()
     end
 
     local farmId = g_currentMission:getFarmId()
-    local dialogPrompt = string.format(g_i18n:getText("tc_staff_releaseConfirm"), worker.name)
 
     YesNoDialog.show(function(target, clickOk)
         if not clickOk then
@@ -1103,6 +1311,118 @@ function MenuContractor:onClickReleaseWorker()
         g_client:getServerConnection():sendEvent(TCReleaseWorkerEvent.new(farmId, worker.id))
 
         target.selectedRosterWorkerId = nil
+        target:refreshStaffState(farmId, g_currentMission.TheContractor.Staff, g_currentMission.TheContractor.Jobs)
+    end, self, MenuContractor.getReleasePrompt(worker))
+end
+
+-- 056: "4" or "4.3" weeks.
+local function formatWeeks(weeks)
+    if math.abs(weeks - math.floor(weeks + 0.5)) < 0.05 then
+        return string.format("%d", math.floor(weeks + 0.5))
+    end
+    return string.format("%.1f", weeks)
+end
+
+-- 056: the release confirmation, with what it costs (the same sum the
+-- server charges - TheContractorStaff.getReleaseCost).
+function MenuContractor.getReleasePrompt(worker)
+    local cost = TheContractorStaff.getReleaseCost(worker)
+    local function money(amount)
+        return g_i18n:formatMoney(amount, 0, true, true)
+    end
+
+    if worker:isLeaving() then
+        if cost.total <= 0 then
+            return string.format(g_i18n:getText("tc_staff_releaseConfirmLeavingNow"), worker.name)
+        end
+        return string.format(g_i18n:getText("tc_staff_releaseConfirmLeaving"), worker.name, money(cost.total),
+            formatWeeks(cost.noticeWeeks))
+    end
+    if cost.redundancyPay > 0 then
+        return string.format(g_i18n:getText("tc_staff_releaseConfirmRedundancy"), worker.name, cost.years,
+            money(cost.total), money(cost.noticePay), formatWeeks(cost.noticeWeeks), money(cost.redundancyPay))
+    end
+    return string.format(g_i18n:getText("tc_staff_releaseConfirmNotice"), worker.name, cost.years,
+        money(cost.total), formatWeeks(cost.noticeWeeks))
+end
+
+-- 056: pick an amount (OptionDialog - a gamepad-friendly option picker),
+-- then funds-check like onClickBookTraining. The server re-checks.
+function MenuContractor:onClickGiveBonus()
+    local worker = self:getSelectedRosterWorker()
+    if worker == nil then
+        return
+    end
+
+    local farmId = g_currentMission:getFarmId()
+    local amounts = TheContractorMorale.BONUS_AMOUNTS
+    local options = {}
+    for _, amount in ipairs(amounts) do
+        table.insert(options, g_i18n:formatMoney(amount, 0, true, true))
+    end
+
+    OptionDialog.show(function(index)
+        local amount = amounts[index]
+        if amount == nil then
+            return
+        end
+
+        if not TheContractorMorale.canAfford(farmId, amount) then
+            InfoDialog.show(string.format(g_i18n:getText("tc_morale_bonusCannotAfford"),
+                g_i18n:formatMoney(amount, 0, true, true), worker.name))
+            return
+        end
+
+        g_client:getServerConnection():sendEvent(TCGiveBonusEvent.new(farmId, worker.id, amount))
+
+        -- Same "synchronous for host/SP, catches up on next refresh for a
+        -- remote client" caveat as onClickHireWorker.
+        self:refreshStaffState(farmId, g_currentMission.TheContractor.Staff, g_currentMission.TheContractor.Jobs)
+    end, string.format(g_i18n:getText("tc_morale_bonusPrompt"), worker.name), g_i18n:getText("tc_morale_bonusTitle"),
+        options)
+end
+
+-- 054: funds-check-then-confirm, like onClickHireWorker. The dates shown
+-- are the ones the server will book (getFirstBookableDay works the same on
+-- every machine), except the assessment's exact day, rolled when booked.
+function MenuContractor:onClickBookTraining()
+    local worker = self:getSelectedRosterWorker()
+    local cert = MenuContractor.TRAINING_CERT
+    if worker == nil or TheContractorTraining.getBookingProblem(worker, cert) ~= nil then
+        return
+    end
+
+    local farmId = g_currentMission:getFarmId()
+    local price = TheContractorTraining.getPrice(farmId, worker, cert)
+    local priceText = TheContractorTraining.formatPrice(price)
+    local certName = TheContractorTraining.getCertName(cert)
+
+    if not TheContractorTraining.canAfford(farmId, price) then
+        InfoDialog.show(string.format(g_i18n:getText("tc_training_cannotAfford"), worker.name, certName, priceText))
+        return
+    end
+
+    local definition = TheContractorTraining.getDefinition(cert)
+    local firstDay = TheContractorTraining.getFirstBookableDay(worker)
+    local dialogPrompt
+    if TheContractorTraining.isRetake(worker, cert) then
+        dialogPrompt = string.format(g_i18n:getText("tc_training_confirmRetake"), worker.name, certName, priceText,
+            TCCalendar.formatDay(firstDay))
+    else
+        dialogPrompt = string.format(g_i18n:getText("tc_training_confirmCourse"), worker.name, certName, priceText,
+            TCCalendar.formatDayRange(firstDay, firstDay + definition.courseDays - 1),
+            TheContractorTraining.ASSESSMENT_GAP_MIN, TheContractorTraining.ASSESSMENT_GAP_MAX)
+    end
+
+    YesNoDialog.show(function(target, clickOk)
+        if not clickOk then
+            return
+        end
+
+        g_client:getServerConnection():sendEvent(TCBookTrainingEvent.new(farmId, worker.id, cert))
+
+        -- Same "synchronous for host/SP, catches up on next refresh for a
+        -- remote client" caveat as onClickHireWorker.
         target:refreshStaffState(farmId, g_currentMission.TheContractor.Staff, g_currentMission.TheContractor.Jobs)
     end, self, dialogPrompt)
 end
@@ -1447,6 +1767,8 @@ function MenuContractor:getNumberOfItemsInSection(list, section)
         return self.staffView == "candidates" and #self.candidateList or #self.rosterWorkers
     elseif list == self.financesInvoiceTable then
         return #self.invoiceList
+    elseif list == self.financesOverheadTable then
+        return #self.overheadRows
     end
     return #self.inboxMessages + #self.inboxJobs
 end
@@ -1472,6 +1794,9 @@ function MenuContractor:populateCellForItemInSection(list, section, index, cell)
         return
     elseif list == self.financesInvoiceTable then
         self:populateInvoiceCell(index, cell)
+        return
+    elseif list == self.financesOverheadTable then
+        self:populateOverheadCell(index, cell)
         return
     end
 
@@ -1581,6 +1906,13 @@ function MenuContractor:onListSelectionChanged(list, section, index)
         local invoice = self.invoiceList[index]
         self.selectedInvoiceId = invoice ~= nil and invoice.id or nil
         self:updateInvoiceDetails()
+        return
+    end
+
+    if list == self.financesOverheadTable then
+        local definition = self.overheadRows[index]
+        self.selectedOverheadKey = definition ~= nil and definition.key or nil
+        self:updateOverheadDetails()
         return
     end
 
@@ -2218,6 +2550,12 @@ function MenuContractor:getCrewWeaknessText(job, operatorId, haulerId, equipment
     for _, member in ipairs(crew) do
         local worker = member.workerId ~= nil and staff:getWorker(farmId, member.workerId) or nil
         if worker ~= nil then
+            -- 054: a missing certificate blocks before anything else.
+            local missingCert = TheContractorAllocation.getMissingCertification(worker, job, member.isHauler)
+            if missingCert ~= nil then
+                return string.format(g_i18n:getText("tc_allocation_notCertifiedWarning"), worker.name,
+                    TheContractorTraining.getCertName(missingCert))
+            end
             local ratings = allocation:getWorkerJobRatings(worker, job, member.equipmentIds, member.isHauler)
             if ratings.tractorTier ~= nil and ratings.tractorRating == nil then
                 return string.format(g_i18n:getText("tc_allocation_blockedWarning"), worker.name,
@@ -2600,6 +2938,25 @@ end
 function MenuContractor:refreshFinancesState(farmId, finances)
     self.financesContent:setVisible(true)
 
+    self.financesViewSelector:setTexts({ g_i18n:getText("tc_finances_viewInvoices"),
+        g_i18n:getText("tc_finances_viewOverheads") })
+    self.financesViewSelector:setState(self.financesView == "overheads" and 2 or 1)
+
+    self:refreshCashFlowState(farmId, finances)
+    self:refreshFinanceYearState(farmId, finances)
+
+    -- 051: the list and the top-right panel follow the view.
+    if self.financesView == "overheads" then
+        self.financesListContainer:setVisible(false)
+        self.financesListEmptyText:setVisible(false)
+        self.financesInvoiceRows:setVisible(false)
+        self.financesInvoiceEmptyText:setVisible(false)
+        self:refreshOverheadsState(farmId, g_currentMission.TheContractor.Overheads)
+        return
+    end
+    self.financesOverheadContainer:setVisible(false)
+    self.financesOverheadRows:setVisible(false)
+
     self.invoiceList = finances:getUnpaidInvoices(farmId)
     self.financesInvoiceTable:reloadData()
 
@@ -2621,24 +2978,32 @@ function MenuContractor:refreshFinancesState(farmId, finances)
         self.selectedInvoiceId = nil
     end
     self:updateInvoiceDetails()
+end
 
-    self:refreshCashFlowState(farmId, finances)
-    self:refreshFinanceYearState(farmId, finances)
+function MenuContractor:onClickFinancesView()
+    self.financesView = self.financesViewSelector:getState() == 2 and "overheads" or "invoices"
+    self:refreshFinancesState(g_currentMission:getFarmId(), g_currentMission.TheContractor.Finances)
+    self:setMenuButtonInfoDirty()
 end
 
 function MenuContractor:refreshCashFlowState(farmId, finances)
     local farm = g_farmManager:getFarmById(farmId)
     self.financesBalance:setText(farm ~= nil and formatMoney(farm:getBalance()) or "-")
     self.financesOutstanding:setText(formatMoney(finances:getTotal(farmId, TheContractorFinances.STATUS.OUTSTANDING)))
-    self.financesOverdue:setText(formatMoney(finances:getTotal(farmId, TheContractorFinances.STATUS.OVERDUE)))
-    self.financesSalaryBill:setText(formatMoney(g_currentMission.TheContractor.Staff:getTotalSalary(farmId)))
+    -- 053: an invoice being pursued is still overdue.
+    self.financesOverdue:setText(formatMoney(finances:getTotal(farmId, TheContractorFinances.STATUS.OVERDUE) +
+        finances:getTotal(farmId, TheContractorFinances.STATUS.PURSUING)))
+    local staff = g_currentMission.TheContractor.Staff
+    self.financesSalaryBill:setText(string.format(g_i18n:getText("tc_finances_salaryBillWithPension"),
+        formatMoney(staff:getWageBill(farmId)), formatMoney(staff:getPensionCost(farmId))))
 
     for i, row in ipairs(finances:getForecast(farmId)) do
         local month = TCCalendar.formatMonth(row.periodIndex)
         self["financesForecastLabel" .. i]:setText(i == 1 and
             string.format(g_i18n:getText("tc_finances_forecastThisMonth"), month) or month)
         self["financesForecastValue" .. i]:setText(string.format(g_i18n:getText("tc_finances_forecastLine"),
-            formatMoney(row.income), formatMoney(row.wages), formatMoney(row.income - row.wages)))
+            formatMoney(row.income), formatMoney(row.wages), formatMoney(row.overheads),
+            formatMoney(row.income - row.wages - row.overheads)))
     end
 
     self.financesCashFlowRows:invalidateLayout()
@@ -2650,7 +3015,12 @@ function MenuContractor:refreshFinanceYearState(farmId, finances)
     self.financesYearInvoiced:setText(formatMoney(stats.invoiced))
     self.financesYearReceived:setText(formatMoney(stats.received))
     self.financesYearWrittenOff:setText(formatMoney(stats.writtenOff))
-    self.financesYearWages:setText(formatMoney(stats.wages))
+    -- 054: training courses share the wages row, for the same reason as below.
+    self.financesYearWages:setText(formatMoney(stats.wages + (stats.training or 0)))
+    self.financesYearOverheads:setText(formatMoney(stats.overheads or 0))
+    -- 053/055: solicitors' fees and H&S fines share the claims row - there's
+    -- no room for another.
+    self.financesYearClaims:setText(formatMoney((stats.claims or 0) + (stats.legal or 0) + (stats.fines or 0)))
 
     self.financesYearRows:invalidateLayout()
 end
@@ -2685,10 +3055,16 @@ function MenuContractor:populateInvoiceCell(index, cell)
 end
 
 -- What the status means for this invoice: how long until it's due, how late
--- it is, or when it was written off.
+-- it is, when it was written off, or since when it's been pursued (053).
 local function getInvoiceStatusNote(invoice)
     local today = g_currentMission.environment.currentMonotonicDay
-    if invoice.status == TheContractorFinances.STATUS.OVERDUE then
+    if invoice.status == TheContractorFinances.STATUS.PURSUING then
+        local since = TCCalendar.formatDayShort(invoice.pursuitStartDay)
+        if (invoice.pursuitFee or 0) == 0 then
+            return string.format(g_i18n:getText("tc_legal_pursuingCovered"), since)
+        end
+        return string.format(g_i18n:getText("tc_legal_pursuingSolicitor"), since, formatMoney(invoice.pursuitFee))
+    elseif invoice.status == TheContractorFinances.STATUS.OVERDUE then
         return string.format(g_i18n:getText("tc_finances_overdueDays"), today - invoice.dueDay)
     elseif invoice.status == TheContractorFinances.STATUS.WRITTEN_OFF then
         return invoice.settledDay ~= nil and
@@ -2750,6 +3126,403 @@ function MenuContractor:onClickWriteOffInvoice()
         -- remote client" caveat as onClickHireWorker.
         target:refreshFinancesState(farmId, g_currentMission.TheContractor.Finances)
     end, self, dialogPrompt)
+end
+
+-- 053: free with legal cover; otherwise the solicitor's fee is paid now, so
+-- it has to be affordable. Confirm either way, then ask the server, which
+-- re-checks both.
+function MenuContractor:onClickPursueInvoice()
+    local invoice = self:getSelectedInvoice()
+    if invoice == nil or invoice.status ~= TheContractorFinances.STATUS.OVERDUE then
+        return
+    end
+
+    local farmId = g_currentMission:getFarmId()
+    local tc = g_currentMission.TheContractor
+    local title = tc.Finances:getInvoiceTitle(invoice)
+    local fee = tc.Association:getPursuitFee(farmId, invoice)
+
+    local dialogPrompt
+    if fee == 0 then
+        dialogPrompt = string.format(g_i18n:getText("tc_legal_pursueConfirmCovered"), title, formatMoney(invoice.amount))
+    else
+        local farm = g_farmManager:getFarmById(farmId)
+        if farm == nil or farm:getBalance() < fee then
+            InfoDialog.show(string.format(g_i18n:getText("tc_legal_cannotAfford"), formatMoney(fee)))
+            return
+        end
+        dialogPrompt = string.format(g_i18n:getText("tc_legal_pursueConfirmSolicitor"), title,
+            formatMoney(invoice.amount), formatMoney(fee))
+    end
+
+    YesNoDialog.show(function(target, clickOk)
+        if not clickOk then
+            return
+        end
+
+        g_client:getServerConnection():sendEvent(TCPursueInvoiceEvent.new(farmId, invoice.id))
+
+        -- Same "synchronous for host/SP, catches up on next refresh for a
+        -- remote client" caveat as onClickHireWorker.
+        target:refreshFinancesState(farmId, g_currentMission.TheContractor.Finances)
+    end, self, dialogPrompt)
+end
+
+-- Overheads (051) -----------------------------------------------------------
+
+-- 057: the office administrator is listed after the overheads, as a row
+-- with this key. It's a salary, not a policy, so it has its own panel and
+-- buttons (updateAdministratorDetails, getOverheadButtonInfo).
+MenuContractor.ADMINISTRATOR_ROW_KEY = "officeAdministrator"
+
+-- Lists every registered overhead, then the office administrator (keeping
+-- the highlighted row, otherwise the first) and fills the panel for it.
+function MenuContractor:refreshOverheadsState(farmId, overheads)
+    self.overheadRows = {}
+    for _, definition in ipairs(overheads:getDefinitions()) do
+        table.insert(self.overheadRows, definition)
+    end
+    table.insert(self.overheadRows, { key = MenuContractor.ADMINISTRATOR_ROW_KEY, isAdministrator = true })
+    self.financesOverheadTable:reloadData()
+    self.financesOverheadContainer:setVisible(true)
+
+    local selectedIndex = 1
+    for i, definition in ipairs(self.overheadRows) do
+        if definition.key == self.selectedOverheadKey then
+            selectedIndex = i
+        end
+    end
+    if #self.overheadRows > 0 then
+        self.financesOverheadTable:setSelectedIndex(selectedIndex)
+        self.selectedOverheadKey = self.overheadRows[selectedIndex].key
+    else
+        self.selectedOverheadKey = nil
+    end
+    self:updateOverheadDetails()
+end
+
+function MenuContractor:getSelectedOverhead()
+    if self.selectedOverheadKey == nil then
+        return nil, nil
+    end
+    local overheads = g_currentMission.TheContractor.Overheads
+    local definition = overheads:getDefinition(self.selectedOverheadKey)
+    if definition == nil then
+        return nil, nil
+    end
+    return definition, overheads:getState(g_currentMission:getFarmId(), definition.key)
+end
+
+-- The status chip's key ("tc_overheads_status_<key>") and a note on what
+-- happens next.
+local function getOverheadStatus(farmId, definition, state)
+    local overheads = g_currentMission.TheContractor.Overheads
+    if state == nil or not state.enabled then
+        if definition.mandatory then
+            return "notNeeded", g_i18n:getText("tc_overheads_noteNotNeeded")
+        end
+        return "notTaken", ""
+    end
+
+    local endText = string.format(g_i18n:getText("tc_overheads_noteEnds"),
+        TCCalendar.formatPeriodIndex(state.cancelled and state.paidUntil or state.renewalPeriod))
+    if state.cancelled then
+        return "cancelled", endText
+    end
+    if not overheads:willRenew(farmId, definition, state) then
+        return "lapsing", endText
+    end
+    local renewText = string.format(g_i18n:getText("tc_overheads_noteRenews"),
+        TCCalendar.formatPeriodIndex(state.renewalPeriod))
+    return definition.mandatory and "mandatory" or "active", renewText
+end
+
+function MenuContractor:populateOverheadCell(index, cell)
+    local definition = self.overheadRows[index]
+    if definition == nil then
+        return
+    end
+    if definition.isAdministrator then
+        self:populateAdministratorCell(cell)
+        return
+    end
+
+    local farmId = g_currentMission:getFarmId()
+    local overheads = g_currentMission.TheContractor.Overheads
+    local state = overheads:getState(farmId, definition.key)
+    local status = getOverheadStatus(farmId, definition, state)
+
+    cell:getAttribute("name"):setText(g_i18n:getText(definition.l10nKey))
+    setChip(cell:getAttribute("statusChip"), cell:getAttribute("statusChipText"),
+        g_i18n:getText("tc_overheads_status_" .. status), OVERHEAD_STATUS_TONES[status])
+
+    if state == nil or not state.enabled then
+        cell:getAttribute("billing"):setText("-")
+        cell:getAttribute("cost"):setText("-")
+        cell:getAttribute("next"):setText("-")
+        return
+    end
+
+    local amount = TheContractorOverheads.getChargeAmount(state.termCost, state.billing)
+    cell:getAttribute("billing"):setText(g_i18n:getText("tc_overheads_billing_" .. state.billing))
+    cell:getAttribute("cost"):setText(string.format(g_i18n:getText("tc_overheads_per_" .. state.billing),
+        formatMoney(amount)))
+
+    local nextPeriod = overheads:getNextCharge(farmId, definition, state)
+    cell:getAttribute("next"):setText(nextPeriod ~= nil and TCCalendar.formatMonth(nextPeriod) or "-")
+end
+
+function MenuContractor:updateOverheadDetails()
+    self:setMenuButtonInfoDirty()
+
+    if self.selectedOverheadKey == MenuContractor.ADMINISTRATOR_ROW_KEY then
+        self:updateAdministratorDetails()
+        return
+    end
+
+    local definition, state = self:getSelectedOverhead()
+    self.financesOverheadRows:setVisible(definition ~= nil)
+    if definition == nil then
+        self.financesInvoiceTitle:setText(g_i18n:getText("tc_overheads_heading"))
+        return
+    end
+
+    local farmId = g_currentMission:getFarmId()
+    local overheads = g_currentMission.TheContractor.Overheads
+    local status, note = getOverheadStatus(farmId, definition, state)
+    local isActive = state ~= nil and state.enabled
+
+    self.financesInvoiceTitle:setText(g_i18n:getText(definition.l10nKey))
+    setChip(self.financesOverheadStatusChip, self.financesOverheadStatusChipText,
+        g_i18n:getText("tc_overheads_status_" .. status), OVERHEAD_STATUS_TONES[status])
+    self.financesOverheadStatusNote:setText(note)
+
+    if isActive then
+        local billingText = g_i18n:getText("tc_overheads_billingDetail_" .. state.billing)
+        if state.pendingBilling ~= nil and not state.cancelled then
+            billingText = string.format(g_i18n:getText("tc_overheads_billingSwitching"), billingText,
+                g_i18n:getText("tc_overheads_billing_" .. state.pendingBilling))
+        end
+        self.financesOverheadBilling:setText(billingText)
+
+        local priceText = string.format(g_i18n:getText("tc_overheads_priceThisTerm"), formatMoney(state.termCost))
+        if state.quotedCost ~= nil and not state.cancelled then
+            priceText = string.format(g_i18n:getText("tc_overheads_priceQuoted"), priceText,
+                formatMoney(state.quotedCost))
+        end
+        self.financesOverheadPrice:setText(priceText)
+
+        local nextPeriod, nextAmount = overheads:getNextCharge(farmId, definition, state)
+        self.financesOverheadNext:setText(nextPeriod ~= nil and
+            string.format(g_i18n:getText("tc_overheads_nextChargeLine"), formatMoney(nextAmount),
+                TCCalendar.formatPeriodIndex(nextPeriod)) or g_i18n:getText("tc_overheads_nextChargeNone"))
+    else
+        local annualCost = overheads:getAnnualCost(farmId, definition)
+        self.financesOverheadBilling:setText("-")
+        self.financesOverheadPrice:setText(string.format(g_i18n:getText("tc_overheads_priceQuote"),
+            formatMoney(TheContractorOverheads.getChargeAmount(annualCost, TheContractorOverheads.BILLING.ANNUAL)),
+            formatMoney(TheContractorOverheads.getChargeAmount(annualCost, TheContractorOverheads.BILLING.MONTHLY))))
+        self.financesOverheadNext:setText(g_i18n:getText("tc_overheads_nextChargeNone"))
+    end
+
+    self.financesOverheadAbout:setText(g_i18n:getText(definition.l10nKey .. "_desc"))
+    self.financesOverheadRows:invalidateLayout()
+end
+
+-- Bottom bar for the highlighted overhead, or nil for just the defaults.
+function MenuContractor:getOverheadButtonInfo()
+    if self.selectedOverheadKey == MenuContractor.ADMINISTRATOR_ROW_KEY then
+        return g_currentMission.TheContractor.Administrator:isEmployed(g_currentMission:getFarmId()) and
+            self.menuButtonInfoAdministratorEmployed or self.menuButtonInfoAdministratorVacant
+    end
+
+    local definition, state = self:getSelectedOverhead()
+    if definition == nil then
+        return nil
+    end
+
+    if state == nil or not state.enabled then
+        return not definition.mandatory and self.menuButtonInfoOverheadNotTaken or nil
+    end
+    if state.cancelled then
+        return self.menuButtonInfoOverheadCancelled
+    end
+
+    local switchTo = TheContractorOverheads.getNextBilling(state) == TheContractorOverheads.BILLING.ANNUAL and
+        TheContractorOverheads.BILLING.MONTHLY or TheContractorOverheads.BILLING.ANNUAL
+    self.btnSwitchOverheadBilling.text = g_i18n:getText("tc_overheads_switchTo_" .. switchTo)
+    return definition.mandatory and self.menuButtonInfoOverheadMandatory or self.menuButtonInfoOverheadActive
+end
+
+-- Sends the request, then redraws - same "synchronous for host/SP, catches
+-- up on next refresh for a remote client" caveat as onClickHireWorker.
+function MenuContractor:sendOverheadRequest(definition, request, billing)
+    local farmId = g_currentMission:getFarmId()
+    g_client:getServerConnection():sendEvent(TCOverheadRequestEvent.new(farmId, definition.key, request, billing))
+    self:refreshFinancesState(farmId, g_currentMission.TheContractor.Finances)
+    self:setMenuButtonInfoDirty()
+end
+
+function MenuContractor:onClickEnableOverhead(billing)
+    local definition, state = self:getSelectedOverhead()
+    if definition == nil or definition.mandatory or (state ~= nil and state.enabled) then
+        return
+    end
+
+    local farmId = g_currentMission:getFarmId()
+    local overheads = g_currentMission.TheContractor.Overheads
+    local amount = TheContractorOverheads.getChargeAmount(overheads:getAnnualCost(farmId, definition), billing)
+    local name = g_i18n:getText(definition.l10nKey)
+
+    if not overheads:canAffordEnable(farmId, definition, billing) then
+        InfoDialog.show(string.format(g_i18n:getText("tc_overheads_cannotAfford"), name, formatMoney(amount)))
+        return
+    end
+
+    YesNoDialog.show(function(target, clickOk)
+        if clickOk then
+            target:sendOverheadRequest(definition, TheContractorOverheads.REQUEST.ENABLE, billing)
+        end
+    end, self, string.format(g_i18n:getText("tc_overheads_enableConfirm_" .. billing), name, formatMoney(amount)))
+end
+
+function MenuContractor:onClickCancelOverhead()
+    local definition, state = self:getSelectedOverhead()
+    if definition == nil or definition.mandatory or state == nil or not state.enabled or state.cancelled then
+        return
+    end
+
+    local endPeriod = state.billing == TheContractorOverheads.BILLING.ANNUAL and state.paidUntil or
+        TCCalendar.getPeriodIndex() + 1
+    YesNoDialog.show(function(target, clickOk)
+        if clickOk then
+            target:sendOverheadRequest(definition, TheContractorOverheads.REQUEST.CANCEL)
+        end
+    end, self, string.format(g_i18n:getText("tc_overheads_cancelConfirm"), g_i18n:getText(definition.l10nKey),
+        TCCalendar.formatPeriodIndex(endPeriod)))
+end
+
+function MenuContractor:onClickKeepOverhead()
+    local definition, state = self:getSelectedOverhead()
+    if definition == nil or state == nil or not state.enabled or not state.cancelled then
+        return
+    end
+    self:sendOverheadRequest(definition, TheContractorOverheads.REQUEST.KEEP)
+end
+
+-- No confirm: it only changes the next term, and can be switched back.
+function MenuContractor:onClickSwitchOverheadBilling()
+    local definition, state = self:getSelectedOverhead()
+    if definition == nil or state == nil or not state.enabled or state.cancelled then
+        return
+    end
+    self:sendOverheadRequest(definition, TheContractorOverheads.REQUEST.SWITCH_BILLING)
+end
+
+-- Office administrator (057) -----------------------------------------------
+
+function MenuContractor:populateAdministratorCell(cell)
+    local admin = g_currentMission.TheContractor.Administrator:getAdministrator(g_currentMission:getFarmId())
+
+    cell:getAttribute("name"):setText(g_i18n:getText("tc_admin_title"))
+    setChip(cell:getAttribute("statusChip"), cell:getAttribute("statusChipText"),
+        g_i18n:getText(admin ~= nil and "tc_admin_status_employed" or "tc_admin_status_vacant"),
+        admin ~= nil and "good" or "neutral")
+
+    if admin == nil then
+        cell:getAttribute("billing"):setText("-")
+        cell:getAttribute("cost"):setText("-")
+        cell:getAttribute("next"):setText("-")
+        return
+    end
+
+    cell:getAttribute("billing"):setText(g_i18n:getText("tc_admin_billingShort"))
+    cell:getAttribute("cost"):setText(string.format(g_i18n:getText("tc_overheads_per_monthly"),
+        formatMoney(admin.salary)))
+    cell:getAttribute("next"):setText(TCCalendar.formatMonth(TCCalendar.getPeriodIndex() + 1))
+end
+
+-- Fills the overhead panel's rows for the administrator.
+function MenuContractor:updateAdministratorDetails()
+    local admin = g_currentMission.TheContractor.Administrator:getAdministrator(g_currentMission:getFarmId())
+    local salary = admin ~= nil and admin.salary or TheContractorAdministrator.SALARY
+    local pension = salary * TheContractorStaff.PENSION_RATE
+
+    self.financesOverheadRows:setVisible(true)
+    self.financesInvoiceTitle:setText(g_i18n:getText("tc_admin_title"))
+
+    if admin ~= nil then
+        setChip(self.financesOverheadStatusChip, self.financesOverheadStatusChipText,
+            g_i18n:getText("tc_admin_status_employed"), "good")
+        self.financesOverheadStatusNote:setText(string.format(g_i18n:getText("tc_admin_noteEmployed"), admin.name,
+            TCCalendar.formatPeriodIndex(admin.hiredPeriod)))
+        self.financesOverheadNext:setText(string.format(g_i18n:getText("tc_overheads_nextChargeLine"),
+            formatMoney(salary + pension), TCCalendar.formatPeriodIndex(TCCalendar.getPeriodIndex() + 1)))
+    else
+        setChip(self.financesOverheadStatusChip, self.financesOverheadStatusChipText,
+            g_i18n:getText("tc_admin_status_vacant"), "neutral")
+        self.financesOverheadStatusNote:setText(g_i18n:getText("tc_admin_noteVacant"))
+        self.financesOverheadNext:setText(g_i18n:getText("tc_overheads_nextChargeNone"))
+    end
+
+    self.financesOverheadBilling:setText(g_i18n:getText("tc_admin_billing"))
+    self.financesOverheadPrice:setText(string.format(g_i18n:getText("tc_admin_price"), formatMoney(salary),
+        formatMoney(pension)))
+    self.financesOverheadAbout:setText(g_i18n:getText("tc_admin_desc"))
+    self.financesOverheadRows:invalidateLayout()
+end
+
+-- Sends the request, then redraws - same caveat as sendOverheadRequest.
+function MenuContractor:sendAdministratorRequest(request)
+    local farmId = g_currentMission:getFarmId()
+    g_client:getServerConnection():sendEvent(TCAdministratorRequestEvent.new(farmId, request))
+    self:refreshFinancesState(farmId, g_currentMission.TheContractor.Finances)
+    self:setMenuButtonInfoDirty()
+end
+
+function MenuContractor:onClickHireAdministrator()
+    local farmId = g_currentMission:getFarmId()
+    local administrator = g_currentMission.TheContractor.Administrator
+    if administrator:isEmployed(farmId) then
+        return
+    end
+
+    local salary = formatMoney(TheContractorAdministrator.SALARY)
+    if not administrator:canAffordHire(farmId) then
+        InfoDialog.show(string.format(g_i18n:getText("tc_admin_cannotAfford"), salary))
+        return
+    end
+
+    YesNoDialog.show(function(target, clickOk)
+        if clickOk then
+            target:sendAdministratorRequest(TheContractorAdministrator.REQUEST.HIRE)
+        end
+    end, self, string.format(g_i18n:getText("tc_admin_hireConfirm"), salary))
+end
+
+-- The cost is worked out like a worker's (056).
+function MenuContractor:onClickReleaseAdministrator()
+    local admin = g_currentMission.TheContractor.Administrator:getAdministrator(g_currentMission:getFarmId())
+    if admin == nil then
+        return
+    end
+
+    local cost = TheContractorAdministrator.getReleaseCost(admin)
+    local prompt
+    if cost.redundancyPay > 0 then
+        prompt = string.format(g_i18n:getText("tc_admin_releaseConfirmRedundancy"), admin.name, cost.years,
+            formatMoney(cost.total), formatMoney(cost.noticePay), formatWeeks(cost.noticeWeeks),
+            formatMoney(cost.redundancyPay))
+    else
+        prompt = string.format(g_i18n:getText("tc_admin_releaseConfirmNotice"), admin.name, cost.years,
+            formatMoney(cost.total), formatWeeks(cost.noticeWeeks))
+    end
+
+    YesNoDialog.show(function(target, clickOk)
+        if clickOk then
+            target:sendAdministratorRequest(TheContractorAdministrator.REQUEST.RELEASE)
+        end
+    end, self, prompt)
 end
 
 function MenuContractor:refreshAdvertisingState(farmId, advertising)

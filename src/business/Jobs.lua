@@ -734,9 +734,11 @@ end
 -- workerSkill being the weaker of their tractor rating and operation skill
 -- for the job (044). A job with no tractor (e.g. a self-propelled combine)
 -- is judged on the operation skill alone.
+-- Trade association members (053) get a little extra on top.
 function TheContractorJobs:calculateReputationReward(job)
     local reward = TheContractorJobs.getBaseReputationReward(job) * self:getReputationQualificationRatio(job)
-    return math.max(TheContractorJobs.MIN_COMPLETION_REPUTATION_REWARD, math.floor(reward))
+    reward = math.max(TheContractorJobs.MIN_COMPLETION_REPUTATION_REWARD, math.floor(reward))
+    return reward + g_currentMission.TheContractor.Association:getReputationBonus(job.farmId, reward)
 end
 
 -- 1 for a fully-qualified operator (see calculateReputationReward), else
@@ -779,13 +781,13 @@ function TheContractorJobs:getWorkerQualificationRatio(job, workerId, equipmentI
 end
 
 -- 0-100 (029), see QUALITY_SKILL_WEIGHT. Reuses 022's qualification ratio
--- rather than a second skill formula.
+-- rather than a second skill formula. 056: an unhappy crew does worse work.
 function TheContractorJobs:calculateQualityScore(job)
     local skill = self:getReputationQualificationRatio(job)
     local reliability = math.max(0,
         1 - job.stuckInterventions * TheContractorJobs.QUALITY_PENALTY_PER_INTERVENTION)
-    local score = TheContractorJobs.QUALITY_SKILL_WEIGHT * skill +
-        TheContractorJobs.QUALITY_RELIABILITY_WEIGHT * reliability
+    local score = (TheContractorJobs.QUALITY_SKILL_WEIGHT * skill +
+        TheContractorJobs.QUALITY_RELIABILITY_WEIGHT * reliability) * TheContractorMorale.getJobQualityMultiplier(job)
     return math.floor(math.max(0, math.min(1, score)) * 100 + 0.5)
 end
 
@@ -837,6 +839,9 @@ function TheContractorJobs:completeJob(job)
     -- the equipment - before the cooldown (it adds the washing time) and
     -- the broadcast (it carries the reports).
     TCJobConsequences.applyOnCompletion(job)
+
+    -- 052: whether a worker botched it, for a claim a few days later.
+    g_currentMission.TheContractor.Claims:rollForJob(job)
 
     job:transitionTo(TheContractorJob.STATE.COMPLETED)
 
@@ -1278,4 +1283,41 @@ function TheContractorJobs:readInitialClientState(streamId, connection)
     for _ = 1, jobCount do
         self:registerJob(TheContractorJobs.readJob(streamId), false)
     end
+end
+
+-- Console commands (tcJob - see TCConsole) ---------------------------------------------
+
+function TheContractorJobs.registerConsoleCommands()
+    -- Nothing checked: the field needn't suit the type, nor the date be workable.
+    TCConsole.register("job", "create", {
+        args = "<jobType> <fieldId> <skill 1-10> <price> <period 1-12> <day>",
+        description = "Create a job with every detail set by hand, unchecked",
+        run = function(farmId, args)
+            local jobType = args[1]
+            local fieldId, skill, price = tonumber(args[2]), tonumber(args[3]), tonumber(args[4])
+            local targetPeriod, targetDay = tonumber(args[5]), tonumber(args[6])
+            if jobType == nil or fieldId == nil or skill == nil or price == nil or targetPeriod == nil or
+                targetDay == nil then
+                return false
+            end
+
+            g_client:getServerConnection():sendEvent(TCDebugCreateJobEvent.new(farmId, jobType, fieldId, skill,
+                targetPeriod, targetDay, price))
+            return string.format("Requested job creation for farm %d", farmId)
+        end,
+    })
+
+    TCConsole.register("job", "state", {
+        args = "<jobId> <state>",
+        description = "Force a job into another state (legal transitions only)",
+        run = function(farmId, args)
+            local jobId, state = tonumber(args[1]), args[2]
+            if jobId == nil or state == nil then
+                return false
+            end
+
+            g_client:getServerConnection():sendEvent(TCDebugSetJobStateEvent.new(farmId, jobId, state))
+            return string.format("Requested job %d -> %s for farm %d", jobId, state, farmId)
+        end,
+    })
 end

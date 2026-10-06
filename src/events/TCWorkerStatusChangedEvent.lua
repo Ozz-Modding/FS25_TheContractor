@@ -67,6 +67,25 @@ function TCWorkerStatusChangedEvent.showNotification(worker, oldStatus, newStatu
         return
     end
 
+    -- 054: off to the course or the assessment, and back from the course.
+    -- Back from the assessment is the pass/fail notification instead
+    -- (TCWorkerTrainingChangedEvent), which arrives first.
+    local training = TheContractorWorker.STATUS.TRAINING
+    if newStatus == training and worker:hasTrainingBooked() then
+        local certName = TheContractorTraining.getCertName(worker.trainingCert)
+        local key = worker.courseDaysLeft > 0 and "tc_training_started" or "tc_training_assessmentStarted"
+        g_currentMission:addIngameNotification(FSBaseMission.INGAME_NOTIFICATION_INFO,
+            string.format(g_i18n:getText(key), worker.name, certName))
+        return
+    elseif oldStatus == training then
+        if worker:hasTrainingBooked() then
+            g_currentMission:addIngameNotification(FSBaseMission.INGAME_NOTIFICATION_INFO,
+                string.format(g_i18n:getText("tc_training_courseDone"), worker.name,
+                    TheContractorTraining.getCertName(worker.trainingCert), TCCalendar.formatDay(worker.assessmentDay)))
+        end
+        -- Falls through: they may have come back off sick.
+    end
+
     local sick = TheContractorWorker.STATUS.SICK
     if newStatus == sick then
         g_currentMission:addIngameNotification(FSBaseMission.INGAME_NOTIFICATION_CRITICAL,

@@ -29,6 +29,16 @@ TCI18NExtension.theContractorTexts = {
     ["finance_tcWages"] = true,
     ["tc_moneyType_jobPayout"] = true,
     ["finance_tcJobPayout"] = true,
+    ["tc_moneyType_overheads"] = true,
+    ["finance_tcOverheads"] = true,
+    ["tc_moneyType_claims"] = true,
+    ["finance_tcClaims"] = true,
+    ["tc_moneyType_legal"] = true,
+    ["finance_tcLegal"] = true,
+    ["tc_moneyType_training"] = true,
+    ["finance_tcTraining"] = true,
+    ["tc_moneyType_fines"] = true,
+    ["finance_tcFines"] = true,
 }
 
 function TCI18NExtension:getText(superFunc, text, modEnv)

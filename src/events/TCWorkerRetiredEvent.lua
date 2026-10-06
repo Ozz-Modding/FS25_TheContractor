@@ -1,7 +1,7 @@
--- Broadcast-only: a hired worker has retired (039,
--- TheContractorStaff:retireWorker) and leaves their farm's roster, the same
--- way a released worker does. See src/events/README.md for the general
--- event conventions.
+-- Broadcast-only: a hired worker has retired (039) or, if they'd quit
+-- (056, worker.isQuitting), simply left (TheContractorStaff:retireWorker),
+-- and leaves their farm's roster, the same way a released worker does. See
+-- src/events/README.md for the general event conventions.
 
 TCWorkerRetiredEvent = {}
 local TCWorkerRetiredEvent_mt = Class(TCWorkerRetiredEvent, Event)
@@ -45,5 +45,6 @@ function TCWorkerRetiredEvent.showNotification(worker)
     end
 
     g_currentMission:addIngameNotification(FSBaseMission.INGAME_NOTIFICATION_INFO,
-        string.format(g_i18n:getText("tc_retirement_retired"), worker.name))
+        string.format(g_i18n:getText(worker.isQuitting and "tc_morale_quitLeft" or "tc_retirement_retired"),
+            worker.name))
 end
