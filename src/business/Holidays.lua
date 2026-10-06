@@ -165,11 +165,12 @@ end
 
 -- Booking -------------------------------------------------------------------
 
--- Rolls for a worker with no booking to book one, and books it. Retiring
--- workers don't book; neither does anyone whose allowance is worth less
--- than a day.
+-- Rolls for a worker with no booking to book one, and books it. Workers
+-- who are leaving (retiring or quitting) don't book; neither does anyone
+-- whose allowance is worth less than a day, nor anyone booked on training
+-- (054) until it's over.
 function TheContractorHolidays:tryBookHoliday(worker)
-    if worker:hasHolidayBooked() or worker:isRetiring() then
+    if worker:hasHolidayBooked() or worker:isLeaving() or worker:hasTrainingBooked() then
         return
     end
 
@@ -237,7 +238,7 @@ function TheContractorHolidays.pickDays(worker, startDay, takeAll)
     return days
 end
 
--- Books it, spends the allowance and tells everyone. Also the tcBookHoliday
+-- Books it, spends the allowance and tells everyone. Also the tcWorker holiday
 -- console command's way in, so it doesn't check notice or allowance itself.
 function TheContractorHolidays:bookHoliday(worker, startDay, days)
     local daysPerPeriod = TCCalendar.getDaysPerPeriodOn(startDay)
@@ -503,4 +504,33 @@ function TheContractorHolidays:writeInitialClientState(streamId, connection)
 end
 
 function TheContractorHolidays:readInitialClientState(streamId, connection)
+end
+
+-- Console commands (tcWorker - see TCConsole) ------------------------------------------
+
+function TheContractorHolidays.registerConsoleCommands()
+    TCConsole.register("worker", "holiday", {
+        args = "<worker> [daysFromNow=0] [days=1]",
+        description = "Book a holiday, skipping the notice and allowance rules",
+        run = function(farmId, args)
+            local worker, problem = TCConsole.findWorker(farmId, args[1])
+            if worker == nil then
+                return problem or false
+            end
+            local daysFromNow = TCConsole.toCount(args[2], 0)
+            local days = TCConsole.toCount(args[3], 1)
+            if daysFromNow == nil or days == nil or days < 1 then
+                return false
+            end
+            if worker:hasHolidayBooked() then
+                return string.format("%s already has a holiday booked (%s)", worker.name,
+                    TCCalendar.formatDayRange(worker.holidayStartDay, worker:getHolidayEndDay()))
+            end
+
+            local startDay = g_currentMission.environment.currentMonotonicDay + daysFromNow
+            g_currentMission.TheContractor.Holidays:bookHoliday(worker, startDay, days)
+            return string.format("%s booked a holiday: %s", worker.name,
+                TCCalendar.formatDayRange(worker.holidayStartDay, worker:getHolidayEndDay()))
+        end,
+    })
 end

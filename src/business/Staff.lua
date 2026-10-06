@@ -30,6 +30,10 @@ TheContractorStaff = {}
 TheContractorStaff_mt = Class(TheContractorStaff)
 
 TheContractorStaff.BASE_SALARY = 2050
+
+-- Workplace pension (051): auto-enrolment's employer minimum, a share of
+-- the salary bill, paid with each salary run under TC_WAGES.
+TheContractorStaff.PENSION_RATE = 0.03
 TheContractorStaff.SALARY_PER_WORK_SPEED = 35
 TheContractorStaff.SALARY_PER_TIER_POINT = 25
 -- 044: only a worker's SALARIED_SKILL_COUNT best operation skills are paid
@@ -110,7 +114,10 @@ TheContractorStaff.GROWTH_WEIGHTS = {
 -- (so 80% one day, 16% two, ~4% three or more). A worker who's out on a job
 -- or in its cooldown when they fall ill finishes it first and goes off sick
 -- once they're back (pendingSickDays) - sickness never pulls anyone off a
--- job or causes a missed one (024) by itself.
+-- job or causes a missed one (024) by itself. 055: a health and safety
+-- programme lowers the daily chance and shortens bouts
+-- (TheContractorHealthSafety), and without one a worker falling sick can
+-- bring a workplace inspection.
 TheContractorStaff.SICK_MAX_DAILY_CHANCE = 0.21
 TheContractorStaff.SICK_EXTRA_DAY_CHANCE = 0.2
 TheContractorStaff.SICK_MAX_DAYS = 5
@@ -124,7 +131,9 @@ TheContractorStaff.SICK_MAX_DAYS = 5
 -- notice: they keep working until the start of that period, then leave the
 -- roster (or, if they're out on a job then, as soon as they're back - see
 -- setWorkerStatus). Pool candidates never retire; they don't stay long
--- enough.
+-- enough. 056: a worker who quits from low morale (Morale.lua) leaves the
+-- same way, after a month's notice; low morale also makes the birthday roll
+-- more likely.
 TheContractorStaff.RETIREMENT_MIN_AGE = 50
 TheContractorStaff.RETIREMENT_CERTAIN_AGE = 65
 TheContractorStaff.RETIREMENT_MIN_CHANCE = 0.02
@@ -206,6 +215,32 @@ function TheContractorStaff:getTotalSalary(farmId)
         total = total + worker.salary
     end
     return total
+end
+
+-- Everyone paid in the salary run: the roster plus the office
+-- administrator (057), who isn't on it.
+function TheContractorStaff:getPayroll(farmId)
+    return self:getTotalSalary(farmId) + g_currentMission.TheContractor.Administrator:getSalary(farmId)
+end
+
+-- Employees, for employer's liability (051): the roster plus the office
+-- administrator (057).
+function TheContractorStaff:getHeadcount(farmId)
+    local headcount = #self:getRoster(farmId)
+    if g_currentMission.TheContractor.Administrator:isEmployed(farmId) then
+        headcount = headcount + 1
+    end
+    return headcount
+end
+
+-- The employer's pension contribution on the payroll (051).
+function TheContractorStaff:getPensionCost(farmId)
+    return self:getPayroll(farmId) * TheContractorStaff.PENSION_RATE
+end
+
+-- What each salary run actually costs: salaries plus pension.
+function TheContractorStaff:getWageBill(farmId)
+    return self:getPayroll(farmId) + self:getPensionCost(farmId)
 end
 
 function TheContractorStaff:getIdleWorkers(farmId)
@@ -403,6 +438,8 @@ function TheContractorStaff:addCandidateToPool()
         growthPotential, birthPeriod, sicknessPropensity, skills, cleanliness)
     candidate.gender = gender
     candidate.appearance = TCWorkerAppearance.roll(gender)
+    -- 054: some arrive already certified.
+    TheContractorTraining.rollCandidateCertifications(candidate)
     self:applyCandidateAdded(candidate)
 
     if g_server ~= nil then
@@ -489,6 +526,14 @@ function TheContractorStaff:onDayChanged()
     -- 040: holidays start, end and get booked after sickness, so a worker
     -- who's just recovered can go straight onto a holiday.
     g_currentMission.TheContractor.Holidays:onDayChanged()
+
+    -- 054: training last, so anyone off sick or on holiday today is
+    -- already marked as such, and misses their training day.
+    g_currentMission.TheContractor.Training:onDayChanged()
+
+    -- 056: then today counts toward the month's workload, with every
+    -- status settled.
+    g_currentMission.TheContractor.Morale:onDayChanged()
 end
 
 -- Sickness (031, server-only, from the daily tick): sick workers count down
@@ -519,53 +564,83 @@ function TheContractorStaff:updateSickness()
             self:setWorkerStatus(farmId, workerId, TheContractorWorker.STATUS.IDLE)
         end
 
+        local chance = TheContractorStaff.SICK_MAX_DAILY_CHANCE *
+            g_currentMission.TheContractor.HealthSafety:getSicknessMultiplier(farmId)
         for _, worker in ipairs(toRoll) do
-            if math.random() < TheContractorStaff.SICK_MAX_DAILY_CHANCE * worker.sicknessPropensity then
-                local days = TheContractorStaff.rollSickDays()
-
-                if worker:isIdle() then
-                    Logging.info("TheContractor: farm %d worker %d (%s) off sick for %d day(s)", farmId, worker.id,
-                        worker.name, days)
-                    worker.sickDaysRemaining = days
-                    self:setWorkerStatus(farmId, worker.id, sickStatus)
-                else
-                    Logging.info("TheContractor: farm %d worker %d (%s) fell ill on a job, off sick for %d day(s) once back",
-                        farmId, worker.id, worker.name, days)
-                    worker.pendingSickDays = days
-                end
+            if math.random() < chance * worker.sicknessPropensity then
+                self:makeWorkerSick(farmId, worker)
             end
         end
     end
 end
 
--- 1 day, plus SICK_EXTRA_DAY_CHANCE of each further day up to SICK_MAX_DAYS.
-function TheContractorStaff.rollSickDays()
+-- A worker falls sick (server-only): off sick now if idle, else once
+-- they're back. Also used by tcWorker sick, whose forceInspection makes 055's
+-- inspection certain if the farm has no H&S programme.
+function TheContractorStaff:makeWorkerSick(farmId, worker, forceInspection)
+    local days = TheContractorStaff.rollSickDays(g_currentMission.TheContractor.HealthSafety:getExtraDayChance(farmId))
+
+    if worker:isIdle() then
+        Logging.info("TheContractor: farm %d worker %d (%s) off sick for %d day(s)", farmId, worker.id,
+            worker.name, days)
+        worker.sickDaysRemaining = days
+        self:setWorkerStatus(farmId, worker.id, TheContractorWorker.STATUS.SICK)
+    else
+        Logging.info("TheContractor: farm %d worker %d (%s) fell ill on a job, off sick for %d day(s) once back",
+            farmId, worker.id, worker.name, days)
+        worker.pendingSickDays = days
+    end
+
+    g_currentMission.TheContractor.HealthSafety:onWorkerFellSick(farmId, worker, forceInspection)
+end
+
+-- 1 day, plus extraDayChance (SICK_EXTRA_DAY_CHANCE, lower with 055's H&S
+-- programme) of each further day up to SICK_MAX_DAYS.
+function TheContractorStaff.rollSickDays(extraDayChance)
+    extraDayChance = extraDayChance or TheContractorStaff.SICK_EXTRA_DAY_CHANCE
     local days = 1
-    while days < TheContractorStaff.SICK_MAX_DAYS and math.random() < TheContractorStaff.SICK_EXTRA_DAY_CHANCE do
+    while days < TheContractorStaff.SICK_MAX_DAYS and math.random() < extraDayChance do
         days = days + 1
     end
     return days
 end
 
--- Retirements go first, so nobody is paid for a period they've already
--- retired at the start of.
+-- Leavers go first, so nobody is paid for a period they've already
+-- retired (or quit) at the start of.
 function TheContractorStaff:onPeriodChanged()
     self:retireDueWorkers()
     self:paySalaries()
     self:ageWorkers()
+    -- 056: morale drifts, the unhappy may quit, and in August everyone asks
+    -- about a harvest bonus. After the birthday roll, so a worker who's
+    -- just decided to retire doesn't quit as well.
+    g_currentMission.TheContractor.Morale:onPeriodChanged()
+    -- 054: ready workers may ask for training.
+    g_currentMission.TheContractor.Training:onPeriodChanged()
 end
 
 -- Salaries (036, server-only, from the period tick): one charge per farm for
--- its whole roster. Charged even if the farm can't afford it - it just goes
--- negative, like any vanilla expense. Money syncs through vanilla, so no
--- event of our own.
+-- its whole roster and office administrator (057), plus the workplace
+-- pension on top (051). Charged even if the farm can't afford it - it just
+-- goes negative, like any vanilla expense. Money syncs through vanilla, so
+-- no event of our own.
 function TheContractorStaff:paySalaries()
+    local farmIds = {}
     for farmId in pairs(self.workersByFarm) do
-        local total = self:getTotalSalary(farmId)
+        farmIds[farmId] = true
+    end
+    for _, farmId in ipairs(g_currentMission.TheContractor.Administrator:getFarmIds()) do
+        farmIds[farmId] = true
+    end
+
+    for farmId in pairs(farmIds) do
+        local salary = self:getPayroll(farmId)
+        local total = self:getWageBill(farmId)
         if total > 0 and g_farmManager:getFarmById(farmId) ~= nil then
             g_currentMission:addMoney(-total, farmId, MoneyType.TC_WAGES, true, true)
             g_currentMission.TheContractor.Finances:recordWages(farmId, total)
-            Logging.info("TheContractor: farm %d paid %.0f in staff salaries", farmId, total)
+            Logging.info("TheContractor: farm %d paid %.0f in staff salaries and %.0f in pension contributions",
+                farmId, salary, total - salary)
         end
     end
 end
@@ -574,7 +649,7 @@ end
 -- starting - pool candidates and hired workers alike - turns a year older.
 -- growthPotential is left alone; it's rolled from age once, at creation.
 -- One broadcast for the whole batch. Hired workers then roll to retire
--- (039).
+-- (039), more likely when their morale is low (056).
 function TheContractorStaff:ageWorkers()
     local period = g_currentMission.environment.currentPeriod
     local aged = {}
@@ -611,8 +686,10 @@ function TheContractorStaff:ageWorkers()
     end
 
     for _, worker in ipairs(hiredBirthdays) do
-        if not worker:isRetiring() and math.random() < TheContractorStaff.getRetirementChance(worker.age) then
-            self:announceRetirement(worker.farmId, worker.id, TheContractorStaff.RETIREMENT_NOTICE_MONTHS)
+        local chance = TheContractorStaff.getRetirementChance(worker.age) *
+            TheContractorMorale.getRetirementMultiplier(worker)
+        if not worker:isLeaving() and math.random() < chance then
+            self:announceLeaving(worker.farmId, worker.id, TheContractorStaff.RETIREMENT_NOTICE_MONTHS, false)
         end
     end
 end
@@ -631,36 +708,37 @@ function TheContractorStaff.getRetirementChance(age)
     return minChance + (1 - minChance) * t ^ TheContractorStaff.RETIREMENT_CURVE_EXPONENT
 end
 
--- The worker hands in their notice: they retire at the start of the period
--- noticeMonths from now (0 = due now, for the tcRetireWorker console
--- command). The farm gets a notification and an Overview notice (038),
--- which stays up until they actually leave.
-function TheContractorStaff:announceRetirement(farmId, workerId, noticeMonths)
+-- The worker hands in their notice: they leave at the start of the period
+-- noticeMonths from now (0 = due now, for the tcWorker retire/quit console
+-- commands) - retiring, or quitting (056) if isQuitting. The farm gets a
+-- notification and an Overview notice (038), which stays up until they
+-- actually leave.
+function TheContractorStaff:announceLeaving(farmId, workerId, noticeMonths, isQuitting)
     if not g_currentMission:getIsServer() then
         return
     end
 
     local worker = self:getWorker(farmId, workerId)
-    if worker == nil or worker:isRetiring() then
+    if worker == nil or worker:isLeaving() then
         return
     end
 
-    local retiresAtPeriod = TCCalendar.getPeriodIndex() + noticeMonths
-    self:applyRetirementAnnounced(farmId, workerId, retiresAtPeriod)
+    local leavesAtPeriod = TCCalendar.getPeriodIndex() + noticeMonths
+    self:applyLeavingAnnounced(farmId, workerId, leavesAtPeriod, isQuitting)
 
-    worker.retirementNoticeId = g_currentMission.TheContractor.Notices:publish(farmId,
-        string.format(g_i18n:getText("tc_retirement_notice"), worker.name,
-            TCCalendar.formatPeriodIndex(retiresAtPeriod)))
+    worker.leavingNoticeId = g_currentMission.TheContractor.Notices:publish(farmId,
+        string.format(g_i18n:getText(isQuitting and "tc_morale_quitNotice" or "tc_retirement_notice"), worker.name,
+            TCCalendar.formatPeriodIndex(leavesAtPeriod)))
 
-    Logging.info("TheContractor: farm %d worker %d (%s, age %d) retires at period %d", farmId, workerId,
-        worker.name, worker.age, retiresAtPeriod)
+    Logging.info("TheContractor: farm %d worker %d (%s, age %d, morale %.1f) %s at period %d", farmId, workerId,
+        worker.name, worker.age, worker.morale, isQuitting and "quits" or "retires", leavesAtPeriod)
 
     -- The host's own notification - the broadcast below doesn't loop back
     -- to it (see src/events/README.md).
     TCWorkerRetirementAnnouncedEvent.showNotification(worker)
 
     if g_server ~= nil then
-        g_server:broadcastEvent(TCWorkerRetirementAnnouncedEvent.new(farmId, workerId, retiresAtPeriod))
+        g_server:broadcastEvent(TCWorkerRetirementAnnouncedEvent.new(farmId, workerId, leavesAtPeriod, isQuitting))
     end
 
     -- Already due (noticeMonths 0) and free to go.
@@ -669,18 +747,20 @@ function TheContractorStaff:announceRetirement(farmId, workerId, noticeMonths)
     end
 end
 
-function TheContractorStaff:applyRetirementAnnounced(farmId, workerId, retiresAtPeriod)
+function TheContractorStaff:applyLeavingAnnounced(farmId, workerId, leavesAtPeriod, isQuitting)
     local worker = self:getWorker(farmId, workerId)
     if worker ~= nil then
-        worker.retiresAtPeriod = retiresAtPeriod
+        worker.leavesAtPeriod = leavesAtPeriod
+        worker.isQuitting = isQuitting
     end
 end
 
--- Idle, off sick or on holiday (040) - not out on a job or driving.
+-- Idle, off sick, on holiday (040) or training (054) - not out on a job or
+-- driving.
 function TheContractorStaff.canLeaveNow(worker)
     local status = worker.status
     return status == TheContractorWorker.STATUS.IDLE or status == TheContractorWorker.STATUS.SICK or
-        status == TheContractorWorker.STATUS.HOLIDAY
+        status == TheContractorWorker.STATUS.HOLIDAY or status == TheContractorWorker.STATUS.TRAINING
 end
 
 -- From the period tick: everyone past their date who's idle, off sick or on
@@ -690,7 +770,7 @@ function TheContractorStaff:retireDueWorkers()
     local due = {}
     for farmId, farmWorkers in pairs(self.workersByFarm) do
         for workerId, worker in pairs(farmWorkers) do
-            if worker:isRetirementDue() and TheContractorStaff.canLeaveNow(worker) then
+            if worker:isLeaveDue() and TheContractorStaff.canLeaveNow(worker) then
                 table.insert(due, { farmId = farmId, workerId = workerId })
             end
         end
@@ -702,6 +782,8 @@ function TheContractorStaff:retireDueWorkers()
 end
 
 -- Leaves the roster like a released worker, and takes their notice down.
+-- Also how a worker who's quit (056) goes: no notice or redundancy pay, and
+-- no knock to anyone else's morale.
 function TheContractorStaff:retireWorker(farmId, workerId)
     if not g_currentMission:getIsServer() then
         return
@@ -712,9 +794,10 @@ function TheContractorStaff:retireWorker(farmId, workerId)
         return
     end
 
-    g_currentMission.TheContractor.Notices:remove(worker.retirementNoticeId)
+    g_currentMission.TheContractor.Notices:remove(worker.leavingNoticeId)
 
-    Logging.info("TheContractor: farm %d worker %d (%s) retired at %d", farmId, workerId, worker.name, worker.age)
+    Logging.info("TheContractor: farm %d worker %d (%s) %s at %d", farmId, workerId, worker.name,
+        worker.isQuitting and "quit" or "retired", worker.age)
 
     -- The host's own notification, while the worker's still on the roster.
     TCWorkerRetiredEvent.showNotification(worker)
@@ -726,6 +809,8 @@ function TheContractorStaff:retireWorker(farmId, workerId)
 
     -- 040: any holiday they'd booked comes off the Overview.
     g_currentMission.TheContractor.Holidays:refreshNotices(farmId)
+    -- 054: and any training message about them leaves the inbox.
+    g_currentMission.TheContractor.Training:removeMessagesFor(farmId, workerId)
 end
 
 -- Worker ids are unique across the pool and every roster (one shared
@@ -817,11 +902,19 @@ function TheContractorStaff:hireWorker(farmId, candidateId)
     candidate.farmId = farmId
     -- 040: before the broadcast, so the allowance goes out with them.
     TheContractorHolidays.grantInitialAllowance(candidate)
+    -- 056: likewise their starting morale and hire date.
+    candidate.morale = TheContractorWorker.MORALE_START
+    candidate.hiredPeriod = TCCalendar.getPeriodIndex()
+    candidate.busyDays = 0
+    candidate.idleDays = 0
     self:applyWorkerHired(candidate)
 
     if g_server ~= nil then
         g_server:broadcastEvent(TCWorkerHiredEvent.new(candidate))
     end
+
+    -- 051: employing anyone needs employer's liability insurance.
+    g_currentMission.TheContractor.Overheads:ensureRequired(farmId)
 
     return candidate
 end
@@ -849,12 +942,89 @@ end
 
 -- Releasing (server-authoritative) ----------------------------------------
 
+-- Letting someone go (056) costs UK statutory pay, at 1x UK like the
+-- salaries:
+-- - Notice pay, paid in lieu as a lump sum: a week's pay per full year of
+--   service, NOTICE_MIN_WEEKS-NOTICE_MAX_WEEKS.
+-- - Redundancy pay from REDUNDANCY_MIN_YEARS of service: for each full year
+--   (the most recent REDUNDANCY_MAX_YEARS), half a week's pay for a year
+--   worked under REDUNDANCY_YOUNG_AGE, one week up to REDUNDANCY_OLDER_AGE,
+--   one and a half from then on. A week's pay is capped at
+--   REDUNDANCY_WEEKLY_PAY_CAP (the statutory cap, 2025) for this part only.
+-- A worker who's already leaving (retiring or quitting) is paid only for
+-- the notice they have left, and no redundancy.
+TheContractorStaff.WEEKS_PER_YEAR = 52
+TheContractorStaff.NOTICE_MIN_WEEKS = 1
+TheContractorStaff.NOTICE_MAX_WEEKS = 12
+TheContractorStaff.REDUNDANCY_MIN_YEARS = 2
+TheContractorStaff.REDUNDANCY_MAX_YEARS = 20
+TheContractorStaff.REDUNDANCY_YOUNG_AGE = 22
+TheContractorStaff.REDUNDANCY_OLDER_AGE = 41
+TheContractorStaff.REDUNDANCY_WEEKLY_PAY_CAP = 719
+
+-- Full years since they were hired (0 until an old save's worker gets a
+-- hire date - see TheContractorMorale:onDayChanged).
+function TheContractorStaff.getYearsOfService(worker)
+    if worker.hiredPeriod == nil then
+        return 0
+    end
+    return math.max(0, math.floor((TCCalendar.getPeriodIndex() - worker.hiredPeriod) / Environment.PERIODS_IN_YEAR))
+end
+
+function TheContractorStaff.getWeeklyPay(worker)
+    return worker.salary * Environment.PERIODS_IN_YEAR / TheContractorStaff.WEEKS_PER_YEAR
+end
+
+-- What releasing the worker today costs. Every machine works it out the
+-- same way, so the confirm dialog shows what the server will charge.
+-- Returns { years, noticeWeeks, noticePay, redundancyWeeks, redundancyPay,
+-- total }, pay in whole money.
+function TheContractorStaff.getReleaseCost(worker)
+    local years = TheContractorStaff.getYearsOfService(worker)
+    local weeklyPay = TheContractorStaff.getWeeklyPay(worker)
+    local noticeWeeks = math.max(TheContractorStaff.NOTICE_MIN_WEEKS, math.min(TheContractorStaff.NOTICE_MAX_WEEKS,
+        years))
+    local redundancyWeeks = 0
+
+    if worker:isLeaving() then
+        local monthsLeft = math.max(0, worker.leavesAtPeriod - TCCalendar.getPeriodIndex())
+        noticeWeeks = math.min(noticeWeeks,
+            monthsLeft * TheContractorStaff.WEEKS_PER_YEAR / Environment.PERIODS_IN_YEAR)
+    elseif years >= TheContractorStaff.REDUNDANCY_MIN_YEARS then
+        for i = 1, math.min(years, TheContractorStaff.REDUNDANCY_MAX_YEARS) do
+            local ageThatYear = worker.age - i
+            if ageThatYear < TheContractorStaff.REDUNDANCY_YOUNG_AGE then
+                redundancyWeeks = redundancyWeeks + 0.5
+            elseif ageThatYear < TheContractorStaff.REDUNDANCY_OLDER_AGE then
+                redundancyWeeks = redundancyWeeks + 1
+            else
+                redundancyWeeks = redundancyWeeks + 1.5
+            end
+        end
+    end
+
+    local noticePay = math.floor(noticeWeeks * weeklyPay + 0.5)
+    local redundancyPay = math.floor(redundancyWeeks *
+        math.min(weeklyPay, TheContractorStaff.REDUNDANCY_WEEKLY_PAY_CAP) + 0.5)
+    return {
+        years = years,
+        noticeWeeks = noticeWeeks,
+        noticePay = noticePay,
+        redundancyWeeks = redundancyWeeks,
+        redundancyPay = redundancyPay,
+        total = noticePay + redundancyPay,
+    }
+end
+
 -- Fires a hired worker from farmId's roster (017's Staff UI roster
--- management action) — no refund, and no move back into the candidate pool
--- (a released worker is just gone, not recycled). Returns true if a worker
--- was actually removed. Unlike hiring there's no race to arbitrate: only the
--- owning farm can ever reference a workerId that's in its own roster, so no
--- re-check-then-act window exists for another farm to interfere with.
+-- management action) — no move back into the candidate pool (a released
+-- worker is just gone, not recycled). 056: charges notice and redundancy
+-- pay (getReleaseCost) under TC_WAGES, even into the red, since it's owed,
+-- and everyone left on the roster takes a morale knock. Returns true if a
+-- worker was actually removed. Unlike hiring there's no race to arbitrate:
+-- only the owning farm can ever reference a workerId that's in its own
+-- roster, so no re-check-then-act window exists for another farm to
+-- interfere with.
 function TheContractorStaff:releaseWorker(farmId, workerId)
     if not g_currentMission:getIsServer() then
         return false
@@ -872,8 +1042,15 @@ function TheContractorStaff:releaseWorker(farmId, workerId)
         return false
     end
 
-    -- 039: their retirement notice goes with them.
-    g_currentMission.TheContractor.Notices:remove(worker.retirementNoticeId)
+    -- 056: what they're owed.
+    local cost = TheContractorStaff.getReleaseCost(worker)
+    if cost.total > 0 then
+        g_currentMission:addMoney(-cost.total, farmId, MoneyType.TC_WAGES, true, true)
+        g_currentMission.TheContractor.Finances:recordWages(farmId, cost.total)
+    end
+
+    -- 039: their retirement (or 056 quitting) notice goes with them.
+    g_currentMission.TheContractor.Notices:remove(worker.leavingNoticeId)
 
     self:applyWorkerReleased(farmId, workerId)
 
@@ -883,8 +1060,15 @@ function TheContractorStaff:releaseWorker(farmId, workerId)
 
     -- 040: any holiday they'd booked comes off the Overview.
     g_currentMission.TheContractor.Holidays:refreshNotices(farmId)
+    -- 054: and any training message about them leaves the inbox.
+    g_currentMission.TheContractor.Training:removeMessagesFor(farmId, workerId)
 
-    Logging.info("TheContractor: farm %d released worker %d (%s)", farmId, workerId, worker.name)
+    Logging.info("TheContractor: farm %d released worker %d (%s) after %d year(s): %.1f weeks' notice pay (%.0f), %.1f weeks' redundancy pay (%.0f)",
+        farmId, workerId, worker.name, cost.years, cost.noticeWeeks, cost.noticePay, cost.redundancyWeeks,
+        cost.redundancyPay)
+
+    -- 056: the rest of the staff don't like seeing it.
+    g_currentMission.TheContractor.Morale:onColleagueReleased(farmId)
 
     return true
 end
@@ -902,7 +1086,7 @@ end
 
 -- Worker status (server-authoritative) -------------------------------------
 
--- Flips a hired worker's status (idle/assigned/cooldown/sick/driving/holiday) and broadcasts it —
+-- Flips a hired worker's status (idle/assigned/cooldown/sick/driving/holiday/training) and broadcasts it —
 -- first driven by allocation (018, idle -> assigned on a successful
 -- allocateJob), later tickets (022/023) will flip it back on
 -- completion/cooldown. Broadcasts just the changed field
@@ -916,7 +1100,7 @@ function TheContractorStaff:setWorkerStatus(farmId, workerId, status)
     -- 039: someone whose retirement date came while they were out on a job
     -- (or driving) leaves the moment they're back, rather than going idle.
     local worker = self:getWorker(farmId, workerId)
-    if worker ~= nil and status == TheContractorWorker.STATUS.IDLE and worker:isRetirementDue() then
+    if worker ~= nil and status == TheContractorWorker.STATUS.IDLE and worker:isLeaveDue() then
         self:retireWorker(farmId, workerId)
         return
     end
@@ -940,6 +1124,14 @@ function TheContractorStaff:setWorkerStatus(farmId, workerId, status)
         worker.sickDaysRemaining = worker.pendingSickDays
         worker.pendingSickDays = 0
         status = TheContractorWorker.STATUS.SICK
+    end
+
+    -- 054: someone back on a day they're due in for training goes straight
+    -- there. Sickness comes first: they miss the day, and it slides.
+    if worker ~= nil and status == TheContractorWorker.STATUS.IDLE and TheContractorTraining.isDueToday(worker) then
+        Logging.info("TheContractor: farm %d worker %d (%s) back on a training day, now training", farmId, workerId,
+            worker.name)
+        status = TheContractorWorker.STATUS.TRAINING
     end
 
     local oldStatus = self:applyWorkerStatusChanged(farmId, workerId, status)
@@ -1007,7 +1199,9 @@ function TheContractorStaff:rollWorkerGrowth(job, workerId, equipmentIds, isHaul
     end
 
     local quality = (job.qualityScore or 100) / 100
-    if math.random() >= TheContractorStaff.GROWTH_BASE_CHANCE * stretch * quality then
+    -- 056: happy staff learn a little faster.
+    local morale = TheContractorMorale.getGrowthMultiplier(worker)
+    if math.random() >= TheContractorStaff.GROWTH_BASE_CHANCE * stretch * quality * morale then
         return
     end
 
@@ -1138,8 +1332,9 @@ function TheContractorStaff.writeWorker(streamId, worker)
     -- 030: age only - growthPotential stays server-side (it's hidden), as
     -- do 031's sicknessPropensity/sickDaysRemaining/pendingSickDays.
     streamWriteInt32(streamId, worker.age)
-    -- 039: 0 = not retiring (period indexes start at 1).
-    streamWriteInt32(streamId, worker.retiresAtPeriod or 0)
+    -- 039: 0 = not leaving (period indexes start at 1). 056: or quitting.
+    streamWriteInt32(streamId, worker.leavesAtPeriod or 0)
+    streamWriteBool(streamId, worker.isQuitting)
     -- 040: holidayStartDay 0 = nothing booked (monotonic days start at 1).
     -- holidayYear/holidayDaysPerPeriod stay server-side.
     streamWriteFloat32(streamId, worker.holidayAllowance)
@@ -1163,6 +1358,10 @@ function TheContractorStaff.writeWorker(streamId, worker)
     end
     -- 045.
     streamWriteUInt8(streamId, worker.cleanliness)
+    -- 054.
+    TheContractorTraining.writeState(streamId, worker)
+    -- 056.
+    TheContractorMorale.writeState(streamId, worker)
 end
 
 function TheContractorStaff.readWorker(streamId)
@@ -1176,7 +1375,8 @@ function TheContractorStaff.readWorker(streamId)
     local salary = streamReadFloat32(streamId)
     local status = streamReadString(streamId)
     local age = streamReadInt32(streamId)
-    local retiresAtPeriod = streamReadInt32(streamId)
+    local leavesAtPeriod = streamReadInt32(streamId)
+    local isQuitting = streamReadBool(streamId)
     local holidayAllowance = streamReadFloat32(streamId)
     local holidayStartDay = streamReadInt32(streamId)
     local holidayDays = streamReadInt32(streamId)
@@ -1195,17 +1395,23 @@ function TheContractorStaff.readWorker(streamId)
         skills[skill] = streamReadUInt8(streamId)
     end
     local cleanliness = streamReadUInt8(streamId)
+    local trainingState = TheContractorTraining.readState(streamId)
+    local morale, hiredPeriod = TheContractorMorale.readState(streamId)
 
     local worker = TheContractorWorker.new(id, farmId, name, workSpeed, tierCapability, salary, age, nil, nil, nil,
         skills, cleanliness)
     worker.status = status
     worker.gender = gender
     worker.appearance = appearance
-    if retiresAtPeriod > 0 then
-        worker.retiresAtPeriod = retiresAtPeriod
+    if leavesAtPeriod > 0 then
+        worker.leavesAtPeriod = leavesAtPeriod
     end
+    worker.isQuitting = isQuitting
+    worker.morale = morale
+    worker.hiredPeriod = hiredPeriod
     TheContractorHolidays.applyHolidayChanged(worker, holidayAllowance,
         holidayStartDay > 0 and holidayStartDay or nil, holidayDays)
+    TheContractorTraining.applyState(worker, trainingState)
 
     return worker
 end
@@ -1231,11 +1437,14 @@ function TheContractorStaff.writeWorkerXML(xmlFile, key, worker)
     if worker.pendingSickDays > 0 then
         setXMLInt(xmlFile, key .. "#pendingSickDays", worker.pendingSickDays)
     end
-    if worker.retiresAtPeriod ~= nil then
-        setXMLInt(xmlFile, key .. "#retiresAtPeriod", worker.retiresAtPeriod)
+    if worker.leavesAtPeriod ~= nil then
+        setXMLInt(xmlFile, key .. "#leavesAtPeriod", worker.leavesAtPeriod)
+        if worker.isQuitting then
+            setXMLBool(xmlFile, key .. "#isQuitting", true)
+        end
     end
-    if worker.retirementNoticeId ~= nil then
-        setXMLInt(xmlFile, key .. "#retirementNoticeId", worker.retirementNoticeId)
+    if worker.leavingNoticeId ~= nil then
+        setXMLInt(xmlFile, key .. "#leavingNoticeId", worker.leavingNoticeId)
     end
     -- 040: hired workers only - a candidate has no allowance yet.
     if worker.holidayYear ~= nil then
@@ -1259,6 +1468,10 @@ function TheContractorStaff.writeWorkerXML(xmlFile, key, worker)
         setXMLInt(xmlFile, key .. "#skill_" .. skill, worker:getSkill(skill))
     end
     setXMLInt(xmlFile, key .. "#cleanliness", worker.cleanliness)
+    -- 054.
+    TheContractorTraining.writeXML(xmlFile, key, worker)
+    -- 056.
+    TheContractorMorale.writeXML(xmlFile, key, worker)
 end
 
 -- farmId is passed in explicitly (nil for a pool candidate) rather than read
@@ -1329,8 +1542,12 @@ function TheContractorStaff.readWorkerXML(xmlFile, key, farmId)
         worker.sickDaysRemaining = math.max(1, getXMLInt(xmlFile, key .. "#sickDaysRemaining") or 1)
     end
     worker.pendingSickDays = getXMLInt(xmlFile, key .. "#pendingSickDays") or 0
-    worker.retiresAtPeriod = getXMLInt(xmlFile, key .. "#retiresAtPeriod")
-    worker.retirementNoticeId = getXMLInt(xmlFile, key .. "#retirementNoticeId")
+    -- 056 renamed these from retiresAtPeriod/retirementNoticeId.
+    worker.leavesAtPeriod = getXMLInt(xmlFile, key .. "#leavesAtPeriod") or
+        getXMLInt(xmlFile, key .. "#retiresAtPeriod")
+    worker.isQuitting = worker.leavesAtPeriod ~= nil and (getXMLBool(xmlFile, key .. "#isQuitting") or false)
+    worker.leavingNoticeId = getXMLInt(xmlFile, key .. "#leavingNoticeId") or
+        getXMLInt(xmlFile, key .. "#retirementNoticeId")
     -- 040: a worker from a save made before 040 has no holidayYear, and
     -- gets their allowance at the next day change (Holidays:onDayChanged).
     worker.holidayYear = getXMLInt(xmlFile, key .. "#holidayYear")
@@ -1343,6 +1560,11 @@ function TheContractorStaff.readWorkerXML(xmlFile, key, farmId)
         worker.holidayDays = holidayDays
         worker.holidayDaysPerPeriod = holidayDaysPerPeriod
     end
+    -- 054.
+    TheContractorTraining.readXML(xmlFile, key, worker)
+    -- 056: a worker from a save made before 056 starts at MORALE_START and
+    -- gets their hire date at the next day change (Morale:onDayChanged).
+    TheContractorMorale.readXML(xmlFile, key, worker)
 
     return worker
 end
@@ -1357,6 +1579,10 @@ function TheContractorStaff:loadFromXMLFile(xmlFile)
     local rootKey = string.format("%s.staff", TheContractor.SaveKey)
     self.nextWorkerId = Utils.getNoNil(getXMLInt(xmlFile, rootKey .. "#nextWorkerId"), 1)
 
+    -- 054: a save from before certificates existed has no marker. Its
+    -- workers are grandfathered once (TheContractorTraining.grandfather).
+    local isPreCertification = getXMLInt(xmlFile, rootKey .. "#certificationVersion") == nil
+
     local poolIndex = 0
     while true do
         local candidateKey = string.format("%s.pool.candidate(%d)", rootKey, poolIndex)
@@ -1365,6 +1591,9 @@ function TheContractorStaff:loadFromXMLFile(xmlFile)
         end
 
         local candidate = TheContractorStaff.readWorkerXML(xmlFile, candidateKey, nil)
+        if isPreCertification then
+            TheContractorTraining.grandfather(candidate)
+        end
         self.candidatePool[candidate.id] = candidate
 
         if candidate.id >= self.nextWorkerId then
@@ -1391,6 +1620,9 @@ function TheContractorStaff:loadFromXMLFile(xmlFile)
             end
 
             local worker = TheContractorStaff.readWorkerXML(xmlFile, workerKey, farmId)
+            if isPreCertification then
+                TheContractorTraining.grandfather(worker)
+            end
 
             self.workersByFarm[farmId] = self.workersByFarm[farmId] or {}
             self.workersByFarm[farmId][worker.id] = worker
@@ -1411,6 +1643,7 @@ function TheContractorStaff:saveToXmlFile(xmlFile)
 
     local rootKey = string.format("%s.staff", TheContractor.SaveKey)
     setXMLInt(xmlFile, rootKey .. "#nextWorkerId", self.nextWorkerId)
+    setXMLInt(xmlFile, rootKey .. "#certificationVersion", 1)
 
     local poolIndex = 0
     for _, candidate in pairs(self.candidatePool) do
@@ -1465,4 +1698,152 @@ function TheContractorStaff:readInitialClientState(streamId, connection)
     for _ = 1, workerCount do
         self:registerWorker(TheContractorStaff.readWorker(streamId))
     end
+end
+
+-- Console commands (tcWorker - see TCConsole) ------------------------------------------
+
+function TheContractorStaff.registerConsoleCommands()
+    -- The ids the other worker commands take - the Staff tab doesn't show
+    -- them. Read-only, so it works on any machine.
+    TCConsole.register("worker", "list", {
+        description = "Your hired workers: id, status, age, morale, crop care, spraying, holiday, leaving",
+        serverOnly = false,
+        run = function(farmId, args)
+            local roster = g_currentMission.TheContractor.Staff:getRoster(farmId)
+            if #roster == 0 then
+                return string.format("Farm %d has no hired workers.", farmId)
+            end
+            table.sort(roster, function(a, b)
+                return a.id < b.id
+            end)
+
+            local cert = "spraying"
+            local lines = { string.format("Farm %d workers (today is day %d):", farmId,
+                g_currentMission.environment.currentMonotonicDay) }
+            for _, worker in ipairs(roster) do
+                local spraying
+                if worker:hasCertification(cert) then
+                    spraying = "certified"
+                elseif worker.trainingCert == cert then
+                    spraying = string.format("booked (%d course day(s) left%s, assessment day %d)",
+                        worker.courseDaysLeft, worker.trainingDay ~= nil and (", next day " .. worker.trainingDay) or "",
+                        worker.assessmentDay)
+                elseif TheContractorTraining.isRetake(worker, cert) then
+                    spraying = "failed, retake due"
+                else
+                    spraying = TheContractorTraining.isReady(worker, cert) and "not certified, ready" or
+                        "not certified, not ready"
+                end
+
+                local extras = {}
+                if worker.declinedRequests > 0 then
+                    table.insert(extras, string.format("%d declined request(s)", worker.declinedRequests))
+                end
+                if worker:hasHolidayBooked() then
+                    table.insert(extras, string.format("holiday days %d-%d", worker.holidayStartDay,
+                        worker:getHolidayEndDay()))
+                end
+                if worker:isLeaving() then
+                    table.insert(extras, (worker.isQuitting and "quitting " or "retiring ") ..
+                        TCCalendar.formatPeriodIndex(worker.leavesAtPeriod))
+                end
+
+                table.insert(lines, string.format("#%d %s - %s, age %d, morale %.0f (%s), crop care %d, spraying: %s%s",
+                    worker.id, worker.name, worker.status, worker.age, worker.morale,
+                    TheContractorMorale.getBand(worker.morale), worker:getSkill("cropCare"), spraying,
+                    #extras > 0 and ("; " .. table.concat(extras, "; ")) or ""))
+            end
+            return table.concat(lines, "\n")
+        end,
+    })
+
+    TCConsole.register("worker", "pool", {
+        description = "Candidates you can hire: id, speed, salary, tractors, skills",
+        serverOnly = false,
+        run = function(farmId, args)
+            local pool = g_currentMission.TheContractor.Staff:getCandidatePool()
+            if #pool == 0 then
+                return "Staff pool is empty."
+            end
+            table.sort(pool, function(a, b)
+                return a.id < b.id
+            end)
+
+            local lines = {}
+            for _, candidate in ipairs(pool) do
+                table.insert(lines, string.format("#%d %s - speed %d, salary %.0f, tractors: %s, skills: %s",
+                    candidate.id, candidate.name, candidate.workSpeed, candidate.salary,
+                    TheContractorStaff.formatTierCapability(candidate.tierCapability),
+                    TheContractorStaff.formatSkills(candidate.skills)))
+            end
+            return table.concat(lines, "\n")
+        end,
+    })
+
+    TCConsole.register("worker", "hire", {
+        args = "<candidate>",
+        description = "Hire a candidate from the pool (id or name, see tcWorker pool)",
+        run = function(farmId, args)
+            local candidate, problem = TCConsole.findPerson(g_currentMission.TheContractor.Staff:getCandidatePool(),
+                args[1], "candidate")
+            if candidate == nil then
+                return problem or false
+            end
+
+            g_client:getServerConnection():sendEvent(TCHireWorkerEvent.new(farmId, candidate.id))
+            return string.format("Hiring %s (#%d) for farm %d", candidate.name, candidate.id, farmId)
+        end,
+    })
+
+    TCConsole.register("worker", "retire", {
+        args = "<worker> [noticeMonths=6, 0=now]",
+        description = "Make a worker hand in their retirement notice",
+        run = function(farmId, args)
+            local worker, problem = TCConsole.findWorker(farmId, args[1])
+            if worker == nil then
+                return problem or false
+            end
+            local noticeMonths = TCConsole.toCount(args[2], TheContractorStaff.RETIREMENT_NOTICE_MONTHS)
+            if noticeMonths == nil then
+                return false
+            end
+            if worker:isLeaving() then
+                return string.format("%s is already leaving (%s)", worker.name,
+                    TCCalendar.formatPeriodIndex(worker.leavesAtPeriod))
+            end
+
+            g_currentMission.TheContractor.Staff:announceLeaving(farmId, worker.id, noticeMonths, false)
+            return string.format("%s handed in their notice (%d month(s))", worker.name, noticeMonths)
+        end,
+    })
+
+    -- 055: through the normal path, so the H&S programme's shorter spells
+    -- and the no-programme inspection roll both apply.
+    TCConsole.register("worker", "sick", {
+        args = "<worker> [inspect]",
+        description = "Make a worker fall sick now; inspect forces an H&S inspection if you have no programme",
+        run = function(farmId, args)
+            local worker, problem = TCConsole.findWorker(farmId, args[1])
+            if worker == nil then
+                return problem or false
+            end
+            if args[2] ~= nil and string.lower(args[2]) ~= "inspect" then
+                return false
+            end
+            if worker.status == TheContractorWorker.STATUS.SICK or worker.pendingSickDays > 0 then
+                return string.format("%s is already sick", worker.name)
+            end
+            if worker.status == TheContractorWorker.STATUS.HOLIDAY then
+                return string.format("%s is on holiday", worker.name)
+            end
+
+            local tc = g_currentMission.TheContractor
+            tc.Staff:makeWorkerSick(farmId, worker, args[2] ~= nil)
+
+            local days = worker.pendingSickDays > 0 and worker.pendingSickDays or worker.sickDaysRemaining
+            return string.format("%s is off sick for %d day(s)%s (H&S programme %s)", worker.name, days,
+                worker.pendingSickDays > 0 and " once back from their job" or "",
+                tc.HealthSafety:isActive(farmId) and "active" or "not active - see the log for the inspection roll")
+        end,
+    })
 end

@@ -79,7 +79,7 @@ function TCEquipmentClass.isTractor(vehicle)
 end
 
 -- fruitTypeIndex nil means "any crop" — used where a harvest job's crop
--- isn't known (e.g. the tcJobAvailability per-type summary).
+-- isn't known (e.g. the tcJob availability per-type summary).
 function TCEquipmentClass.canCutFruit(vehicle, fruitTypeIndex)
     local spec = vehicle.spec_cutter
     if spec == nil or spec.fruitTypeIndices == nil then

@@ -480,6 +480,11 @@ function TheContractorDrivers:rollDrivingGrowth(binding, vehicle)
 
     local chance = math.min(TheContractorDrivers.DRIVER_GROWTH_MAX_CHANCE,
         TheContractorDrivers.DRIVER_GROWTH_CHANCE_PER_HOUR * minutes / 60)
+    -- 056: happy staff learn a little faster.
+    local worker = g_currentMission.TheContractor.Staff:getWorker(binding.farmId, binding.workerId)
+    if worker ~= nil then
+        chance = chance * TheContractorMorale.getGrowthMultiplier(worker)
+    end
     if math.random() >= chance then
         return
     end

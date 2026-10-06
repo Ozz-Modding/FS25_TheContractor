@@ -186,3 +186,21 @@ end
 function TheContractorReputation:reset(farmId)
     self:applyReputationScore(farmId, 0)
 end
+
+-- Console commands (tcCompany - see TCConsole) -----------------------------------------
+
+function TheContractorReputation.registerConsoleCommands()
+    TCConsole.register("company", "rep", {
+        args = "<amount>",
+        description = "Add reputation, or remove it with a negative amount",
+        run = function(farmId, args)
+            local amount = tonumber(args[1])
+            if amount == nil then
+                return false
+            end
+
+            g_client:getServerConnection():sendEvent(TCDebugAddReputationEvent.new(farmId, amount))
+            return string.format("Applied %d reputation to farm %d", amount, farmId)
+        end,
+    })
+end

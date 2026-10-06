@@ -55,6 +55,9 @@ TheContractorJobGeneration_mt = Class(TheContractorJobGeneration)
 --   skill            the worker operation skill the work uses (044, see
 --                    TheContractorWorker.SKILLS). Sow says "seeding", but
 --                    is split by crop - see getOperationSkill.
+--   certification    a certificate the hired worker doing it must hold (054,
+--                    TheContractorTraining.CERTIFICATIONS) - herbicide needs
+--                    "spraying" (PA1/PA2). The player is assumed certified.
 --   rewardPerHa      the pricing anchor, vanilla's own per-mission-type
 --                    loadMapData default (plow 2800, cultivate 2300, sow
 --                    2000, harvest 2500, mow 2500, tedder 1500, bale 2200,
@@ -91,7 +94,7 @@ TheContractorJobGeneration.JOB_TYPES = {
         rewardPerHa = 1500, reputationPerHa = 5.1, skill = "cropCare" },
     herbicide = { implementSpec = "spec_sprayer", vanillaMission = HerbicideMission, startState = "weedState",
         supplyFillTypeNames = { "HERBICIDE" }, seasonRule = "noWinter", requiresWeeds = true, rewardPerHa = 1500,
-        reputationPerHa = 5.1, skill = "cropCare" },
+        reputationPerHa = 5.1, skill = "cropCare", certification = "spraying" },
     weed = { implementSpec = "spec_weeder", weederType = "weed", vanillaMission = WeedMission,
         startState = "weedState", seasonRule = "noWinter", requiresWeeds = true, serverMeasured = true,
         rewardPerHa = 2000, reputationPerHa = 6.8, skill = "cropCare" },
@@ -273,7 +276,7 @@ end
 -- when no type has an eligible field with a workable deadline — and then
 -- generation just skips a beat rather than forcing a bad offer out.
 --
--- onlyJobType (the tcOfferJob console command) restricts the roll to that
+-- onlyJobType (the tcJob offer console command) restricts the roll to that
 -- one type and always prefers a field the farm can fulfill, falling back
 -- to any of the type's fields - same rules otherwise, so a forced offer is
 -- still one the generator could have made on its own.
@@ -824,7 +827,7 @@ end
 -- out of season — are dropped and re-picked past, 033), and how many of
 -- those the farm could fulfill (getFulfillableFields). A type is offered
 -- only with a datable field; it's in pickJobType's fulfillable share only
--- with a fulfillable datable one. Drives the tcJobAvailability console
+-- with a fulfillable datable one. Drives the tcJob availability console
 -- command.
 function TheContractorJobGeneration:getAvailabilitySnapshot(farmId)
     local snapshot = {}
@@ -850,4 +853,105 @@ function TheContractorJobGeneration:getAvailabilitySnapshot(farmId)
     end
 
     return snapshot
+end
+
+-- Console commands (tcJob - see TCConsole) ---------------------------------------------
+
+function TheContractorJobGeneration.registerConsoleCommands()
+    -- Forces one generation hit for a single job type (tryGenerateJob's
+    -- onlyJobType): a real offer on a real field, priced and dated by the
+    -- same rules as the hourly roll, so it's safe for testing and for
+    -- scripting a storyline. Jobs broadcasts the new job itself. Fails only
+    -- when no field qualifies for the type right now, or none that does has
+    -- a workable deadline.
+    TCConsole.register("job", "offer", {
+        args = "<jobType>",
+        description = "Offer your farm a real job of that type now (no type lists the types)",
+        run = function(farmId, args)
+            local tc = g_currentMission.TheContractor
+            local typeList = table.concat(TheContractorJobGeneration.JOB_TYPE_KEYS, ", ")
+            if args[1] == nil then
+                return "Usage: tcJob offer <jobType>\nJob types: " .. typeList
+            end
+            local jobType = TheContractorJobGeneration.findJobType(args[1])
+            if jobType == nil then
+                return string.format("Unknown job type '%s'. Job types: %s", args[1], typeList)
+            end
+            if not tc.Company:hasCompany(farmId) then
+                return string.format("Error: farm %d has no company yet", farmId)
+            end
+
+            local job = tc.JobGeneration:tryGenerateJob(farmId, jobType)
+            if job ~= nil then
+                return string.format("Offered %s job %d on field %d to farm %d (%s, due period %d day %d, skill %d%s)",
+                    jobType, job.id, job.fieldId, farmId, g_i18n:formatMoney(job.price, 0, true, true),
+                    job.targetPeriod, job.targetDayInPeriod, job.requiredSkillLevel,
+                    job.equipmentAvailable and "" or ", farm lacks the equipment")
+            end
+
+            local jobDef = TheContractorJobGeneration.JOB_TYPES[jobType]
+            if jobDef.requiresWeeds and not TheContractorJobGeneration.getHasWeeds() then
+                return string.format("No %s job possible: weeds are off for this save or map", jobType)
+            end
+            if jobDef.requiresStones and g_currentMission.missionInfo.stonesEnabled == false then
+                return string.format("No %s job possible: stones are switched off for this save", jobType)
+            end
+            local candidates = #tc.JobGeneration:getCandidateFields(farmId, jobDef)
+            if candidates == 0 then
+                return string.format("No %s job possible right now: no field the farm doesn't own qualifies for it",
+                    jobType)
+            end
+            return string.format("No %s job possible right now: %d field(s) qualify, but none has a workable deadline (crop not ready/predictable in time, or out of season)",
+                jobType, candidates)
+        end,
+    })
+
+    -- 025 investigation aid: what the hourly generator could offer this farm
+    -- right now, per job type. Read-only, but server-only because field
+    -- state and generation both live there.
+    TCConsole.register("job", "availability", {
+        description = "Dry run: which job types have fields and dates available right now",
+        run = function(farmId, args)
+            local jobGeneration = g_currentMission.TheContractor.JobGeneration
+            local environment = g_currentMission.environment
+            local hourlyChance = jobGeneration:getHourlyChance(farmId)
+            local rollsPerPeriod = 24 * environment.daysPerPeriod
+
+            local snapshot = jobGeneration:getAvailabilitySnapshot(farmId)
+            local datableTypes, fulfillableTypes = 0, 0
+            for _, entry in ipairs(snapshot) do
+                if entry.datable > 0 then
+                    datableTypes = datableTypes + 1
+                end
+                if entry.fulfillable > 0 then
+                    fulfillableTypes = fulfillableTypes + 1
+                end
+            end
+
+            local hitsPerPeriod = hourlyChance * rollsPerPeriod
+            local split
+            if datableTypes == 0 then
+                split = "no job type has a datable field - every hit is wasted"
+            elseif fulfillableTypes == 0 then
+                split = string.format("nothing fulfillable - split evenly across the %d types with datable fields",
+                    datableTypes)
+            else
+                local share = TheContractorJobGeneration.FULFILLABLE_TYPE_SHARE
+                split = string.format("%d%% evenly across the %d fulfillable types, %d%% across all %d types with datable fields; ~%.1f fulfillable offers per period",
+                    math.floor(share * 100 + 0.5), fulfillableTypes, math.floor((1 - share) * 100 + 0.5), datableTypes,
+                    hitsPerPeriod * (share + (1 - share) * fulfillableTypes / datableTypes))
+            end
+
+            local lines = {
+                string.format("Farm %d, period %d day %d: hourly chance %.4f, ~%.1f generation hits per period (%s)",
+                    farmId, environment.currentPeriod, environment.currentDayInPeriod, hourlyChance, hitsPerPeriod,
+                    split),
+            }
+            for _, entry in ipairs(snapshot) do
+                table.insert(lines, string.format("  %-9s eligible fields %3d, with target date %3d, fulfillable %3d",
+                    entry.jobType, entry.candidates, entry.datable, entry.fulfillable))
+            end
+            return table.concat(lines, "\n")
+        end,
+    })
 end

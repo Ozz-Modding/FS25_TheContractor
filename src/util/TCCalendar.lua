@@ -20,11 +20,16 @@ function TCCalendar.getYearOfPeriodIndex(periodIndex)
 end
 
 -- Same period->month mapping (period 1 == March) as MenuContractor's
--- periodToMonth.
-local function getMonthName(periodIndex)
+-- periodToMonth. The key on its own is for text rendered elsewhere (051's
+-- inbox message args).
+function TCCalendar.getMonthTextKey(periodIndex)
     local period = (periodIndex - 1) % Environment.PERIODS_IN_YEAR + 1
     local month = (period + 1) % 12 + 1
-    return g_i18n:getText("ui_month" .. month)
+    return "ui_month" .. month
+end
+
+local function getMonthName(periodIndex)
+    return g_i18n:getText(TCCalendar.getMonthTextKey(periodIndex))
 end
 
 local function formatYear(periodIndex)

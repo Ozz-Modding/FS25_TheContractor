@@ -71,6 +71,8 @@
 		<text name="tc_detail_status" text="Status"/>
 		<text name="tc_detail_currentJob" text="Current job"/>
 		<text name="tc_detail_retiring" text="Retiring"/>
+		<text name="tc_detail_quitting" text="Quitting"/>
+		<text name="tc_detail_morale" text="Morale"/>
 		<text name="tc_detail_holidayLeft" text="Holiday left"/>
 		<text name="tc_detail_holiday" text="Holiday"/>
 		<text name="tc_staff_tier_small" text="Small"/>
@@ -80,6 +82,7 @@
 		<text name="tc_staff_tierTractor_medium" text="Medium tractors"/>
 		<text name="tc_staff_tierTractor_large" text="Large tractors"/>
 		<text name="tc_staff_skillsHeading" text="Skills"/>
+		<text name="tc_staff_certificatesHeading" text="Certificates"/>
 		<text name="tc_skill_harvesting" text="Harvesting"/>
 		<text name="tc_skill_baling" text="Baling"/>
 		<text name="tc_skill_grassland" text="Grassland"/>
@@ -173,6 +176,10 @@
 		<text name="tc_inbox_jobRejectedInfo" text="Negotiation failed: they walked away from %s on Field %s."/>
 		<text name="tc_inbox_dismissButton" text="Dismiss"/>
 		<text name="tc_inbox_chipMessage" text="Message"/>
+		<text name="tc_inbox_chipAdmin" text="Admin"/>
+		<text name="tc_inbox_chipClaim" text="Claim"/>
+		<text name="tc_inbox_chipLegal" text="Legal"/>
+		<text name="tc_inbox_chipTraining" text="Training"/>
 		<text name="tc_calendar_yearLabel" text="Year %d"/>
 		<text name="tc_calendar_columnDay" text="Day"/>
 		<text name="tc_calendar_columnJobs" text="Jobs"/>
@@ -210,6 +217,16 @@
 		<text name="finance_tcWages" text="Staff wages"/>
 		<text name="tc_moneyType_jobPayout" text="Job payout"/>
 		<text name="finance_tcJobPayout" text="Job payout"/>
+		<text name="tc_moneyType_overheads" text="Business overheads"/>
+		<text name="finance_tcOverheads" text="Business overheads"/>
+		<text name="tc_moneyType_claims" text="Compensation claims"/>
+		<text name="finance_tcClaims" text="Compensation claims"/>
+		<text name="tc_moneyType_legal" text="Legal fees"/>
+		<text name="finance_tcLegal" text="Legal fees"/>
+		<text name="tc_moneyType_training" text="Staff training"/>
+		<text name="finance_tcTraining" text="Staff training"/>
+		<text name="tc_moneyType_fines" text="Fines"/>
+		<text name="finance_tcFines" text="Fines"/>
 		<text name="tc_staff_viewRoster" text="Roster"/>
 		<text name="tc_staff_viewCandidates" text="Candidates"/>
 		<text name="tc_staff_columnName" text="Name"/>
@@ -252,7 +269,6 @@
 		<text name="tc_staff_hireConfirm" text="Hire %s for %s per month? The salary is charged at the start of every month while they're on your roster. The first month is paid now."/>
 		<text name="tc_staff_hireCannotAfford" text="You can't afford this candidate's first month of salary right now."/>
 		<text name="tc_staff_salaryBill" text="%s per month (%d workers)"/>
-		<text name="tc_staff_releaseConfirm" text="Release %s from your roster? This cannot be undone."/>
 		<text name="tc_staff_status_driving" text="Driving"/>
 		<text name="tc_staff_drivingLine" text="Driving %s"/>
 		<text name="tc_staff_releaseDriving" text="%s is out driving. Stop their vehicle before releasing them."/>
@@ -334,6 +350,7 @@
 		<text name="tc_supplies_onHold" text="%s on %s is on hold: %s."/>
 		<text name="tc_supplies_or" text=" or "/>
 		<text name="tc_allocation_blockedWarning" text="%s isn't certified on %s."/>
+		<text name="tc_allocation_notCertifiedWarning" text="%s doesn't hold a %s certificate. Book them on a course from the Staff tab."/>
 		<text name="tc_allocation_underqualifiedWarning" text="%s is under-qualified: %s %d, the job needs %d - expect a reduced reward and extra wear on the machines."/>
 		<text name="tc_overview_noticesHeading" text="Important"/>
 		<text name="tc_overview_noticesEmpty" text="Nothing to report."/>
@@ -345,6 +362,7 @@
 		<text name="tc_staff_detailRetiringNextMonth" text="Start of %s (next month)"/>
 		<text name="tc_staff_detailRetiringDue" text="As soon as they're back"/>
 		<text name="tc_staff_status_holiday" text="Holiday"/>
+		<text name="tc_staff_status_training" text="Training"/>
 		<text name="tc_staff_detailHolidayLeft" text="%d day(s) this year"/>
 		<text name="tc_staff_detailHolidayBooked" text="Booked: %s"/>
 		<text name="tc_staff_detailHolidayNow" text="On holiday now: %s"/>
@@ -365,6 +383,7 @@
 		<text name="tc_finances_status_overdue" text="Overdue"/>
 		<text name="tc_finances_status_writtenOff" text="Written off"/>
 		<text name="tc_finances_status_paid" text="Paid"/>
+		<text name="tc_finances_status_pursuing" text="Pursuing"/>
 		<text name="tc_finances_noInvoices" text="No unpaid invoices."/>
 		<text name="tc_finances_invoiceHeading" text="Invoice"/>
 		<text name="tc_finances_noInvoiceSelected" text="Completed jobs are invoiced here until the customer pays."/>
@@ -384,16 +403,181 @@
 		<text name="tc_finances_outstanding" text="Outstanding"/>
 		<text name="tc_finances_overdue" text="Overdue"/>
 		<text name="tc_finances_forecastThisMonth" text="%s (rest)"/>
-		<text name="tc_finances_forecastLine" text="Invoices %s, wages %s, net %s"/>
-		<text name="tc_finances_forecastNote" text="Forecast by due date. Overdue invoices aren't counted; wages are charged at the start of each month."/>
+		<text name="tc_finances_forecastLine" text="Invoices %s, wages %s, overheads %s, net %s"/>
+		<text name="tc_finances_forecastNote" text="Invoices by due date, overdue ones not counted. Wages and overheads are charged at the start of each month."/>
+		<text name="tc_finances_salaryBillWithPension" text="%s a month (incl. %s pension)"/>
 		<text name="tc_finances_yearHeading" text="This year so far (Year %d)"/>
 		<text name="tc_finances_invoiced" text="Invoiced"/>
 		<text name="tc_finances_received" text="Received"/>
 		<text name="tc_finances_writtenOff" text="Written off"/>
-		<text name="tc_finances_wages" text="Wages"/>
+		<text name="tc_finances_wages" text="Wages &amp; training"/>
+		<text name="tc_finances_overheads" text="Overheads"/>
+		<text name="tc_finances_claims" text="Claims, legal &amp; fines"/>
+		<text name="tc_finances_viewInvoices" text="Invoices"/>
+		<text name="tc_finances_viewOverheads" text="Overheads"/>
 		<text name="tc_finances_writeOffButton" text="Write off"/>
 		<text name="tc_finances_writeOffConfirm" text="Write off the invoice for %s (%s)? It will be treated as never paid."/>
 		<text name="tc_finances_paidNotification" text="Invoice paid: %s (%s)"/>
 		<text name="tc_finances_writtenOffNotice" text="Invoice for %s (%s) written off: the customer never paid."/>
+
+		<!-- Overheads (051) -->
+		<text name="tc_overhead_employersLiability" text="Employer's liability insurance"/>
+		<text name="tc_overhead_employersLiability_desc" text="Required by law once you employ anyone. Priced by headcount at each renewal: 400 a year plus 100 per employee."/>
+		<text name="tc_overheads_heading" text="Overhead"/>
+		<text name="tc_overheads_columnName" text="Overhead"/>
+		<text name="tc_overheads_columnStatus" text="Status"/>
+		<text name="tc_overheads_columnBilling" text="Billing"/>
+		<text name="tc_overheads_columnCost" text="Cost"/>
+		<text name="tc_overheads_columnNext" text="Next"/>
+		<text name="tc_overheads_status" text="Status"/>
+		<text name="tc_overheads_billing" text="Billing"/>
+		<text name="tc_overheads_price" text="Price"/>
+		<text name="tc_overheads_nextCharge" text="Next charge"/>
+		<text name="tc_overheads_about" text="About"/>
+		<text name="tc_overheads_status_active" text="Active"/>
+		<text name="tc_overheads_status_mandatory" text="Mandatory"/>
+		<text name="tc_overheads_status_cancelled" text="Cancelled"/>
+		<text name="tc_overheads_status_lapsing" text="Lapsing"/>
+		<text name="tc_overheads_status_notNeeded" text="Not needed"/>
+		<text name="tc_overheads_status_notTaken" text="Not taken"/>
+		<text name="tc_overheads_noteNotNeeded" text="Starts by itself once it's required"/>
+		<text name="tc_overheads_noteRenews" text="Renews %s"/>
+		<text name="tc_overheads_noteEnds" text="Cover ends at the start of %s"/>
+		<text name="tc_overheads_billing_annual" text="Annual"/>
+		<text name="tc_overheads_billing_monthly" text="Monthly"/>
+		<text name="tc_overheads_billingDetail_annual" text="Annual, paid up front (12% less than monthly)"/>
+		<text name="tc_overheads_billingDetail_monthly" text="Monthly"/>
+		<text name="tc_overheads_billingSwitching" text="%s, switching to %s at renewal"/>
+		<text name="tc_overheads_per_annual" text="%s/yr"/>
+		<text name="tc_overheads_per_monthly" text="%s/mo"/>
+		<text name="tc_overheads_priceThisTerm" text="%s a year this term"/>
+		<text name="tc_overheads_priceQuoted" text="%s, renewing at %s"/>
+		<text name="tc_overheads_priceQuote" text="%s a year paid annually, or %s a month"/>
+		<text name="tc_overheads_nextChargeLine" text="%s, %s"/>
+		<text name="tc_overheads_nextChargeNone" text="None"/>
+		<text name="tc_overheads_enableAnnualButton" text="Take out (annual)"/>
+		<text name="tc_overheads_enableMonthlyButton" text="Take out (monthly)"/>
+		<text name="tc_overheads_cancelButton" text="Cancel policy"/>
+		<text name="tc_overheads_keepButton" text="Keep policy"/>
+		<text name="tc_overheads_switchTo_annual" text="Pay annually from renewal"/>
+		<text name="tc_overheads_switchTo_monthly" text="Pay monthly from renewal"/>
+		<text name="tc_overheads_payAnnuallyButton" text="Pay annually"/>
+		<text name="tc_overheads_payMonthlyButton" text="Pay monthly"/>
+		<text name="tc_overheads_enableConfirm_annual" text="Take out %s? %s is charged now for the year."/>
+		<text name="tc_overheads_enableConfirm_monthly" text="Take out %s? %s is charged now and at the start of every month."/>
+		<text name="tc_overheads_cannotAfford" text="You can't afford %s right now: the first payment is %s."/>
+		<text name="tc_overheads_cancelConfirm" text="Cancel %s? There's no refund: cover carries on until the start of %s, then stops."/>
+		<text name="tc_overheads_startedNotice" text="%s taken out: the law requires it once you employ staff. %s a year, paid annually."/>
+		<text name="tc_overheads_renewalTitle" text="Renewal due: %s"/>
+		<text name="tc_overheads_renewalBody" text="Your %s renews in %s, Year %d. Next year's price is %s paid annually (12%% less), or %s a month. If you don't reply it renews as it is (%s). You can also cancel it."/>
+		<text name="tc_overheads_renewalBodyMandatory" text="Your %s renews in %s, Year %d. It's required by law while you employ staff. Next year's price is %s paid annually (12%% less), or %s a month. If you don't reply it renews as it is (%s)."/>
+		<text name="tc_overheads_renewalBodyLoaded" text="Your %s renews in %s, Year %d. Next year's price is %s paid annually (12%% less), or %s a month. That includes a claims loading of +%d%% for %d claim(s) in the last 3 years. If you don't reply it renews as it is (%s). You can also cancel it."/>
+		<text name="tc_overhead_publicLiability" text="Public liability insurance"/>
+		<text name="tc_overhead_publicLiability_desc" text="5m cover if a job damages a customer's crop or land. You pay the first 500 of each claim. 800 a year plus 60 per worker, plus 35% for each claim in the last 3 years."/>
+		<text name="tc_claims_title" text="Compensation claim: field %d"/>
+		<text name="tc_claims_bodyInsured" text="The owner of field %d says %s %s during the %s job, and is claiming %s for the damage. Your public liability insurance covers it, less the excess: %s has been charged. The claim goes on your record and will raise your premium for the next 3 years. Word gets around, too: your reputation has taken a knock."/>
+		<text name="tc_claims_bodyUninsured" text="The owner of field %d says %s %s during the %s job, and is claiming %s for the damage. You don't have public liability insurance, so the whole %s has been charged. Word gets around, too: your reputation has taken a knock."/>
+		<text name="tc_claims_noticeInsured" text="Compensation claim on field %d: %s excess paid by you, the rest by your insurer."/>
+		<text name="tc_claims_noticeUninsured" text="Compensation claim on field %d: %s paid in full, uninsured."/>
+		<text name="tc_claims_cause_ruts" text="left deep ruts across the field"/>
+		<text name="tc_claims_cause_compaction" text="worked the field too wet and compacted the soil"/>
+		<text name="tc_claims_cause_boundary" text="damaged the hedge and fence along the boundary"/>
+		<text name="tc_claims_cause_rate" text="applied the wrong rate"/>
+		<text name="tc_claims_cause_scorch" text="overlapped the passes and scorched the crop"/>
+		<text name="tc_claims_cause_drift" text="let the spray drift onto the neighbouring crop"/>
+		<text name="tc_claims_cause_cropDamage" text="went too close and tore out part of the crop"/>
+		<text name="tc_overhead_tradeAssociation" text="Agricultural Contractors' Association"/>
+		<text name="tc_overhead_tradeAssociation_desc" text="Trade association membership, 400 a year. Members earn 5% more reputation per job, get 25% off certification courses and cheaper legal cover."/>
+		<text name="tc_overhead_legalExpenses" text="Legal expenses insurance"/>
+		<text name="tc_overhead_legalExpenses_desc" text="Pursue overdue invoices at no cost, with a better chance of recovery. 350 a year, or 200 for association members (from the next renewal if you join mid-term)."/>
+		<text name="tc_legal_pursueButton" text="Pursue"/>
+		<text name="tc_legal_pursueConfirmCovered" text="Pursue the invoice for %s (%s)? Your legal cover handles it at no cost. Expect an outcome in 1-2 months."/>
+		<text name="tc_legal_pursueConfirmSolicitor" text="Instruct a solicitor to recover the invoice for %s (%s)? Their fee and the court fee come to %s, paid now and not refunded if it fails. Expect an outcome in 1-2 months."/>
+		<text name="tc_legal_cannotAfford" text="You can't afford a solicitor right now: the fee is %s. Legal expenses insurance would cover it."/>
+		<text name="tc_legal_pursuingCovered" text="Pursuing since %s (legal cover)"/>
+		<text name="tc_legal_pursuingSolicitor" text="Pursuing since %s (fee %s)"/>
+		<text name="tc_legal_unknownJob" text="completed"/>
+		<text name="tc_legal_recoveredTitle" text="Debt recovered: %s, field %s"/>
+		<text name="tc_legal_recoveredBody" text="The customer for the %s job on field %s has paid the overdue invoice in full: %s."/>
+		<text name="tc_legal_failedTitle" text="Debt not recovered: %s, field %s"/>
+		<text name="tc_legal_failedBodyCovered" text="Your legal cover couldn't recover the money for the %s job on field %s. The customer can't pay, so the %s invoice has been written off."/>
+		<text name="tc_legal_failedBodySolicitor" text="Your solicitor couldn't recover the money for the %s job on field %s. The customer can't pay, so the %s invoice has been written off, and the %s fee isn't refunded."/>
+		<text name="tc_legal_failedNotice" text="Pursuit failed: the invoice for %s (%s) has been written off."/>
+		<text name="tc_overhead_healthSafety" text="Health &amp; safety programme"/>
+		<text name="tc_overhead_healthSafety_desc" text="PPE, first aid kits, refresher training and risk assessments, 250 per worker a year. Staff fall sick less often and recover sooner. Without it, a worker falling sick can bring a workplace inspection and a fine."/>
+		<text name="tc_admin_title" text="Office administrator"/>
+		<text name="tc_admin_status_employed" text="Employed"/>
+		<text name="tc_admin_status_vacant" text="None"/>
+		<text name="tc_admin_noteEmployed" text="%s, since %s"/>
+		<text name="tc_admin_noteVacant" text="You do the paperwork yourself, in the evenings"/>
+		<text name="tc_admin_billingShort" text="Salary"/>
+		<text name="tc_admin_billing" text="Monthly salary, paid with the salary run"/>
+		<text name="tc_admin_price" text="%s a month, plus %s pension"/>
+		<text name="tc_admin_desc" text="Handles invoicing and credit control: customers pay sooner, and fewer pay late or not at all. Only invoices issued while employed."/>
+		<text name="tc_admin_hireButton" text="Hire administrator"/>
+		<text name="tc_admin_releaseButton" text="Release administrator"/>
+		<text name="tc_admin_hireConfirm" text="Hire an office administrator for %s a month, plus pension? The first month is paid now. Customers will pay sooner, and fewer will pay late or not at all."/>
+		<text name="tc_admin_cannotAfford" text="You can't afford an office administrator right now: the first month's salary is %s."/>
+		<text name="tc_admin_releaseConfirmNotice" text="Release %s, your office administrator? After %d full year(s) of service, you'll pay them %s in lieu of %s week(s)' notice. This cannot be undone."/>
+		<text name="tc_admin_releaseConfirmRedundancy" text="Release %s, your office administrator? After %d full years of service, you'll pay them %s: %s in lieu of %s weeks' notice and %s redundancy pay. This cannot be undone."/>
+		<text name="tc_admin_hiredNotification" text="%s has started as your office administrator"/>
+		<text name="tc_admin_releasedNotification" text="%s, your office administrator, has left"/>
+		<text name="tc_healthSafety_chipActive" text="H&amp;S programme"/>
+		<text name="tc_healthSafety_chipInactive" text="No H&amp;S programme"/>
+		<text name="tc_healthSafety_inspectionNotice" text="Workplace inspection after %s fell sick: no health and safety programme in place. Fined %s, and your reputation has taken a knock."/>
+		<text name="tc_cert_spraying" text="spraying"/>
+		<text name="tc_training_chipCertified" text="%s certified"/>
+		<text name="tc_training_chipInTraining" text="In training"/>
+		<text name="tc_training_chipNotCertified" text="Not certified"/>
+		<text name="tc_training_noteCourse" text="Course %s, assessment %s"/>
+		<text name="tc_training_noteAssessment" text="Retake assessment %s"/>
+		<text name="tc_training_noteNotReady" text="Not ready to train: needs %s %d (has %d)"/>
+		<text name="tc_training_noteReady" text="Ready to train: course %s"/>
+		<text name="tc_training_noteRetake" text="Failed the assessment: retake %s"/>
+		<text name="tc_training_bookCourseButton" text="Book spraying course"/>
+		<text name="tc_training_bookRetakeButton" text="Book retake"/>
+		<text name="tc_training_bookItButton" text="Book it"/>
+		<text name="tc_training_notNowButton" text="Not now"/>
+		<text name="tc_training_confirmCourse" text="Book %s on a %s course for %s? Training is on %s, with the assessment %d-%d days after. They can't take jobs on those days. If they're out on a job when it's due, it moves back."/>
+		<text name="tc_training_confirmRetake" text="Book %s a retake of the %s assessment for %s? The assessment is on %s. They can't take jobs that day. If they're out on a job when it's due, it moves back."/>
+		<text name="tc_training_cannotAfford" text="You can't afford %s's %s course right now: it costs %s."/>
+		<text name="tc_training_cannotAffordNotice" text="Couldn't book %s's %s course: you can't afford %s."/>
+		<text name="tc_training_booked" text="%s is booked on a %s course: training %s, assessment %s"/>
+		<text name="tc_training_bookedRetake" text="%s is booked for a %s assessment retake on %s"/>
+		<text name="tc_training_started" text="%s is away on their %s course"/>
+		<text name="tc_training_assessmentStarted" text="%s is sitting their %s assessment today"/>
+		<text name="tc_training_courseDone" text="%s is back from their %s course. Assessment: %s"/>
+		<text name="tc_training_passed" text="%s passed and now holds a %s certificate"/>
+		<text name="tc_training_failed" text="%s failed their %s assessment"/>
+		<text name="tc_training_requestTitle" text="Training request: %s"/>
+		<text name="tc_training_requestBody" text="%s would like to take their %s certificate, so they can do herbicide work. The course costs %s, and they'd be away for %d days of training plus an assessment day a few days later."/>
+		<text name="tc_training_requestBodyRetake" text="%s would like another go at their %s assessment. A retake costs %s and takes one day."/>
+		<text name="tc_training_failedTitle" text="Assessment failed: %s"/>
+		<text name="tc_training_failedBody" text="%s didn't pass their %s assessment. They've done the course, so they only need to retake the assessment: one day, costing %s. You can book it now or later from the Staff tab."/>
+		<!-- 056: staff morale, bonuses, quitting and the cost of letting staff go -->
+		<text name="tc_morale_band_happy" text="Happy"/>
+		<text name="tc_morale_band_content" text="Content"/>
+		<text name="tc_morale_band_unsettled" text="Unsettled"/>
+		<text name="tc_morale_band_unhappy" text="Unhappy"/>
+		<text name="tc_inbox_chipStaff" text="Staff"/>
+		<text name="tc_morale_harvestTitle" text="Harvest bonus"/>
+		<text name="tc_morale_harvestBody" text="Harvest is nearly here, and your staff are asking whether there'll be a bonus this year. A small bonus is %s each and a generous one %s each. With %d staff on the roster, that's %s or %s in total. Saying no, or not answering, will go down badly."/>
+		<text name="tc_morale_harvestSmallButton" text="Small bonus"/>
+		<text name="tc_morale_harvestGenerousButton" text="Generous bonus"/>
+		<text name="tc_morale_harvestNoneButton" text="No bonus"/>
+		<text name="tc_morale_harvestBonusNotice" text="Your staff are pleased with their %s harvest bonus"/>
+		<text name="tc_morale_noHarvestBonusNotice" text="Your staff are disappointed there's no harvest bonus this year"/>
+		<text name="tc_morale_bonusButton" text="Give bonus"/>
+		<text name="tc_morale_bonusTitle" text="Give a bonus"/>
+		<text name="tc_morale_bonusPrompt" text="Give %s a one-off bonus? It's paid now, with their wages, and lifts their morale."/>
+		<text name="tc_morale_bonusCannotAfford" text="You can't afford a %s bonus for %s."/>
+		<text name="tc_morale_bonusNotice" text="%s is pleased with their %s bonus"/>
+		<text name="tc_morale_quitNotice" text="%s has quit and leaves at the start of %s."/>
+		<text name="tc_morale_quitAnnounced" text="%s is unhappy and has handed in their notice. They leave at the start of %s"/>
+		<text name="tc_morale_quitLeft" text="%s has left your roster"/>
+		<text name="tc_staff_releaseConfirmNotice" text="Release %s from your roster? After %d full year(s) of service, you'll pay them %s in lieu of %s week(s)' notice. The rest of your staff won't like it. This cannot be undone."/>
+		<text name="tc_staff_releaseConfirmRedundancy" text="Release %s from your roster? After %d full years of service, you'll pay them %s: %s in lieu of %s weeks' notice and %s redundancy pay. The rest of your staff won't like it. This cannot be undone."/>
+		<text name="tc_staff_releaseConfirmLeaving" text="Release %s now? They're already leaving, so you'll only pay %s for the %s week(s)' notice they have left. The rest of your staff won't like it. This cannot be undone."/>
+		<text name="tc_staff_releaseConfirmLeavingNow" text="Release %s now? They're leaving as soon as they're back, so there's nothing more to pay. The rest of your staff won't like it. This cannot be undone."/>
 	</texts>
 </l10n>

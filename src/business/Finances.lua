@@ -14,7 +14,20 @@
 -- An overdue invoice could be a late payer or a bad debt - the player
 -- can't tell which. One overdue for WRITE_OFF_AFTER_PERIODS is written off
 -- automatically, with an Overview notice; the player can write one off
--- sooner from the Finances tab. Recovering a debt is 053's.
+-- sooner from the Finances tab.
+--
+-- 053: or pursue it (requestPursuit) - free with legal cover, a solicitor's
+-- fee without (see TheContractorAssociation). The invoice goes to
+-- `pursuing` and isn't written off automatically. PURSUIT_MIN-MAX_PERIODS
+-- later it resolves: a late payer always pays, a bad debt pays with
+-- RECOVERY_CHANCE_COVERED/_SOLICITOR, otherwise it's written off. A late
+-- payer whose own payment day comes first just pays then. Public pursuit
+-- fields: pursuitStartDay, pursuitFee (0 under legal cover); the day it
+-- resolves, pursuitResolveDay, stays on the server like paymentDay.
+--
+-- 057: an office administrator (TheContractorAdministrator) swaps in
+-- shorter delays and lower bad-debt and late-payer chances for the
+-- invoices issued while they're employed.
 --
 -- With the lateInvoices setting off, invoiceJob pays on the spot (the
 -- pre-049 behaviour) and no invoice is kept. Invoices already issued still
@@ -28,11 +41,13 @@ TheContractorFinances.STATUS = {
     PAID = "paid",
     OVERDUE = "overdue",
     WRITTEN_OFF = "writtenOff",
+    PURSUING = "pursuing",
 }
 
 -- Payment delay in whole periods, weighted toward shorter ones. A random
 -- day within the period goes on top, so payments don't all land on a
--- period boundary.
+-- period boundary. These and the two chances below are the numbers without
+-- an office administrator (057).
 TheContractorFinances.DELAY_WEIGHTS = {
     { periods = 0, weight = 35 },
     { periods = 1, weight = 35 },
@@ -52,6 +67,13 @@ TheContractorFinances.WRITE_OFF_AFTER_PERIODS = 6
 -- How long the write-off notice stays on the Overview board.
 TheContractorFinances.WRITE_OFF_NOTICE_MONTHS = 3
 
+-- Pursuing an overdue invoice (053): how long it takes, and how likely a
+-- bad debt is to pay up in the end, with legal cover or a solicitor.
+TheContractorFinances.PURSUIT_MIN_PERIODS = 1
+TheContractorFinances.PURSUIT_MAX_PERIODS = 2
+TheContractorFinances.RECOVERY_CHANCE_COVERED = 0.8
+TheContractorFinances.RECOVERY_CHANCE_SOLICITOR = 0.65
+
 -- Settled (paid/written off) invoices are dropped from the save once
 -- they're this many periods old - nothing reads them after that.
 TheContractorFinances.KEEP_SETTLED_PERIODS = 12
@@ -59,7 +81,8 @@ TheContractorFinances.KEEP_SETTLED_PERIODS = 12
 -- The forecast covers this month and the next FORECAST_PERIODS - 1.
 TheContractorFinances.FORECAST_PERIODS = 3
 
-TheContractorFinances.YEAR_STAT_KEYS = { "invoiced", "received", "writtenOff", "wages" }
+TheContractorFinances.YEAR_STAT_KEYS = { "invoiced", "received", "writtenOff", "wages", "overheads", "claims",
+    "legal", "training", "fines" }
 
 function TheContractorFinances.new()
     local self = {}
@@ -69,7 +92,8 @@ function TheContractorFinances.new()
     self.invoicesById = {}
     self.nextInvoiceId = 1
 
-    -- yearStatsByFarm[farmId] = { year, invoiced, received, writtenOff, wages }
+    -- yearStatsByFarm[farmId] = { year, invoiced, received, writtenOff, wages,
+    -- overheads, claims, legal, training, fines }
     self.yearStatsByFarm = {}
 
     return self
@@ -114,24 +138,33 @@ end
 function TheContractorFinances:getYearStats(farmId)
     local stats = self.yearStatsByFarm[farmId]
     if stats == nil or stats.year ~= g_currentMission.environment.currentYear then
-        return { year = g_currentMission.environment.currentYear, invoiced = 0, received = 0, writtenOff = 0, wages = 0 }
+        return { year = g_currentMission.environment.currentYear, invoiced = 0, received = 0, writtenOff = 0, wages = 0,
+            overheads = 0, claims = 0, legal = 0, training = 0, fines = 0 }
     end
     return stats
 end
 
--- Cash-flow forecast: { periodIndex, income, wages } for this month and
--- the next FORECAST_PERIODS - 1. income is what outstanding invoices are
--- due to bring in that month, by their due day - overdue ones aren't
--- counted, since nobody knows if they'll pay. wages is the current salary
--- bill, charged at the start of each month, so this month's (already paid)
--- is 0.
+-- Cash-flow forecast: { periodIndex, income, wages, overheads } for this
+-- month and the next FORECAST_PERIODS - 1. income is what outstanding
+-- invoices are due to bring in that month, by their due day - overdue ones
+-- aren't counted, since nobody knows if they'll pay. wages is the current
+-- salary bill plus pension (051), charged at the start of each month, so
+-- this month's (already paid) is 0. overheads (051) are the policy charges
+-- falling in that month, also charged at its start.
 function TheContractorFinances:getForecast(farmId)
+    local tc = g_currentMission.TheContractor
     local firstIndex = TCCalendar.getPeriodIndex()
-    local salary = g_currentMission.TheContractor.Staff:getTotalSalary(farmId)
+    local wageBill = tc.Staff:getWageBill(farmId)
 
     local rows = {}
     for i = 1, TheContractorFinances.FORECAST_PERIODS do
-        table.insert(rows, { periodIndex = firstIndex + i - 1, income = 0, wages = i > 1 and salary or 0 })
+        local periodIndex = firstIndex + i - 1
+        table.insert(rows, {
+            periodIndex = periodIndex,
+            income = 0,
+            wages = i > 1 and wageBill or 0,
+            overheads = i > 1 and tc.Overheads:getForecastForPeriod(farmId, periodIndex) or 0,
+        })
     end
 
     for _, invoice in pairs(self.invoicesById) do
@@ -148,19 +181,19 @@ end
 
 -- Invoicing (server-only) -------------------------------------------------
 
-local function rollDelayPeriods()
+local function rollDelayPeriods(weights)
     local totalWeight = 0
-    for _, entry in ipairs(TheContractorFinances.DELAY_WEIGHTS) do
+    for _, entry in ipairs(weights) do
         totalWeight = totalWeight + entry.weight
     end
     local roll = math.random() * totalWeight
-    for _, entry in ipairs(TheContractorFinances.DELAY_WEIGHTS) do
+    for _, entry in ipairs(weights) do
         roll = roll - entry.weight
         if roll < 0 then
             return entry.periods
         end
     end
-    return TheContractorFinances.DELAY_WEIGHTS[#TheContractorFinances.DELAY_WEIGHTS].periods
+    return weights[#weights].periods
 end
 
 -- Called from TheContractorJobs:completeJob with job.paymentAmount set.
@@ -183,13 +216,16 @@ function TheContractorFinances:invoiceJob(job)
     local environment = g_currentMission.environment
     local today = environment.currentMonotonicDay
     local daysPerPeriod = environment.daysPerPeriod
+    -- 057: credit control, if they employ an office administrator.
+    local administrator = g_currentMission.TheContractor.Administrator
 
     -- At least a day, so even a prompt payer pays on a later day tick.
-    local delayDays = math.max(1, rollDelayPeriods() * daysPerPeriod + math.random(0, daysPerPeriod - 1))
+    local delayDays = math.max(1, rollDelayPeriods(administrator:getDelayWeights(job.farmId)) * daysPerPeriod +
+        math.random(0, daysPerPeriod - 1))
     local dueDay = today + delayDays
 
-    local isBadDebt = math.random() < TheContractorFinances.BAD_DEBT_CHANCE
-    local isLate = not isBadDebt and math.random() < TheContractorFinances.LATE_PAYER_CHANCE
+    local isBadDebt = math.random() < administrator:getBadDebtChance(job.farmId)
+    local isLate = not isBadDebt and math.random() < administrator:getLatePayerChance(job.farmId)
     local paymentDay = nil
     if isLate then
         paymentDay = dueDay + math.random(TheContractorFinances.LATE_MIN_PERIODS * daysPerPeriod,
@@ -237,17 +273,19 @@ function TheContractorFinances:setInvoiceStatus(invoice, status)
         settledDay = g_currentMission.environment.currentMonotonicDay
     end
 
-    self:applyInvoiceStatus(invoice.id, status, settledDay)
+    self:applyInvoiceStatus(invoice.id, status, settledDay, invoice.pursuitStartDay, invoice.pursuitFee)
 
     if g_server ~= nil then
-        g_server:broadcastEvent(TCInvoiceStatusChangedEvent.new(invoice.id, status, settledDay))
+        g_server:broadcastEvent(TCInvoiceStatusChangedEvent.new(invoice.id, status, settledDay,
+            invoice.pursuitStartDay, invoice.pursuitFee))
     end
 end
 
 -- The actual status change, run on whichever machine (server, or a client
 -- receiving TCInvoiceStatusChangedEvent) is applying it. Tells the farm's
--- player when one's paid.
-function TheContractorFinances:applyInvoiceStatus(invoiceId, status, settledDay)
+-- player when one's paid. pursuitStartDay/pursuitFee (053) are nil for an
+-- invoice that was never pursued.
+function TheContractorFinances:applyInvoiceStatus(invoiceId, status, settledDay, pursuitStartDay, pursuitFee)
     local invoice = self.invoicesById[invoiceId]
     if invoice == nil then
         return
@@ -255,6 +293,8 @@ function TheContractorFinances:applyInvoiceStatus(invoiceId, status, settledDay)
 
     invoice.status = status
     invoice.settledDay = settledDay
+    invoice.pursuitStartDay = pursuitStartDay
+    invoice.pursuitFee = pursuitFee
 
     if status == TheContractorFinances.STATUS.PAID and g_client ~= nil and
         g_currentMission:getFarmId() == invoice.farmId then
@@ -276,10 +316,19 @@ function TheContractorFinances:getInvoiceTitle(invoice)
 end
 
 function TheContractorFinances:payInvoice(invoice)
+    local wasPursued = invoice.status == TheContractorFinances.STATUS.PURSUING
+
     g_currentMission:addMoney(invoice.amount, invoice.farmId, MoneyType.TC_JOB_PAYOUT, true, true)
     self:addToYearStats(invoice.farmId, "received", invoice.amount)
     self:setInvoiceStatus(invoice, TheContractorFinances.STATUS.PAID)
     Logging.info("TheContractor: farm %d invoice %d paid (%.0f)", invoice.farmId, invoice.id, invoice.amount)
+
+    -- 053: whether the pursuit did it or they'd have paid anyway, it's over.
+    if wasPursued then
+        g_currentMission.TheContractor.Inbox:postMessage(invoice.farmId, TheContractorAssociation.MESSAGE_KIND,
+            "tc_legal_recoveredTitle", "tc_legal_recoveredBody", self:getPursuitMessageArgs(invoice), nil,
+            { invoiceId = invoice.id })
+    end
 end
 
 -- Server-only. isAutomatic: written off by the daily tick rather than by
@@ -314,6 +363,83 @@ function TheContractorFinances:requestWriteOff(farmId, invoiceId)
     self:writeOffInvoice(invoice, false)
 end
 
+-- Pursuing overdue invoices (053, server-only) ------------------------------
+
+-- Server side of TCPursueInvoiceEvent: the farm's own overdue invoice, and
+-- the solicitor's fee has to be affordable (nothing to pay with legal cover).
+function TheContractorFinances:requestPursuit(farmId, invoiceId)
+    if not g_currentMission:getIsServer() then
+        return
+    end
+
+    local tc = g_currentMission.TheContractor
+    local invoice = self.invoicesById[invoiceId]
+    if invoice == nil or invoice.farmId ~= farmId or invoice.status ~= TheContractorFinances.STATUS.OVERDUE or
+        not tc.Company:hasCompany(farmId) then
+        return
+    end
+
+    local fee = tc.Association:getPursuitFee(farmId, invoice)
+    local farm = g_farmManager:getFarmById(farmId)
+    if farm == nil or farm:getBalance() < fee then
+        return
+    end
+
+    if fee > 0 then
+        g_currentMission:addMoney(-fee, farmId, MoneyType.TC_LEGAL, true, true)
+        self:addToYearStats(farmId, "legal", fee)
+    end
+
+    local environment = g_currentMission.environment
+    local today = environment.currentMonotonicDay
+    invoice.pursuitStartDay = today
+    invoice.pursuitFee = fee
+    invoice.pursuitResolveDay = today + math.random(TheContractorFinances.PURSUIT_MIN_PERIODS * environment.daysPerPeriod,
+        TheContractorFinances.PURSUIT_MAX_PERIODS * environment.daysPerPeriod)
+    self:setInvoiceStatus(invoice, TheContractorFinances.STATUS.PURSUING)
+
+    Logging.info("TheContractor: farm %d pursuing invoice %d (%s, fee %.0f), resolves day %d", farmId, invoice.id,
+        fee == 0 and "legal cover" or "solicitor", fee, invoice.pursuitResolveDay)
+end
+
+-- Inbox args for a pursuit's outcome: job type, field, amount, fee.
+function TheContractorFinances:getPursuitMessageArgs(invoice)
+    local job = g_currentMission.TheContractor.Jobs:getJob(invoice.farmId, invoice.jobId)
+    return {
+        job ~= nil and ("$l10n_tc_jobType_" .. job.jobType) or "$l10n_tc_legal_unknownJob",
+        job ~= nil and tostring(job.fieldId) or "?",
+        "$money_" .. invoice.amount,
+        "$money_" .. (invoice.pursuitFee or 0),
+    }
+end
+
+-- Its resolve day has come: a late payer pays, a bad debt rolls - paid, or
+-- written off with a message and a notice.
+function TheContractorFinances:resolvePursuit(invoice)
+    local isCovered = (invoice.pursuitFee or 0) == 0
+    local chance = isCovered and TheContractorFinances.RECOVERY_CHANCE_COVERED or
+        TheContractorFinances.RECOVERY_CHANCE_SOLICITOR
+    local roll = math.random()
+
+    Logging.info("TheContractor: farm %d invoice %d pursuit resolved: %s", invoice.farmId, invoice.id,
+        invoice.isBadDebt and string.format("bad debt, roll %.3f vs %.2f", roll, chance) or "late payer, pays")
+
+    if not invoice.isBadDebt or roll < chance then
+        self:payInvoice(invoice)
+        return
+    end
+
+    self:writeOffInvoice(invoice, false)
+
+    local tc = g_currentMission.TheContractor
+    tc.Inbox:postMessage(invoice.farmId, TheContractorAssociation.MESSAGE_KIND, "tc_legal_failedTitle",
+        isCovered and "tc_legal_failedBodyCovered" or "tc_legal_failedBodySolicitor",
+        self:getPursuitMessageArgs(invoice), nil, { invoiceId = invoice.id })
+    tc.Notices:publish(invoice.farmId, string.format(g_i18n:getText("tc_legal_failedNotice"),
+        self:getInvoiceTitle(invoice), g_i18n:formatMoney(invoice.amount, 0, true, true)),
+        TheContractorFinances.WRITE_OFF_NOTICE_MONTHS)
+end
+
 -- Daily tick (server-only) --------------------------------------------------
 
 function TheContractorFinances:startDailyTick()
@@ -328,8 +454,9 @@ function TheContractorFinances:stopDailyTick()
     g_messageCenter:unsubscribe(MessageType.DAY_CHANGED, self)
 end
 
--- Pays whatever's due, then marks the unpaid ones overdue, then writes off
--- the ones that have been overdue too long.
+-- Pays whatever's due, then marks the unpaid ones overdue, then resolves
+-- pursuits (053) and writes off the ones that have been overdue too long
+-- (never one being pursued).
 function TheContractorFinances:onDayChanged()
     local environment = g_currentMission.environment
     local today = environment.currentMonotonicDay
@@ -345,12 +472,16 @@ function TheContractorFinances:onDayChanged()
 
     for _, invoice in ipairs(invoices) do
         local isUnpaid = invoice.status == TheContractorFinances.STATUS.OUTSTANDING or
-            invoice.status == TheContractorFinances.STATUS.OVERDUE
+            invoice.status == TheContractorFinances.STATUS.OVERDUE or
+            invoice.status == TheContractorFinances.STATUS.PURSUING
 
         if isUnpaid and invoice.paymentDay ~= nil and invoice.paymentDay <= today then
             self:payInvoice(invoice)
         elseif invoice.status == TheContractorFinances.STATUS.OUTSTANDING and invoice.dueDay <= today then
             self:setInvoiceStatus(invoice, TheContractorFinances.STATUS.OVERDUE)
+        elseif invoice.status == TheContractorFinances.STATUS.PURSUING and
+            (invoice.pursuitResolveDay == nil or invoice.pursuitResolveDay <= today) then
+            self:resolvePursuit(invoice)
         elseif invoice.status == TheContractorFinances.STATUS.OVERDUE and today - invoice.dueDay >= writeOffDays then
             self:writeOffInvoice(invoice, true)
         end
@@ -379,15 +510,35 @@ function TheContractorFinances:applyYearStats(farmId, stats)
     self.yearStatsByFarm[farmId] = stats
 end
 
--- Staff's wage charges (036) - per-period salaries and a new hire's first
--- period.
+-- Staff's wage charges (036) - per-period salaries (with pension, 051) and
+-- a new hire's first period.
 function TheContractorFinances:recordWages(farmId, amount)
     self:addToYearStats(farmId, "wages", amount)
 end
 
+-- Overhead charges (051).
+function TheContractorFinances:recordOverheads(farmId, amount)
+    self:addToYearStats(farmId, "overheads", amount)
+end
+
+-- Compensation claims paid (052): the excess, or the lot if uninsured.
+function TheContractorFinances:recordClaims(farmId, amount)
+    self:addToYearStats(farmId, "claims", amount)
+end
+
+-- Certification courses and retakes (054).
+function TheContractorFinances:recordTraining(farmId, amount)
+    self:addToYearStats(farmId, "training", amount)
+end
+
+-- Health and safety inspection fines (055).
+function TheContractorFinances:recordFines(farmId, amount)
+    self:addToYearStats(farmId, "fines", amount)
+end
+
 -- Wire serialization ---------------------------------------------------------
--- Public fields only - paymentDay/isBadDebt/isLate stay on the server.
--- settledDay -1 = not settled.
+-- Public fields only - paymentDay/isBadDebt/isLate/pursuitResolveDay stay
+-- on the server. settledDay/pursuitStartDay -1 = not settled/not pursued.
 
 function TheContractorFinances.writeInvoice(streamId, invoice)
     streamWriteInt32(streamId, invoice.id)
@@ -398,6 +549,8 @@ function TheContractorFinances.writeInvoice(streamId, invoice)
     streamWriteInt32(streamId, invoice.dueDay)
     streamWriteString(streamId, invoice.status)
     streamWriteInt32(streamId, invoice.settledDay or -1)
+    streamWriteInt32(streamId, invoice.pursuitStartDay or -1)
+    streamWriteFloat32(streamId, invoice.pursuitFee or 0)
 end
 
 function TheContractorFinances.readInvoice(streamId)
@@ -410,9 +563,15 @@ function TheContractorFinances.readInvoice(streamId)
         dueDay = streamReadInt32(streamId),
         status = streamReadString(streamId),
         settledDay = streamReadInt32(streamId),
+        pursuitStartDay = streamReadInt32(streamId),
+        pursuitFee = streamReadFloat32(streamId),
     }
     if invoice.settledDay < 0 then
         invoice.settledDay = nil
+    end
+    if invoice.pursuitStartDay < 0 then
+        invoice.pursuitStartDay = nil
+        invoice.pursuitFee = nil
     end
     return invoice
 end
@@ -462,6 +621,9 @@ function TheContractorFinances:loadFromXMLFile(xmlFile)
             paymentDay = getXMLInt(xmlFile, key .. "#paymentDay"),
             isBadDebt = Utils.getNoNil(getXMLBool(xmlFile, key .. "#isBadDebt"), false),
             isLate = Utils.getNoNil(getXMLBool(xmlFile, key .. "#isLate"), false),
+            pursuitStartDay = getXMLInt(xmlFile, key .. "#pursuitStartDay"),
+            pursuitFee = getXMLFloat(xmlFile, key .. "#pursuitFee"),
+            pursuitResolveDay = getXMLInt(xmlFile, key .. "#pursuitResolveDay"),
         })
 
         index = index + 1
@@ -516,6 +678,13 @@ function TheContractorFinances:saveToXmlFile(xmlFile)
             end
             setXMLBool(xmlFile, key .. "#isBadDebt", invoice.isBadDebt)
             setXMLBool(xmlFile, key .. "#isLate", invoice.isLate)
+            if invoice.pursuitStartDay ~= nil then
+                setXMLInt(xmlFile, key .. "#pursuitStartDay", invoice.pursuitStartDay)
+                setXMLFloat(xmlFile, key .. "#pursuitFee", invoice.pursuitFee or 0)
+            end
+            if invoice.pursuitResolveDay ~= nil then
+                setXMLInt(xmlFile, key .. "#pursuitResolveDay", invoice.pursuitResolveDay)
+            end
             index = index + 1
         end
     end
@@ -566,4 +735,36 @@ function TheContractorFinances:readInitialClientState(streamId, connection)
         local farmId = streamReadInt32(streamId)
         self:applyYearStats(farmId, TheContractorFinances.readYearStats(streamId))
     end
+end
+
+-- Console commands (tcFinance - see TCConsole) -----------------------------------------
+
+function TheContractorFinances.registerConsoleCommands()
+    -- Server-only, since it shows what clients never get: when (or whether)
+    -- each invoice will really be paid.
+    TCConsole.register("finance", "invoices", {
+        description = "Your invoices, with the hidden late/bad-debt rolls and pursuit details",
+        run = function(farmId, args)
+            local lines = { string.format("Farm %d invoices (today is day %d):", farmId,
+                g_currentMission.environment.currentMonotonicDay) }
+            for _, invoice in pairs(g_currentMission.TheContractor.Finances.invoicesById) do
+                if invoice.farmId == farmId then
+                    local outcome = "pays on time"
+                    if invoice.isBadDebt then
+                        outcome = "bad debt, never pays"
+                    elseif invoice.isLate then
+                        outcome = string.format("late, pays day %d", invoice.paymentDay)
+                    end
+                    if invoice.status == TheContractorFinances.STATUS.PURSUING then
+                        outcome = string.format("%s; pursued since day %d (%s), resolves day %d", outcome,
+                            invoice.pursuitStartDay or -1, (invoice.pursuitFee or 0) == 0 and "legal cover" or
+                            string.format("solicitor, fee %.0f", invoice.pursuitFee), invoice.pursuitResolveDay or -1)
+                    end
+                    table.insert(lines, string.format("#%d job %d: %.0f, issued day %d, due day %d, %s (%s)", invoice.id,
+                        invoice.jobId, invoice.amount, invoice.issuedDay, invoice.dueDay, invoice.status, outcome))
+                end
+            end
+            return table.concat(lines, "\n")
+        end,
+    })
 end

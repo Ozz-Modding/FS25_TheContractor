@@ -233,8 +233,29 @@ function TheContractorAllocation:getWeakestRatingFor(worker, job, equipmentIds, 
     return rating or TheContractorWorker.MAX_SKILL
 end
 
+-- 054: the certificate the worker's part of the job needs, or nil - the
+-- job type's own (herbicide's "spraying"). A hauler (035) carts the crop,
+-- so needs none.
+function TheContractorAllocation.getRequiredCertification(job, isHauler)
+    if isHauler then
+        return nil
+    end
+    local jobDef = TheContractorJobGeneration.JOB_TYPES[job.jobType]
+    return jobDef ~= nil and jobDef.certification or nil
+end
+
+-- 054: the certificate this worker lacks for their part of the job, or nil.
+function TheContractorAllocation.getMissingCertification(worker, job, isHauler)
+    local cert = TheContractorAllocation.getRequiredCertification(job, isHauler)
+    if cert ~= nil and not worker:hasCertification(cert) then
+        return cert
+    end
+    return nil
+end
+
 -- Worker capability check (016 vs. 018's design decision): a worker with no
--- rating at all for the equipment's tractor tier is blocked outright; a
+-- rating at all for the equipment's tractor tier is blocked outright, as is
+-- one without a certificate the job needs (054); a
 -- worker whose tractor rating or operation skill (044) falls short of the
 -- job's requiredSkillLevel is merely warned about (still allowed — reduced
 -- reputation reward is 022's concern, extra wear 045's, not enforced
@@ -243,6 +264,10 @@ end
 function TheContractorAllocation:previewWorkerCapability(worker, job, equipmentIds, isHauler)
     if worker == nil then
         return TheContractorAllocation.CAPABILITY.OK
+    end
+
+    if TheContractorAllocation.getMissingCertification(worker, job, isHauler) ~= nil then
+        return TheContractorAllocation.CAPABILITY.BLOCKED
     end
 
     local ratings = self:getWorkerJobRatings(worker, job, equipmentIds, isHauler)

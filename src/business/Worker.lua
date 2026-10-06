@@ -29,6 +29,8 @@ TheContractorWorker.STATUS = {
     DRIVING = "driving",
     -- 040: on a booked holiday - can't be allocated until they're back.
     HOLIDAY = "holiday",
+    -- 054: on a training course or sitting its assessment (Training.lua).
+    TRAINING = "training",
 }
 
 TheContractorWorker.TIERS = { "small", "medium", "large" }
@@ -50,6 +52,9 @@ TheContractorWorker.MAX_SKILL = 10
 -- before it's back in the yard and how quickly. See TCJobConsequences.
 TheContractorWorker.MIN_CLEANLINESS = 1
 TheContractorWorker.MAX_CLEANLINESS = 10
+
+-- 056: morale on hire (and for a worker from a save made before 056).
+TheContractorWorker.MORALE_START = 70
 
 TheContractorWorker.MIN_WORK_SPEED = 1
 TheContractorWorker.MAX_WORK_SPEED = 10
@@ -124,12 +129,26 @@ function TheContractorWorker.new(id, farmId, name, workSpeed, tierCapability, sa
     -- otherwise.
     self.drivingVehicleId = nil
 
-    -- 039: the TCCalendar period index they retire at the start of, once
-    -- they've handed in their notice - nil otherwise. Visible, so it's sent
-    -- to clients. retirementNoticeId is the Overview notice (038) announcing
+    -- 039: the TCCalendar period index they leave at the start of, once
+    -- they've handed in their notice - nil otherwise. That's retiring, or
+    -- (056) quitting when isQuitting is set. Both visible, so they're sent
+    -- to clients. leavingNoticeId is the Overview notice (038) announcing
     -- it, taken down when they leave - server-only.
-    self.retiresAtPeriod = nil
-    self.retirementNoticeId = nil
+    self.leavesAtPeriod = nil
+    self.isQuitting = false
+    self.leavingNoticeId = nil
+
+    -- 056: morale, 0-100 (see Morale.lua), set to MORALE_START when they're
+    -- hired, and the TCCalendar period index they were hired in (for notice
+    -- and redundancy pay). Both visible, so they're sent to clients - nil
+    -- hiredPeriod is a pool candidate, or a worker from a save made before
+    -- 056 until the next day change fills it in. busyDays/idleDays count
+    -- this month's days out on work and sat idle, for the monthly morale
+    -- drift - server-only.
+    self.morale = TheContractorWorker.MORALE_START
+    self.hiredPeriod = nil
+    self.busyDays = 0
+    self.idleDays = 0
 
     -- 040: holiday allowance left this year, as a fraction of a period (1 =
     -- a whole month, i.e. daysPerPeriod days - see Holidays.lua), and the
@@ -152,7 +171,48 @@ function TheContractorWorker.new(id, farmId, name, workSpeed, tierCapability, sa
     self.appearance = nil
     self.playerStyle = nil
 
+    -- 054: certificates held, a set ({ spraying = true }) - see Training.lua.
+    -- The one booked course, if any: trainingCert is what it's for,
+    -- courseDaysLeft the course days still to attend (0 for a retake, which
+    -- is just the assessment), trainingDay the next course day and
+    -- assessmentDay the assessment (monotonic days). retakeCerts is the set
+    -- of certificates whose course they've done but whose assessment they
+    -- failed, so the next booking is a cheaper retake. declinedRequests is
+    -- how many of their training requests the player turned down or let
+    -- expire (for 056's morale). All visible, so they're sent to clients.
+    -- forcedAssessmentResult ("pass"/"fail", tcWorker train) is server-only
+    -- and never saved.
+    self.certifications = {}
+    self.trainingCert = nil
+    self.courseDaysLeft = 0
+    self.trainingDay = nil
+    self.assessmentDay = nil
+    self.retakeCerts = {}
+    self.declinedRequests = 0
+    self.forcedAssessmentResult = nil
+
     return self
+end
+
+function TheContractorWorker:hasCertification(cert)
+    return self.certifications[cert] == true
+end
+
+function TheContractorWorker:hasTrainingBooked()
+    return self.trainingCert ~= nil
+end
+
+-- 054: the monotonic day they're next due in for training - the next
+-- course day, or the assessment once the course is done. nil if nothing's
+-- booked.
+function TheContractorWorker:getTrainingDueDay()
+    if self.trainingCert == nil then
+        return nil
+    end
+    if self.courseDaysLeft > 0 then
+        return self.trainingDay
+    end
+    return self.assessmentDay
 end
 
 function TheContractorWorker:hasHolidayBooked()
@@ -169,14 +229,15 @@ function TheContractorWorker:isHolidayOn(monotonicDay)
         monotonicDay <= self:getHolidayEndDay()
 end
 
-function TheContractorWorker:isRetiring()
-    return self.retiresAtPeriod ~= nil
+-- Handed in their notice: retiring (039) or quitting (056).
+function TheContractorWorker:isLeaving()
+    return self.leavesAtPeriod ~= nil
 end
 
--- Past their retirement date but still here: they were out on a job (or
+-- Past their leaving date but still here: they were out on a job (or
 -- driving) when it came, and leave the moment they're set idle.
-function TheContractorWorker:isRetirementDue()
-    return self.retiresAtPeriod ~= nil and self.retiresAtPeriod <= TCCalendar.getPeriodIndex()
+function TheContractorWorker:isLeaveDue()
+    return self.leavesAtPeriod ~= nil and self.leavesAtPeriod <= TCCalendar.getPeriodIndex()
 end
 
 -- nil tier means the job doesn't require a tractor at all (e.g. a job whose
