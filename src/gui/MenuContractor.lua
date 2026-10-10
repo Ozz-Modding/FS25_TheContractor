@@ -365,10 +365,18 @@ function MenuContractor:initialize()
             self:onClickGiveBonus()
         end
     }
+    -- 058: a pay rise for the highlighted roster worker.
+    self.btnPayRise = {
+        inputAction = InputAction.MENU_CANCEL,
+        text = g_i18n:getText("tc_pay_riseButton"),
+        callback = function()
+            self:onClickPayRise()
+        end
+    }
     self.menuButtonInfoStaffWithCandidateSelection = { self.btnBack, self.btnNextPage, self.btnPrevPage,
         self.btnHireWorker }
     self.menuButtonInfoStaffWithRosterSelection = { self.btnBack, self.btnNextPage, self.btnPrevPage,
-        self.btnReleaseWorker, self.btnGiveBonus }
+        self.btnReleaseWorker, self.btnGiveBonus, self.btnPayRise }
 
     -- 054: book the highlighted worker on the spraying course (or its
     -- retake), only while they're ready, uncertified and not booked - see
@@ -381,7 +389,7 @@ function MenuContractor:initialize()
         end
     }
     self.menuButtonInfoStaffWithTrainableWorker = { self.btnBack, self.btnNextPage, self.btnPrevPage,
-        self.btnReleaseWorker, self.btnBookTraining, self.btnGiveBonus }
+        self.btnReleaseWorker, self.btnBookTraining, self.btnGiveBonus, self.btnPayRise }
 
     -- Finances (049) - write off the highlighted invoice, only while it's
     -- overdue (see getMenuButtonInfo).
@@ -1094,8 +1102,14 @@ function MenuContractor:updateStaffDetails()
     -- Chips are plain numbers - every rating is out of 10.
     setChip(self.staffDetailWorkSpeedChip, self.staffDetailWorkSpeedChipText, tostring(worker.workSpeed),
         getTierChipTone(worker.workSpeed))
-    self.staffDetailSalary:setText(string.format(g_i18n:getText("tc_staff_detailSalary"),
-        g_i18n:formatMoney(worker.salary, 0, true, true)))
+    -- 058: and, for a roster worker who wants more, what they want.
+    if self.staffView == "roster" and TheContractorPayReviews.wantsMore(worker) then
+        self.staffDetailSalary:setText(string.format(g_i18n:getText("tc_pay_detailSalaryWants"),
+            g_i18n:formatMoney(worker.salary, 0, true, true), g_i18n:formatMoney(worker.expectedSalary, 0, true, true)))
+    else
+        self.staffDetailSalary:setText(string.format(g_i18n:getText("tc_staff_detailSalary"),
+            g_i18n:formatMoney(worker.salary, 0, true, true)))
+    end
     -- 045: a chip, same tones as the skills.
     setChip(self.staffDetailCleanlinessChip, self.staffDetailCleanlinessChipText,
         tostring(worker.cleanliness),
@@ -1380,6 +1394,53 @@ function MenuContractor:onClickGiveBonus()
         self:refreshStaffState(farmId, g_currentMission.TheContractor.Staff, g_currentMission.TheContractor.Jobs)
     end, string.format(g_i18n:getText("tc_morale_bonusPrompt"), worker.name), g_i18n:getText("tc_morale_bonusTitle"),
         options)
+end
+
+-- 058: pick a rise (OptionDialog, like onClickGiveBonus). No funds check:
+-- nothing's paid now, it starts with the next salary run. The server works
+-- the option out again.
+function MenuContractor:onClickPayRise()
+    local worker = self:getSelectedRosterWorker()
+    if worker == nil then
+        return
+    end
+
+    local farmId = g_currentMission:getFarmId()
+    local function money(amount)
+        return g_i18n:formatMoney(amount, 0, true, true)
+    end
+
+    local riseOptions = TheContractorPayReviews.getRiseOptions(worker)
+    local options = {}
+    for _, option in ipairs(riseOptions) do
+        if option.key == TheContractorPayReviews.OPTION_EXPECTED then
+            table.insert(options, string.format(g_i18n:getText("tc_pay_optionExpected"), money(option.salary)))
+        else
+            table.insert(options, string.format(g_i18n:getText("tc_pay_optionPercent"), option.percent,
+                money(option.salary)))
+        end
+    end
+
+    local prompt
+    if TheContractorPayReviews.wantsMore(worker) then
+        prompt = string.format(g_i18n:getText("tc_pay_risePromptWants"), worker.name, money(worker.salary),
+            money(worker.expectedSalary))
+    else
+        prompt = string.format(g_i18n:getText("tc_pay_risePrompt"), worker.name, money(worker.salary))
+    end
+
+    OptionDialog.show(function(index)
+        local option = riseOptions[index]
+        if option == nil then
+            return
+        end
+
+        g_client:getServerConnection():sendEvent(TCPayRiseEvent.new(farmId, worker.id, option.key))
+
+        -- Same "synchronous for host/SP, catches up on next refresh for a
+        -- remote client" caveat as onClickHireWorker.
+        self:refreshStaffState(farmId, g_currentMission.TheContractor.Staff, g_currentMission.TheContractor.Jobs)
+    end, prompt, g_i18n:getText("tc_pay_riseTitle"), options)
 end
 
 -- 054: funds-check-then-confirm, like onClickHireWorker. The dates shown

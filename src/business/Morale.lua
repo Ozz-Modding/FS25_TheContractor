@@ -10,8 +10,9 @@
 --   by last month's workload. Sat idle most of the month is TARGET_IDLE, a
 --   steady month TARGET_STEADY, and out on work nearly every day
 --   TARGET_OVERWORKED. So a bonus, or a knock, wears off over a few months.
---   Pay isn't a factor: salary follows the stats (036), so nobody is
---   underpaid.
+--   058: pay moves the target too. Paid below what they expect lowers it,
+--   paid above raises it a little (TheContractorPayReviews.
+--   getMoraleTargetShift).
 --
 -- What it does:
 -- - Below QUIT_MORALE a worker may quit at the month roll. They hand in a
@@ -217,8 +218,15 @@ function TheContractorMorale.getJobQualityMultiplier(job)
     return 1 - TheContractorMorale.QUALITY_MAX_PENALTY * (low - lowest) / low
 end
 
--- The month's drift target from busyDays/idleDays (see the TARGET_* tunables).
+-- The month's drift target: the workload's (getWorkloadTarget), moved by
+-- their pay against what they expect (058).
 function TheContractorMorale.getTarget(worker)
+    return TheContractorMorale.clamp(TheContractorMorale.getWorkloadTarget(worker) +
+        TheContractorPayReviews.getMoraleTargetShift(worker))
+end
+
+-- From busyDays/idleDays (see the TARGET_* tunables).
+function TheContractorMorale.getWorkloadTarget(worker)
     local counted = worker.busyDays + worker.idleDays
     local steady = TheContractorMorale.TARGET_STEADY
     if counted == 0 then
@@ -529,9 +537,10 @@ function TheContractorMorale.registerConsoleCommands()
                 g_currentMission.TheContractor.Morale:adjust(farmId, { worker }, value - worker.morale)
             end
 
-            return string.format("%s: morale %.1f (%s), %d busy / %d idle days this month (target %.1f), quit chance %.0f%%",
+            return string.format("%s: morale %.1f (%s), %d busy / %d idle days this month (target %.1f, pay %+.1f), quit chance %.0f%%",
                 worker.name, worker.morale, TheContractorMorale.getBand(worker.morale), worker.busyDays,
                 worker.idleDays, TheContractorMorale.getTarget(worker),
+                TheContractorPayReviews.getMoraleTargetShift(worker),
                 TheContractorMorale.getQuitChance(worker.morale) * 100)
         end,
     })

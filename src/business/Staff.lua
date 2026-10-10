@@ -24,7 +24,9 @@
 -- first period is paid up front at hire, so hiring just
 -- after a period change and releasing just before the next isn't free. No
 -- refund on release, no proration. Pool sizing and the daily add/remove odds
--- were reviewed in 026 and kept.
+-- were reviewed in 026 and kept. 058: those figures are a worker's market
+-- value (getSalary). A hired worker's pay is fixed at what they were hired
+-- for and only moves with an agreed rise - see PayReviews.lua.
 
 TheContractorStaff = {}
 TheContractorStaff_mt = Class(TheContractorStaff)
@@ -74,7 +76,7 @@ TheContractorStaff.POOL_DAILY_REMOVE_CHANCE = 0.15
 -- worker, the bigger the pool can be (MAX_GROWTH_POTENTIAL at MIN_AGE,
 -- nothing from GROWTH_POTENTIAL_ZERO_AGE on), times a random
 -- GROWTH_POTENTIAL_MIN_ROLL-1 so two workers of the same age still differ.
--- Salary ignores both - pay follows current ability (user's call).
+-- Market value ignores both - it follows current ability (user's call).
 TheContractorStaff.MIN_AGE = 18
 TheContractorStaff.MAX_AGE = 60
 TheContractorStaff.MAX_GROWTH_POTENTIAL = 12
@@ -335,9 +337,10 @@ function TheContractorStaff.rollSicknessPropensity()
     return math.random() ^ 2
 end
 
--- Per period (036). Always derived from current stats: recomputed on load
--- and whenever a worker grows (applyWorkerGrowth), so a better worker costs
--- more.
+-- Per period (036): the market value for these stats, what a candidate asks
+-- for. 058: a hired worker's pay starts here and stays put when they grow -
+-- growth raises their market value (TheContractorPayReviews.getMarketValue)
+-- instead.
 function TheContractorStaff.getSalary(workSpeed, tierCapability, skills)
     local salary = TheContractorStaff.BASE_SALARY + workSpeed * TheContractorStaff.SALARY_PER_WORK_SPEED
 
@@ -615,6 +618,9 @@ function TheContractorStaff:onPeriodChanged()
     -- about a harvest bonus. After the birthday roll, so a worker who's
     -- just decided to retire doesn't quit as well.
     g_currentMission.TheContractor.Morale:onPeriodChanged()
+    -- 058: anniversary pay reviews, after the drift (which ran on last
+    -- month's pay) and the quit rolls, so nobody leaving asks.
+    g_currentMission.TheContractor.PayReviews:onPeriodChanged()
     -- 054: ready workers may ask for training.
     g_currentMission.TheContractor.Training:onPeriodChanged()
 end
@@ -811,6 +817,8 @@ function TheContractorStaff:retireWorker(farmId, workerId)
     g_currentMission.TheContractor.Holidays:refreshNotices(farmId)
     -- 054: and any training message about them leaves the inbox.
     g_currentMission.TheContractor.Training:removeMessagesFor(farmId, workerId)
+    -- 058: and any pay review.
+    g_currentMission.TheContractor.PayReviews:removeMessagesFor(farmId, workerId)
 end
 
 -- Worker ids are unique across the pool and every roster (one shared
@@ -907,6 +915,9 @@ function TheContractorStaff:hireWorker(farmId, candidateId)
     candidate.hiredPeriod = TCCalendar.getPeriodIndex()
     candidate.busyDays = 0
     candidate.idleDays = 0
+    -- 058: paid what they asked for, and happy with it.
+    candidate.expectedSalary = candidate.salary
+    candidate.lastReviewPeriod = nil
     self:applyWorkerHired(candidate)
 
     if g_server ~= nil then
@@ -1062,6 +1073,8 @@ function TheContractorStaff:releaseWorker(farmId, workerId)
     g_currentMission.TheContractor.Holidays:refreshNotices(farmId)
     -- 054: and any training message about them leaves the inbox.
     g_currentMission.TheContractor.Training:removeMessagesFor(farmId, workerId)
+    -- 058: and any pay review.
+    g_currentMission.TheContractor.PayReviews:removeMessagesFor(farmId, workerId)
 
     Logging.info("TheContractor: farm %d released worker %d (%s) after %d year(s): %.1f weeks' notice pay (%.0f), %.1f weeks' redundancy pay (%.0f)",
         farmId, workerId, worker.name, cost.years, cost.noticeWeeks, cost.noticePay, cost.redundancyWeeks,
@@ -1304,8 +1317,8 @@ end
 
 -- The actual stat change, run on whichever machine (server, or a client
 -- receiving TCWorkerGrewEvent) is applying it. growthPotential is only
--- tracked on the server, so it isn't touched here. Salary follows the new
--- stats (036); every machine recomputes it the same way.
+-- tracked on the server, so it isn't touched here. 058: pay stays put -
+-- the new stats only raise their market value, worked out live.
 function TheContractorStaff:applyWorkerGrowth(farmId, workerId, stat, value)
     local worker = self:getWorker(farmId, workerId)
     if worker == nil then
@@ -1313,7 +1326,6 @@ function TheContractorStaff:applyWorkerGrowth(farmId, workerId, stat, value)
     end
 
     worker:setStat(stat, value)
-    worker.salary = TheContractorStaff.getSalary(worker.workSpeed, worker.tierCapability, worker.skills)
 end
 
 -- Wire serialization, shared by the pool/hire events and initial client
@@ -1362,6 +1374,8 @@ function TheContractorStaff.writeWorker(streamId, worker)
     TheContractorTraining.writeState(streamId, worker)
     -- 056.
     TheContractorMorale.writeState(streamId, worker)
+    -- 058.
+    TheContractorPayReviews.writeState(streamId, worker)
 end
 
 function TheContractorStaff.readWorker(streamId)
@@ -1397,6 +1411,7 @@ function TheContractorStaff.readWorker(streamId)
     local cleanliness = streamReadUInt8(streamId)
     local trainingState = TheContractorTraining.readState(streamId)
     local morale, hiredPeriod = TheContractorMorale.readState(streamId)
+    local expectedSalary = TheContractorPayReviews.readState(streamId)
 
     local worker = TheContractorWorker.new(id, farmId, name, workSpeed, tierCapability, salary, age, nil, nil, nil,
         skills, cleanliness)
@@ -1409,6 +1424,7 @@ function TheContractorStaff.readWorker(streamId)
     worker.isQuitting = isQuitting
     worker.morale = morale
     worker.hiredPeriod = hiredPeriod
+    worker.expectedSalary = expectedSalary
     TheContractorHolidays.applyHolidayChanged(worker, holidayAllowance,
         holidayStartDay > 0 and holidayStartDay or nil, holidayDays)
     TheContractorTraining.applyState(worker, trainingState)
@@ -1422,7 +1438,7 @@ function TheContractorStaff.writeWorkerXML(xmlFile, key, worker)
     setXMLInt(xmlFile, key .. "#id", worker.id)
     setXMLString(xmlFile, key .. "#name", worker.name)
     setXMLInt(xmlFile, key .. "#workSpeed", worker.workSpeed)
-    -- Informational only: readWorkerXML recomputes it from the stats.
+    -- 058: a hired worker's pay. A candidate's is recomputed on load.
     setXMLFloat(xmlFile, key .. "#salary", worker.salary)
     setXMLString(xmlFile, key .. "#status", worker.status)
     setXMLInt(xmlFile, key .. "#age", worker.age)
@@ -1472,6 +1488,8 @@ function TheContractorStaff.writeWorkerXML(xmlFile, key, worker)
     TheContractorTraining.writeXML(xmlFile, key, worker)
     -- 056.
     TheContractorMorale.writeXML(xmlFile, key, worker)
+    -- 058.
+    TheContractorPayReviews.writeXML(xmlFile, key, worker)
 end
 
 -- farmId is passed in explicitly (nil for a pool candidate) rather than read
@@ -1510,9 +1528,14 @@ function TheContractorStaff.readWorkerXML(xmlFile, key, farmId)
     cleanliness = math.max(TheContractorWorker.MIN_CLEANLINESS,
         math.min(TheContractorWorker.MAX_CLEANLINESS, cleanliness))
 
-    -- Always recomputed (036), so a pre-036 save's #hireCost is simply
-    -- ignored and a retuned formula applies to existing workers too.
+    -- A candidate's is always recomputed (036), so a retuned formula
+    -- applies to the pool too. 058: a hired worker's is their saved pay (a
+    -- pre-036 save's #hireCost is simply ignored). Saves from before 058
+    -- are migrated in loadFromXMLFile.
     local salary = TheContractorStaff.getSalary(workSpeed, tierCapability, skills)
+    if farmId ~= nil then
+        salary = getXMLFloat(xmlFile, key .. "#salary") or salary
+    end
 
     -- A worker saved before 030 has neither: roll them now, as if they'd
     -- just joined the pool.
@@ -1565,6 +1588,8 @@ function TheContractorStaff.readWorkerXML(xmlFile, key, farmId)
     -- 056: a worker from a save made before 056 starts at MORALE_START and
     -- gets their hire date at the next day change (Morale:onDayChanged).
     TheContractorMorale.readXML(xmlFile, key, worker)
+    -- 058.
+    TheContractorPayReviews.readXML(xmlFile, key, worker)
 
     return worker
 end
@@ -1582,6 +1607,9 @@ function TheContractorStaff:loadFromXMLFile(xmlFile)
     -- 054: a save from before certificates existed has no marker. Its
     -- workers are grandfathered once (TheContractorTraining.grandfather).
     local isPreCertification = getXMLInt(xmlFile, rootKey .. "#certificationVersion") == nil
+    -- 058: likewise from before pay was fixed at hire. Its workers are paid
+    -- their market value once (TheContractorPayReviews.migrate).
+    local isPrePayReviews = getXMLInt(xmlFile, rootKey .. "#payVersion") == nil
 
     local poolIndex = 0
     while true do
@@ -1623,6 +1651,9 @@ function TheContractorStaff:loadFromXMLFile(xmlFile)
             if isPreCertification then
                 TheContractorTraining.grandfather(worker)
             end
+            if isPrePayReviews then
+                TheContractorPayReviews.migrate(worker)
+            end
 
             self.workersByFarm[farmId] = self.workersByFarm[farmId] or {}
             self.workersByFarm[farmId][worker.id] = worker
@@ -1644,6 +1675,7 @@ function TheContractorStaff:saveToXmlFile(xmlFile)
     local rootKey = string.format("%s.staff", TheContractor.SaveKey)
     setXMLInt(xmlFile, rootKey .. "#nextWorkerId", self.nextWorkerId)
     setXMLInt(xmlFile, rootKey .. "#certificationVersion", 1)
+    setXMLInt(xmlFile, rootKey .. "#payVersion", 1)
 
     local poolIndex = 0
     for _, candidate in pairs(self.candidatePool) do
