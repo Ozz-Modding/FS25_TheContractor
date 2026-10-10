@@ -360,6 +360,8 @@ function TheContractorDrivers:bindDriver(vehicleId, farmId, workerId, activeMs, 
     binding.graceMs = graceMs
 
     g_currentMission.TheContractor.Staff:setWorkerStatus(farmId, workerId, TheContractorWorker.STATUS.DRIVING)
+    -- 060: the start of their stint, for the vehicle's logbook.
+    g_currentMission.TheContractor.Logbook:onDriverBound(vehicleId, farmId, workerId)
 
     local vehicle = NetworkUtil.getObject(vehicleId)
     Logging.info("TheContractor: farm %d worker %d now driving '%s'", farmId, workerId,
@@ -382,6 +384,8 @@ function TheContractorDrivers:releaseDriver(vehicleId, vehicle)
     if vehicle ~= nil then
         self:rollDrivingGrowth(binding, vehicle)
     end
+    -- 060: and the end of it.
+    g_currentMission.TheContractor.Logbook:onDriverReleased(vehicleId, vehicle, binding)
 
     g_currentMission.TheContractor.Staff:setWorkerStatus(binding.farmId, binding.workerId,
         TheContractorWorker.STATUS.IDLE)
@@ -457,6 +461,8 @@ function TheContractorDrivers:update(dt)
             table.insert(toRelease, { vehicleId = vehicleId })
         elseif TheContractorDrivers.isVehicleDriven(vehicle) then
             binding.activeMs = binding.activeMs + gameDt
+            -- 060: AutoDrive, Courseplay or a plain AI helper, for the log.
+            g_currentMission.TheContractor.Logbook:noteDriverActivity(vehicleId, vehicle)
             binding.idleMs = 0
             binding.graceMs = TheContractorDrivers.RELEASE_GRACE_MS
         else
@@ -587,6 +593,10 @@ function TheContractorDrivers:resolveLoadedBindings()
 
     local loaded = self.loadedBindings
     self.loadedBindings = nil
+
+    -- Everything else saved by uniqueId first: binding tells the logbook,
+    -- whose saved driver sessions are looked up by object id.
+    g_currentMission.TheContractor:resolveSavedVehicles()
 
     local staff = g_currentMission.TheContractor.Staff
     for _, entry in ipairs(loaded) do

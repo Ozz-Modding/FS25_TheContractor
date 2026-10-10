@@ -13,8 +13,33 @@
 -- networks on its own (unlike a vehicle's position), so every machine has
 -- to apply it itself - see setVisibleEverywhere and
 -- TCEquipmentVisibilityEvent.
+--
+-- On a client a vehicle id may not resolve yet (a joining client still
+-- streaming vehicles in), or resolve to a vehicle that's still loading,
+-- whose postReadStream would put it back in physics anyway. Those wait in
+-- pendingByVehicleId (newest request wins) and update retries them - the
+-- pendingClientItems pattern from FS25_UsedEquipmentYards.
 
 TCEquipmentVisibility = {}
+
+-- Client only: vehicleId -> true (reveal) / false (hide).
+local pendingByVehicleId = {}
+
+function TCEquipmentVisibility.reset()
+    pendingByVehicleId = {}
+end
+
+-- The vehicle behind an id once it's ready to hide or reveal, else nil.
+local function getReadyVehicle(vehicleId)
+    local vehicle = NetworkUtil.getObject(vehicleId)
+    if vehicle == nil or vehicle.isDeleted then
+        return nil
+    end
+    if not g_currentMission:getIsServer() and vehicle.getIsSynchronized ~= nil and not vehicle:getIsSynchronized() then
+        return nil
+    end
+    return vehicle
+end
 
 function TCEquipmentVisibility.hideVehicle(vehicle)
     if vehicle.stopMotor ~= nil then
@@ -30,23 +55,48 @@ function TCEquipmentVisibility.revealVehicle(vehicle)
     vehicle:addToPhysics()
 end
 
--- Resolves and hides/reveals every vehicle id that's still resolvable (a
--- vehicle sold/deleted in the meantime is silently skipped - nothing to
--- hide or reveal for it either way).
-function TCEquipmentVisibility.hideVehicles(vehicleIds)
+-- Hides/reveals every vehicle id. On the server a vehicle that's gone
+-- (sold/deleted in the meantime) is skipped - nothing to hide or reveal
+-- for it either way. On a client one that isn't ready yet waits (see top).
+local function setVisible(vehicleIds, isVisible)
+    local isServer = g_currentMission:getIsServer()
     for _, vehicleId in ipairs(vehicleIds) do
-        local vehicle = NetworkUtil.getObject(vehicleId)
+        local vehicle = getReadyVehicle(vehicleId)
         if vehicle ~= nil then
-            TCEquipmentVisibility.hideVehicle(vehicle)
+            pendingByVehicleId[vehicleId] = nil
+            if isVisible then
+                TCEquipmentVisibility.revealVehicle(vehicle)
+            else
+                TCEquipmentVisibility.hideVehicle(vehicle)
+            end
+        elseif not isServer then
+            pendingByVehicleId[vehicleId] = isVisible
         end
     end
 end
 
+function TCEquipmentVisibility.hideVehicles(vehicleIds)
+    setVisible(vehicleIds, false)
+end
+
 function TCEquipmentVisibility.revealVehicles(vehicleIds)
-    for _, vehicleId in ipairs(vehicleIds) do
-        local vehicle = NetworkUtil.getObject(vehicleId)
+    setVisible(vehicleIds, true)
+end
+
+-- Every frame from TheContractor:update: retries what was waiting.
+function TCEquipmentVisibility.update(dt)
+    if next(pendingByVehicleId) == nil then
+        return
+    end
+    for vehicleId, isVisible in pairs(pendingByVehicleId) do
+        local vehicle = getReadyVehicle(vehicleId)
         if vehicle ~= nil then
-            TCEquipmentVisibility.revealVehicle(vehicle)
+            pendingByVehicleId[vehicleId] = nil
+            if isVisible then
+                TCEquipmentVisibility.revealVehicle(vehicle)
+            else
+                TCEquipmentVisibility.hideVehicle(vehicle)
+            end
         end
     end
 end

@@ -25,6 +25,16 @@
 -- (washEquipment, from Cooldown:endCooldown once it's home). None of this
 -- happens on a save with dirt switched off.
 --
+-- Breakdowns (059), only with FS25_AdvancedDamageSystem. ADS zeroes
+-- vanilla damage on the vehicles it manages, so the extra damage above
+-- does nothing there (the extra wear still lands). Instead, each machine
+-- that did some work rolls for an ADS breakdown, more likely the more
+-- careless the worker (cleanliness, as Claims reads it) and the further
+-- short of the job their rating for that machine is. A hit adds a random
+-- failure that suits the vehicle through ADS's vehicle:addBreakdown(),
+-- already some way along, and ADS develops and syncs it from there. No
+-- ADS, or a vehicle it excludes, means no roll.
+--
 -- What happened goes on the job as workerReports - sent to clients with the
 -- completed job and saved - for the completion notifications.
 --
@@ -38,6 +48,19 @@ TCJobConsequences.WEAR_PER_SKILL_POINT = 0.15
 -- Below this much vanilla damage + wear, there's nothing worth reporting
 -- (e.g. a haulage rig that never left the yard - the carting is synthetic).
 TCJobConsequences.MIN_REPORTED_WEAR = 0.0005
+
+-- 059: chance per machine of an ADS breakdown - base, plus up to
+-- BREAKDOWN_CARELESS_CHANCE for the untidiest worker, plus this much per
+-- point short of requiredSkillLevel. A tidy, qualified worker is 1%, the
+-- untidiest 4 points short 25%.
+TCJobConsequences.BREAKDOWN_BASE_CHANCE = 0.01
+TCJobConsequences.BREAKDOWN_CARELESS_CHANCE = 0.04
+TCJobConsequences.BREAKDOWN_CHANCE_PER_SKILL_POINT = 0.05
+-- How far along (0-1) the failure starts: random, up to BASE plus
+-- PER_SKILL_POINT per point short, capped at MAX.
+TCJobConsequences.BREAKDOWN_PROGRESS_BASE = 0.1
+TCJobConsequences.BREAKDOWN_PROGRESS_PER_SKILL_POINT = 0.05
+TCJobConsequences.BREAKDOWN_PROGRESS_MAX = 0.5
 
 -- Extra dirt (0-1, as Washable's dirt amount) for the untidiest worker
 -- (cleanliness 1), down to none at the tidiest.
@@ -111,11 +134,11 @@ local function getGap(job, rating)
     return math.max(0, job.requiredSkillLevel - rating)
 end
 
--- Adds a vehicle's skill-gap share of extra damage and wear. Returns the
--- extra as a whole percentage of vanilla's, or nil if none was added.
-function TCJobConsequences.applyExtraWear(job, vehicle, vehicleId, gap)
+-- The damage and wear vanilla added to a vehicle during the job, or nil if
+-- there's no baseline or it barely worked.
+local function getJobWear(job, vehicle, vehicleId)
     local start = job.startCondition ~= nil and job.startCondition[vehicleId] or nil
-    if start == nil or gap <= 0 or vehicle.spec_wearable == nil then
+    if start == nil or vehicle.spec_wearable == nil then
         return nil
     end
 
@@ -124,11 +147,55 @@ function TCJobConsequences.applyExtraWear(job, vehicle, vehicleId, gap)
     if vanillaDamage + vanillaWear < TCJobConsequences.MIN_REPORTED_WEAR then
         return nil
     end
+    return vanillaDamage, vanillaWear
+end
+
+-- Adds a vehicle's skill-gap share of extra damage and wear. Returns the
+-- extra as a whole percentage of vanilla's, or nil if none was added.
+function TCJobConsequences.applyExtraWear(job, vehicle, vehicleId, gap)
+    if gap <= 0 then
+        return nil
+    end
+    local vanillaDamage, vanillaWear = getJobWear(job, vehicle, vehicleId)
+    if vanillaDamage == nil then
+        return nil
+    end
 
     local factor = gap * TCJobConsequences.WEAR_PER_SKILL_POINT
     vehicle:addDamageAmount(vanillaDamage * factor, true)
     vehicle:addWearAmount(vanillaWear * factor, true)
     return math.floor(factor * 100 + 0.5)
+end
+
+-- 059: whether ADS manages this vehicle and can give it a breakdown.
+function TCJobConsequences.canBreakDown(vehicle)
+    return vehicle.addBreakdown ~= nil and vehicle.spec_AdvancedDamageSystem ~= nil
+        and (vehicle.getIsADSExcluded == nil or not vehicle:getIsADSExcluded())
+end
+
+function TCJobConsequences.getBreakdownChance(worker, gap)
+    return TCJobConsequences.BREAKDOWN_BASE_CHANCE
+        + TCJobConsequences.BREAKDOWN_CARELESS_CHANCE * (1 - getCleanlinessFactor(worker))
+        + TCJobConsequences.BREAKDOWN_CHANCE_PER_SKILL_POINT * gap
+end
+
+-- 059: rolls for an ADS breakdown on a machine that worked during the job.
+-- Returns the ADS breakdown id if one was added, else nil.
+function TCJobConsequences.rollBreakdown(job, worker, vehicle, vehicleId, gap)
+    if not TCJobConsequences.canBreakDown(vehicle) or getJobWear(job, vehicle, vehicleId) == nil then
+        return nil
+    end
+    if math.random() >= TCJobConsequences.getBreakdownChance(worker, gap) then
+        return nil
+    end
+
+    local maxProgress = math.min(TCJobConsequences.BREAKDOWN_PROGRESS_MAX,
+        TCJobConsequences.BREAKDOWN_PROGRESS_BASE + TCJobConsequences.BREAKDOWN_PROGRESS_PER_SKILL_POINT * gap)
+    local added, breakdownId = vehicle:addBreakdown(nil, { breakdownProgress = math.random() * maxProgress })
+    if added ~= true then
+        return nil
+    end
+    return breakdownId
 end
 
 -- Server-only, from TheContractorJobs:completeJob before the cooldown
@@ -150,7 +217,8 @@ function TCJobConsequences.applyOnCompletion(job)
     for _, member in ipairs(TCJobConsequences.getCrew(job)) do
         local worker = staff:getWorker(job.farmId, member.workerId)
         if worker ~= nil then
-            local report = { workerId = worker.id, wash = TCJobConsequences.WASH.NONE, extraWear = {} }
+            local report = { workerId = worker.id, wash = TCJobConsequences.WASH.NONE, extraWear = {},
+                breakdowns = {} }
 
             local ratings = allocation:getWorkerJobRatings(worker, job, member.equipmentIds, member.isHauler)
             local tractorGap = getGap(job, ratings.tractorRating)
@@ -169,6 +237,14 @@ function TCJobConsequences.applyOnCompletion(job)
                 local percent = TCJobConsequences.applyExtraWear(job, entry.vehicle, entry.id, gap)
                 if percent ~= nil then
                     table.insert(report.extraWear, { vehicleName = entry.vehicle:getFullName(), percent = percent })
+                end
+
+                local breakdownId = TCJobConsequences.rollBreakdown(job, worker, entry.vehicle, entry.id, gap)
+                if breakdownId ~= nil then
+                    table.insert(report.breakdowns, entry.vehicle:getFullName())
+                    Logging.info("TheContractor: farm %d job %d worker %d (%s) caused ADS breakdown %s on %s",
+                        job.farmId, job.id, worker.id, worker.name, tostring(breakdownId),
+                        entry.vehicle:getFullName())
                 end
             end
 
@@ -245,8 +321,9 @@ function TCJobConsequences.washEquipment(job)
 end
 
 -- Player-facing lines for the completion notifications, one or two per
--- worker: "Amy Hall washed the equipment before bringing it back." and
--- "Extra wear from skill gaps: Fendt 942 Vario +60%, ...". Every machine
+-- worker: "Amy Hall washed the equipment before bringing it back.",
+-- "Extra wear from skill gaps: Fendt 942 Vario +60%, ..." and (059) the
+-- machines they left with an ADS fault. Every machine
 -- builds them from workerReports itself.
 function TCJobConsequences.getReportLines(job)
     local lines = {}
@@ -273,6 +350,11 @@ function TCJobConsequences.getReportLines(job)
             table.insert(lines, string.format(g_i18n:getText("tc_consequences_extraWear"), name,
                 table.concat(parts, ", ")))
         end
+
+        if #report.breakdowns > 0 then
+            table.insert(lines, string.format(g_i18n:getText("tc_consequences_breakdown"), name,
+                table.concat(report.breakdowns, ", ")))
+        end
     end
     return lines
 end
@@ -291,16 +373,24 @@ function TCJobConsequences.writeReports(streamId, job)
             streamWriteString(streamId, wear.vehicleName)
             streamWriteInt32(streamId, wear.percent)
         end
+        streamWriteUInt8(streamId, #report.breakdowns)
+        for _, vehicleName in ipairs(report.breakdowns) do
+            streamWriteString(streamId, vehicleName)
+        end
     end
 end
 
 function TCJobConsequences.readReports(streamId)
     local reports = {}
     for _ = 1, streamReadUInt8(streamId) do
-        local report = { workerId = streamReadInt32(streamId), wash = streamReadUInt8(streamId), extraWear = {} }
+        local report = { workerId = streamReadInt32(streamId), wash = streamReadUInt8(streamId), extraWear = {},
+            breakdowns = {} }
         for _ = 1, streamReadUInt8(streamId) do
             table.insert(report.extraWear, { vehicleName = streamReadString(streamId),
                 percent = streamReadInt32(streamId) })
+        end
+        for _ = 1, streamReadUInt8(streamId) do
+            table.insert(report.breakdowns, streamReadString(streamId))
         end
         table.insert(reports, report)
     end
@@ -312,16 +402,19 @@ function TCJobConsequences.saveToXML(xmlFile, jobKey, job)
     if job.startCondition ~= nil and not job:isTerminal() then
         local index = 0
         for vehicleId, condition in pairs(job.startCondition) do
-            local key = string.format("%s.startCondition(%d)", jobKey, index)
-            setXMLInt(xmlFile, key .. "#vehicleId", vehicleId)
-            setXMLFloat(xmlFile, key .. "#damage", condition.damage)
-            setXMLFloat(xmlFile, key .. "#wear", condition.wear)
-            index = index + 1
+            local uniqueId = TCVehicleIds.getUniqueId(vehicleId)
+            if uniqueId ~= nil then
+                local key = string.format("%s.startCondition(%d)", jobKey, index)
+                setXMLString(xmlFile, key .. "#uniqueId", uniqueId)
+                setXMLFloat(xmlFile, key .. "#damage", condition.damage)
+                setXMLFloat(xmlFile, key .. "#wear", condition.wear)
+                index = index + 1
+            end
         end
     end
 
-    if job.washVehicleIds ~= nil and #job.washVehicleIds > 0 then
-        setXMLString(xmlFile, jobKey .. "#washVehicleIds", TheContractorJobs.encodeIdList(job.washVehicleIds))
+    if job.washVehicleIds ~= nil then
+        TCVehicleIds.saveList(xmlFile, jobKey .. ".wash", job.washVehicleIds)
     end
 
     for i, report in ipairs(job.workerReports or {}) do
@@ -333,6 +426,9 @@ function TCJobConsequences.saveToXML(xmlFile, jobKey, job)
             setXMLString(xmlFile, wearKey .. "#vehicle", wear.vehicleName)
             setXMLInt(xmlFile, wearKey .. "#percent", wear.percent)
         end
+        for j, vehicleName in ipairs(report.breakdowns) do
+            setXMLString(xmlFile, string.format("%s.breakdown(%d)#vehicle", key, j - 1), vehicleName)
+        end
     end
 end
 
@@ -343,17 +439,20 @@ function TCJobConsequences.loadFromXML(xmlFile, jobKey, job)
         if not hasXMLProperty(xmlFile, key) then
             break
         end
-        job.startCondition = job.startCondition or {}
-        job.startCondition[getXMLInt(xmlFile, key .. "#vehicleId")] = {
-            damage = Utils.getNoNil(getXMLFloat(xmlFile, key .. "#damage"), 0),
-            wear = Utils.getNoNil(getXMLFloat(xmlFile, key .. "#wear"), 0),
-        }
+        -- By uniqueId until resolveSavedVehicles.
+        local uniqueId = getXMLString(xmlFile, key .. "#uniqueId")
+        if uniqueId ~= nil then
+            job.savedStartCondition = job.savedStartCondition or {}
+            job.savedStartCondition[uniqueId] = {
+                damage = Utils.getNoNil(getXMLFloat(xmlFile, key .. "#damage"), 0),
+                wear = Utils.getNoNil(getXMLFloat(xmlFile, key .. "#wear"), 0),
+            }
+        end
         index = index + 1
     end
 
-    local washVehicleIds = getXMLString(xmlFile, jobKey .. "#washVehicleIds")
-    if washVehicleIds ~= nil then
-        job.washVehicleIds = TheContractorJobs.decodeIdList(washVehicleIds)
+    if hasXMLProperty(xmlFile, jobKey .. ".wash") then
+        job.savedWashUniqueIds = TCVehicleIds.loadList(xmlFile, jobKey .. ".wash")
     end
 
     index = 0
@@ -366,6 +465,7 @@ function TCJobConsequences.loadFromXML(xmlFile, jobKey, job)
             workerId = getXMLInt(xmlFile, key .. "#workerId"),
             wash = Utils.getNoNil(getXMLInt(xmlFile, key .. "#wash"), TCJobConsequences.WASH.NONE),
             extraWear = {},
+            breakdowns = {},
         }
         local wearIndex = 0
         while true do
@@ -377,8 +477,36 @@ function TCJobConsequences.loadFromXML(xmlFile, jobKey, job)
                 percent = Utils.getNoNil(getXMLInt(xmlFile, wearKey .. "#percent"), 0) })
             wearIndex = wearIndex + 1
         end
+        local breakdownIndex = 0
+        while true do
+            local breakdownKey = string.format("%s.breakdown(%d)", key, breakdownIndex)
+            if not hasXMLProperty(xmlFile, breakdownKey) then
+                break
+            end
+            table.insert(report.breakdowns, getXMLString(xmlFile, breakdownKey .. "#vehicle") or "?")
+            breakdownIndex = breakdownIndex + 1
+        end
         job.workerReports = job.workerReports or {}
         table.insert(job.workerReports, report)
         index = index + 1
+    end
+end
+
+-- Server, from TheContractorJobs:resolveSavedVehicles once vehicles exist:
+-- the saved baseline and wash list back to object ids.
+function TCJobConsequences.resolveSavedVehicles(job)
+    if job.savedStartCondition ~= nil then
+        job.startCondition = {}
+        for uniqueId, condition in pairs(job.savedStartCondition) do
+            local vehicleId = TCVehicleIds.getObjectId(uniqueId)
+            if vehicleId ~= nil then
+                job.startCondition[vehicleId] = condition
+            end
+        end
+        job.savedStartCondition = nil
+    end
+    if job.savedWashUniqueIds ~= nil then
+        job.washVehicleIds = TCVehicleIds.resolveList(job.savedWashUniqueIds)
+        job.savedWashUniqueIds = nil
     end
 end

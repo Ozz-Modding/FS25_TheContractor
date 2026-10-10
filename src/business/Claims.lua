@@ -272,6 +272,10 @@ function TheContractorClaims:deliverClaim(claim)
 
     tc.Reputation:addReputation(claim.farmId, -claim.reputationPenalty)
 
+    -- 060: on the job's logbook entry, off its margin.
+    tc.Logbook:recordClaim(claim.farmId, claim.jobId, { cause = claim.cause, amount = claim.amount, paid = paid,
+        insured = claim.insured, reputationPenalty = claim.reputationPenalty })
+
     local args = {
         claim.fieldId,
         claim.workerName,

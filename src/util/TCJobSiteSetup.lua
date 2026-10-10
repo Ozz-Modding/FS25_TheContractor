@@ -350,21 +350,29 @@ end
 -- Persistence, delegated into from TheContractorJobs' own job save/load.
 
 function TCJobSiteSetup.saveHomeToXML(xmlFile, key, home)
-    for i, entry in ipairs(home) do
-        local vehicleKey = string.format("%s.vehicle(%d)", key, i - 1)
-        setXMLInt(xmlFile, vehicleKey .. "#id", entry.vehicleId)
-        for j, component in ipairs(entry.components) do
-            local componentKey = string.format("%s.component(%d)", vehicleKey, j - 1)
-            setXMLFloat(xmlFile, componentKey .. "#x", component[1][1])
-            setXMLFloat(xmlFile, componentKey .. "#y", component[1][2])
-            setXMLFloat(xmlFile, componentKey .. "#z", component[1][3])
-            setXMLFloat(xmlFile, componentKey .. "#rx", component[2][1])
-            setXMLFloat(xmlFile, componentKey .. "#ry", component[2][2])
-            setXMLFloat(xmlFile, componentKey .. "#rz", component[2][3])
+    -- Marks home as recorded even if none of its vehicles are left.
+    setXMLBool(xmlFile, key .. "#recorded", true)
+    local index = 0
+    for _, entry in ipairs(home) do
+        local uniqueId = TCVehicleIds.getUniqueId(entry.vehicleId)
+        if uniqueId ~= nil then
+            local vehicleKey = string.format("%s.vehicle(%d)", key, index)
+            setXMLString(xmlFile, vehicleKey .. "#uniqueId", uniqueId)
+            for j, component in ipairs(entry.components) do
+                local componentKey = string.format("%s.component(%d)", vehicleKey, j - 1)
+                setXMLFloat(xmlFile, componentKey .. "#x", component[1][1])
+                setXMLFloat(xmlFile, componentKey .. "#y", component[1][2])
+                setXMLFloat(xmlFile, componentKey .. "#z", component[1][3])
+                setXMLFloat(xmlFile, componentKey .. "#rx", component[2][1])
+                setXMLFloat(xmlFile, componentKey .. "#ry", component[2][2])
+                setXMLFloat(xmlFile, componentKey .. "#rz", component[2][3])
+            end
+            index = index + 1
         end
     end
 end
 
+-- Entries carry the vehicle's uniqueId until resolveSavedHome.
 function TCJobSiteSetup.loadHomeFromXML(xmlFile, key)
     if not hasXMLProperty(xmlFile, key) then
         return nil
@@ -394,8 +402,27 @@ function TCJobSiteSetup.loadHomeFromXML(xmlFile, key)
             j = j + 1
         end
 
-        table.insert(home, { vehicleId = getXMLInt(xmlFile, vehicleKey .. "#id"), components = components })
+        table.insert(home, { uniqueId = getXMLString(xmlFile, vehicleKey .. "#uniqueId"), components = components })
         i = i + 1
     end
     return home
+end
+
+-- Server, from TheContractorJobs:resolveSavedVehicles once vehicles exist.
+function TCJobSiteSetup.resolveSavedHome(job)
+    if job.equipmentHome == nil then
+        return
+    end
+    local home = {}
+    for _, entry in ipairs(job.equipmentHome) do
+        if entry.uniqueId ~= nil then
+            local vehicleId = TCVehicleIds.getObjectId(entry.uniqueId)
+            if vehicleId ~= nil then
+                table.insert(home, { vehicleId = vehicleId, components = entry.components })
+            end
+        else
+            table.insert(home, entry)
+        end
+    end
+    job.equipmentHome = home
 end

@@ -83,6 +83,8 @@ function TheContractorJob.new(id, farmId, jobType, fieldId, requiredSkillLevel, 
 
     self.state = TheContractorJob.STATE.OFFERED
     self.assignedWorkerId = nil
+    -- Vehicle network object ids, like every vehicle list here; saved by
+    -- uniqueId (TCVehicleIds).
     self.assignedEquipmentIds = {}
     self.completionPercentage = 0
     self.paymentAmount = nil

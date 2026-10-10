@@ -12,6 +12,7 @@
 		<text name="tc_header_staff" text="Staff"/>
 		<text name="tc_header_overview" text="Overview"/>
 		<text name="tc_header_finances" text="Finances"/>
+		<text name="tc_header_logbook" text="Logbook"/>
 		<text name="tc_overview_companyHeading" text="Company"/>
 		<text name="tc_overview_businessHeading" text="Business"/>
 		<text name="tc_inbox_negotiationHeading" text="Negotiation"/>
@@ -262,6 +263,7 @@
 		<text name="tc_consequences_washed" text="%s washed the equipment before bringing it back."/>
 		<text name="tc_consequences_unwashed" text="%s brought the equipment back unwashed."/>
 		<text name="tc_consequences_extraWear" text="Extra wear from %s's skill gaps: %s"/>
+		<text name="tc_consequences_breakdown" text="%s caused a fault on: %s"/>
 		<text name="tc_consequences_unknownWorker" text="A former worker"/>
 		<text name="tc_sickness_offSick" text="%s has called in sick and can't take jobs for a few days"/>
 		<text name="tc_sickness_recovered" text="%s is back at work after being off sick"/>
@@ -592,5 +594,119 @@
 		<text name="tc_pay_optionExpected" text="What they want: %s"/>
 		<text name="tc_pay_optionPercent" text="+%d%%: %s"/>
 		<text name="tc_pay_detailSalaryWants" text="%s per month (wants %s)"/>
+		<text name="tc_logbook_viewJobs" text="Jobs"/>
+		<text name="tc_logbook_viewVehicles" text="Vehicles"/>
+		<text name="tc_logbook_columnDate" text="Date"/>
+		<text name="tc_logbook_columnJob" text="Job"/>
+		<text name="tc_logbook_columnField" text="Field"/>
+		<text name="tc_logbook_columnCrew" text="Crew"/>
+		<text name="tc_logbook_columnMargin" text="Margin"/>
+		<text name="tc_logbook_columnVehicle" text="Vehicle"/>
+		<text name="tc_logbook_columnLastUsedBy" text="Last used by"/>
+		<text name="tc_logbook_columnLastUsed" text="Last used"/>
+		<text name="tc_logbook_columnCondition" text="Condition"/>
+		<text name="tc_logbook_noJobs" text="No finished jobs yet. Completed and missed jobs are recorded here."/>
+		<text name="tc_logbook_noMatches" text="No jobs match this filter"/>
+		<text name="tc_logbook_noVehicles" text="The farm has no vehicles"/>
+		<text name="tc_logbook_showing" text="Showing: %s"/>
+		<text name="tc_logbook_sortedBy" text="Sorted by: %s"/>
+		<text name="tc_logbook_filterButton" text="Filter: %s"/>
+		<text name="tc_logbook_sortButton" text="Sort: %s"/>
+		<text name="tc_logbook_filterAll" text="All jobs"/>
+		<text name="tc_logbook_filterCompleted" text="Completed"/>
+		<text name="tc_logbook_filterMissed" text="Missed"/>
+		<text name="tc_logbook_sort_lastUsed" text="Last used"/>
+		<text name="tc_logbook_sort_hours" text="Most hours"/>
+		<text name="tc_logbook_sort_faults" text="Most faults"/>
+		<text name="tc_logbook_sort_name" text="Name"/>
+		<text name="tc_logbook_openVehicleButton" text="Vehicle log"/>
+		<text name="tc_logbook_openJobButton" text="Job log"/>
+		<text name="tc_logbook_sectionJob" text="Job"/>
+		<text name="tc_logbook_sectionCrew" text="Crew"/>
+		<text name="tc_logbook_sectionEquipment" text="Equipment"/>
+		<text name="tc_logbook_sectionTime" text="Time"/>
+		<text name="tc_logbook_sectionSupplies" text="Supplies"/>
+		<text name="tc_logbook_sectionMoney" text="Money"/>
+		<text name="tc_logbook_sectionNow" text="Now"/>
+		<text name="tc_logbook_sectionYear" text="Last 12 months"/>
+		<text name="tc_logbook_sectionHistory" text="History"/>
+		<text name="tc_logbook_completed" text="Completed"/>
+		<text name="tc_logbook_missed" text="Missed"/>
+		<text name="tc_logbook_completedOn" text="Completed"/>
+		<text name="tc_logbook_missedOn" text="Missed"/>
+		<text name="tc_logbook_field" text="Field"/>
+		<text name="tc_logbook_progress" text="Done when missed"/>
+		<text name="tc_logbook_quality" text="Quality"/>
+		<text name="tc_logbook_interventions" text="Got stuck"/>
+		<text name="tc_logbook_notAllocated" text="Never allocated"/>
+		<text name="tc_logbook_ratingChip" text="Rating %d / %d"/>
+		<text name="tc_logbook_role_operator" text="Operator"/>
+		<text name="tc_logbook_role_hauler" text="Haulage"/>
+		<text name="tc_logbook_role_player" text="Driven by"/>
+		<text name="tc_logbook_aPlayer" text="A player"/>
+		<text name="tc_logbook_machine" text="Machine"/>
+		<text name="tc_logbook_usedBy" text="Used by"/>
+		<text name="tc_logbook_condition" text="Condition"/>
+		<text name="tc_logbook_service" text="Service"/>
+		<text name="tc_logbook_damage" text="Damage"/>
+		<text name="tc_logbook_paint" text="Paint wear"/>
+		<text name="tc_logbook_change" text="%s to %s"/>
+		<text name="tc_logbook_newFault" text="New fault"/>
+		<text name="tc_logbook_worseFault" text="Fault worse"/>
+		<text name="tc_logbook_faultStage" text="%s (stage %d)"/>
+		<text name="tc_logbook_activeFaults" text="Active faults"/>
+		<text name="tc_logbook_conditionShort" text="Cond. %s"/>
+		<text name="tc_logbook_damageShort" text="Damage %s"/>
+		<text name="tc_logbook_faultChip" text="Fault"/>
+		<text name="tc_logbook_faultShort" text="Fault"/>
+		<text name="tc_logbook_extraWearChip" text="+%d%% wear"/>
+		<text name="tc_logbook_dirtyChip" text="Dirty"/>
+		<text name="tc_logbook_engineHours" text="Hours worked"/>
+		<text name="tc_logbook_hours" text="%.1f h"/>
+		<text name="tc_logbook_washed" text="Washed"/>
+		<text name="tc_logbook_yes" text="Yes"/>
+		<text name="tc_logbook_no" text="No"/>
+		<text name="tc_logbook_wearCost" text="Wear cost (est.)"/>
+		<text name="tc_logbook_travelOut" text="Travel out"/>
+		<text name="tc_logbook_fieldwork" text="Fieldwork"/>
+		<text name="tc_logbook_returnWash" text="Return and wash"/>
+		<text name="tc_logbook_total" text="Total"/>
+		<text name="tc_logbook_notRecorded" text="Not recorded"/>
+		<text name="tc_logbook_none" text="None"/>
+		<text name="tc_logbook_loaded" text="From stock"/>
+		<text name="tc_logbook_agreedPrice" text="Agreed price"/>
+		<text name="tc_logbook_agreedFromOffered" text="%s (offered %s)"/>
+		<text name="tc_logbook_invoice" text="Invoice"/>
+		<text name="tc_logbook_notInvoiced" text="Not invoiced"/>
+		<text name="tc_logbook_fuel" text="Fuel"/>
+		<text name="tc_logbook_fuelValue" text="%s (%.0f l)"/>
+		<text name="tc_logbook_labour" text="Labour (est.)"/>
+		<text name="tc_logbook_machineWear" text="Machine wear (est.)"/>
+		<text name="tc_logbook_claim" text="Claim"/>
+		<text name="tc_logbook_claimPaid" text="Claim paid"/>
+		<text name="tc_logbook_claimPaidValue" text="%s of %s claimed"/>
+		<text name="tc_logbook_insured" text="Insured"/>
+		<text name="tc_logbook_uninsured" text="Uninsured"/>
+		<text name="tc_logbook_margin" text="Margin"/>
+		<text name="tc_logbook_reputation" text="Reputation"/>
+		<text name="tc_logbook_claimReputation" text="Reputation (claim)"/>
+		<text name="tc_logbook_status" text="Status"/>
+		<text name="tc_logbook_inFleet" text="In the fleet"/>
+		<text name="tc_logbook_jobs" text="Jobs"/>
+		<text name="tc_logbook_drivenBy" text="Driven by"/>
+		<text name="tc_logbook_faultsCaused" text="Faults caused"/>
+		<text name="tc_logbook_neverUsed" text="Never used"/>
+		<text name="tc_logbook_noHistory" text="No use logged in the last year"/>
+		<text name="tc_logbook_historyLine" text="%s - %s"/>
+		<text name="tc_logbook_kind_job" text="Job"/>
+		<text name="tc_logbook_kind_driver" text="Staff driver"/>
+		<text name="tc_logbook_kind_player" text="Player use"/>
+		<text name="tc_logbook_kindChip_job" text="Job"/>
+		<text name="tc_logbook_kindChip_driver" text="Driver"/>
+		<text name="tc_logbook_kindChip_player" text="Player"/>
+		<text name="tc_logbook_driverVia" text="Staff driver (%s)"/>
+		<text name="tc_logbook_source_autodrive" text="AutoDrive"/>
+		<text name="tc_logbook_source_courseplay" text="Courseplay"/>
+		<text name="tc_logbook_source_ai" text="AI helper"/>
 	</texts>
 </l10n>
