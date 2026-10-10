@@ -67,7 +67,7 @@ tcWorker quit amy 0
 
 ### `tcWorker morale <worker> [value]`
 
-Shows one of your hired workers' morale, its band, this month's busy and idle days, the morale it's drifting toward at the next month roll, and their chance of quitting then. With `value` (0-100), it sets their morale first. The change syncs to everyone.
+Shows one of your hired workers' morale, its band, this month's busy and idle days, the morale it's drifting toward at the next month roll, and their chance of quitting then. The target includes how their pay against what they expect moves it (`pay`, see `tcWorker pay`). With `value` (0-100), it sets their morale first. The change syncs to everyone.
 
 ```
 tcWorker morale 2
@@ -77,7 +77,39 @@ tcWorker morale amy 20
 Prints, for example:
 
 ```
-Amy Hall: morale 20.0 (unhappy), 3 busy / 1 idle days this month (target 70.0), quit chance 8%
+Amy Hall: morale 20.0 (unhappy), 3 busy / 1 idle days this month (target 62.0, pay -8.0), quit chance 8%
+```
+
+### `tcWorker pay <worker> [salary]`
+
+Shows one of your hired workers' pay and what drives their pay reviews:
+- **paid:** their monthly pay.
+- **market value:** what hiring them new would cost.
+- **expects:** their expected pay, and how far their pay is above or below it.
+- **loyalty:** the discount their years of service give.
+- **morale target:** how their pay moves their monthly morale drift.
+- **last review:** when they last had a pay review.
+
+With `salary`, it sets their monthly pay first. This can cut it, which the game itself never does. The change syncs to everyone.
+
+```
+tcWorker pay 2
+tcWorker pay amy 2500
+```
+
+Prints, for example:
+
+```
+Amy Hall: paid 2500, market value 2985, expects 2910 (-14.1%), loyalty 0.95 after 1 year(s), morale target -9.1, last review March, Year 3
+```
+
+### `tcWorker payReview <worker> [expected]`
+
+Gives one of your hired workers their pay review now, as if it were their hire anniversary. They roll a new expected pay, or take `expected` if you give it, but never less than they're paid. If it's more than 5% above their pay, they ask for a rise in your inbox, replacing any request they already had open.
+
+```
+tcWorker payReview 2
+tcWorker payReview amy 3200
 ```
 
 ### `tcWorker harvestBonus`

@@ -32,6 +32,7 @@ function TCInitialClientStateEvent:writeStream(streamId, connection)
     tc.HealthSafety:writeInitialClientState(streamId, connection)
     tc.Training:writeInitialClientState(streamId, connection)
     tc.Morale:writeInitialClientState(streamId, connection)
+    tc.PayReviews:writeInitialClientState(streamId, connection)
     tc.Administrator:writeInitialClientState(streamId, connection)
 end
 
@@ -56,6 +57,7 @@ function TCInitialClientStateEvent:readStream(streamId, connection)
     tc.HealthSafety:readInitialClientState(streamId, connection)
     tc.Training:readInitialClientState(streamId, connection)
     tc.Morale:readInitialClientState(streamId, connection)
+    tc.PayReviews:readInitialClientState(streamId, connection)
     tc.Administrator:readInitialClientState(streamId, connection)
 
     self:run(connection)

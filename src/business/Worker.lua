@@ -98,8 +98,16 @@ function TheContractorWorker.new(id, farmId, name, workSpeed, tierCapability, sa
     self.skills = skills or {}
     -- 045: visible, so it's sent to clients.
     self.cleanliness = cleanliness or TheContractorWorker.MIN_CLEANLINESS
-    -- 036: per period, derived from the stats (TheContractorStaff.getSalary).
+    -- 036: per period. A candidate's is their market value
+    -- (TheContractorStaff.getSalary); 058: a hired worker's is fixed at what
+    -- they were hired for and only moves with an agreed rise.
+    -- expectedSalary is what they think they should be paid, rolled at their
+    -- pay reviews (PayReviews.lua) - visible, so it's sent to clients.
+    -- lastReviewPeriod, the TCCalendar period index of their last review
+    -- (nil for none yet), is server-only.
     self.salary = salary
+    self.expectedSalary = salary
+    self.lastReviewPeriod = nil
 
     -- 030: age is visible (the player's only hint at how much a worker can
     -- still improve); growthPotential is the hidden number of stat points

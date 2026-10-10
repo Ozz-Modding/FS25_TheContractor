@@ -504,7 +504,7 @@
 		<text name="tc_legal_failedBodySolicitor" text="Your solicitor couldn't recover the money for the %s job on field %s. The customer can't pay, so the %s invoice has been written off, and the %s fee isn't refunded."/>
 		<text name="tc_legal_failedNotice" text="Pursuit failed: the invoice for %s (%s) has been written off."/>
 		<text name="tc_overhead_healthSafety" text="Health &amp; safety programme"/>
-		<text name="tc_overhead_healthSafety_desc" text="PPE, first aid kits, refresher training and risk assessments, 250 per worker a year. Staff fall sick less often and recover sooner. Without it, a worker falling sick can bring a workplace inspection and a fine."/>
+		<text name="tc_overhead_healthSafety_desc" text="PPE, first aid, training and risk assessments: 250 per worker a year. Staff get sick less and recover sooner. Without it, sickness risks an inspection and a fine."/>
 		<text name="tc_admin_title" text="Office administrator"/>
 		<text name="tc_admin_status_employed" text="Employed"/>
 		<text name="tc_admin_status_vacant" text="None"/>
@@ -579,5 +579,18 @@
 		<text name="tc_staff_releaseConfirmRedundancy" text="Release %s from your roster? After %d full years of service, you'll pay them %s: %s in lieu of %s weeks' notice and %s redundancy pay. The rest of your staff won't like it. This cannot be undone."/>
 		<text name="tc_staff_releaseConfirmLeaving" text="Release %s now? They're already leaving, so you'll only pay %s for the %s week(s)' notice they have left. The rest of your staff won't like it. This cannot be undone."/>
 		<text name="tc_staff_releaseConfirmLeavingNow" text="Release %s now? They're leaving as soon as they're back, so there's nothing more to pay. The rest of your staff won't like it. This cannot be undone."/>
+		<text name="tc_pay_requestTitle" text="Pay review: %s"/>
+		<text name="tc_pay_requestBody" text="%s would like a pay rise. They're paid %s a month and would like %s, after %d full year(s) with you. You could agree, meet them halfway at %s, or refuse. Refusing, or not answering, will go down badly, and staff paid less than they expect grow unhappy. A rise starts from the next salary run."/>
+		<text name="tc_pay_agreeButton" text="Agree"/>
+		<text name="tc_pay_halfwayButton" text="Meet halfway"/>
+		<text name="tc_pay_refuseButton" text="Refuse"/>
+		<text name="tc_pay_riseNotice" text="%s's pay is now %s a month, from the next salary run"/>
+		<text name="tc_pay_riseButton" text="Pay rise"/>
+		<text name="tc_pay_riseTitle" text="Give a pay rise"/>
+		<text name="tc_pay_risePromptWants" text="Give %s a pay rise? They're paid %s a month and would like %s. A rise is permanent and starts from the next salary run."/>
+		<text name="tc_pay_risePrompt" text="Give %s a pay rise? They're paid %s a month and are happy with it, but paying more than they expect lifts their morale for a while. A rise is permanent and starts from the next salary run."/>
+		<text name="tc_pay_optionExpected" text="What they want: %s"/>
+		<text name="tc_pay_optionPercent" text="+%d%%: %s"/>
+		<text name="tc_pay_detailSalaryWants" text="%s per month (wants %s)"/>
 	</texts>
 </l10n>
