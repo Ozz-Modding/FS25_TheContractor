@@ -1,5 +1,5 @@
--- Top-level "Contractor" in-game menu page: five sub-tabs (Overview, Inbox,
--- Calendar, Staff, Finances). Structure mirrors FS25_RedTape/src/gui/MenuRedTape.lua's own
+-- Top-level "Contractor" in-game menu page: six sub-tabs (Overview, Inbox,
+-- Calendar, Staff, Finances, Logbook). Structure mirrors FS25_RedTape/src/gui/MenuRedTape.lua's own
 -- top-level page + subCategory-tab pattern.
 
 MenuContractor = {}
@@ -17,6 +17,7 @@ MenuContractor.SUB_CATEGORY = {
     CALENDAR = 3,
     STAFF = 4,
     FINANCES = 5,
+    LOGBOOK = 6,
 }
 
 MenuContractor.HEADER_SLICES = {
@@ -25,6 +26,7 @@ MenuContractor.HEADER_SLICES = {
     [MenuContractor.SUB_CATEGORY.STAFF] = "gui.icon_ingameMenu_animals",
     [MenuContractor.SUB_CATEGORY.OVERVIEW] = "gui.icon_ingameMenu_finances",
     [MenuContractor.SUB_CATEGORY.FINANCES] = "gui.icon_ingameMenu_prices",
+    [MenuContractor.SUB_CATEGORY.LOGBOOK] = "gui.icon_ingameMenu_handToolsOverview",
 }
 
 MenuContractor.HEADER_TITLES = {
@@ -33,6 +35,7 @@ MenuContractor.HEADER_TITLES = {
     [MenuContractor.SUB_CATEGORY.STAFF] = "tc_header_staff",
     [MenuContractor.SUB_CATEGORY.OVERVIEW] = "tc_header_overview",
     [MenuContractor.SUB_CATEGORY.FINANCES] = "tc_header_finances",
+    [MenuContractor.SUB_CATEGORY.LOGBOOK] = "tc_header_logbook",
 }
 
 -- Same period->month convention as FS25_RedTape/src/RedTape.lua's
@@ -648,6 +651,58 @@ function MenuContractor:initialize()
 
     self.financesOverheadTable:setDataSource(self)
     self.financesOverheadTable:setDelegate(self)
+
+    -- Logbook (060): Jobs or Vehicles (logbookView, switched by
+    -- logbookViewSelector), each with its own list, and one detail list for
+    -- whichever's highlighted. Jobs can be filtered and vehicles sorted from
+    -- the bottom bar, and each view jumps to the matching entry in the
+    -- other (see getLogbookButtonInfo).
+    self.logbookView = "jobs"
+    self.logbookJobs = {}
+    self.selectedLogbookJobId = nil
+    self.logbookJobFilterIndex = 1
+    self.logbookJobFilters = {}
+    self.logbookVehicleRows = {}
+    self.selectedLogbookVehicleId = nil
+    self.logbookVehicleSortIndex = 1
+    self.logbookDetailRows = {}
+    self.logbookDetailIndex = nil
+
+    self.btnLogbookFilter = {
+        inputAction = InputAction.MENU_EXTRA_1,
+        text = "",
+        callback = function()
+            self:onClickLogbookFilter()
+        end
+    }
+    self.btnLogbookSort = {
+        inputAction = InputAction.MENU_EXTRA_1,
+        text = "",
+        callback = function()
+            self:onClickLogbookSort()
+        end
+    }
+    self.btnLogbookOpenVehicle = {
+        inputAction = InputAction.MENU_ACTIVATE,
+        text = g_i18n:getText("tc_logbook_openVehicleButton"),
+        callback = function()
+            self:onClickLogbookOpenVehicle()
+        end
+    }
+    self.btnLogbookOpenJob = {
+        inputAction = InputAction.MENU_ACTIVATE,
+        text = g_i18n:getText("tc_logbook_openJobButton"),
+        callback = function()
+            self:onClickLogbookOpenJob()
+        end
+    }
+
+    self.logbookJobTable:setDataSource(self)
+    self.logbookJobTable:setDelegate(self)
+    self.logbookVehicleTable:setDataSource(self)
+    self.logbookVehicleTable:setDelegate(self)
+    self.logbookDetailTable:setDataSource(self)
+    self.logbookDetailTable:setDelegate(self)
 end
 
 function MenuContractor:getMenuButtonInfo()
@@ -714,6 +769,10 @@ function MenuContractor:getMenuButtonInfo()
                 return self.menuButtonInfoFinancesWithOverdue
             end
         end
+    end
+
+    if state == MenuContractor.SUB_CATEGORY.LOGBOOK and self:hasCompany() then
+        return self:getLogbookButtonInfo()
     end
 
     return self.menuButtonInfo[state]
@@ -814,6 +873,10 @@ function MenuContractor:refreshCompanyState()
         self.financesContent:setVisible(false)
         self.selectedInvoiceId = nil
         self.selectedOverheadKey = nil
+
+        self.logbookContent:setVisible(false)
+        self.selectedLogbookJobId = nil
+        self.selectedLogbookVehicleId = nil
     end
 
     if hasCompany then
@@ -847,6 +910,7 @@ function MenuContractor:refreshCompanyState()
         self:refreshNoticesState(farmId, tc.Notices)
         self:refreshStaffState(farmId, tc.Staff, tc.Jobs)
         self:refreshFinancesState(farmId, tc.Finances)
+        self:refreshLogbookState(farmId, tc.Logbook)
 
         -- The row BoxLayouts only place their rows when told to: the
         -- layout run at GUI setup leaves them unplaced (seen in-game, 043).
@@ -864,6 +928,8 @@ function MenuContractor:refreshCompanyState()
     self.placeholderStaff:setText(lockedText)
     self.placeholderFinances:setVisible(not hasCompany)
     self.placeholderFinances:setText(lockedText)
+    self.placeholderLogbook:setVisible(not hasCompany)
+    self.placeholderLogbook:setText(lockedText)
 end
 
 -- Overview tab's last-job line (029): the most recent completion summary,
@@ -1830,6 +1896,12 @@ function MenuContractor:getNumberOfItemsInSection(list, section)
         return #self.invoiceList
     elseif list == self.financesOverheadTable then
         return #self.overheadRows
+    elseif list == self.logbookJobTable then
+        return #self.logbookJobs
+    elseif list == self.logbookVehicleTable then
+        return #self.logbookVehicleRows
+    elseif list == self.logbookDetailTable then
+        return #self.logbookDetailRows
     end
     return #self.inboxMessages + #self.inboxJobs
 end
@@ -1858,6 +1930,15 @@ function MenuContractor:populateCellForItemInSection(list, section, index, cell)
         return
     elseif list == self.financesOverheadTable then
         self:populateOverheadCell(index, cell)
+        return
+    elseif list == self.logbookJobTable then
+        self:populateLogbookJobCell(index, cell)
+        return
+    elseif list == self.logbookVehicleTable then
+        self:populateLogbookVehicleCell(index, cell)
+        return
+    elseif list == self.logbookDetailTable then
+        self:populateLogbookDetailCell(index, cell)
         return
     end
 
@@ -1974,6 +2055,29 @@ function MenuContractor:onListSelectionChanged(list, section, index)
         local definition = self.overheadRows[index]
         self.selectedOverheadKey = definition ~= nil and definition.key or nil
         self:updateOverheadDetails()
+        return
+    end
+
+    -- Logbook (060): the two left-hand lists redraw the detail list; the
+    -- detail list only tracks its highlight, for the bottom-bar jumps.
+    -- None of them reload their own list from here.
+    if list == self.logbookJobTable then
+        local entry = self.logbookJobs[index]
+        self.selectedLogbookJobId = entry ~= nil and entry.jobId or nil
+        self:updateLogbookDetails()
+        return
+    end
+
+    if list == self.logbookVehicleTable then
+        local row = self.logbookVehicleRows[index]
+        self.selectedLogbookVehicleId = row ~= nil and row.id or nil
+        self:updateLogbookDetails()
+        return
+    end
+
+    if list == self.logbookDetailTable then
+        self.logbookDetailIndex = index
+        self:setMenuButtonInfoDirty()
         return
     end
 
@@ -3586,6 +3690,661 @@ function MenuContractor:onClickReleaseAdministrator()
     end, self, prompt)
 end
 
+-- Logbook (060) ------------------------------------------------------------
+
+-- Vehicles view sort orders, cycled by btnLogbookSort.
+MenuContractor.LOGBOOK_VEHICLE_SORTS = { "lastUsed", "hours", "faults", "name" }
+
+local function getFieldName(fieldId)
+    local field = g_fieldManager:getFieldById(fieldId)
+    return field ~= nil and field:getName() or tostring(fieldId)
+end
+
+local function formatHours(hours)
+    return string.format(g_i18n:getText("tc_logbook_hours"), hours or 0)
+end
+
+-- Who a crew member was: their name, "A player" for a player-driven job
+-- nobody was seen driving, or a former employee.
+local function getCrewName(member)
+    if member.name ~= nil then
+        return member.name
+    end
+    if member.role == TheContractorLogbook.ROLE.PLAYER then
+        return g_i18n:getText("tc_logbook_aPlayer")
+    end
+    return g_i18n:getText("tc_calendar_formerWorker")
+end
+
+local function getCrewText(entry)
+    local names = {}
+    for _, member in ipairs(entry.crew) do
+        table.insert(names, getCrewName(member))
+    end
+    return #names > 0 and table.concat(names, ", ") or "-"
+end
+
+-- The margin chip: money, or "Missed".
+local function getMarginChip(entry)
+    if entry.outcome == TheContractorLogbook.OUTCOME.MISSED then
+        return g_i18n:getText("tc_logbook_missed"), "bad"
+    end
+    return formatMoney(TheContractorLogbook.getMargin(entry)), TheContractorLogbook.getMarginTone(entry)
+end
+
+-- "Damage 12% > 19%, Paint 30% > 34%" - a history row's condition on one line.
+local function getCompactChange(before, after)
+    local parts = {}
+    for _, row in ipairs(TCVehicleCondition.getChangeRows(before, after)) do
+        table.insert(parts, row.label .. " " .. row.value)
+    end
+    return table.concat(parts, ", ")
+end
+
+-- Filters: everything, completed, missed, then one per person in the log.
+function MenuContractor:buildLogbookJobFilters(entries)
+    local filters = {
+        { key = "all", text = g_i18n:getText("tc_logbook_filterAll") },
+        { key = "completed", text = g_i18n:getText("tc_logbook_filterCompleted") },
+        { key = "missed", text = g_i18n:getText("tc_logbook_filterMissed") },
+    }
+    local names, seen = {}, {}
+    for _, entry in ipairs(entries) do
+        for _, member in ipairs(entry.crew) do
+            local name = getCrewName(member)
+            if not seen[name] then
+                seen[name] = true
+                table.insert(names, name)
+            end
+        end
+    end
+    table.sort(names)
+    for _, name in ipairs(names) do
+        table.insert(filters, { key = "person", name = name, text = name })
+    end
+    return filters
+end
+
+local function matchesFilter(entry, filter)
+    if filter.key == "completed" then
+        return entry.outcome == TheContractorLogbook.OUTCOME.COMPLETED
+    elseif filter.key == "missed" then
+        return entry.outcome == TheContractorLogbook.OUTCOME.MISSED
+    elseif filter.key == "person" then
+        for _, member in ipairs(entry.crew) do
+            if getCrewName(member) == filter.name then
+                return true
+            end
+        end
+        return false
+    end
+    return true
+end
+
+-- Every vehicle the farm owns that wears (no pallets or big bags). Each
+-- row: { id (the vehicle's object id), record (nil if never logged),
+-- vehicle, name, summary }.
+function MenuContractor:buildLogbookVehicleRows(farmId, logbook)
+    local rows = {}
+
+    for _, vehicle in ipairs(g_currentMission.vehicleSystem.vehicles) do
+        local vehicleId = NetworkUtil.getObjectId(vehicle)
+        if vehicleId ~= nil and vehicle.getOwnerFarmId ~= nil and vehicle:getOwnerFarmId() == farmId and
+                not vehicle.isPallet and vehicle.spec_wearable ~= nil and not vehicle.isDeleted then
+            table.insert(rows, {
+                id = vehicleId,
+                record = logbook:getRecordForVehicle(vehicle),
+                vehicle = vehicle,
+                name = vehicle:getFullName(),
+            })
+        end
+    end
+
+    for _, row in ipairs(rows) do
+        row.summary = row.record ~= nil and TheContractorLogbook.getVehicleSummary(row.record, farmId) or
+            { jobs = 0, hours = 0, people = {}, faults = 0, wearCost = 0 }
+    end
+
+    local sort = MenuContractor.LOGBOOK_VEHICLE_SORTS[self.logbookVehicleSortIndex]
+    local function lastUsed(row)
+        local last = row.summary.last
+        return last ~= nil and (last.endedAt or last.day * 1440) or -1
+    end
+    table.sort(rows, function(a, b)
+        if sort == "hours" and a.summary.hours ~= b.summary.hours then
+            return a.summary.hours > b.summary.hours
+        elseif sort == "faults" and a.summary.faults ~= b.summary.faults then
+            return a.summary.faults > b.summary.faults
+        elseif sort ~= "name" and lastUsed(a) ~= lastUsed(b) then
+            return lastUsed(a) > lastUsed(b)
+        end
+        if a.name ~= b.name then
+            return a.name < b.name
+        end
+        return a.id < b.id
+    end)
+    return rows
+end
+
+-- Rebuilds whichever view's showing (keeping its highlight if it's still
+-- listed, else the first row, like refreshCompletedJobsState) and its
+-- details.
+function MenuContractor:refreshLogbookState(farmId, logbook)
+    self.logbookContent:setVisible(true)
+    self.logbookViewSelector:setTexts({ g_i18n:getText("tc_logbook_viewJobs"),
+        g_i18n:getText("tc_logbook_viewVehicles") })
+    self.logbookViewSelector:setState(self.logbookView == "vehicles" and 2 or 1)
+
+    local isJobs = self.logbookView ~= "vehicles"
+    local count, selectedIndex = 0, nil
+    -- reloadData re-raises the selection callback with the old index, which
+    -- would overwrite the row asked for (e.g. a jump from the other view).
+    local wantedJobId, wantedVehicleId = self.selectedLogbookJobId, self.selectedLogbookVehicleId
+
+    if isJobs then
+        local entries = logbook:getJobEntries(farmId)
+        self.logbookJobFilters = self:buildLogbookJobFilters(entries)
+        if self.logbookJobFilters[self.logbookJobFilterIndex] == nil then
+            self.logbookJobFilterIndex = 1
+        end
+        local filter = self.logbookJobFilters[self.logbookJobFilterIndex]
+
+        self.logbookJobs = {}
+        for _, entry in ipairs(entries) do
+            if matchesFilter(entry, filter) then
+                table.insert(self.logbookJobs, entry)
+            end
+        end
+        self.logbookJobTable:reloadData()
+
+        count = #self.logbookJobs
+        for i, entry in ipairs(self.logbookJobs) do
+            if entry.jobId == wantedJobId then
+                selectedIndex = i
+            end
+        end
+        self.logbookListNote:setText(string.format(g_i18n:getText("tc_logbook_showing"), filter.text))
+        self.btnLogbookFilter.text = string.format(g_i18n:getText("tc_logbook_filterButton"), filter.text)
+        self.logbookEmptyText:setText(g_i18n:getText(#entries == 0 and "tc_logbook_noJobs" or "tc_logbook_noMatches"))
+    else
+        self.logbookVehicleRows = self:buildLogbookVehicleRows(farmId, logbook)
+        self.logbookVehicleTable:reloadData()
+
+        count = #self.logbookVehicleRows
+        for i, row in ipairs(self.logbookVehicleRows) do
+            if row.id == wantedVehicleId then
+                selectedIndex = i
+            end
+        end
+        local sortText = g_i18n:getText("tc_logbook_sort_" ..
+            MenuContractor.LOGBOOK_VEHICLE_SORTS[self.logbookVehicleSortIndex])
+        self.logbookListNote:setText(string.format(g_i18n:getText("tc_logbook_sortedBy"), sortText))
+        self.btnLogbookSort.text = string.format(g_i18n:getText("tc_logbook_sortButton"), sortText)
+        self.logbookEmptyText:setText(g_i18n:getText("tc_logbook_noVehicles"))
+    end
+
+    local hasItems = count > 0
+    self.logbookJobsContainer:setVisible(isJobs and hasItems)
+    self.logbookVehiclesContainer:setVisible(not isJobs and hasItems)
+    self.logbookEmptyText:setVisible(not hasItems)
+
+    if hasItems then
+        selectedIndex = selectedIndex or 1
+        if isJobs then
+            self.logbookJobTable:setSelectedIndex(selectedIndex)
+            self.selectedLogbookJobId = self.logbookJobs[selectedIndex].jobId
+        else
+            self.logbookVehicleTable:setSelectedIndex(selectedIndex)
+            self.selectedLogbookVehicleId = self.logbookVehicleRows[selectedIndex].id
+        end
+    elseif isJobs then
+        self.selectedLogbookJobId = nil
+    else
+        self.selectedLogbookVehicleId = nil
+    end
+
+    self:updateLogbookDetails()
+end
+
+function MenuContractor:onClickLogbookView()
+    self.logbookView = self.logbookViewSelector:getState() == 2 and "vehicles" or "jobs"
+    self:refreshLogbookState(g_currentMission:getFarmId(), g_currentMission.TheContractor.Logbook)
+    self:setMenuButtonInfoDirty()
+end
+
+function MenuContractor:onClickLogbookFilter()
+    self.logbookJobFilterIndex = self.logbookJobFilterIndex % math.max(1, #self.logbookJobFilters) + 1
+    self:refreshLogbookState(g_currentMission:getFarmId(), g_currentMission.TheContractor.Logbook)
+    self:setMenuButtonInfoDirty()
+end
+
+function MenuContractor:onClickLogbookSort()
+    self.logbookVehicleSortIndex = self.logbookVehicleSortIndex % #MenuContractor.LOGBOOK_VEHICLE_SORTS + 1
+    self:refreshLogbookState(g_currentMission:getFarmId(), g_currentMission.TheContractor.Logbook)
+    self:setMenuButtonInfoDirty()
+end
+
+function MenuContractor:getSelectedLogbookJob()
+    for _, entry in ipairs(self.logbookJobs) do
+        if entry.jobId == self.selectedLogbookJobId then
+            return entry
+        end
+    end
+    return nil
+end
+
+function MenuContractor:getSelectedLogbookVehicleRow()
+    for _, row in ipairs(self.logbookVehicleRows) do
+        if row.id == self.selectedLogbookVehicleId then
+            return row
+        end
+    end
+    return nil
+end
+
+function MenuContractor:populateLogbookJobCell(index, cell)
+    local entry = self.logbookJobs[index]
+    if entry == nil then
+        return
+    end
+    cell:getAttribute("date"):setText(TCCalendar.formatDayShort(entry.day))
+    cell:getAttribute("title"):setText(entry.title or "-")
+    cell:getAttribute("field"):setText(getFieldName(entry.fieldId))
+    cell:getAttribute("crew"):setText(getCrewText(entry))
+    local chipText, tone = getMarginChip(entry)
+    setChip(cell:getAttribute("marginChip"), cell:getAttribute("marginChipText"), chipText, tone)
+end
+
+function MenuContractor:populateLogbookVehicleCell(index, cell)
+    local row = self.logbookVehicleRows[index]
+    if row == nil then
+        return
+    end
+    local last = row.summary.last
+    cell:getAttribute("name"):setText(row.name)
+    cell:getAttribute("lastUsedBy"):setText(last ~= nil and (last.who or "-") or g_i18n:getText("tc_logbook_neverUsed"))
+    cell:getAttribute("lastUsed"):setText(last ~= nil and TCCalendar.formatDayShort(last.day) or "-")
+
+    local snapshot = TCVehicleCondition.capture(row.vehicle)
+    setChip(cell:getAttribute("conditionChip"), cell:getAttribute("conditionChipText"),
+        TCVehicleCondition.getHeadline(snapshot) or "-", TCVehicleCondition.getTone(snapshot))
+
+    -- A fault one of our people caused on it this year.
+    setChip(cell:getAttribute("faultChip"), cell:getAttribute("faultChipText"),
+        row.summary.faults > 0 and g_i18n:getText("tc_logbook_faultChip") or nil, "bad")
+end
+
+function MenuContractor:populateLogbookDetailCell(index, cell)
+    local row = self.logbookDetailRows[index]
+    if row == nil then
+        return
+    end
+    local isSection = row.section ~= nil
+    cell:getAttribute("surface"):setVisible(not isSection)
+    cell:getAttribute("section"):setVisible(isSection)
+    cell:getAttribute("section"):setText(row.section or "")
+    cell:getAttribute("label"):setVisible(not isSection)
+    cell:getAttribute("label"):setText(row.label or "")
+    cell:getAttribute("value"):setVisible(not isSection)
+    cell:getAttribute("value"):setText(row.value or "")
+    setChip(cell:getAttribute("chip"), cell:getAttribute("chipText"), not isSection and row.chip or nil, row.tone)
+end
+
+-- Fills the detail panel for the highlighted job or vehicle.
+function MenuContractor:updateLogbookDetails()
+    self:setMenuButtonInfoDirty()
+
+    local title, chipText, chipTone = nil, nil, nil
+    local rows = nil
+    if self.logbookView == "vehicles" then
+        local row = self:getSelectedLogbookVehicleRow()
+        if row ~= nil then
+            title = row.name
+            rows = self:getLogbookVehicleRows(row)
+        end
+    else
+        local entry = self:getSelectedLogbookJob()
+        if entry ~= nil then
+            title = entry.title
+            chipText, chipTone = getMarginChip(entry)
+            rows = self:getLogbookJobRows(entry)
+        end
+    end
+
+    self.logbookDetailsBox:setVisible(rows ~= nil)
+    self.logbookDetailRows = rows or {}
+    self.logbookDetailIndex = nil
+    self.logbookDetailTable:reloadData()
+    if rows == nil then
+        return
+    end
+
+    self.logbookDetailTitle:setText(title or "-")
+    setChip(self.logbookDetailChip, self.logbookDetailChipText, chipText, chipTone)
+    if #self.logbookDetailRows > 0 then
+        self.logbookDetailTable:setSelectedIndex(1)
+    end
+end
+
+-- The detail rows for a job entry: sections, then label/value rows with an
+-- optional chip. Rows about a machine carry its vehicleId, for the
+-- Vehicle log button.
+function MenuContractor:getLogbookJobRows(entry)
+    local rows = {}
+    local function section(key)
+        table.insert(rows, { section = g_i18n:getText(key) })
+    end
+    local function row(label, value, chip, tone, vehicleId)
+        table.insert(rows, { label = label, value = value, chip = chip, tone = tone, vehicleId = vehicleId })
+    end
+    local function text(key)
+        return g_i18n:getText(key)
+    end
+
+    local isMissed = entry.outcome == TheContractorLogbook.OUTCOME.MISSED
+
+    section("tc_logbook_sectionJob")
+    row(text(isMissed and "tc_logbook_missedOn" or "tc_logbook_completedOn"), TCCalendar.formatDay(entry.day),
+        text(isMissed and "tc_logbook_missed" or "tc_logbook_completed"), isMissed and "bad" or "good")
+    row(text("tc_logbook_field"), getFieldName(entry.fieldId))
+    if isMissed then
+        row(text("tc_logbook_progress"), string.format("%d%%", math.floor(entry.completionPercentage or 0)))
+    elseif entry.qualityScore ~= nil then
+        row(text("tc_logbook_quality"), string.format("%d%%", entry.qualityScore),
+            string.format("%d%%", entry.qualityScore), getQualityChipTone(entry.qualityScore))
+    end
+    if (entry.stuckInterventions or 0) > 0 then
+        row(text("tc_logbook_interventions"), tostring(entry.stuckInterventions), nil, nil)
+    end
+
+    section("tc_logbook_sectionCrew")
+    if #entry.crew == 0 then
+        row("-", text("tc_logbook_notAllocated"))
+    end
+    for _, member in ipairs(entry.crew) do
+        local chip, tone = nil, nil
+        if member.rating ~= nil and entry.requiredSkillLevel ~= nil then
+            chip = string.format(text("tc_logbook_ratingChip"), member.rating, entry.requiredSkillLevel)
+            tone = member.rating >= entry.requiredSkillLevel and "good" or "warn"
+        end
+        row(text("tc_logbook_role_" .. (member.role or TheContractorLogbook.ROLE.OPERATOR)), getCrewName(member), chip,
+            tone)
+    end
+
+    if #entry.equipment > 0 then
+        section("tc_logbook_sectionEquipment")
+        for _, machine in ipairs(entry.equipment) do
+            local chip, tone = nil, nil
+            if machine.faultCaused then
+                chip, tone = text("tc_logbook_faultChip"), "bad"
+            elseif machine.extraWear ~= nil then
+                chip, tone = string.format(text("tc_logbook_extraWearChip"), machine.extraWear), "warn"
+            end
+            row(text("tc_logbook_machine"), machine.name or "?", chip, tone, machine.vehicleId)
+            if machine.workerName ~= nil then
+                row(text("tc_logbook_usedBy"), machine.workerName, nil, nil, machine.vehicleId)
+            end
+            for _, change in ipairs(TCVehicleCondition.getChangeRows(machine.startSnapshot, machine.endSnapshot)) do
+                row(change.label, change.value, change.tone ~= nil and text("tc_logbook_faultShort") or nil, change.tone,
+                    machine.vehicleId)
+            end
+            local hours = TCVehicleCondition.getHoursBetween(machine.startSnapshot, machine.endSnapshot)
+            if hours ~= nil then
+                row(text("tc_logbook_engineHours"), formatHours(hours), nil, nil, machine.vehicleId)
+            end
+            if machine.wash == TCJobConsequences.WASH.WASHED then
+                row(text("tc_logbook_washed"), text("tc_logbook_yes"), nil, nil, machine.vehicleId)
+            elseif machine.wash == TCJobConsequences.WASH.UNWASHED then
+                row(text("tc_logbook_washed"), text("tc_logbook_no"), text("tc_logbook_dirtyChip"), "warn",
+                    machine.vehicleId)
+            end
+            row(text("tc_logbook_wearCost"), formatMoney(machine.wearCost), nil, nil, machine.vehicleId)
+        end
+    end
+
+    section("tc_logbook_sectionTime")
+    local function minutes(value)
+        return value ~= nil and TheContractorJob.formatMinutes(value) or text("tc_logbook_notRecorded")
+    end
+    row(text("tc_logbook_travelOut"), minutes(entry.travelMinutes))
+    row(text("tc_logbook_fieldwork"), minutes(entry.fieldMinutes))
+    row(text("tc_logbook_returnWash"), minutes(entry.returnMinutes))
+    if entry.travelMinutes ~= nil or entry.fieldMinutes ~= nil or entry.returnMinutes ~= nil then
+        row(text("tc_logbook_total"), TheContractorJob.formatMinutes((entry.travelMinutes or 0) +
+            (entry.fieldMinutes or 0) + (entry.returnMinutes or 0)))
+    end
+
+    if #entry.supplies > 0 then
+        section("tc_logbook_sectionSupplies")
+        for _, supply in ipairs(entry.supplies) do
+            local fillTypeIndex = g_fillTypeManager:getFillTypeIndexByName(supply.fillTypeName)
+            row(text("tc_logbook_loaded"), fillTypeIndex ~= nil and
+                TCJobSupplies.formatAmount(fillTypeIndex, supply.liters) or
+                string.format("%s %.0f", supply.fillTypeName, supply.liters))
+        end
+    end
+
+    section("tc_logbook_sectionMoney")
+    local agreed = formatMoney(entry.agreedPrice or entry.price)
+    if entry.offeredPrice ~= nil and entry.agreedPrice ~= nil and math.floor(entry.offeredPrice + 0.5) ~=
+            math.floor(entry.agreedPrice + 0.5) then
+        agreed = string.format(text("tc_logbook_agreedFromOffered"), agreed, formatMoney(entry.offeredPrice))
+    end
+    row(text("tc_logbook_agreedPrice"), agreed)
+
+    if isMissed then
+        row(text("tc_logbook_invoice"), text("tc_logbook_notInvoiced"))
+    else
+        local invoice = TheContractorLogbook.getInvoice(entry)
+        if invoice ~= nil then
+            row(text("tc_logbook_invoice"), formatMoney(invoice.amount),
+                g_i18n:getText("tc_finances_status_" .. invoice.status), INVOICE_STATUS_TONES[invoice.status] or "good")
+        else
+            row(text("tc_logbook_invoice"), formatMoney(entry.price), text("tc_finances_status_paid"), "good")
+        end
+    end
+
+    row(text("tc_logbook_fuel"), string.format(text("tc_logbook_fuelValue"), formatMoney(entry.fuelCost),
+        entry.fuelLiters or 0))
+    row(text("tc_logbook_labour"), entry.labourCost ~= nil and formatMoney(entry.labourCost) or
+        text("tc_logbook_none"))
+    row(text("tc_logbook_machineWear"), entry.wearCost ~= nil and formatMoney(entry.wearCost) or
+        text("tc_logbook_notRecorded"))
+
+    if entry.claim ~= nil then
+        local cause = entry.claim.cause ~= nil and g_i18n:getText("tc_claims_cause_" .. entry.claim.cause) or "-"
+        cause = (string.gsub(cause, "^%l", string.upper))
+        row(text("tc_logbook_claim"), cause, text(entry.claim.insured and "tc_logbook_insured" or
+            "tc_logbook_uninsured"), entry.claim.insured and "info" or "bad")
+        row(text("tc_logbook_claimPaid"), string.format(text("tc_logbook_claimPaidValue"),
+            formatMoney(entry.claim.paid), formatMoney(entry.claim.amount)))
+    end
+
+    local marginChip, marginTone = getMarginChip(entry)
+    row(text("tc_logbook_margin"), formatMoney(TheContractorLogbook.getMargin(entry)), marginChip, marginTone)
+
+    if entry.reputation ~= nil then
+        row(text("tc_logbook_reputation"), string.format("%+d", entry.reputation), nil, nil)
+    end
+    if entry.claim ~= nil and (entry.claim.reputationPenalty or 0) > 0 then
+        row(text("tc_logbook_claimReputation"), string.format("%+d", -entry.claim.reputationPenalty), nil, nil)
+    end
+
+    return rows
+end
+
+local SOURCE_KEYS = {
+    autodrive = "tc_logbook_source_autodrive",
+    courseplay = "tc_logbook_source_courseplay",
+    ai = "tc_logbook_source_ai",
+}
+
+-- "Cultivate (field 12)", "Staff driver: AutoDrive", "Player use".
+local function getVehicleEntryTitle(entry)
+    if entry.kind == TheContractorLogbook.KIND.JOB then
+        return entry.jobTitle or g_i18n:getText("tc_logbook_kind_job")
+    elseif entry.kind == TheContractorLogbook.KIND.DRIVER then
+        local sources = {}
+        for source in string.gmatch(entry.source or "", "([^,]+)") do
+            table.insert(sources, g_i18n:getText(SOURCE_KEYS[source] or "tc_logbook_source_ai"))
+        end
+        if #sources == 0 then
+            return g_i18n:getText("tc_logbook_kind_driver")
+        end
+        return string.format(g_i18n:getText("tc_logbook_driverVia"), table.concat(sources, ", "))
+    end
+    return g_i18n:getText("tc_logbook_kind_player")
+end
+
+-- The detail rows for a vehicle: this year's summary, then its history,
+-- two rows an entry. History rows carry their jobId for the Job log button.
+function MenuContractor:getLogbookVehicleRows(vehicleRow)
+    local rows = {}
+    local function section(key)
+        table.insert(rows, { section = g_i18n:getText(key) })
+    end
+    local function row(label, value, chip, tone, jobId)
+        table.insert(rows, { label = label, value = value, chip = chip, tone = tone, jobId = jobId })
+    end
+    local function text(key)
+        return g_i18n:getText(key)
+    end
+
+    local farmId = g_currentMission:getFarmId()
+    local summary = vehicleRow.summary
+
+    section("tc_logbook_sectionNow")
+    local snapshot = TCVehicleCondition.capture(vehicleRow.vehicle)
+    row(text("tc_logbook_status"), text("tc_logbook_inFleet"), TCVehicleCondition.getHeadline(snapshot),
+        TCVehicleCondition.getTone(snapshot))
+    for _, state in ipairs(TCVehicleCondition.getStateRows(snapshot)) do
+        row(state.label, state.value, state.tone ~= nil and text("tc_logbook_faultShort") or nil, state.tone)
+    end
+
+    section("tc_logbook_sectionYear")
+    row(text("tc_logbook_jobs"), tostring(summary.jobs))
+    row(text("tc_logbook_engineHours"), formatHours(summary.hours))
+    row(text("tc_logbook_drivenBy"), #summary.people > 0 and table.concat(summary.people, ", ") or "-")
+    row(text("tc_logbook_faultsCaused"), tostring(summary.faults), summary.faults > 0 and
+        text("tc_logbook_faultChip") or nil, "bad")
+    row(text("tc_logbook_wearCost"), formatMoney(summary.wearCost))
+
+    section("tc_logbook_sectionHistory")
+    local entries = vehicleRow.record ~= nil and TheContractorLogbook.getVehicleEntries(vehicleRow.record, farmId) or {}
+    if #entries == 0 then
+        row("-", text("tc_logbook_noHistory"))
+    end
+    for _, entry in ipairs(entries) do
+        local kindChip, kindTone = text("tc_logbook_kindChip_" .. entry.kind), "info"
+        if entry.kind == TheContractorLogbook.KIND.PLAYER then
+            kindTone = "neutral"
+        elseif entry.outcome == TheContractorLogbook.OUTCOME.MISSED then
+            kindChip, kindTone = text("tc_logbook_missed"), "bad"
+        end
+        row(TCCalendar.formatDayShort(entry.day), string.format(text("tc_logbook_historyLine"),
+            getVehicleEntryTitle(entry), entry.who or text("tc_logbook_aPlayer")), kindChip, kindTone, entry.jobId)
+
+        local change = getCompactChange(entry.startSnapshot, entry.endSnapshot)
+        local hours = TCVehicleCondition.getHoursBetween(entry.startSnapshot, entry.endSnapshot)
+        local duration = entry.minutes ~= nil and TheContractorJob.formatMinutes(entry.minutes) or "-"
+        local chip, tone = nil, nil
+        if entry.faultCaused then
+            chip, tone = text("tc_logbook_faultChip"), "bad"
+        elseif entry.wash == TCJobConsequences.WASH.UNWASHED then
+            chip, tone = text("tc_logbook_dirtyChip"), "warn"
+        end
+        row(duration, (hours ~= nil and formatHours(hours) .. "  " or "") .. (change ~= "" and change or "-"), chip,
+            tone, entry.jobId)
+    end
+
+    return rows
+end
+
+-- Bottom bar: the filter or sort, plus the jump to the other view when
+-- there's somewhere to jump to.
+function MenuContractor:getLogbookButtonInfo()
+    local buttons = { self.btnBack, self.btnNextPage, self.btnPrevPage }
+    if self.logbookView == "vehicles" then
+        table.insert(buttons, self.btnLogbookSort)
+        if self:getLogbookJumpJobId() ~= nil then
+            table.insert(buttons, self.btnLogbookOpenJob)
+        end
+    else
+        table.insert(buttons, self.btnLogbookFilter)
+        if self:getLogbookJumpVehicleId() ~= nil then
+            table.insert(buttons, self.btnLogbookOpenVehicle)
+        end
+    end
+    return buttons
+end
+
+-- Jobs view: the machine of the highlighted detail row, else the job's
+-- first machine - as long as it's still on the farm.
+function MenuContractor:getLogbookJumpVehicleId()
+    local function isOnFarm(vehicleId)
+        local vehicle = vehicleId ~= nil and NetworkUtil.getObject(vehicleId) or nil
+        return vehicle ~= nil and not vehicle.isDeleted and vehicle.getOwnerFarmId ~= nil and
+            vehicle:getOwnerFarmId() == g_currentMission:getFarmId()
+    end
+
+    local detail = self.logbookDetailRows[self.logbookDetailIndex or 0]
+    if detail ~= nil and isOnFarm(detail.vehicleId) then
+        return detail.vehicleId
+    end
+    local entry = self:getSelectedLogbookJob()
+    for _, machine in ipairs(entry ~= nil and entry.equipment or {}) do
+        if isOnFarm(machine.vehicleId) then
+            return machine.vehicleId
+        end
+    end
+    return nil
+end
+
+-- Vehicles view: the job of the highlighted history row, else the latest
+-- job the vehicle was on - if it's still in the job log.
+function MenuContractor:getLogbookJumpJobId()
+    local logbook = g_currentMission.TheContractor.Logbook
+    local farmId = g_currentMission:getFarmId()
+    local detail = self.logbookDetailRows[self.logbookDetailIndex or 0]
+    if detail ~= nil and detail.jobId ~= nil and logbook:getJobEntry(farmId, detail.jobId) ~= nil then
+        return detail.jobId
+    end
+    local row = self:getSelectedLogbookVehicleRow()
+    if row == nil or row.record == nil then
+        return nil
+    end
+    for _, entry in ipairs(TheContractorLogbook.getVehicleEntries(row.record, farmId)) do
+        if entry.jobId ~= nil and logbook:getJobEntry(farmId, entry.jobId) ~= nil then
+            return entry.jobId
+        end
+    end
+    return nil
+end
+
+function MenuContractor:onClickLogbookOpenVehicle()
+    local vehicleId = self:getLogbookJumpVehicleId()
+    if vehicleId == nil then
+        return
+    end
+    self.logbookView = "vehicles"
+    self.selectedLogbookVehicleId = vehicleId
+    self:refreshLogbookState(g_currentMission:getFarmId(), g_currentMission.TheContractor.Logbook)
+    self:setMenuButtonInfoDirty()
+end
+
+function MenuContractor:onClickLogbookOpenJob()
+    local jobId = self:getLogbookJumpJobId()
+    if jobId == nil then
+        return
+    end
+    self.logbookView = "jobs"
+    -- Unfiltered, so the job's sure to be listed.
+    self.logbookJobFilterIndex = 1
+    self.selectedLogbookJobId = jobId
+    self:refreshLogbookState(g_currentMission:getFarmId(), g_currentMission.TheContractor.Logbook)
+    self:setMenuButtonInfoDirty()
+end
+
 function MenuContractor:refreshAdvertisingState(farmId, advertising)
     local activeLevel = advertising:getActiveLevel(farmId)
     if activeLevel ~= nil then
@@ -3667,6 +4426,11 @@ end
 
 function MenuContractor:onClickFinances()
     self.subCategoryPaging:setState(MenuContractor.SUB_CATEGORY.FINANCES, true)
+    self:setMenuButtonInfoDirty()
+end
+
+function MenuContractor:onClickLogbook()
+    self.subCategoryPaging:setState(MenuContractor.SUB_CATEGORY.LOGBOOK, true)
     self:setMenuButtonInfoDirty()
 end
 

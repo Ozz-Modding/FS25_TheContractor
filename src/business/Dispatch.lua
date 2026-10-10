@@ -266,6 +266,8 @@ function TheContractorDispatch:update(dt)
                 else
                     pending.stage = TheContractorDispatch.STAGE.RIGGED
                     pending.elapsedMs = 0
+                    -- 060: on the field - the end of the trip out.
+                    g_currentMission.TheContractor.Logbook:onArrived(job)
                 end
             elseif pending.stage == TheContractorDispatch.STAGE.RIGGED and
                 pending.elapsedMs >= TheContractorDispatch.SETTLE_MS then

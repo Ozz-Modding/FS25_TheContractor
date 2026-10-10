@@ -13,7 +13,7 @@ You type these into the developer console. You don't need cheats on. There are f
 Type a group on its own (or with `help`) to list its subcommands and their arguments. Subcommand names aren't case-sensitive. If you get the arguments wrong, the command prints that subcommand's usage.
 
 - **Your farm:** every command acts on your current farm. Most need that farm to have created a company first.
-- **Server only:** commands that change something only work on the server, which means single player or the host of a multiplayer game. The read-only lists `tcWorker list`, `tcWorker pool` and `tcCompany notices` also work on a joined client.
+- **Server only:** commands that change something only work on the server, which means single player or the host of a multiplayer game. The read-only lists `tcWorker list`, `tcWorker pool`, `tcJob log`, `tcCompany notices` and `tcCompany vehicleLog` also work on a joined client.
 - **`<worker>`:** a hired worker's id, or the start of their first or last name. `amy`, `Hall` and `3` could all mean Amy Hall (#3). If a name matches more than one worker, the command lists them and asks for the id. `tcWorker list` shows ids and names.
 
 ## Workers — `tcWorker`
@@ -231,6 +231,19 @@ Forces a job into another state. Only legal transitions are allowed:
 tcJob state 7 accepted
 ```
 
+### `tcJob log [jobId]`
+
+Shows a job's entry in the Logbook. That's the crew, each machine's condition going out and coming back, the time split, supplies, costs, margin, reputation and any claim. With no job id it lists the farm's last 10 logged jobs, newest first, with their ids and margins. Read-only, so it also works on a joined client.
+
+| Argument | Meaning |
+|---|---|
+| `jobId` | Optional. The job to show. Leave it out to list the last 10. |
+
+```
+tcJob log
+tcJob log 42
+```
+
 ## Finances — `tcFinance`
 
 ### `tcFinance invoices`
@@ -305,4 +318,13 @@ Takes a notice off your farm's Overview board. `tcCompany notices` shows the ids
 
 ```
 tcCompany removeNotice 4
+```
+
+### `tcCompany vehicleLog <vehicle>`
+
+Shows a vehicle's Logbook history for the last year. You get a summary line (jobs, hours worked, faults caused by your staff, wear cost), then every logged use: jobs, staff drivers and players, with who, how long and its condition before and after. `<vehicle>` is any part of its name, case-insensitive. Words after the first are included, so names with spaces work. Every logged vehicle that matches is shown. Only vehicles with history on your farm are searched. Read-only, so it also works on a joined client.
+
+```
+tcCompany vehicleLog fendt
+tcCompany vehicleLog 942 Vario
 ```

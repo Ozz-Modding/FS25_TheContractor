@@ -107,7 +107,7 @@ end
 -- Shared with 020's dispatch staging - see TCEquipmentVisibility. Run on
 -- every machine (server applies directly per the "no SP loopback" gotcha,
 -- other clients apply from the broadcast event, a joining client from
--- initial state, a reloading client from reapplyHidingAfterLoad).
+-- initial state, the server after a load from resolveSavedVehicles).
 local hideVehicles = TCEquipmentVisibility.hideVehicles
 local revealVehicles = TCEquipmentVisibility.revealVehicles
 
@@ -296,17 +296,14 @@ end
 
 -- Persistence ---------------------------------------------------------------
 --
--- Vehicle network object ids are the same "id space" Job.lua's own
--- assignedEquipmentIds already persists across save/load (008/018) - this
--- follows that identical, already-accepted convention rather than inventing
--- a more durable vehicle identity of its own. Equipment/worker status
--- itself doesn't need re-deriving here: a hired worker's "cooldown" status
--- string round-trips through Staff.lua's own persistence unchanged; what
--- XML load can't give back for free is the *hidden* rendering/physics state
--- (a freshly loaded vehicle always starts visible - see Vehicle:
--- onFinishedLoading in the base game), which is why loadMap re-hides
--- everything still-active immediately after loading (see
--- reapplyHidingAfterLoad below).
+-- Vehicles are saved by uniqueId (TCVehicleIds) and turned back into
+-- object ids by resolveSavedVehicles once they exist. Equipment/worker
+-- status itself doesn't need re-deriving here: a hired worker's "cooldown"
+-- status string round-trips through Staff.lua's own persistence unchanged;
+-- what XML load can't give back for free is the *hidden* rendering/physics
+-- state (a freshly loaded vehicle always starts visible - see Vehicle:
+-- onFinishedLoading in the base game), so resolveSavedVehicles hides
+-- everything still in cooldown again.
 
 function TheContractorCooldown:loadFromXMLFile(xmlFile)
     if not g_currentMission:getIsServer() then return end
@@ -336,23 +333,20 @@ function TheContractorCooldown:loadFromXMLFile(xmlFile)
         end
         local jobId = getXMLInt(xmlFile, entryKey .. "#jobId")
         local remainingMs = Utils.getNoNil(getXMLFloat(xmlFile, entryKey .. "#remainingMs"), 0)
-        local vehicleIds = TheContractorJobs.decodeIdList(getXMLString(xmlFile, entryKey .. "#vehicleIds"))
 
         local entry = {
             id = id,
             farmId = farmId,
             jobId = jobId,
             workerIds = workerIds,
-            vehicleIds = vehicleIds,
+            vehicleIds = {},
+            -- Until resolveSavedVehicles.
+            savedVehicleUniqueIds = TCVehicleIds.loadList(xmlFile, entryKey),
             remainingMs = remainingMs,
         }
 
         self.entriesByFarm[farmId] = self.entriesByFarm[farmId] or {}
         self.entriesByFarm[farmId][id] = entry
-
-        for _, vehicleId in ipairs(vehicleIds) do
-            self.vehicleIdsInCooldown[vehicleId] = true
-        end
 
         if id >= self.nextCooldownId then
             self.nextCooldownId = id + 1
@@ -381,26 +375,27 @@ function TheContractorCooldown:saveToXmlFile(xmlFile)
                 setXMLInt(xmlFile, entryKey .. "#jobId", entry.jobId)
             end
             setXMLFloat(xmlFile, entryKey .. "#remainingMs", entry.remainingMs)
-            setXMLString(xmlFile, entryKey .. "#vehicleIds", TheContractorJobs.encodeIdList(entry.vehicleIds))
+            TCVehicleIds.saveList(xmlFile, entryKey, entry.vehicleIds)
 
             index = index + 1
         end
     end
 end
 
--- Called once from TheContractor:loadMap, after loadFromXMLFile - vehicles
--- are already spawned by this point (the same assumption Allocation/
--- Dispatch/Watchdog's own NetworkUtil.getObject calls already make), so any
--- cooldown entry still active gets its equipment hidden again immediately,
--- rather than sitting fully visible/available for one frame (or forever, if
--- nothing else in-game would ever notice) despite still-frozen worker status
--- and a live remainingMs countdown.
-function TheContractorCooldown:reapplyHidingAfterLoad()
-    if not g_currentMission:getIsServer() then return end
-
+-- Server, once vehicles exist (TheContractor:resolveSavedVehicles): the
+-- saved uniqueIds back to object ids, and anything still in cooldown hidden
+-- again (vehicles always load visible).
+function TheContractorCooldown:resolveSavedVehicles()
     for _, farmEntries in pairs(self.entriesByFarm) do
         for _, entry in pairs(farmEntries) do
-            hideVehicles(entry.vehicleIds)
+            if entry.savedVehicleUniqueIds ~= nil then
+                entry.vehicleIds = TCVehicleIds.resolveList(entry.savedVehicleUniqueIds)
+                entry.savedVehicleUniqueIds = nil
+                for _, vehicleId in ipairs(entry.vehicleIds) do
+                    self.vehicleIdsInCooldown[vehicleId] = true
+                end
+                hideVehicles(entry.vehicleIds)
+            end
         end
     end
 end
@@ -424,7 +419,7 @@ end
 -- resolves eagerly via NetworkUtil.getObject inside hideVehicles, so any
 -- vehicle not yet streamed in simply doesn't get hidden here. That's an
 -- acceptable, self-correcting gap for a joining client specifically (not a
--- save/load reload, which is what reapplyHidingAfterLoad exists for): the
+-- save/load reload, which is what resolveSavedVehicles re-hides for): the
 -- vehicle will already be hidden from the server/host's perspective (they
 -- applied it directly when the cooldown started, long before this client
 -- joined), so the joining client briefly sees it visible until whatever

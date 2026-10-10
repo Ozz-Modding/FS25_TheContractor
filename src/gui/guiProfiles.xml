@@ -220,6 +220,26 @@
     <Profile name="tc_listRowCellRight" extends="tc_listRowCellLeft">
         <textAlignment value="right" />
     </Profile>
+    <!-- Logbook (060) detail list: label/value rows like tc_detailRows, plus
+         green section titles, as list rows so a long record scrolls. -->
+    <Profile name="tc_listRowLabel" extends="tc_listRowCellLeft">
+        <textSize value="13px" />
+        <textBold value="true" />
+        <textUpperCase value="true" />
+        <textColor value="$preset_tc_mutedText" />
+        <textLayoutMode value="truncate" />
+    </Profile>
+    <Profile name="tc_listRowValue" extends="tc_listRowCellLeft">
+        <textColor value="$preset_tc_valueText" />
+        <textLayoutMode value="truncate" />
+    </Profile>
+    <Profile name="tc_listRowSection" extends="tc_listRowCellLeft">
+        <textSize value="16px" />
+        <textBold value="true" />
+        <textUpperCase value="true" />
+        <textColor value="$preset_fs25_colorMainHighlight" />
+        <textSelectedColor value="$preset_fs25_colorMainHighlight" />
+    </Profile>
     <Profile name="tc_table" extends="emptyPanel" with="anchorStretchingYLeft pivotTopLeft">
         <listItemSpacing value="3px"/>
     </Profile>

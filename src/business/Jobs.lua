@@ -485,6 +485,10 @@ function TheContractorJobs:missJob(job)
         g_server:broadcastEvent(TCJobStateChangedEvent.new(job.farmId, job.id, TheContractorJob.STATE.MISSED))
     end
 
+    -- 060: into the logbook, while its machines are still where the job
+    -- left them.
+    g_currentMission.TheContractor.Logbook:recordJobMissed(job, penalty)
+
     if wasAllocated then
         self:releaseMissedJobResources(job)
     end
@@ -615,6 +619,8 @@ function TheContractorJobs:markWorkStarted(job)
         return
     end
     job.workStartedAt = TheContractorJobs.getGameMinutes()
+    -- 060: and the condition its machines set off in.
+    g_currentMission.TheContractor.Logbook:onWorkStarted(job)
 end
 
 -- Job history (029): completed jobs stay in jobsByFarm (and the save) for
@@ -850,6 +856,10 @@ function TheContractorJobs:completeJob(job)
     -- unloading, etc.), during which equipment is physically hidden. See
     -- TheContractorCooldown:startCooldown.
     g_currentMission.TheContractor.Cooldown:startCooldown(job)
+
+    -- 060: into the logbook - after the cooldown's set up, since its length
+    -- is the trip back.
+    g_currentMission.TheContractor.Logbook:recordJobCompleted(job, reputationReward)
 
     TCJobProgress.clearJob(job.id)
     TCHaulage.stopDelivery(job)
@@ -1100,16 +1110,15 @@ function TheContractorJobs:loadFromXMLFile(xmlFile)
                 self.hasLegacyDeadlines = true
             end
             job.assignedWorkerId = getXMLInt(xmlFile, jobKey .. "#assignedWorkerId")
-            job.assignedEquipmentIds = TheContractorJobs.decodeIdList(getXMLString(xmlFile,
-                jobKey .. "#assignedEquipmentIds"))
+            -- Vehicles by uniqueId until resolveSavedVehicles.
+            job.savedEquipmentUniqueIds = TCVehicleIds.loadList(xmlFile, jobKey .. ".equipment")
             job.paymentAmount = getXMLFloat(xmlFile, jobKey .. "#paymentAmount")
             job.invoiceDueDay = getXMLInt(xmlFile, jobKey .. "#invoiceDueDay")
             job.equipmentHome = TCJobSiteSetup.loadHomeFromXML(xmlFile, jobKey .. ".equipmentHome")
             job.transportRemainingMs = getXMLFloat(xmlFile, jobKey .. "#transportRemainingMs")
             job.includesHaulage = Utils.getNoNil(getXMLBool(xmlFile, jobKey .. "#includesHaulage"), false)
             job.haulerWorkerId = getXMLInt(xmlFile, jobKey .. "#haulerWorkerId")
-            job.haulageEquipmentIds = TheContractorJobs.decodeIdList(getXMLString(xmlFile,
-                jobKey .. "#haulageEquipmentIds"))
+            job.savedHaulageUniqueIds = TCVehicleIds.loadList(xmlFile, jobKey .. ".haulageEquipment")
             job.deliveryStationUniqueId = getXMLString(xmlFile, jobKey .. ".delivery#stationUniqueId")
             job.deliveryStationIndex = getXMLInt(xmlFile, jobKey .. ".delivery#stationIndex")
             job.deliveryStationName = getXMLString(xmlFile, jobKey .. ".delivery#stationName")
@@ -1148,6 +1157,26 @@ function TheContractorJobs:loadFromXMLFile(xmlFile)
         end
 
         farmIndex = farmIndex + 1
+    end
+end
+
+-- Server, once vehicles exist (TheContractor:resolveSavedVehicles): the
+-- saved uniqueIds back to object ids, for every job and the equipment
+-- data hanging off it.
+function TheContractorJobs:resolveSavedVehicles()
+    for _, farmJobs in pairs(self.jobsByFarm) do
+        for _, job in pairs(farmJobs) do
+            if job.savedEquipmentUniqueIds ~= nil then
+                job.assignedEquipmentIds = TCVehicleIds.resolveList(job.savedEquipmentUniqueIds)
+                job.savedEquipmentUniqueIds = nil
+            end
+            if job.savedHaulageUniqueIds ~= nil then
+                job.haulageEquipmentIds = TCVehicleIds.resolveList(job.savedHaulageUniqueIds)
+                job.savedHaulageUniqueIds = nil
+            end
+            TCJobConsequences.resolveSavedVehicles(job)
+            TCJobSiteSetup.resolveSavedHome(job)
+        end
     end
 end
 
@@ -1202,8 +1231,7 @@ function TheContractorJobs:saveToXmlFile(xmlFile)
                 setXMLInt(xmlFile, jobKey .. "#assignedWorkerId", job.assignedWorkerId)
             end
 
-            setXMLString(xmlFile, jobKey .. "#assignedEquipmentIds",
-                TheContractorJobs.encodeIdList(job.assignedEquipmentIds))
+            TCVehicleIds.saveList(xmlFile, jobKey .. ".equipment", job.assignedEquipmentIds)
 
             if job.paymentAmount ~= nil then
                 setXMLFloat(xmlFile, jobKey .. "#paymentAmount", job.paymentAmount)
@@ -1225,10 +1253,7 @@ function TheContractorJobs:saveToXmlFile(xmlFile)
                 if job.haulerWorkerId ~= nil then
                     setXMLInt(xmlFile, jobKey .. "#haulerWorkerId", job.haulerWorkerId)
                 end
-                if #job.haulageEquipmentIds > 0 then
-                    setXMLString(xmlFile, jobKey .. "#haulageEquipmentIds",
-                        TheContractorJobs.encodeIdList(job.haulageEquipmentIds))
-                end
+                TCVehicleIds.saveList(xmlFile, jobKey .. ".haulageEquipment", job.haulageEquipmentIds)
                 if job.deliveryStationUniqueId ~= nil then
                     setXMLString(xmlFile, jobKey .. ".delivery#stationUniqueId", job.deliveryStationUniqueId)
                     setXMLInt(xmlFile, jobKey .. ".delivery#stationIndex", job.deliveryStationIndex)

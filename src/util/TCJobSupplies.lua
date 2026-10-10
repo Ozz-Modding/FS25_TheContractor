@@ -315,6 +315,7 @@ local function pickFillType(farmId, tank)
     return best
 end
 
+-- Returns the amount loaded and its fill type.
 local function fillTank(farmId, tank)
     local vehicle, fillUnitIndex = tank.vehicle, tank.fillUnitIndex
     local fillTypeIndex = vehicle:getFillUnitFillLevel(fillUnitIndex) > 0 and
@@ -335,7 +336,7 @@ local function fillTank(farmId, tank)
     vehicle:addFillUnitFillLevel(farmId, fillUnitIndex, taken, fillTypeIndex, ToolType.UNDEFINED, nil)
     Logging.info("TheContractor: filled '%s' with %s from farm %d's stock", vehicle:getName(),
         TCJobSupplies.formatAmount(fillTypeIndex, taken), farmId)
-    return taken
+    return taken, fillTypeIndex
 end
 
 -- Server-only. Tops up the job's tanks from the farm's stock and says
@@ -362,7 +363,12 @@ function TCJobSupplies.topUp(job, onlyBelowRatio, canFill)
             local capacity = vehicle:getFillUnitCapacity(fillUnitIndex)
             local wantsFill = not onlyBelowRatio or level < capacity * TCJobSupplies.REFILL_RATIO
             if wantsFill and (canFill == nil or canFill(tank)) then
-                loaded = loaded + fillTank(job.farmId, tank)
+                local taken, fillTypeIndex = fillTank(job.farmId, tank)
+                loaded = loaded + taken
+                -- 060: the job's supplies, for the logbook.
+                if taken > 0 then
+                    g_currentMission.TheContractor.Logbook:onSuppliesLoaded(job, fillTypeIndex, taken)
+                end
             end
 
             if isTankOut(tank) and status == nil then

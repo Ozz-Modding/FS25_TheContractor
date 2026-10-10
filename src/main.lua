@@ -17,6 +17,8 @@ source(TheContractor.dir .. "src/util/TCJobSiteSetup.lua")
 source(TheContractor.dir .. "src/util/TCHaulage.lua")
 source(TheContractor.dir .. "src/util/TCJobSupplies.lua")
 source(TheContractor.dir .. "src/util/TCJobConsequences.lua")
+source(TheContractor.dir .. "src/util/TCVehicleCondition.lua")
+source(TheContractor.dir .. "src/util/TCVehicleIds.lua")
 source(TheContractor.dir .. "src/util/TCWorkerFieldSpeed.lua")
 source(TheContractor.dir .. "src/util/TCAutoDrive.lua")
 source(TheContractor.dir .. "src/util/TCCourseplay.lua")
@@ -56,6 +58,7 @@ source(TheContractor.dir .. "src/business/Training.lua")
 source(TheContractor.dir .. "src/business/Morale.lua")
 source(TheContractor.dir .. "src/business/PayReviews.lua")
 source(TheContractor.dir .. "src/business/Administrator.lua")
+source(TheContractor.dir .. "src/business/Logbook.lua")
 source(TheContractor.dir .. "src/events/TCInitialClientStateEvent.lua")
 source(TheContractor.dir .. "src/events/TCSettingsEvent.lua")
 source(TheContractor.dir .. "src/events/TCCreateCompanyEvent.lua")
@@ -119,6 +122,9 @@ source(TheContractor.dir .. "src/events/TCWorkerPayChangedEvent.lua")
 source(TheContractor.dir .. "src/events/TCPayRiseEvent.lua")
 source(TheContractor.dir .. "src/events/TCAdministratorRequestEvent.lua")
 source(TheContractor.dir .. "src/events/TCAdministratorChangedEvent.lua")
+source(TheContractor.dir .. "src/events/TCLogJobRecordedEvent.lua")
+source(TheContractor.dir .. "src/events/TCLogVehicleEntryEvent.lua")
+source(TheContractor.dir .. "src/events/TCLogClaimEvent.lua")
 
 -- The top-level Contractor page itself stays always-visible (see Company.lua
 -- and MenuContractor's Overview tab): "Create Company" has to live somewhere
@@ -133,6 +139,7 @@ end
 
 function TheContractor:loadMap()
     g_currentMission.TheContractor = self
+    self.hasResolvedSavedVehicles = false
 
     self.Settings = TheContractorSettings.new()
     self.Reputation = TheContractorReputation.new()
@@ -165,10 +172,12 @@ function TheContractor:loadMap()
     self.PayReviews = TheContractorPayReviews.new()
     self.PayReviews:register(self.Inbox)
     self.Administrator = TheContractorAdministrator.new()
+    self.Logbook = TheContractorLogbook.new()
     self.InboxHUD = TCInboxHUD.new()
 
     -- Module-level caches outlive a savegame; start each load clean.
     TCFieldAccess.reset()
+    TCEquipmentVisibility.reset()
     TCVehicleLock.reset()
     TCHaulage.reset()
     TCFieldPreparation.reset()
@@ -213,6 +222,8 @@ function TheContractor:loadMap()
     self.Inbox:startDailyTick()
     self.Overheads:startTicks()
     self.Claims:startDailyTick()
+    -- 060: every machine prunes its own copy.
+    self.Logbook:startDailyTick()
 
     -- Console commands: each subsystem registers its own (see TCConsole).
     TCConsole.reset()
@@ -227,6 +238,7 @@ function TheContractor:loadMap()
     TheContractorClaims.registerConsoleCommands()
     TheContractorReputation.registerConsoleCommands()
     TheContractorNotices.registerConsoleCommands()
+    TheContractorLogbook.registerConsoleCommands()
     TCConsole.install()
 
     Logging.info("TheContractor: loadMap")
@@ -274,14 +286,24 @@ function TheContractor:loadFromXMLFile()
     self.Morale:loadFromXMLFile(xmlFile)
     self.PayReviews:loadFromXMLFile(xmlFile)
     self.Administrator:loadFromXMLFile(xmlFile)
+    self.Logbook:loadFromXMLFile(xmlFile)
 
     delete(xmlFile)
+end
 
-    -- Vehicles always load fully visible/in-physics (base game default, see
-    -- Vehicle:onFinishedLoading) - re-hide anything still mid-buffer from a
-    -- prior session now that vehicles are actually resolvable (see
-    -- TheContractorCooldown:reapplyHidingAfterLoad).
-    self.Cooldown:reapplyHidingAfterLoad()
+-- Server, once: turns the vehicle uniqueIds the save stored back into
+-- network object ids (see TCVehicleIds). Vehicles load after loadMap, so
+-- this waits for whichever comes first of the first update, a client
+-- joining (a paused dedicated server has no updates) or a save.
+function TheContractor:resolveSavedVehicles()
+    if self.hasResolvedSavedVehicles or not g_currentMission:getIsServer() then
+        return
+    end
+    self.hasResolvedSavedVehicles = true
+
+    self.Jobs:resolveSavedVehicles()
+    self.Cooldown:resolveSavedVehicles()
+    self.Logbook:resolveSavedVehicles()
 end
 
 -- Appended onto FSBaseMission.saveSavegame (see installSaveHook below), so
@@ -292,6 +314,8 @@ function TheContractor:saveToXmlFile()
 
     local tc = g_currentMission.TheContractor
     if tc == nil then return end
+
+    tc:resolveSavedVehicles()
 
     local savegameFolderPath = g_currentMission.missionInfo.savegameDirectory .. "/"
 
@@ -318,6 +342,7 @@ function TheContractor:saveToXmlFile()
     tc.Morale:saveToXmlFile(xmlFile)
     tc.PayReviews:saveToXmlFile(xmlFile)
     tc.Administrator:saveToXmlFile(xmlFile)
+    tc.Logbook:saveToXmlFile(xmlFile)
 
     saveXMLFile(xmlFile)
     delete(xmlFile)
@@ -345,6 +370,8 @@ function TheContractor.installSaveHook()
 end
 
 function TheContractor:sendInitialClientState(connection, user, farm)
+    -- self is the mission here (appended onto FSBaseMission).
+    g_currentMission.TheContractor:resolveSavedVehicles()
     connection:sendEvent(TCInitialClientStateEvent.new())
 end
 
@@ -401,6 +428,10 @@ function TheContractor:deleteMap()
         self.Claims:stopDailyTick()
     end
 
+    if self.Logbook ~= nil then
+        self.Logbook:stopDailyTick()
+    end
+
     if self.InboxHUD ~= nil then
         self.InboxHUD:delete()
     end
@@ -413,11 +444,15 @@ function TheContractor:deleteMap()
 end
 
 function TheContractor:update(dt)
+    -- Before anything that touches job equipment.
+    self:resolveSavedVehicles()
+
     if self.InboxHUD ~= nil then
         self.InboxHUD:update(dt)
     end
 
     TCJobProgress.update(dt)
+    TCEquipmentVisibility.update(dt)
     TCFieldAccess.update(dt)
     TCVehicleLock.update(dt)
     TCHaulage.update(dt)
@@ -442,6 +477,12 @@ function TheContractor:update(dt)
 
     if self.Drivers ~= nil then
         self.Drivers:update(dt)
+    end
+
+    -- After Drivers: its first update relinks saved bindings, which the
+    -- logbook's driver sessions follow.
+    if self.Logbook ~= nil then
+        self.Logbook:update(dt)
     end
 end
 

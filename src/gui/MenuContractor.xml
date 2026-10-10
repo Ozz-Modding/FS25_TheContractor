@@ -29,6 +29,9 @@
             <Button profile="fs25_subCategorySelectorTabbedTab" id="subCategoryTabs[5]" text="$l10n_tc_header_finances" onClick="onClickFinances">
                 <ThreePartBitmap profile="fs25_subCategorySelectorTabbedTabBg" name="background"/>
             </Button>
+            <Button profile="fs25_subCategorySelectorTabbedTab" id="subCategoryTabs[6]" text="$l10n_tc_header_logbook" onClick="onClickLogbook">
+                <ThreePartBitmap profile="fs25_subCategorySelectorTabbedTabBg" name="background"/>
+            </Button>
         </BoxLayout>
         <ThreePartBitmap profile="fs25_lineSeparatorTopHighlighted" position="0px -57px"/>
         <MultiTextOption profile="fs25_subCategorySelectorTabbed" id="subCategoryPaging" position="0px -10px" onClick="updateSubCategoryPages"/>
@@ -738,6 +741,98 @@
                     </GuiElement>
                 </BoxLayout>
                 <Text profile="tc_panelNote" text="$l10n_tc_finances_forecastNote" position="704px -604px" size="752px 24px"/>
+            </GuiElement>
+        </GuiElement>
+
+        <!-- Logbook (060) ================================================== -->
+        <GuiElement profile="fs25_subCategorySelectorTabbedContainer" id="subCategoryPages[6]">
+            <Text profile="tc_emptyStateText" id="placeholderLogbook" text="$l10n_tc_placeholder_locked" position="40px -250px" size="1440px 60px" textMaxNumLines="2"/>
+
+            <GuiElement id="logbookContent" position="0px 0px">
+                <!-- Jobs | Vehicles. The note beside it says what the list is filtered or sorted by. -->
+                <MultiTextOption profile="tc_calendarPeriodSwitcher" id="logbookViewSelector" position="40px -20px" onClick="onClickLogbookView" wrap="true" size="380px 32px"/>
+                <Text profile="tc_panelNote" id="logbookListNote" text="" position="440px -26px" size="200px 24px"/>
+
+                <!-- Finished jobs, newest first. -->
+                <GuiElement id="logbookJobsContainer" position="40px -64px">
+                    <GuiElement profile="tc_tableHeaderRow" position="0px 0px" size="600px 30px">
+                        <Button profile="tc_tableHeader" position="14px 0px" text="$l10n_tc_logbook_columnDate" handleFocus="false"/>
+                        <Button profile="tc_tableHeader" position="100px 0px" text="$l10n_tc_logbook_columnJob" handleFocus="false"/>
+                        <Button profile="tc_tableHeader" position="290px 0px" text="$l10n_tc_logbook_columnField" handleFocus="false"/>
+                        <Button profile="tc_tableHeader" position="350px 0px" text="$l10n_tc_logbook_columnCrew" handleFocus="false"/>
+                        <Button profile="tc_tableHeader" position="490px 0px" text="$l10n_tc_logbook_columnMargin" handleFocus="false"/>
+                        <Bitmap profile="tc_tableHeaderDivider"/>
+                    </GuiElement>
+                    <SmoothList id="logbookJobTable" profile="tc_table" position="0px -36px" size="600px 530px">
+                        <ListItem profile="tc_tableListItem">
+                            <RoundCorner profile="tc_tableRowSurface"/>
+                            <Bitmap profile="tc_tableRowAccent"/>
+                            <Text profile="tc_listRowCellLeft" position="14px 0px" size="80px 32px" name="date"/>
+                            <Text profile="tc_listRowValue" position="100px 0px" size="184px 32px" name="title"/>
+                            <Text profile="tc_listRowCellLeft" position="290px 0px" size="54px 32px" name="field"/>
+                            <Text profile="tc_listRowValue" position="350px 0px" size="134px 32px" name="crew"/>
+                            <RoundCorner profile="tc_rowChip" position="490px 0px" size="100px 20px" name="marginChip"/>
+                            <Text profile="tc_rowChipText" position="490px 0px" size="100px 20px" name="marginChipText"/>
+                        </ListItem>
+                    </SmoothList>
+                    <ThreePartBitmap profile="tc_slider_box" position="610px -36px" size="6px 530px">
+                        <Slider profile="fs25_listSlider" dataElementId="logbookJobTable"/>
+                    </ThreePartBitmap>
+                </GuiElement>
+
+                <!-- Every farm vehicle, plus sold ones with history left. -->
+                <GuiElement id="logbookVehiclesContainer" position="40px -64px">
+                    <GuiElement profile="tc_tableHeaderRow" position="0px 0px" size="600px 30px">
+                        <Button profile="tc_tableHeader" position="14px 0px" text="$l10n_tc_logbook_columnVehicle" handleFocus="false"/>
+                        <Button profile="tc_tableHeader" position="206px 0px" text="$l10n_tc_logbook_columnLastUsedBy" handleFocus="false"/>
+                        <Button profile="tc_tableHeader" position="342px 0px" text="$l10n_tc_logbook_columnLastUsed" handleFocus="false"/>
+                        <Button profile="tc_tableHeader" position="438px 0px" text="$l10n_tc_logbook_columnCondition" handleFocus="false"/>
+                        <Bitmap profile="tc_tableHeaderDivider"/>
+                    </GuiElement>
+                    <SmoothList id="logbookVehicleTable" profile="tc_table" position="0px -36px" size="600px 530px">
+                        <ListItem profile="tc_tableListItem">
+                            <RoundCorner profile="tc_tableRowSurface"/>
+                            <Bitmap profile="tc_tableRowAccent"/>
+                            <Text profile="tc_listRowValue" position="14px 0px" size="186px 32px" name="name"/>
+                            <Text profile="tc_listRowValue" position="206px 0px" size="130px 32px" name="lastUsedBy"/>
+                            <Text profile="tc_listRowCellLeft" position="342px 0px" size="90px 32px" name="lastUsed"/>
+                            <RoundCorner profile="tc_rowChip" position="438px 0px" size="82px 20px" name="conditionChip"/>
+                            <Text profile="tc_rowChipText" position="438px 0px" size="82px 20px" name="conditionChipText"/>
+                            <RoundCorner profile="tc_rowChip" position="526px 0px" size="66px 20px" name="faultChip"/>
+                            <Text profile="tc_rowChipText" position="526px 0px" size="66px 20px" name="faultChipText"/>
+                        </ListItem>
+                    </SmoothList>
+                    <ThreePartBitmap profile="tc_slider_box" position="610px -36px" size="6px 530px">
+                        <Slider profile="fs25_listSlider" dataElementId="logbookVehicleTable"/>
+                    </ThreePartBitmap>
+                </GuiElement>
+
+                <Text profile="tc_emptyStateText" id="logbookEmptyText" text="" position="40px -250px" size="600px 60px" textMaxNumLines="2"/>
+
+                <!-- The highlighted job or vehicle: a scrolling list of
+                     section titles and label/value rows (MenuContractor's
+                     getLogbookJobRows/getLogbookVehicleRows). -->
+                <GuiElement id="logbookDetailsBox" position="680px -20px">
+                    <RoundCorner profile="tc_panel" position="0px 0px" size="800px 610px"/>
+                    <Text profile="tc_panelHeading" id="logbookDetailTitle" text="" position="24px -16px" size="620px 32px"/>
+                    <RoundCorner profile="tc_chip" id="logbookDetailChip" position="656px -22px" size="120px 20px"/>
+                    <Text profile="tc_chipText" id="logbookDetailChipText" position="656px -22px" size="120px 20px"/>
+                    <Bitmap profile="tc_divider" position="24px -56px" size="752px 1px"/>
+                    <SmoothList id="logbookDetailTable" profile="tc_table" position="24px -66px" size="740px 530px">
+                        <ListItem profile="tc_tableListItem">
+                            <RoundCorner profile="tc_tableRowSurface" name="surface"/>
+                            <Bitmap profile="tc_tableRowAccent"/>
+                            <Text profile="tc_listRowSection" position="14px 0px" size="700px 32px" name="section"/>
+                            <Text profile="tc_listRowLabel" position="14px 0px" size="196px 32px" name="label"/>
+                            <Text profile="tc_listRowValue" position="216px 0px" size="400px 32px" name="value"/>
+                            <RoundCorner profile="tc_rowChip" position="626px 0px" size="104px 20px" name="chip"/>
+                            <Text profile="tc_rowChipText" position="626px 0px" size="104px 20px" name="chipText"/>
+                        </ListItem>
+                    </SmoothList>
+                    <ThreePartBitmap profile="tc_slider_box" position="770px -66px" size="6px 530px">
+                        <Slider profile="fs25_listSlider" dataElementId="logbookDetailTable"/>
+                    </ThreePartBitmap>
+                </GuiElement>
             </GuiElement>
         </GuiElement>
     </GuiElement>
