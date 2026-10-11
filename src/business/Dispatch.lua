@@ -184,7 +184,16 @@ function TheContractorDispatch:startJobForWorker(job, skipTransport)
     -- tank still empty (nothing in stock) or holding the wrong product, the
     -- worker doesn't go anywhere: the job's on hold until TCJobSupplies'
     -- poll finds the farm restocked and calls this again.
+    -- 063: diesel is one of them, and a fresh trip out burns a little of
+    -- it. Should that empty a tank (the farm's out of diesel), the second
+    -- topUp is what puts the job on hold.
     local loaded, supplyStatus, supplyFillTypeName = TCJobSupplies.topUp(job)
+    if supplyStatus == nil and not skipTransport and job.transportRemainingMs == nil and
+        TCJobFuel.burnTravelFuel(job) then
+        local reloaded
+        reloaded, supplyStatus, supplyFillTypeName = TCJobSupplies.topUp(job)
+        loaded = loaded + reloaded
+    end
     local jobs = g_currentMission.TheContractor.Jobs
     jobs:setJobSupplyStatus(job, supplyStatus, supplyFillTypeName)
     if supplyStatus ~= nil then
@@ -446,8 +455,9 @@ function TheContractorDispatch:onAIJobStopped(aiJob, aiMessage)
     -- 032: an empty tank isn't the watchdog's business - it's a supplies
     -- problem. Forgotten here straight away (like stopJob does) so the job
     -- reads as not working, and left for TCJobSupplies' poll to refill and
-    -- restart, or put on hold.
-    if not isClean and aiMessage.isa ~= nil and aiMessage:isa(AIMessageErrorOutOfFill) then
+    -- restart, or put on hold. An empty diesel tank (063) is the same.
+    if not isClean and aiMessage.isa ~= nil and (aiMessage:isa(AIMessageErrorOutOfFill) or
+            aiMessage:isa(AIMessageErrorOutOfFuel)) then
         self.ourJobIdByAIJob[aiJob] = nil
         if self.aiJobByOurJobId[ourJobId] == aiJob then
             self.aiJobByOurJobId[ourJobId] = nil

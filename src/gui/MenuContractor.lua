@@ -1,5 +1,5 @@
--- Top-level "Contractor" in-game menu page: six sub-tabs (Overview, Inbox,
--- Calendar, Staff, Finances, Logbook). Structure mirrors FS25_RedTape/src/gui/MenuRedTape.lua's own
+-- Top-level "Contractor" in-game menu page: seven sub-tabs (Overview, Inbox,
+-- Calendar, Staff, Finances, Logbook, Supplies). Structure mirrors FS25_RedTape/src/gui/MenuRedTape.lua's own
 -- top-level page + subCategory-tab pattern.
 
 MenuContractor = {}
@@ -18,6 +18,7 @@ MenuContractor.SUB_CATEGORY = {
     STAFF = 4,
     FINANCES = 5,
     LOGBOOK = 6,
+    SUPPLIES = 7,
 }
 
 MenuContractor.HEADER_SLICES = {
@@ -27,6 +28,7 @@ MenuContractor.HEADER_SLICES = {
     [MenuContractor.SUB_CATEGORY.OVERVIEW] = "gui.icon_ingameMenu_finances",
     [MenuContractor.SUB_CATEGORY.FINANCES] = "gui.icon_ingameMenu_prices",
     [MenuContractor.SUB_CATEGORY.LOGBOOK] = "gui.icon_ingameMenu_handToolsOverview",
+    [MenuContractor.SUB_CATEGORY.SUPPLIES] = "gui.icon_ingameMenu_productionChains",
 }
 
 MenuContractor.HEADER_TITLES = {
@@ -36,6 +38,7 @@ MenuContractor.HEADER_TITLES = {
     [MenuContractor.SUB_CATEGORY.OVERVIEW] = "tc_header_overview",
     [MenuContractor.SUB_CATEGORY.FINANCES] = "tc_header_finances",
     [MenuContractor.SUB_CATEGORY.LOGBOOK] = "tc_header_logbook",
+    [MenuContractor.SUB_CATEGORY.SUPPLIES] = "tc_header_supplies",
 }
 
 -- Same period->month convention as FS25_RedTape/src/RedTape.lua's
@@ -703,6 +706,22 @@ function MenuContractor:initialize()
     self.logbookVehicleTable:setDelegate(self)
     self.logbookDetailTable:setDataSource(self)
     self.logbookDetailTable:setDelegate(self)
+
+    -- Supplies (064): the farm's supplies, or FS25_AdvancedDamageSystem's
+    -- consumables/spare parts (suppliesView, from getSuppliesViews), with
+    -- one detail list for the highlighted row. Read live, so the tab
+    -- refreshes itself while it's showing (see update).
+    self.suppliesView = "supplies"
+    self.suppliesViews = {}
+    self.suppliesRows = {}
+    self.selectedSupplyKey = nil
+    self.suppliesDetailRows = {}
+    self.suppliesRefreshMs = 0
+
+    self.suppliesTable:setDataSource(self)
+    self.suppliesTable:setDelegate(self)
+    self.suppliesDetailTable:setDataSource(self)
+    self.suppliesDetailTable:setDelegate(self)
 end
 
 function MenuContractor:getMenuButtonInfo()
@@ -809,6 +828,17 @@ function MenuContractor:update(dt)
     if self.workerPortrait ~= nil then
         self.workerPortrait:update(dt)
     end
+
+    -- 064: stock changes as jobs draw on it, so the Supplies tab keeps
+    -- itself up to date while it's the one showing.
+    self.suppliesRefreshMs = (self.suppliesRefreshMs or 0) + dt
+    if self.suppliesRefreshMs >= MenuContractor.SUPPLIES_REFRESH_MS then
+        self.suppliesRefreshMs = 0
+        if self.isFrameOpen and self.subCategoryPaging:getState() == MenuContractor.SUB_CATEGORY.SUPPLIES and
+                self:hasCompany() then
+            self:refreshSuppliesState(g_currentMission:getFarmId())
+        end
+    end
 end
 
 -- 042: shows the highlighted worker's portrait while the Staff tab is the
@@ -821,7 +851,7 @@ function MenuContractor:updateWorkerPortrait()
     local worker = nil
     if self.isFrameOpen and self.subCategoryPaging:getState() == MenuContractor.SUB_CATEGORY.STAFF and
             self:hasCompany() then
-        worker = self.staffView == "roster" and self:getSelectedRosterWorker() or self:getSelectedCandidate()
+        worker = self:getSelectedStaffWorker()
     end
     self.workerPortrait:setWorker(worker)
 end
@@ -877,6 +907,9 @@ function MenuContractor:refreshCompanyState()
         self.logbookContent:setVisible(false)
         self.selectedLogbookJobId = nil
         self.selectedLogbookVehicleId = nil
+
+        self.suppliesContent:setVisible(false)
+        self.selectedSupplyKey = nil
     end
 
     if hasCompany then
@@ -911,6 +944,7 @@ function MenuContractor:refreshCompanyState()
         self:refreshStaffState(farmId, tc.Staff, tc.Jobs)
         self:refreshFinancesState(farmId, tc.Finances)
         self:refreshLogbookState(farmId, tc.Logbook)
+        self:refreshSuppliesState(farmId)
 
         -- The row BoxLayouts only place their rows when told to: the
         -- layout run at GUI setup leaves them unplaced (seen in-game, 043).
@@ -930,6 +964,8 @@ function MenuContractor:refreshCompanyState()
     self.placeholderFinances:setText(lockedText)
     self.placeholderLogbook:setVisible(not hasCompany)
     self.placeholderLogbook:setText(lockedText)
+    self.placeholderSupplies:setVisible(not hasCompany)
+    self.placeholderSupplies:setText(lockedText)
 end
 
 -- Overview tab's last-job line (029): the most recent completion summary,
@@ -1088,6 +1124,16 @@ function MenuContractor:getSelectedRosterWorker()
     return nil
 end
 
+-- The selection in whichever view is showing. Not `a and b or c`: with no
+-- roster selection that would fall through to the selected candidate and
+-- show them under the roster.
+function MenuContractor:getSelectedStaffWorker()
+    if self.staffView == "roster" then
+        return self:getSelectedRosterWorker()
+    end
+    return self:getSelectedCandidate()
+end
+
 function MenuContractor:getSelectedCandidate()
     for _, candidate in ipairs(self.candidateList) do
         if candidate.id == self.selectedCandidateId then
@@ -1156,7 +1202,7 @@ end
 function MenuContractor:updateStaffDetails()
     self:setMenuButtonInfoDirty()
 
-    local worker = self.staffView == "roster" and self:getSelectedRosterWorker() or self:getSelectedCandidate()
+    local worker = self:getSelectedStaffWorker()
     self.staffDetailsBox:setVisible(worker ~= nil)
     self:updateWorkerPortrait()
     if worker == nil then
@@ -1902,6 +1948,10 @@ function MenuContractor:getNumberOfItemsInSection(list, section)
         return #self.logbookVehicleRows
     elseif list == self.logbookDetailTable then
         return #self.logbookDetailRows
+    elseif list == self.suppliesTable then
+        return #self.suppliesRows
+    elseif list == self.suppliesDetailTable then
+        return #self.suppliesDetailRows
     end
     return #self.inboxMessages + #self.inboxJobs
 end
@@ -1939,6 +1989,12 @@ function MenuContractor:populateCellForItemInSection(list, section, index, cell)
         return
     elseif list == self.logbookDetailTable then
         self:populateLogbookDetailCell(index, cell)
+        return
+    elseif list == self.suppliesTable then
+        self:populateSupplyCell(index, cell)
+        return
+    elseif list == self.suppliesDetailTable then
+        self:populateSupplyDetailCell(index, cell)
         return
     end
 
@@ -2078,6 +2134,19 @@ function MenuContractor:onListSelectionChanged(list, section, index)
     if list == self.logbookDetailTable then
         self.logbookDetailIndex = index
         self:setMenuButtonInfoDirty()
+        return
+    end
+
+    -- Supplies (064): the list redraws the detail panel; the detail list
+    -- is only there to scroll.
+    if list == self.suppliesTable then
+        local row = self.suppliesRows[index]
+        self.selectedSupplyKey = row ~= nil and row.key or nil
+        self:updateSupplyDetails()
+        return
+    end
+
+    if list == self.suppliesDetailTable then
         return
     end
 
@@ -3424,21 +3493,6 @@ function MenuContractor:populateOverheadCell(index, cell)
     cell:getAttribute("name"):setText(g_i18n:getText(definition.l10nKey))
     setChip(cell:getAttribute("statusChip"), cell:getAttribute("statusChipText"),
         g_i18n:getText("tc_overheads_status_" .. status), OVERHEAD_STATUS_TONES[status])
-
-    if state == nil or not state.enabled then
-        cell:getAttribute("billing"):setText("-")
-        cell:getAttribute("cost"):setText("-")
-        cell:getAttribute("next"):setText("-")
-        return
-    end
-
-    local amount = TheContractorOverheads.getChargeAmount(state.termCost, state.billing)
-    cell:getAttribute("billing"):setText(g_i18n:getText("tc_overheads_billing_" .. state.billing))
-    cell:getAttribute("cost"):setText(string.format(g_i18n:getText("tc_overheads_per_" .. state.billing),
-        formatMoney(amount)))
-
-    local nextPeriod = overheads:getNextCharge(farmId, definition, state)
-    cell:getAttribute("next"):setText(nextPeriod ~= nil and TCCalendar.formatMonth(nextPeriod) or "-")
 end
 
 function MenuContractor:updateOverheadDetails()
@@ -3494,7 +3548,11 @@ function MenuContractor:updateOverheadDetails()
         self.financesOverheadNext:setText(g_i18n:getText("tc_overheads_nextChargeNone"))
     end
 
-    self.financesOverheadAbout:setText(g_i18n:getText(definition.l10nKey .. "_desc"))
+    local amounts = {}
+    for i, amount in ipairs(definition.descriptionAmounts or {}) do
+        amounts[i] = formatMoney(g_currentMission.TheContractor.Settings:scaleCost(amount))
+    end
+    self.financesOverheadAbout:setText(string.format(g_i18n:getText(definition.l10nKey .. "_desc"), unpack(amounts)))
     self.financesOverheadRows:invalidateLayout()
 end
 
@@ -3597,18 +3655,6 @@ function MenuContractor:populateAdministratorCell(cell)
     setChip(cell:getAttribute("statusChip"), cell:getAttribute("statusChipText"),
         g_i18n:getText(admin ~= nil and "tc_admin_status_employed" or "tc_admin_status_vacant"),
         admin ~= nil and "good" or "neutral")
-
-    if admin == nil then
-        cell:getAttribute("billing"):setText("-")
-        cell:getAttribute("cost"):setText("-")
-        cell:getAttribute("next"):setText("-")
-        return
-    end
-
-    cell:getAttribute("billing"):setText(g_i18n:getText("tc_admin_billingShort"))
-    cell:getAttribute("cost"):setText(string.format(g_i18n:getText("tc_overheads_per_monthly"),
-        formatMoney(admin.salary)))
-    cell:getAttribute("next"):setText(TCCalendar.formatMonth(TCCalendar.getPeriodIndex() + 1))
 end
 
 -- Fills the overhead panel's rows for the administrator.
@@ -3630,13 +3676,12 @@ function MenuContractor:updateAdministratorDetails()
     else
         setChip(self.financesOverheadStatusChip, self.financesOverheadStatusChipText,
             g_i18n:getText("tc_admin_status_vacant"), "neutral")
-        self.financesOverheadStatusNote:setText(g_i18n:getText("tc_admin_noteVacant"))
+        self.financesOverheadStatusNote:setText("")
         self.financesOverheadNext:setText(g_i18n:getText("tc_overheads_nextChargeNone"))
     end
 
     self.financesOverheadBilling:setText(g_i18n:getText("tc_admin_billing"))
-    self.financesOverheadPrice:setText(string.format(g_i18n:getText("tc_admin_price"), formatMoney(salary),
-        formatMoney(pension)))
+    self.financesOverheadPrice:setText(string.format(g_i18n:getText("tc_admin_price"), formatMoney(salary)))
     self.financesOverheadAbout:setText(g_i18n:getText("tc_admin_desc"))
     self.financesOverheadRows:invalidateLayout()
 end
@@ -4349,6 +4394,422 @@ function MenuContractor:onClickLogbookOpenJob()
     self:setMenuButtonInfoDirty()
 end
 
+-- Supplies (064) -----------------------------------------------------------
+
+-- How often the Supplies tab re-reads stock while it's showing.
+MenuContractor.SUPPLIES_REFRESH_MS = 1000
+
+-- Bar fills: the menu's green, or red when stock is low or jobs are held
+-- for it (vanilla's production storage list does the same).
+MenuContractor.BAR_COLORS = {
+    normal = { 0.30, 0.62, 0.06, 1 },
+    danger = { 0.75, 0.15, 0.08, 1 },
+}
+
+local function formatPercent(ratio)
+    return string.format("%d%%", math.floor((ratio or 0) * 100 + 0.5))
+end
+
+-- A stock bar (tc_rowBarTrack + tc_rowBarFill): the fill's width is its
+-- share of the track's. Hidden for a nil ratio. The fill only has a
+-- default colour, so setting .color covers selected rows too.
+local function setBar(track, fill, ratio, isDanger)
+    local visible = ratio ~= nil
+    track:setVisible(visible)
+    fill:setVisible(visible and ratio > 0)
+    if not visible or ratio <= 0 then
+        return
+    end
+    local fullWidth = track.size[1]
+    fill:setSize(math.max(fullWidth * math.min(ratio, 1), track.size[2]), nil)
+    fill.color = isDanger and MenuContractor.BAR_COLORS.danger or MenuContractor.BAR_COLORS.normal
+end
+
+-- The views on offer: the farm's supplies always, then ADS's consumables
+-- and spare parts each only if TCADSStock can read them.
+function MenuContractor:getSuppliesViews()
+    local views = { "supplies" }
+    if TCADSStock.hasConsumables() then
+        table.insert(views, "adsConsumables")
+    end
+    if TCADSStock.hasPartsBoxes() then
+        table.insert(views, "adsParts")
+    end
+    return views
+end
+
+local function getHeldJobsChip(supply)
+    if #supply.heldJobs > 0 then
+        return string.format(g_i18n:getText("tc_supplies_chipHeld"), #supply.heldJobs), "bad"
+    end
+    return nil, nil
+end
+
+-- A list row: { key, name, amountText, ratio, isDanger, chip, tone,
+-- source } - a bar for a ratio, else the chip if there is one.
+local function buildSupplyRow(supply)
+    local row = {
+        key = "supply:" .. tostring(supply.fillTypeName),
+        name = supply.title,
+        amountText = TCJobSupplies.formatQuantity(supply.fillTypeIndex, supply.amount),
+        isDanger = supply.isLow or #supply.heldJobs > 0,
+        supply = supply,
+    }
+    if supply.ratio ~= nil then
+        row.ratio = supply.ratio
+    else
+        row.chip, row.tone = getHeldJobsChip(supply)
+        if row.chip == nil then
+            if supply.amount <= 0 then
+                row.chip, row.tone = g_i18n:getText("tc_supplies_chipNone"), "warn"
+            else
+                row.chip, row.tone = g_i18n:getText("tc_supplies_chipPallets"), "neutral"
+            end
+        end
+    end
+    return row
+end
+
+local function formatADSAmount(item)
+    if item.fillTypeIndex ~= nil then
+        return TCJobSupplies.formatQuantity(item.fillTypeIndex, item.amount)
+    end
+    return string.format(g_i18n:getText("tc_supplies_pieces"), g_i18n:formatNumber(math.floor(item.amount)))
+end
+
+local function buildADSConsumableRow(item)
+    local row = {
+        key = "ads:" .. item.key,
+        name = item.name,
+        amountText = formatADSAmount(item),
+        adsConsumable = item,
+    }
+    if item.capacity ~= nil then
+        row.ratio = item.amount / item.capacity
+        row.isDanger = row.ratio < TCSupplyStock.LOW_RATIO
+    end
+    return row
+end
+
+local function getPartBoxName(item)
+    if item.tierText == "" then
+        return item.name
+    end
+    return string.format(g_i18n:getText("tc_supplies_partTier"), item.name, item.tierText)
+end
+
+local function buildADSPartRow(item)
+    local row = {
+        key = "part:" .. item.key,
+        name = getPartBoxName(item),
+        amountText = string.format(g_i18n:getText("tc_supplies_boxes"), item.count),
+        adsPart = item,
+    }
+    if item.reserved ~= nil and item.reserved > 0 then
+        row.chip, row.tone = string.format(g_i18n:getText("tc_supplies_chipReserved"), item.reserved), "info"
+    end
+    return row
+end
+
+function MenuContractor:buildSuppliesRows(farmId)
+    local rows = {}
+    if self.suppliesView == "adsConsumables" then
+        for _, item in ipairs(TCADSStock.getConsumableRows(farmId)) do
+            table.insert(rows, buildADSConsumableRow(item))
+        end
+    elseif self.suppliesView == "adsParts" then
+        for _, item in ipairs(TCADSStock.getPartBoxRows(farmId)) do
+            table.insert(rows, buildADSPartRow(item))
+        end
+    else
+        for _, supply in ipairs(TCSupplyStock.getSupplies(farmId)) do
+            table.insert(rows, buildSupplyRow(supply))
+        end
+    end
+    return rows
+end
+
+MenuContractor.SUPPLIES_VIEW_TEXTS = {
+    supplies = { view = "tc_supplies_viewSupplies", name = "tc_supplies_columnSupply",
+        amount = "tc_supplies_columnStock", level = "tc_supplies_columnLevel", empty = "tc_supplies_empty" },
+    adsConsumables = { view = "tc_supplies_viewAdsConsumables", name = "tc_supplies_columnItem",
+        amount = "tc_supplies_columnStock", level = "tc_supplies_columnLevel", empty = "tc_supplies_emptyAdsConsumables" },
+    adsParts = { view = "tc_supplies_viewAdsParts", name = "tc_supplies_columnPart",
+        amount = "tc_supplies_columnStock", level = "tc_supplies_columnStatus", empty = "tc_supplies_emptyAdsParts" },
+}
+
+function MenuContractor:refreshSuppliesState(farmId)
+    self.suppliesContent:setVisible(true)
+
+    -- A view whose ADS functions went missing isn't offered; fall back to
+    -- the farm's supplies.
+    self.suppliesViews = self:getSuppliesViews()
+    local viewIndex = 1
+    local viewTexts = {}
+    for i, view in ipairs(self.suppliesViews) do
+        if view == self.suppliesView then
+            viewIndex = i
+        end
+        table.insert(viewTexts, g_i18n:getText(MenuContractor.SUPPLIES_VIEW_TEXTS[view].view))
+    end
+    self.suppliesView = self.suppliesViews[viewIndex]
+    self.suppliesViewSelector:setTexts(viewTexts)
+    self.suppliesViewSelector:setState(viewIndex)
+
+    local texts = MenuContractor.SUPPLIES_VIEW_TEXTS[self.suppliesView]
+    self.suppliesColumnName:setText(g_i18n:getText(texts.name))
+    self.suppliesColumnAmount:setText(g_i18n:getText(texts.amount))
+    self.suppliesColumnLevel:setText(g_i18n:getText(texts.level))
+    self.suppliesEmptyText:setText(g_i18n:getText(texts.empty))
+
+    -- reloadData re-raises the selection callback with the old index, which
+    -- would overwrite the row that was highlighted if the list has moved.
+    local wantedKey = self.selectedSupplyKey
+    self.suppliesRows = self:buildSuppliesRows(farmId)
+    self.suppliesTable:reloadData()
+
+    local hasItems = #self.suppliesRows > 0
+    self.suppliesListContainer:setVisible(hasItems)
+    self.suppliesEmptyText:setVisible(not hasItems)
+
+    if hasItems then
+        local selectedIndex = 1
+        for i, row in ipairs(self.suppliesRows) do
+            if row.key == wantedKey then
+                selectedIndex = i
+            end
+        end
+        if self.suppliesTable:getSelectedIndexInSection() ~= selectedIndex then
+            self.suppliesTable:setSelectedIndex(selectedIndex)
+        end
+        self.selectedSupplyKey = self.suppliesRows[selectedIndex].key
+    else
+        self.selectedSupplyKey = nil
+    end
+
+    self:updateSupplyDetails()
+end
+
+function MenuContractor:onClickSuppliesView()
+    self.suppliesView = self.suppliesViews[self.suppliesViewSelector:getState()] or "supplies"
+    self.selectedSupplyKey = nil
+    self:refreshSuppliesState(g_currentMission:getFarmId())
+end
+
+function MenuContractor:getSelectedSupplyRow()
+    for _, row in ipairs(self.suppliesRows) do
+        if row.key == self.selectedSupplyKey then
+            return row
+        end
+    end
+    return nil
+end
+
+function MenuContractor:populateSupplyCell(index, cell)
+    local row = self.suppliesRows[index]
+    if row == nil then
+        return
+    end
+    cell:getAttribute("name"):setText(row.name)
+    cell:getAttribute("amount"):setText(row.amountText)
+    setBar(cell:getAttribute("barTrack"), cell:getAttribute("barFill"), row.ratio, row.isDanger)
+    cell:getAttribute("percent"):setVisible(row.ratio ~= nil)
+    cell:getAttribute("percent"):setText(row.ratio ~= nil and formatPercent(row.ratio) or "")
+    setChip(cell:getAttribute("chip"), cell:getAttribute("chipText"), row.ratio == nil and row.chip or nil, row.tone)
+end
+
+function MenuContractor:populateSupplyDetailCell(index, cell)
+    local row = self.suppliesDetailRows[index]
+    if row == nil then
+        return
+    end
+    local isSection = row.section ~= nil
+    cell:getAttribute("surface"):setVisible(not isSection)
+    cell:getAttribute("section"):setVisible(isSection)
+    cell:getAttribute("section"):setText(row.section or "")
+    cell:getAttribute("label"):setVisible(not isSection)
+    cell:getAttribute("label"):setText(row.label or "")
+    cell:getAttribute("value"):setVisible(not isSection)
+    cell:getAttribute("value"):setText(row.value or "")
+    local ratio = not isSection and row.ratio or nil
+    setBar(cell:getAttribute("barTrack"), cell:getAttribute("barFill"), ratio, row.isDanger)
+    cell:getAttribute("percent"):setVisible(ratio ~= nil)
+    cell:getAttribute("percent"):setText(ratio ~= nil and formatPercent(ratio) or "")
+    setChip(cell:getAttribute("chip"), cell:getAttribute("chipText"),
+        not isSection and ratio == nil and row.chip or nil, row.tone)
+end
+
+-- "1,200 / 5,000 l": stored against capacity, in the fill type's unit.
+local function formatStoredOf(fillTypeIndex, amount, capacity)
+    return string.format(g_i18n:getText("tc_supplies_storedOf"), g_i18n:formatNumber(math.floor(amount)),
+        TCJobSupplies.formatQuantity(fillTypeIndex, capacity))
+end
+
+-- Section titles and label/value rows, as in the Logbook's detail list,
+-- plus an optional bar (ratio) per row.
+local function newDetailRows()
+    local rows = {}
+    local builder = {}
+    function builder.section(key)
+        table.insert(rows, { section = g_i18n:getText(key) })
+    end
+    function builder.row(label, value, extra)
+        local row = extra or {}
+        row.label, row.value = label, value
+        table.insert(rows, row)
+    end
+    return rows, builder
+end
+
+function MenuContractor:getSupplyDetailRows(supply)
+    local rows, add = newDetailRows()
+    local fillTypeIndex = supply.fillTypeIndex
+    local text = function(key)
+        return g_i18n:getText(key)
+    end
+
+    add.section("tc_supplies_sectionStock")
+    add.row(text("tc_supplies_inStock"), TCJobSupplies.formatQuantity(fillTypeIndex, supply.amount))
+    if supply.capacity ~= nil then
+        add.row(text("tc_supplies_inStorage"), TCJobSupplies.formatQuantity(fillTypeIndex, supply.storedAmount))
+        add.row(text("tc_supplies_capacity"), TCJobSupplies.formatQuantity(fillTypeIndex, supply.capacity))
+        add.row(text("tc_supplies_freeSpace"),
+            TCJobSupplies.formatQuantity(fillTypeIndex, math.max(supply.capacity - supply.storedAmount, 0)))
+        add.row(text("tc_supplies_fillLevel"), formatPercent(supply.ratio), { ratio = supply.ratio or 0,
+            isDanger = supply.isLow or #supply.heldJobs > 0 })
+    else
+        add.row(text("tc_supplies_capacity"), text("tc_supplies_noStorage"))
+    end
+
+    if #supply.storages > 0 then
+        add.section("tc_supplies_sectionStorage")
+        for _, storage in ipairs(supply.storages) do
+            local ratio = storage.capacity > 0 and storage.amount / storage.capacity or 0
+            add.row(storage.name, formatStoredOf(fillTypeIndex, storage.amount, storage.capacity),
+                { ratio = ratio, isDanger = ratio < TCSupplyStock.LOW_RATIO })
+        end
+    end
+
+    if #supply.pallets > 0 then
+        add.section("tc_supplies_sectionPallets")
+        for _, group in ipairs(supply.pallets) do
+            add.row(string.format(text("tc_supplies_palletGroup"), group.name, group.count),
+                TCJobSupplies.formatQuantity(fillTypeIndex, group.amount))
+        end
+    end
+
+    if #supply.heldJobs > 0 then
+        add.section("tc_supplies_sectionHeld")
+        for _, job in ipairs(supply.heldJobs) do
+            add.row(getFieldName(job.fieldId), job:getTypeText(),
+                { chip = text("tc_supplies_chipWaiting"), tone = "bad" })
+        end
+    end
+
+    return rows
+end
+
+function MenuContractor:getADSConsumableDetailRows(item)
+    local rows, add = newDetailRows()
+    local text = function(key)
+        return g_i18n:getText(key)
+    end
+
+    add.section("tc_supplies_sectionStock")
+    add.row(text("tc_supplies_inStock"), formatADSAmount(item))
+    if item.tierText ~= "" then
+        add.row(text("tc_supplies_quality"), item.tierText)
+    end
+    if item.capacity ~= nil then
+        local ratio = item.amount / item.capacity
+        add.row(text("tc_supplies_capacity"), TCJobSupplies.formatQuantity(item.fillTypeIndex, item.capacity))
+        add.row(text("tc_supplies_fillLevel"), formatPercent(ratio),
+            { ratio = ratio, isDanger = ratio < TCSupplyStock.LOW_RATIO })
+    end
+
+    add.section("tc_supplies_sectionKept")
+    for _, source in ipairs(item.sources) do
+        if source.capacity ~= nil and source.capacity > 0 then
+            local ratio = source.amount / source.capacity
+            add.row(source.name, formatStoredOf(item.fillTypeIndex, source.amount, source.capacity),
+                { ratio = ratio, isDanger = ratio < TCSupplyStock.LOW_RATIO })
+        else
+            local amount = { fillTypeIndex = item.fillTypeIndex, amount = source.amount }
+            add.row(source.name, formatADSAmount(amount))
+        end
+    end
+
+    return rows
+end
+
+function MenuContractor:getADSPartDetailRows(item)
+    local rows, add = newDetailRows()
+    local text = function(key)
+        return g_i18n:getText(key)
+    end
+
+    add.section("tc_supplies_sectionStock")
+    add.row(text("tc_supplies_boxCount"), string.format(text("tc_supplies_boxes"), item.count))
+    if item.tierText ~= "" then
+        add.row(text("tc_supplies_quality"), item.tierText)
+    end
+    -- Without ADS's isReserved there's no telling free from reserved.
+    if item.reserved ~= nil then
+        add.row(text("tc_supplies_free"), string.format(text("tc_supplies_boxes"), item.count - item.reserved))
+        add.row(text("tc_supplies_reserved"), string.format(text("tc_supplies_boxes"), item.reserved),
+            item.reserved > 0 and { chip = text("tc_supplies_chipWorkOrder"), tone = "info" } or nil)
+    end
+
+    add.section("tc_supplies_sectionFits")
+    for _, fit in ipairs(item.fits) do
+        add.row(fit.vehicleName, string.format(text("tc_supplies_boxes"), fit.count))
+    end
+
+    return rows
+end
+
+-- The header chip for a supply: held jobs first, then how much is left.
+local function getSupplyStatusChip(supply)
+    local chip, tone = getHeldJobsChip(supply)
+    if chip ~= nil then
+        return chip, tone
+    elseif supply.amount <= 0 then
+        return g_i18n:getText("tc_supplies_chipOut"), "bad"
+    elseif supply.isLow then
+        return g_i18n:getText("tc_supplies_chipLow"), "warn"
+    end
+    return g_i18n:getText("tc_supplies_chipInStock"), "good"
+end
+
+-- Fills the detail panel for the highlighted row.
+function MenuContractor:updateSupplyDetails()
+    local row = self:getSelectedSupplyRow()
+    local rows, chipText, chipTone = nil, nil, nil
+    if row ~= nil then
+        if row.supply ~= nil then
+            rows = self:getSupplyDetailRows(row.supply)
+            chipText, chipTone = getSupplyStatusChip(row.supply)
+        elseif row.adsConsumable ~= nil then
+            rows = self:getADSConsumableDetailRows(row.adsConsumable)
+            if row.isDanger then
+                chipText, chipTone = g_i18n:getText("tc_supplies_chipLow"), "warn"
+            end
+        elseif row.adsPart ~= nil then
+            rows = self:getADSPartDetailRows(row.adsPart)
+        end
+    end
+
+    self.suppliesDetailsBox:setVisible(rows ~= nil)
+    self.suppliesDetailRows = rows or {}
+    self.suppliesDetailTable:reloadData()
+    if rows == nil then
+        return
+    end
+
+    self.suppliesDetailTitle:setText(row.name)
+    setChip(self.suppliesDetailChip, self.suppliesDetailChipText, chipText, chipTone)
+end
+
 function MenuContractor:refreshAdvertisingState(farmId, advertising)
     local activeLevel = advertising:getActiveLevel(farmId)
     if activeLevel ~= nil then
@@ -4435,6 +4896,11 @@ end
 
 function MenuContractor:onClickLogbook()
     self.subCategoryPaging:setState(MenuContractor.SUB_CATEGORY.LOGBOOK, true)
+    self:setMenuButtonInfoDirty()
+end
+
+function MenuContractor:onClickSupplies()
+    self.subCategoryPaging:setState(MenuContractor.SUB_CATEGORY.SUPPLIES, true)
     self:setMenuButtonInfoDirty()
 end
 

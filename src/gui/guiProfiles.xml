@@ -260,6 +260,18 @@
          matching the coordinate space our SmoothList/ListItem cells already
          use, so header labels land directly above their column's content. -->
     <Profile name="tc_tableHeaderRow" extends="emptyPanel" with="anchorTopLeft" />
+
+    <!-- Supplies (064) stock bar: a dark track with a fill over it, sized
+         at runtime (MenuContractor's setBar, which also sets the fill's
+         colour). Vertically centred in a 32px list row. -->
+    <Profile name="tc_rowBarTrack" extends="baseReference" with="anchorMiddleLeft">
+        <size value="150px 10px"/>
+        <color value="0.12 0.12 0.13 1"/>
+        <cornerSize value="0.3"/>
+    </Profile>
+    <Profile name="tc_rowBarFill" extends="tc_rowBarTrack">
+        <color value="$preset_fs25_colorMainHighlight"/>
+    </Profile>
     <Profile name="tc_slider_box" extends="fs25_listSliderBox" with="anchorTopLeft" />
 
     <!-- Calendar (015) month selector — the same vanilla "< value >" chevron

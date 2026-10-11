@@ -142,10 +142,13 @@ end
 
 -- What booking the worker's next step costs the farm: the course, or the
 -- retake after a failed assessment, less any association discount (053).
+-- The costs are 1x UK, scaled by TheContractorSettings:scaleCost.
 function TheContractorTraining.getPrice(farmId, worker, cert)
     local definition = TheContractorTraining.getDefinition(cert)
-    local base = TheContractorTraining.isRetake(worker, cert) and definition.retakeCost or definition.courseCost
-    return base * (1 - g_currentMission.TheContractor.Association:getCertificationDiscount(farmId))
+    local tc = g_currentMission.TheContractor
+    local base = tc.Settings:scaleCost(TheContractorTraining.isRetake(worker, cert) and definition.retakeCost or
+        definition.courseCost)
+    return base * (1 - tc.Association:getCertificationDiscount(farmId))
 end
 
 -- Prices aren't always whole (487.50 for members), so show pence then.

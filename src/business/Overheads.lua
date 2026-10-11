@@ -9,9 +9,11 @@
 --       l10nKey = "tc_overhead_publicLiability",   -- name; "<l10nKey>_desc" is its description
 --       mandatory = false,
 --       isRequired = function(farmId) ... end,     -- mandatory only, optional: false = not needed now
---       annualCost = function(farmId) ... end,     -- 1x UK, not scaled by the pay setting
+--       annualCost = function(farmId) ... end,     -- 1x UK; getAnnualCost scales it (Settings:scaleCost)
 --       getRenewalLoading = function(farmId) ... end, -- optional only, optional:
 --                                                  -- claimCount, loadingPercent for the renewal notice (052)
+--       descriptionAmounts = { 800, 60 },          -- optional: 1x UK money for the description's %s,
+--                                                  -- in order, scaled and formatted in the player's currency
 --   })
 --
 -- Register on every machine, at load: clients need the name and the cost
@@ -96,6 +98,8 @@ function TheContractorOverheads.new()
                 TheContractorOverheads.EMPLOYERS_LIABILITY_PER_WORKER *
                 g_currentMission.TheContractor.Staff:getHeadcount(farmId)
         end,
+        descriptionAmounts = { TheContractorOverheads.EMPLOYERS_LIABILITY_BASE,
+            TheContractorOverheads.EMPLOYERS_LIABILITY_PER_WORKER },
     })
 
     return self
@@ -149,9 +153,10 @@ function TheContractorOverheads:isRequired(farmId, definition)
     return definition.isRequired == nil or definition.isRequired(farmId)
 end
 
--- The price for a year's cover right now.
+-- The price for a year's cover right now, scaled from the definition's 1x UK
+-- price (TheContractorSettings:scaleCost).
 function TheContractorOverheads:getAnnualCost(farmId, definition)
-    return math.max(0, definition.annualCost(farmId))
+    return g_currentMission.TheContractor.Settings:scaleCost(math.max(0, definition.annualCost(farmId)))
 end
 
 -- What one charge comes to for a term costing annualCost.

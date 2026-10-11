@@ -1,0 +1,251 @@
+-- TCADSStock (064): FS25_AdvancedDamageSystem's workshop stock, read
+-- through ADS's own classifier and parts box functions, and hiding only
+-- what needs an ADS function that isn't there.
+--
+-- The fake ADS below follows refs/FS25_AdvancedDamageSystem (0.10.0.0):
+-- ADS_PlayerWorkshop.collectStockSources(object, list) appends
+-- { kind, key, tier, grade, amount, fillUnitIndex, fillTypeIndex } entries
+-- (a drum pallet's opened drum and full ones as two entries from one fill
+-- unit), and ADS_SparePartsBox.isBox/getState/isReserved.
+
+local MOD = "FS25_AdvancedDamageSystem"
+
+-- The fake ADS env: each object's `adsSources` is what the classifier
+-- reports for it, `adsBox` its box state, `adsReserved` its reservation.
+local function newADSEnv()
+    return {
+        ADS_PlayerWorkshop = {
+            STOCK_KINDS = { FLUID = "fluid", GREASE = "grease", PACK = "pack" },
+            collectStockSources = function(object, list)
+                for _, source in ipairs(object.adsSources or {}) do
+                    local copy = {}
+                    for k, v in pairs(source) do
+                        copy[k] = v
+                    end
+                    copy.object = object
+                    table.insert(list, copy)
+                end
+            end,
+        },
+        ADS_SparePartsBox = {
+            isBox = function(object)
+                return object.adsBox ~= nil
+            end,
+            getState = function(object)
+                return object.adsBox
+            end,
+            isReserved = function(object)
+                return object.adsReserved == true
+            end,
+        },
+    }
+end
+
+local function setup(env)
+    local world = stubs.install()
+    world.adsEnv = env
+    TheContractorDrivers = {
+        getModEnv = function(modName)
+            assertEquals(modName, MOD, "mod name")
+            return world.adsEnv
+        end,
+    }
+    world:load("src/util/TCADSStock.lua")
+    world.modTexts[MOD] = {
+        ads_ws_quality_premium = "Premium",
+        ads_spec_part_types_oem = "OEM",
+    }
+    world.oil = world:addFillType("ADS_MOTOR_OIL_PREMIUM", "ADS Motor Oil Premium")
+    world.grease = world:addFillType("ADS_GREASE_ORIGINAL", "Original grease", "g")
+    return world
+end
+
+local function addItem(world, def)
+    local object = world:addVehicle({ name = def.name, farmId = def.farmId, isPallet = true,
+        fillUnits = def.fillUnits })
+    object.adsSources = def.sources
+    object.adsBox = def.box
+    object.adsReserved = def.reserved
+    return object
+end
+
+local function addOilDrums(world, def)
+    -- A 400 l pallet of two drums, one opened: two entries, one fill unit.
+    return addItem(world, { name = "Motor Oil Drum (Premium)", farmId = def.farmId,
+        fillUnits = { { capacity = 400, level = 350, fillType = world.oil } },
+        sources = {
+            { kind = "fluid", key = "motorOil", tier = "PREMIUM", amount = 150, fillUnitIndex = 1,
+                fillTypeIndex = world.oil },
+            { kind = "fluid", key = "motorOil", tier = "PREMIUM", amount = 200, fillUnitIndex = 1,
+                fillTypeIndex = world.oil },
+        } })
+end
+
+local function addBatteries(world, count, tier)
+    return addItem(world, { name = "Battery", sources = {
+        { kind = "pack", key = "battery", tier = tier, grade = "L", amount = count },
+    } })
+end
+
+local function addBox(world, def)
+    return addItem(world, { name = def.name or "Hydraulic pump", farmId = def.farmId, reserved = def.reserved,
+        box = { componentId = def.componentId or "hydraulicPump", tier = def.tier or "OEM",
+            vehicleName = def.vehicleName or "Fendt 942", isPreview = def.isPreview or false } })
+end
+
+test("without ADS nothing is offered and nothing is logged", function()
+    local world = setup(nil)
+    TCADSStock.detect()
+    assertTrue(not TCADSStock.isAvailable(), "available")
+    assertTrue(not TCADSStock.hasConsumables(), "consumables")
+    assertTrue(not TCADSStock.hasPartsBoxes(), "parts boxes")
+    assertEquals(#TCADSStock.getConsumableRows(1), 0, "consumable rows")
+    assertEquals(#TCADSStock.getPartBoxRows(1), 0, "part rows")
+    assertEquals(#world.warnings, 0, "warnings")
+end)
+
+test("with the whole API every view is offered", function()
+    local world = setup(newADSEnv())
+    TCADSStock.detect()
+    assertTrue(TCADSStock.hasConsumables(), "consumables")
+    assertTrue(TCADSStock.hasPartsBoxes(), "parts boxes")
+    assertTrue(TCADSStock.hasReservations(), "reservations")
+    assertEquals(#world.warnings, 0, "warnings")
+end)
+
+test("consumables group by kind/key/tier, fluids counting a fill unit's room once", function()
+    local world = setup(newADSEnv())
+    TCADSStock.detect()
+    addOilDrums(world, {})
+    addOilDrums(world, {})
+    addOilDrums(world, { farmId = 2 })
+    addBatteries(world, 4, "PREMIUM")
+    addBatteries(world, 2, "PREMIUM")
+    addBatteries(world, 3, "LIZARD")
+    addItem(world, { name = "Grease box", fillUnits = { { capacity = 4000, level = 1000, fillType = world.grease } },
+        sources = { { kind = "grease", key = "grease", tier = "ORIGINAL", amount = 1000, fillUnitIndex = 1,
+            fillTypeIndex = world.grease } } })
+    -- A tractor: the classifier reports nothing for it.
+    world:addVehicle({ name = "Tractor", dieselUsagePerHour = 40 })
+
+    local rows = TCADSStock.getConsumableRows(1)
+    assertEquals(#rows, 4, "rows")
+
+    local oil = rows[1]
+    assertEquals(oil.name, "ADS Motor Oil Premium", "fluid named by its fill type")
+    assertEquals(oil.amount, 700, "oil amount")
+    assertEquals(oil.capacity, 800, "oil capacity, once per drum pallet")
+    assertEquals(#oil.sources, 2, "oil sources")
+    assertEquals(oil.sources[1].capacity, 400, "source capacity")
+    assertEquals(oil.tierText, "Premium", "ADS's own tier text")
+
+    assertEquals(rows[2].name, "Original grease", "grease after fluids")
+    assertEquals(rows[2].capacity, 4000, "grease capacity")
+
+    assertEquals(rows[3].name, "Battery, L, LIZARD", "pack with no ADS text keeps the raw tier")
+    assertEquals(rows[3].amount, 3, "lizard batteries")
+    assertEquals(rows[4].name, "Battery, L, Premium", "pack name")
+    assertEquals(rows[4].amount, 6, "premium batteries")
+    assertEquals(rows[4].capacity, nil, "packs are counts")
+end)
+
+test("spare parts boxes group by part and tier, without ADS's free samples", function()
+    local world = setup(newADSEnv())
+    TCADSStock.detect()
+    addBox(world, { vehicleName = "Fendt 942" })
+    addBox(world, { vehicleName = "Fendt 942", reserved = true })
+    addBox(world, { vehicleName = "Claas Axion" })
+    addBox(world, { tier = "USED" })
+    addBox(world, { isPreview = true })
+    addBox(world, { farmId = 2 })
+
+    local rows = TCADSStock.getPartBoxRows(1)
+    assertEquals(#rows, 2, "rows")
+    local oem = rows[1].tierText == "OEM" and rows[1] or rows[2]
+    local used = rows[1].tierText == "OEM" and rows[2] or rows[1]
+    assertEquals(oem.count, 3, "OEM boxes")
+    assertEquals(oem.reserved, 1, "reserved")
+    assertEquals(#oem.fits, 2, "fits")
+    assertEquals(oem.fits[1].vehicleName, "Claas Axion", "fits sorted")
+    assertEquals(oem.fits[2].count, 2, "Fendt boxes")
+    assertEquals(used.tierText, "USED", "raw tier without an ADS text")
+    assertEquals(used.count, 1, "used boxes")
+end)
+
+-- Each ADS entry point removed in turn: only what needs it goes.
+local function withoutEntryPoint(tableName, fieldName)
+    local env = newADSEnv()
+    env[tableName][fieldName] = nil
+    local world = setup(env)
+    TCADSStock.detect()
+    return world
+end
+
+local function assertWarnedAbout(world, name)
+    assertEquals(#world.warnings, 1, "one warning")
+    assertTrue(world.warnings[1]:find(name, 1, true) ~= nil, "warning names " .. name)
+end
+
+test("without collectStockSources only the consumables view goes", function()
+    local world = withoutEntryPoint("ADS_PlayerWorkshop", "collectStockSources")
+    assertTrue(not TCADSStock.hasConsumables(), "consumables")
+    assertTrue(TCADSStock.hasPartsBoxes(), "parts boxes")
+    assertTrue(TCADSStock.hasReservations(), "reservations")
+    assertTrue(TCADSStock.isAvailable(), "available")
+    addOilDrums(world, {})
+    assertEquals(#TCADSStock.getConsumableRows(1), 0, "consumable rows")
+    assertWarnedAbout(world, "ADS_PlayerWorkshop.collectStockSources")
+end)
+
+test("without STOCK_KINDS only the consumables view goes", function()
+    local world = withoutEntryPoint("ADS_PlayerWorkshop", "STOCK_KINDS")
+    assertTrue(not TCADSStock.hasConsumables(), "consumables")
+    assertTrue(TCADSStock.hasPartsBoxes(), "parts boxes")
+    assertWarnedAbout(world, "ADS_PlayerWorkshop.STOCK_KINDS")
+end)
+
+test("without isBox the spare parts view goes, and its reservations with it", function()
+    local world = withoutEntryPoint("ADS_SparePartsBox", "isBox")
+    assertTrue(TCADSStock.hasConsumables(), "consumables")
+    assertTrue(not TCADSStock.hasPartsBoxes(), "parts boxes")
+    assertTrue(not TCADSStock.hasReservations(), "reservations")
+    addBox(world, {})
+    assertEquals(#TCADSStock.getPartBoxRows(1), 0, "part rows")
+    assertWarnedAbout(world, "ADS_SparePartsBox.isBox")
+end)
+
+test("without getState the spare parts view goes", function()
+    local world = withoutEntryPoint("ADS_SparePartsBox", "getState")
+    assertTrue(TCADSStock.hasConsumables(), "consumables")
+    assertTrue(not TCADSStock.hasPartsBoxes(), "parts boxes")
+    assertWarnedAbout(world, "ADS_SparePartsBox.getState")
+end)
+
+test("without isReserved boxes are listed with no free/reserved split", function()
+    local world = withoutEntryPoint("ADS_SparePartsBox", "isReserved")
+    assertTrue(TCADSStock.hasPartsBoxes(), "parts boxes")
+    assertTrue(not TCADSStock.hasReservations(), "reservations")
+    addBox(world, { reserved = true })
+    local rows = TCADSStock.getPartBoxRows(1)
+    assertEquals(#rows, 1, "rows")
+    assertEquals(rows[1].count, 1, "count")
+    assertEquals(rows[1].reserved, nil, "no reserved count")
+    assertWarnedAbout(world, "ADS_SparePartsBox.isReserved")
+end)
+
+test("with neither half there's no ADS view at all", function()
+    local env = newADSEnv()
+    env.ADS_PlayerWorkshop = nil
+    env.ADS_SparePartsBox = nil
+    local world = setup(env)
+    TCADSStock.detect()
+    assertTrue(not TCADSStock.isAvailable(), "available")
+    assertEquals(#world.warnings, 4, "a warning per missing entry point")
+end)
+
+test("a missing entry point is only warned about once a session", function()
+    local world = withoutEntryPoint("ADS_SparePartsBox", "isReserved")
+    TCADSStock.detect()
+    TCADSStock.detect()
+    assertEquals(#world.warnings, 1, "warnings")
+end)

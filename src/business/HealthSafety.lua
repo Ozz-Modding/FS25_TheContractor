@@ -12,8 +12,8 @@
 -- Without it, each time a worker falls sick there's INSPECTION_CHANCE of a
 -- workplace inspection that finds shortcomings (server-only, from
 -- TheContractorStaff:makeWorkerSick): a FINE_MIN-FINE_MAX fine (a rough
--- UK scale for an improvement notice plus costs, 1x UK, not scaled by the
--- pay setting) under MoneyType.TC_FINES, an Overview notice and a
+-- UK scale for an improvement notice plus costs, written at 1x UK and scaled
+-- by TheContractorSettings:scaleCost) under MoneyType.TC_FINES, an Overview notice and a
 -- REPUTATION_PENALTY hit. Charged even into the red, like a claim (052).
 --
 -- Everything else is overhead state, so there's nothing of its own to save
@@ -56,6 +56,7 @@ function TheContractorHealthSafety:register(overheads)
         annualCost = function(farmId)
             return TheContractorHealthSafety.COST_PER_WORKER * #g_currentMission.TheContractor.Staff:getRoster(farmId)
         end,
+        descriptionAmounts = { TheContractorHealthSafety.COST_PER_WORKER },
     })
 end
 
@@ -98,7 +99,8 @@ end
 
 function TheContractorHealthSafety:runInspection(farmId, worker)
     local tc = g_currentMission.TheContractor
-    local fine = math.floor(math.random(TheContractorHealthSafety.FINE_MIN, TheContractorHealthSafety.FINE_MAX) / 100) * 100
+    local fine = math.floor(tc.Settings:scaleCost(math.random(TheContractorHealthSafety.FINE_MIN,
+        TheContractorHealthSafety.FINE_MAX)) / 100) * 100
 
     g_currentMission:addMoney(-fine, farmId, MoneyType.TC_FINES, true, true)
     tc.Finances:recordFines(farmId, fine)
