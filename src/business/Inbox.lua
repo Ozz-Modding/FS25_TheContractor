@@ -105,15 +105,12 @@ local function resolveArgs(args)
     return resolved
 end
 
--- A bad format string or a missing arg shows the raw text rather than
--- breaking the menu.
 local function formatText(key, args)
     local text = g_i18n:getText(key)
     if #args == 0 then
         return text
     end
-    local ok, formatted = pcall(string.format, text, unpack(resolveArgs(args)))
-    return ok and formatted or text
+    return string.format(text, unpack(resolveArgs(args)))
 end
 
 function TheContractorInbox.getTitle(message)

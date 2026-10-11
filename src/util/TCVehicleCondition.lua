@@ -4,9 +4,10 @@
 -- a save that gained ADS halfway through, still reads correctly:
 --
 --   vanilla  damage (0-1), paint wear (0-1), repair price
---   ads      condition and service (0-1, ADS's own levels), paint wear
---            (ADS leaves vanilla's paint wear alone), and the faults
---            active at the time as { id, stage }
+--   ads      condition (0-1, ADS's own level), paint wear (ADS leaves
+--            vanilla's paint wear alone), and the faults active at the
+--            time as { id, stage }. ADS has no live service level (only
+--            the last inspection's), so there's none here.
 --
 -- Both also note the vehicle's operating hours, which is how long a
 -- machine actually ran between two snapshots.
@@ -21,6 +22,8 @@
 
 TCVehicleCondition = {}
 
+TCVehicleCondition.ADS_MOD_NAME = "FS25_AdvancedDamageSystem"
+
 TCVehicleCondition.MODEL = {
     VANILLA = 0,
     ADS = 1,
@@ -28,7 +31,7 @@ TCVehicleCondition.MODEL = {
 
 function TCVehicleCondition.isManagedByADS(vehicle)
     return vehicle.spec_AdvancedDamageSystem ~= nil and vehicle.getConditionLevel ~= nil and
-        vehicle.getServiceLevel ~= nil and (vehicle.getIsADSExcluded == nil or not vehicle:getIsADSExcluded())
+        (vehicle.getIsADSExcluded == nil or not vehicle:getIsADSExcluded())
 end
 
 local function sortFaults(faults)
@@ -51,7 +54,6 @@ function TCVehicleCondition.capture(vehicle)
     if TCVehicleCondition.isManagedByADS(vehicle) then
         snapshot.model = TCVehicleCondition.MODEL.ADS
         snapshot.condition = vehicle:getConditionLevel() or 1
-        snapshot.service = vehicle:getServiceLevel() or 1
         snapshot.faults = {}
         local breakdowns = vehicle.getActiveBreakdowns ~= nil and vehicle:getActiveBreakdowns() or nil
         for id, breakdown in pairs(breakdowns or {}) do
@@ -96,19 +98,13 @@ function TCVehicleCondition.getNewFaults(before, after)
 end
 
 -- ADS's own global environment (mods' globals live in their own, see
--- TheContractorDrivers.getModEnv), found by what's in it rather than the
--- folder name. Looked up once a session; false once known to be missing.
+-- TheContractorDrivers.getModEnv). Looked up once a session; false once
+-- known to be missing.
 local adsEnv = nil
 local function getADSEnv()
     if adsEnv == nil then
-        adsEnv = false
-        for modName, isLoaded in pairs(g_modIsLoaded or {}) do
-            local env = isLoaded and getfenv(0)[modName] or nil
-            if type(env) == "table" and env.ADS_Breakdowns ~= nil then
-                adsEnv = env
-                break
-            end
-        end
+        local env = TheContractorDrivers.getModEnv(TCVehicleCondition.ADS_MOD_NAME)
+        adsEnv = env ~= nil and env.ADS_VehiclePerformance ~= nil and env.ADS_Components ~= nil and env or false
     end
     return adsEnv or nil
 end
@@ -120,8 +116,7 @@ local function getADSRepairPrice(vehicle, id, stage)
     local env = getADSEnv()
     local partType = env ~= nil and env.AdvancedDamageSystem ~= nil and env.AdvancedDamageSystem.PART_TYPES ~= nil and
         env.AdvancedDamageSystem.PART_TYPES.OEM or nil
-    local ok, price = pcall(vehicle.getBreakdownRepairPrice, vehicle, id, stage, partType)
-    return ok and tonumber(price) or 0
+    return tonumber(vehicle:getBreakdownRepairPrice(id, stage, partType)) or 0
 end
 
 -- Server-only, with the vehicle still there: what the change from `before`
@@ -168,13 +163,15 @@ local function getOtherModText(key)
     return nil
 end
 
--- ADS's own name for a fault (the part or system it's in), or a tidied-up
--- id when ADS isn't loaded on this machine.
+-- ADS's own name for a fault (the component it's in, as ADS's maintenance
+-- log names it), or a tidied-up id when ADS isn't loaded on this machine.
 function TCVehicleCondition.getFaultName(id)
     local env = getADSEnv()
-    local registry = env ~= nil and env.ADS_Breakdowns.BreakdownRegistry or nil
-    local entry = registry ~= nil and registry[id] or nil
-    local key = entry ~= nil and (entry.part or entry.system) or nil
+    local entry = env ~= nil and env.ADS_VehiclePerformance.ConditionRegistry ~= nil and
+        env.ADS_VehiclePerformance.ConditionRegistry[id] or nil
+    local component = entry ~= nil and entry.componentId ~= nil and
+        env.ADS_Components.getComponentDefinition(entry.componentId) or nil
+    local key = component ~= nil and component.name or nil
     local text = type(key) == "string" and getOtherModText(key) or nil
     if text ~= nil then
         return text
@@ -219,7 +216,6 @@ function TCVehicleCondition.getChangeRows(before, after)
     local rows = {}
     if reference.model == TCVehicleCondition.MODEL.ADS then
         table.insert(rows, { label = g_i18n:getText("tc_logbook_condition"), value = change("condition") })
-        table.insert(rows, { label = g_i18n:getText("tc_logbook_service"), value = change("service") })
     else
         table.insert(rows, { label = g_i18n:getText("tc_logbook_damage"), value = change("damage") })
     end
@@ -241,7 +237,6 @@ function TCVehicleCondition.getStateRows(snapshot)
     local rows = {}
     if snapshot.model == TCVehicleCondition.MODEL.ADS then
         table.insert(rows, { label = g_i18n:getText("tc_logbook_condition"), value = percent(snapshot.condition) })
-        table.insert(rows, { label = g_i18n:getText("tc_logbook_service"), value = percent(snapshot.service) })
     else
         table.insert(rows, { label = g_i18n:getText("tc_logbook_damage"), value = percent(snapshot.damage) })
     end
@@ -301,7 +296,6 @@ function TCVehicleCondition.writeStream(streamId, snapshot)
     streamWriteFloat32(streamId, snapshot.hours or 0)
     if snapshot.model == TCVehicleCondition.MODEL.ADS then
         streamWriteFloat32(streamId, snapshot.condition or 1)
-        streamWriteFloat32(streamId, snapshot.service or 1)
         local faults = snapshot.faults or {}
         streamWriteUInt8(streamId, math.min(#faults, 255))
         for i = 1, math.min(#faults, 255) do
@@ -325,7 +319,6 @@ function TCVehicleCondition.readStream(streamId)
     }
     if snapshot.model == TCVehicleCondition.MODEL.ADS then
         snapshot.condition = streamReadFloat32(streamId)
-        snapshot.service = streamReadFloat32(streamId)
         snapshot.faults = {}
         for _ = 1, streamReadUInt8(streamId) do
             table.insert(snapshot.faults, { id = streamReadString(streamId), stage = streamReadUInt8(streamId) })
@@ -349,7 +342,6 @@ function TCVehicleCondition.saveToXML(xmlFile, key, snapshot)
     setXMLFloat(xmlFile, key .. "#hours", snapshot.hours or 0)
     if snapshot.model == TCVehicleCondition.MODEL.ADS then
         setXMLFloat(xmlFile, key .. "#condition", snapshot.condition or 1)
-        setXMLFloat(xmlFile, key .. "#service", snapshot.service or 1)
         local parts = {}
         for _, fault in ipairs(snapshot.faults or {}) do
             table.insert(parts, string.format("%s:%d", fault.id, fault.stage))
@@ -373,7 +365,6 @@ function TCVehicleCondition.loadFromXML(xmlFile, key)
     }
     if model == TCVehicleCondition.MODEL.ADS then
         snapshot.condition = Utils.getNoNil(getXMLFloat(xmlFile, key .. "#condition"), 1)
-        snapshot.service = Utils.getNoNil(getXMLFloat(xmlFile, key .. "#service"), 1)
         snapshot.faults = {}
         for part in string.gmatch(getXMLString(xmlFile, key .. "#faults") or "", "([^;]+)") do
             local id, stage = string.match(part, "^(.+):(%d+)$")

@@ -32,6 +32,10 @@
         <storeItem xmlFilename="xml/parkingSlot.xml" />
     </storeItems>
 
+    <constructionCategories>
+        <tab categoryName="buildings" name="contractor" title="$l10n_tc_construction_tab" />
+    </constructionCategories>
+
     <l10n filenamePrefix="languages/l10n" />
 
     <multiplayer supported="true"/>

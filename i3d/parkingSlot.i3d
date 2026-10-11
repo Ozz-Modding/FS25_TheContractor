@@ -39,12 +39,12 @@
         </TransformGroup>
       </TransformGroup>
       <Shape name="pickCollision" shapeId="1" static="true" collisionFilterGroup="0x2000" collisionFilterMask="0x0" density="0.0001" nodeId="19" castsShadows="false" receiveShadows="false" nonRenderable="true" materialIds="5"/>
-      <TransformGroup name="visuals" nodeId="20">
-        <Shape name="borderLeft" translation="-1.9 0.02 0" shapeId="2" clipDistance="300" nodeId="21" castsShadows="false" receiveShadows="true" nonRenderable="true" terrainDecal="true" decalLayer="1" materialIds="6"/>
-        <Shape name="borderRight" translation="1.9 0.02 0" shapeId="2" clipDistance="300" nodeId="22" castsShadows="false" receiveShadows="true" nonRenderable="true" terrainDecal="true" decalLayer="1" materialIds="6"/>
-        <Shape name="borderBack" translation="0 0.02 -4.4" shapeId="3" clipDistance="300" nodeId="23" castsShadows="false" receiveShadows="true" nonRenderable="true" terrainDecal="true" decalLayer="1" materialIds="6"/>
-        <Shape name="borderFront" translation="0 0.02 4.4" shapeId="3" clipDistance="300" nodeId="24" castsShadows="false" receiveShadows="true" nonRenderable="true" terrainDecal="true" decalLayer="1" materialIds="6"/>
-        <Shape name="arrow" translation="0 0.02 1.5" shapeId="4" clipDistance="300" nodeId="25" castsShadows="false" receiveShadows="true" nonRenderable="true" terrainDecal="true" decalLayer="1" materialIds="6"/>
+      <TransformGroup name="visuals" translation="0 0.05 0" nodeId="20">
+        <Shape name="borderLeft" translation="-1.9 0 0" shapeId="2" clipDistance="300" nodeId="21" castsShadows="false" receiveShadows="true" materialIds="6"/>
+        <Shape name="borderRight" translation="1.9 0 0" shapeId="2" clipDistance="300" nodeId="22" castsShadows="false" receiveShadows="true" materialIds="6"/>
+        <Shape name="borderBack" translation="0 0 -4.4" shapeId="3" clipDistance="300" nodeId="23" castsShadows="false" receiveShadows="true" materialIds="6"/>
+        <Shape name="borderFront" translation="0 0 4.4" shapeId="3" clipDistance="300" nodeId="24" castsShadows="false" receiveShadows="true" materialIds="6"/>
+        <Shape name="arrow" translation="0 0 1.5" shapeId="4" clipDistance="300" nodeId="25" castsShadows="false" receiveShadows="true" materialIds="6"/>
       </TransformGroup>
     </TransformGroup>
   </Scene>

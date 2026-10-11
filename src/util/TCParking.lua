@@ -211,43 +211,59 @@ end
 -- or one just placed) sets itself from lastConstructionScreenOpenTime in
 -- its own onLoad.
 
+-- Whether the slots are currently shown, so the hook only acts (and logs)
+-- when the construction menu actually opens or closes.
+local slotsShown = false
+
+-- Returns how many slots were set.
 function TCParking.setSlotsVisible(isVisible)
     local placeableSystem = g_currentMission ~= nil and g_currentMission.placeableSystem or nil
     if placeableSystem == nil then
-        return
+        return 0
     end
+    local count = 0
     for _, placeable in ipairs(placeableSystem.placeables) do
         if PlaceableTCParkingSlot.isSlot(placeable) then
             PlaceableTCParkingSlot.setVisualsVisible(placeable, isVisible)
+            count = count + 1
         end
     end
+    return count
 end
 
-local function onConstructionScreenOpen()
-    TCParking.setSlotsVisible(true)
-end
-
-local function onConstructionScreenClose()
-    TCParking.setSlotsVisible(false)
-end
-
--- Hooking ConstructionScreen.onOpen/onClose on the class does nothing: when
--- the screen's xml loads (at game start, before any mod), GuiElement:
--- addCallback copies the target's functions into the screen element's
--- onOpenCallback/onCloseCallback, and Gui:changeScreen calls those. So the
--- element's copies are wrapped instead. The GUI outlives a savegame, so the
--- originals are kept on the element and each load wraps them afresh rather
--- than stacking on the last load's wrapper.
-function TCParking.installConstructionScreenHook()
-    local element = g_gui ~= nil and g_gui.screens[ConstructionScreen] or nil
-    if element == nil then
-        Logging.warning("[TheContractor] Construction screen not found; parking slots won't show in it.")
+-- After every screen change. ConstructionScreen:onOpen/onClose set
+-- lastConstructionScreenOpenTime inside Gui:changeScreen, so it's up to
+-- date by the time this runs.
+function TCParking.onScreenChanged()
+    if g_currentMission == nil or g_currentMission.lastConstructionScreenOpenTime == nil then
         return
     end
-    if element.tcOriginalOnOpenCallback == nil then
-        element.tcOriginalOnOpenCallback = element.onOpenCallback or false
-        element.tcOriginalOnCloseCallback = element.onCloseCallback or false
+    local isOpen = g_currentMission.lastConstructionScreenOpenTime > -1
+    if isOpen == slotsShown then
+        return
     end
-    element.onOpenCallback = Utils.appendedFunction(element.tcOriginalOnOpenCallback or nil, onConstructionScreenOpen)
-    element.onCloseCallback = Utils.appendedFunction(element.tcOriginalOnCloseCallback or nil, onConstructionScreenClose)
+    slotsShown = isOpen
+    local count = TCParking.setSlotsVisible(isOpen)
+    Logging.info("TheContractor: construction menu %s - %s %d parking slot(s)", isOpen and "opened" or "closed",
+        isOpen and "showing" or "hiding", count)
+end
+
+-- Called every loadMap. Every screen change goes through Gui:changeScreen
+-- (hooking ConstructionScreen.onOpen/onClose on the class does nothing:
+-- the screen element holds copies of them, made when its xml loaded at game
+-- start). GUI_AFTER_OPEN/GUI_AFTER_CLOSE wouldn't do either, as they only
+-- fire when the GUI as a whole opens or closes, not when one screen
+-- replaces another. Flagged on Gui so it goes on once per game session;
+-- changeScreen's return value is passed on, as some screens need it.
+function TCParking.installConstructionMenuHook()
+    slotsShown = false
+    if not Gui.tcParkingHookInstalled then
+        Gui.changeScreen = Utils.overwrittenFunction(Gui.changeScreen, function(self, superFunc, ...)
+            local screenElement = superFunc(self, ...)
+            TCParking.onScreenChanged()
+            return screenElement
+        end)
+        Gui.tcParkingHookInstalled = true
+    end
+    Logging.info("TheContractor: construction menu hook installed (parking slot visibility)")
 end

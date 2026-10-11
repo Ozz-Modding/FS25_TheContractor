@@ -411,8 +411,8 @@ function TCJobSupplies.isContractVehicle(vehicle)
     return contractVehicles[vehicle] == true
 end
 
--- Runs func with helperBuySeeds off for a contract vehicle, putting the
--- setting back even if func throws.
+-- Runs func with helperBuySeeds off for a contract vehicle, then puts the
+-- setting back.
 local function withOwnSeeds(vehicle, func, ...)
     if not contractVehicles[vehicle] then
         return func(...)
@@ -420,11 +420,8 @@ local function withOwnSeeds(vehicle, func, ...)
     local missionInfo = g_currentMission.missionInfo
     local helperBuySeeds = missionInfo.helperBuySeeds
     missionInfo.helperBuySeeds = false
-    local ok, a, b, c = pcall(func, ...)
+    local a, b, c = func(...)
     missionInfo.helperBuySeeds = helperBuySeeds
-    if not ok then
-        error(a, 0)
-    end
     return a, b, c
 end
 
