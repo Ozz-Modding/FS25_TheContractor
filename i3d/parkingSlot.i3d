@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="iso-8859-1"?>
+
+<i3D name="parkingSlot.i3d" version="1.6" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://i3d.giants.ch/schema/i3d-1.6.xsd">
+  <Asset>
+    <Export program="GIANTS Editor 64bit" version="10.0.13"/>
+  </Asset>
+
+  <Files>
+    <File fileId="5" filename="$data/shaders/placeableShader.xml"/>
+    <File fileId="2" filename="$data/shared/warningStripes_diffuse.dds"/>
+    <File fileId="3" filename="$data/shared/warningStripes_normal.dds"/>
+    <File fileId="4" filename="$data/shared/warningStripes_specular.dds"/>
+  </Files>
+
+
+  <Materials>
+    <Material name="lambert1" materialId="5" diffuseColor="0.494118 0.494118 0.494118 1">
+    </Material>
+    <Material name="warningStripes_mat" materialId="6" customShaderId="5">
+      <Texture fileId="2"/>
+      <Normalmap fileId="3"/>
+      <Glossmap fileId="4"/>
+      <CustomParameter name="snowScale" value="0"/>
+    </Material>
+  </Materials>
+
+
+  <Shapes externalShapesFile="parkingSlot.i3d.shapes">
+  </Shapes>
+
+  <Scene>
+    <TransformGroup name="parkingSlot" clipDistance="300" nodeId="12">
+      <TransformGroup name="areaStart" translation="-2 0 -4.5" nodeId="13"/>
+      <TransformGroup name="areaWidth" translation="2 0 -4.5" nodeId="14"/>
+      <TransformGroup name="areaHeight" translation="-2 0 4.5" nodeId="15"/>
+      <TransformGroup name="testAreas" nodeId="16">
+        <TransformGroup name="testAreaStart" translation="-1.95 0 -4.45" nodeId="17">
+          <TransformGroup name="testAreaEnd" translation="3.9 1 8.9" nodeId="18"/>
+        </TransformGroup>
+      </TransformGroup>
+      <Shape name="pickCollision" shapeId="1" static="true" collisionFilterGroup="0x2000" collisionFilterMask="0x0" density="0.0001" nodeId="19" castsShadows="false" receiveShadows="false" nonRenderable="true" materialIds="5"/>
+      <TransformGroup name="visuals" translation="0 0.05 0" nodeId="20">
+        <Shape name="borderLeft" translation="-1.9 0 0" shapeId="2" clipDistance="300" nodeId="21" castsShadows="false" receiveShadows="true" materialIds="6"/>
+        <Shape name="borderRight" translation="1.9 0 0" shapeId="2" clipDistance="300" nodeId="22" castsShadows="false" receiveShadows="true" materialIds="6"/>
+        <Shape name="borderBack" translation="0 0 -4.4" shapeId="3" clipDistance="300" nodeId="23" castsShadows="false" receiveShadows="true" materialIds="6"/>
+        <Shape name="borderFront" translation="0 0 4.4" shapeId="3" clipDistance="300" nodeId="24" castsShadows="false" receiveShadows="true" materialIds="6"/>
+        <Shape name="arrow" translation="0 0 1.5" shapeId="4" clipDistance="300" nodeId="25" castsShadows="false" receiveShadows="true" materialIds="6"/>
+      </TransformGroup>
+    </TransformGroup>
+  </Scene>
+
+</i3D>

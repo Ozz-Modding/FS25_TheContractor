@@ -309,6 +309,18 @@
 		<text name="tc_allocation_confirmButton" text="Confirm"/>
 		<text name="tc_allocation_cancelButton" text="Cancel"/>
 		<text name="tc_vehicleLock_busy" text="This vehicle is out on a contract job."/>
+		<text name="tc_parkingSlot_name" text="Parking Slot"/>
+		<text name="tc_parkingSlot_function" text="Marks a parking space for equipment coming back from contract jobs, facing the arrow. Only visible in the construction menu."/>
+		<text name="tc_inbox_chipParking" text="Parking"/>
+		<text name="tc_parking_sendToShopButton" text="Send to shop"/>
+		<text name="tc_parking_messageTitle" text="Machines waiting for parking"/>
+		<text name="tc_parking_messageBody" text="These machines are back from a job, but none of your parking slots has room for them: %s. They'll be parked as soon as a slot is free. Place more parking slots from the construction menu, clear the ones you have, or send them to the shop."/>
+		<text name="tc_parking_waitingNotification" text="No free parking space for %s. Place a parking slot or clear one."/>
+		<text name="tc_parking_shopFullNotification" text="No room at the shop for %s. Still waiting for a parking space."/>
+		<text name="tc_parking_allocationRefusedNotification" text="Couldn't allocate: %s is waiting for a parking space and there's no room at the shop to put it."/>
+		<text name="tc_parking_noticeOne" text="1 machine waiting for a free parking space"/>
+		<text name="tc_parking_noticeMany" text="%d machines waiting for a free parking space"/>
+		<text name="tc_allocation_awaitingParking" text="Awaiting parking"/>
 		<text name="tc_dispatch_noAttachPoint" text="Couldn't hitch %s to %s - no compatible free attachment point."/>
 		<text name="tc_allocation_selectEquipmentButton" text="Select Equipment"/>
 		<text name="tc_allocation_deselectEquipmentButton" text="Deselect Equipment"/>

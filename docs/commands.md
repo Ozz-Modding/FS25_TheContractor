@@ -244,6 +244,14 @@ tcJob log
 tcJob log 42
 ```
 
+### `tcJob park`
+
+Parks the vehicle you're sitting in, for testing parking slots. You're put out of the vehicle and it's unhitched from anything it's pulling. It then goes to a random free spot in one of your farm's parking slots. If none is free (or you haven't placed any), it's hidden and joins the parking queue, the same as equipment back from a job: it's parked within about 5 seconds of a slot coming free. Takes no arguments. It has to be your farm's vehicle and not out on a job.
+
+```
+tcJob park
+```
+
 ## Finances — `tcFinance`
 
 ### `tcFinance invoices`

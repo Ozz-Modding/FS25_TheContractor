@@ -171,9 +171,10 @@ end
 -- it left off rather than starting over.
 --
 -- A two-worker haulage job's tractor + trailer (035) are hidden here too,
--- but never staged: the hauler is synthetic, so they stay out of sight in
--- the yard, untouched, until the job's cooldown ends (or it's missed with
--- no work done - see TheContractorJobs:releaseMissedJobResources).
+-- but never staged: the hauler is synthetic, so they stay out of sight,
+-- untouched, until the job's cooldown ends (or it's missed with no work
+-- done - see TheContractorJobs:releaseMissedJobResources), when they go to
+-- the parking return queue (062) like the rest.
 function TheContractorDispatch:startJobForWorker(job, skipTransport)
     if not g_currentMission:getIsServer() then
         return
@@ -198,9 +199,11 @@ function TheContractorDispatch:startJobForWorker(job, skipTransport)
     -- 045: and the condition it set off in, for the skill-gap wear.
     TCJobConsequences.recordStartCondition(job)
 
-    -- Remember where it all stood (it goes back there when the job's done),
-    -- and leave anything that isn't part of the job behind in the yard.
-    TCJobSiteSetup.recordHome(job)
+    -- 062: a machine still waiting to be parked goes straight out from the
+    -- queue - it's hidden already, and the dispatch moves it to the field.
+    g_currentMission.TheContractor.Parking:removeVehicles(job:getAllEquipmentIds())
+
+    -- Leave anything that isn't part of the job behind in the yard.
     TCJobSiteSetup.detachForeignImplements(job)
 
     if #job.haulageEquipmentIds > 0 then
@@ -245,6 +248,10 @@ function TheContractorDispatch:update(dt)
         if job == nil or (job.state ~= TheContractorJob.STATE.ALLOCATED and
                 job.state ~= TheContractorJob.STATE.IN_PROGRESS) then
             self:cancelPending(jobId, job)
+            -- 062: whatever's still hidden goes to be parked.
+            if job ~= nil then
+                g_currentMission.TheContractor.Parking:returnHiddenVehicles(job.farmId, job:getAllEquipmentIds())
+            end
         else
             -- The trip runs on game time (sped up by the time scale); the
             -- physics staging after it runs on real time.
@@ -262,6 +269,9 @@ function TheContractorDispatch:update(dt)
                     Logging.warning("TheContractor: farm %d job %d equipment couldn't be rigged: %s", job.farmId,
                         job.id, tostring(errorText))
                     self:cancelPending(jobId, job)
+                    -- 062: it never got going, so it's parked. The haulage
+                    -- rig stays hidden with the job, as it always has.
+                    g_currentMission.TheContractor.Parking:returnVehicles(job.farmId, job.assignedEquipmentIds)
                     self:notifyDispatchFailed(job, errorText)
                 else
                     pending.stage = TheContractorDispatch.STAGE.RIGGED
@@ -272,19 +282,20 @@ function TheContractorDispatch:update(dt)
             elseif pending.stage == TheContractorDispatch.STAGE.RIGGED and
                 pending.elapsedMs >= TheContractorDispatch.SETTLE_MS then
                 self:cancelPending(jobId, job)
+                TCEquipmentVisibility.setVisibleEverywhere(job.assignedEquipmentIds, true)
                 self:startAIJob(job)
             end
         end
     end
 end
 
--- Drops a job's staging and brings its equipment back into view, wherever
--- staging got it to.
+-- Drops a job's staging. The equipment stays hidden: the caller reveals it
+-- on the field, or sends it to the parking return queue (062), or hands it
+-- to a cooldown or a fresh dispatch. Nothing goes back to where it stood.
 function TheContractorDispatch:cancelPending(jobId, job)
     self.pendingByJobId[jobId] = nil
     if job ~= nil then
         job.transportRemainingMs = nil
-        TCEquipmentVisibility.setVisibleEverywhere(job.assignedEquipmentIds, true)
         g_currentMission.TheContractor.Jobs:setJobTravelling(job.farmId, job.id, false)
     end
 end
@@ -504,7 +515,8 @@ function TheContractorDispatch:stopJob(jobId, aiMessage)
         return
     end
 
-    -- Still mid-staging: nothing running yet, just un-hide the equipment.
+    -- Still mid-staging: nothing running yet, just drop the staging. The
+    -- equipment stays hidden for the caller to deal with (cancelPending).
     if self.pendingByJobId[jobId] ~= nil then
         self:cancelPending(jobId, g_currentMission.TheContractor.Jobs:getJobById(jobId))
     end

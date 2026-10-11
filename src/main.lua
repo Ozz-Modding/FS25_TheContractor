@@ -14,6 +14,7 @@ source(TheContractor.dir .. "src/util/TCFieldPreparation.lua")
 source(TheContractor.dir .. "src/util/TCFieldAccess.lua")
 source(TheContractor.dir .. "src/util/TCVehicleLock.lua")
 source(TheContractor.dir .. "src/util/TCJobSiteSetup.lua")
+source(TheContractor.dir .. "src/util/TCParking.lua")
 source(TheContractor.dir .. "src/util/TCHaulage.lua")
 source(TheContractor.dir .. "src/util/TCJobSupplies.lua")
 source(TheContractor.dir .. "src/util/TCJobConsequences.lua")
@@ -59,6 +60,7 @@ source(TheContractor.dir .. "src/business/Morale.lua")
 source(TheContractor.dir .. "src/business/PayReviews.lua")
 source(TheContractor.dir .. "src/business/Administrator.lua")
 source(TheContractor.dir .. "src/business/Logbook.lua")
+source(TheContractor.dir .. "src/business/Parking.lua")
 source(TheContractor.dir .. "src/events/TCInitialClientStateEvent.lua")
 source(TheContractor.dir .. "src/events/TCSettingsEvent.lua")
 source(TheContractor.dir .. "src/events/TCCreateCompanyEvent.lua")
@@ -125,6 +127,9 @@ source(TheContractor.dir .. "src/events/TCAdministratorChangedEvent.lua")
 source(TheContractor.dir .. "src/events/TCLogJobRecordedEvent.lua")
 source(TheContractor.dir .. "src/events/TCLogVehicleEntryEvent.lua")
 source(TheContractor.dir .. "src/events/TCLogClaimEvent.lua")
+source(TheContractor.dir .. "src/events/TCParkingQueuedEvent.lua")
+source(TheContractor.dir .. "src/events/TCParkingRemovedEvent.lua")
+source(TheContractor.dir .. "src/events/TCParkingNoticeEvent.lua")
 
 -- The top-level Contractor page itself stays always-visible (see Company.lua
 -- and MenuContractor's Overview tab): "Create Company" has to live somewhere
@@ -173,6 +178,8 @@ function TheContractor:loadMap()
     self.PayReviews:register(self.Inbox)
     self.Administrator = TheContractorAdministrator.new()
     self.Logbook = TheContractorLogbook.new()
+    self.Parking = TheContractorParking.new()
+    self.Parking:register(self.Inbox)
     self.InboxHUD = TCInboxHUD.new()
 
     -- Module-level caches outlive a savegame; start each load clean.
@@ -184,6 +191,9 @@ function TheContractor:loadMap()
     TCJobSupplies.reset()
 
     TheContractorDisableVanillaContracts.hideContractsTab()
+
+    -- 062: parking slots only show in the construction menu.
+    TCParking.installConstructionScreenHook()
 
     -- 037: staff-driver hooks - vanilla AI Helper starts always, plus
     -- AutoDrive/Courseplay for whichever of the two is loaded.
@@ -239,6 +249,7 @@ function TheContractor:loadMap()
     TheContractorReputation.registerConsoleCommands()
     TheContractorNotices.registerConsoleCommands()
     TheContractorLogbook.registerConsoleCommands()
+    TheContractorParking.registerConsoleCommands()
     TCConsole.install()
 
     Logging.info("TheContractor: loadMap")
@@ -287,6 +298,7 @@ function TheContractor:loadFromXMLFile()
     self.PayReviews:loadFromXMLFile(xmlFile)
     self.Administrator:loadFromXMLFile(xmlFile)
     self.Logbook:loadFromXMLFile(xmlFile)
+    self.Parking:loadFromXMLFile(xmlFile)
 
     delete(xmlFile)
 end
@@ -304,6 +316,7 @@ function TheContractor:resolveSavedVehicles()
     self.Jobs:resolveSavedVehicles()
     self.Cooldown:resolveSavedVehicles()
     self.Logbook:resolveSavedVehicles()
+    self.Parking:resolveSavedVehicles()
 end
 
 -- Appended onto FSBaseMission.saveSavegame (see installSaveHook below), so
@@ -343,6 +356,7 @@ function TheContractor:saveToXmlFile()
     tc.PayReviews:saveToXmlFile(xmlFile)
     tc.Administrator:saveToXmlFile(xmlFile)
     tc.Logbook:saveToXmlFile(xmlFile)
+    tc.Parking:saveToXmlFile(xmlFile)
 
     saveXMLFile(xmlFile)
     delete(xmlFile)
@@ -473,6 +487,10 @@ function TheContractor:update(dt)
 
     if self.Cooldown ~= nil then
         self.Cooldown:update(dt)
+    end
+
+    if self.Parking ~= nil then
+        self.Parking:update(dt)
     end
 
     if self.Drivers ~= nil then

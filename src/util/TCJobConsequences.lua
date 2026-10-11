@@ -303,9 +303,8 @@ function TCJobConsequences.applyOnCompletion(job)
     job.startCondition = nil
 end
 
--- Server-only, from Cooldown:endCooldown once the equipment's been taken
--- home and before it's revealed: whatever the workers washed comes out
--- clean. Vanilla's Washable syncs the dirt to clients itself.
+-- Server-only, from Cooldown:endCooldown before the equipment goes to be
+-- parked (062): whatever the workers washed comes out clean. Vanilla's Washable syncs the dirt to clients itself.
 function TCJobConsequences.washEquipment(job)
     if not g_currentMission:getIsServer() or job.washVehicleIds == nil then
         return

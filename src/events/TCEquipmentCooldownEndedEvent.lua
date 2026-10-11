@@ -1,7 +1,8 @@
 -- Broadcast-only: the server ends a buffer, on schedule (via
 -- TheContractorCooldown:endCooldown, 023, driven by its own update(dt)) and
--- tells every client to reveal the same equipment. Just the farmId/
--- cooldownId pair, not a full entry snapshot - applyCooldownEnded already
+-- tells every client to drop it (the equipment stays hidden: it's gone to
+-- the parking return queue, 062, which reveals it as it's parked). Just
+-- the farmId/cooldownId pair, not a full entry snapshot - applyCooldownEnded already
 -- has the vehicle ids on hand locally (self.entriesByFarm), same
 -- "broadcast the minimum, look the rest up locally" shape
 -- TCWorkerStatusChangedEvent uses. See src/events/README.md for the general

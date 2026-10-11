@@ -2641,6 +2641,10 @@ function MenuContractor:populateAllocationEquipmentCell(index, cell)
     setAllocationCheckBox(cell:getAttribute("checkBox"), self.allocationSelectedEquipmentKeys[row.key] == true)
     cell:getAttribute("name"):setText(row.label)
     cell:getAttribute("kind"):setText(g_i18n:getText("tc_allocation_role_" .. row.role))
+    -- 062: a machine back from a job that hasn't found a parking space yet.
+    local isPending = g_currentMission.TheContractor.Parking:isPending(row.vehicleId)
+    setChip(cell:getAttribute("parkingChip"), cell:getAttribute("parkingChipText"),
+        isPending and g_i18n:getText("tc_allocation_awaitingParking") or nil, "warn")
 end
 
 -- Selected vehicle ids, field equipment or (isHaulage) the haulage rig.
