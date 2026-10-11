@@ -6,13 +6,14 @@
 		<text name="tc_setting_jobPayRate" text="Job pay rate"/>
 		<text name="tc_setting_lateInvoices" text="Late/unpaid invoices"/>
 		<text name="tc_toolTip_lateInvoices" text="On: completed jobs are invoiced and paid up to three months later, some late and a few never. Off: jobs pay in full on completion. Invoices already sent still run their course."/>
-		<text name="tc_toolTip_jobPayRate" text="Scales what new contract offers pay. 100% is half of base-game contract pay. Jobs already offered or accepted keep their price."/>
+		<text name="tc_toolTip_jobPayRate" text="Scales what new contract offers pay. 100% is half of base-game contract pay. Jobs already offered or accepted keep their price. Business costs (insurance, memberships, training, claims and fines) scale with it; staff pay doesn't."/>
 		<text name="tc_header_inbox" text="Inbox"/>
 		<text name="tc_header_calendar" text="Calendar"/>
 		<text name="tc_header_staff" text="Staff"/>
 		<text name="tc_header_overview" text="Overview"/>
 		<text name="tc_header_finances" text="Finances"/>
 		<text name="tc_header_logbook" text="Logbook"/>
+		<text name="tc_header_supplies" text="Supplies"/>
 		<text name="tc_overview_companyHeading" text="Company"/>
 		<text name="tc_overview_businessHeading" text="Business"/>
 		<text name="tc_inbox_negotiationHeading" text="Negotiation"/>
@@ -366,6 +367,8 @@
 		<text name="tc_supplies_status_wrongFill" text="Tank holds %s - empty it"/>
 		<text name="tc_supplies_onHold" text="%s on %s is on hold: %s."/>
 		<text name="tc_supplies_or" text=" or "/>
+		<text name="tc_supplies_noticeOne" text="Out of %s: a job is on hold until you restock."/>
+		<text name="tc_supplies_noticeMany" text="Out of %s: %d jobs are on hold until you restock."/>
 		<text name="tc_allocation_blockedWarning" text="%s isn't certified on %s."/>
 		<text name="tc_allocation_notCertifiedWarning" text="%s doesn't hold a %s certificate. Book them on a course from the Staff tab."/>
 		<text name="tc_allocation_underqualifiedWarning" text="%s is under-qualified: %s %d, the job needs %d - expect a reduced reward and extra wear on the machines."/>
@@ -439,13 +442,10 @@
 
 		<!-- Overheads (051) -->
 		<text name="tc_overhead_employersLiability" text="Employer's liability insurance"/>
-		<text name="tc_overhead_employersLiability_desc" text="Required by law once you employ anyone. Priced by headcount at each renewal: 400 a year plus 100 per employee."/>
+		<text name="tc_overhead_employersLiability_desc" text="Required by law once you employ anyone. Priced by headcount at each renewal: %s a year plus %s per employee."/>
 		<text name="tc_overheads_heading" text="Overhead"/>
 		<text name="tc_overheads_columnName" text="Overhead"/>
 		<text name="tc_overheads_columnStatus" text="Status"/>
-		<text name="tc_overheads_columnBilling" text="Billing"/>
-		<text name="tc_overheads_columnCost" text="Cost"/>
-		<text name="tc_overheads_columnNext" text="Next"/>
 		<text name="tc_overheads_status" text="Status"/>
 		<text name="tc_overheads_billing" text="Billing"/>
 		<text name="tc_overheads_price" text="Price"/>
@@ -465,8 +465,6 @@
 		<text name="tc_overheads_billingDetail_annual" text="Annual, paid up front (12% less than monthly)"/>
 		<text name="tc_overheads_billingDetail_monthly" text="Monthly"/>
 		<text name="tc_overheads_billingSwitching" text="%s, switching to %s at renewal"/>
-		<text name="tc_overheads_per_annual" text="%s/yr"/>
-		<text name="tc_overheads_per_monthly" text="%s/mo"/>
 		<text name="tc_overheads_priceThisTerm" text="%s a year this term"/>
 		<text name="tc_overheads_priceQuoted" text="%s, renewing at %s"/>
 		<text name="tc_overheads_priceQuote" text="%s a year paid annually, or %s a month"/>
@@ -490,7 +488,7 @@
 		<text name="tc_overheads_renewalBodyMandatory" text="Your %s renews in %s, Year %d. It's required by law while you employ staff. Next year's price is %s paid annually (12%% less), or %s a month. If you don't reply it renews as it is (%s)."/>
 		<text name="tc_overheads_renewalBodyLoaded" text="Your %s renews in %s, Year %d. Next year's price is %s paid annually (12%% less), or %s a month. That includes a claims loading of +%d%% for %d claim(s) in the last 3 years. If you don't reply it renews as it is (%s). You can also cancel it."/>
 		<text name="tc_overhead_publicLiability" text="Public liability insurance"/>
-		<text name="tc_overhead_publicLiability_desc" text="5m cover if a job damages a customer's crop or land. You pay the first 500 of each claim. 800 a year plus 60 per worker, plus 35% for each claim in the last 3 years."/>
+		<text name="tc_overhead_publicLiability_desc" text="Covers job damage to customers' crops or land, less a %s excess per claim. %s a year plus %s per worker, +35%% per claim in the last 3 years."/>
 		<text name="tc_claims_title" text="Compensation claim: field %d"/>
 		<text name="tc_claims_bodyInsured" text="The owner of field %d says %s %s during the %s job, and is claiming %s for the damage. Your public liability insurance covers it, less the excess: %s has been charged. The claim goes on your record and will raise your premium for the next 3 years. Word gets around, too: your reputation has taken a knock."/>
 		<text name="tc_claims_bodyUninsured" text="The owner of field %d says %s %s during the %s job, and is claiming %s for the damage. You don't have public liability insurance, so the whole %s has been charged. Word gets around, too: your reputation has taken a knock."/>
@@ -504,9 +502,9 @@
 		<text name="tc_claims_cause_drift" text="let the spray drift onto the neighbouring crop"/>
 		<text name="tc_claims_cause_cropDamage" text="went too close and tore out part of the crop"/>
 		<text name="tc_overhead_tradeAssociation" text="Agricultural Contractors' Association"/>
-		<text name="tc_overhead_tradeAssociation_desc" text="Trade association membership, 400 a year. Members earn 5% more reputation per job, get 25% off certification courses and cheaper legal cover."/>
+		<text name="tc_overhead_tradeAssociation_desc" text="Trade association membership, %s a year. Members earn 5%% more reputation per job, get 25%% off certification courses and cheaper legal cover."/>
 		<text name="tc_overhead_legalExpenses" text="Legal expenses insurance"/>
-		<text name="tc_overhead_legalExpenses_desc" text="Pursue overdue invoices at no cost, with a better chance of recovery. 350 a year, or 200 for association members (from the next renewal if you join mid-term)."/>
+		<text name="tc_overhead_legalExpenses_desc" text="Pursue overdue invoices at no cost, with a better chance of recovery. %s a year, or %s for association members (from the next renewal if you join mid-term)."/>
 		<text name="tc_legal_pursueButton" text="Pursue"/>
 		<text name="tc_legal_pursueConfirmCovered" text="Pursue the invoice for %s (%s)? Your legal cover handles it at no cost. Expect an outcome in 1-2 months."/>
 		<text name="tc_legal_pursueConfirmSolicitor" text="Instruct a solicitor to recover the invoice for %s (%s)? Their fee and the court fee come to %s, paid now and not refunded if it fails. Expect an outcome in 1-2 months."/>
@@ -521,19 +519,17 @@
 		<text name="tc_legal_failedBodySolicitor" text="Your solicitor couldn't recover the money for the %s job on field %s. The customer can't pay, so the %s invoice has been written off, and the %s fee isn't refunded."/>
 		<text name="tc_legal_failedNotice" text="Pursuit failed: the invoice for %s (%s) has been written off."/>
 		<text name="tc_overhead_healthSafety" text="Health &amp; safety programme"/>
-		<text name="tc_overhead_healthSafety_desc" text="PPE, first aid, training and risk assessments: 250 per worker a year. Staff get sick less and recover sooner. Without it, sickness risks an inspection and a fine."/>
+		<text name="tc_overhead_healthSafety_desc" text="PPE, first aid, training and risk assessments: %s per worker a year. Staff get sick less and recover sooner. Without it, sickness risks an inspection and a fine."/>
 		<text name="tc_admin_title" text="Office administrator"/>
 		<text name="tc_admin_status_employed" text="Employed"/>
 		<text name="tc_admin_status_vacant" text="None"/>
 		<text name="tc_admin_noteEmployed" text="%s, since %s"/>
-		<text name="tc_admin_noteVacant" text="You do the paperwork yourself, in the evenings"/>
-		<text name="tc_admin_billingShort" text="Salary"/>
 		<text name="tc_admin_billing" text="Monthly salary, paid with the salary run"/>
-		<text name="tc_admin_price" text="%s a month, plus %s pension"/>
+		<text name="tc_admin_price" text="%s a month"/>
 		<text name="tc_admin_desc" text="Handles invoicing and credit control: customers pay sooner, and fewer pay late or not at all. Only invoices issued while employed."/>
 		<text name="tc_admin_hireButton" text="Hire administrator"/>
 		<text name="tc_admin_releaseButton" text="Release administrator"/>
-		<text name="tc_admin_hireConfirm" text="Hire an office administrator for %s a month, plus pension? The first month is paid now. Customers will pay sooner, and fewer will pay late or not at all."/>
+		<text name="tc_admin_hireConfirm" text="Hire an office administrator for %s a month? The first month is paid now. Customers will pay sooner, and fewer will pay late or not at all."/>
 		<text name="tc_admin_cannotAfford" text="You can't afford an office administrator right now: the first month's salary is %s."/>
 		<text name="tc_admin_releaseConfirmNotice" text="Release %s, your office administrator? After %d full year(s) of service, you'll pay them %s in lieu of %s week(s)' notice. This cannot be undone."/>
 		<text name="tc_admin_releaseConfirmRedundancy" text="Release %s, your office administrator? After %d full years of service, you'll pay them %s: %s in lieu of %s weeks' notice and %s redundancy pay. This cannot be undone."/>
@@ -722,5 +718,48 @@
 		<text name="tc_logbook_source_autodrive" text="AutoDrive"/>
 		<text name="tc_logbook_source_courseplay" text="Courseplay"/>
 		<text name="tc_logbook_source_ai" text="AI helper"/>
+		<text name="tc_supplies_viewSupplies" text="Supplies"/>
+		<text name="tc_supplies_viewAdsConsumables" text="ADS consumables"/>
+		<text name="tc_supplies_viewAdsParts" text="ADS spare parts"/>
+		<text name="tc_supplies_columnSupply" text="Supply"/>
+		<text name="tc_supplies_columnItem" text="Item"/>
+		<text name="tc_supplies_columnPart" text="Part"/>
+		<text name="tc_supplies_columnStock" text="In stock"/>
+		<text name="tc_supplies_columnLevel" text="Level"/>
+		<text name="tc_supplies_columnStatus" text="Status"/>
+		<text name="tc_supplies_empty" text="No supplies to show"/>
+		<text name="tc_supplies_emptyAdsConsumables" text="No ADS oils, coolant, grease or parts packs on the farm"/>
+		<text name="tc_supplies_emptyAdsParts" text="No spare parts boxes on the farm"/>
+		<text name="tc_supplies_storage" text="Storage"/>
+		<text name="tc_supplies_chipHeld" text="%d on hold"/>
+		<text name="tc_supplies_chipNone" text="None"/>
+		<text name="tc_supplies_chipPallets" text="Pallets only"/>
+		<text name="tc_supplies_chipReserved" text="%d reserved"/>
+		<text name="tc_supplies_chipWaiting" text="Waiting"/>
+		<text name="tc_supplies_chipWorkOrder" text="Work order"/>
+		<text name="tc_supplies_chipOut" text="Out of stock"/>
+		<text name="tc_supplies_chipLow" text="Low"/>
+		<text name="tc_supplies_chipInStock" text="In stock"/>
+		<text name="tc_supplies_pieces" text="%s pcs"/>
+		<text name="tc_supplies_boxes" text="%d box(es)"/>
+		<text name="tc_supplies_partTier" text="%s (%s)"/>
+		<text name="tc_supplies_storedOf" text="%s / %s"/>
+		<text name="tc_supplies_palletGroup" text="%s (%d)"/>
+		<text name="tc_supplies_sectionStock" text="Stock"/>
+		<text name="tc_supplies_sectionStorage" text="Storage"/>
+		<text name="tc_supplies_sectionPallets" text="Pallets"/>
+		<text name="tc_supplies_sectionHeld" text="Jobs on hold"/>
+		<text name="tc_supplies_sectionKept" text="Where it's kept"/>
+		<text name="tc_supplies_sectionFits" text="Fits"/>
+		<text name="tc_supplies_inStock" text="In stock"/>
+		<text name="tc_supplies_inStorage" text="In storage"/>
+		<text name="tc_supplies_capacity" text="Capacity"/>
+		<text name="tc_supplies_freeSpace" text="Free space"/>
+		<text name="tc_supplies_fillLevel" text="Fill level"/>
+		<text name="tc_supplies_noStorage" text="No storage, pallets only"/>
+		<text name="tc_supplies_quality" text="Quality"/>
+		<text name="tc_supplies_boxCount" text="Boxes"/>
+		<text name="tc_supplies_free" text="Free"/>
+		<text name="tc_supplies_reserved" text="Reserved"/>
 	</texts>
 </l10n>

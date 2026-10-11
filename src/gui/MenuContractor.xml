@@ -32,6 +32,9 @@
             <Button profile="fs25_subCategorySelectorTabbedTab" id="subCategoryTabs[6]" text="$l10n_tc_header_logbook" onClick="onClickLogbook">
                 <ThreePartBitmap profile="fs25_subCategorySelectorTabbedTabBg" name="background"/>
             </Button>
+            <Button profile="fs25_subCategorySelectorTabbedTab" id="subCategoryTabs[7]" text="$l10n_tc_header_supplies" onClick="onClickSupplies">
+                <ThreePartBitmap profile="fs25_subCategorySelectorTabbedTabBg" name="background"/>
+            </Button>
         </BoxLayout>
         <ThreePartBitmap profile="fs25_lineSeparatorTopHighlighted" position="0px -57px"/>
         <MultiTextOption profile="fs25_subCategorySelectorTabbed" id="subCategoryPaging" position="0px -10px" onClick="updateSubCategoryPages"/>
@@ -578,10 +581,7 @@
                 <GuiElement id="financesOverheadContainer" position="40px -64px">
                     <GuiElement profile="tc_tableHeaderRow" position="0px 0px" size="600px 30px">
                         <Button profile="tc_tableHeader" position="14px 0px" text="$l10n_tc_overheads_columnName" handleFocus="false"/>
-                        <Button profile="tc_tableHeader" position="220px 0px" text="$l10n_tc_overheads_columnStatus" handleFocus="false"/>
-                        <Button profile="tc_tableHeader" position="322px 0px" text="$l10n_tc_overheads_columnBilling" handleFocus="false"/>
-                        <Button profile="tc_tableHeader" position="402px 0px" text="$l10n_tc_overheads_columnCost" handleFocus="false"/>
-                        <Button profile="tc_tableHeader" position="502px 0px" text="$l10n_tc_overheads_columnNext" handleFocus="false"/>
+                        <Button profile="tc_tableHeader" position="470px 0px" text="$l10n_tc_overheads_columnStatus" handleFocus="false"/>
                         <Bitmap profile="tc_tableHeaderDivider"/>
                     </GuiElement>
 
@@ -589,12 +589,9 @@
                         <ListItem profile="tc_tableListItem">
                             <RoundCorner profile="tc_tableRowSurface"/>
                             <Bitmap profile="tc_tableRowAccent"/>
-                            <Text profile="tc_listRowCellLeft" position="14px 0px" size="200px 32px" name="name"/>
-                            <RoundCorner profile="tc_rowChip" position="220px 0px" size="96px 20px" name="statusChip"/>
-                            <Text profile="tc_rowChipText" position="220px 0px" size="96px 20px" name="statusChipText"/>
-                            <Text profile="tc_listRowCellLeft" position="322px 0px" size="75px 32px" name="billing"/>
-                            <Text profile="tc_listRowCellLeft" position="402px 0px" size="95px 32px" name="cost"/>
-                            <Text profile="tc_listRowCellLeft" position="502px 0px" size="94px 32px" name="next"/>
+                            <Text profile="tc_listRowCellLeft" position="14px 0px" size="446px 32px" name="name"/>
+                            <RoundCorner profile="tc_rowChip" position="470px 0px" size="110px 20px" name="statusChip"/>
+                            <Text profile="tc_rowChipText" position="470px 0px" size="110px 20px" name="statusChipText"/>
                         </ListItem>
                     </SmoothList>
                     <ThreePartBitmap profile="tc_slider_box" position="610px -36px" size="6px 256px">
@@ -834,6 +831,74 @@
                     </SmoothList>
                     <ThreePartBitmap profile="tc_slider_box" position="770px -66px" size="6px 530px">
                         <Slider profile="fs25_listSlider" dataElementId="logbookDetailTable"/>
+                    </ThreePartBitmap>
+                </GuiElement>
+            </GuiElement>
+        </GuiElement>
+
+        <!-- Supplies (064) ================================================== -->
+        <GuiElement profile="fs25_subCategorySelectorTabbedContainer" id="subCategoryPages[7]">
+            <Text profile="tc_emptyStateText" id="placeholderSupplies" text="$l10n_tc_placeholder_locked" position="40px -250px" size="1440px 60px" textMaxNumLines="2"/>
+
+            <GuiElement id="suppliesContent" position="0px 0px">
+                <!-- Supplies, plus FS25_AdvancedDamageSystem's consumables and
+                     spare parts when it's loaded (TCADSStock). -->
+                <MultiTextOption profile="tc_calendarPeriodSwitcher" id="suppliesViewSelector" position="40px -20px" onClick="onClickSuppliesView" wrap="true" size="380px 32px"/>
+
+                <!-- One row per supply or item: name, amount, then a bar of
+                     what's stored against the room for it, or a chip where
+                     there's nothing to measure it against. -->
+                <GuiElement id="suppliesListContainer" position="40px -64px">
+                    <GuiElement profile="tc_tableHeaderRow" position="0px 0px" size="600px 30px">
+                        <Button profile="tc_tableHeader" id="suppliesColumnName" position="14px 0px" text="" handleFocus="false"/>
+                        <Button profile="tc_tableHeader" id="suppliesColumnAmount" position="240px 0px" text="" handleFocus="false"/>
+                        <Button profile="tc_tableHeader" id="suppliesColumnLevel" position="380px 0px" text="" handleFocus="false"/>
+                        <Bitmap profile="tc_tableHeaderDivider"/>
+                    </GuiElement>
+                    <SmoothList id="suppliesTable" profile="tc_table" position="0px -36px" size="600px 530px">
+                        <ListItem profile="tc_tableListItem">
+                            <RoundCorner profile="tc_tableRowSurface"/>
+                            <Bitmap profile="tc_tableRowAccent"/>
+                            <Text profile="tc_listRowValue" position="14px 0px" size="220px 32px" name="name"/>
+                            <Text profile="tc_listRowCellLeft" position="240px 0px" size="134px 32px" name="amount"/>
+                            <RoundCorner profile="tc_rowBarTrack" position="380px 0px" size="150px 10px" name="barTrack"/>
+                            <RoundCorner profile="tc_rowBarFill" position="380px 0px" size="150px 10px" name="barFill"/>
+                            <Text profile="tc_listRowCellRight" position="534px 0px" size="56px 32px" name="percent"/>
+                            <RoundCorner profile="tc_rowChip" position="380px 0px" size="130px 20px" name="chip"/>
+                            <Text profile="tc_rowChipText" position="380px 0px" size="130px 20px" name="chipText"/>
+                        </ListItem>
+                    </SmoothList>
+                    <ThreePartBitmap profile="tc_slider_box" position="610px -36px" size="6px 530px">
+                        <Slider profile="fs25_listSlider" dataElementId="suppliesTable"/>
+                    </ThreePartBitmap>
+                </GuiElement>
+
+                <Text profile="tc_emptyStateText" id="suppliesEmptyText" text="" position="40px -250px" size="600px 60px" textMaxNumLines="2"/>
+
+                <!-- The highlighted row: section titles and label/value rows,
+                     each place it's kept with its own bar. -->
+                <GuiElement id="suppliesDetailsBox" position="680px -20px">
+                    <RoundCorner profile="tc_panel" position="0px 0px" size="800px 610px"/>
+                    <Text profile="tc_panelHeading" id="suppliesDetailTitle" text="" position="24px -16px" size="620px 32px"/>
+                    <RoundCorner profile="tc_chip" id="suppliesDetailChip" position="656px -22px" size="120px 20px"/>
+                    <Text profile="tc_chipText" id="suppliesDetailChipText" position="656px -22px" size="120px 20px"/>
+                    <Bitmap profile="tc_divider" position="24px -56px" size="752px 1px"/>
+                    <SmoothList id="suppliesDetailTable" profile="tc_table" position="24px -66px" size="740px 530px">
+                        <ListItem profile="tc_tableListItem">
+                            <RoundCorner profile="tc_tableRowSurface" name="surface"/>
+                            <Bitmap profile="tc_tableRowAccent"/>
+                            <Text profile="tc_listRowSection" position="14px 0px" size="700px 32px" name="section"/>
+                            <Text profile="tc_listRowLabel" position="14px 0px" size="250px 32px" name="label"/>
+                            <Text profile="tc_listRowValue" position="270px 0px" size="250px 32px" name="value"/>
+                            <RoundCorner profile="tc_rowBarTrack" position="530px 0px" size="140px 10px" name="barTrack"/>
+                            <RoundCorner profile="tc_rowBarFill" position="530px 0px" size="140px 10px" name="barFill"/>
+                            <Text profile="tc_listRowCellRight" position="674px 0px" size="56px 32px" name="percent"/>
+                            <RoundCorner profile="tc_rowChip" position="626px 0px" size="104px 20px" name="chip"/>
+                            <Text profile="tc_rowChipText" position="626px 0px" size="104px 20px" name="chipText"/>
+                        </ListItem>
+                    </SmoothList>
+                    <ThreePartBitmap profile="tc_slider_box" position="770px -66px" size="6px 530px">
+                        <Slider profile="fs25_listSlider" dataElementId="suppliesDetailTable"/>
                     </ThreePartBitmap>
                 </GuiElement>
             </GuiElement>

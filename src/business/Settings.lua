@@ -116,6 +116,23 @@ function TheContractorSettings:getJobPayMultiplier()
     return self.values.jobPayRate / 100 * TheContractorJobGeneration.JOB_PAY_BASELINE
 end
 
+-- The business's fixed costs - overheads (051), claims and the excess (052),
+-- the solicitor's fee (053), training (054) and fines (055) - are written at
+-- 1x UK prices but charged at COST_BASELINE times that, scaled by the job pay
+-- rate too, so they keep the same weight against job income whatever the
+-- setting. Job pay is far above real UK contractor rates (047), so at 1x UK
+-- they'd hardly register. Wages, bonuses and severance stay at UK pay.
+TheContractorSettings.COST_BASELINE = 5
+
+function TheContractorSettings:getCostMultiplier()
+    return self.values.jobPayRate / 100 * TheContractorSettings.COST_BASELINE
+end
+
+-- A 1x UK cost at the current scale, to the nearest whole unit.
+function TheContractorSettings:scaleCost(amount)
+    return math.floor(amount * self:getCostMultiplier() + 0.5)
+end
+
 -- Streaming (TCSettingsEvent and initial client state) -------------------
 
 function TheContractorSettings:copyValues()

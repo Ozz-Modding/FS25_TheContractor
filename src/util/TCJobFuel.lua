@@ -19,6 +19,13 @@
 -- counts as fuel usage (so a little DEF, and electric/methane at the diesel
 -- price) - close enough for a summary.
 --
+-- 063: a hired worker's machines run on the farm's own diesel
+-- (TCJobSupplies tops their tanks up from stock), so "helper buys fuel" is
+-- switched off around updateConsumers for them - they burn their tank, and
+-- their fuel is priced without the surcharge. The trip to the field is
+-- simulated, so burnTravelFuel takes a short drive's worth out of each
+-- machine's tank as the worker sets off.
+--
 -- Hooks installed at source time, same as FS25_RedTape's specialization
 -- overrides (e.g. DischargeableExtension), before vehicle types register
 -- their functions.
@@ -27,12 +34,70 @@ TCJobFuel = {}
 
 TCJobFuel.HELPER_FUEL_PRICE_MULTIPLIER = 1.5
 
+-- 063: the trip there and back, as a drive of TRAVEL_MILES at
+-- TRAVEL_SPEED_KMH with Motorized's usage factor at TRAVEL_LOAD (road
+-- driving at part load). A 40 l/h tractor burns about 4 l on normal fuel
+-- usage.
+TCJobFuel.TRAVEL_MILES = 3
+TCJobFuel.TRAVEL_SPEED_KMH = 30
+TCJobFuel.TRAVEL_LOAD = 0.45
+TCJobFuel.METERS_PER_MILE = 1609.344
+
 local currentVehicle = nil
 
 function TCJobFuel.updateConsumers(vehicle, superFunc, dt, accInput)
     currentVehicle = vehicle
+    local missionInfo = g_currentMission.missionInfo
+    local helperBuyFuel = missionInfo.helperBuyFuel
+    if helperBuyFuel and TCJobSupplies.isContractVehicle(vehicle) then
+        missionInfo.helperBuyFuel = false
+    end
     superFunc(vehicle, dt, accInput)
+    missionInfo.helperBuyFuel = helperBuyFuel
     currentVehicle = nil
+end
+
+-- Motorized:updateConsumers' factor for the game's fuel usage setting.
+local function getFuelUsageFactor()
+    local fuelUsage = g_currentMission.missionInfo.fuelUsage
+    if fuelUsage == 1 then
+        return 1
+    elseif fuelUsage == 3 then
+        return 2.5
+    end
+    return 1.5
+end
+
+-- Server-only, as a hired worker sets off: takes the trip's diesel out of
+-- each of the job's machines' tanks (never more than is in it), counted as
+-- the job's fuel. Returns true if a tank ran dry.
+function TCJobFuel.burnTravelFuel(job)
+    local mission = g_currentMission
+    local travelMs = TCJobFuel.TRAVEL_MILES * TCJobFuel.METERS_PER_MILE / (TCJobFuel.TRAVEL_SPEED_KMH / 3.6) * 1000
+    local factor = getFuelUsageFactor() * TCJobFuel.TRAVEL_LOAD
+    local pricePerLiter = mission.economyManager:getCostPerLiter(FillType.DIESEL)
+    local ranDry = false
+
+    for _, vehicleId in ipairs(job.assignedEquipmentIds) do
+        local vehicle = NetworkUtil.getObject(vehicleId)
+        local consumer = vehicle ~= nil and TCJobSupplies.getDieselConsumer(vehicle) or nil
+        if consumer ~= nil and consumer.permanentConsumption then
+            local level = vehicle:getFillUnitFillLevel(consumer.fillUnitIndex)
+            local liters = math.min(level, consumer.usage * factor * travelMs)
+            if liters > 0 then
+                vehicle:addFillUnitFillLevel(job.farmId, consumer.fillUnitIndex, -liters, FillType.DIESEL,
+                    ToolType.UNDEFINED, nil)
+                g_farmManager:updateFarmStats(job.farmId, "fuelUsage", liters)
+                job.fuelUsedLiters = job.fuelUsedLiters + liters
+                job.fuelCost = job.fuelCost + liters * pricePerLiter
+            end
+            if vehicle:getFillUnitFillLevel(consumer.fillUnitIndex) <= 0.001 then
+                ranDry = true
+            end
+        end
+    end
+
+    return ranDry
 end
 
 function TCJobFuel.updateFarmStats(farmManager, superFunc, farmId, statName, delta)

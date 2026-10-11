@@ -13,7 +13,9 @@
 --             (TCEquipmentClass.isSeedTank), a sprayer's tank (taking one of
 --             the job's products - JOB_TYPES' supplyFillTypeNames), and any
 --             consumable holder (Consumable spec - a baler's net/twine, a
---             wrapper's film) on the job's implement.
+--             wrapper's film) on the job's implement. A hired worker's job
+--             also has each of its machines' diesel tanks (063) - see
+--             "Diesel" below.
 --
 -- Tanks are topped up from stock (topUp): as a hired worker sets off,
 -- which adds loading time to their trip (Dispatch's "supplies" transport
@@ -29,6 +31,20 @@
 -- if they hadn't set off, or stopped on the field if they had - and carries
 -- on by themselves once the farm restocks; a player-driven job just shows
 -- the status. Server-only apart from that status.
+--
+-- Diesel (063): a hired worker's machines run on the farm's own diesel,
+-- out of the same stock (a fuel tank is a storage). Their diesel tanks are
+-- tanks like the rest, filled as the worker sets off and topped up below
+-- REFILL_RATIO, for every job type (crop-dependent ones too - a combine
+-- carries no supplies but still burns fuel). Vanilla's "helper buys fuel"
+-- is ignored for them (TCJobFuel), so they never pay cash at the pump. A
+-- player's own machines are never refuelled - they drive to the tank. DEF
+-- needs nothing of its own: vanilla tops it up in step with diesel
+-- (Motorized:onFillUnitFillLevelChanged).
+--
+-- While any job is held for something the farm has run out of, the farm's
+-- Overview board carries a notice per product (refreshNotices). Not saved:
+-- the holds are worked out again by the first poll after a load.
 
 TCJobSupplies = {}
 
@@ -52,6 +68,10 @@ TCJobSupplies.STATUS = {
 
 local accumulatedMs = 0
 
+-- farmId -> fillTypeName -> { id, count }: the notices refreshNotices has
+-- up. Server-only.
+local supplyNotices = {}
+
 -- vehicle -> true for equipment on an allocated/in_progress hired-worker
 -- job (see "The AI Helper buying as it goes" below). Server-only, rebuilt
 -- every poll (checkJobs).
@@ -60,6 +80,7 @@ local contractVehicles = {}
 function TCJobSupplies.reset()
     accumulatedMs = 0
     contractVehicles = {}
+    supplyNotices = {}
 end
 
 local function getJobDef(job)
@@ -91,14 +112,38 @@ end
 local function addTank(tanks, vehicle, fillUnitIndex, fillTypes, consumableType)
     local capacity = vehicle:getFillUnitCapacity(fillUnitIndex)
     if capacity == nil or capacity <= 0 or #fillTypes == 0 then
-        return
+        return nil
     end
-    table.insert(tanks, {
+    local tank = {
         vehicle = vehicle,
         fillUnitIndex = fillUnitIndex,
         fillTypes = fillTypes,
         consumableType = consumableType,
-    })
+    }
+    table.insert(tanks, tank)
+    return tank
+end
+
+-- 063: a motorised vehicle's diesel consumer (its fillUnitIndex is the
+-- tank), or nil if it doesn't run on diesel. TCJobFuel's travel burn uses
+-- it too.
+function TCJobSupplies.getDieselConsumer(vehicle)
+    local spec = vehicle.spec_motorized
+    if spec == nil or spec.consumersByFillType == nil then
+        return nil
+    end
+    return spec.consumersByFillType[FillType.DIESEL]
+end
+
+local function addFuelTank(tanks, vehicle)
+    local consumer = TCJobSupplies.getDieselConsumer(vehicle)
+    if consumer == nil then
+        return
+    end
+    local tank = addTank(tanks, vehicle, consumer.fillUnitIndex, { FillType.DIESEL })
+    if tank ~= nil then
+        tank.isFuel = true
+    end
 end
 
 -- The tanks (see file header) on `vehicles` for a job of this type.
@@ -163,8 +208,17 @@ local function resolveVehicles(ids)
     return vehicles
 end
 
+-- The job's tanks, plus its machines' diesel tanks if a hired worker is
+-- driving them (063).
 function TCJobSupplies.getJobTanks(job)
-    return TCJobSupplies.getTanks(getJobDef(job), resolveVehicles(job.assignedEquipmentIds))
+    local vehicles = resolveVehicles(job.assignedEquipmentIds)
+    local tanks = TCJobSupplies.getTanks(getJobDef(job), vehicles)
+    if job.assignedWorkerId ~= nil then
+        for _, vehicle in ipairs(vehicles) do
+            addFuelTank(tanks, vehicle)
+        end
+    end
+    return tanks
 end
 
 -- Whether the job needs supplies at all, going by what the farm owns that
@@ -205,8 +259,9 @@ local function getStorageSources(farmId, fillTypeIndex)
 end
 
 -- Pallets/big bags/liquid tanks holding this fill type for the farm:
--- { pallet, fillUnitIndex, level }...
-local function getPalletSources(farmId, fillTypeIndex)
+-- { pallet, fillUnitIndex, level }... Also the Supplies tab's (064)
+-- pallet rows.
+function TCJobSupplies.getPalletSources(farmId, fillTypeIndex)
     local sources = {}
     for _, vehicle in ipairs(g_currentMission.vehicleSystem.vehicles) do
         if vehicle.isPallet and isOwnedBy(vehicle, farmId) and vehicle.getFillUnitFillType ~= nil then
@@ -228,7 +283,7 @@ function TCJobSupplies.getFarmStock(farmId, fillTypeIndex)
     for _, source in ipairs(getStorageSources(farmId, fillTypeIndex)) do
         total = total + source.level
     end
-    for _, source in ipairs(getPalletSources(farmId, fillTypeIndex)) do
+    for _, source in ipairs(TCJobSupplies.getPalletSources(farmId, fillTypeIndex)) do
         total = total + source.level
     end
     return total
@@ -248,7 +303,7 @@ function TCJobSupplies.drawFromStock(farmId, fillTypeIndex, amount)
         taken = taken + take
     end
 
-    for _, source in ipairs(getPalletSources(farmId, fillTypeIndex)) do
+    for _, source in ipairs(TCJobSupplies.getPalletSources(farmId, fillTypeIndex)) do
         if taken >= amount then
             break
         end
@@ -261,18 +316,21 @@ function TCJobSupplies.drawFromStock(farmId, fillTypeIndex, amount)
     return taken
 end
 
--- "Seeds 12,400 l" - a fill type's title with an amount in its own unit
--- (pieces for net/twine/film, volume for everything else).
+-- "12,400 l" - an amount in the fill type's own unit (pieces for
+-- net/twine/film, volume for everything else).
+function TCJobSupplies.formatQuantity(fillTypeIndex, amount)
+    local fillType = g_fillTypeManager:getFillTypeByIndex(fillTypeIndex)
+    if fillType ~= nil and fillType.unitShort ~= nil and fillType.unitShort ~= "" then
+        return string.format("%s %s", g_i18n:formatNumber(math.floor(amount)), fillType.unitShort)
+    end
+    return g_i18n:formatVolume(amount, 0)
+end
+
+-- "Seeds 12,400 l" - a fill type's title with an amount in its own unit.
 function TCJobSupplies.formatAmount(fillTypeIndex, amount)
     local fillType = g_fillTypeManager:getFillTypeByIndex(fillTypeIndex)
     local title = fillType ~= nil and fillType.title or tostring(fillTypeIndex)
-    local amountText
-    if fillType ~= nil and fillType.unitShort ~= nil and fillType.unitShort ~= "" then
-        amountText = string.format("%s %s", g_i18n:formatNumber(math.floor(amount)), fillType.unitShort)
-    else
-        amountText = g_i18n:formatVolume(amount, 0)
-    end
-    return string.format("%s %s", title, amountText)
+    return string.format("%s %s", title, TCJobSupplies.formatQuantity(fillTypeIndex, amount))
 end
 
 -- Tanks ---------------------------------------------------------------------
@@ -365,8 +423,9 @@ function TCJobSupplies.topUp(job, onlyBelowRatio, canFill)
             if wantsFill and (canFill == nil or canFill(tank)) then
                 local taken, fillTypeIndex = fillTank(job.farmId, tank)
                 loaded = loaded + taken
-                -- 060: the job's supplies, for the logbook.
-                if taken > 0 then
+                -- 060: the job's supplies, for the logbook. Not diesel:
+                -- the logbook's fuel line has what was burned.
+                if taken > 0 and not tank.isFuel then
                     g_currentMission.TheContractor.Logbook:onSuppliesLoaded(job, fillTypeIndex, taken)
                 end
             end
@@ -520,24 +579,71 @@ local function checkPlayerJob(job, jobs)
     jobs:setJobSupplyStatus(job, status, fillTypeName)
 end
 
+local function isActiveJob(job)
+    return job.state == TheContractorJob.STATE.ALLOCATED or job.state == TheContractorJob.STATE.IN_PROGRESS
+end
+
+-- 063: one Overview notice per product a farm has jobs waiting on, kept in
+-- step with how many are waiting.
+local function refreshNotices(tc)
+    local wanted = {}
+    for _, farm in ipairs(g_farmManager:getFarms()) do
+        for _, job in ipairs(tc.Jobs:getAllJobs(farm.farmId)) do
+            if isActiveJob(job) and job.supplyStatus == TCJobSupplies.STATUS.NO_STOCK and
+                job.supplyFillTypeName ~= nil then
+                local byName = wanted[farm.farmId] or {}
+                wanted[farm.farmId] = byName
+                byName[job.supplyFillTypeName] = (byName[job.supplyFillTypeName] or 0) + 1
+            end
+        end
+    end
+
+    for farmId, byName in pairs(supplyNotices) do
+        for fillTypeName, notice in pairs(byName) do
+            if wanted[farmId] == nil or wanted[farmId][fillTypeName] ~= notice.count then
+                tc.Notices:remove(notice.id)
+                byName[fillTypeName] = nil
+            end
+        end
+    end
+
+    for farmId, byName in pairs(wanted) do
+        supplyNotices[farmId] = supplyNotices[farmId] or {}
+        for fillTypeName, count in pairs(byName) do
+            if supplyNotices[farmId][fillTypeName] == nil then
+                local fillTypeIndex = g_fillTypeManager:getFillTypeIndexByName(fillTypeName)
+                local title = fillTypeIndex ~= nil and g_fillTypeManager:getFillTypeTitleByIndex(fillTypeIndex) or
+                    fillTypeName
+                local text = count == 1 and string.format(g_i18n:getText("tc_supplies_noticeOne"), title) or
+                    string.format(g_i18n:getText("tc_supplies_noticeMany"), title, count)
+                supplyNotices[farmId][fillTypeName] = { id = tc.Notices:publish(farmId, text, nil, true), count = count }
+            end
+        end
+    end
+end
+
 local function checkJobs()
     refreshContractVehicles()
 
     local tc = g_currentMission.TheContractor
     for _, farm in ipairs(g_farmManager:getFarms()) do
         for _, job in ipairs(tc.Jobs:getAllJobs(farm.farmId)) do
-            if job.state == TheContractorJob.STATE.ALLOCATED or job.state == TheContractorJob.STATE.IN_PROGRESS then
+            if isActiveJob(job) then
                 local jobDef = getJobDef(job)
-                if jobDef ~= nil and not jobDef.cropDependent then
+                if jobDef ~= nil then
+                    -- A crop-dependent job carries no supplies, but a hired
+                    -- worker's machines still need diesel (063).
                     if job.assignedWorkerId ~= nil then
                         checkWorkerJob(job, tc.Jobs, tc.Dispatch)
-                    else
+                    elseif not jobDef.cropDependent then
                         checkPlayerJob(job, tc.Jobs)
                     end
                 end
             end
         end
     end
+
+    refreshNotices(tc)
 end
 
 -- Server-only, called every frame from TheContractor:update.

@@ -13,8 +13,8 @@
 -- so a good worker almost never does, a careless and under-qualified one
 -- about one job in 20. At most one claim per job.
 --
--- The claim (field ha * CLAIM_PER_HA * 0.5-1.5, 1x UK, not scaled by the
--- pay setting) arrives CLAIM_DELAY_MIN-MAX days later as an inbox message
+-- The claim (field ha * CLAIM_PER_HA * 0.5-1.5, written at 1x UK and scaled
+-- by TheContractorSettings:scaleCost, as is EXCESS) arrives CLAIM_DELAY_MIN-MAX days later as an inbox message
 -- (050) and an Overview notice (038), with a reputation hit. Until then
 -- it's a pending claim: server-only, saved, never streamed.
 --
@@ -117,6 +117,8 @@ function TheContractorClaims:register(overheads, inbox)
             local count = self:getRecentClaimCount(farmId)
             return count, math.floor(count * TheContractorClaims.CLAIMS_LOADING * 100 + 0.5)
         end,
+        descriptionAmounts = { TheContractorClaims.EXCESS, TheContractorClaims.PL_BASE,
+            TheContractorClaims.PL_PER_WORKER },
     })
 
     inbox:registerMessageKind(TheContractorClaims.MESSAGE_KIND, {
@@ -139,7 +141,7 @@ function TheContractorClaims:getRecentClaimCount(farmId)
     return count
 end
 
--- Public liability's yearly price right now (1x UK).
+-- Public liability's yearly price right now (1x UK - Overheads scales it).
 function TheContractorClaims:getPremium(farmId)
     local headcount = #g_currentMission.TheContractor.Staff:getRoster(farmId)
     local base = TheContractorClaims.PL_BASE + TheContractorClaims.PL_PER_WORKER * headcount
@@ -213,7 +215,7 @@ function TheContractorClaims:createPendingClaim(job, worker, delayDays)
         fieldId = job.fieldId,
         workerName = worker.name,
         cause = causes[math.random(#causes)],
-        amount = math.floor(areaHa * TheContractorClaims.CLAIM_PER_HA * factor),
+        amount = g_currentMission.TheContractor.Settings:scaleCost(areaHa * TheContractorClaims.CLAIM_PER_HA * factor),
         insured = self:isInsured(job.farmId),
         reputationPenalty = math.floor(math.max(TheContractorClaims.MIN_REPUTATION_PENALTY,
             TheContractorJobs.getBaseReputationReward(job) * TheContractorClaims.REPUTATION_PENALTY_MULTIPLIER)),
@@ -258,7 +260,8 @@ function TheContractorClaims:deliverClaim(claim)
         return
     end
 
-    local paid = claim.insured and math.min(claim.amount, TheContractorClaims.EXCESS) or claim.amount
+    local excess = tc.Settings:scaleCost(TheContractorClaims.EXCESS)
+    local paid = claim.insured and math.min(claim.amount, excess) or claim.amount
     g_currentMission:addMoney(-paid, claim.farmId, MoneyType.TC_CLAIMS, true, true)
     tc.Finances:recordClaims(claim.farmId, paid)
 

@@ -17,6 +17,8 @@ source(TheContractor.dir .. "src/util/TCJobSiteSetup.lua")
 source(TheContractor.dir .. "src/util/TCParking.lua")
 source(TheContractor.dir .. "src/util/TCHaulage.lua")
 source(TheContractor.dir .. "src/util/TCJobSupplies.lua")
+source(TheContractor.dir .. "src/util/TCSupplyStock.lua")
+source(TheContractor.dir .. "src/util/TCADSStock.lua")
 source(TheContractor.dir .. "src/util/TCJobConsequences.lua")
 source(TheContractor.dir .. "src/util/TCVehicleCondition.lua")
 source(TheContractor.dir .. "src/util/TCVehicleIds.lua")
@@ -189,6 +191,10 @@ function TheContractor:loadMap()
     TCHaulage.reset()
     TCFieldPreparation.reset()
     TCJobSupplies.reset()
+
+    -- 064: which parts of FS25_AdvancedDamageSystem's stock the Supplies
+    -- tab can show (none without the mod).
+    TCADSStock.detect()
 
     TheContractorDisableVanillaContracts.hideContractsTab()
 

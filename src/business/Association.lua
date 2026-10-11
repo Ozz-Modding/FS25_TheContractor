@@ -65,6 +65,7 @@ function TheContractorAssociation:register(overheads, inbox)
         annualCost = function(farmId)
             return TheContractorAssociation.MEMBERSHIP_COST
         end,
+        descriptionAmounts = { TheContractorAssociation.MEMBERSHIP_COST },
     })
 
     overheads:registerOverhead({
@@ -75,6 +76,8 @@ function TheContractorAssociation:register(overheads, inbox)
             return self:isMember(farmId) and TheContractorAssociation.LEGAL_COVER_MEMBER_COST or
                 TheContractorAssociation.LEGAL_COVER_COST
         end,
+        descriptionAmounts = { TheContractorAssociation.LEGAL_COVER_COST,
+            TheContractorAssociation.LEGAL_COVER_MEMBER_COST },
     })
 
     inbox:registerMessageKind(TheContractorAssociation.MESSAGE_KIND, {
@@ -112,7 +115,9 @@ function TheContractorAssociation:getPursuitFee(farmId, invoice)
     if self:hasLegalCover(farmId) then
         return 0
     end
-    return math.floor(TheContractorAssociation.SOLICITOR_FEE +
+    -- The fixed fee is 1x UK, so it's scaled; the rate is on the invoice,
+    -- which already is.
+    return math.floor(g_currentMission.TheContractor.Settings:scaleCost(TheContractorAssociation.SOLICITOR_FEE) +
         TheContractorAssociation.SOLICITOR_FEE_RATE * invoice.amount + 0.5)
 end
 

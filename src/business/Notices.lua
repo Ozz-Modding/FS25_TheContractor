@@ -7,7 +7,9 @@
 --
 -- publish returns the notice's id; keep it to take the notice down again.
 -- ttlMonths is optional: given, the notice removes itself that many period
--- changes later; nil means it stays until removed. Ids are unique across all
+-- changes later; nil means it stays until removed. isTransient (optional)
+-- keeps it out of the save, for a notice its publisher puts up again
+-- after a load anyway (063's supply holds). Ids are unique across all
 -- farms (one shared counter, like Staff's worker ids), so remove needs no
 -- farmId.
 --
@@ -53,7 +55,7 @@ end
 -- Publishing/removing (server-authoritative) ----------------------------
 
 -- Returns the new notice's id, or nil if called on a client.
-function TheContractorNotices:publish(farmId, text, ttlMonths)
+function TheContractorNotices:publish(farmId, text, ttlMonths, isTransient)
     if not g_currentMission:getIsServer() then
         return nil
     end
@@ -68,6 +70,8 @@ function TheContractorNotices:publish(farmId, text, ttlMonths)
         farmId = farmId,
         text = text,
         expiresAtPeriod = expiresAtPeriod,
+        -- Server-only, never streamed: only the server saves.
+        isTransient = isTransient == true,
     }
     self:applyNoticePublished(notice)
 
@@ -196,14 +200,16 @@ function TheContractorNotices:saveToXmlFile(xmlFile)
 
     local index = 0
     for _, notice in pairs(self.noticesById) do
-        local key = string.format("%s.notice(%d)", rootKey, index)
-        setXMLInt(xmlFile, key .. "#id", notice.id)
-        setXMLInt(xmlFile, key .. "#farmId", notice.farmId)
-        setXMLString(xmlFile, key .. "#text", notice.text)
-        if notice.expiresAtPeriod ~= nil then
-            setXMLInt(xmlFile, key .. "#expiresAtPeriod", notice.expiresAtPeriod)
+        if not notice.isTransient then
+            local key = string.format("%s.notice(%d)", rootKey, index)
+            setXMLInt(xmlFile, key .. "#id", notice.id)
+            setXMLInt(xmlFile, key .. "#farmId", notice.farmId)
+            setXMLString(xmlFile, key .. "#text", notice.text)
+            if notice.expiresAtPeriod ~= nil then
+                setXMLInt(xmlFile, key .. "#expiresAtPeriod", notice.expiresAtPeriod)
+            end
+            index = index + 1
         end
-        index = index + 1
     end
 end
 
