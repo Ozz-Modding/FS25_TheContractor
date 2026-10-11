@@ -311,6 +311,8 @@
 		<text name="tc_vehicleLock_busy" text="This vehicle is out on a contract job."/>
 		<text name="tc_construction_tab" text="Contractor"/>
 		<text name="tc_parkingSlot_name" text="Parking Slot"/>
+		<text name="tc_parkingSlotMedium_name" text="Parking Slot (Medium)"/>
+		<text name="tc_parkingSlotLarge_name" text="Parking Slot (Large)"/>
 		<text name="tc_parkingSlot_function" text="Marks a parking space for equipment coming back from contract jobs, facing the arrow. Only visible in the construction menu."/>
 		<text name="tc_inbox_chipParking" text="Parking"/>
 		<text name="tc_parking_sendToShopButton" text="Send to shop"/>

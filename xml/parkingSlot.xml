@@ -12,7 +12,7 @@
         <functions>
             <function>$l10n_tc_parkingSlot_function</function>
         </functions>
-        <image>icon_TheContractor.dds</image>
+        <image>images/store/parkingSlot.dds</image>
         <price>0</price>
         <dailyUpkeep>0</dailyUpkeep>
         <lifetime>1000</lifetime>
