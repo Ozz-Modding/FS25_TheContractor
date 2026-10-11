@@ -309,6 +309,7 @@
 		<text name="tc_allocation_confirmButton" text="Confirm"/>
 		<text name="tc_allocation_cancelButton" text="Cancel"/>
 		<text name="tc_vehicleLock_busy" text="This vehicle is out on a contract job."/>
+		<text name="tc_construction_tab" text="Contractor"/>
 		<text name="tc_parkingSlot_name" text="Parking Slot"/>
 		<text name="tc_parkingSlot_function" text="Marks a parking space for equipment coming back from contract jobs, facing the arrow. Only visible in the construction menu."/>
 		<text name="tc_inbox_chipParking" text="Parking"/>
@@ -659,7 +660,6 @@
 		<text name="tc_logbook_machine" text="Machine"/>
 		<text name="tc_logbook_usedBy" text="Used by"/>
 		<text name="tc_logbook_condition" text="Condition"/>
-		<text name="tc_logbook_service" text="Service"/>
 		<text name="tc_logbook_damage" text="Damage"/>
 		<text name="tc_logbook_paint" text="Paint wear"/>
 		<text name="tc_logbook_change" text="%s to %s"/>

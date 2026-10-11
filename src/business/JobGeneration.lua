@@ -640,23 +640,9 @@ function TheContractorJobGeneration.getMowMissionData()
     return data
 end
 
--- Vanilla mission code isn't written to be called from outside its own
--- generation loop, so an error in it (an odd map, another mod) costs that
--- field its eligibility rather than breaking the hourly tick.
-local loggedVanillaErrors = {}
-
 function TheContractorJobGeneration.isVanillaAvailable(field, jobDef)
     TheContractorJobGeneration.getMowMissionData()
-    local ok, result = pcall(jobDef.vanillaMission.isAvailableForField, field, nil)
-    if not ok then
-        if not loggedVanillaErrors[jobDef.vanillaMission] then
-            loggedVanillaErrors[jobDef.vanillaMission] = true
-            Logging.warning("TheContractor: vanilla eligibility check failed for field %s: %s",
-                tostring(field:getId()), tostring(result))
-        end
-        return false
-    end
-    return result == true
+    return jobDef.vanillaMission.isAvailableForField(field, nil) == true
 end
 
 -- The job's deadline as an absolute (monotonic) day — it's due by the end
