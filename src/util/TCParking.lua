@@ -266,3 +266,43 @@ function TCParking.installConstructionScreenHook()
             onConstructionScreenClose)
     end
 end
+
+-- The slot (any farm's) whose rectangle holds x, z, or nil.
+function TCParking.getSlotAt(x, z)
+    local placeableSystem = g_currentMission ~= nil and g_currentMission.placeableSystem or nil
+    if placeableSystem == nil then
+        return nil
+    end
+    for _, placeable in ipairs(placeableSystem.placeables) do
+        if PlaceableTCParkingSlot.isSlot(placeable) and not placeable.isDeleted and not placeable.markedForDeletion then
+            local area = PlaceableTCParkingSlot.getArea(placeable)
+            if area ~= nil then
+                local dx, dz = x - area.x, z - area.z
+                local u = dx * area.uX + dz * area.uZ
+                local v = dx * area.vX + dz * area.vZ
+                if u >= 0 and u <= area.width and v >= 0 and v <= area.length then
+                    return placeable
+                end
+            end
+        end
+    end
+    return nil
+end
+
+-- Selecting a slot (to sell it) with the construction cursor. The cursor
+-- picks placeables by raycasting for their collision, and a slot's pick box
+-- is only a thin slab: slots don't level the ground, so on a slope the
+-- terrain covers part or all of it and the ray hits the terrain instead. In
+-- selection mode, a terrain hit inside a slot's rectangle counts as that
+-- slot.
+function TCParking.getHitPlaceable(cursor, superFunc)
+    local placeable = superFunc(cursor)
+    if placeable == nil and cursor.selectionMode and cursor.currentHitId ~= nil and
+        cursor.currentHitId == g_terrainNode and cursor.currentHitX ~= nil then
+        placeable = TCParking.getSlotAt(cursor.currentHitX, cursor.currentHitZ)
+    end
+    return placeable
+end
+
+GuiTopDownCursor.getHitPlaceable = Utils.overwrittenFunction(GuiTopDownCursor.getHitPlaceable,
+    TCParking.getHitPlaceable)

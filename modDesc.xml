@@ -30,6 +30,8 @@
     </placeableTypes>
     <storeItems>
         <storeItem xmlFilename="xml/parkingSlot.xml" />
+        <storeItem xmlFilename="xml/parkingSlotMedium.xml" />
+        <storeItem xmlFilename="xml/parkingSlotLarge.xml" />
     </storeItems>
 
     <constructionCategories>
