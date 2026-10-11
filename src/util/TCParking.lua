@@ -211,10 +211,6 @@ end
 -- or one just placed) sets itself from lastConstructionScreenOpenTime in
 -- its own onLoad.
 
--- Whether the slots are currently shown, so the hook only acts when the
--- construction menu actually opens or closes.
-local slotsShown = false
-
 function TCParking.setSlotsVisible(isVisible)
     local placeableSystem = g_currentMission ~= nil and g_currentMission.placeableSystem or nil
     if placeableSystem == nil then
@@ -227,36 +223,46 @@ function TCParking.setSlotsVisible(isVisible)
     end
 end
 
--- After every screen change. ConstructionScreen:onOpen/onClose set
--- lastConstructionScreenOpenTime inside Gui:changeScreen, so it's up to
--- date by the time this runs.
-function TCParking.onScreenChanged()
-    if g_currentMission == nil or g_currentMission.lastConstructionScreenOpenTime == nil then
-        return
-    end
-    local isOpen = g_currentMission.lastConstructionScreenOpenTime > -1
-    if isOpen == slotsShown then
-        return
-    end
-    slotsShown = isOpen
-    TCParking.setSlotsVisible(isOpen)
+local function onConstructionScreenOpen()
+    TCParking.setSlotsVisible(true)
 end
 
--- Called every loadMap. Every screen change goes through Gui:changeScreen
--- (hooking ConstructionScreen.onOpen/onClose on the class does nothing:
--- the screen element holds copies of them, made when its xml loaded at game
--- start). GUI_AFTER_OPEN/GUI_AFTER_CLOSE wouldn't do either, as they only
--- fire when the GUI as a whole opens or closes, not when one screen
--- replaces another. Flagged on Gui so it goes on once per game session;
--- changeScreen's return value is passed on, as some screens need it.
-function TCParking.installConstructionMenuHook()
-    slotsShown = false
-    if not Gui.tcParkingHookInstalled then
-        Gui.changeScreen = Utils.overwrittenFunction(Gui.changeScreen, function(self, superFunc, ...)
-            local screenElement = superFunc(self, ...)
-            TCParking.onScreenChanged()
-            return screenElement
-        end)
-        Gui.tcParkingHookInstalled = true
+local function onConstructionScreenClose()
+    TCParking.setSlotsVisible(false)
+end
+
+-- Hooking ConstructionScreen.onOpen/onClose on the class does nothing: when
+-- the screen's xml loads (at game start, before any mod), GuiElement:
+-- addCallback copies the target's functions into the screen element's
+-- onOpenCallback/onCloseCallback. Opening always goes through the element
+-- (Gui:changeScreen calls screenElement:onOpen), so its copy is wrapped.
+-- Closing usually doesn't: the screen closes itself with
+-- self:changeScreen(nil), and Gui:changeScreen then calls onClose on the
+-- controller (sourceScreen) directly, never raising the element's
+-- onCloseCallback. So the controller instance, g_constructionScreen, gets
+-- its own onClose wrapper too; the element's onCloseCallback is still
+-- wrapped for a close with no source screen. The GUI outlives a savegame,
+-- so the originals are kept and each load wraps them afresh rather than
+-- stacking on the last load's wrapper.
+function TCParking.installConstructionScreenHook()
+    local element = g_gui ~= nil and g_gui.screens[ConstructionScreen] or nil
+    if element == nil then
+        Logging.warning("[TheContractor] Construction screen not found; parking slots won't show in it.")
+        return
+    end
+    if element.tcOriginalOnOpenCallback == nil then
+        element.tcOriginalOnOpenCallback = element.onOpenCallback or false
+        element.tcOriginalOnCloseCallback = element.onCloseCallback or false
+    end
+    element.onOpenCallback = Utils.appendedFunction(element.tcOriginalOnOpenCallback or nil, onConstructionScreenOpen)
+    element.onCloseCallback = Utils.appendedFunction(element.tcOriginalOnCloseCallback or nil, onConstructionScreenClose)
+
+    local screen = g_constructionScreen
+    if screen ~= nil then
+        if screen.tcOriginalOnClose == nil then
+            screen.tcOriginalOnClose = rawget(screen, "onClose") or false
+        end
+        screen.onClose = Utils.appendedFunction(screen.tcOriginalOnClose or ConstructionScreen.onClose,
+            onConstructionScreenClose)
     end
 end

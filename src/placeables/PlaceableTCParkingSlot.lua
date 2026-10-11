@@ -11,9 +11,9 @@
 -- Visuals: terrain decals under one node, so they follow slopes. They only
 -- show while the construction menu is open, on each machine by itself and
 -- never networked: here at load for a slot that appears while it's open (a
--- preview, a slot just placed), then by TCParking's screen-change hook for
--- every slot at once. Both read vanilla's lastConstructionScreenOpenTime
--- (g_time while the screen's open, -1 otherwise).
+-- preview, a slot just placed, going by vanilla's
+-- lastConstructionScreenOpenTime), then by TCParking's construction-screen
+-- hook for every slot at once.
 --
 -- The slot's pick collision is a thin static box in the ROAD group (one of
 -- the construction cursor's raycast groups, so it can be selected and

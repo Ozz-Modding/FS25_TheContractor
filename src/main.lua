@@ -193,7 +193,7 @@ function TheContractor:loadMap()
     TheContractorDisableVanillaContracts.hideContractsTab()
 
     -- 062: parking slots only show in the construction menu.
-    TCParking.installConstructionMenuHook()
+    TCParking.installConstructionScreenHook()
 
     -- 037: staff-driver hooks - vanilla AI Helper starts always, plus
     -- AutoDrive/Courseplay for whichever of the two is loaded.
