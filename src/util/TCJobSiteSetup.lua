@@ -25,15 +25,12 @@
 -- Server-only: vehicle positions and VehicleAttachEvent both replicate to
 -- clients by themselves.
 --
--- Going home: before anything moves, recordHome snapshots where every job
--- vehicle stood (job.equipmentHome, persisted with the job), and any
--- non-job implement hitched to one of them is unhitched and left in the
--- yard (detachForeignImplements), so nothing that isn't part of the job
--- ever leaves it. Once the job's done (end of 023's cooldown, or straight
--- away for a job missed with no work done), returnHome unhitches the job's
--- equipment and puts each piece back exactly where it stood. Nothing is
--- re-hitched - whatever it was hitched to before may be gone by then. A
--- later ticket may replace "where it stood" with defined equipment areas.
+-- Going home: before anything moves, any non-job implement hitched to a
+-- job vehicle is unhitched and left in the yard (detachForeignImplements),
+-- so nothing that isn't part of the job ever leaves it. Once the job's
+-- done, the equipment goes to 062's parking return queue (Parking.lua),
+-- which unhitches every piece (unhitchVehicles) and parks each one in a
+-- free parking slot. Nothing is re-hitched.
 
 TCJobSiteSetup = {}
 
@@ -263,29 +260,6 @@ local function resolveJobVehicles(job)
     return vehicles
 end
 
--- Server-only. Snapshots every job vehicle's component world transforms -
--- the same shape Vehicle:setAbsolutePosition's componentPositions takes, so
--- multi-component vehicles go back exactly as they were. Only the first
--- dispatch of a job records: a watchdog retry or post-load resume starts
--- from the field, which isn't home.
-function TCJobSiteSetup.recordHome(job)
-    if job.equipmentHome ~= nil then
-        return
-    end
-
-    local home = {}
-    for _, vehicle in ipairs(resolveJobVehicles(job)) do
-        local components = {}
-        for i, component in ipairs(vehicle.components) do
-            local x, y, z = getWorldTranslation(component.node)
-            local rx, ry, rz = getWorldRotation(component.node)
-            components[i] = { { x, y, z }, { rx, ry, rz } }
-        end
-        table.insert(home, { vehicleId = NetworkUtil.getObjectId(vehicle), components = components })
-    end
-    job.equipmentHome = home
-end
-
 -- Server-only. Unhitches anything that isn't part of the job from the job's
 -- equipment, where it stands - it stays in the yard.
 function TCJobSiteSetup.detachForeignImplements(job)
@@ -310,119 +284,26 @@ function TCJobSiteSetup.detachForeignImplements(job)
     end
 end
 
--- Server-only. Unhitches the job's equipment and puts each piece back where
--- recordHome found it. Visibility is left alone - during a cooldown the
--- equipment is still hidden and gets revealed by the cooldown's own end.
-function TCJobSiteSetup.returnHome(job)
-    local home = job.equipmentHome
-    if home == nil then
-        return
-    end
-    job.equipmentHome = nil
-
-    local placements = {}
-    for _, entry in ipairs(home) do
-        local vehicle = NetworkUtil.getObject(entry.vehicleId)
-        if vehicle ~= nil and #entry.components == #vehicle.components then
-            table.insert(placements, { vehicle = vehicle, components = entry.components })
-        end
-    end
-
-    for _, placement in ipairs(placements) do
-        local vehicle = placement.vehicle
-        local attacher = vehicle.getAttacherVehicle ~= nil and vehicle:getAttacherVehicle() or nil
-        if attacher ~= nil then
-            attacher:detachImplementByObject(vehicle)
-        end
-    end
-
-    for _, placement in ipairs(placements) do
-        local root = placement.components[1]
-        placement.vehicle:removeFromPhysics()
-        placement.vehicle:setAbsolutePosition(root[1][1], root[1][2], root[1][3], root[2][1], root[2][2], root[2][3],
-            placement.components)
-        placement.vehicle:addToPhysics()
-    end
-
-    Logging.info("TheContractor: job %d equipment returned home (%d vehicles)", job.id, #placements)
-end
-
--- Persistence, delegated into from TheContractorJobs' own job save/load.
-
-function TCJobSiteSetup.saveHomeToXML(xmlFile, key, home)
-    -- Marks home as recorded even if none of its vehicles are left.
-    setXMLBool(xmlFile, key .. "#recorded", true)
-    local index = 0
-    for _, entry in ipairs(home) do
-        local uniqueId = TCVehicleIds.getUniqueId(entry.vehicleId)
-        if uniqueId ~= nil then
-            local vehicleKey = string.format("%s.vehicle(%d)", key, index)
-            setXMLString(xmlFile, vehicleKey .. "#uniqueId", uniqueId)
-            for j, component in ipairs(entry.components) do
-                local componentKey = string.format("%s.component(%d)", vehicleKey, j - 1)
-                setXMLFloat(xmlFile, componentKey .. "#x", component[1][1])
-                setXMLFloat(xmlFile, componentKey .. "#y", component[1][2])
-                setXMLFloat(xmlFile, componentKey .. "#z", component[1][3])
-                setXMLFloat(xmlFile, componentKey .. "#rx", component[2][1])
-                setXMLFloat(xmlFile, componentKey .. "#ry", component[2][2])
-                setXMLFloat(xmlFile, componentKey .. "#rz", component[2][3])
+-- Server-only. Unhitches every vehicle id from whatever it's hitched to,
+-- and anything hitched to it, so each piece stands alone and can be parked
+-- by itself (062). Works on hidden equipment too.
+function TCJobSiteSetup.unhitchVehicles(vehicleIds)
+    for _, vehicleId in ipairs(vehicleIds) do
+        local vehicle = NetworkUtil.getObject(vehicleId)
+        if vehicle ~= nil and not vehicle.isDeleted then
+            local attacher = vehicle.getAttacherVehicle ~= nil and vehicle:getAttacherVehicle() or nil
+            if attacher ~= nil then
+                attacher:detachImplementByObject(vehicle)
             end
-            index = index + 1
-        end
-    end
-end
-
--- Entries carry the vehicle's uniqueId until resolveSavedHome.
-function TCJobSiteSetup.loadHomeFromXML(xmlFile, key)
-    if not hasXMLProperty(xmlFile, key) then
-        return nil
-    end
-
-    local home = {}
-    local i = 0
-    while true do
-        local vehicleKey = string.format("%s.vehicle(%d)", key, i)
-        if not hasXMLProperty(xmlFile, vehicleKey) then
-            break
-        end
-
-        local components = {}
-        local j = 0
-        while true do
-            local componentKey = string.format("%s.component(%d)", vehicleKey, j)
-            if not hasXMLProperty(xmlFile, componentKey) then
-                break
+            if vehicle.getAttachedImplements ~= nil then
+                local implements = {}
+                for _, implement in ipairs(vehicle:getAttachedImplements()) do
+                    table.insert(implements, implement.object)
+                end
+                for _, object in ipairs(implements) do
+                    vehicle:detachImplementByObject(object)
+                end
             end
-            table.insert(components, {
-                { getXMLFloat(xmlFile, componentKey .. "#x"), getXMLFloat(xmlFile, componentKey .. "#y"),
-                    getXMLFloat(xmlFile, componentKey .. "#z") },
-                { getXMLFloat(xmlFile, componentKey .. "#rx"), getXMLFloat(xmlFile, componentKey .. "#ry"),
-                    getXMLFloat(xmlFile, componentKey .. "#rz") },
-            })
-            j = j + 1
-        end
-
-        table.insert(home, { uniqueId = getXMLString(xmlFile, vehicleKey .. "#uniqueId"), components = components })
-        i = i + 1
-    end
-    return home
-end
-
--- Server, from TheContractorJobs:resolveSavedVehicles once vehicles exist.
-function TCJobSiteSetup.resolveSavedHome(job)
-    if job.equipmentHome == nil then
-        return
-    end
-    local home = {}
-    for _, entry in ipairs(job.equipmentHome) do
-        if entry.uniqueId ~= nil then
-            local vehicleId = TCVehicleIds.getObjectId(entry.uniqueId)
-            if vehicleId ~= nil then
-                table.insert(home, { vehicleId = vehicleId, components = entry.components })
-            end
-        else
-            table.insert(home, entry)
         end
     end
-    job.equipmentHome = home
 end

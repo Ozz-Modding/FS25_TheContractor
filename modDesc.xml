@@ -18,6 +18,20 @@
         <sourceFile filename="src/main.lua"/>
     </extraSourceFiles>
 
+    <!-- 062: parking slots. -->
+    <placeableSpecializations>
+        <specialization name="tcParkingSlot" className="PlaceableTCParkingSlot" filename="src/placeables/PlaceableTCParkingSlot.lua" />
+    </placeableSpecializations>
+    <placeableTypes>
+        <type name="tcParkingSlot" parent="placeable" className="Placeable" filename="$dataS/scripts/placeables/Placeable.lua">
+            <specialization name="placement" />
+            <specialization name="tcParkingSlot" />
+        </type>
+    </placeableTypes>
+    <storeItems>
+        <storeItem xmlFilename="xml/parkingSlot.xml" />
+    </storeItems>
+
     <l10n filenamePrefix="languages/l10n" />
 
     <multiplayer supported="true"/>

@@ -12,14 +12,11 @@
 -- job, so this deliberately skips UEY's detachVehicle step - detaching a
 -- tractor/implement pair would leave 020's AI dispatch unable to start a
 -- future job on it (Dispatch.lua's findOperatingVehicle/getIsStartable
--- requires an already-attached implement). Hiding/revealing every vehicle
--- id in the job's assignedEquipmentIds independently, in place, with no
--- position change, sidesteps that entirely: a tractor+implement pair stays
--- exactly as attached as it was when the job finished, just invisible and
--- physics-inactive for the buffer's duration. That also answers the
--- ticket's open "where does it reappear" question - nowhere new, it just
--- un-hides where the AI/player left it; no separate storage-location
--- concept needed.
+-- requires an already-attached implement). Every vehicle id in the job's
+-- equipment is hidden independently, in place, for the buffer's duration.
+-- 062: when the buffer ends nothing is revealed where it stood - the
+-- equipment goes to the parking return queue (Parking.lua), which unhitches
+-- it and parks each piece in a free parking slot.
 --
 -- Worker-side reuses Worker.lua's existing COOLDOWN status (016 already
 -- defined the enum value, just never had anything driving it). Equipment
@@ -106,10 +103,11 @@ end
 
 -- Shared with 020's dispatch staging - see TCEquipmentVisibility. Run on
 -- every machine (server applies directly per the "no SP loopback" gotcha,
--- other clients apply from the broadcast event, a joining client from
--- initial state, the server after a load from resolveSavedVehicles).
+-- other clients apply from the broadcast event, the server after a load
+-- from resolveSavedVehicles). A joining client gets the hide from
+-- TCEquipmentVisibility's own initial state (061), not from here. The
+-- reveal is the parking queue's (062).
 local hideVehicles = TCEquipmentVisibility.hideVehicles
-local revealVehicles = TCEquipmentVisibility.revealVehicles
 
 -- Cooldown lifecycle (server-authoritative) --------------------------------
 
@@ -138,6 +136,9 @@ function TheContractorCooldown:startCooldown(job)
         remainingMs = durationMs,
     }
 
+    -- 062: a vehicle is in a cooldown or waiting to be parked, never both.
+    g_currentMission.TheContractor.Parking:removeVehicles(entry.vehicleIds)
+
     self:applyCooldownStarted(entry)
 
     for _, workerId in ipairs(entry.workerIds) do
@@ -154,10 +155,10 @@ end
 
 -- The actual state application, run on whichever machine (server, or a
 -- client receiving TCEquipmentCooldownStartedEvent/initial client state) is
--- applying it. Idempotent-safe against double application (e.g. initial
--- client state replaying an entry the client's own hide already covered) -
--- hiding an already-hidden vehicle is a harmless no-op.
-function TheContractorCooldown:applyCooldownStarted(entry)
+-- applying it. skipHide is for initial client state, where
+-- TCEquipmentVisibility already hides everything the server has hidden
+-- (061), so the equipment isn't hidden twice.
+function TheContractorCooldown:applyCooldownStarted(entry, skipHide)
     self.entriesByFarm[entry.farmId] = self.entriesByFarm[entry.farmId] or {}
     self.entriesByFarm[entry.farmId][entry.id] = entry
 
@@ -165,26 +166,26 @@ function TheContractorCooldown:applyCooldownStarted(entry)
         self.vehicleIdsInCooldown[vehicleId] = true
     end
 
-    hideVehicles(entry.vehicleIds)
+    if not skipHide then
+        hideVehicles(entry.vehicleIds)
+    end
 end
 
--- Ends a cooldown early or on schedule: reveals equipment, frees the worker
--- back to idle, and drops the entry. Server-only trigger point (see
--- update() below) - other machines only ever apply via the broadcast event.
+-- Ends a cooldown early or on schedule: hands the equipment to the parking
+-- return queue (062), frees the worker back to idle, and drops the entry.
+-- Server-only trigger point (see update() below) - other machines only ever
+-- apply via the broadcast event.
 function TheContractorCooldown:endCooldown(farmId, cooldownId)
     if not g_currentMission:getIsServer() then
         return
     end
 
-    -- Equipment goes back to where dispatch took it from (020) while it's
-    -- still hidden, then applyCooldownEnded reveals it there.
+    -- 045: the equipment comes back clean, if it was washed.
     local farmEntries = self.entriesByFarm[farmId]
     local pendingEntry = farmEntries ~= nil and farmEntries[cooldownId] or nil
     if pendingEntry ~= nil and pendingEntry.jobId ~= nil then
         local job = g_currentMission.TheContractor.Jobs:getJobById(pendingEntry.jobId)
         if job ~= nil then
-            TCJobSiteSetup.returnHome(job)
-            -- 045: and comes out clean, if it was washed.
             TCJobConsequences.washEquipment(job)
         end
     end
@@ -193,6 +194,10 @@ function TheContractorCooldown:endCooldown(farmId, cooldownId)
     if entry == nil then
         return
     end
+
+    -- Out of the cooldown first: the queue won't take a vehicle that's in
+    -- one. It stays hidden until it's parked.
+    g_currentMission.TheContractor.Parking:returnVehicles(farmId, entry.vehicleIds)
 
     for _, workerId in ipairs(entry.workerIds) do
         g_currentMission.TheContractor.Staff:setWorkerStatus(farmId, workerId, TheContractorWorker.STATUS.IDLE)
@@ -226,8 +231,6 @@ function TheContractorCooldown:applyCooldownEnded(farmId, cooldownId)
     for _, vehicleId in ipairs(entry.vehicleIds) do
         self.vehicleIdsInCooldown[vehicleId] = nil
     end
-
-    revealVehicles(entry.vehicleIds)
 
     return entry
 end
@@ -414,21 +417,12 @@ function TheContractorCooldown:writeInitialClientState(streamId, connection)
     end
 end
 
--- Per src/events/README.md's initial-client-state gotcha, referenced
--- vehicles may not be resolved yet on a joining client - applyCooldownStarted
--- resolves eagerly via NetworkUtil.getObject inside hideVehicles, so any
--- vehicle not yet streamed in simply doesn't get hidden here. That's an
--- acceptable, self-correcting gap for a joining client specifically (not a
--- save/load reload, which is what resolveSavedVehicles re-hides for): the
--- vehicle will already be hidden from the server/host's perspective (they
--- applied it directly when the cooldown started, long before this client
--- joined), so the joining client briefly sees it visible until whatever
--- vehicle-streaming pass would otherwise reconcile it - the same latent
--- gap this ticket's own equipmentIds resolution has everywhere else,
--- not one introduced here.
+-- The entries only: hiding their equipment is TCEquipmentVisibility's
+-- initial state (061), which also queues vehicles that haven't streamed in
+-- yet.
 function TheContractorCooldown:readInitialClientState(streamId, connection)
     local entryCount = streamReadInt32(streamId)
     for _ = 1, entryCount do
-        self:applyCooldownStarted(TheContractorCooldown.readEntry(streamId))
+        self:applyCooldownStarted(TheContractorCooldown.readEntry(streamId), true)
     end
 end

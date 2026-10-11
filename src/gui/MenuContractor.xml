@@ -344,8 +344,11 @@
                             <RoundCorner profile="tc_tableRowSurface"/>
                             <Bitmap profile="tc_tableRowAccent"/>
                             <RoundCorner profile="tc_rowCheckBox" name="checkBox"/>
-                            <Text profile="tc_listRowCellLeft" position="36px 0px" size="220px 32px" name="name"/>
-                            <Text profile="tc_listRowCellLeft" position="262px 0px" size="100px 32px" name="kind"/>
+                            <Text profile="tc_listRowCellLeft" position="36px 0px" size="150px 32px" name="name"/>
+                            <!-- 062: still waiting for a parking space. -->
+                            <RoundCorner profile="tc_rowChip" position="190px 0px" size="88px 20px" name="parkingChip"/>
+                            <Text profile="tc_rowChipText" position="190px 0px" size="88px 20px" name="parkingChipText"/>
+                            <Text profile="tc_listRowCellLeft" position="284px 0px" size="80px 32px" name="kind"/>
                         </ListItem>
                     </SmoothList>
 

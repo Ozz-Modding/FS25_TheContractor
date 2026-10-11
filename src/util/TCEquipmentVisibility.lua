@@ -19,14 +19,28 @@
 -- whose postReadStream would put it back in physics anyway. Those wait in
 -- pendingByVehicleId (newest request wins) and update retries them - the
 -- pendingClientItems pattern from FS25_UsedEquipmentYards.
+--
+-- 061: the server also keeps the set of vehicle ids it currently has hidden,
+-- whichever path hid them (dispatch, haulage, cooldown, a re-hide after a
+-- load), so a client that joins later gets them in initial state. It isn't
+-- saved - the resume and re-hide paths rebuild it after a load.
 
 TCEquipmentVisibility = {}
 
 -- Client only: vehicleId -> true (reveal) / false (hide).
 local pendingByVehicleId = {}
 
+-- Server only: vehicleId -> true while hidden.
+local hiddenVehicleIds = {}
+
 function TCEquipmentVisibility.reset()
     pendingByVehicleId = {}
+    hiddenVehicleIds = {}
+end
+
+-- Server only (062: what the parking queue takes back).
+function TCEquipmentVisibility.isHidden(vehicleId)
+    return hiddenVehicleIds[vehicleId] == true
 end
 
 -- The vehicle behind an id once it's ready to hide or reveal, else nil.
@@ -61,6 +75,9 @@ end
 local function setVisible(vehicleIds, isVisible)
     local isServer = g_currentMission:getIsServer()
     for _, vehicleId in ipairs(vehicleIds) do
+        if isServer then
+            hiddenVehicleIds[vehicleId] = not isVisible or nil
+        end
         local vehicle = getReadyVehicle(vehicleId)
         if vehicle ~= nil then
             pendingByVehicleId[vehicleId] = nil
@@ -113,4 +130,32 @@ function TCEquipmentVisibility.setVisibleEverywhere(vehicleIds, isVisible)
     if g_server ~= nil then
         g_server:broadcastEvent(TCEquipmentVisibilityEvent.new(vehicleIds, isVisible))
     end
+end
+
+-- 061: a joining client gets every vehicle the server has hidden, as object
+-- ids. Anything that's been sold or deleted since drops out here.
+function TCEquipmentVisibility.writeInitialClientState(streamId, connection)
+    local vehicleIds = {}
+    for vehicleId in pairs(hiddenVehicleIds) do
+        if getReadyVehicle(vehicleId) ~= nil then
+            table.insert(vehicleIds, vehicleId)
+        else
+            hiddenVehicleIds[vehicleId] = nil
+        end
+    end
+
+    streamWriteInt32(streamId, #vehicleIds)
+    for _, vehicleId in ipairs(vehicleIds) do
+        streamWriteInt32(streamId, vehicleId)
+    end
+end
+
+-- Vehicles still streaming in wait in the pending queue (see top).
+function TCEquipmentVisibility.readInitialClientState(streamId, connection)
+    local vehicleIds = {}
+    local count = streamReadInt32(streamId)
+    for i = 1, count do
+        vehicleIds[i] = streamReadInt32(streamId)
+    end
+    TCEquipmentVisibility.hideVehicles(vehicleIds)
 end

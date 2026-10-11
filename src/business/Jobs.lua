@@ -514,9 +514,15 @@ end
 -- partial work occurred" default: if any work happened, the worker and
 -- equipment go through the normal skill-scaled buffer (they were genuinely
 -- out on the job); if none did, there's nothing to come back from, so the
--- worker goes straight back to idle and the equipment stays visible.
+-- worker goes straight back to idle. Equipment that had left the yard (a
+-- dispatch under way, or anything hidden, haulage rig included) goes to
+-- the parking return queue (062); a player's own equipment, never hidden,
+-- stays where they left it.
 function TheContractorJobs:releaseMissedJobResources(job)
-    g_currentMission.TheContractor.Dispatch:stopJob(job.id, AIMessageSuccessStoppedByUser.new())
+    local dispatch = g_currentMission.TheContractor.Dispatch
+    local wasDispatched = job.assignedWorkerId ~= nil and dispatch:isJobActive(job)
+
+    dispatch:stopJob(job.id, AIMessageSuccessStoppedByUser.new())
     TCJobProgress.clearJob(job.id)
     TCHaulage.stopDelivery(job)
     TCFieldPreparation.clearUpAfterJob(job)
@@ -525,12 +531,11 @@ function TheContractorJobs:releaseMissedJobResources(job)
     if job.completionPercentage > 0 then
         g_currentMission.TheContractor.Cooldown:startCooldown(job)
     else
-        -- No buffer to come back from - dispatched equipment (020) goes
-        -- straight back to where it was taken from, and haulage equipment
-        -- (035), which never left the yard, just reappears.
-        TCJobSiteSetup.returnHome(job)
-        if #job.haulageEquipmentIds > 0 then
-            TCEquipmentVisibility.setVisibleEverywhere(job.haulageEquipmentIds, true)
+        local parking = g_currentMission.TheContractor.Parking
+        if wasDispatched then
+            parking:returnVehicles(job.farmId, job:getAllEquipmentIds())
+        else
+            parking:returnHiddenVehicles(job.farmId, job:getAllEquipmentIds())
         end
         for _, workerId in ipairs(job:getWorkerIds()) do
             g_currentMission.TheContractor.Staff:setWorkerStatus(job.farmId, workerId, TheContractorWorker.STATUS.IDLE)
@@ -1114,7 +1119,6 @@ function TheContractorJobs:loadFromXMLFile(xmlFile)
             job.savedEquipmentUniqueIds = TCVehicleIds.loadList(xmlFile, jobKey .. ".equipment")
             job.paymentAmount = getXMLFloat(xmlFile, jobKey .. "#paymentAmount")
             job.invoiceDueDay = getXMLInt(xmlFile, jobKey .. "#invoiceDueDay")
-            job.equipmentHome = TCJobSiteSetup.loadHomeFromXML(xmlFile, jobKey .. ".equipmentHome")
             job.transportRemainingMs = getXMLFloat(xmlFile, jobKey .. "#transportRemainingMs")
             job.includesHaulage = Utils.getNoNil(getXMLBool(xmlFile, jobKey .. "#includesHaulage"), false)
             job.haulerWorkerId = getXMLInt(xmlFile, jobKey .. "#haulerWorkerId")
@@ -1175,7 +1179,6 @@ function TheContractorJobs:resolveSavedVehicles()
                 job.savedHaulageUniqueIds = nil
             end
             TCJobConsequences.resolveSavedVehicles(job)
-            TCJobSiteSetup.resolveSavedHome(job)
         end
     end
 end
@@ -1238,10 +1241,6 @@ function TheContractorJobs:saveToXmlFile(xmlFile)
             end
             if job.invoiceDueDay ~= nil then
                 setXMLInt(xmlFile, jobKey .. "#invoiceDueDay", job.invoiceDueDay)
-            end
-
-            if job.equipmentHome ~= nil then
-                TCJobSiteSetup.saveHomeToXML(xmlFile, jobKey .. ".equipmentHome", job.equipmentHome)
             end
 
             if job.transportRemainingMs ~= nil then

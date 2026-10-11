@@ -1,6 +1,7 @@
 -- Keeps the player out of equipment that's away with a hired worker: every
--- vehicle on an allocated/in_progress hired-worker job (020), or sitting in
--- a post-job buffer (023), can't be tabbed to or driven. A player
+-- vehicle on an allocated/in_progress hired-worker job (020), sitting in a
+-- post-job buffer (023), or still hidden waiting for a parking space (062),
+-- can't be tabbed to or driven. A player
 -- self-allocated job is never locked - the player is the one driving it.
 --
 -- Technique from the user's FS25_UsedEquipmentYards mod
@@ -85,6 +86,11 @@ function TCVehicleLock.refresh()
     end
     for vehicleId in pairs(tc.Cooldown.vehicleIdsInCooldown) do
         shouldLock[vehicleId] = true
+    end
+    if tc.Parking ~= nil then
+        for vehicleId in pairs(tc.Parking.entryByVehicleId) do
+            shouldLock[vehicleId] = true
+        end
     end
 
     for vehicleId in pairs(shouldLock) do

@@ -35,6 +35,8 @@ function TCInitialClientStateEvent:writeStream(streamId, connection)
     tc.PayReviews:writeInitialClientState(streamId, connection)
     tc.Administrator:writeInitialClientState(streamId, connection)
     tc.Logbook:writeInitialClientState(streamId, connection)
+    tc.Parking:writeInitialClientState(streamId, connection)
+    TCEquipmentVisibility.writeInitialClientState(streamId, connection)
 end
 
 function TCInitialClientStateEvent:readStream(streamId, connection)
@@ -61,6 +63,8 @@ function TCInitialClientStateEvent:readStream(streamId, connection)
     tc.PayReviews:readInitialClientState(streamId, connection)
     tc.Administrator:readInitialClientState(streamId, connection)
     tc.Logbook:readInitialClientState(streamId, connection)
+    tc.Parking:readInitialClientState(streamId, connection)
+    TCEquipmentVisibility.readInitialClientState(streamId, connection)
 
     self:run(connection)
 end

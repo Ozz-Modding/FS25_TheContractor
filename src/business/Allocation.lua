@@ -14,7 +14,10 @@
 -- not currently assigned to another allocated/in_progress job (reads
 -- assignedEquipmentIds directly), not sitting in 023's post-completion
 -- buffer (TheContractorCooldown:isVehicleInCooldown), and not out with a
--- staff driver under AutoDrive/Courseplay (037).
+-- staff driver under AutoDrive/Courseplay (037). A machine still waiting
+-- for a parking space (062) is free: a hired worker's dispatch takes it
+-- straight from the queue, and a player self-allocation puts it at the
+-- shop first (see allocateJob).
 
 TheContractorAllocation = {}
 TheContractorAllocation_mt = Class(TheContractorAllocation)
@@ -40,7 +43,7 @@ end
 -- A vehicle counts as free if it isn't sitting in another of this farm's
 -- allocated/in_progress jobs' equipment (008 - field and haulage equipment
 -- alike), and isn't currently sitting in 023's post-completion buffer
--- (still physically hidden).
+-- (still physically hidden). Waiting to be parked (062) doesn't stop it.
 function TheContractorAllocation:isVehicleFree(farmId, vehicle)
     local vehicleId = NetworkUtil.getObjectId(vehicle)
     if vehicleId == nil then
@@ -509,6 +512,25 @@ function TheContractorAllocation:allocateJob(farmId, jobId, workerIds, equipment
 
     if not job:canTransitionTo(TheContractorJob.STATE.ALLOCATED) then
         return false
+    end
+
+    -- 062: the player has to drive it, so a machine still waiting for a
+    -- parking space goes to the shop first. With no room there either, the
+    -- allocation's refused. (A hired worker's dispatch takes it straight
+    -- from the queue - Dispatch:startJobForWorker.)
+    if operatorId == nil then
+        local parking = g_currentMission.TheContractor.Parking
+        local pendingIds = {}
+        for _, vehicleId in ipairs(equipmentIds) do
+            if parking:isPending(vehicleId) then
+                table.insert(pendingIds, vehicleId)
+            end
+        end
+        local failedNames = parking:sendToShop(pendingIds)
+        if #failedNames > 0 then
+            parking:notify(farmId, "tc_parking_allocationRefusedNotification", table.concat(failedNames, ", "))
+            return false
+        end
     end
 
     job.assignedWorkerId = operatorId

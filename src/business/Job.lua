@@ -124,13 +124,6 @@ function TheContractorJob.new(id, farmId, jobType, fieldId, requiredSkillLevel, 
     -- display and calendar grouping.
     self.deadlineDay = nil
 
-    -- Hired-worker jobs only (020): where each piece of allocated equipment
-    -- stood before dispatch took it to the field, so it can go back there
-    -- when the job's done - { { vehicleId, components = { {pos}, {rot} }... } }.
-    -- Server-only, never sent to clients. See TCJobSiteSetup.recordHome/
-    -- returnHome.
-    self.equipmentHome = nil
-
     -- Hired-worker jobs only (020): true while the worker and equipment are
     -- on the road to the field (Dispatch's transport wait), still `allocated`
     -- until the AI starts and flips it to `in_progress`. Display-only, synced
