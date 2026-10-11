@@ -2,7 +2,7 @@
 <!--
     062 parking slot: where equipment back from a contract job is parked
     (src/placeables/PlaceableTCParkingSlot.lua). A marker only: no leveling
-    or foliage clearing. Its stripes are plain meshes fitted to the slope, shown only while
+    or foliage clearing. Its stripes are terrain decals, shown only while
     the construction menu is open. The test area is inset 5 cm from the
     4 m x 9 m footprint so slots can be placed flush against each other.
 -->
