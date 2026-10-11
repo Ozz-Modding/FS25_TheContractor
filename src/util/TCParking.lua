@@ -211,24 +211,20 @@ end
 -- or one just placed) sets itself from lastConstructionScreenOpenTime in
 -- its own onLoad.
 
--- Whether the slots are currently shown, so the hook only acts (and logs)
--- when the construction menu actually opens or closes.
+-- Whether the slots are currently shown, so the hook only acts when the
+-- construction menu actually opens or closes.
 local slotsShown = false
 
--- Returns how many slots were set.
 function TCParking.setSlotsVisible(isVisible)
     local placeableSystem = g_currentMission ~= nil and g_currentMission.placeableSystem or nil
     if placeableSystem == nil then
-        return 0
+        return
     end
-    local count = 0
     for _, placeable in ipairs(placeableSystem.placeables) do
         if PlaceableTCParkingSlot.isSlot(placeable) then
             PlaceableTCParkingSlot.setVisualsVisible(placeable, isVisible)
-            count = count + 1
         end
     end
-    return count
 end
 
 -- After every screen change. ConstructionScreen:onOpen/onClose set
@@ -243,9 +239,7 @@ function TCParking.onScreenChanged()
         return
     end
     slotsShown = isOpen
-    local count = TCParking.setSlotsVisible(isOpen)
-    Logging.info("TheContractor: construction menu %s - %s %d parking slot(s)", isOpen and "opened" or "closed",
-        isOpen and "showing" or "hiding", count)
+    TCParking.setSlotsVisible(isOpen)
 end
 
 -- Called every loadMap. Every screen change goes through Gui:changeScreen
@@ -265,5 +259,4 @@ function TCParking.installConstructionMenuHook()
         end)
         Gui.tcParkingHookInstalled = true
     end
-    Logging.info("TheContractor: construction menu hook installed (parking slot visibility)")
 end
