@@ -35,7 +35,7 @@
 		<text name="tc_inbox_fieldValue" text="%s (%s)"/>
 		<text name="tc_inbox_skillValue" text="%s %d / 10"/>
 		<text name="tc_inbox_crewOne" text="1 worker, or yourself"/>
-		<text name="tc_inbox_crewHaul" text="2 workers (one harvesting, one hauling), or haul it yourself"/>
+		<text name="tc_inbox_crewHaul" text="2 workers (one harvesting, one hauling), or harvest and haul it all yourself"/>
 		<text name="tc_inbox_crewPlayerOnly" text="Yourself only - workers can't do this job"/>
 		<text name="tc_inbox_suppliesInStock" text="In stock"/>
 		<text name="tc_inbox_suppliesNone" text="None"/>
@@ -106,7 +106,7 @@
 		<text name="tc_overview_currentJobsHeading" text="Current Jobs"/>
 		<text name="tc_overview_currentJobsEmpty" text="No jobs currently allocated or in progress."/>
 		<text name="tc_overview_currentJobLine" text="Field %s: %s - %d%%"/>
-		<text name="tc_overview_deliveredSuffix" text=" (delivered %d%%)"/>
+		<text name="tc_overview_deliveredSuffix" text=" (%d%% delivered to %s)"/>
 		<text name="tc_overview_supplySuffix" text=" - %s"/>
 		<text name="tc_actions_createButton" text="Create Company"/>
 		<text name="tc_actions_createCompanyPrompt" text="Name your new contracting company (cost: %s):"/>
@@ -187,6 +187,10 @@
 		<text name="tc_calendar_columnJobs" text="Jobs"/>
 		<text name="tc_calendar_columnStatus" text="Status"/>
 		<text name="tc_calendar_columnJobType" text="Type"/>
+		<text name="tc_calendar_columnCrew" text="Crew"/>
+		<text name="tc_calendar_deliveryNote" text="Delivery: %s"/>
+		<text name="tc_calendar_deliveryProgressNote" text="Delivery: %s - %d%% delivered so far"/>
+		<text name="tc_calendar_crewPlayer" text="You"/>
 		<text name="tc_calendar_columnFarmland" text="Farmland"/>
 		<text name="tc_calendar_columnPrice" text="Price"/>
 		<text name="tc_calendar_columnAllocation" text="Allocation"/>
@@ -261,8 +265,6 @@
 		<text name="tc_growth_stat_planting" text="planting"/>
 		<text name="tc_growth_stat_cropCare" text="crop care"/>
 		<text name="tc_growth_stat_haulage" text="haulage"/>
-		<text name="tc_consequences_washed" text="%s washed the equipment before bringing it back."/>
-		<text name="tc_consequences_unwashed" text="%s brought the equipment back unwashed."/>
 		<text name="tc_consequences_extraWear" text="Extra wear from %s's skill gaps: %s"/>
 		<text name="tc_consequences_breakdown" text="%s caused a fault on: %s"/>
 		<text name="tc_consequences_unknownWorker" text="A former worker"/>
@@ -297,7 +299,9 @@
 
 		<text name="tc_allocation_title" text="Allocate: %s"/>
 		<text name="tc_allocation_myself" text="Myself"/>
-		<text name="tc_allocation_workerHeading" text="Worker"/>
+		<text name="tc_allocation_crew" text="Crew: %s"/>
+		<text name="tc_allocation_workerHeadingCount" text="Workers (%d/%d)"/>
+		<text name="tc_allocation_workerHeadingMyself" text="Workers (yourself)"/>
 		<text name="tc_allocation_equipmentHeading" text="Equipment"/>
 		<text name="tc_allocation_role_tractor" text="Tractor"/>
 		<text name="tc_allocation_role_implement" text="Implement"/>
@@ -306,6 +310,9 @@
 		<text name="tc_allocation_role_haulTractor" text="Haul tractor"/>
 		<text name="tc_allocation_role_trailer" text="Trailer"/>
 		<text name="tc_allocation_role_seedTank" text="Seed tank"/>
+		<text name="tc_allocation_size_small" text="Small"/>
+		<text name="tc_allocation_size_medium" text="Medium"/>
+		<text name="tc_allocation_size_large" text="Large"/>
 		<text name="tc_allocation_allocateButton" text="Allocate"/>
 		<text name="tc_allocation_confirmButton" text="Confirm"/>
 		<text name="tc_allocation_cancelButton" text="Cancel"/>
@@ -319,6 +326,7 @@
 		<text name="tc_parking_sendToShopButton" text="Send to shop"/>
 		<text name="tc_parking_messageTitle" text="Machines waiting for parking"/>
 		<text name="tc_parking_messageBody" text="These machines are back from a job, but none of your parking slots has room for them: %s. They'll be parked as soon as a slot is free. Place more parking slots from the construction menu, clear the ones you have, or send them to the shop."/>
+		<text name="tc_parking_returnedNotification" text="Back and parked: %s"/>
 		<text name="tc_parking_waitingNotification" text="No free parking space for %s. Place a parking slot or clear one."/>
 		<text name="tc_parking_shopFullNotification" text="No room at the shop for %s. Still waiting for a parking space."/>
 		<text name="tc_parking_allocationRefusedNotification" text="Couldn't allocate: %s is waiting for a parking space and there's no room at the shop to put it."/>
@@ -330,9 +338,10 @@
 		<text name="tc_allocation_deselectEquipmentButton" text="Deselect Equipment"/>
 		<text name="tc_allocation_selectWorkerButton" text="Select Worker"/>
 		<text name="tc_allocation_deselectWorkerButton" text="Deselect Worker"/>
-		<text name="tc_allocation_needsSecondWorker" text="Harvest &amp; haul needs two workers - one harvesting, one hauling. Or select Myself to go and haul it yourself."/>
+		<text name="tc_allocation_selectMyselfButton" text="Do It Myself"/>
+		<text name="tc_allocation_needsSecondWorker" text="Harvest &amp; haul needs two workers - one harvesting, one hauling. Or pick Myself on your own to harvest and haul it all yourself."/>
 		<text name="tc_allocation_tooManyWorkers" text="This job only takes one worker."/>
-		<text name="tc_allocation_haulYourself" text="You will haul the crop yourself - deliver it to %s."/>
+		<text name="tc_allocation_haulYourself" text="You will harvest the crop and haul it yourself - deliver it to %s."/>
 		<text name="tc_allocation_playerOnly" text="Workers can't do this job - only you can. Select Myself."/>
 		<text name="tc_allocation_noSuppliesWarning" text="You have no %s in stock - the job will be on hold until you do."/>
 		<text name="tc_allocation_selectWarning" text="Still to select: %s."/>
@@ -702,22 +711,15 @@
 		<text name="tc_logbook_claimReputation" text="Reputation (claim)"/>
 		<text name="tc_logbook_status" text="Status"/>
 		<text name="tc_logbook_inFleet" text="In the fleet"/>
+		<text name="tc_logbook_fuelLevel" text="%d%% (%s)"/>
+		<text name="tc_logbook_columnMonth" text="Month"/>
+		<text name="tc_logbook_columnDriver" text="Driver"/>
+		<text name="tc_logbook_columnDamage" text="Damage"/>
+		<text name="tc_logbook_columnWear" text="Wear"/>
 		<text name="tc_logbook_jobs" text="Jobs"/>
-		<text name="tc_logbook_drivenBy" text="Driven by"/>
 		<text name="tc_logbook_faultsCaused" text="Faults caused"/>
 		<text name="tc_logbook_neverUsed" text="Never used"/>
 		<text name="tc_logbook_noHistory" text="No use logged in the last year"/>
-		<text name="tc_logbook_historyLine" text="%s - %s"/>
-		<text name="tc_logbook_kind_job" text="Job"/>
-		<text name="tc_logbook_kind_driver" text="Staff driver"/>
-		<text name="tc_logbook_kind_player" text="Player use"/>
-		<text name="tc_logbook_kindChip_job" text="Job"/>
-		<text name="tc_logbook_kindChip_driver" text="Driver"/>
-		<text name="tc_logbook_kindChip_player" text="Player"/>
-		<text name="tc_logbook_driverVia" text="Staff driver (%s)"/>
-		<text name="tc_logbook_source_autodrive" text="AutoDrive"/>
-		<text name="tc_logbook_source_courseplay" text="Courseplay"/>
-		<text name="tc_logbook_source_ai" text="AI helper"/>
 		<text name="tc_supplies_viewSupplies" text="Supplies"/>
 		<text name="tc_supplies_viewAdsConsumables" text="ADS consumables"/>
 		<text name="tc_supplies_viewAdsParts" text="ADS spare parts"/>

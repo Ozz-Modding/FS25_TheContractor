@@ -34,8 +34,8 @@ TheContractorLogbook.JOB_RETENTION_YEARS = 2
 TheContractorLogbook.VEHICLE_RETENTION_YEARS = 1
 
 -- Staff-driver and player sessions shorter than this (in-game minutes)
--- aren't logged.
-TheContractorLogbook.MIN_SESSION_MINUTES = 1
+-- aren't logged, and a vehicle's history leaves out any use this short.
+TheContractorLogbook.MIN_SESSION_MINUTES = 10
 -- How often the server checks who's in the business's machines (real ms).
 TheContractorLogbook.PLAYER_POLL_MS = 1000
 
@@ -892,11 +892,10 @@ function TheContractorLogbook.getInvoice(entry)
     return nil
 end
 
--- One year's summary of a vehicle for a farm: { jobs, hours, people (names),
--- faults, wearCost, last (newest entry) }.
+-- One year's summary of a vehicle for a farm: { jobs, hours, faults,
+-- wearCost, last (newest entry) }.
 function TheContractorLogbook.getVehicleSummary(record, farmId)
-    local summary = { jobs = 0, hours = 0, people = {}, faults = 0, wearCost = 0, last = nil }
-    local seenPeople = {}
+    local summary = { jobs = 0, hours = 0, faults = 0, wearCost = 0, last = nil }
     for _, entry in ipairs(TheContractorLogbook.getVehicleEntries(record, farmId)) do
         summary.last = summary.last or entry
         if entry.kind == TheContractorLogbook.KIND.JOB then
@@ -907,10 +906,6 @@ function TheContractorLogbook.getVehicleSummary(record, farmId)
             summary.faults = summary.faults + 1
         end
         summary.wearCost = summary.wearCost + (entry.wearCost or 0)
-        if entry.who ~= nil and not seenPeople[entry.who] then
-            seenPeople[entry.who] = true
-            table.insert(summary.people, entry.who)
-        end
     end
     return summary
 end

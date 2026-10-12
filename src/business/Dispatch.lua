@@ -467,6 +467,13 @@ function TheContractorDispatch:onAIJobStopped(aiJob, aiMessage)
     end
 
     if isClean then
+        -- Forgotten first: it's already stopping, and completeJob stops
+        -- whatever AI job is still tracked for the job (a second
+        -- AISystem:stopJob on the same one would stop and broadcast twice).
+        self.ourJobIdByAIJob[aiJob] = nil
+        if self.aiJobByOurJobId[ourJobId] == aiJob then
+            self.aiJobByOurJobId[ourJobId] = nil
+        end
         local job = g_currentMission.TheContractor.Jobs:getJobById(ourJobId)
         if job ~= nil then
             g_currentMission.TheContractor.Jobs:completeJob(job)

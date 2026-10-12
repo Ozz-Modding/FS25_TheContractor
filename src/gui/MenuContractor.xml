@@ -306,52 +306,65 @@
                 <GuiElement id="calendarDayJobsContainer" position="24px -68px">
                     <GuiElement profile="tc_tableHeaderRow" position="0px 0px" size="752px 30px">
                         <Button profile="tc_tableHeader" position="14px 0px" text="$l10n_tc_calendar_columnJobType" handleFocus="false"/>
-                        <Button profile="tc_tableHeader" position="260px 0px" text="$l10n_tc_calendar_columnFarmland" handleFocus="false"/>
-                        <Button profile="tc_tableHeader" position="380px 0px" text="$l10n_tc_calendar_columnPrice" handleFocus="false"/>
-                        <Button profile="tc_tableHeader" position="500px 0px" text="$l10n_tc_calendar_columnAllocation" handleFocus="false"/>
+                        <Button profile="tc_tableHeader" position="246px 0px" text="$l10n_tc_calendar_columnCrew" handleFocus="false"/>
+                        <Button profile="tc_tableHeader" position="312px 0px" text="$l10n_tc_calendar_columnFarmland" handleFocus="false"/>
+                        <Button profile="tc_tableHeader" position="424px 0px" text="$l10n_tc_calendar_columnPrice" handleFocus="false"/>
+                        <Button profile="tc_tableHeader" position="540px 0px" text="$l10n_tc_calendar_columnAllocation" handleFocus="false"/>
                         <Bitmap profile="tc_tableHeaderDivider"/>
                     </GuiElement>
-                    <SmoothList id="calendarDayJobsTable" profile="tc_table" position="0px -36px" size="752px 190px">
+                    <SmoothList id="calendarDayJobsTable" profile="tc_table" position="0px -36px" size="752px 160px">
                         <ListItem profile="tc_tableListItem">
                             <RoundCorner profile="tc_tableRowSurface"/>
                             <Bitmap profile="tc_tableRowAccent"/>
-                            <Text profile="tc_listRowCellLeft" position="14px 0px" size="240px 32px" name="jobType"/>
-                            <Text profile="tc_listRowCellLeft" position="260px 0px" size="115px 32px" name="field"/>
-                            <Text profile="tc_listRowCellLeft" position="380px 0px" size="115px 32px" name="price"/>
-                            <RoundCorner profile="tc_rowChip" position="500px 0px" size="240px 20px" name="statusChip"/>
-                            <Text profile="tc_rowChipText" position="500px 0px" size="240px 20px" name="statusChipText"/>
+                            <Text profile="tc_listRowCellLeft" position="14px 0px" size="226px 32px" name="jobType"/>
+                            <Text profile="tc_listRowCellLeft" position="246px 0px" size="50px 32px" name="crew"/>
+                            <Text profile="tc_listRowCellLeft" position="312px 0px" size="106px 32px" name="field"/>
+                            <Text profile="tc_listRowCellLeft" position="424px 0px" size="110px 32px" name="price"/>
+                            <RoundCorner profile="tc_rowChip" position="540px 0px" size="200px 20px" name="statusChip"/>
+                            <Text profile="tc_rowChipText" position="540px 0px" size="200px 20px" name="statusChipText"/>
                         </ListItem>
                     </SmoothList>
+                    <!-- Harvest & haul (035): where the highlighted job's crop goes. -->
+                    <Text profile="tc_panelNote" id="calendarDayJobNote" text="" position="0px -202px" size="752px 24px"/>
                 </GuiElement>
 
                 <!-- Allocation (018): swapped in for calendarDayJobsContainer while
                      self.allocatingJobId is set (see refreshAllocationState/
                      onClickCancelAllocation) -->
                 <GuiElement id="allocationContainer" position="24px -68px">
+                    <!-- Both pickers have selectedWithoutFocus off, so only
+                         the one with the cursor shows a highlighted row. -->
                     <Text profile="tc_sectionTitle" id="allocationJobTitle" text="" position="0px 0px" size="752px 24px"/>
                     <Bitmap profile="tc_divider" position="0px -28px" size="752px 1px"/>
 
-                    <Text profile="tc_detailLabel" id="allocationWorkerLabel" text="$l10n_tc_allocation_workerHeading" position="0px -36px" size="360px 30px"/>
-                    <SmoothList id="allocationWorkerTable" profile="tc_table" position="0px -70px" size="360px 300px">
+                    <!-- Who the job needs, then how many are picked in the
+                         worker heading (see updateAllocationWorkerHeading). -->
+                    <Text profile="tc_panelNote" id="allocationCrewText" text="" position="0px -36px" size="752px 24px"/>
+
+                    <Text profile="tc_detailLabel" id="allocationWorkerLabel" text="" position="0px -66px" size="240px 30px"/>
+                    <SmoothList id="allocationWorkerTable" profile="tc_table" selectedWithoutFocus="false" position="0px -100px" size="240px 270px">
                         <ListItem profile="tc_tableListItem">
                             <RoundCorner profile="tc_tableRowSurface"/>
                             <Bitmap profile="tc_tableRowAccent"/>
                             <RoundCorner profile="tc_rowCheckBox" name="checkBox"/>
-                            <Text profile="tc_listRowCellLeft" position="36px 0px" size="314px 32px" name="name"/>
+                            <Text profile="tc_listRowCellLeft" position="36px 0px" size="194px 32px" name="name"/>
                         </ListItem>
                     </SmoothList>
 
-                    <Text profile="tc_detailLabel" id="allocationEquipmentLabel" text="$l10n_tc_allocation_equipmentHeading" position="384px -36px" size="368px 30px"/>
-                    <SmoothList id="allocationEquipmentTable" profile="tc_table" position="384px -70px" size="368px 300px">
+                    <Text profile="tc_detailLabel" id="allocationEquipmentLabel" text="$l10n_tc_allocation_equipmentHeading" position="264px -66px" size="488px 30px"/>
+                    <SmoothList id="allocationEquipmentTable" profile="tc_table" selectedWithoutFocus="false" position="264px -100px" size="488px 270px">
                         <ListItem profile="tc_tableListItem">
                             <RoundCorner profile="tc_tableRowSurface"/>
                             <Bitmap profile="tc_tableRowAccent"/>
                             <RoundCorner profile="tc_rowCheckBox" name="checkBox"/>
-                            <Text profile="tc_listRowCellLeft" position="36px 0px" size="150px 32px" name="name"/>
+                            <Text profile="tc_listRowCellLeft" position="36px 0px" size="190px 32px" name="name"/>
+                            <!-- A tractor's size, toned by whether the picked crew can drive it. -->
+                            <RoundCorner profile="tc_rowChip" position="232px 0px" size="64px 20px" name="sizeChip"/>
+                            <Text profile="tc_rowChipText" position="232px 0px" size="64px 20px" name="sizeChipText"/>
                             <!-- 062: still waiting for a parking space. -->
-                            <RoundCorner profile="tc_rowChip" position="190px 0px" size="88px 20px" name="parkingChip"/>
-                            <Text profile="tc_rowChipText" position="190px 0px" size="88px 20px" name="parkingChipText"/>
-                            <Text profile="tc_listRowCellLeft" position="284px 0px" size="80px 32px" name="kind"/>
+                            <RoundCorner profile="tc_rowChip" position="302px 0px" size="88px 20px" name="parkingChip"/>
+                            <Text profile="tc_rowChipText" position="302px 0px" size="88px 20px" name="parkingChipText"/>
+                            <Text profile="tc_listRowCellLeft" position="396px 0px" size="88px 32px" name="kind"/>
                         </ListItem>
                     </SmoothList>
 
@@ -825,6 +838,16 @@
                             <Text profile="tc_listRowSection" position="14px 0px" size="700px 32px" name="section"/>
                             <Text profile="tc_listRowLabel" position="14px 0px" size="196px 32px" name="label"/>
                             <Text profile="tc_listRowValue" position="216px 0px" size="400px 32px" name="value"/>
+                            <!-- A vehicle's history (getLogbookVehicleRows): month, driver,
+                                 damage and paint wear, as headings or as one use. -->
+                            <Text profile="tc_listRowLabel" position="14px 0px" size="150px 32px" name="historyHeading1"/>
+                            <Text profile="tc_listRowLabel" position="170px 0px" size="230px 32px" name="historyHeading2"/>
+                            <Text profile="tc_listRowLabel" position="406px 0px" size="100px 32px" name="historyHeading3"/>
+                            <Text profile="tc_listRowLabel" position="512px 0px" size="100px 32px" name="historyHeading4"/>
+                            <Text profile="tc_listRowValue" position="14px 0px" size="150px 32px" name="history1"/>
+                            <Text profile="tc_listRowValue" position="170px 0px" size="230px 32px" name="history2"/>
+                            <Text profile="tc_listRowValue" position="406px 0px" size="100px 32px" name="history3"/>
+                            <Text profile="tc_listRowValue" position="512px 0px" size="100px 32px" name="history4"/>
                             <RoundCorner profile="tc_rowChip" position="626px 0px" size="104px 20px" name="chip"/>
                             <Text profile="tc_rowChipText" position="626px 0px" size="104px 20px" name="chipText"/>
                         </ListItem>

@@ -54,7 +54,9 @@ function TCJobCompletedEvent.showNotification(job)
     -- 049: invoiced, or paid there and then.
     g_currentMission:addIngameNotification(FSBaseMission.INGAME_NOTIFICATION_INFO, job:getPaymentText())
 
-    -- 045: what the workers did to the machines.
+    -- 045: what the workers did to the machines. Washing isn't mentioned -
+    -- it's in the logbook, and the machines aren't back yet (Parking says
+    -- when they are).
     for _, line in ipairs(TCJobConsequences.getReportLines(job)) do
         g_currentMission:addIngameNotification(FSBaseMission.INGAME_NOTIFICATION_INFO, line)
     end

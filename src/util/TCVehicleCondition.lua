@@ -228,6 +228,23 @@ function TCVehicleCondition.getChangeRows(before, after)
     return rows
 end
 
+-- How much worse a vehicle got between two snapshots, as fractions:
+-- damage (vanilla damage, or ADS condition lost) and paint wear. Either is
+-- nil when there's nothing to compare (a missing snapshot, or the two taken
+-- under different models). A repair in between can make them negative.
+function TCVehicleCondition.getDeltas(before, after)
+    if before == nil or after == nil or before.model ~= after.model then
+        return nil, nil
+    end
+    local damage
+    if after.model == TCVehicleCondition.MODEL.ADS then
+        damage = (before.condition or 1) - (after.condition or 1)
+    else
+        damage = (after.damage or 0) - (before.damage or 0)
+    end
+    return damage, (after.wear or 0) - (before.wear or 0)
+end
+
 -- Label/value rows for one snapshot on its own (a vehicle as it is now),
 -- with every active fault listed for ADS.
 function TCVehicleCondition.getStateRows(snapshot)

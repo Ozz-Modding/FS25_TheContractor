@@ -32,7 +32,9 @@
 -- rest - batches' inbox messages, the farm's notice, whether the player's
 -- been told - is server-only.
 --
--- Telling the player: the first time a piece can't be parked, the farm gets
+-- Telling the player: once every piece of a return (a batch) that was
+-- parked here is down, the farm gets a "back and parked" notification
+-- naming them. The first time a piece can't be parked, the farm gets
 -- a notification (TCParkingNoticeEvent). Each return (a batch) with a piece
 -- that can't be parked posts one inbox message with a Send to shop action,
 -- removed once the whole batch is parked. While the farm has anything
@@ -59,6 +61,9 @@ function TheContractorParking.new()
 
     -- Server only. batchId -> inbox message id.
     self.messageIdByBatch = {}
+    -- Server only, not saved. batchId -> { farmId, names } of the pieces
+    -- parked so far, for the notification once the batch is done.
+    self.parkedByBatch = {}
     -- Server only. farmId -> { id, count }, the farm's Overview notice.
     self.noticeByFarm = {}
 
@@ -265,6 +270,9 @@ function TheContractorParking:runPass()
         local vehicle = getVehicle(entry.vehicleId)
         local x, y, z, rotY = TCParking.findSpot(vehicle, entry.farmId)
         if x ~= nil then
+            local parked = self.parkedByBatch[entry.batchId] or { farmId = entry.farmId, names = {} }
+            table.insert(parked.names, vehicle:getFullName())
+            self.parkedByBatch[entry.batchId] = parked
             self:removeVehicles({ entry.vehicleId })
             TCParking.placeVehicle(vehicle, x, y, z, rotY)
             Logging.info("TheContractor: farm %d parked '%s'", entry.farmId, vehicle:getFullName())
@@ -301,11 +309,12 @@ function TheContractorParking:tellStuck(entries)
     end
 end
 
--- Shows a notification on the farm's machines (TCParkingNoticeEvent).
-function TheContractorParking:notify(farmId, textKey, arg)
-    TCParkingNoticeEvent.showNotification(farmId, textKey, arg)
+-- Shows a notification on the farm's machines (TCParkingNoticeEvent) - a
+-- warning, or a plain one if isGood.
+function TheContractorParking:notify(farmId, textKey, arg, isGood)
+    TCParkingNoticeEvent.showNotification(farmId, textKey, arg, isGood)
     if g_server ~= nil then
-        g_server:broadcastEvent(TCParkingNoticeEvent.new(farmId, textKey, arg))
+        g_server:broadcastEvent(TCParkingNoticeEvent.new(farmId, textKey, arg, isGood))
     end
 end
 
@@ -334,11 +343,24 @@ function TheContractorParking:postBatchMessage(farmId, batchId)
         { TheContractorParking.SEND_TO_SHOP_ACTION, TheContractorInbox.DISMISS_ACTION }, { batchId = batchId })
 end
 
--- Takes down the inbox message of every batch with nothing left waiting.
+-- Takes down the inbox message of every batch with nothing left waiting,
+-- and tells the farm what of it was parked here (anything sent to the shop
+-- or taken out by a new dispatch isn't).
 function TheContractorParking:removeFinishedBatchMessages()
     local hasEntries = {}
     for _, entry in ipairs(self.queue) do
         hasEntries[entry.batchId] = true
+    end
+
+    local done = {}
+    for batchId, parked in pairs(self.parkedByBatch) do
+        if not hasEntries[batchId] then
+            table.insert(done, batchId)
+            self:notify(parked.farmId, "tc_parking_returnedNotification", table.concat(parked.names, ", "), true)
+        end
+    end
+    for _, batchId in ipairs(done) do
+        self.parkedByBatch[batchId] = nil
     end
     local finished = {}
     for batchId in pairs(self.messageIdByBatch) do

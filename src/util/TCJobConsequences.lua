@@ -319,11 +319,10 @@ function TCJobConsequences.washEquipment(job)
     job.washVehicleIds = nil
 end
 
--- Player-facing lines for the completion notifications, one or two per
--- worker: "Amy Hall washed the equipment before bringing it back.",
+-- Player-facing lines for the completion notifications, per worker:
 -- "Extra wear from skill gaps: Fendt 942 Vario +60%, ..." and (059) the
--- machines they left with an ADS fault. Every machine
--- builds them from workerReports itself.
+-- machines they left with an ADS fault. Washing is left to the logbook.
+-- Every machine builds them from workerReports itself.
 function TCJobConsequences.getReportLines(job)
     local lines = {}
     if job.workerReports == nil then
@@ -334,12 +333,6 @@ function TCJobConsequences.getReportLines(job)
     for _, report in ipairs(job.workerReports) do
         local worker = staff:getWorker(job.farmId, report.workerId)
         local name = worker ~= nil and worker.name or g_i18n:getText("tc_consequences_unknownWorker")
-
-        if report.wash == TCJobConsequences.WASH.WASHED then
-            table.insert(lines, string.format(g_i18n:getText("tc_consequences_washed"), name))
-        elseif report.wash == TCJobConsequences.WASH.UNWASHED then
-            table.insert(lines, string.format(g_i18n:getText("tc_consequences_unwashed"), name))
-        end
 
         if #report.extraWear > 0 then
             local parts = {}
