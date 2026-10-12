@@ -4834,10 +4834,12 @@ function MenuContractor:getSupplyDetailRows(supply)
 
     if #supply.storages > 0 then
         add.section("tc_supplies_sectionStorage")
+        -- Each storage's bar is just how full it is: Low is judged on the
+        -- whole supply (TCSupplyStock.getLowAmount), not one storage.
         for _, storage in ipairs(supply.storages) do
             local ratio = storage.capacity > 0 and storage.amount / storage.capacity or 0
             add.row(storage.name, formatStoredOf(fillTypeIndex, storage.amount, storage.capacity),
-                { ratio = ratio, isDanger = ratio < TCSupplyStock.LOW_RATIO })
+                { ratio = ratio, isDanger = false })
         end
     end
 

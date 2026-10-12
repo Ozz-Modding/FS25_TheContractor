@@ -275,6 +275,28 @@ function TheContractorJobs:transitionJobState(farmId, jobId, newState)
     return true
 end
 
+-- Server-only, for the tcJob state console command: like
+-- transitionJobState, but the final states go the real way - completed
+-- through completeJob (forced, so a job part-way through finishes now:
+-- the AI stops, it's invoiced, the crew and machines come back) and missed
+-- through missJob (the penalty, and everything released). Returns whether
+-- the job moved.
+function TheContractorJobs:forceJobState(farmId, jobId, newState)
+    local job = self:getJob(farmId, jobId)
+    if job == nil or not job:canTransitionTo(newState) then
+        return false
+    end
+
+    if newState == TheContractorJob.STATE.COMPLETED then
+        self:completeJob(job, true)
+        return job.state == TheContractorJob.STATE.COMPLETED
+    elseif newState == TheContractorJob.STATE.MISSED then
+        self:missJob(job)
+        return true
+    end
+    return self:transitionJobState(farmId, jobId, newState)
+end
+
 -- The actual state flip, run on whichever machine (server, or a client
 -- receiving TCJobStateChangedEvent) is applying the transition.
 function TheContractorJobs:applyJobStateChanged(farmId, jobId, newState)
@@ -820,18 +842,20 @@ end
 -- for an under-qualified operator (022's design decision) - that's the
 -- reputation reward's job, not the price's; only the missed-job case (024)
 -- ever pays less than the full negotiated price.
-function TheContractorJobs:completeJob(job)
+-- isForced (the tcJob state console command) skips the field-done and
+-- delivered checks: everything else happens as on a real finish.
+function TheContractorJobs:completeJob(job, isForced)
     if not g_currentMission:getIsServer() then
         return
     end
 
-    if job.completionPercentage < TheContractorJobs.COMPLETION_THRESHOLD_PERCENTAGE then
+    if not isForced and job.completionPercentage < TheContractorJobs.COMPLETION_THRESHOLD_PERCENTAGE then
         return
     end
 
     -- A player-driven haulage job (035) isn't done until the crop has been
     -- delivered, as well as cut.
-    if job:needsPlayerDelivery() and job.deliveredLiters < job.requiredLiters then
+    if not isForced and job:needsPlayerDelivery() and job.deliveredLiters < job.requiredLiters then
         return
     end
 
@@ -1326,6 +1350,66 @@ end
 -- Console commands (tcJob - see TCConsole) ---------------------------------------------
 
 function TheContractorJobs.registerConsoleCommands()
+    -- The ids the other job commands take. Open jobs by default (not yet
+    -- completed, declined or missed), or one state, or all. Read-only, so it
+    -- works on any machine.
+    TCConsole.register("job", "list", {
+        args = "[state|all]",
+        description = "Your jobs with their ids: open ones, one state, or all",
+        serverOnly = false,
+        run = function(farmId, args)
+            local filter = args[1] ~= nil and string.lower(args[1]) or nil
+            local isState = false
+            for _, state in pairs(TheContractorJob.STATE) do
+                isState = isState or state == filter
+            end
+            if filter ~= nil and filter ~= "all" and not isState then
+                return false
+            end
+
+            local staff = g_currentMission.TheContractor.Staff
+            local jobs = {}
+            for _, job in ipairs(g_currentMission.TheContractor.Jobs:getAllJobs(farmId)) do
+                if (filter == nil and not job:isTerminal()) or filter == "all" or job.state == filter then
+                    table.insert(jobs, job)
+                end
+            end
+            if #jobs == 0 then
+                return string.format("Farm %d has no %s jobs.", farmId, filter or "open")
+            end
+            table.sort(jobs, function(a, b)
+                return a.id < b.id
+            end)
+
+            local lines = { string.format("Farm %d jobs (%s, today is day %d):", farmId, filter or "open",
+                g_currentMission.environment.currentMonotonicDay) }
+            for _, job in ipairs(jobs) do
+                local details = {}
+                if job.state == TheContractorJob.STATE.IN_PROGRESS or job.completionPercentage > 0 then
+                    table.insert(details, string.format("%.0f%% done", job.completionPercentage))
+                end
+                if job.deadlineDay ~= nil then
+                    table.insert(details, string.format("due %s (day %d)", TCCalendar.formatDay(job.deadlineDay),
+                        job.deadlineDay))
+                end
+                if job.state == TheContractorJob.STATE.ALLOCATED or job.state == TheContractorJob.STATE.IN_PROGRESS then
+                    local crew = {}
+                    for _, workerId in ipairs(job:getWorkerIds()) do
+                        local worker = staff:getWorker(farmId, workerId)
+                        table.insert(crew, worker ~= nil and worker.name or ("#" .. workerId))
+                    end
+                    table.insert(details, #crew > 0 and ("crew " .. table.concat(crew, ", ")) or "you")
+                end
+                local field = g_fieldManager:getFieldById(job.fieldId)
+                table.insert(lines, string.format("#%d %s, field %s - %s, %s%s", job.id, job:getDisplayTitle(),
+                    field ~= nil and field:getName() or tostring(job.fieldId), job.state,
+                    g_i18n:formatMoney(job.price, 0, true, true),
+                    #details > 0 and (", " .. table.concat(details, ", ")) or ""))
+            end
+            return table.concat(lines, "\n")
+        end,
+    })
+
     -- Nothing checked: the field needn't suit the type, nor the date be workable.
     TCConsole.register("job", "create", {
         args = "<jobType> <fieldId> <skill 1-10> <price> <period 1-12> <day>",
@@ -1349,9 +1433,29 @@ function TheContractorJobs.registerConsoleCommands()
         args = "<jobId> <state>",
         description = "Force a job into another state (legal transitions only)",
         run = function(farmId, args)
-            local jobId, state = tonumber(args[1]), args[2]
-            if jobId == nil or state == nil then
+            local jobId, state = tonumber(args[1]), args[2] ~= nil and string.lower(args[2]) or nil
+            if jobId == nil then
                 return false
+            end
+
+            local job = g_currentMission.TheContractor.Jobs:getJob(farmId, jobId)
+            if job == nil then
+                return string.format("Farm %d has no job %d. tcJob list shows their ids.", farmId, jobId)
+            end
+            -- No state, or one it can't go to from here: say where it can go.
+            if state == nil or not job:canTransitionTo(state) then
+                local nextStates = {}
+                for nextState in pairs(TheContractorJob.VALID_TRANSITIONS[job.state] or {}) do
+                    table.insert(nextStates, nextState)
+                end
+                table.sort(nextStates)
+                local prefix = state ~= nil and string.format("Job %d can't go from %s to %s. ", jobId, job.state,
+                    state) or ""
+                if #nextStates == 0 then
+                    return string.format("%sJob %d is %s, which is final.", prefix, jobId, job.state)
+                end
+                return string.format("%sJob %d is %s. It can go to: %s", prefix, jobId, job.state,
+                    table.concat(nextStates, ", "))
             end
 
             g_client:getServerConnection():sendEvent(TCDebugSetJobStateEvent.new(farmId, jobId, state))

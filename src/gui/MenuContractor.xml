@@ -82,7 +82,7 @@
                     </GuiElement>
                     <GuiElement profile="tc_detailRowTall" size="752px 74px">
                         <Text profile="tc_detailLabel" text="$l10n_tc_detail_lastJob" position="0px 0px"/>
-                        <Text profile="tc_detailValueTall" id="textLastCompletedJob" text="" position="220px -6px" size="532px 64px" textMaxNumLines="3"/>
+                        <Text profile="tc_detailValueTall" id="textLastCompletedJob" text="" position="220px -9px" size="532px 64px" textMaxNumLines="3"/>
                     </GuiElement>
                 </BoxLayout>
 
@@ -678,7 +678,7 @@
                     </GuiElement>
                     <GuiElement profile="tc_detailRowTall" size="752px 64px">
                         <Text profile="tc_detailLabel" text="$l10n_tc_finances_job" position="0px 0px"/>
-                        <Text profile="tc_detailValueTall" id="financesInvoiceJob" text="" position="220px -6px" size="532px 58px" textMaxNumLines="2"/>
+                        <Text profile="tc_detailValueTall" id="financesInvoiceJob" text="" position="220px -9px" size="532px 58px" textMaxNumLines="2"/>
                     </GuiElement>
                 </BoxLayout>
 
@@ -708,7 +708,7 @@
                     </GuiElement>
                     <GuiElement profile="tc_detailRowTall" size="752px 64px">
                         <Text profile="tc_detailLabel" text="$l10n_tc_overheads_about" position="0px 0px"/>
-                        <Text profile="tc_detailValueTall" id="financesOverheadAbout" text="" position="220px -6px" size="532px 58px" textMaxNumLines="2"/>
+                        <Text profile="tc_detailValueTall" id="financesOverheadAbout" text="" position="220px -9px" size="532px 58px" textMaxNumLines="2"/>
                     </GuiElement>
                 </BoxLayout>
 

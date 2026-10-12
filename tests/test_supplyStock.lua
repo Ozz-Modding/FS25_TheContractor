@@ -87,7 +87,6 @@ test("a dedicated storage's capacity is its own; pallets don't add room", functi
     local supply = findSupply(TCSupplyStock.getSupplies(1), FillType.DIESEL)
     assertEquals(supply.capacity, 1000, "capacity")
     assertNear(supply.ratio, 0.3, 0.0001, "ratio is stored over capacity")
-    assertTrue(not supply.isLow, "30% isn't low")
 end)
 
 test("in a shared storage the room shown is what's left after the neighbours", function()
@@ -111,7 +110,6 @@ test("capacity adds up across storages, and each is listed with its own", functi
     assertEquals(supply.capacity, 4000, "capacity")
     assertEquals(#supply.storages, 2, "empty storage listed too")
     assertEquals(supply.storages[2].capacity, 3000, "its capacity")
-    assertTrue(supply.isLow, "100 of 4000 is low")
 end)
 
 test("a pallets-only supply has no capacity or ratio", function()
@@ -123,7 +121,33 @@ test("a pallets-only supply has no capacity or ratio", function()
     assertEquals(supply.amount, 400, "amount")
     assertEquals(supply.capacity, nil, "capacity")
     assertEquals(supply.ratio, nil, "ratio")
-    assertTrue(not supply.isLow, "some in stock isn't low")
+end)
+
+test("Low is a set amount in stock, not a share of the storage", function()
+    local world = setup()
+    -- A huge, nearly empty silo doesn't make 12,000 seed low.
+    world:addStorage({ levels = { [FillType.SEEDS] = 12000 }, capacities = { [FillType.SEEDS] = 500000 } })
+    assertTrue(not findSupply(TCSupplyStock.getSupplies(1), FillType.SEEDS).isLow, "12,000 seed isn't low")
+
+    -- And 9,000 in a full small one is.
+    world = setup()
+    world:addStorage({ levels = { [FillType.SEEDS] = 9000 }, capacities = { [FillType.SEEDS] = 9000 } })
+    assertTrue(findSupply(TCSupplyStock.getSupplies(1), FillType.SEEDS).isLow, "9,000 seed is low")
+end)
+
+test("pallets count towards the amount judged", function()
+    local world = setup()
+    world:addStorage({ levels = { [FillType.SEEDS] = 0 }, capacities = { [FillType.SEEDS] = 500000 } })
+    world:addVehicle({ name = "Seed bag", isPallet = true,
+        fillUnits = { { capacity = 20000, level = 17000, fillType = FillType.SEEDS } } })
+    assertTrue(not findSupply(TCSupplyStock.getSupplies(1), FillType.SEEDS).isLow, "17,000 in bags isn't low")
+end)
+
+test("supplies counted in pieces have their own threshold", function()
+    setup()
+    assertEquals(TCSupplyStock.getLowAmount(FillType.BALENET), TCSupplyStock.LOW_AMOUNT_PIECES)
+    assertEquals(TCSupplyStock.getLowAmount(FillType.SEEDS), 10000)
+    assertEquals(TCSupplyStock.getLowAmount(FillType.HERBICIDE), TCSupplyStock.LOW_AMOUNT_VOLUME)
 end)
 
 test("storages are named after the placeable that holds them", function()
@@ -143,6 +167,24 @@ test("storages are named after the placeable that holds them", function()
     assertEquals(byAmount[20], "Silo extension", "extension")
     assertEquals(byAmount[30], "Storage", "fallback")
     assertTrue(unnamed ~= nil)
+end)
+
+test("a storage kept out of sight is named through its stations", function()
+    local world = setup()
+    local deep = world:addStorage({ levels = { [FillType.SEEDS] = 10 } })
+    local stationOnly = world:addStorage({ levels = { [FillType.SEEDS] = 20 } })
+    -- A mod's building keeping its storage further down than the specs.
+    local shed = world:addPlaceable({ name = "Seed shed", specs = { spec_modShed = { a = { b = { deep } } } } })
+    deep.unloadingStations = { [{ owningPlaceable = shed }] = true }
+    stationOnly.loadingStations = { [{ stationName = "Seed bunker" }] = true }
+
+    local supply = findSupply(TCSupplyStock.getSupplies(1), FillType.SEEDS)
+    local byAmount = {}
+    for _, storage in ipairs(supply.storages) do
+        byAmount[storage.amount] = storage.name
+    end
+    assertEquals(byAmount[10], "Seed shed", "through the station's building")
+    assertEquals(byAmount[20], "Seed bunker", "the station's own name")
 end)
 
 test("jobs held for a supply are listed against it", function()

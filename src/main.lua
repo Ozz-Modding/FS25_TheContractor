@@ -256,6 +256,7 @@ function TheContractor:loadMap()
     TheContractorNotices.registerConsoleCommands()
     TheContractorLogbook.registerConsoleCommands()
     TheContractorParking.registerConsoleCommands()
+    TCSupplyStock.registerConsoleCommands()
     TCConsole.install()
 
     Logging.info("TheContractor: loadMap")
