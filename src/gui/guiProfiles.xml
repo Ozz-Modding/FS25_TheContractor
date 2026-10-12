@@ -99,9 +99,12 @@
         <textVerticalAlignment value="middle"/>
         <textLayoutMode value="truncate"/>
     </Profile>
+    <!-- A value that can run to more lines than its row's label: top-aligned,
+         so its first line sits level with the label (place it at y -9px). -->
     <Profile name="tc_detailValueTall" extends="tc_detailValue">
         <size value="300px 54px"/>
         <textSize value="15px"/>
+        <textVerticalAlignment value="top"/>
         <textMaxNumLines value="2"/>
         <textLayoutMode value="truncate"/>
     </Profile>

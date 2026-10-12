@@ -1,11 +1,10 @@
--- Cheat-command-only: request half of the tcSetJobState console command
--- (see main.lua). Client -> server request — the server applies via
--- TheContractorJobs:transitionJobState, which validates against the job's
--- state machine, applies, and broadcasts TCJobStateChangedEvent to other
--- clients. Lets state-machine transitions be exercised manually before 018
--- (allocation)/019 (progress)/022 (completion)/024 (missed) exist to drive
--- them for real. See src/events/README.md for the general event
--- conventions.
+-- Console-command-only: request half of `tcJob state` (Jobs.lua's
+-- registerConsoleCommands). Client -> server request - the server applies
+-- via TheContractorJobs:forceJobState, which validates against the job's
+-- state machine and sends completed/missed through the real completeJob/
+-- missJob (payout or penalty, AI stopped, crew and machines released);
+-- other states are a plain transitionJobState. See src/events/README.md
+-- for the general event conventions.
 
 TCDebugSetJobStateEvent = {}
 local TCDebugSetJobStateEvent_mt = Class(TCDebugSetJobStateEvent, Event)
@@ -39,6 +38,6 @@ end
 
 function TCDebugSetJobStateEvent:run(connection)
     if g_currentMission:getIsServer() then
-        g_currentMission.TheContractor.Jobs:transitionJobState(self.farmId, self.jobId, self.state)
+        g_currentMission.TheContractor.Jobs:forceJobState(self.farmId, self.jobId, self.state)
     end
 end

@@ -20,10 +20,35 @@
 
 TCSupplyStock = {}
 
--- Below this share of its capacity a supply's bar goes red - vanilla's
--- production storage list uses the same (InGameMenuProductionFrame.
--- STATUS_BAR_LOW).
+-- A supply is Low below a set amount in stock - storages and pallets
+-- together, in its own unit - not a share of its storage. A big silo
+-- (or a map's shared one, where every farm gets its own room) would make
+-- any sensible amount look nearly empty. LOW_AMOUNTS is by fill type name;
+-- anything not in it uses LOW_AMOUNT_VOLUME, or LOW_AMOUNT_PIECES for one
+-- counted in pieces (bale net, twine, film).
+TCSupplyStock.LOW_AMOUNTS = {
+    SEEDS = 10000,
+}
+TCSupplyStock.LOW_AMOUNT_VOLUME = 10000
+TCSupplyStock.LOW_AMOUNT_PIECES = 10
+
+-- ADS consumables (TCADSStock) are still judged by how full they are:
+-- below this share of capacity - vanilla's production storage list uses
+-- the same (InGameMenuProductionFrame.STATUS_BAR_LOW).
 TCSupplyStock.LOW_RATIO = 0.2
+
+-- How little of a supply counts as Low (see LOW_AMOUNTS).
+function TCSupplyStock.getLowAmount(fillTypeIndex)
+    local name = g_fillTypeManager:getFillTypeNameByIndex(fillTypeIndex)
+    if name ~= nil and TCSupplyStock.LOW_AMOUNTS[name] ~= nil then
+        return TCSupplyStock.LOW_AMOUNTS[name]
+    end
+    local fillType = g_fillTypeManager:getFillTypeByIndex(fillTypeIndex)
+    if fillType ~= nil and fillType.unitShort ~= nil and fillType.unitShort ~= "" then
+        return TCSupplyStock.LOW_AMOUNT_PIECES
+    end
+    return TCSupplyStock.LOW_AMOUNT_VOLUME
+end
 
 local function isOwnedBy(object, farmId)
     return object.getOwnerFarmId ~= nil and object:getOwnerFarmId() == farmId
@@ -120,18 +145,42 @@ local function findStorages(map, wanted, placeable, value, depth)
     end
 end
 
--- storage -> placeable, for the storages in `wanted` (a set).
+-- A storage's unloading/loading stations (vanilla keeps them as sets).
+local function getStations(storage)
+    local stations = {}
+    for _, set in ipairs({ storage.unloadingStations or {}, storage.loadingStations or {} }) do
+        for station in pairs(set) do
+            if type(station) == "table" then
+                table.insert(stations, station)
+            end
+        end
+    end
+    return stations
+end
+
+-- storage -> placeable, for the storages in `wanted` (a set). One the spec
+-- search misses (a mod keeping it further down) is found through its
+-- stations, which know the building they belong to.
 local function mapStoragesToPlaceables(farmId, wanted)
     local map = {}
     local placeableSystem = g_currentMission.placeableSystem
-    if placeableSystem == nil or placeableSystem.placeables == nil then
-        return map
+    if placeableSystem ~= nil and placeableSystem.placeables ~= nil then
+        for _, placeable in ipairs(placeableSystem.placeables) do
+            if isOwnedBy(placeable, farmId) then
+                for key, spec in pairs(placeable) do
+                    if type(key) == "string" and key:sub(1, 5) == "spec_" then
+                        findStorages(map, wanted, placeable, spec, 0)
+                    end
+                end
+            end
+        end
     end
-    for _, placeable in ipairs(placeableSystem.placeables) do
-        if isOwnedBy(placeable, farmId) then
-            for key, spec in pairs(placeable) do
-                if type(key) == "string" and key:sub(1, 5) == "spec_" then
-                    findStorages(map, wanted, placeable, spec, 0)
+    for storage in pairs(wanted) do
+        if map[storage] == nil then
+            for _, station in ipairs(getStations(storage)) do
+                if station.owningPlaceable ~= nil then
+                    map[storage] = station.owningPlaceable
+                    break
                 end
             end
         end
@@ -139,10 +188,17 @@ local function mapStoragesToPlaceables(farmId, wanted)
     return map
 end
 
-local function getPlaceableName(placeable)
+-- The building's name, else a station's own name, else plain "Storage".
+local function getStorageName(storage, placeable)
     if placeable ~= nil and placeable.getName ~= nil then
         local name = placeable:getName()
         if name ~= nil and name ~= "" then
+            return name
+        end
+    end
+    for _, station in ipairs(getStations(storage)) do
+        local name = station.stationName
+        if type(name) == "string" and name ~= "" then
             return name
         end
     end
@@ -177,7 +233,7 @@ end
 --                 takes it, empty ones too
 --   pallets       { { name, count, amount }... }, grouped by name
 --   heldJobs      jobs on hold for it (noStock)
---   isLow         ratio under LOW_RATIO, or there's none of it at all
+--   isLow         amount under getLowAmount, or none at all
 -- }
 local function buildSupply(farmId, fillTypeIndex, placeableByStorage, storageEntries)
     local supply = {
@@ -195,7 +251,7 @@ local function buildSupply(farmId, fillTypeIndex, placeableByStorage, storageEnt
         supply.storedAmount = supply.storedAmount + level
         supply.capacity = (supply.capacity or 0) + level + room
         table.insert(supply.storages, {
-            name = getPlaceableName(placeableByStorage[entry.storage]),
+            name = getStorageName(entry.storage, placeableByStorage[entry.storage]),
             amount = level,
             capacity = level + room,
         })
@@ -223,16 +279,14 @@ local function buildSupply(farmId, fillTypeIndex, placeableByStorage, storageEnt
         supply.ratio = math.min(supply.storedAmount / supply.capacity, 1)
     end
     supply.heldJobs = getHeldJobs(farmId, supply.fillTypeName)
-    supply.isLow = supply.amount <= 0 or (supply.ratio ~= nil and supply.ratio < TCSupplyStock.LOW_RATIO)
+    supply.isLow = supply.amount <= 0 or supply.amount < TCSupplyStock.getLowAmount(fillTypeIndex)
 
     return supply
 end
 
--- Every supply (see buildSupply), in getSupplyFillTypes' order.
-function TCSupplyStock.getSupplies(farmId)
-    local fillTypes = TCSupplyStock.getSupplyFillTypes(farmId)
-
-    -- The farm's storages for each supply, and the set of them to name.
+-- The farm's storages that take each of fillTypes: fillTypeIndex ->
+-- { { storage, level, room }... }, and the set of them all.
+local function getStorageEntries(farmId, fillTypes)
     local entriesByFillType, wanted = {}, {}
     for _, fillTypeIndex in ipairs(fillTypes) do
         entriesByFillType[fillTypeIndex] = {}
@@ -249,6 +303,13 @@ function TCSupplyStock.getSupplies(farmId)
             end
         end
     end
+    return entriesByFillType, wanted
+end
+
+-- Every supply (see buildSupply), in getSupplyFillTypes' order.
+function TCSupplyStock.getSupplies(farmId)
+    local fillTypes = TCSupplyStock.getSupplyFillTypes(farmId)
+    local entriesByFillType, wanted = getStorageEntries(farmId, fillTypes)
     local placeableByStorage = mapStoragesToPlaceables(farmId, wanted)
 
     local supplies = {}
@@ -256,4 +317,82 @@ function TCSupplyStock.getSupplies(farmId)
         table.insert(supplies, buildSupply(farmId, fillTypeIndex, placeableByStorage, entriesByFillType[fillTypeIndex]))
     end
     return supplies
+end
+
+-- Console commands (tcCompany - see TCConsole) ---------------------------------
+
+local COMPASS = { "east", "north-east", "north", "north-west", "west", "south-west", "south", "south-east" }
+
+-- "1.2 km north-east of you" from the local player to a world position, or
+-- the bare coordinates when there's no player to measure from.
+local function describeWhere(x, z)
+    if g_localPlayer == nil or g_localPlayer.getPosition == nil then
+        return string.format("at x %.0f, z %.0f", x, z)
+    end
+    local px, _, pz = g_localPlayer:getPosition()
+    local dx, dz = x - px, z - pz
+    local distance = math.sqrt(dx * dx + dz * dz)
+    if distance < 50 then
+        return "right by you"
+    end
+    -- World z runs south, so north is -z.
+    local sector = math.floor((math.atan2(-dz, dx) / (2 * math.pi) * 8 + 0.5) % 8) + 1
+    local distanceText = distance >= 1000 and string.format("%.1f km", distance / 1000) or
+        string.format("%.0f m", distance)
+    return string.format("%s %s of you", distanceText, COMPASS[sector])
+end
+
+local function getStoragePosition(storage, placeable)
+    for _, node in ipairs({ storage.rootNode, placeable ~= nil and placeable.rootNode or nil }) do
+        if node ~= nil and node ~= 0 and entityExists(node) then
+            local x, _, z = getWorldTranslation(node)
+            return x, z
+        end
+    end
+    return nil
+end
+
+function TCSupplyStock.registerConsoleCommands()
+    -- Finding a storage the Supplies tab counts: what it is, whose mod, how
+    -- full, and where. Read-only, so it works on any machine.
+    TCConsole.register("company", "storages", {
+        args = "[fillType]",
+        description = "Your storages the Supplies tab counts, with where they are",
+        serverOnly = false,
+        run = function(farmId, args)
+            local fillTypes
+            if args[1] ~= nil then
+                local fillTypeIndex = g_fillTypeManager:getFillTypeIndexByName(string.upper(args[1]))
+                if fillTypeIndex == nil then
+                    return string.format("No fill type called %s (e.g. SEEDS, FERTILIZER, DIESEL).", args[1])
+                end
+                fillTypes = { fillTypeIndex }
+            else
+                fillTypes = TCSupplyStock.getSupplyFillTypes(farmId)
+            end
+
+            local entriesByFillType, wanted = getStorageEntries(farmId, fillTypes)
+            local placeableByStorage = mapStoragesToPlaceables(farmId, wanted)
+            local lines = {}
+            for _, fillTypeIndex in ipairs(fillTypes) do
+                local entries = entriesByFillType[fillTypeIndex]
+                if #entries > 0 then
+                    table.insert(lines, string.format("%s:", g_fillTypeManager:getFillTypeTitleByIndex(fillTypeIndex)))
+                    for _, entry in ipairs(entries) do
+                        local placeable = placeableByStorage[entry.storage]
+                        local x, z = getStoragePosition(entry.storage, placeable)
+                        local mod = placeable ~= nil and placeable.customEnvironment or nil
+                        table.insert(lines, string.format("  %s%s - %.0f of %.0f, %s", getStorageName(entry.storage,
+                            placeable), mod ~= nil and (" [" .. mod .. "]") or "", entry.level, entry.level + entry.room,
+                            x ~= nil and describeWhere(x, z) or "position unknown"))
+                    end
+                end
+            end
+            if #lines == 0 then
+                return string.format("Farm %d has no storages for %s.", farmId,
+                    args[1] ~= nil and args[1] or "its supplies")
+            end
+            return table.concat(lines, "\n")
+        end,
+    })
 end

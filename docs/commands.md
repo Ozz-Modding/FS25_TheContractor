@@ -6,14 +6,14 @@ You type these into the developer console. You don't need cheats on. There are f
 |---|---|
 | `tcHelp` | Lists the groups below |
 | `tcWorker` | Hire, list and change your staff |
-| `tcJob` | Offer, create and force jobs |
+| `tcJob` | List, offer, create and force jobs |
 | `tcFinance` | Invoices, claims and botched jobs |
 | `tcCompany` | Reputation and Overview notices |
 
 Type a group on its own (or with `help`) to list its subcommands and their arguments. Subcommand names aren't case-sensitive. If you get the arguments wrong, the command prints that subcommand's usage.
 
 - **Your farm:** every command acts on your current farm. Most need that farm to have created a company first.
-- **Server only:** commands that change something only work on the server, which means single player or the host of a multiplayer game. The read-only lists `tcWorker list`, `tcWorker pool`, `tcJob log`, `tcCompany notices` and `tcCompany vehicleLog` also work on a joined client.
+- **Server only:** commands that change something only work on the server, which means single player or the host of a multiplayer game. The read-only lists `tcWorker list`, `tcWorker pool`, `tcJob list`, `tcJob log`, `tcCompany storages`, `tcCompany notices` and `tcCompany vehicleLog` also work on a joined client.
 - **`<worker>`:** a hired worker's id, or the start of their first or last name. `amy`, `Hall` and `3` could all mean Amy Hall (#3). If a name matches more than one worker, the command lists them and asks for the id. `tcWorker list` shows ids and names.
 
 ## Workers — `tcWorker`
@@ -175,6 +175,25 @@ tcWorker certify 2 off
 
 ## Jobs — `tcJob`
 
+### `tcJob list [state|all]`
+
+Lists your farm's jobs with their ids, for the other job commands. Each line shows the job, its field, state and price. Where they apply, it adds how far along it is, when it's due (date and monotonic day) and who's on it: worker names, or "you" for a job you're doing yourself. Read-only, so it also works on a joined client.
+
+| Argument | Meaning |
+|---|---|
+| `state` | Optional. With no argument it lists open jobs (not yet completed, declined or missed). Give a state to list only that one (`offered`, `negotiating`, `accepted`, `allocated`, `in_progress`, `completed`, `declined`, `missed`), or `all` for every job. |
+
+```
+tcJob list
+tcJob list accepted
+```
+
+```
+Farm 1 jobs (open, today is day 212):
+#12 Harvest & Haul (Canola), field 37 - in_progress, 4,267 €, 45% done, due August 1, Year 1 (day 213), crew John White, Grace Hughes
+#14 Cultivate, field 12 - accepted, 1,180 €, due September 1, Year 1 (day 244)
+```
+
 ### `tcJob offer <jobType>`
 
 Offers your farm a job of the given type right now, through the normal job generator. You get a real offer on a real field, with the usual price, deadline and required skill, so the game could have offered the same job by itself. This is useful for testing and for setting up a storyline.
@@ -227,8 +246,21 @@ Forces a job into another state. Only legal transitions are allowed:
 
 `completed`, `declined` and `missed` are final.
 
+`completed` and `missed` work the same as a real finish or deadline, whatever the job's progress:
+- **`completed`:** a hired worker's AI is stopped where it is, even mid-field or on the road. The job's invoiced and earns reputation. The crew and machines go through the usual trip back and parking, and the logbook records it.
+- **`missed`:** the usual missed-deadline reputation penalty (less whatever progress was made), and the crew and machines are released the same way.
+
+Other states only change the job's state.
+
+Leave the state out, or give one the job can't go to, and it tells you the job's current state and the states it can go to instead, without changing anything. Get job ids from `tcJob list`.
+
 ```
 tcJob state 7 accepted
+tcJob state 7
+```
+
+```
+Job 7 is accepted. It can go to: allocated, missed
 ```
 
 ### `tcJob log [jobId]`
@@ -335,4 +367,18 @@ Shows a vehicle's Logbook history for the last year. You get a summary line (job
 ```
 tcCompany vehicleLog fendt
 tcCompany vehicleLog 942 Vario
+```
+
+### `tcCompany storages [fillType]`
+
+Lists the storages your farm owns that the Supplies tab counts, to track one down. For each one it shows the building's name, the mod it comes from (in brackets, if it's from a mod), how much is in it out of its room for that product, and how far away it is and in which direction from you. With no argument it covers every supply the tab lists; give a fill type's name (e.g. `SEEDS`, `FERTILIZER`, `DIESEL`, case-insensitive) for just that one. A storage shared between products shows its room for each one, so the same building can appear under several. Read-only, so it also works on a joined client.
+
+```
+tcCompany storages
+tcCompany storages seeds
+```
+
+```
+Seeds:
+  Farm Silo [FS25_SomeMap] - 0 of 500000, 1.2 km north-east of you
 ```
