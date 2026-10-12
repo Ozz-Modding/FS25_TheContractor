@@ -191,7 +191,7 @@ TheContractorJobGeneration.MAX_PRICE_VARIANCE = 1.1
 -- real UK contractor rates, and wages are 1x UK since 047; the right level
 -- is still being found in play - retune this once it is. Reputation isn't
 -- scaled (reputationPerHa / REPUTATION_PER_REWARD use rewardPerHa).
-TheContractorJobGeneration.JOB_PAY_BASELINE = 0.5
+TheContractorJobGeneration.JOB_PAY_BASELINE = 0.8
 
 -- Harvest & haul (035): the share of harvest offers where the client wants
 -- the crop carted to a selling point as well as the field combined - a

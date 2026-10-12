@@ -537,9 +537,11 @@ function MenuContractor:initialize()
     -- Selects/deselects the equipment row currently highlighted in
     -- allocationEquipmentTable — one button for both, its label flipped by
     -- updateAllocationEquipmentToggleButton. A bottom-bar action rather
-    -- than reacting to list clicks, so it works the same on a gamepad.
+    -- than reacting to list clicks, so it works the same on a gamepad. It
+    -- shares its key with the worker toggle: only the one for the list with
+    -- the cursor is shown (getMenuButtonInfo).
     self.btnAllocateToggleEquipment = {
-        inputAction = InputAction.MENU_EXTRA_2,
+        inputAction = InputAction.MENU_CANCEL,
         text = g_i18n:getText("tc_allocation_selectEquipmentButton"),
         callback = function()
             self:onClickToggleAllocationEquipment()
@@ -559,9 +561,8 @@ function MenuContractor:initialize()
     }
     self.menuButtonInfoCalendarAllocating = { self.btnBack, self.btnNextPage, self.btnPrevPage,
         self.btnAllocateConfirm, self.btnAllocateCancel, self.btnAllocateToggleWorker }
-    self.menuButtonInfoCalendarAllocatingWithEquipment = { self.btnBack, self.btnNextPage, self.btnPrevPage,
-        self.btnAllocateConfirm, self.btnAllocateCancel, self.btnAllocateToggleWorker,
-        self.btnAllocateToggleEquipment }
+    self.menuButtonInfoCalendarAllocatingEquipment = { self.btnBack, self.btnNextPage, self.btnPrevPage,
+        self.btnAllocateConfirm, self.btnAllocateCancel, self.btnAllocateToggleEquipment }
 
     self.calendarPeriodOffset = 0
     self.selectedCalendarDay = nil
@@ -634,6 +635,19 @@ function MenuContractor:initialize()
     self.allocationWorkerTable:setDelegate(self)
     self.allocationEquipmentTable:setDataSource(self)
     self.allocationEquipmentTable:setDelegate(self)
+
+    -- The two allocation pickers only lead to each other (vanilla's
+    -- Production tab does the same). Left to itself FocusManager goes to
+    -- whatever lies nearest, which is the day list, and moving onto that
+    -- picks a day and closes the panel. Leaving is the Cancel button.
+    FocusManager:linkElements(self.allocationWorkerTable, FocusManager.LEFT, nil)
+    FocusManager:linkElements(self.allocationWorkerTable, FocusManager.RIGHT, self.allocationEquipmentTable)
+    FocusManager:linkElements(self.allocationWorkerTable, FocusManager.TOP, nil)
+    FocusManager:linkElements(self.allocationWorkerTable, FocusManager.BOTTOM, nil)
+    FocusManager:linkElements(self.allocationEquipmentTable, FocusManager.LEFT, self.allocationWorkerTable)
+    FocusManager:linkElements(self.allocationEquipmentTable, FocusManager.RIGHT, nil)
+    FocusManager:linkElements(self.allocationEquipmentTable, FocusManager.TOP, nil)
+    FocusManager:linkElements(self.allocationEquipmentTable, FocusManager.BOTTOM, nil)
 
     self.staffTable:setDataSource(self)
     self.staffTable:setDelegate(self)
@@ -750,8 +764,9 @@ function MenuContractor:getMenuButtonInfo()
 
     if state == MenuContractor.SUB_CATEGORY.CALENDAR and self:hasCompany() then
         if self.allocatingJobId ~= nil then
-            if self.allocationEquipmentRows[self.allocationHighlightedEquipmentIndex] ~= nil then
-                return self.menuButtonInfoCalendarAllocatingWithEquipment
+            if FocusManager:getFocusedElement() == self.allocationEquipmentTable and
+                    self.allocationEquipmentRows[self.allocationHighlightedEquipmentIndex] ~= nil then
+                return self.menuButtonInfoCalendarAllocatingEquipment
             end
             return self.menuButtonInfoCalendarAllocating
         end
@@ -1032,7 +1047,7 @@ function MenuContractor:refreshCurrentJobsState(farmId, jobs)
         -- Player-driven haulage (035): delivery counts towards done too.
         if job:needsPlayerDelivery() and job.requiredLiters > 0 then
             line = line .. string.format(g_i18n:getText("tc_overview_deliveredSuffix"),
-                math.floor(100 * job.deliveredLiters / job.requiredLiters))
+                math.floor(100 * job.deliveredLiters / job.requiredLiters), job.deliveryStationName or "?")
         end
         -- On hold for supplies (032).
         if job:isWaitingForSupplies() then
@@ -1732,7 +1747,7 @@ function MenuContractor:updateInboxDetails()
     self.inboxDetailField:setText(fieldText)
     self.inboxDetailTargetDate:setText(formatTargetDate(job.targetPeriod, job.targetDayInPeriod))
     self.inboxDetailPrice:setText(g_i18n:formatMoney(job.price, 0, true, true))
-    self.inboxDetailCrew:setText(self:getInboxCrewText(job))
+    self.inboxDetailCrew:setText(self:getJobCrewText(job))
     self.inboxDetailSkill:setText(string.format(g_i18n:getText("tc_inbox_skillValue"),
         job:getOperationSkillText() or "-", job.requiredSkillLevel))
 
@@ -1754,7 +1769,7 @@ end
 -- Who can do the job: one worker (or the player), two for harvest & haul
 -- (035) unless the player hauls, or the player alone for work the AI
 -- helper can't do (032's playerOnly, bale wrapping).
-function MenuContractor:getInboxCrewText(job)
+function MenuContractor:getJobCrewText(job)
     local jobDef = TheContractorJobGeneration.JOB_TYPES[job.jobType]
     if jobDef ~= nil and jobDef.playerOnly then
         return g_i18n:getText("tc_inbox_crewPlayerOnly")
@@ -2042,6 +2057,17 @@ end
 function MenuContractor:onListSelectionChanged(list, section, index)
     if list == self.calendarDayTable then
         local row = self.calendarDayRows[index]
+        -- The pickers' focus links keep a gamepad off this list while
+        -- allocating, but a mouse can still pick a day. Another day closes
+        -- the allocation properly; the same day (a reload re-raising this)
+        -- leaves it alone.
+        if self.allocatingJobId ~= nil then
+            if row ~= nil and row.day == self.selectedCalendarDay then
+                return
+            end
+            self.allocatingJobId = nil
+            self.calendarCompletedContainer:setVisible(true)
+        end
         self.selectedCalendarDay = row ~= nil and row.day or nil
         self:updateCalendarDayDetails()
         return
@@ -2050,6 +2076,7 @@ function MenuContractor:onListSelectionChanged(list, section, index)
     if list == self.calendarDayJobsTable then
         local job = self.calendarDayJobs[index]
         self.selectedCalendarDayJobId = job ~= nil and job.id or nil
+        self:updateCalendarDayJobNote()
         self:setMenuButtonInfoDirty()
         return
     end
@@ -2444,6 +2471,15 @@ function MenuContractor:populateCalendarDayJobCell(index, cell)
 
     cell:getAttribute("jobType"):setText(job:getDisplayTitle())
 
+    -- How many people the job takes: 2 for harvest & haul (035), "You" for
+    -- work only the player can do. getJobCrewText has the long form.
+    local jobDef = TheContractorJobGeneration.JOB_TYPES[job.jobType]
+    if jobDef ~= nil and jobDef.playerOnly then
+        cell:getAttribute("crew"):setText(g_i18n:getText("tc_calendar_crewPlayer"))
+    else
+        cell:getAttribute("crew"):setText(tostring(TheContractorAllocation.getRequiredWorkerCount(job)))
+    end
+
     local field = g_fieldManager:getFieldById(job.fieldId)
     cell:getAttribute("field"):setText(field ~= nil and field:getName() or tostring(job.fieldId))
 
@@ -2503,6 +2539,9 @@ function MenuContractor:onClickOpenAllocation()
     self.allocationSelectedWorkerIds = {}
     self.allocationSelectedEquipmentKeys = {}
     self:refreshAllocationState()
+    -- Focus stays wherever it was (the tab bar, or the job list that's just
+    -- been hidden) unless it's moved, so up/down wouldn't reach the pickers.
+    FocusManager:setFocus(self.allocationWorkerTable)
 end
 
 function MenuContractor:onClickCancelAllocation()
@@ -2511,6 +2550,17 @@ function MenuContractor:onClickCancelAllocation()
     self.calendarCompletedContainer:setVisible(true)
     self:updateCalendarDayDetails()
     self:setMenuButtonInfoDirty()
+    self:focusCalendarDayJobs()
+end
+
+-- Once allocation closes: back on the day's job list, or the day list if
+-- the day has no jobs to show.
+function MenuContractor:focusCalendarDayJobs()
+    if self.calendarDayJobsContainer:getIsVisible() then
+        FocusManager:setFocus(self.calendarDayJobsTable)
+    else
+        FocusManager:setFocus(self.calendarDayTable)
+    end
 end
 
 -- Rebuilds the worker/equipment picker lists for self.allocatingJobId: row 1
@@ -2536,6 +2586,7 @@ function MenuContractor:refreshAllocationState()
 
     local staff = g_currentMission.TheContractor.Staff
     self.allocationJobTitle:setText(string.format(g_i18n:getText("tc_allocation_title"), job:getDisplayTitle()))
+    self.allocationCrewText:setText(string.format(g_i18n:getText("tc_allocation_crew"), self:getJobCrewText(job)))
 
     self.allocationWorkerRows = { { workerId = nil, label = g_i18n:getText("tc_allocation_myself") } }
     for _, worker in ipairs(staff:getIdleWorkers(farmId)) do
@@ -2548,6 +2599,7 @@ function MenuContractor:refreshAllocationState()
     self.allocationHighlightedEquipmentIndex = nil
     self:rebuildAllocationEquipmentRows(job)
 
+    self:updateAllocationWorkerHeading(job)
     self:updateAllocationWorkerToggleButton()
     self:updateAllocationWarning()
 end
@@ -2572,6 +2624,7 @@ function MenuContractor:rebuildAllocationEquipmentRows(job)
             vehicleId = vehicleId,
             label = vehicle:getFullName(),
             role = role,
+            sizeTier = TCEquipmentClass.getSizeTier(vehicle),
             isHaulage = role == "haulTractor" or role == "trailer",
         })
     end
@@ -2643,8 +2696,21 @@ function MenuContractor:onClickToggleAllocationWorker()
 
     self.allocationWorkerTable:reloadData()
     self:rebuildAllocationEquipmentRows(job)
+    self:updateAllocationWorkerHeading(job)
     self:updateAllocationWorkerToggleButton()
     self:updateAllocationWarning()
+end
+
+-- "Workers (1/2)" against the job's worker count, or "Workers (yourself)"
+-- while Myself is the pick.
+function MenuContractor:updateAllocationWorkerHeading(job)
+    local picked = #self.allocationSelectedWorkerIds
+    if picked == 0 then
+        self.allocationWorkerLabel:setText(g_i18n:getText("tc_allocation_workerHeadingMyself"))
+    else
+        self.allocationWorkerLabel:setText(string.format(g_i18n:getText("tc_allocation_workerHeadingCount"), picked,
+            TheContractorAllocation.getRequiredWorkerCount(job)))
+    end
 end
 
 function MenuContractor:isAllocationWorkerRowSelected(row)
@@ -2656,9 +2722,14 @@ end
 
 function MenuContractor:updateAllocationWorkerToggleButton()
     local row = self.allocationWorkerRows[self.allocationHighlightedWorkerIndex]
-    local isSelected = row ~= nil and row.workerId ~= nil and self:isAllocationWorkerRowSelected(row)
-    self.btnAllocateToggleWorker.text = g_i18n:getText(isSelected and "tc_allocation_deselectWorkerButton" or
-        "tc_allocation_selectWorkerButton")
+    local key = "tc_allocation_selectWorkerButton"
+    if row ~= nil and row.workerId == nil then
+        -- Myself drops any picked workers rather than toggling.
+        key = "tc_allocation_selectMyselfButton"
+    elseif row ~= nil and self:isAllocationWorkerRowSelected(row) then
+        key = "tc_allocation_deselectWorkerButton"
+    end
+    self.btnAllocateToggleWorker.text = g_i18n:getText(key)
     self:setMenuButtonInfoDirty()
 end
 
@@ -2676,6 +2747,15 @@ function MenuContractor:onClickToggleAllocationEquipment()
     if self.allocationSelectedEquipmentKeys[row.key] then
         self.allocationSelectedEquipmentKeys[row.key] = nil
     else
+        -- One tractor, harvester, trailer... per crew: a second pick of
+        -- the same role replaces the first.
+        if TheContractorAllocation.SINGLE_ROLES[row.role] then
+            for _, other in ipairs(self.allocationEquipmentRows) do
+                if other.role == row.role then
+                    self.allocationSelectedEquipmentKeys[other.key] = nil
+                end
+            end
+        end
         self.allocationSelectedEquipmentKeys[row.key] = true
     end
 
@@ -2701,6 +2781,25 @@ function MenuContractor:populateAllocationWorkerCell(index, cell)
     cell:getAttribute("name"):setText(row.label)
 end
 
+-- A tractor size against the picked workers: good if any of them is
+-- certified on it (assignCrewRoles puts that one on it), bad if none is,
+-- plain info while it's the player alone.
+function MenuContractor:getAllocationTierTone(tier)
+    local workerIds = self.allocationSelectedWorkerIds
+    if #workerIds == 0 then
+        return "info"
+    end
+    local staff = g_currentMission.TheContractor.Staff
+    local farmId = g_currentMission:getFarmId()
+    for _, workerId in ipairs(workerIds) do
+        local worker = staff:getWorker(farmId, workerId)
+        if worker ~= nil and worker:getTierCapability(tier) ~= nil then
+            return "good"
+        end
+    end
+    return "bad"
+end
+
 function MenuContractor:populateAllocationEquipmentCell(index, cell)
     local row = self.allocationEquipmentRows[index]
     if row == nil then
@@ -2710,6 +2809,13 @@ function MenuContractor:populateAllocationEquipmentCell(index, cell)
     setAllocationCheckBox(cell:getAttribute("checkBox"), self.allocationSelectedEquipmentKeys[row.key] == true)
     cell:getAttribute("name"):setText(row.label)
     cell:getAttribute("kind"):setText(g_i18n:getText("tc_allocation_role_" .. row.role))
+    local sizeChip, sizeChipText = cell:getAttribute("sizeChip"), cell:getAttribute("sizeChipText")
+    if row.sizeTier == nil then
+        setChip(sizeChip, sizeChipText, nil)
+    else
+        setChip(sizeChip, sizeChipText, g_i18n:getText("tc_allocation_size_" .. row.sizeTier),
+            self:getAllocationTierTone(row.sizeTier))
+    end
     -- 062: a machine back from a job that hasn't found a parking space yet.
     local isPending = g_currentMission.TheContractor.Parking:isPending(row.vehicleId)
     setChip(cell:getAttribute("parkingChip"), cell:getAttribute("parkingChipText"),
@@ -2932,6 +3038,7 @@ function MenuContractor:onClickConfirmAllocation()
     -- Same "synchronous for host/SP, catches up on next refresh for a remote
     -- client" caveat as respondToSelectedInboxJob/sendCounterOffer.
     self:refreshCalendarState(farmId, g_currentMission.TheContractor.Jobs)
+    self:focusCalendarDayJobs()
 end
 
 function MenuContractor:updateCalendarDayDetails()
@@ -2964,6 +3071,7 @@ function MenuContractor:updateCalendarDayDetails()
     else
         self.selectedCalendarDayJobId = nil
     end
+    self:updateCalendarDayJobNote()
     self:setMenuButtonInfoDirty()
 
     if row == nil then
@@ -2972,6 +3080,22 @@ function MenuContractor:updateCalendarDayDetails()
 
     self.calendarDayDetailTitle:setText(string.format(g_i18n:getText("tc_calendar_dayDetailTitle"),
         formatCalendarDate(self:getCalendarViewPeriod(), row.day, self:getCalendarViewYear())))
+end
+
+-- Harvest & haul (035): the highlighted job's selling point, with how much
+-- has gone in while the player is doing the carting. Blank otherwise.
+function MenuContractor:updateCalendarDayJobNote()
+    local job = self:getSelectedCalendarDayJob()
+    if job == nil or not job.includesHaulage or job.deliveryStationName == nil then
+        self.calendarDayJobNote:setText("")
+    elseif job:needsPlayerDelivery() and job.requiredLiters > 0 and
+            (job.state == TheContractorJob.STATE.ALLOCATED or job.state == TheContractorJob.STATE.IN_PROGRESS) then
+        self.calendarDayJobNote:setText(string.format(g_i18n:getText("tc_calendar_deliveryProgressNote"),
+            job.deliveryStationName, math.floor(100 * job.deliveredLiters / job.requiredLiters)))
+    else
+        self.calendarDayJobNote:setText(string.format(g_i18n:getText("tc_calendar_deliveryNote"),
+            job.deliveryStationName))
+    end
 end
 
 function MenuContractor:onClickCalendarToday()
@@ -3781,15 +3905,6 @@ local function getMarginChip(entry)
     return formatMoney(TheContractorLogbook.getMargin(entry)), TheContractorLogbook.getMarginTone(entry)
 end
 
--- "Damage 12% > 19%, Paint 30% > 34%" - a history row's condition on one line.
-local function getCompactChange(before, after)
-    local parts = {}
-    for _, row in ipairs(TCVehicleCondition.getChangeRows(before, after)) do
-        table.insert(parts, row.label .. " " .. row.value)
-    end
-    return table.concat(parts, ", ")
-end
-
 -- Filters: everything, completed, missed, then one per person in the log.
 function MenuContractor:buildLogbookJobFilters(entries)
     local filters = {
@@ -4028,14 +4143,26 @@ function MenuContractor:populateLogbookDetailCell(index, cell)
     if row == nil then
         return
     end
+    -- Kinds of row: a section title, a label/value pair, or a vehicle
+    -- history line (four columns - their headings when isHeader).
     local isSection = row.section ~= nil
-    cell:getAttribute("surface"):setVisible(not isSection)
+    local isHistory = row.history ~= nil
+    local isPair = not isSection and not isHistory
+    cell:getAttribute("surface"):setVisible(not isSection and not row.isHeader)
     cell:getAttribute("section"):setVisible(isSection)
     cell:getAttribute("section"):setText(row.section or "")
-    cell:getAttribute("label"):setVisible(not isSection)
+    cell:getAttribute("label"):setVisible(isPair)
     cell:getAttribute("label"):setText(row.label or "")
-    cell:getAttribute("value"):setVisible(not isSection)
+    cell:getAttribute("value"):setVisible(isPair)
     cell:getAttribute("value"):setText(row.value or "")
+    for i = 1, 4 do
+        local heading = cell:getAttribute("historyHeading" .. i)
+        local value = cell:getAttribute("history" .. i)
+        heading:setVisible(isHistory and row.isHeader == true)
+        heading:setText(isHistory and row.history[i] or "")
+        value:setVisible(isHistory and not row.isHeader)
+        value:setText(isHistory and row.history[i] or "")
+    end
     setChip(cell:getAttribute("chip"), cell:getAttribute("chipText"), not isSection and row.chip or nil, row.tone)
 end
 
@@ -4222,31 +4349,45 @@ function MenuContractor:getLogbookJobRows(entry)
     return rows
 end
 
-local SOURCE_KEYS = {
-    autodrive = "tc_logbook_source_autodrive",
-    courseplay = "tc_logbook_source_courseplay",
-    ai = "tc_logbook_source_ai",
-}
-
--- "Cultivate (field 12)", "Staff driver: AutoDrive", "Player use".
-local function getVehicleEntryTitle(entry)
-    if entry.kind == TheContractorLogbook.KIND.JOB then
-        return entry.jobTitle or g_i18n:getText("tc_logbook_kind_job")
-    elseif entry.kind == TheContractorLogbook.KIND.DRIVER then
-        local sources = {}
-        for source in string.gmatch(entry.source or "", "([^,]+)") do
-            table.insert(sources, g_i18n:getText(SOURCE_KEYS[source] or "tc_logbook_source_ai"))
-        end
-        if #sources == 0 then
-            return g_i18n:getText("tc_logbook_kind_driver")
-        end
-        return string.format(g_i18n:getText("tc_logbook_driverVia"), table.concat(sources, ", "))
+-- "+3%" for a vehicle getting worse by a fraction, "-" for no change (or
+-- better, after a repair) or nothing to compare.
+local function formatWorse(delta)
+    local points = delta ~= nil and math.floor(delta * 100 + 0.5) or 0
+    if points <= 0 then
+        return "-"
     end
-    return g_i18n:getText("tc_logbook_kind_player")
+    return string.format("+%d%%", points)
 end
 
--- The detail rows for a vehicle: this year's summary, then its history,
--- two rows an entry. History rows carry their jobId for the Job log button.
+-- How long a vehicle history entry had the machine out, in in-game minutes:
+-- the entry's own time, else its engine hours.
+local function getEntryMinutes(entry)
+    if entry.minutes ~= nil then
+        return entry.minutes
+    end
+    local hours = TCVehicleCondition.getHoursBetween(entry.startSnapshot, entry.endSnapshot)
+    return hours ~= nil and hours * 60 or 0
+end
+
+-- "62% (248 l)" for a vehicle's diesel tank, or nil if it hasn't one.
+local function getFuelText(vehicle)
+    local consumer = vehicle ~= nil and TCJobSupplies.getDieselConsumer(vehicle) or nil
+    if consumer == nil then
+        return nil
+    end
+    local capacity = vehicle:getFillUnitCapacity(consumer.fillUnitIndex) or 0
+    local level = vehicle:getFillUnitFillLevel(consumer.fillUnitIndex) or 0
+    if capacity <= 0 then
+        return nil
+    end
+    return string.format(g_i18n:getText("tc_logbook_fuelLevel"), math.floor(100 * level / capacity + 0.5),
+        g_i18n:formatVolume(level, 0))
+end
+
+-- The detail rows for a vehicle: how it is now, this year's summary, then
+-- its history, one row a use (anything under MIN_SESSION_MINUTES left
+-- out) under a row of column headings. History rows carry their jobId for
+-- the Job log button.
 function MenuContractor:getLogbookVehicleRows(vehicleRow)
     local rows = {}
     local function section(key)
@@ -4269,41 +4410,51 @@ function MenuContractor:getLogbookVehicleRows(vehicleRow)
     for _, state in ipairs(TCVehicleCondition.getStateRows(snapshot)) do
         row(state.label, state.value, state.tone ~= nil and text("tc_logbook_faultShort") or nil, state.tone)
     end
+    local fuel = getFuelText(vehicleRow.vehicle)
+    if fuel ~= nil then
+        row(text("tc_logbook_fuel"), fuel)
+    end
 
     section("tc_logbook_sectionYear")
     row(text("tc_logbook_jobs"), tostring(summary.jobs))
     row(text("tc_logbook_engineHours"), formatHours(summary.hours))
-    row(text("tc_logbook_drivenBy"), #summary.people > 0 and table.concat(summary.people, ", ") or "-")
     row(text("tc_logbook_faultsCaused"), tostring(summary.faults), summary.faults > 0 and
         text("tc_logbook_faultChip") or nil, "bad")
     row(text("tc_logbook_wearCost"), formatMoney(summary.wearCost))
 
     section("tc_logbook_sectionHistory")
-    local entries = vehicleRow.record ~= nil and TheContractorLogbook.getVehicleEntries(vehicleRow.record, farmId) or {}
+    local entries = {}
+    if vehicleRow.record ~= nil then
+        for _, entry in ipairs(TheContractorLogbook.getVehicleEntries(vehicleRow.record, farmId)) do
+            if getEntryMinutes(entry) >= TheContractorLogbook.MIN_SESSION_MINUTES then
+                table.insert(entries, entry)
+            end
+        end
+    end
     if #entries == 0 then
         row("-", text("tc_logbook_noHistory"))
+        return rows
     end
-    for _, entry in ipairs(entries) do
-        local kindChip, kindTone = text("tc_logbook_kindChip_" .. entry.kind), "info"
-        if entry.kind == TheContractorLogbook.KIND.PLAYER then
-            kindTone = "neutral"
-        elseif entry.outcome == TheContractorLogbook.OUTCOME.MISSED then
-            kindChip, kindTone = text("tc_logbook_missed"), "bad"
-        end
-        row(TCCalendar.formatDayShort(entry.day), string.format(text("tc_logbook_historyLine"),
-            getVehicleEntryTitle(entry), entry.who or text("tc_logbook_aPlayer")), kindChip, kindTone, entry.jobId)
 
-        local change = getCompactChange(entry.startSnapshot, entry.endSnapshot)
-        local hours = TCVehicleCondition.getHoursBetween(entry.startSnapshot, entry.endSnapshot)
-        local duration = entry.minutes ~= nil and TheContractorJob.formatMinutes(entry.minutes) or "-"
+    table.insert(rows, { history = { text("tc_logbook_columnMonth"), text("tc_logbook_columnDriver"),
+        text("tc_logbook_columnDamage"), text("tc_logbook_columnWear") }, isHeader = true })
+    for _, entry in ipairs(entries) do
+        local damage, wear = TCVehicleCondition.getDeltas(entry.startSnapshot, entry.endSnapshot)
         local chip, tone = nil, nil
-        if entry.faultCaused then
+        if entry.outcome == TheContractorLogbook.OUTCOME.MISSED then
+            chip, tone = text("tc_logbook_missed"), "bad"
+        elseif entry.faultCaused then
             chip, tone = text("tc_logbook_faultChip"), "bad"
         elseif entry.wash == TCJobConsequences.WASH.UNWASHED then
             chip, tone = text("tc_logbook_dirtyChip"), "warn"
         end
-        row(duration, (hours ~= nil and formatHours(hours) .. "  " or "") .. (change ~= "" and change or "-"), chip,
-            tone, entry.jobId)
+        table.insert(rows, {
+            history = { TCCalendar.formatDayShort(entry.day), entry.who or text("tc_logbook_aPlayer"),
+                formatWorse(damage), formatWorse(wear) },
+            chip = chip,
+            tone = tone,
+            jobId = entry.jobId,
+        })
     end
 
     return rows

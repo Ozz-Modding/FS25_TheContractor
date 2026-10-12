@@ -35,13 +35,18 @@ TheContractorJobs.MIN_COMPLETION_REPUTATION_REWARD = 1
 TheContractorJobs.COMPLETION_THRESHOLD_PERCENTAGE = 100
 
 -- Quality score (029), 0-100, set on completion (calculateQualityScore): a
--- weighted blend of skill (the operator's qualification ratio, the same one
+-- weighted blend of skill (the crew's qualification ratio, the same one
 -- that scales the reputation reward) and reliability (1 minus
 -- QUALITY_PENALTY_PER_INTERVENTION for each time 021's watchdog had to step
 -- in, floored at 0). The player driving personally always scores 100.
 TheContractorJobs.QUALITY_SKILL_WEIGHT = 0.7
 TheContractorJobs.QUALITY_RELIABILITY_WEIGHT = 0.3
 TheContractorJobs.QUALITY_PENALTY_PER_INTERVENTION = 0.5
+
+-- A two-worker harvest & haul crew (035) is scored on both workers, each
+-- for their own part: the combine driver counts for OPERATOR_SCORE_WEIGHT
+-- of it, the hauler the rest. The field work matters more.
+TheContractorJobs.OPERATOR_SCORE_WEIGHT = 0.6
 
 local function isMissableState(state)
     return state == TheContractorJob.STATE.ACCEPTED or state == TheContractorJob.STATE.ALLOCATED or
@@ -755,12 +760,14 @@ end
 -- 1 for a fully-qualified operator (see calculateReputationReward), else
 -- workerSkill/requiredSkillLevel. On a two-worker haulage job (035) each
 -- worker is judged against their own equipment's tier and their own
--- operation skill (haulage for the hauler), and the weaker ratio counts.
+-- operation skill (haulage for the hauler), and the two are blended by
+-- OPERATOR_SCORE_WEIGHT.
 function TheContractorJobs:getReputationQualificationRatio(job)
     local ratio = self:getWorkerQualificationRatio(job, job.assignedWorkerId, job.assignedEquipmentIds, false)
     if job.haulerWorkerId ~= nil then
-        ratio = math.min(ratio,
-            self:getWorkerQualificationRatio(job, job.haulerWorkerId, job.haulageEquipmentIds, true))
+        local haulerRatio = self:getWorkerQualificationRatio(job, job.haulerWorkerId, job.haulageEquipmentIds, true)
+        local weight = TheContractorJobs.OPERATOR_SCORE_WEIGHT
+        ratio = weight * ratio + (1 - weight) * haulerRatio
     end
     return ratio
 end
@@ -855,6 +862,13 @@ function TheContractorJobs:completeJob(job)
     g_currentMission.TheContractor.Claims:rollForJob(job)
 
     job:transitionTo(TheContractorJob.STATE.COMPLETED)
+
+    -- The progress sweep can complete a job while its AI Helper is still
+    -- out: vanilla's field percentage reaches the finished threshold with a
+    -- strip still uncut, so the helper carries on. Stopped here, after the
+    -- state flip, so the AI_JOB_STOPPED this fires finds the job already
+    -- completed (as missJob does). A no-op if the helper stopped itself.
+    g_currentMission.TheContractor.Dispatch:stopJob(job.id, AIMessageSuccessFinishedJob.new())
 
     -- 023: worker + equipment don't go straight back to idle/available -
     -- they sit in a skill-scaled buffer first (simulating driving back,

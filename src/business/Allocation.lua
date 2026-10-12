@@ -332,11 +332,48 @@ function TheContractorAllocation.getCrewShapeError(job, workerIds)
     return nil
 end
 
--- Which of two workers operates the field equipment and which hauls: each
--- is judged against their own equipment's tier and their own operation
--- skill (previewWorkerCapability - the hauler on haulage, 044),
--- and the pairing whose worse half comes out best wins, so a worker only
--- certified for the haulage tractor's tier ends up hauling. Returns
+-- Equipment roles a crew takes one of: one worker drives one tractor, one
+-- harvester, one header, and the hauler one tractor and one trailer. In
+-- the allocation panel a second pick of one of these replaces the first.
+TheContractorAllocation.SINGLE_ROLES = {
+    tractor = true,
+    harvester = true,
+    header = true,
+    seedTank = true,
+    haulTractor = true,
+    trailer = true,
+}
+
+-- The server's version of SINGLE_ROLES, from the vehicles themselves: true
+-- if the field equipment has two tractors or two harvesters, or the haulage
+-- rig two tractors or two trailers.
+function TheContractorAllocation.hasDoubledMachines(equipmentVehicles, haulageVehicles, fillTypeIndex)
+    local function count(vehicles, predicate)
+        local n = 0
+        for _, vehicle in ipairs(vehicles) do
+            if predicate(vehicle) then
+                n = n + 1
+            end
+        end
+        return n
+    end
+    local function isTrailer(vehicle)
+        return TCEquipmentClass.isTrailerFor(vehicle, fillTypeIndex)
+    end
+
+    return count(equipmentVehicles, TCEquipmentClass.isTractor) > 1 or
+        count(equipmentVehicles, TCEquipmentClass.isHarvester) > 1 or
+        count(haulageVehicles, TCEquipmentClass.isTractor) > 1 or
+        count(haulageVehicles, isTrailer) > 1
+end
+
+-- Which of two workers operates the field equipment and which hauls, each
+-- judged against their own equipment's tier and their own operation skill
+-- (the hauler on haulage, 044). A pairing where either can't do their part
+-- (an uncertified tractor size, a missing certificate) loses to one where
+-- both can, so a worker only certified for the haul tractor's size ends up
+-- hauling. Otherwise the field work decides: the better-rated operator for
+-- it (the better harvester on the combine), then the better hauler. Returns
 -- operatorId, haulerId, capability. A one-worker (or no-worker) crew just
 -- gets its operator checked.
 function TheContractorAllocation:assignCrewRoles(farmId, job, workerIds, equipmentIds, haulageEquipmentIds)
@@ -348,19 +385,32 @@ function TheContractorAllocation:assignCrewRoles(farmId, job, workerIds, equipme
         return operatorId, nil, self:previewWorkerCapability(operator, job, equipmentIds, false)
     end
 
+    local BLOCKED = TheContractorAllocation.CAPABILITY.BLOCKED
     local best = nil
     for _, pairing in ipairs({ { workerIds[1], workerIds[2] }, { workerIds[2], workerIds[1] } }) do
         local operator = staff:getWorker(farmId, pairing[1])
         local hauler = staff:getWorker(farmId, pairing[2])
-        local capability = worseCapability(self:previewWorkerCapability(operator, job, equipmentIds, false),
-            self:previewWorkerCapability(hauler, job, haulageEquipmentIds, true))
-        -- 044: between two equally capable pairings, the one whose weaker
-        -- half is better rated (e.g. the better harvester on the combine).
-        local weakest = math.min(self:getWeakestRatingFor(operator, job, equipmentIds, false),
-            self:getWeakestRatingFor(hauler, job, haulageEquipmentIds, true))
-        if best == nil or CAPABILITY_RANK[capability] < CAPABILITY_RANK[best.capability] or
-            (capability == best.capability and weakest > best.weakest) then
-            best = { operatorId = pairing[1], haulerId = pairing[2], capability = capability, weakest = weakest }
+        local candidate = {
+            operatorId = pairing[1],
+            haulerId = pairing[2],
+            capability = worseCapability(self:previewWorkerCapability(operator, job, equipmentIds, false),
+                self:previewWorkerCapability(hauler, job, haulageEquipmentIds, true)),
+            operatorRating = self:getWeakestRatingFor(operator, job, equipmentIds, false),
+            haulerRating = self:getWeakestRatingFor(hauler, job, haulageEquipmentIds, true),
+        }
+
+        local isBetter
+        if best == nil then
+            isBetter = true
+        elseif (candidate.capability == BLOCKED) ~= (best.capability == BLOCKED) then
+            isBetter = best.capability == BLOCKED
+        elseif candidate.operatorRating ~= best.operatorRating then
+            isBetter = candidate.operatorRating > best.operatorRating
+        else
+            isBetter = candidate.haulerRating > best.haulerRating
+        end
+        if isBetter then
+            best = candidate
         end
     end
     return best.operatorId, best.haulerId, best.capability
@@ -481,6 +531,18 @@ function TheContractorAllocation:allocateJob(farmId, jobId, workerIds, equipment
 
     local seen = {}
     if not checkVehicles(self, farmId, equipmentIds, seen) or not checkVehicles(self, farmId, haulageEquipmentIds, seen) then
+        return false
+    end
+
+    local function toVehicles(vehicleIds)
+        local vehicles = {}
+        for _, vehicleId in ipairs(vehicleIds) do
+            table.insert(vehicles, NetworkUtil.getObject(vehicleId))
+        end
+        return vehicles
+    end
+    if TheContractorAllocation.hasDoubledMachines(toVehicles(equipmentIds), toVehicles(haulageEquipmentIds),
+            self:getJobFillTypeIndex(job)) then
         return false
     end
 

@@ -24,15 +24,25 @@
 TCInboxHUD = {}
 TCInboxHUD_mt = Class(TCInboxHUD)
 
--- Normalised screen position (0-1, origin bottom-left, matching RTSaltSchemeHUD).
--- Bottom-left, stacked just above the minimap (which occupies roughly
--- 0-0.24 from the bottom at the default minimap size) rather than the
--- top-left corner — keeps it near where the player's eyes already are
--- (minimap/speedometer) without overlapping either.
-TCInboxHUD.POS_X = 0.02
-TCInboxHUD.POS_Y = 0.27
-TCInboxHUD.ICON_HEIGHT = 0.035
-TCInboxHUD.TEXT_SIZE = 0.02
+-- The badge is a tinted disc with the unread count on it, placed the way
+-- FS25_ToolInclinationHelper places its circles: in pixels relative to the
+-- vanilla speedometer, scaled through the speedometer's own
+-- scalePixelValuesToScreenVector so it follows the UI scale setting.
+-- In a vehicle it sits on the speedometer's bottom line, left of the
+-- speedometer background (speedBg, repositioned by vanilla every draw since
+-- its width depends on the vehicle's fuel/damage/gear bars) and one slot
+-- beyond ToolInclinationHelper's two circles at 0 and -35 px. On foot there's
+-- no speedometer, so it tucks into the bottom-right HUD anchor instead.
+-- Sizes are in reference (1080p) pixels.
+TCInboxHUD.BADGE_SIZE = 32
+TCInboxHUD.VEHICLE_OFFSET_X = -70
+TCInboxHUD.TEXT_SIZE = 18
+-- Middle-aligned text sits slightly low; ToolInclinationHelper nudges its own
+-- up by the same 2 px (text at 18 of a 32 px circle).
+TCInboxHUD.TEXT_OFFSET_Y = 2
+-- Vanilla's HUD green, so it's distinct from ToolInclinationHelper's black circles.
+TCInboxHUD.BADGE_COLOR = { 0.2384, 0.4621, 0.0015, 0.95 }
+TCInboxHUD.MAX_SHOWN_COUNT = 99
 TCInboxHUD.SYNC_INTERVAL_MS = 1000
 
 function TCInboxHUD.new()
@@ -44,15 +54,14 @@ function TCInboxHUD.new()
     self.unreadCount = 0
     self.syncTime = 0
 
-    local iconWidth = TCInboxHUD.ICON_HEIGHT / g_screenAspectRatio
-    self.iconOverlay = Overlay.new(Utils.getFilename("images/menuIcon.dds", TheContractor.dir),
-        TCInboxHUD.POS_X, TCInboxHUD.POS_Y, iconWidth, TCInboxHUD.ICON_HEIGHT)
+    self.badgeOverlay = Overlay.new(Utils.getFilename("images/hudBadge.dds", TheContractor.dir), 0, 0, 0, 0)
+    self.badgeOverlay:setColor(unpack(TCInboxHUD.BADGE_COLOR))
 
     return self
 end
 
 function TCInboxHUD:delete()
-    self.iconOverlay:delete()
+    self.badgeOverlay:delete()
 end
 
 -- Called from TheContractorJobs:registerJob whenever a genuinely new job
@@ -137,14 +146,35 @@ function TCInboxHUD:draw()
         return
     end
 
-    self.iconOverlay:render()
+    -- Respect the player hiding the HUD.
+    local hud = g_currentMission.hud
+    if hud == nil or hud.speedMeter == nil or not hud:getIsVisible() then
+        return
+    end
 
-    setTextAlignment(RenderText.ALIGN_LEFT)
+    local speedMeter = hud.speedMeter
+    local width, height = speedMeter:scalePixelValuesToScreenVector(TCInboxHUD.BADGE_SIZE, TCInboxHUD.BADGE_SIZE)
+    local x, y
+    if hud.controlledVehicle ~= nil and speedMeter.vehicle ~= nil then
+        local offsetX = speedMeter:scalePixelToScreenWidth(TCInboxHUD.VEHICLE_OFFSET_X)
+        x, y = speedMeter.speedBg.x + offsetX, speedMeter.speedBg.y
+    else
+        local anchorX, anchorY = speedMeter:getPosition()
+        x, y = anchorX - width, anchorY
+    end
+
+    self.badgeOverlay:setDimension(width, height)
+    self.badgeOverlay:setPosition(x, y)
+    self.badgeOverlay:render()
+
+    local count = math.min(self.unreadCount, TCInboxHUD.MAX_SHOWN_COUNT)
+    setTextAlignment(RenderText.ALIGN_CENTER)
     setTextVerticalAlignment(RenderText.VERTICAL_ALIGN_MIDDLE)
     setTextBold(true)
-    setTextColor(1, 0.35, 0.35, 1)
-    renderText(TCInboxHUD.POS_X + self.iconOverlay.width + 0.01, TCInboxHUD.POS_Y + self.iconOverlay.height * 0.5,
-        TCInboxHUD.TEXT_SIZE, tostring(self.unreadCount))
+    setTextColor(1, 1, 1, 1)
+    local textY = y + height * 0.5 + speedMeter:scalePixelToScreenHeight(TCInboxHUD.TEXT_OFFSET_Y)
+    renderText(x + width * 0.5, textY, speedMeter:scalePixelToScreenHeight(TCInboxHUD.TEXT_SIZE),
+        tostring(count))
 
     setTextColor(1, 1, 1, 1)
     setTextAlignment(RenderText.ALIGN_LEFT)
