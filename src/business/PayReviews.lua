@@ -278,8 +278,8 @@ function TheContractorPayReviews:postRequest(worker)
 
     g_currentMission.TheContractor.Inbox:postMessage(worker.farmId, TheContractorPayReviews.MESSAGE_KIND,
         "tc_pay_requestTitle", "tc_pay_requestBody",
-        { worker.name, "$money_" .. worker.salary, "$money_" .. expected, TheContractorStaff.getYearsOfService(worker),
-            "$money_" .. halfway },
+        { worker.name, "$pay_" .. worker.salary, "$pay_" .. expected, TheContractorStaff.getYearsOfService(worker),
+            "$pay_" .. halfway },
         {
             { key = TheContractorPayReviews.ACTION.AGREE, textKey = "tc_pay_agreeButton" },
             { key = TheContractorPayReviews.ACTION.HALFWAY, textKey = "tc_pay_halfwayButton" },
