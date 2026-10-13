@@ -139,8 +139,10 @@ function TheContractorJob.new(id, farmId, jobType, fieldId, requiredSkillLevel, 
 
     -- Hired-worker jobs only (032): how much supply the worker just loaded
     -- setting off (TCJobSupplies.topUp), which the trip's loading time is
-    -- worked out from. Server-only, transient.
+    -- worked out from. Server-only, transient. fuelLoaded is the diesel,
+    -- kept apart since refuelling takes a flat time.
     self.suppliesLoaded = nil
+    self.fuelLoaded = nil
 
     -- Harvest jobs only (035): the client wants the crop carted away too,
     -- not just the field combined - a two-person job. Rolled at generation,
