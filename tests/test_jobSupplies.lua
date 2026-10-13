@@ -142,3 +142,30 @@ test("refuelling adds a flat 3 minutes, supplies 5 plus filling time", function(
     assertEquals(TCJobSupplies.getLoadingMinutes(3000, 0), 6.5, "3000 l of seed")
     assertEquals(TCJobSupplies.getLoadingMinutes(3000, 4), 9.5, "seed and diesel")
 end)
+
+test("a two-worker haulage job's tractor is refuelled from stock too", function()
+    local world = setup()
+    local combine = addTractor(world, 400)
+    local haulTractor = addTractor(world, 0)
+    local storage = world:addStorage({ levels = { [FillType.DIESEL] = 1000 } })
+    local job = world:addJob({ workerId = 3, vehicles = { combine }, haulerId = 4, haulageVehicles = { haulTractor },
+        state = TheContractorJob.STATE.ALLOCATED })
+
+    local _, status, _, fuelLoaded = TCJobSupplies.topUp(job)
+
+    assertEquals(status, nil, "status")
+    assertEquals(dieselLevel(haulTractor), 400, "haul tractor tank")
+    assertEquals(fuelLoaded, 400, "diesel loaded")
+    assertEquals(storage:getFillLevel(FillType.DIESEL), 600, "storage")
+end)
+
+test("a haulage job with no diesel for the haul tractor is held", function()
+    local world = setup()
+    local job = world:addJob({ workerId = 3, vehicles = { addTractor(world, 400) }, haulerId = 4,
+        haulageVehicles = { addTractor(world, 0) }, state = TheContractorJob.STATE.ALLOCATED })
+
+    local _, status, fillTypeName = TCJobSupplies.topUp(job)
+
+    assertEquals(status, TCJobSupplies.STATUS.NO_STOCK, "status")
+    assertEquals(fillTypeName, "DIESEL", "fill type")
+end)

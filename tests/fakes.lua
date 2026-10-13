@@ -99,7 +99,7 @@ function fakes.installContractor(world)
     tc.Notices = TheContractorNotices.new()
 
     -- def: { id, farmId, jobType, workerId, state, vehicles = {...},
-    --        working }
+    --        working, haulerId, haulageVehicles = {...} }
     function world:addJob(def)
         local job = TheContractorJob.new(def.id or (#self.jobs + 1), def.farmId or 1, def.jobType or "harvest", 1, 1,
             1, 1, 1000)
@@ -107,6 +107,10 @@ function fakes.installContractor(world)
         job.assignedWorkerId = def.workerId
         for _, vehicle in ipairs(def.vehicles or {}) do
             table.insert(job.assignedEquipmentIds, vehicle.id)
+        end
+        job.haulerWorkerId = def.haulerId
+        for _, vehicle in ipairs(def.haulageVehicles or {}) do
+            table.insert(job.haulageEquipmentIds, vehicle.id)
         end
         if def.working then
             self.working[job.id] = true

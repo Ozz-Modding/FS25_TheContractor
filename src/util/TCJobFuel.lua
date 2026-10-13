@@ -24,7 +24,9 @@
 -- switched off around updateConsumers for them - they burn their tank, and
 -- their fuel is priced without the surcharge. The trip to the field is
 -- simulated, so burnTravelFuel takes a short drive's worth out of each
--- machine's tank as the worker sets off.
+-- machine's tank as the worker sets off. So is a two-worker haulage job's
+-- carting (035): burnCartingFuel takes a round trip's worth out of the
+-- haulage rig's tank for each load (TCHaulage's auto-empty).
 --
 -- Hooks installed at source time, same as FS25_RedTape's specialization
 -- overrides (e.g. DischargeableExtension), before vehicle types register
@@ -42,6 +44,10 @@ TCJobFuel.TRAVEL_MILES = 3
 TCJobFuel.TRAVEL_SPEED_KMH = 30
 TCJobFuel.TRAVEL_LOAD = 0.45
 TCJobFuel.METERS_PER_MILE = 1609.344
+
+-- A haulage job's round trip to the selling point and back with each load,
+-- driven the same way as the trip out.
+TCJobFuel.CARTING_MILES = 3
 
 local currentVehicle = nil
 
@@ -68,22 +74,22 @@ local function getFuelUsageFactor()
     return 1.5
 end
 
--- Server-only, as a hired worker sets off: takes the trip's diesel out of
--- each of the job's machines' tanks (never more than is in it), counted as
--- the job's fuel. Returns true if a tank ran dry.
-function TCJobFuel.burnTravelFuel(job)
+-- Takes a drive of `miles` out of each of these machines' diesel tanks
+-- (never more than is in it), counted as the job's fuel. Returns true if a
+-- tank ran dry.
+local function burnDrive(job, vehicleIds, miles)
     local mission = g_currentMission
-    local travelMs = TCJobFuel.TRAVEL_MILES * TCJobFuel.METERS_PER_MILE / (TCJobFuel.TRAVEL_SPEED_KMH / 3.6) * 1000
+    local driveMs = miles * TCJobFuel.METERS_PER_MILE / (TCJobFuel.TRAVEL_SPEED_KMH / 3.6) * 1000
     local factor = getFuelUsageFactor() * TCJobFuel.TRAVEL_LOAD
     local pricePerLiter = mission.economyManager:getCostPerLiter(FillType.DIESEL)
     local ranDry = false
 
-    for _, vehicleId in ipairs(job.assignedEquipmentIds) do
+    for _, vehicleId in ipairs(vehicleIds) do
         local vehicle = NetworkUtil.getObject(vehicleId)
         local consumer = vehicle ~= nil and TCJobSupplies.getDieselConsumer(vehicle) or nil
         if consumer ~= nil and consumer.permanentConsumption then
             local level = vehicle:getFillUnitFillLevel(consumer.fillUnitIndex)
-            local liters = math.min(level, consumer.usage * factor * travelMs)
+            local liters = math.min(level, consumer.usage * factor * driveMs)
             if liters > 0 then
                 vehicle:addFillUnitFillLevel(job.farmId, consumer.fillUnitIndex, -liters, FillType.DIESEL,
                     ToolType.UNDEFINED, nil)
@@ -98,6 +104,20 @@ function TCJobFuel.burnTravelFuel(job)
     end
 
     return ranDry
+end
+
+-- Server-only, as a hired worker sets off: the trip's diesel out of every
+-- machine on the job, the haulage rig's included. Returns true if a tank
+-- ran dry.
+function TCJobFuel.burnTravelFuel(job)
+    return burnDrive(job, job:getAllEquipmentIds(), TCJobFuel.TRAVEL_MILES)
+end
+
+-- Server-only, as a two-worker haulage job's combine is emptied: one load's
+-- round trip out of the haulage rig's tank. A tank it empties is refilled,
+-- or the job held, by TCJobSupplies' next poll.
+function TCJobFuel.burnCartingFuel(job)
+    return burnDrive(job, job.haulageEquipmentIds, TCJobFuel.CARTING_MILES)
 end
 
 function TCJobFuel.updateFarmStats(farmManager, superFunc, farmId, statName, delta)

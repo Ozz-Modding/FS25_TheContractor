@@ -211,12 +211,12 @@ local function resolveVehicles(ids)
 end
 
 -- The job's tanks, plus its machines' diesel tanks if a hired worker is
--- driving them (063).
+-- driving them (063) - the haulage rig's (035) included, though it never
+-- leaves the yard.
 function TCJobSupplies.getJobTanks(job)
-    local vehicles = resolveVehicles(job.assignedEquipmentIds)
-    local tanks = TCJobSupplies.getTanks(getJobDef(job), vehicles)
+    local tanks = TCJobSupplies.getTanks(getJobDef(job), resolveVehicles(job.assignedEquipmentIds))
     if job.assignedWorkerId ~= nil then
-        for _, vehicle in ipairs(vehicles) do
+        for _, vehicle in ipairs(resolveVehicles(job:getAllEquipmentIds())) do
             addFuelTank(tanks, vehicle)
         end
     end
