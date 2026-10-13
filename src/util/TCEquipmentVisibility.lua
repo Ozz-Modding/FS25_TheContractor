@@ -55,7 +55,14 @@ local function getReadyVehicle(vehicleId)
     return vehicle
 end
 
+-- Anyone sitting in it gets out first, where it stood: each machine puts
+-- its own player out (leaveVehicle sends vanilla's VehicleLeaveEvent), the
+-- same way vanilla's menus do before a teleport.
 function TCEquipmentVisibility.hideVehicle(vehicle)
+    local player = g_localPlayer
+    if player ~= nil and player.getCurrentVehicle ~= nil and player:getCurrentVehicle() == vehicle then
+        player:leaveVehicle()
+    end
     if vehicle.stopMotor ~= nil then
         vehicle:stopMotor()
     end
