@@ -219,6 +219,9 @@ function TCParking.setSlotsVisible(isVisible)
     for _, placeable in ipairs(placeableSystem.placeables) do
         if PlaceableTCParkingSlot.isSlot(placeable) then
             PlaceableTCParkingSlot.setVisualsVisible(placeable, isVisible)
+        elseif PlaceableTCStandingSpot.isSpot(placeable) then
+            -- 065: standing spots share the hook.
+            PlaceableTCStandingSpot.setVisualsVisible(placeable, isVisible)
         end
     end
 end
@@ -267,15 +270,21 @@ function TCParking.installConstructionScreenHook()
     end
 end
 
--- The slot (any farm's) whose rectangle holds x, z, or nil.
+-- The slot or standing spot (065) (any farm's) whose rectangle holds x, z,
+-- or nil.
 function TCParking.getSlotAt(x, z)
     local placeableSystem = g_currentMission ~= nil and g_currentMission.placeableSystem or nil
     if placeableSystem == nil then
         return nil
     end
     for _, placeable in ipairs(placeableSystem.placeables) do
-        if PlaceableTCParkingSlot.isSlot(placeable) and not placeable.isDeleted and not placeable.markedForDeletion then
-            local area = PlaceableTCParkingSlot.getArea(placeable)
+        if not placeable.isDeleted and not placeable.markedForDeletion then
+            local area = nil
+            if PlaceableTCParkingSlot.isSlot(placeable) then
+                area = PlaceableTCParkingSlot.getArea(placeable)
+            elseif PlaceableTCStandingSpot.isSpot(placeable) then
+                area = PlaceableTCStandingSpot.getArea(placeable)
+            end
             if area ~= nil then
                 local dx, dz = x - area.x, z - area.z
                 local u = dx * area.uX + dz * area.uZ
@@ -289,9 +298,9 @@ function TCParking.getSlotAt(x, z)
     return nil
 end
 
--- Selecting a slot (to sell it) with the construction cursor. The cursor
--- picks placeables by raycasting for their collision, and a slot's pick box
--- is only a thin slab: slots don't level the ground, so on a slope the
+-- Selecting a slot or standing spot (to sell it) with the construction
+-- cursor. The cursor picks placeables by raycasting for their collision,
+-- and a slot's pick box is only a thin slab: slots don't level the ground, so on a slope the
 -- terrain covers part or all of it and the ray hits the terrain instead. In
 -- selection mode, a terrain hit inside a slot's rectangle counts as that
 -- slot.

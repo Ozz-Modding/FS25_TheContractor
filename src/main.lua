@@ -28,6 +28,7 @@ source(TheContractor.dir .. "src/util/TCCourseplay.lua")
 source(TheContractor.dir .. "src/util/TCCalendar.lua")
 source(TheContractor.dir .. "src/util/TCConsole.lua")
 source(TheContractor.dir .. "src/util/TCWorkerAppearance.lua")
+source(TheContractor.dir .. "src/util/TCIdleStaff.lua")
 source(TheContractor.dir .. "src/gui/TCWorkerPortrait.lua")
 source(TheContractor.dir .. "src/gui/MenuContractor.lua")
 source(TheContractor.dir .. "src/gui/TCSettingsMenu.lua")
@@ -191,6 +192,7 @@ function TheContractor:loadMap()
     TCHaulage.reset()
     TCFieldPreparation.reset()
     TCJobSupplies.reset()
+    TCIdleStaff.reset()
 
     -- 064: which parts of FS25_AdvancedDamageSystem's stock the Supplies
     -- tab can show (none without the mod).
@@ -257,6 +259,7 @@ function TheContractor:loadMap()
     TheContractorLogbook.registerConsoleCommands()
     TheContractorParking.registerConsoleCommands()
     TCSupplyStock.registerConsoleCommands()
+    TCIdleStaff.registerConsoleCommands()
     TCConsole.install()
 
     Logging.info("TheContractor: loadMap")
@@ -457,6 +460,9 @@ function TheContractor:deleteMap()
         self.InboxHUD:delete()
     end
 
+    -- 065: frees the standing workers' models.
+    TCIdleStaff.reset()
+
     TCConsole.uninstall()
 
     if g_currentMission ~= nil and g_currentMission.TheContractor == self then
@@ -509,6 +515,9 @@ function TheContractor:update(dt)
     if self.Logbook ~= nil then
         self.Logbook:update(dt)
     end
+
+    -- 065: idle staff on standing spots (clients only).
+    TCIdleStaff.update(dt)
 end
 
 function TheContractor:draw()
