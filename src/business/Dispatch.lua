@@ -61,12 +61,13 @@ TheContractorDispatch.TRANSPORT_WAIT_FACTORS = {
         end,
     },
     -- Supplies (032): loading the seed/fertilizer/... the job needs from the
-    -- farm's stock before setting off (TCJobSupplies.getLoadingMinutes) -
-    -- job.suppliesLoaded is what startJobForWorker just loaded.
+    -- farm's stock before setting off, plus a flat few minutes if it
+    -- refuelled (TCJobSupplies.getLoadingMinutes) - job.suppliesLoaded and
+    -- job.fuelLoaded are what startJobForWorker just loaded.
     {
         name = "supplies",
         getMinutes = function(job, worker)
-            return TCJobSupplies.getLoadingMinutes(job.suppliesLoaded)
+            return TCJobSupplies.getLoadingMinutes(job.suppliesLoaded, job.fuelLoaded)
         end,
     },
 }
@@ -187,19 +188,21 @@ function TheContractorDispatch:startJobForWorker(job, skipTransport)
     -- 063: diesel is one of them, and a fresh trip out burns a little of
     -- it. Should that empty a tank (the farm's out of diesel), the second
     -- topUp is what puts the job on hold.
-    local loaded, supplyStatus, supplyFillTypeName = TCJobSupplies.topUp(job)
+    local loaded, supplyStatus, supplyFillTypeName, fuelLoaded = TCJobSupplies.topUp(job)
     if supplyStatus == nil and not skipTransport and job.transportRemainingMs == nil and
         TCJobFuel.burnTravelFuel(job) then
-        local reloaded
-        reloaded, supplyStatus, supplyFillTypeName = TCJobSupplies.topUp(job)
+        local reloaded, refuelled
+        reloaded, supplyStatus, supplyFillTypeName, refuelled = TCJobSupplies.topUp(job)
         loaded = loaded + reloaded
+        fuelLoaded = fuelLoaded + refuelled
     end
     local jobs = g_currentMission.TheContractor.Jobs
     jobs:setJobSupplyStatus(job, supplyStatus, supplyFillTypeName)
     if supplyStatus ~= nil then
         return
     end
-    job.suppliesLoaded = loaded
+    job.suppliesLoaded = loaded - fuelLoaded
+    job.fuelLoaded = fuelLoaded
 
     -- The job's clock (029) starts as the worker sets off, so a slow
     -- worker's longer trip shows in their time taken. No-op when resuming

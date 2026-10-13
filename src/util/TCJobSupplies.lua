@@ -55,9 +55,11 @@ TCJobSupplies.REFILL_RATIO = 0.25
 
 -- Loading supplies onto a hired worker's equipment as they set off: a
 -- fixed LOAD_MINUTES whenever anything's loaded at all, plus LITERS_PER_
--- MINUTE of filling (a 3000 l seed hopper: 5 + 1.5 minutes).
+-- MINUTE of filling (a 3000 l seed hopper: 5 + 1.5 minutes). Diesel isn't
+-- part of that: refuelling is a flat FUEL_MINUTES whenever any went in.
 TCJobSupplies.LOAD_MINUTES = 5
 TCJobSupplies.LITERS_PER_MINUTE = 2000
+TCJobSupplies.FUEL_MINUTES = 3
 
 TCJobSupplies.POLL_INTERVAL_MS = TCJobProgress.POLL_INTERVAL_MS
 
@@ -398,15 +400,16 @@ local function fillTank(farmId, tank)
 end
 
 -- Server-only. Tops up the job's tanks from the farm's stock and says
--- whether the job can carry on. Returns amount loaded, then status and
--- fill type name if it's on hold (see file header), else nil.
+-- whether the job can carry on. Returns amount loaded (diesel included),
+-- then status and fill type name if it's on hold (see file header), else
+-- nil, then how much of the amount loaded was diesel.
 --   onlyBelowRatio  only tanks under REFILL_RATIO (a top-up mid-job),
 --                   rather than filling everything that has room
 --   canFill(tank)   optional: whether this tank may be filled right now
 --                   (a player's equipment only on the job's farmland) -
 --                   tanks it refuses still count towards the status
 function TCJobSupplies.topUp(job, onlyBelowRatio, canFill)
-    local loaded = 0
+    local loaded, fuelLoaded = 0, 0
     local status, statusFillType = nil, nil
 
     for _, tank in ipairs(TCJobSupplies.getJobTanks(job)) do
@@ -423,6 +426,9 @@ function TCJobSupplies.topUp(job, onlyBelowRatio, canFill)
             if wantsFill and (canFill == nil or canFill(tank)) then
                 local taken, fillTypeIndex = fillTank(job.farmId, tank)
                 loaded = loaded + taken
+                if tank.isFuel then
+                    fuelLoaded = fuelLoaded + taken
+                end
                 -- 060: the job's supplies, for the logbook. Not diesel:
                 -- the logbook's fuel line has what was burned.
                 if taken > 0 and not tank.isFuel then
@@ -442,16 +448,21 @@ function TCJobSupplies.topUp(job, onlyBelowRatio, canFill)
     end
 
     local fillTypeName = statusFillType ~= nil and g_fillTypeManager:getFillTypeNameByIndex(statusFillType) or nil
-    return loaded, status, fillTypeName
+    return loaded, status, fillTypeName, fuelLoaded
 end
 
 -- Dispatch's "supplies" transport factor: in-game minutes to load `liters`
 -- of supplies before setting off.
-function TCJobSupplies.getLoadingMinutes(liters)
-    if liters == nil or liters <= 0 then
-        return 0
+-- liters: supplies loaded, not counting diesel; fuelLiters: diesel.
+function TCJobSupplies.getLoadingMinutes(liters, fuelLiters)
+    local minutes = 0
+    if liters ~= nil and liters > 0 then
+        minutes = TCJobSupplies.LOAD_MINUTES + liters / TCJobSupplies.LITERS_PER_MINUTE
     end
-    return TCJobSupplies.LOAD_MINUTES + liters / TCJobSupplies.LITERS_PER_MINUTE
+    if fuelLiters ~= nil and fuelLiters > 0 then
+        minutes = minutes + TCJobSupplies.FUEL_MINUTES
+    end
+    return minutes
 end
 
 -- The AI Helper buying as it goes ---------------------------------------------
