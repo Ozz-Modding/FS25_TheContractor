@@ -36,7 +36,7 @@ Farm 1 workers (today is day 104):
 
 ### `tcWorker pool`
 
-Lists the candidates currently available to hire, with their id, name, work speed, salary, the tractor sizes they can drive and their operation skills.
+Lists the candidates currently available to hire, with their id, name, work speed, salary (the full-month rate, see `tcWorker pay`), the tractor sizes they can drive and their operation skills.
 
 ### `tcWorker hire <candidate>`
 
@@ -91,6 +91,8 @@ Shows one of your hired workers' pay and what drives their pay reviews:
 - **last review:** when they last had a pay review.
 
 With `salary`, it sets their monthly pay first. This can cut it, which the game itself never does. The change syncs to everyone.
+
+All figures here, and the `salary` you give, are full-month rates. With fewer than 5 days per month the game pays less than that: 60% at 1 day, rising evenly to the full rate at 5. The menu shows the reduced amount, so it won't match these figures.
 
 ```
 tcWorker pay 2

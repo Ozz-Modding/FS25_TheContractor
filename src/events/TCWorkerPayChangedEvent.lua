@@ -60,6 +60,6 @@ function TCWorkerPayChangedEvent.showNotification(worker, notify)
     if notify == TheContractorPayReviews.NOTIFY.RISE then
         g_currentMission:addIngameNotification(FSBaseMission.INGAME_NOTIFICATION_OK,
             string.format(g_i18n:getText("tc_pay_riseNotice"), worker.name,
-                g_i18n:formatMoney(worker.salary, 0, true, true)))
+                g_i18n:formatMoney(TheContractorStaff.scalePay(worker.salary), 0, true, true)))
     end
 end

@@ -20,7 +20,9 @@
 -- monotonic, expiresDay nil for no expiry. Title and body are l10n keys
 -- formatted with args on each client, so everyone reads their own
 -- language; a string arg starting "$l10n_" is translated too, and one
--- starting "$money_" (then a number) is formatted as money. args and
+-- starting "$money_" (then a number) is formatted as money, and "$pay_"
+-- likewise after TheContractorStaff.scalePay, so a full-month salary shows
+-- at this month's pay even if days per period changes later. args and
 -- payload hold plain values only (numbers, strings, booleans) - never a
 -- node (see src/events/README.md). A message with no actions gets a single
 -- Dismiss. Ids are unique across all farms.
@@ -98,6 +100,9 @@ local function resolveArgs(args)
             resolved[i] = g_i18n:getText(string.sub(arg, 7))
         elseif type(arg) == "string" and string.sub(arg, 1, 7) == "$money_" then
             resolved[i] = g_i18n:formatMoney(tonumber(string.sub(arg, 8)) or 0, 0, true, true)
+        elseif type(arg) == "string" and string.sub(arg, 1, 5) == "$pay_" then
+            resolved[i] = g_i18n:formatMoney(TheContractorStaff.scalePay(tonumber(string.sub(arg, 6)) or 0), 0, true,
+                true)
         else
             resolved[i] = arg
         end

@@ -26,12 +26,23 @@
 -- refund on release, no proration. Pool sizing and the daily add/remove odds
 -- were reviewed in 026 and kept. 058: those figures are a worker's market
 -- value (getSalary). A hired worker's pay is fixed at what they were hired
--- for and only moves with an agreed rise - see PayReviews.lua.
+-- for and only moves with an agreed rise - see PayReviews.lua. All of these
+-- are full-month figures, paid less in short months (SHORT_MONTH_PAY).
 
 TheContractorStaff = {}
 TheContractorStaff_mt = Class(TheContractorStaff)
 
 TheContractorStaff.BASE_SALARY = 2050
+
+-- Short months: a month of fewer days is fewer working days, so pay
+-- (salaries, the administrator, notice and redundancy) is scaled by the
+-- save's days per period, read live at every charge and display so changing
+-- the setting takes effect at once. SHORT_MONTH_PAY at 1 day, rising evenly
+-- to full pay at FULL_PAY_DAYS and over. Stored salaries (worker.salary,
+-- expectedSalary, market value) stay full-month figures; scalePay turns
+-- them into what's paid.
+TheContractorStaff.SHORT_MONTH_PAY = 0.6
+TheContractorStaff.FULL_PAY_DAYS = 5
 
 -- Workplace pension (051): auto-enrolment's employer minimum, a share of
 -- the salary bill, paid with each salary run under TC_WAGES.
@@ -209,14 +220,28 @@ function TheContractorStaff:getRoster(farmId)
     return result
 end
 
+-- The share of a full month's pay a month of daysPerPeriod days pays (see
+-- SHORT_MONTH_PAY).
+function TheContractorStaff.getPayFactor(daysPerPeriod)
+    daysPerPeriod = daysPerPeriod or g_currentMission.environment.daysPerPeriod
+    local minPay, fullDays = TheContractorStaff.SHORT_MONTH_PAY, TheContractorStaff.FULL_PAY_DAYS
+    local progress = math.max(0, math.min(1, (daysPerPeriod - 1) / (fullDays - 1)))
+    return minPay + (1 - minPay) * progress
+end
+
+-- A full-month amount as it's paid this month, in whole money.
+function TheContractorStaff.scalePay(amount)
+    return math.floor(amount * TheContractorStaff.getPayFactor() + 0.5)
+end
+
 -- The farm's salary bill per period (036): every hired worker, whatever
--- their status.
+-- their status, at this month's pay (scalePay).
 function TheContractorStaff:getTotalSalary(farmId)
     local total = 0
     for _, worker in ipairs(self:getRoster(farmId)) do
         total = total + worker.salary
     end
-    return total
+    return TheContractorStaff.scalePay(total)
 end
 
 -- Everyone paid in the salary run: the roster plus the office
@@ -900,12 +925,13 @@ function TheContractorStaff:hireWorker(farmId, candidateId)
         return nil
     end
 
-    if not self:canAffordHire(farmId, candidate.salary) then
+    local firstPay = TheContractorStaff.scalePay(candidate.salary)
+    if not self:canAffordHire(farmId, firstPay) then
         return nil
     end
 
-    g_currentMission:addMoney(-candidate.salary, farmId, MoneyType.TC_WAGES, true, true)
-    g_currentMission.TheContractor.Finances:recordWages(farmId, candidate.salary)
+    g_currentMission:addMoney(-firstPay, farmId, MoneyType.TC_WAGES, true, true)
+    g_currentMission.TheContractor.Finances:recordWages(farmId, firstPay)
 
     candidate.farmId = farmId
     -- 040: before the broadcast, so the allowance goes out with them.
@@ -982,8 +1008,10 @@ function TheContractorStaff.getYearsOfService(worker)
     return math.max(0, math.floor((TCCalendar.getPeriodIndex() - worker.hiredPeriod) / Environment.PERIODS_IN_YEAR))
 end
 
+-- From this month's pay (scalePay), unrounded.
 function TheContractorStaff.getWeeklyPay(worker)
-    return worker.salary * Environment.PERIODS_IN_YEAR / TheContractorStaff.WEEKS_PER_YEAR
+    return worker.salary * TheContractorStaff.getPayFactor() * Environment.PERIODS_IN_YEAR /
+        TheContractorStaff.WEEKS_PER_YEAR
 end
 
 -- What releasing the worker today costs. Every machine works it out the

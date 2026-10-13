@@ -1189,7 +1189,8 @@ function MenuContractor:populateStaffCell(index, cell)
 
         cell:getAttribute("name"):setText(candidate.name)
         cell:getAttribute("workSpeed"):setText(tostring(candidate.workSpeed))
-        cell:getAttribute("col4"):setText(g_i18n:formatMoney(candidate.salary, 0, true, true))
+        cell:getAttribute("col4"):setText(g_i18n:formatMoney(TheContractorStaff.scalePay(candidate.salary), 0, true,
+            true))
         cell:getAttribute("col4"):setVisible(true)
         setChip(cell:getAttribute("statusChip"), cell:getAttribute("statusChipText"), nil)
         cell:getAttribute("col5"):setText(formatBestSkillsCell(candidate))
@@ -1232,10 +1233,11 @@ function MenuContractor:updateStaffDetails()
     -- 058: and, for a roster worker who wants more, what they want.
     if self.staffView == "roster" and TheContractorPayReviews.wantsMore(worker) then
         self.staffDetailSalary:setText(string.format(g_i18n:getText("tc_pay_detailSalaryWants"),
-            g_i18n:formatMoney(worker.salary, 0, true, true), g_i18n:formatMoney(worker.expectedSalary, 0, true, true)))
+            g_i18n:formatMoney(TheContractorStaff.scalePay(worker.salary), 0, true, true),
+            g_i18n:formatMoney(TheContractorStaff.scalePay(worker.expectedSalary), 0, true, true)))
     else
         self.staffDetailSalary:setText(string.format(g_i18n:getText("tc_staff_detailSalary"),
-            g_i18n:formatMoney(worker.salary, 0, true, true)))
+            g_i18n:formatMoney(TheContractorStaff.scalePay(worker.salary), 0, true, true)))
     end
     -- 045: a chip, same tones as the skills.
     setChip(self.staffDetailCleanlinessChip, self.staffDetailCleanlinessChipText,
@@ -1408,13 +1410,14 @@ function MenuContractor:onClickHireWorker()
     local farmId = g_currentMission:getFarmId()
     local staff = g_currentMission.TheContractor.Staff
 
-    if not staff:canAffordHire(farmId, candidate.salary) then
+    local firstPay = TheContractorStaff.scalePay(candidate.salary)
+    if not staff:canAffordHire(farmId, firstPay) then
         InfoDialog.show(g_i18n:getText("tc_staff_hireCannotAfford"))
         return
     end
 
     local dialogPrompt = string.format(g_i18n:getText("tc_staff_hireConfirm"), candidate.name,
-        g_i18n:formatMoney(candidate.salary, 0, true, true))
+        g_i18n:formatMoney(firstPay, 0, true, true))
 
     YesNoDialog.show(function(target, clickOk)
         if not clickOk then
@@ -1533,8 +1536,9 @@ function MenuContractor:onClickPayRise()
     end
 
     local farmId = g_currentMission:getFarmId()
+    -- Full-month figures, shown at this month's pay.
     local function money(amount)
-        return g_i18n:formatMoney(amount, 0, true, true)
+        return g_i18n:formatMoney(TheContractorStaff.scalePay(amount), 0, true, true)
     end
 
     local riseOptions = TheContractorPayReviews.getRiseOptions(worker)
@@ -3784,7 +3788,7 @@ end
 -- Fills the overhead panel's rows for the administrator.
 function MenuContractor:updateAdministratorDetails()
     local admin = g_currentMission.TheContractor.Administrator:getAdministrator(g_currentMission:getFarmId())
-    local salary = admin ~= nil and admin.salary or TheContractorAdministrator.SALARY
+    local salary = TheContractorStaff.scalePay(admin ~= nil and admin.salary or TheContractorAdministrator.SALARY)
     local pension = salary * TheContractorStaff.PENSION_RATE
 
     self.financesOverheadRows:setVisible(true)
@@ -3825,7 +3829,7 @@ function MenuContractor:onClickHireAdministrator()
         return
     end
 
-    local salary = formatMoney(TheContractorAdministrator.SALARY)
+    local salary = formatMoney(TheContractorStaff.scalePay(TheContractorAdministrator.SALARY))
     if not administrator:canAffordHire(farmId) then
         InfoDialog.show(string.format(g_i18n:getText("tc_admin_cannotAfford"), salary))
         return

@@ -58,10 +58,10 @@ function TheContractorAdministrator:isEmployed(farmId)
     return self.adminByFarm[farmId] ~= nil
 end
 
--- Their monthly salary, 0 without one.
+-- This month's salary (TheContractorStaff.scalePay), 0 without one.
 function TheContractorAdministrator:getSalary(farmId)
     local admin = self.adminByFarm[farmId]
-    return admin ~= nil and admin.salary or 0
+    return admin ~= nil and TheContractorStaff.scalePay(admin.salary) or 0
 end
 
 function TheContractorAdministrator:getFarmIds()
@@ -111,7 +111,7 @@ end
 -- affordable.
 function TheContractorAdministrator:canAffordHire(farmId)
     local farm = g_farmManager:getFarmById(farmId)
-    return farm ~= nil and farm:getBalance() >= TheContractorAdministrator.SALARY
+    return farm ~= nil and farm:getBalance() >= TheContractorStaff.scalePay(TheContractorAdministrator.SALARY)
 end
 
 -- Server side of TCAdministratorRequestEvent: re-checks everything.
@@ -140,8 +140,9 @@ function TheContractorAdministrator:hire(farmId)
         ageAtHire = math.random(TheContractorAdministrator.AGE_MIN, TheContractorAdministrator.AGE_MAX),
     }
 
-    g_currentMission:addMoney(-admin.salary, farmId, MoneyType.TC_WAGES, true, true)
-    tc.Finances:recordWages(farmId, admin.salary)
+    local firstPay = TheContractorStaff.scalePay(admin.salary)
+    g_currentMission:addMoney(-firstPay, farmId, MoneyType.TC_WAGES, true, true)
+    tc.Finances:recordWages(farmId, firstPay)
 
     self:commit(farmId, admin)
 
