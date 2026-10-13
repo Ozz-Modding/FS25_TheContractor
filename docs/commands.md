@@ -13,7 +13,7 @@ You type these into the developer console. You don't need cheats on. There are f
 Type a group on its own (or with `help`) to list its subcommands and their arguments. Subcommand names aren't case-sensitive. If you get the arguments wrong, the command prints that subcommand's usage.
 
 - **Your farm:** every command acts on your current farm. Most need that farm to have created a company first.
-- **Server only:** commands that change something only work on the server, which means single player or the host of a multiplayer game. The read-only lists `tcWorker list`, `tcWorker pool`, `tcJob list`, `tcJob log`, `tcCompany storages`, `tcCompany notices` and `tcCompany vehicleLog` also work on a joined client.
+- **Server only:** commands that change something only work on the server, which means single player or the host of a multiplayer game. The read-only lists `tcWorker list`, `tcWorker pool`, `tcJob list`, `tcJob log`, `tcCompany storages`, `tcCompany notices`, `tcCompany vehicleLog` and `tcWorker standing` also work on a joined client.
 - **`<worker>`:** a hired worker's id, or the start of their first or last name. `amy`, `Hall` and `3` could all mean Amy Hall (#3). If a name matches more than one worker, the command lists them and asks for the id. `tcWorker list` shows ids and names.
 
 ## Workers — `tcWorker`
@@ -173,6 +173,24 @@ Gives one of your hired workers the spraying certificate, or takes it away with 
 ```
 tcWorker certify 2
 tcWorker certify 2 off
+```
+
+### `tcWorker standing`
+
+Shows, for each of your hired workers, whether they're standing on one of your farm's standing spots, and if not, why. Only workers who are idle or in a cooldown stand. Each line gives the spot they're assigned today (its position in decimetres) and how far it is from the camera, then one of:
+- waiting until you look away (nobody appears on a spot you can see)
+- waiting for another worker to leave the spot
+- standing, model not loaded (models load within 150 m)
+- standing, model loading
+- standing, shown, or hidden (too far)
+- standing, but their look couldn't be loaded
+
+This only shows what your own machine is displaying, so it also works on a joined client.
+
+```
+Farm 1: 2 standing spot(s), day 104
+#3 Amy Hall - wants spot 1203:-455, 12 m away, standing, shown
+#7 John Smith - not standing (assigned)
 ```
 
 ## Jobs — `tcJob`

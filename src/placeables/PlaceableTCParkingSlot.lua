@@ -73,7 +73,12 @@ end
 -- unit axes along its width (uX, uZ) and towards the height node (vX, vZ),
 -- and the two lengths. nil if the xml's nodes are missing.
 function PlaceableTCParkingSlot.getArea(placeable)
-    local data = placeable[PlaceableTCParkingSlot.KEY]
+    return PlaceableTCParkingSlot.getAreaFromNodes(placeable[PlaceableTCParkingSlot.KEY])
+end
+
+-- The same rectangle from any spec data with start/width/height nodes (065's
+-- standing spots use it too).
+function PlaceableTCParkingSlot.getAreaFromNodes(data)
     if data == nil or data.startNode == nil or data.widthNode == nil or data.heightNode == nil then
         return nil
     end

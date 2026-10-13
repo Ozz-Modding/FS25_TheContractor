@@ -322,6 +322,8 @@
 		<text name="tc_parkingSlotMedium_name" text="Parking Slot (Medium)"/>
 		<text name="tc_parkingSlotLarge_name" text="Parking Slot (Large)"/>
 		<text name="tc_parkingSlot_function" text="Marks a parking space for equipment coming back from contract jobs, facing the arrow. Only visible in the construction menu."/>
+		<text name="tc_standingSpot_name" text="Standing Spot"/>
+		<text name="tc_standingSpot_function" text="Somewhere for one of your staff to stand while they've nothing on, facing the arrow. Only visible in the construction menu."/>
 		<text name="tc_inbox_chipParking" text="Parking"/>
 		<text name="tc_parking_sendToShopButton" text="Send to shop"/>
 		<text name="tc_parking_messageTitle" text="Machines waiting for parking"/>
