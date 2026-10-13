@@ -114,3 +114,31 @@ test("the travel burn skips machines without a diesel tank", function()
     assertEquals(TCJobFuel.burnTravelFuel(job), false, "ran dry")
     assertEquals(job.fuelUsedLiters, 0, "job liters")
 end)
+
+test("the haulage rig burns the trip's diesel too", function()
+    local world = setup()
+    local combine = world:addVehicle({ dieselUsagePerHour = 40, dieselLevel = 400 })
+    local haulTractor = world:addVehicle({ dieselUsagePerHour = 40, dieselLevel = 400 })
+    local job = world:addJob({ workerId = 3, vehicles = { combine }, haulerId = 4, haulageVehicles = { haulTractor } })
+    local expected = expectedTravelLiters(40, 1.5)
+
+    TCJobFuel.burnTravelFuel(job)
+
+    assertNear(400 - dieselLevel(haulTractor), expected, 0.0001, "haul tractor burned")
+    assertNear(job.fuelUsedLiters, expected * 2, 0.0001, "job liters")
+end)
+
+test("each load carted burns a round trip from the haulage rig only", function()
+    local world = setup()
+    local combine = world:addVehicle({ dieselUsagePerHour = 40, dieselLevel = 400 })
+    local haulTractor = world:addVehicle({ dieselUsagePerHour = 40, dieselLevel = 400 })
+    local job = world:addJob({ workerId = 3, vehicles = { combine }, haulerId = 4, haulageVehicles = { haulTractor } })
+    local expected = expectedTravelLiters(40, 1.5)
+
+    assertEquals(TCJobFuel.burnCartingFuel(job), false, "ran dry")
+    TCJobFuel.burnCartingFuel(job)
+
+    assertNear(400 - dieselLevel(haulTractor), expected * 2, 0.0001, "two loads")
+    assertEquals(dieselLevel(combine), 400, "combine untouched")
+    assertNear(job.fuelUsedLiters, expected * 2, 0.0001, "job liters")
+end)

@@ -9,6 +9,8 @@
 --                tank), which the stuck watchdog (021) would misread as
 --                stuck. Applies to every harvest job except a player-driven
 --                haulage job, where the player is the one doing the carting.
+--                Each load our hauler takes burns its tractor's diesel
+--                (TCJobFuel.burnCartingFuel).
 --                A player-driven combine is only emptied while it's on the
 --                job's farmland and holding the job's crop, so it's never
 --                touched working the player's own fields.
@@ -258,6 +260,10 @@ local function autoEmptyJobHarvesters(job)
                 vehicle:addFillUnitFillLevel(vehicle:getOwnerFarmId(), fillUnitIndex, -math.huge, fillTypeIndex,
                     ToolType.UNDEFINED, nil)
                 Logging.info("TheContractor: job %d emptied %.0f l from '%s'", job.id, level, vehicle:getName())
+                -- 063: our hauler drove that load away.
+                if job.haulerWorkerId ~= nil then
+                    TCJobFuel.burnCartingFuel(job)
+                end
             end
         end
     end
