@@ -246,8 +246,13 @@ end
 --               and there's no seed tank to feed them
 --   "seedTankHitch" sow: seed tanks there, but none hitches to any of the
 --               tractors (a front hopper needs front linkage)
--- See getMissingEquipmentText for the player-facing wording.
+-- See getMissingEquipmentText for the player-facing wording. A job type
+-- that needs nothing (067's noEquipment) is never missing anything.
 function TCEquipmentClass.getMissingEquipment(vehicles, jobDef, fruitTypeIndex)
+    if jobDef.noEquipment then
+        return {}
+    end
+
     local hasCutter, hasHarvester, hasSelfPropelledHarvester, hasImplement, hasTractor = false, false, false, false,
         false
     local hasSelfPropelledImplement = false

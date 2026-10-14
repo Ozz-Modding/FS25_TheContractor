@@ -306,8 +306,12 @@ local function worseCapability(a, b)
     return CAPABILITY_RANK[a] >= CAPABILITY_RANK[b] and a or b
 end
 
--- How many workers the job needs if it isn't the player alone.
+-- How many workers the job needs if it isn't the player alone - 2 for
+-- harvest & haul. (A player-only job never gets this far.)
 function TheContractorAllocation.getRequiredWorkerCount(job)
+    if TheContractorJobGeneration.isPlayerOnly(job) then
+        return 1
+    end
     return job.includesHaulage and 2 or 1
 end
 
@@ -317,9 +321,9 @@ function TheContractorAllocation.getCrewShapeError(job, workerIds)
     if #workerIds == 0 then
         return nil
     end
-    -- 032: work the AI Helper can't do (bale wrapping) is the player's.
-    local jobDef = TheContractorJobGeneration.JOB_TYPES[job.jobType]
-    if jobDef ~= nil and jobDef.playerOnly then
+    -- 032: work the AI Helper can't do (bale wrapping) is the player's, and
+    -- so (067) is anything with bales to deliver.
+    if TheContractorJobGeneration.isPlayerOnly(job) then
         return "tc_allocation_playerOnly"
     end
     local required = TheContractorAllocation.getRequiredWorkerCount(job)
@@ -504,8 +508,15 @@ function TheContractorAllocation:allocateJob(farmId, jobId, workerIds, equipment
     end
 
     workerIds = workerIds or {}
+    equipmentIds = equipmentIds or {}
     haulageEquipmentIds = haulageEquipmentIds or {}
-    if equipmentIds == nil or #equipmentIds == 0 then
+    local jobDef = TheContractorJobGeneration.JOB_TYPES[job.jobType]
+    if jobDef == nil then
+        return false
+    end
+    -- 067: a job that needs no equipment takes none (there'd be nothing to
+    -- hand back for it), and every other job needs some.
+    if (#equipmentIds == 0) ~= (jobDef.noEquipment == true) then
         return false
     end
 
@@ -525,10 +536,6 @@ function TheContractorAllocation:allocateJob(farmId, jobId, workerIds, equipment
     -- and appear only once, and together they must cover the job's
     -- equipment requirements (TCEquipmentClass.getMissingEquipment/
     -- getMissingHaulageEquipment).
-    if TheContractorJobGeneration.JOB_TYPES[job.jobType] == nil then
-        return false
-    end
-
     local seen = {}
     if not checkVehicles(self, farmId, equipmentIds, seen) or not checkVehicles(self, farmId, haulageEquipmentIds, seen) then
         return false

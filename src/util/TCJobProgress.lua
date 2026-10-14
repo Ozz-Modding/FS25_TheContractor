@@ -19,8 +19,9 @@
 -- Except (032) for job types marked serverMeasured in JobGeneration's
 -- JOB_TYPES: tedder/bale (litres of windrow left, against what was spawned
 -- at allocation), weed/hoe (weed area left, against what was there at
--- allocation) and bale wrap (the spawned bales' wrapping) are measured
--- against a baseline only the server has (job.workTotal/spawnedBaleIds),
+-- allocation), bale wrap (the spawned bales' wrapping) and straw delivery
+-- (what's been delivered, 067) are measured against a baseline only the
+-- server has (job.workTotal/spawnedBaleIds/requiredLiters),
 -- so only the server measures them, and sends the result to clients
 -- (TCJobProgressEvent) whenever it moves by a whole percent.
 
@@ -278,6 +279,15 @@ local function getBaleWrapCompletion(job)
     return math.min(0.99, wrapped * 0.99)
 end
 
+-- Straw delivery (067, server-only like the rest of TCHaulage's delivery
+-- state): there's no field work, so the job is as done as its delivery.
+local function getDeliveryCompletion(job)
+    if job.requiredLiters <= 0 then
+        return 0
+    end
+    return math.min(1, job.deliveredLiters / job.requiredLiters)
+end
+
 -- One entry per generatable job type (JobGeneration.JOB_TYPE_KEYS):
 --   createModifier(state, job)  builds the scan's modifier/filter
 --   fruitTypeSource  a target fruit type has to be resolved first, and
@@ -303,6 +313,7 @@ local JOB_TYPE_HANDLERS = {
     tedder = { createModifier = createWindrowModifier, measure = "remainingLiters" },
     bale = { createModifier = createWindrowModifier, measure = "remainingLiters" },
     baleWrap = { getCompletion = getBaleWrapCompletion },
+    strawDelivery = { getCompletion = getDeliveryCompletion },
     fertilize = { createModifier = createFertilizeModifier },
     herbicide = { createModifier = createHerbicideModifier },
     weed = { createModifier = createWeedModifier, measure = "remainingArea" },

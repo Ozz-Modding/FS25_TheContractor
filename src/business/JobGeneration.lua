@@ -51,7 +51,17 @@ TheContractorJobGeneration_mt = Class(TheContractorJobGeneration)
 --                    knows (spawned windrow, the field's weeds at the start,
 --                    spawned bales) - see TCJobProgress.
 --   playerOnly       no hired worker can do it: the AI Helper can't drive a
---                    standalone bale wrapper.
+--                    standalone bale wrapper, or a bale loader.
+--   deliversBales    067: the job's crop can have to go to a selling point
+--                    as bales (straw only, see getStrawFillType) - a bale
+--                    job rolls it like harvest's haulage, and with it
+--                    becomes player-only (isPlayerOnly).
+--   deliveryOnly     067: the job is the delivery and nothing else - always
+--                    includesHaulage, no field work to measure (progress is
+--                    what's been delivered) and nothing to equip
+--                    (noEquipment: we can't tell how the player will move
+--                    the bales). Priced per bale and by distance
+--                    (getStrawDeliveryReward), not per hectare.
 --   skill            the worker operation skill the work uses (044, see
 --                    TheContractorWorker.SKILLS). Sow says "seeding", but
 --                    is split by crop - see getOperationSkill.
@@ -86,9 +96,12 @@ TheContractorJobGeneration.JOB_TYPES = {
     tedder = { implementSpec = "spec_tedder", vanillaMission = TedderMission, seasonRule = "noWinterOrEarlySpring",
         serverMeasured = true, rewardPerHa = 1500, reputationPerHa = 5.1, skill = "grassland" },
     bale = { implementSpec = "spec_baler", vanillaMission = BaleMission, recordsCrop = true, seasonRule = "noWinter",
-        serverMeasured = true, rewardPerHa = 2200, reputationPerHa = 7.5, skill = "baling" },
+        serverMeasured = true, deliversBales = true, rewardPerHa = 2200, reputationPerHa = 7.5, skill = "baling" },
     baleWrap = { implementSpec = "spec_baleWrapper", vanillaMission = BaleWrapMission, seasonRule = "noWinter",
         serverMeasured = true, playerOnly = true, rewardPerBale = 300, skill = "baling" },
+    strawDelivery = { vanillaMission = BaleMission, recordsCrop = true, seasonRule = "noWinter", serverMeasured = true,
+        playerOnly = true, noEquipment = true, deliversBales = true, deliveryOnly = true, reputationPerHa = 5.1,
+        skill = "haulage" },
     fertilize = { implementSpec = "spec_sprayer", vanillaMission = FertilizeMission, startState = "sprayLevel",
         supplyFillTypeNames = { "FERTILIZER", "LIQUIDFERTILIZER", "MANURE", "LIQUIDMANURE" }, seasonRule = "noWinter",
         rewardPerHa = 1500, reputationPerHa = 5.1, skill = "cropCare" },
@@ -105,7 +118,7 @@ TheContractorJobGeneration.JOB_TYPES = {
         requiresStones = true, rewardPerHa = 2200, reputationPerHa = 7.5, skill = "tillage" },
 }
 TheContractorJobGeneration.JOB_TYPE_KEYS = { "harvest", "cultivate", "sow", "plow", "mow", "tedder", "bale",
-    "baleWrap", "fertilize", "herbicide", "weed", "hoe", "stonePick" }
+    "baleWrap", "strawDelivery", "fertilize", "herbicide", "weed", "hoe", "stonePick" }
 
 -- Reputation per unit of rewardPerHa, from plow's anchor above - for job
 -- types without a fixed reputationPerHa (bale wrap, whose rewardPerHa is
@@ -202,6 +215,18 @@ TheContractorJobGeneration.JOB_PAY_BASELINE = 0.8
 TheContractorJobGeneration.HAULAGE_CHANCE = 0.4
 TheContractorJobGeneration.HAULAGE_PRICE_MULTIPLIER = 1.5
 TheContractorJobGeneration.HAULAGE_REPUTATION_MULTIPLIER = 1.5
+
+-- Straw delivery (067), the shape of vanilla TransportMission.calculateReward:
+-- so much per bale, plus so much per metre (field to selling point, as the
+-- crow flies) for every load of BALES_PER_LOAD - before the same
+-- difficulty, reputation, skill, spread and pay-rate layers as any other
+-- job (estimatePrice). Both rates are 70% of vanilla's (350 a bale, 0.5 a
+-- metre), cut after the first in-game test. Bale & deliver (a straw bale
+-- job with delivery) is priced like harvest & haul, by
+-- HAULAGE_PRICE_MULTIPLIER.
+TheContractorJobGeneration.STRAW_DELIVERY_REWARD_PER_BALE = 245
+TheContractorJobGeneration.STRAW_DELIVERY_REWARD_PER_METER = 0.35
+TheContractorJobGeneration.STRAW_DELIVERY_BALES_PER_LOAD = 5
 
 -- Required operator skill (026) rises with standing: the top of the range
 -- runs from MAX_REQUIRED_SKILL_LEVEL_AT_START (standing 0) to
@@ -305,15 +330,31 @@ function TheContractorJobGeneration:tryGenerateJob(farmId, onlyJobType)
 
     local jobType, jobDef = option.jobType, option.jobDef
     local requiredSkillLevel = self:rollRequiredSkillLevel(farmId)
-    local price = self:estimatePrice(field, jobDef, farmId, requiredSkillLevel)
     local fruitTypeName = jobDef.recordsCrop and TheContractorJobGeneration.getFieldFruitTypeName(field) or nil
     local fruitTypeIndex = TheContractorJobGeneration.getFruitTypeIndexByName(fruitTypeName)
     local equipmentAvailable = table.hasElement(option.fulfillable, field)
 
+    -- 067: a straw delivery always has somewhere to go (getCandidateFields
+    -- only offers it when somewhere takes straw bales), and its price
+    -- depends on how far that is.
     local deliveryStation = nil
-    if jobDef.cropDependent and fruitTypeIndex ~= nil and math.random() < TheContractorJobGeneration.HAULAGE_CHANCE then
-        deliveryStation = TCHaulage.findDeliveryStation(g_fruitTypeManager:getFillTypeIndexByFruitTypeIndex(
-            fruitTypeIndex))
+    if jobDef.deliveryOnly then
+        deliveryStation = TCHaulage.findBaleDeliveryStation(TheContractorJobGeneration.getStrawFillType(fruitTypeIndex))
+        if deliveryStation == nil then
+            return nil
+        end
+    end
+    local price = self:estimatePrice(field, jobDef, farmId, requiredSkillLevel, deliveryStation)
+
+    if not jobDef.deliveryOnly and fruitTypeIndex ~= nil and
+        math.random() < TheContractorJobGeneration.HAULAGE_CHANCE then
+        if jobDef.cropDependent then
+            deliveryStation = TCHaulage.findDeliveryStation(g_fruitTypeManager:getFillTypeIndexByFruitTypeIndex(
+                fruitTypeIndex))
+        elseif jobDef.deliversBales then
+            deliveryStation = TCHaulage.findBaleDeliveryStation(TheContractorJobGeneration.getStrawFillType(
+                fruitTypeIndex))
+        end
         if deliveryStation ~= nil then
             price = math.floor(price * TheContractorJobGeneration.HAULAGE_PRICE_MULTIPLIER)
         end
@@ -434,11 +475,35 @@ function TheContractorJobGeneration.getFruitTypeIndexByName(fruitTypeName)
     return fruitType ~= nil and fruitType.index or nil
 end
 
+-- 067: FillType.STRAW if the crop leaves straw once cut, else nil - grass
+-- (hay) never gets delivered, nor does anything else baled.
+function TheContractorJobGeneration.getStrawFillType(fruitTypeIndex)
+    if fruitTypeIndex == nil or fruitTypeIndex == FruitType.GRASS then
+        return nil
+    end
+    if g_fruitTypeManager:getWindrowFillTypeIndexByFruitTypeIndex(fruitTypeIndex) ~= FillType.STRAW then
+        return nil
+    end
+    return FillType.STRAW
+end
+
+-- Whether only the player can do the job: a job type the AI Helper can't
+-- do at all (bale wrapping, delivering straw), or a bale job that includes
+-- delivery (067) - the bales have to be loaded and carted, and a worker
+-- can't bale while the player hauls (035 never mixes the two).
+function TheContractorJobGeneration.isPlayerOnly(job)
+    local jobDef = TheContractorJobGeneration.JOB_TYPES[job.jobType]
+    if jobDef == nil then
+        return false
+    end
+    return jobDef.playerOnly == true or (job.includesHaulage and jobDef.deliversBales == true)
+end
+
 -- The job types some field qualifies for right now (032), one option each:
 --   candidates   the type's eligible fields (getCandidateFields)
 --   fulfillable  the ones the farm owns the equipment for (033) - all or
 --                none of them, except for harvest, where it's crop by crop
--- With thirteen types, most of which only fit a field at certain points in
+-- With fourteen types, most of which only fit a field at certain points in
 -- its year (and weeding not at all on a save with weeds off), drawing from
 -- every type would waste most rolls on types with nothing to offer and cut
 -- the offer rate to a fraction of 026's tuning. onlyJobType limits it to
@@ -578,6 +643,10 @@ function TheContractorJobGeneration:getCandidateFields(farmId, jobDef)
     if jobDef.requiresStones and g_currentMission.missionInfo.stonesEnabled == false then
         return candidates
     end
+    -- 067: nowhere on the map takes straw bales, so nowhere to deliver to.
+    if jobDef.deliveryOnly and TCHaulage.findBaleDeliveryStation(FillType.STRAW) == nil then
+        return candidates
+    end
 
     for _, field in ipairs(g_fieldManager:getFields()) do
         if field:getOwner() ~= farmId and TheContractorJobGeneration.isFieldEligible(field, jobDef) then
@@ -600,7 +669,8 @@ end
 -- catch crop (nothing to combine - vanilla's HarvestMission skips those
 -- too). It doesn't have to be ready yet - a future-dated offer is fine,
 -- see getDeadlineDay. Everything else: vanilla's own rules for the matching
--- mission type.
+-- mission type - narrowed to straw crops for a straw delivery (067), whose
+-- bales lie where a bale job's would.
 function TheContractorJobGeneration.isFieldEligible(field, jobDef)
     local fieldState = field:getFieldState()
     if fieldState == nil or not fieldState.isValid then
@@ -613,6 +683,9 @@ function TheContractorJobGeneration.isFieldEligible(field, jobDef)
             not TheContractorJobGeneration.isGrass(fruitType.index)
     end
 
+    if jobDef.deliveryOnly and TheContractorJobGeneration.getStrawFillType(fieldState.fruitTypeIndex) == nil then
+        return false
+    end
     return TheContractorJobGeneration.isVanillaAvailable(field, jobDef)
 end
 
@@ -739,11 +812,17 @@ end
 -- Base price follows vanilla's own AbstractFieldMission:getReward formula
 -- (rewardPerHa * areaHa * (1.3 - 0.1 * economicDifficulty)), then layers in
 -- reputation, required skill and a small random spread (see the pricing
--- constants above).
-function TheContractorJobGeneration:estimatePrice(field, jobDef, farmId, requiredSkillLevel)
-    local areaHa = field:getAreaHa() or 1
+-- constants above). A straw delivery (067) swaps rewardPerHa * areaHa for
+-- getStrawDeliveryReward to its deliveryStation.
+function TheContractorJobGeneration:estimatePrice(field, jobDef, farmId, requiredSkillLevel, deliveryStation)
     local difficultyMultiplier = 1.3 - 0.1 * g_currentMission.missionInfo.economicDifficulty
-    local basePrice = TheContractorJobGeneration.getRewardPerHa(jobDef) * areaHa * difficultyMultiplier
+    local reward
+    if jobDef.deliveryOnly then
+        reward = TheContractorJobGeneration.getStrawDeliveryReward(field, deliveryStation)
+    else
+        reward = TheContractorJobGeneration.getRewardPerHa(jobDef) * (field:getAreaHa() or 1)
+    end
+    local basePrice = reward * difficultyMultiplier
 
     local standing = g_currentMission.TheContractor.Reputation:getStanding(farmId)
     local reputationMultiplier = TheContractorJobGeneration.MIN_REPUTATION_PRICE_MULTIPLIER +
@@ -779,6 +858,36 @@ function TheContractorJobGeneration.getRewardPerHa(jobDef)
         return jobDef.rewardPerBale
     end
     return 1 + jobDef.rewardPerBale * MathUtil.haToSqm(1) * grass.literPerSqm / capacity
+end
+
+-- How many straw bales the field's crop makes, in the bales a straw
+-- delivery lays out (TCFieldPreparation.getStrawBaleIndex) - the same
+-- whole-bales sum the spawn does. 0 if there's no such bale.
+function TheContractorJobGeneration.estimateStrawBales(field)
+    local fieldState = field:getFieldState()
+    local fruitType = fieldState ~= nil and g_fruitTypeManager:getFruitTypeByIndex(fieldState.fruitTypeIndex) or nil
+    local baleIndex = TCFieldPreparation.getStrawBaleIndex()
+    local capacity = baleIndex ~= nil and g_baleManager:getBaleCapacityByBaleIndex(baleIndex, FillType.STRAW) or 0
+    if fruitType == nil or capacity <= 0 then
+        return 0
+    end
+    local liters = MathUtil.haToSqm(field:getAreaHa() or 0) * (fruitType.windrowLiterPerSqm or fruitType.literPerSqm)
+    return math.floor(liters / capacity)
+end
+
+-- 067: TransportMission.calculateReward's shape - see the STRAW_DELIVERY_*
+-- constants. Distance is field centre to the station.
+function TheContractorJobGeneration.getStrawDeliveryReward(field, deliveryStation)
+    local bales = TheContractorJobGeneration.estimateStrawBales(field)
+    local distance = 0
+    if deliveryStation ~= nil and deliveryStation.rootNode ~= nil then
+        local fieldX, fieldZ = field:getCenterOfFieldWorldPosition()
+        local stationX, _, stationZ = getWorldTranslation(deliveryStation.rootNode)
+        distance = MathUtil.vector2Length(stationX - fieldX, stationZ - fieldZ)
+    end
+    local loads = math.ceil(bales / TheContractorJobGeneration.STRAW_DELIVERY_BALES_PER_LOAD)
+    return bales * TheContractorJobGeneration.STRAW_DELIVERY_REWARD_PER_BALE +
+        loads * distance * TheContractorJobGeneration.STRAW_DELIVERY_REWARD_PER_METER
 end
 
 -- Completion reputation per hectare (see JOB_TYPES' reputationPerHa).
@@ -882,6 +991,9 @@ function TheContractorJobGeneration.registerConsoleCommands()
             if jobDef.requiresStones and g_currentMission.missionInfo.stonesEnabled == false then
                 return string.format("No %s job possible: stones are switched off for this save", jobType)
             end
+            if jobDef.deliveryOnly and TCHaulage.findBaleDeliveryStation(FillType.STRAW) == nil then
+                return string.format("No %s job possible: no selling point on this map takes straw bales", jobType)
+            end
             local candidates = #tc.JobGeneration:getCandidateFields(farmId, jobDef)
             if candidates == 0 then
                 return string.format("No %s job possible right now: no field the farm doesn't own qualifies for it",
@@ -934,7 +1046,7 @@ function TheContractorJobGeneration.registerConsoleCommands()
                     split),
             }
             for _, entry in ipairs(snapshot) do
-                table.insert(lines, string.format("  %-9s eligible fields %3d, with target date %3d, fulfillable %3d",
+                table.insert(lines, string.format("  %-13s eligible fields %3d, with target date %3d, fulfillable %3d",
                     entry.jobType, entry.candidates, entry.datable, entry.fulfillable))
             end
             return table.concat(lines, "\n")
