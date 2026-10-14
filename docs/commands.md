@@ -47,6 +47,15 @@ tcWorker hire 3
 tcWorker hire smith
 ```
 
+### `tcWorker rename <worker> <new name>`
+
+Renames one of your hired workers, the same as the Staff tab's Edit without changing their gender or look. Everything after `<worker>` is the new name, so it can have spaces. Leading and trailing spaces are trimmed, and the name must be 1-30 characters.
+
+```
+tcWorker rename 2 Jane Smith
+tcWorker rename amy Amelia
+```
+
 ### `tcWorker retire <worker> [noticeMonths]`
 
 Makes one of your hired workers hand in their retirement notice. `noticeMonths` defaults to 6; `0` retires them straight away.

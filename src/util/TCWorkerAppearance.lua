@@ -50,7 +50,7 @@ function TCWorkerAppearance.rollGender()
     return TCWorkerAppearance.GENDER.MALE
 end
 
--- Rolling (server) ------------------------------------------------------------
+-- Rolling (server, or a client's edit preview - 066) -------------------------
 
 local function pickRandom(list)
     if #list == 0 then
@@ -215,6 +215,27 @@ function TCWorkerAppearance.toPlayerStyle(data)
         return nil
     end
     return style
+end
+
+-- Whether appearance data is a usable look for `gender` (066's edit check
+-- on the server): it builds, on a model of that gender - or any model, if
+-- none has it, matching getModelStyles.
+function TCWorkerAppearance.isValidLook(data, gender)
+    if data == nil or data.model == nil then
+        return false
+    end
+    local entry = PlayerSystem.PLAYER_STYLES_BY_FILENAME[data.model]
+    if entry == nil then
+        return false
+    end
+    if entry.gender ~= gender then
+        for _, other in ipairs(PlayerSystem.PLAYER_STYLES) do
+            if other.gender == gender and other.style ~= nil and other.style.isConfigurationLoaded then
+                return false
+            end
+        end
+    end
+    return TCWorkerAppearance.toPlayerStyle(data) ~= nil
 end
 
 -- The worker's PlayerStyle, built once per machine and cached (nil if they

@@ -54,10 +54,17 @@ TheContractorStaff.SALARY_PER_TIER_POINT = 25
 TheContractorStaff.SALARY_PER_SKILL_POINT = 20
 TheContractorStaff.SALARIED_SKILL_COUNT = 2
 
--- Independent per-tier roll: each tier has this chance of the worker being
--- certified on it at all (a random 1-10 rating), otherwise "not certified"
--- (the key stays absent from tierCapability, per Worker.lua's convention).
-TheContractorStaff.TIER_CERTIFICATION_CHANCE = 0.65
+-- Tractor experience is a ladder (small -> medium -> large), rolled the way
+-- growth would have built it (see rollTierCapability): the worker's biggest
+-- size comes from TOP_TIER_WEIGHTS (no tier: not certified on any, the keys
+-- stay absent from tierCapability per Worker.lua's convention), and every
+-- size below it is at CERTIFY_THRESHOLD or more.
+TheContractorStaff.TOP_TIER_WEIGHTS = {
+    { tier = nil, weight = 0.05 },
+    { tier = "small", weight = 0.25 },
+    { tier = "medium", weight = 0.35 },
+    { tier = "large", weight = 0.35 },
+}
 
 -- 044: operation skills. Every skill gets a SKILL_BASE_MIN-SKILL_BASE_MAX
 -- base roll, then SPECIALISMS_MIN-SPECIALISMS_MAX of them, picked at random,
@@ -101,10 +108,13 @@ TheContractorStaff.GROWTH_POTENTIAL_MIN_ROLL = 0.4
 -- than GROWTH_EASY_MARGIN above it is easy work. A successful roll spends
 -- one growthPotential point on one stat, picked by GROWTH_WEIGHTS among
 -- those that can still move: +1 workSpeed, +1 on the operation skill used
--- (044), +1 on the tractor tier driven, or - once that tier is at
--- CERTIFY_THRESHOLD - a new certification on the next tier up, starting at
--- CERTIFY_START_RATING. About 3 in 10 good jobs grow a worker, so a young
--- worker's full pool takes around 40 jobs to use up.
+-- (044) or +1 on the tractor tier driven. A tier reaching CERTIFY_THRESHOLD
+-- also certifies the worker on the next tier up, starting at
+-- CERTIFY_START_RATING, as part of the same growth (it's the same kind of
+-- machine, only bigger). certify is only for a worker rolled before that
+-- rule, already past the threshold with nothing above it. About 3 in 10
+-- good jobs grow a worker, so a young worker's full pool takes around 40
+-- jobs to use up.
 TheContractorStaff.GROWTH_BASE_CHANCE = 0.3
 TheContractorStaff.GROWTH_STRETCH_MULTIPLIER = 1.5
 TheContractorStaff.GROWTH_EASY_MULTIPLIER = 0.5
@@ -311,12 +321,46 @@ function TheContractorStaff.rollWorkSpeed()
     return math.random(1, 10)
 end
 
+local function rollTopTier()
+    local totalWeight = 0
+    for _, entry in ipairs(TheContractorStaff.TOP_TIER_WEIGHTS) do
+        totalWeight = totalWeight + entry.weight
+    end
+    local roll = math.random() * totalWeight
+    for _, entry in ipairs(TheContractorStaff.TOP_TIER_WEIGHTS) do
+        roll = roll - entry.weight
+        if roll < 0 then
+            return entry.tier
+        end
+    end
+    return nil
+end
+
+-- See TOP_TIER_WEIGHTS. Sizes below the top one are CERTIFY_THRESHOLD-10
+-- (reaching the threshold is what qualified them for the next). The top
+-- one is no better than the size below it, and under the threshold unless
+-- it's the biggest there is - reaching it would have qualified them for the
+-- next size up.
 function TheContractorStaff.rollTierCapability()
     local tierCapability = {}
+    local topTier = rollTopTier()
+    if topTier == nil then
+        return tierCapability
+    end
+
+    local threshold, maxRating = TheContractorStaff.CERTIFY_THRESHOLD, TheContractorWorker.MAX_SKILL
+    local below = nil
     for _, tier in ipairs(TheContractorWorker.TIERS) do
-        if math.random() < TheContractorStaff.TIER_CERTIFICATION_CHANCE then
-            tierCapability[tier] = math.random(1, 10)
+        if tier == topTier then
+            local cap = below or maxRating
+            if TheContractorStaff.getNextTier(tier) ~= nil then
+                cap = math.min(cap, threshold - 1)
+            end
+            tierCapability[tier] = math.random(1, cap)
+            break
         end
+        tierCapability[tier] = math.random(threshold, maxRating)
+        below = tierCapability[tier]
     end
     return tierCapability
 end
@@ -1268,19 +1312,31 @@ function TheContractorStaff:growWorker(farmId, workerId, tier, skill)
         return
     end
 
-    local oldValue = worker:getStat(stat)
     worker.growthPotential = worker.growthPotential - 1
-    self:applyWorkerGrowth(farmId, workerId, stat, value)
+    self:announceGrowth(farmId, worker, stat, value)
+
+    -- A tier reaching the threshold qualifies them on the next one up too,
+    -- for the same point (see GROWTH_WEIGHTS above).
+    local nextTier = TheContractorStaff.getNextTier(stat)
+    if nextTier ~= nil and value >= TheContractorStaff.CERTIFY_THRESHOLD and not worker:isCapableOfTier(nextTier) then
+        self:announceGrowth(farmId, worker, nextTier, TheContractorStaff.CERTIFY_START_RATING)
+    end
+end
+
+-- Applies one stat change on the server and tells everyone.
+function TheContractorStaff:announceGrowth(farmId, worker, stat, value)
+    local oldValue = worker:getStat(stat)
+    self:applyWorkerGrowth(farmId, worker.id, stat, value)
 
     Logging.info("TheContractor: farm %d worker %d (%s) grew %s %s -> %d, %d potential left", farmId,
-        workerId, worker.name, stat, tostring(oldValue), value, worker.growthPotential)
+        worker.id, worker.name, stat, tostring(oldValue), value, worker.growthPotential)
 
     -- The host's own notification - the broadcast below doesn't loop back
     -- to it (see src/events/README.md).
     TCWorkerGrewEvent.showNotification(worker, stat, oldValue, value)
 
     if g_server ~= nil then
-        g_server:broadcastEvent(TCWorkerGrewEvent.new(farmId, workerId, stat, value))
+        g_server:broadcastEvent(TCWorkerGrewEvent.new(farmId, worker.id, stat, value))
     end
 end
 
@@ -1354,6 +1410,85 @@ function TheContractorStaff:applyWorkerGrowth(farmId, workerId, stat, value)
     end
 
     worker:setStat(stat, value)
+end
+
+-- Editing (066) ------------------------------------------------------------
+-- The player can rename a hired worker, change their gender and re-roll
+-- their look (TCEditWorkerDialog, or tcWorker rename). Cosmetic and free.
+-- Changing gender never touches the name.
+
+-- Characters, like the Create Company prompt.
+TheContractorStaff.NAME_MAX_LENGTH = 30
+
+-- The name trimmed, or nil if that leaves nothing or it's too long.
+function TheContractorStaff.cleanName(name)
+    if name == nil then
+        return nil
+    end
+    name = string.match(name, "^%s*(.-)%s*$")
+    local length = utf8Strlen ~= nil and utf8Strlen(name) or string.len(name)
+    if length == 0 or length > TheContractorStaff.NAME_MAX_LENGTH then
+        return nil
+    end
+    return name
+end
+
+-- Why an edit can't be applied, or nil. For the log and the console.
+function TheContractorStaff.getEditProblem(name, gender, appearance)
+    if TheContractorStaff.cleanName(name) == nil then
+        return string.format("the name must be 1-%d characters", TheContractorStaff.NAME_MAX_LENGTH)
+    end
+    if gender ~= TCWorkerAppearance.GENDER.MALE and gender ~= TCWorkerAppearance.GENDER.FEMALE then
+        return "unknown gender " .. tostring(gender)
+    end
+    if not TCWorkerAppearance.isValidLook(appearance, gender) then
+        return "that look can't be built for a " .. gender .. " worker"
+    end
+    return nil
+end
+
+-- Server. Returns nil once applied, or why it wasn't.
+function TheContractorStaff:editWorker(farmId, workerId, name, gender, appearance)
+    local worker = self:getWorker(farmId, workerId)
+    if worker == nil then
+        return string.format("farm %d has no worker %d", farmId, workerId)
+    end
+    local problem = TheContractorStaff.getEditProblem(name, gender, appearance)
+    if problem ~= nil then
+        Logging.warning("TheContractor: edit of worker %d (%s) refused: %s", workerId, worker.name, problem)
+        return problem
+    end
+
+    name = TheContractorStaff.cleanName(name)
+    Logging.info("TheContractor: farm %d worker %d edited: %s -> %s, %s -> %s", farmId, workerId, worker.name, name,
+        worker.gender, gender)
+    self:applyWorkerEdited(farmId, workerId, name, gender, appearance)
+
+    if g_server ~= nil then
+        g_server:broadcastEvent(TCWorkerEditedEvent.new(farmId, workerId, name, gender, appearance))
+    end
+    return nil
+end
+
+-- Every machine. The cached PlayerStyle goes, so the next look-up builds
+-- the new one; the portrait and standing spot reload theirs. A worker in a
+-- cab keeps the old look until their next trip.
+function TheContractorStaff:applyWorkerEdited(farmId, workerId, name, gender, appearance)
+    local worker = self:getWorker(farmId, workerId)
+    if worker == nil then
+        return
+    end
+
+    worker.name = name
+    worker.gender = gender
+    worker.appearance = appearance
+    worker.playerStyle = nil
+
+    TCIdleStaff.reloadLook(worker)
+    local menu = g_currentMission.TheContractor.MenuContractor
+    if menu ~= nil then
+        menu:onWorkerEdited(workerId)
+    end
 end
 
 -- Wire serialization, shared by the pool/hire events and initial client
@@ -1874,6 +2009,34 @@ function TheContractorStaff.registerConsoleCommands()
 
             g_currentMission.TheContractor.Staff:announceLeaving(farmId, worker.id, noticeMonths, false)
             return string.format("%s handed in their notice (%d month(s))", worker.name, noticeMonths)
+        end,
+    })
+
+    -- 066: the Staff tab's Edit, name only. Everything after the worker is
+    -- the new name, so it can have spaces.
+    TCConsole.register("worker", "rename", {
+        args = "<worker> <new name>",
+        description = "Rename a hired worker (look and gender are on the Staff tab's Edit)",
+        run = function(farmId, args)
+            local worker, problem = TCConsole.findWorker(farmId, args[1])
+            if worker == nil then
+                return problem or false
+            end
+            local words = {}
+            for i = 2, #args do
+                table.insert(words, args[i])
+            end
+            if #words == 0 then
+                return false
+            end
+
+            local oldName = worker.name
+            problem = g_currentMission.TheContractor.Staff:editWorker(farmId, worker.id, table.concat(words, " "),
+                worker.gender, worker.appearance)
+            if problem ~= nil then
+                return "Error: " .. problem
+            end
+            return string.format("%s (#%d) is now %s", oldName, worker.id, worker.name)
         end,
     })
 

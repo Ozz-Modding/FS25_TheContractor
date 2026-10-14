@@ -315,4 +315,32 @@
         <cameraNode value="0|1"/>
         <superSamplingFactor value="2"/>
     </Profile>
+
+    <!-- Edit worker dialog (066): the same portrait, anchored like the other
+         dialogs' profiles. -->
+    <Profile name="tc_editWorkerPortrait" extends="baseReference" with="anchorTopCenter">
+        <size value="260px 320px"/>
+        <cameraNode value="0|1"/>
+        <superSamplingFactor value="2"/>
+    </Profile>
+    <Profile name="tc_editWorkerLabel" extends="fs25_dialogText" with="anchorTopCenter">
+        <size value="340px 28px" />
+        <textSize value="16px" />
+        <textBold value="true" />
+        <textUpperCase value="true" />
+        <textAlignment value="center" />
+        <textColor value="$preset_colorWhite_50" />
+    </Profile>
+    <Profile name="tc_editWorkerName" extends="fs25_dialogText" with="anchorTopCenter">
+        <size value="340px 34px" />
+        <textSize value="22px" />
+        <textBold value="true" />
+        <textAlignment value="center" />
+    </Profile>
+    <Profile name="tc_editWorkerHint" extends="fs25_dialogText" with="anchorTopCenter">
+        <size value="340px 28px" />
+        <textSize value="15px" />
+        <textAlignment value="center" />
+        <textColor value="$preset_colorWhite_50" />
+    </Profile>
 </GUIProfiles>

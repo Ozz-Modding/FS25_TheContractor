@@ -77,6 +77,14 @@ function TCWorkerPortrait:setWorker(worker)
     end
 end
 
+-- The shown worker's look changed (066): load it again on the next update.
+function TCWorkerPortrait:reload()
+    self:deleteCharacter()
+    self.shownWorkerId = nil
+    self.switchTimer = 0
+    self:setSceneVisible(false)
+end
+
 -- Menu closed: frees the character and the scene.
 function TCWorkerPortrait:destroy()
     self:deleteCharacter()

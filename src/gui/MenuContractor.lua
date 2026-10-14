@@ -363,39 +363,21 @@ function MenuContractor:initialize()
             self:onClickReleaseWorker()
         end
     }
-    -- 056: a one-off bonus for the highlighted roster worker.
-    self.btnGiveBonus = {
-        inputAction = InputAction.MENU_EXTRA_2,
-        text = g_i18n:getText("tc_morale_bonusButton"),
+    -- 066: everything else for the highlighted roster worker - edit, a
+    -- bonus (056), a pay rise (058), training (054) - is one Manage button
+    -- with a list (onClickManageWorker). The bottom bar has a fixed number
+    -- of slots (six seen in-game) and silently drops anything past them.
+    self.btnManageWorker = {
+        inputAction = InputAction.MENU_ACCEPT,
+        text = g_i18n:getText("tc_staff_manageButton"),
         callback = function()
-            self:onClickGiveBonus()
-        end
-    }
-    -- 058: a pay rise for the highlighted roster worker.
-    self.btnPayRise = {
-        inputAction = InputAction.MENU_CANCEL,
-        text = g_i18n:getText("tc_pay_riseButton"),
-        callback = function()
-            self:onClickPayRise()
+            self:onClickManageWorker()
         end
     }
     self.menuButtonInfoStaffWithCandidateSelection = { self.btnBack, self.btnNextPage, self.btnPrevPage,
         self.btnHireWorker }
     self.menuButtonInfoStaffWithRosterSelection = { self.btnBack, self.btnNextPage, self.btnPrevPage,
-        self.btnReleaseWorker, self.btnGiveBonus, self.btnPayRise }
-
-    -- 054: book the highlighted worker on the spraying course (or its
-    -- retake), only while they're ready, uncertified and not booked - see
-    -- getMenuButtonInfo. The label says which (updateStaffDetails).
-    self.btnBookTraining = {
-        inputAction = InputAction.MENU_EXTRA_1,
-        text = g_i18n:getText("tc_training_bookCourseButton"),
-        callback = function()
-            self:onClickBookTraining()
-        end
-    }
-    self.menuButtonInfoStaffWithTrainableWorker = { self.btnBack, self.btnNextPage, self.btnPrevPage,
-        self.btnReleaseWorker, self.btnBookTraining, self.btnGiveBonus, self.btnPayRise }
+        self.btnReleaseWorker, self.btnManageWorker }
 
     -- Finances (049) - write off the highlighted invoice, only while it's
     -- overdue (see getMenuButtonInfo).
@@ -782,11 +764,6 @@ function MenuContractor:getMenuButtonInfo()
             return self.menuButtonInfoStaffWithCandidateSelection
         end
         if self.staffView == "roster" and self.selectedRosterWorkerId ~= nil then
-            local worker = self:getSelectedRosterWorker()
-            if worker ~= nil and
-                    TheContractorTraining.getBookingProblem(worker, MenuContractor.TRAINING_CERT) == nil then
-                return self.menuButtonInfoStaffWithTrainableWorker
-            end
             return self.menuButtonInfoStaffWithRosterSelection
         end
     end
@@ -863,9 +840,11 @@ function MenuContractor:updateWorkerPortrait()
         self.workerPortrait = TCWorkerPortrait.new(self.staffPortraitRender)
     end
 
+    -- 066: not while the edit dialog's showing its own - both scenes sit in
+    -- the same spot in the world.
     local worker = nil
-    if self.isFrameOpen and self.subCategoryPaging:getState() == MenuContractor.SUB_CATEGORY.STAFF and
-            self:hasCompany() then
+    if self.isFrameOpen and not self.isEditingWorker and
+            self.subCategoryPaging:getState() == MenuContractor.SUB_CATEGORY.STAFF and self:hasCompany() then
         worker = self:getSelectedStaffWorker()
     end
     self.workerPortrait:setWorker(worker)
@@ -1313,10 +1292,6 @@ function MenuContractor:updateCertificationDetails(worker, isRoster)
         note = self:getCertificationNote(worker, cert) or ""
     end
     self.staffDetailCertNote:setText(note)
-
-    -- The bottom-bar button says whether it's the course or a retake.
-    self.btnBookTraining.text = g_i18n:getText(TheContractorTraining.isRetake(worker, cert) and
-        "tc_training_bookRetakeButton" or "tc_training_bookCourseButton")
 end
 
 function MenuContractor:getCertificationNote(worker, cert)
@@ -1522,6 +1497,11 @@ function MenuContractor:onClickGiveBonus()
         -- Same "synchronous for host/SP, catches up on next refresh for a
         -- remote client" caveat as onClickHireWorker.
         self:refreshStaffState(farmId, g_currentMission.TheContractor.Staff, g_currentMission.TheContractor.Jobs)
+
+        -- A blocking confirmation as well as the notification. Worded
+        -- without the new morale, which a remote client won't have yet.
+        InfoDialog.show(string.format(g_i18n:getText("tc_morale_bonusConfirm"), worker.name,
+            g_i18n:formatMoney(amount, 0, true, true)))
     end, string.format(g_i18n:getText("tc_morale_bonusPrompt"), worker.name), g_i18n:getText("tc_morale_bonusTitle"),
         options)
 end
@@ -1572,6 +1552,76 @@ function MenuContractor:onClickPayRise()
         -- remote client" caveat as onClickHireWorker.
         self:refreshStaffState(farmId, g_currentMission.TheContractor.Staff, g_currentMission.TheContractor.Jobs)
     end, prompt, g_i18n:getText("tc_pay_riseTitle"), options)
+end
+
+-- 066: the Manage list for the highlighted roster worker. Booking training
+-- (054) is only offered while they're ready, uncertified and not booked,
+-- and says whether it's the course or a retake. OptionDialog closes before
+-- its callback runs, so the chosen action can open its own dialog.
+function MenuContractor:onClickManageWorker()
+    local worker = self:getSelectedRosterWorker()
+    if worker == nil then
+        return
+    end
+
+    local cert = MenuContractor.TRAINING_CERT
+    local actions = {
+        { text = g_i18n:getText("tc_editWorker_button"), run = self.onClickEditWorker },
+        { text = g_i18n:getText("tc_morale_bonusButton"), run = self.onClickGiveBonus },
+        { text = g_i18n:getText("tc_pay_riseButton"), run = self.onClickPayRise },
+    }
+    if TheContractorTraining.getBookingProblem(worker, cert) == nil then
+        table.insert(actions, { text = g_i18n:getText(TheContractorTraining.isRetake(worker, cert) and
+            "tc_training_bookRetakeButton" or "tc_training_bookCourseButton"), run = self.onClickBookTraining })
+    end
+
+    local options = {}
+    for _, action in ipairs(actions) do
+        table.insert(options, action.text)
+    end
+
+    local workerId = worker.id
+    OptionDialog.show(function(index)
+        local action = actions[index]
+        -- Still the same worker: the list could have refreshed meanwhile.
+        if action == nil or self.selectedRosterWorkerId ~= workerId then
+            return
+        end
+        action.run(self)
+    end, string.format(g_i18n:getText("tc_staff_managePrompt"), worker.name), g_i18n:getText("tc_staff_manageTitle"),
+        options)
+end
+
+-- 066: the dialog sends the edit itself. The Staff tab's portrait is
+-- hidden while it's open (updateWorkerPortrait) and comes back on close.
+function MenuContractor:onClickEditWorker()
+    local worker = self:getSelectedRosterWorker()
+    if worker == nil then
+        return
+    end
+
+    self.isEditingWorker = true
+    self:updateWorkerPortrait()
+    TCEditWorkerDialog.show(worker, function(target)
+        target.isEditingWorker = false
+        -- Same "synchronous for host/SP, catches up when the edit arrives
+        -- for a remote client" as the other Staff actions.
+        target:refreshStaffState(g_currentMission:getFarmId(), g_currentMission.TheContractor.Staff,
+            g_currentMission.TheContractor.Jobs)
+    end, self)
+end
+
+-- 066: a worker was edited (TheContractorStaff:applyWorkerEdited, every
+-- machine). Their portrait loads the new look, and an open Staff tab shows
+-- the new name.
+function MenuContractor:onWorkerEdited(workerId)
+    if self.workerPortrait ~= nil and self.workerPortrait.shownWorkerId == workerId then
+        self.workerPortrait:reload()
+    end
+    if self.isFrameOpen and self:hasCompany() then
+        local tc = g_currentMission.TheContractor
+        self:refreshStaffState(g_currentMission:getFarmId(), tc.Staff, tc.Jobs)
+    end
 end
 
 -- 054: funds-check-then-confirm, like onClickHireWorker. The dates shown
@@ -1752,8 +1802,12 @@ function MenuContractor:updateInboxDetails()
     self.inboxDetailTargetDate:setText(formatTargetDate(job.targetPeriod, job.targetDayInPeriod))
     self.inboxDetailPrice:setText(g_i18n:formatMoney(job.price, 0, true, true))
     self.inboxDetailCrew:setText(self:getJobCrewText(job))
-    self.inboxDetailSkill:setText(string.format(g_i18n:getText("tc_inbox_skillValue"),
-        job:getOperationSkillText() or "-", job.requiredSkillLevel))
+    setChip(self.inboxDetailSkillChip, self.inboxDetailSkillChipText, string.format(
+        g_i18n:getText("tc_inbox_skillValue"), job:getOperationSkillText() or "-", job.requiredSkillLevel), "info")
+    -- Harvest & haul (035): the hauler is judged on haulage, to the same level.
+    setChip(self.inboxDetailHaulSkillChip, self.inboxDetailHaulSkillChipText, job.includesHaulage and string.format(
+        g_i18n:getText("tc_inbox_skillValue"), g_i18n:getText("tc_skill_haulage"), job.requiredSkillLevel) or nil,
+        "info")
 
     -- Harvest & haul (035): where the crop has to go.
     self.inboxRowDelivery:setVisible(job.includesHaulage)
