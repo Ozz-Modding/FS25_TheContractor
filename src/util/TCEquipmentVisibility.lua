@@ -68,12 +68,41 @@ function TCEquipmentVisibility.hideVehicle(vehicle)
     end
     vehicle:removeFromPhysics()
     vehicle:setVisibility(false)
+    TCEquipmentVisibility.setHotspotHidden(vehicle, true)
 end
 
 function TCEquipmentVisibility.revealVehicle(vehicle)
     vehicle:removeFromPhysics()
     vehicle:setVisibility(true)
     vehicle:addToPhysics()
+    TCEquipmentVisibility.setHotspotHidden(vehicle, false)
+end
+
+-- Map hotspots: a hidden vehicle's would stay on the map where it stood.
+-- Vanilla re-reads getIsMapHotspotVisible every update (Vehicle:update ->
+-- updateMapHotspot), so the flag is checked there; the hotspot is updated
+-- at once too, since a hidden vehicle may not be updating. Local, like the
+-- hiding itself: every machine sets it for its own map.
+function TCEquipmentVisibility.setHotspotHidden(vehicle, isHidden)
+    vehicle.tcIsHotspotHidden = isHidden or nil
+    if vehicle.updateMapHotspot ~= nil then
+        vehicle:updateMapHotspot()
+    end
+end
+
+function TCEquipmentVisibility.getIsMapHotspotVisible(vehicle, superFunc)
+    if vehicle.tcIsHotspotHidden then
+        return false
+    end
+    return superFunc(vehicle)
+end
+
+-- At module scope, guarded so it can't stack: vehicle types pick up
+-- Vehicle's functions when they're finalized, after mods' sources run.
+if not Vehicle.tcHotspotHookInstalled then
+    Vehicle.getIsMapHotspotVisible = Utils.overwrittenFunction(Vehicle.getIsMapHotspotVisible,
+        TCEquipmentVisibility.getIsMapHotspotVisible)
+    Vehicle.tcHotspotHookInstalled = true
 end
 
 -- Hides/reveals every vehicle id. On the server a vehicle that's gone

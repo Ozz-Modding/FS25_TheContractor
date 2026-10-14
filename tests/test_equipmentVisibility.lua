@@ -60,3 +60,31 @@ test("no local player (a dedicated server) is fine", function()
 
     assertEquals(tractor.isVisible, false, "hidden")
 end)
+
+-- Its map hotspot goes while it's hidden and comes back with it: the flag
+-- is what vanilla's every-update check reads, and the hotspot is updated
+-- straight away as well.
+test("a hidden vehicle's map hotspot is hidden, and back when it is", function()
+    local world = setup()
+    local tractor = addHideableVehicle(world)
+    function tractor:addToPhysics() end
+    function tractor:getIsMapHotspotVisible()
+        return TCEquipmentVisibility.getIsMapHotspotVisible(self, Vehicle.getIsMapHotspotVisible)
+    end
+    function tractor:updateMapHotspot()
+        self.hotspotVisible = self:getIsMapHotspotVisible()
+    end
+    local bystander = addHideableVehicle(world)
+    function bystander:getIsMapHotspotVisible()
+        return TCEquipmentVisibility.getIsMapHotspotVisible(self, Vehicle.getIsMapHotspotVisible)
+    end
+
+    TCEquipmentVisibility.hideVehicles({ tractor.id })
+    assertEquals(tractor.hotspotVisible, false, "hidden at once")
+    assertEquals(tractor:getIsMapHotspotVisible(), false, "and on every update")
+    assertEquals(bystander:getIsMapHotspotVisible(), true, "other vehicles keep theirs")
+
+    TCEquipmentVisibility.revealVehicles({ tractor.id })
+    assertEquals(tractor.hotspotVisible, true, "back at once")
+    assertEquals(tractor:getIsMapHotspotVisible(), true)
+end)
