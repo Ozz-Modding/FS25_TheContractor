@@ -515,7 +515,7 @@
 		<text name="tc_overhead_tradeAssociation" text="Agricultural Contractors' Association"/>
 		<text name="tc_overhead_tradeAssociation_desc" text="Trade association membership, %s a year. Members earn 5%% more reputation per job, get 25%% off certification courses and cheaper legal cover."/>
 		<text name="tc_overhead_legalExpenses" text="Legal expenses insurance"/>
-		<text name="tc_overhead_legalExpenses_desc" text="Pursue overdue invoices at no cost, with a better chance of recovery. %s a year, or %s for association members (from the next renewal if you join mid-term)."/>
+		<text name="tc_overhead_legalExpenses_desc" text="Pursue overdue invoices free, with better odds of recovery. %s a year, or %s for association members (from the next renewal)."/>
 		<text name="tc_legal_pursueButton" text="Pursue"/>
 		<text name="tc_legal_pursueConfirmCovered" text="Pursue the invoice for %s (%s)? Your legal cover handles it at no cost. Expect an outcome in 1-2 months."/>
 		<text name="tc_legal_pursueConfirmSolicitor" text="Instruct a solicitor to recover the invoice for %s (%s)? Their fee and the court fee come to %s, paid now and not refunded if it fails. Expect an outcome in 1-2 months."/>

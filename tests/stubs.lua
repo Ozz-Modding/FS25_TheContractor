@@ -184,6 +184,12 @@ function stubs.install()
             g_farmManager:updateFarmStats(vehicle:getOwnerFarmId(), "fuelUsage", vehicle.fuelStep or 2)
         end,
     }
+    -- Vanilla's base: every map hotspot shown (specializations narrow it).
+    Vehicle = {
+        getIsMapHotspotVisible = function(vehicle)
+            return true
+        end,
+    }
     FarmManager = {
         updateFarmStats = function(_, farmId, statName, delta)
             table.insert(world.farmStats, { farmId = farmId, statName = statName, delta = delta })
