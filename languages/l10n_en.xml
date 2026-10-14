@@ -65,6 +65,7 @@
 		<text name="tc_equipment_need_implement_weed" text="Weeder"/>
 		<text name="tc_equipment_need_implement_hoe" text="Hoe"/>
 		<text name="tc_equipment_need_implement_stonePick" text="Stone picker"/>
+		<text name="tc_equipment_need_baleTransport" text="Whatever you move bales with (bale loader, trailer, front loader)"/>
 		<text name="tc_detail_age" text="Age"/>
 		<text name="tc_detail_workSpeed" text="Work speed"/>
 		<text name="tc_detail_tiers" text="Tractors"/>
@@ -152,6 +153,8 @@
 		<text name="tc_jobType_tedder" text="Ted"/>
 		<text name="tc_jobType_bale" text="Bale"/>
 		<text name="tc_jobType_baleWrap" text="Wrap Bales"/>
+		<text name="tc_jobType_baleHaul" text="Bale &amp; Deliver"/>
+		<text name="tc_jobType_strawDelivery" text="Deliver Straw"/>
 		<text name="tc_jobType_fertilize" text="Fertilize"/>
 		<text name="tc_jobType_herbicide" text="Spray Herbicide"/>
 		<text name="tc_jobType_weed" text="Weed"/>
@@ -209,6 +212,8 @@
 		<text name="tc_calendar_jobTravelling" text="Travelling"/>
 		<text name="tc_calendar_jobInProgress" text="In progress - %d%%"/>
 		<text name="tc_calendar_jobDelivering" text="%d%% cut, %d%% delivered"/>
+		<text name="tc_calendar_jobBalingDelivering" text="%d%% baled, %d%% delivered"/>
+		<text name="tc_calendar_jobDeliveringOnly" text="%d%% delivered"/>
 		<text name="tc_calendar_jobUnallocated" text="Not yet allocated"/>
 		<text name="tc_calendar_jobMissed" text="Failed"/>
 		<text name="tc_calendar_jumpToToday" text="Jump to Today"/>
@@ -344,6 +349,8 @@
 		<text name="tc_allocation_needsSecondWorker" text="Harvest &amp; haul needs two workers - one harvesting, one hauling. Or pick Myself on your own to harvest and haul it all yourself."/>
 		<text name="tc_allocation_tooManyWorkers" text="This job only takes one worker."/>
 		<text name="tc_allocation_haulYourself" text="You will harvest the crop and haul it yourself - deliver it to %s."/>
+		<text name="tc_allocation_baleAndDeliverYourself" text="You will bale the straw and deliver the bales yourself - take them to %s."/>
+		<text name="tc_allocation_deliverStrawYourself" text="Collect the straw bales from the field and deliver them to %s."/>
 		<text name="tc_allocation_playerOnly" text="Workers can't do this job - only you can. Select Myself."/>
 		<text name="tc_allocation_noSuppliesWarning" text="You have no %s in stock - the job will be on hold until you do."/>
 		<text name="tc_allocation_selectWarning" text="Still to select: %s."/>

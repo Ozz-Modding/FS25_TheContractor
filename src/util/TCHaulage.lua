@@ -23,6 +23,13 @@
 --                being sold (SellingStation:addFillLevelFromTool). Once
 --                requiredLiters is in, the tracker drops out and anything
 --                more sells normally - the player keeps the excess.
+--                067 delivers straw bales the same way, to a station with
+--                a bale trigger (findBaleDeliveryStation): bale & deliver
+--                (a bale job with includesHaulage) and straw delivery. A
+--                bale tipped into a BaleUnloadTrigger reaches the station's
+--                addFillLevelFromTool like any other load. Counted in
+--                litres by fill type + farm, like the crop - the farm's own
+--                straw sold there counts too.
 --
 -- Server-only apart from the display state (deliveredLiters/requiredLiters/
 -- deliveryStationName), which rides on the job snapshot and
@@ -67,6 +74,62 @@ function TCHaulage.findDeliveryStation(fillTypeIndex)
     return station
 end
 
+-- Whether one of a station's unload triggers is a bale trigger that takes
+-- bales of this fill type - BaleUnloadTrigger:getIsBaleSupportedByUnloadTrigger's
+-- own checks, less the bale itself.
+local function hasBaleTriggerFor(station, fillTypeIndex)
+    if BaleUnloadTrigger == nil then
+        return false
+    end
+    for _, trigger in ipairs(station.unloadTriggers or {}) do
+        if trigger.isa ~= nil and trigger:isa(BaleUnloadTrigger) and
+            (trigger.supportedFillTypes == nil or trigger.supportedFillTypes[fillTypeIndex] ~= nil) and
+            trigger:getIsFillTypeAllowed(fillTypeIndex) and trigger:getIsFillTypeSupported(fillTypeIndex) and
+            trigger:getIsToolTypeAllowed(ToolType.BALE) then
+            return true
+        end
+    end
+    return false
+end
+
+-- 067: the selling point paying most for the fill type that has a bale
+-- trigger taking it - HarvestMission.getSellingStationWithHighestPrice's
+-- pick, among the stations bales can actually be tipped into. Bales sold
+-- there go through SellingStation:addFillLevelFromTool like any load, so
+-- the same tracker counts them. nil if nowhere takes them.
+function TCHaulage.findBaleDeliveryStation(fillTypeIndex)
+    if fillTypeIndex == nil or fillTypeIndex == FillType.UNKNOWN then
+        return nil
+    end
+
+    local bestStation, bestPrice = nil, 0
+    for _, station in pairs(g_currentMission.storageSystem:getUnloadingStations()) do
+        if station.owningPlaceable ~= nil and station.isSellingPoint and station.allowMissions and
+            station.acceptedFillTypes ~= nil and station.acceptedFillTypes[fillTypeIndex] and
+            hasBaleTriggerFor(station, fillTypeIndex) then
+            local price = station:getEffectiveFillTypePrice(fillTypeIndex)
+            if price > bestPrice then
+                bestStation, bestPrice = station, price
+            end
+        end
+    end
+    return bestStation
+end
+
+-- What a job delivers: the crop on a harvest job, straw on a bale job
+-- (067).
+function TCHaulage.getDeliveryFillType(job)
+    local jobDef = TheContractorJobGeneration.JOB_TYPES[job.jobType]
+    local fruitTypeIndex = job:getFruitTypeIndex()
+    if jobDef == nil or fruitTypeIndex == nil then
+        return nil
+    end
+    if jobDef.deliversBales then
+        return TheContractorJobGeneration.getStrawFillType(fruitTypeIndex)
+    end
+    return g_fruitTypeManager:getFillTypeIndexByFruitTypeIndex(fruitTypeIndex)
+end
+
 -- Remembers a station on the job the way vanilla saves one (owning
 -- placeable's uniqueId + unloading station index), plus its name for
 -- display.
@@ -107,14 +170,62 @@ local function getExpectedLiters(job)
     return g_fruitTypeManager:getFruitTypeAreaLiters(fruitTypeIndex, pixels, false)
 end
 
+-- The straw in a straw delivery's bales (067), as laid out.
+local function getSpawnedBaleLiters(job)
+    local liters = 0
+    for _, uniqueId in ipairs(job.spawnedBaleIds) do
+        local bale = g_currentMission.itemSystem:getItemByUniqueId(uniqueId)
+        if bale ~= nil then
+            liters = liters + bale:getFillLevel()
+        end
+    end
+    return liters
+end
+
+-- Litres the job has to deliver, or nil while that isn't known yet: a
+-- bale job's straw is the windrow it's baling, a straw delivery's the
+-- bales laid out for it, and both are only there once its field's been
+-- laid out (TCFieldPreparation, which calls startDelivery again when it
+-- has). Harvest's is the field's expected yield. Always less
+-- DELIVERY_SUCCESS_FACTOR, for what's lost along the way (headlands, a
+-- part-bale left in the baler, a bale that rolled off).
+function TCHaulage.getRequiredLiters(job)
+    local jobDef = TheContractorJobGeneration.JOB_TYPES[job.jobType]
+    if jobDef == nil then
+        return nil
+    end
+
+    local liters
+    if jobDef.deliveryOnly then
+        if job.workTotal == nil then
+            return nil
+        end
+        liters = getSpawnedBaleLiters(job)
+    elseif jobDef.deliversBales then
+        liters = job.workTotal
+    else
+        liters = getExpectedLiters(job)
+    end
+    if liters == nil then
+        return nil
+    end
+    return liters * TCHaulage.DELIVERY_SUCCESS_FACTOR
+end
+
 -- Delivery tracking -----------------------------------------------------------
 
 -- Duck-typed stand-in for a vanilla mission in SellingStation.missions:
 -- addFillLevelFromTool matches on fillTypeIndex + farmId, picks the
 -- matching entry with the highest getCompletion(), and calls fillSold on
 -- it instead of selling; SellingStation:delete calls onDeleteSellingStation.
+-- "Highest" starts from 0 and only a completion above it is picked, so a
+-- tracker reporting exactly 0 (nothing delivered yet) is never picked and
+-- every load sells instead - vanilla's own missions are always past 0 by
+-- then, from their field work. Hence MIN_COMPLETION.
 local TCDeliveryTracker = {}
 local TCDeliveryTracker_mt = { __index = TCDeliveryTracker }
+
+TCHaulage.MIN_COMPLETION = 0.001
 
 function TCDeliveryTracker.new(job, station, fillTypeIndex)
     return setmetatable({
@@ -134,7 +245,7 @@ function TCDeliveryTracker:getCompletion()
     if job == nil or job.requiredLiters <= 0 then
         return 1
     end
-    return job.deliveredLiters / job.requiredLiters
+    return math.max(TCHaulage.MIN_COMPLETION, job.deliveredLiters / job.requiredLiters)
 end
 
 function TCDeliveryTracker:fillSold(fillDelta)
@@ -173,9 +284,7 @@ local function registerTracker(job)
         return false
     end
 
-    local fruitTypeIndex = job:getFruitTypeIndex()
-    local fillTypeIndex = fruitTypeIndex ~= nil and g_fruitTypeManager:getFillTypeIndexByFruitTypeIndex(fruitTypeIndex)
-        or nil
+    local fillTypeIndex = TCHaulage.getDeliveryFillType(job)
     if fillTypeIndex == nil then
         return false
     end
@@ -187,13 +296,19 @@ local function registerTracker(job)
 end
 
 -- Server-only. Called on allocating a haulage job to the player: works out
--- how much has to be delivered and starts counting deliveries.
+-- how much has to be delivered and starts counting deliveries. For a job
+-- whose amount isn't known until its field is laid out (getRequiredLiters),
+-- that's left until TCFieldPreparation calls this again - with nothing
+-- required, the tracker would count the terms as met at once.
 function TCHaulage.startDelivery(job)
     if not g_currentMission:getIsServer() or not job:needsPlayerDelivery() then
         return
     end
 
-    local required = getExpectedLiters(job) * TCHaulage.DELIVERY_SUCCESS_FACTOR
+    local required = TCHaulage.getRequiredLiters(job)
+    if required == nil then
+        return
+    end
     g_currentMission.TheContractor.Jobs:applyJobDelivery(job.farmId, job.id, 0, required)
     dirtyJobIds[job.id] = true
 

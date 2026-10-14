@@ -1805,7 +1805,9 @@ function MenuContractor:updateInboxDetails()
     setChip(self.inboxDetailSkillChip, self.inboxDetailSkillChipText, string.format(
         g_i18n:getText("tc_inbox_skillValue"), job:getOperationSkillText() or "-", job.requiredSkillLevel), "info")
     -- Harvest & haul (035): the hauler is judged on haulage, to the same level.
-    setChip(self.inboxDetailHaulSkillChip, self.inboxDetailHaulSkillChipText, job.includesHaulage and string.format(
+    -- There's no hauler on a job only the player does (067's bales).
+    local hasHauler = job.includesHaulage and not TheContractorJobGeneration.isPlayerOnly(job)
+    setChip(self.inboxDetailHaulSkillChip, self.inboxDetailHaulSkillChipText, hasHauler and string.format(
         g_i18n:getText("tc_inbox_skillValue"), g_i18n:getText("tc_skill_haulage"), job.requiredSkillLevel) or nil,
         "info")
 
@@ -1826,10 +1828,10 @@ end
 
 -- Who can do the job: one worker (or the player), two for harvest & haul
 -- (035) unless the player hauls, or the player alone for work the AI
--- helper can't do (032's playerOnly, bale wrapping).
+-- helper can't do (032's playerOnly, bale wrapping, and 067's bales to
+-- deliver).
 function MenuContractor:getJobCrewText(job)
-    local jobDef = TheContractorJobGeneration.JOB_TYPES[job.jobType]
-    if jobDef ~= nil and jobDef.playerOnly then
+    if TheContractorJobGeneration.isPlayerOnly(job) then
         return g_i18n:getText("tc_inbox_crewPlayerOnly")
     end
     if TheContractorAllocation.getRequiredWorkerCount(job) > 1 then
@@ -1915,6 +1917,13 @@ function MenuContractor:getInboxEquipmentRows(job, missingFree, haulageMissingFr
         table.insert(rows, { key = key, isHaulage = isHaulage })
     end
 
+    -- 067: a straw delivery needs nothing in particular - whatever the
+    -- player moves bales with. One unchecked row says so.
+    if jobDef.noEquipment then
+        table.insert(rows, { key = "baleTransport", isHaulage = false, isUnchecked = true })
+        return rows
+    end
+
     if jobDef.cropDependent then
         add("cutter", false)
         add("harvester", false)
@@ -1928,7 +1937,7 @@ function MenuContractor:getInboxEquipmentRows(job, missingFree, haulageMissingFr
         add("tractor", false)
     end
 
-    if job.includesHaulage then
+    if job.includesHaulage and not TheContractorJobGeneration.isPlayerOnly(job) then
         add("haulTractor", true)
         add("trailer", true)
         for _, key in ipairs(haulageMissingFree) do
@@ -1965,7 +1974,7 @@ function MenuContractor:updateInboxEquipment(job)
     local allocation = g_currentMission.TheContractor.Allocation
     local missingOwned, missingFree = allocation:getMissingEquipment(farmId, job)
     local haulageOwned, haulageFree = {}, {}
-    if job.includesHaulage then
+    if job.includesHaulage and not TheContractorJobGeneration.isPlayerOnly(job) then
         haulageOwned, haulageFree = allocation:getMissingHaulageEquipment(farmId, job)
     end
 
@@ -1977,7 +1986,9 @@ function MenuContractor:updateInboxEquipment(job)
             local owned = row.isHaulage and haulageOwned or missingOwned
             local free = row.isHaulage and haulageFree or missingFree
             local chip, chipText = self["inboxEquipChip" .. i], self["inboxEquipChipText" .. i]
-            if table.hasElement(owned, row.key) then
+            if row.isUnchecked then
+                setChip(chip, chipText, nil)
+            elseif table.hasElement(owned, row.key) then
                 setChip(chip, chipText, g_i18n:getText("tc_inbox_equipmentStatusMissing"), "bad")
             elseif table.hasElement(free, row.key) then
                 setChip(chip, chipText, g_i18n:getText("tc_inbox_equipmentStatusBusy"), "warn")
@@ -2532,7 +2543,7 @@ function MenuContractor:populateCalendarDayJobCell(index, cell)
     -- How many people the job takes: 2 for harvest & haul (035), "You" for
     -- work only the player can do. getJobCrewText has the long form.
     local jobDef = TheContractorJobGeneration.JOB_TYPES[job.jobType]
-    if jobDef ~= nil and jobDef.playerOnly then
+    if TheContractorJobGeneration.isPlayerOnly(job) then
         cell:getAttribute("crew"):setText(g_i18n:getText("tc_calendar_crewPlayer"))
     else
         cell:getAttribute("crew"):setText(tostring(TheContractorAllocation.getRequiredWorkerCount(job)))
@@ -2570,9 +2581,17 @@ function MenuContractor:populateCalendarDayJobCell(index, cell)
     elseif job.isTravelling then
         setChip(chip, chipText, g_i18n:getText("tc_calendar_jobTravelling"), "info")
     elseif job:needsPlayerDelivery() and job.requiredLiters > 0 and job.state == TheContractorJob.STATE.ALLOCATED then
-        -- Player-driven haulage (035): cut and delivered, both.
-        setChip(chip, chipText, string.format(g_i18n:getText("tc_calendar_jobDelivering"),
-            math.floor(job.completionPercentage), math.floor(100 * job.deliveredLiters / job.requiredLiters)), "good")
+        -- Player-driven haulage (035): cut and delivered, both - or for a
+        -- straw delivery (067), just delivered.
+        local delivered = math.floor(100 * job.deliveredLiters / job.requiredLiters)
+        if jobDef ~= nil and jobDef.deliveryOnly then
+            setChip(chip, chipText, string.format(g_i18n:getText("tc_calendar_jobDeliveringOnly"), delivered), "good")
+        else
+            local key = jobDef ~= nil and jobDef.deliversBales and "tc_calendar_jobBalingDelivering" or
+                "tc_calendar_jobDelivering"
+            setChip(chip, chipText, string.format(g_i18n:getText(key), math.floor(job.completionPercentage),
+                delivered), "good")
+        end
     else
         setChip(chip, chipText, g_i18n:getText("tc_calendar_jobAllocated"), "info")
     end
@@ -2695,7 +2714,7 @@ function MenuContractor:rebuildAllocationEquipmentRows(job)
             addRow(vehicle, "tractor")
         end
     end
-    if job.includesHaulage and #self.allocationSelectedWorkerIds > 0 then
+    if self:isHaulageCrewPicked(job) then
         for _, entry in ipairs(allocation:getEligibleHaulageEquipment(farmId, job)) do
             addRow(entry.vehicle, entry.role)
         end
@@ -2720,6 +2739,14 @@ function MenuContractor:rebuildAllocationEquipmentRows(job)
         self.allocationEquipmentTable:setSelectedIndex(self.allocationHighlightedEquipmentIndex)
     end
     self:updateAllocationEquipmentToggleButton()
+end
+
+-- Workers picked for a haulage job a crew can do (035) - the haulage rig
+-- comes into it. Not on a job only the player can do (067's bales), where
+-- picking a worker just gets the crew warning.
+function MenuContractor:isHaulageCrewPicked(job)
+    return job.includesHaulage and not TheContractorJobGeneration.isPlayerOnly(job) and
+        #self.allocationSelectedWorkerIds > 0
 end
 
 function MenuContractor:getAllocatingJob()
@@ -3005,7 +3032,7 @@ function MenuContractor:updateAllocationWarning()
     -- once workers are picked for a haulage job - the player alone brings
     -- their own.
     local missingOwned, missingFree = allocation:getMissingEquipment(farmId, job)
-    if job.includesHaulage and #self.allocationSelectedWorkerIds > 0 then
+    if self:isHaulageCrewPicked(job) then
         local haulageOwned, haulageFree = allocation:getMissingHaulageEquipment(farmId, job)
         for _, key in ipairs(haulageOwned) do
             table.insert(missingOwned, key)
@@ -3057,13 +3084,27 @@ function MenuContractor:updateAllocationWarning()
             joinSupplyTitles(supplyEntries)))
         self.allocationWarningText:setTextColor(1, 0.75, 0.25, 1)
     elseif job.includesHaulage and #self.allocationSelectedWorkerIds == 0 then
-        -- Player alone on a haulage job: they're doing the carting.
-        self.allocationWarningText:setText(string.format(g_i18n:getText("tc_allocation_haulYourself"),
+        -- Player alone on a haulage job: they're doing the carting - the
+        -- crop, or (067) the straw bales.
+        self.allocationWarningText:setText(string.format(g_i18n:getText(self:getHaulYourselfKey(job)),
             job.deliveryStationName or "?"))
         self.allocationWarningText:setTextColor(1, 1, 1, 1)
     else
         self.allocationWarningText:setText("")
     end
+end
+
+-- What the player is told they'll be carting on a haulage job they do
+-- themselves: the crop (035), the straw they bale, or (straw delivery)
+-- bales already lying there (067).
+function MenuContractor:getHaulYourselfKey(job)
+    local jobDef = TheContractorJobGeneration.JOB_TYPES[job.jobType]
+    if jobDef ~= nil and jobDef.deliveryOnly then
+        return "tc_allocation_deliverStrawYourself"
+    elseif jobDef ~= nil and jobDef.deliversBales then
+        return "tc_allocation_baleAndDeliverYourself"
+    end
+    return "tc_allocation_haulYourself"
 end
 
 -- Validates locally (friendly pre-check, same "server re-validates

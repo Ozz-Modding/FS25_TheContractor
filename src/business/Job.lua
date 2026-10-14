@@ -144,12 +144,14 @@ function TheContractorJob.new(id, farmId, jobType, fieldId, requiredSkillLevel, 
     self.suppliesLoaded = nil
     self.fuelLoaded = nil
 
-    -- Harvest jobs only (035): the client wants the crop carted away too,
-    -- not just the field combined - a two-person job. Rolled at generation,
+    -- Harvest jobs (035): the client wants the crop carted away too, not
+    -- just the field combined - a two-person job. Rolled at generation,
     -- priced/rewarded higher (TheContractorJobGeneration.HAULAGE_*).
     -- Allocated either to the player alone, who hauls the crop to
     -- deliveryStation themselves, or to two hired workers, where the
-    -- carting is synthetic (TCHaulage).
+    -- carting is synthetic (TCHaulage). 067: a straw bale job can roll it
+    -- too (bale & deliver), and a straw delivery always has it - both the
+    -- player's alone (TheContractorJobGeneration.isPlayerOnly).
     self.includesHaulage = false
 
     -- Two-worker haulage jobs only: the worker doing the carting, alongside
@@ -200,10 +202,11 @@ function TheContractorJob.new(id, farmId, jobType, fieldId, requiredSkillLevel, 
     -- 032, server-only, saved: the baseline a serverMeasured job's progress
     -- is measured against, set once its field has been prepared at
     -- allocation - litres of windrow spawned (tedder/bale), weed area at the
-    -- start (weed/hoe), bales spawned (bale wrap). nil until then.
+    -- start (weed/hoe), bales spawned (bale wrap, straw delivery). nil
+    -- until then.
     self.workTotal = nil
-    -- Bale wrap only (server-only, saved): uniqueIds of the bales spawned
-    -- for the job, removed again once it's over.
+    -- Bale wrap and straw delivery only (server-only, saved): uniqueIds of
+    -- the bales spawned for the job, removed again once it's over.
     self.spawnedBaleIds = {}
 
     -- 032: why work is on hold for supplies, or nil - "noStock" (the farm
@@ -366,10 +369,13 @@ function TheContractorJob:getCropTitle()
     return fillType ~= nil and fillType.title or nil
 end
 
--- "Harvest", "Cultivate", "Mow", ... - or "Harvest & Haul" for a haulage
--- job.
+-- "Harvest", "Cultivate", "Mow", ... - or "Harvest & Haul"/"Bale &
+-- Deliver" for a haulage job. A straw delivery is all haulage, so it's
+-- just "Deliver Straw".
 function TheContractorJob:getTypeText()
-    return g_i18n:getText("tc_jobType_" .. self.jobType .. (self.includesHaulage and "Haul" or ""))
+    local jobDef = TheContractorJobGeneration.JOB_TYPES[self.jobType]
+    local isExtraHaulage = self.includesHaulage and not (jobDef ~= nil and jobDef.deliveryOnly)
+    return g_i18n:getText("tc_jobType_" .. self.jobType .. (isExtraHaulage and "Haul" or ""))
 end
 
 -- "Harvest (Spinach)" for crop jobs, plain "Cultivate" otherwise, and

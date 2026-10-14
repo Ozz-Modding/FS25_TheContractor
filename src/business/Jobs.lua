@@ -136,7 +136,8 @@ end
 -- monotonic day) is optional: 011 passes the one it worked out, callers
 -- that only have a period/day (debug creation) get the next occurrence of
 -- that date (getNextOccurrenceDay). includesHaulage/deliveryStation
--- (an unloading station object) are harvest-only and optional (035).
+-- (an unloading station object) are optional: harvest & haul (035), bale
+-- & deliver and straw delivery (067).
 -- startState is the field state the job starts from, for job types that
 -- record one (032, JOB_TYPES' startState).
 function TheContractorJobs:createJob(farmId, jobType, fieldId, requiredSkillLevel, targetPeriod, targetDayInPeriod,
@@ -753,13 +754,15 @@ end
 
 -- Full (fully-qualified operator) reputation reward before rounding: field
 -- area times the job type's reputationPerHa, scaled up for a haulage job
--- (035).
+-- (035) - not a straw delivery (067), where hauling is the whole job and
+-- its reputationPerHa already says so.
 function TheContractorJobs.getBaseReputationReward(job)
     local jobDef = TheContractorJobGeneration.JOB_TYPES[job.jobType]
     local field = g_fieldManager:getFieldById(job.fieldId)
     local areaHa = field ~= nil and field:getAreaHa() or 1
     local reputationPerHa = jobDef ~= nil and TheContractorJobGeneration.getReputationPerHa(jobDef) or 0
-    local haulageMultiplier = job.includesHaulage and TheContractorJobGeneration.HAULAGE_REPUTATION_MULTIPLIER or 1
+    local isExtraHaulage = job.includesHaulage and not (jobDef ~= nil and jobDef.deliveryOnly)
+    local haulageMultiplier = isExtraHaulage and TheContractorJobGeneration.HAULAGE_REPUTATION_MULTIPLIER or 1
     return reputationPerHa * areaHa * haulageMultiplier
 end
 
@@ -854,7 +857,7 @@ function TheContractorJobs:completeJob(job, isForced)
     end
 
     -- A player-driven haulage job (035) isn't done until the crop has been
-    -- delivered, as well as cut.
+    -- delivered, as well as cut - or (067) the straw, as well as baled.
     if not isForced and job:needsPlayerDelivery() and job.deliveredLiters < job.requiredLiters then
         return
     end

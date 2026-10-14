@@ -17,9 +17,10 @@
 -- Some job types (032) need more than a field state to work on, and get it
 -- the way vanilla's own missions do: tedding and baling need a cut crop
 -- lying in windrows (TedderMission/BaleMission spawn one along a field
--- course), bale wrapping needs bales (BaleWrapMission spawns them). That
--- spawning runs over several frames (FieldCourseIterator), so those jobs'
--- baseline (job.workTotal - what TCJobProgress measures them against) is
+-- course), bale wrapping needs bales (BaleWrapMission spawns them), and so
+-- does a straw delivery (067), straw ones. That spawning runs over several
+-- frames (FieldCourseIterator), so those jobs' baseline (job.workTotal -
+-- what TCJobProgress measures them against) is
 -- only set once it's finished; a save that lands mid-spawn prepares the
 -- field again on the next load (resumeAfterLoad).
 
@@ -50,6 +51,10 @@ TCFieldPreparation.COURSE_HEADLANDS = 2
 -- Bale wrap: the bale vanilla falls back to when the job's wrapper tells
 -- us nothing (BaleWrapMission.tryGenerateMission's round option).
 TCFieldPreparation.DEFAULT_WRAP_BALE = { isRoundbale = true, width = 1.2, height = 0, length = 0, diameter = 1.5 }
+
+-- Straw delivery (067): the straw bale it lays out - the same round size,
+-- else any round straw bale the map has, else any square one.
+TCFieldPreparation.STRAW_BALE = { isRoundbale = true, width = 1.2, diameter = 1.5 }
 
 -- jobId -> token of the spawn running for that job (see startSpawn)
 local spawningJobIds = {}
@@ -187,6 +192,9 @@ local function finishSpawn(job, total, what)
     else
         Logging.info("TheContractor: job %d field %d - laid out %.0f %s", job.id, job.fieldId, total, what)
     end
+    -- 067: what a player delivering the straw has to take in is only known
+    -- now.
+    TCHaulage.startDelivery(job)
 end
 
 -- A windrow along the field course, the way BaleMission:update lays one:
@@ -255,22 +263,31 @@ local function getWrapBaleIndex(job)
         bale.diameter)
 end
 
+-- The straw bale a straw delivery lays out (STRAW_BALE), or nil if the map
+-- has no straw bale at all.
+function TCFieldPreparation.getStrawBaleIndex()
+    local bale = TCFieldPreparation.STRAW_BALE
+    return g_baleManager:getBaleIndex(FillType.STRAW, bale.isRoundbale, bale.width, nil, nil, bale.diameter) or
+        g_baleManager:getBaleIndex(FillType.STRAW, true) or g_baleManager:getBaleIndex(FillType.STRAW, false)
+end
+
 -- Bales along the field course, the way BaleWrapMission:prepareField lays
--- them: a field's worth of grass (area * literPerSqm) in full bales, one
--- dropped each time a bale's worth of course has gone by (a part-bale's
--- worth left over at the end makes no bale, as in vanilla). Owned like
--- vanilla's, by the field's owner (no one, for the unowned land contracts
--- go to), so our wrapper can work them but nobody can sell them.
-local function spawnBales(job, field)
-    local baleIndex = getWrapBaleIndex(job)
+-- them: a field's worth of the crop (area * windrowLiterPerSqm) in full
+-- bales of fillTypeIndex, one dropped each time a bale's worth of course
+-- has gone by (a part-bale's worth left over at the end makes no bale, as
+-- in vanilla). A bale wrap job's are owned like vanilla's, by the field's
+-- owner (no one, for the unowned land contracts go to), so our wrapper can
+-- work them but nobody can sell them. A straw delivery's (067) are the
+-- job's farm's: its player has to be able to load them (in MP too), and
+-- the delivery tracker counts what the bale's owner sells.
+local function spawnBales(job, field, baleIndex, fruitTypeIndex, fillTypeIndex, ownerFarmId)
     if baleIndex == nil then
         finishSpawn(job, 0, "bales")
         return
     end
 
-    local grass = g_fruitTypeManager:getFruitTypeByIndex(FruitType.GRASS)
-    local fillTypeIndex = FillType.GRASS_WINDROW
-    local totalLiters = MathUtil.haToSqm(field:getAreaHa()) * (grass.windrowLiterPerSqm or grass.literPerSqm)
+    local fruitType = g_fruitTypeManager:getFruitTypeByIndex(fruitTypeIndex)
+    local totalLiters = MathUtil.haToSqm(field:getAreaHa()) * (fruitType.windrowLiterPerSqm or fruitType.literPerSqm)
     local xmlFilename = g_baleManager:getBaleXMLFilenameByIndex(baleIndex)
     local capacity = g_baleManager:getBaleCapacityByBaleIndex(baleIndex, fillTypeIndex)
     local baleDesc = g_baleManager:getBaleDescByIndex(baleIndex)
@@ -296,7 +313,7 @@ local function spawnBales(job, field)
         if bale:loadFromConfigXML(xmlFilename, x, y, z, 0, rotY, 0) then
             bale:setFillType(fillTypeIndex)
             bale:setFillLevel(capacity)
-            bale:setOwnerFarmId(field:getOwner(), true)
+            bale:setOwnerFarmId(ownerFarmId, true)
             bale:register()
             table.insert(job.spawnedBaleIds, bale:getUniqueId())
         end
@@ -372,7 +389,15 @@ function TCFieldPreparation.prepareFieldForJob(job)
         spawnWindrow(job, field, fruitTypeIndex, fillTypeIndex)
     elseif jobType == "baleWrap" then
         prepareCutCrop(field, FruitType.GRASS)
-        spawnBales(job, field)
+        spawnBales(job, field, getWrapBaleIndex(job), FruitType.GRASS, FillType.GRASS_WINDROW, field:getOwner())
+    elseif jobType == "strawDelivery" then
+        local fruitTypeIndex = job:getFruitTypeIndex()
+        if TheContractorJobGeneration.getStrawFillType(fruitTypeIndex) == nil then
+            Logging.warning("TheContractor: job %d has no straw crop, can't prepare field %d", job.id, job.fieldId)
+            return false
+        end
+        prepareCutCrop(field, fruitTypeIndex)
+        spawnBales(job, field, TCFieldPreparation.getStrawBaleIndex(), fruitTypeIndex, FillType.STRAW, job.farmId)
     elseif jobType == "fertilize" then
         fieldState.sprayType = FieldSprayType.NONE
         fieldState.sprayLevel = job.startState or fieldState.sprayLevel
@@ -408,10 +433,11 @@ end
 
 -- Server-only. What vanilla's missions clear away once they're done
 -- (BaleMission/BaleWrapMission:finishField): the bales. Spawned bales for a
--- bale wrap job; for a baling job, the bales our baler left on the field -
--- ours, of the job's crop, lying on the job's farmland. The client keeps
--- the crop, the same way harvest jobs' grain is carted away (TCHaulage).
--- Called on completion and on a miss alike.
+-- bale wrap job or a straw delivery (whatever of a delivery's wasn't
+-- delivered, wherever it is); for a baling job, the bales our baler left
+-- on the field - ours, of the job's crop, lying on the job's farmland. The
+-- client keeps the crop, the same way harvest jobs' grain is carted away
+-- (TCHaulage). Called on completion and on a miss alike.
 function TCFieldPreparation.clearUpAfterJob(job)
     if not g_currentMission:getIsServer() then
         return
@@ -458,7 +484,8 @@ local function resumeAfterLoad()
     for _, farm in ipairs(g_farmManager:getFarms()) do
         for _, job in ipairs(tc.Jobs:getAllJobs(farm.farmId)) do
             local jobDef = getJobDef(job)
-            if jobDef ~= nil and (job.jobType == "tedder" or job.jobType == "bale" or job.jobType == "baleWrap") and
+            if jobDef ~= nil and (job.jobType == "tedder" or job.jobType == "bale" or job.jobType == "baleWrap" or
+                    job.jobType == "strawDelivery") and
                 job.workTotal == nil and (job.state == TheContractorJob.STATE.ALLOCATED or
                     job.state == TheContractorJob.STATE.IN_PROGRESS) then
                 Logging.info("TheContractor: job %d field %d wasn't finished being laid out, preparing it again",
