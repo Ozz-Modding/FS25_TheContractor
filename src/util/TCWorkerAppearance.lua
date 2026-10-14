@@ -337,7 +337,8 @@ end
 -- The hired worker on a vehicle, on any machine: its staff driver (037 -
 -- AI Helper, AutoDrive or Courseplay), or the operator of a contract job
 -- it's assigned to. nil for anything else - a helper on a vehicle of a farm
--- with no company, a player-driven job.
+-- with no company, a player-driven job. The second value says which: true
+-- for a contract job, false for a staff driver.
 function TCWorkerAppearance.getWorkerOnVehicle(vehicle)
     local tc = g_currentMission ~= nil and g_currentMission.TheContractor or nil
     if tc == nil or tc.Staff == nil then
@@ -346,7 +347,7 @@ function TCWorkerAppearance.getWorkerOnVehicle(vehicle)
 
     local binding = tc.Drivers ~= nil and tc.Drivers:getBinding(vehicle) or nil
     if binding ~= nil then
-        return tc.Staff:getWorker(binding.farmId, binding.workerId)
+        return tc.Staff:getWorker(binding.farmId, binding.workerId), false
     end
 
     local vehicleId = NetworkUtil.getObjectId(vehicle)
@@ -360,7 +361,7 @@ function TCWorkerAppearance.getWorkerOnVehicle(vehicle)
                 job.state == TheContractorJob.STATE.IN_PROGRESS) then
             for _, equipmentId in ipairs(job.assignedEquipmentIds) do
                 if equipmentId == vehicleId then
-                    return tc.Staff:getWorker(farmId, job.assignedWorkerId)
+                    return tc.Staff:getWorker(farmId, job.assignedWorkerId), true
                 end
             end
         end
