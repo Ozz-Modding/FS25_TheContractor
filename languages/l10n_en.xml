@@ -33,7 +33,7 @@
 		<text name="tc_detail_replyBy" text="Reply by"/>
 		<text name="tc_inbox_equipmentHeading" text="Equipment needed"/>
 		<text name="tc_inbox_fieldValue" text="%s (%s)"/>
-		<text name="tc_inbox_skillValue" text="%s %d / 10"/>
+		<text name="tc_inbox_skillValue" text="%s %d"/>
 		<text name="tc_inbox_crewOne" text="1 worker, or yourself"/>
 		<text name="tc_inbox_crewHaul" text="2 workers (one harvesting, one hauling), or harvest and haul it all yourself"/>
 		<text name="tc_inbox_crewPlayerOnly" text="Yourself only - workers can't do this job"/>
@@ -595,6 +595,7 @@
 		<text name="tc_morale_bonusTitle" text="Give a bonus"/>
 		<text name="tc_morale_bonusPrompt" text="Give %s a one-off bonus? It's paid now, with their wages, and lifts their morale."/>
 		<text name="tc_morale_bonusCannotAfford" text="You can't afford a %s bonus for %s."/>
+		<text name="tc_morale_bonusConfirm" text="%s has been paid a %s bonus. It has improved their morale."/>
 		<text name="tc_morale_bonusNotice" text="%s is pleased with their %s bonus"/>
 		<text name="tc_morale_quitNotice" text="%s has quit and leaves at the start of %s."/>
 		<text name="tc_morale_quitAnnounced" text="%s is unhappy and has handed in their notice. They leave at the start of %s"/>
@@ -616,6 +617,21 @@
 		<text name="tc_pay_optionExpected" text="What they want: %s"/>
 		<text name="tc_pay_optionPercent" text="+%d%%: %s"/>
 		<text name="tc_pay_detailSalaryWants" text="%s per month (wants %s)"/>
+		<text name="tc_staff_manageButton" text="Manage"/>
+		<text name="tc_staff_manageTitle" text="Manage worker"/>
+		<text name="tc_staff_managePrompt" text="What would you like to do for %s?"/>
+		<text name="tc_editWorker_button" text="Edit name and look"/>
+		<text name="tc_editWorker_title" text="Edit worker"/>
+		<text name="tc_editWorker_nameLabel" text="Name"/>
+		<text name="tc_editWorker_genderLabel" text="Gender"/>
+		<text name="tc_editWorker_gender_male" text="Male"/>
+		<text name="tc_editWorker_gender_female" text="Female"/>
+		<text name="tc_editWorker_genderHint" text="Changing gender rolls a new look."/>
+		<text name="tc_editWorker_save" text="Save"/>
+		<text name="tc_editWorker_roll" text="Roll look"/>
+		<text name="tc_editWorker_rename" text="Rename"/>
+		<text name="tc_editWorker_renamePrompt" text="Enter a new name for this worker"/>
+		<text name="tc_editWorker_invalidName" text="A name must be between 1 and %d characters."/>
 		<text name="tc_logbook_viewJobs" text="Jobs"/>
 		<text name="tc_logbook_viewVehicles" text="Vehicles"/>
 		<text name="tc_logbook_columnDate" text="Date"/>

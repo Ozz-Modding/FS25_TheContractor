@@ -169,7 +169,11 @@
                     </GuiElement>
                     <GuiElement profile="tc_detailRow" size="752px 34px">
                         <Text profile="tc_detailLabel" text="$l10n_tc_detail_skill" position="0px 0px"/>
-                        <Text profile="tc_detailValue" id="inboxDetailSkill" text="" position="220px 0px" size="532px 34px"/>
+                        <RoundCorner profile="tc_chip" id="inboxDetailSkillChip" position="220px -7px" size="140px 20px"/>
+                        <Text profile="tc_chipText" id="inboxDetailSkillChipText" position="220px -7px" size="140px 20px"/>
+                        <!-- Harvest & haul (035): the hauler's skill alongside. -->
+                        <RoundCorner profile="tc_chip" id="inboxDetailHaulSkillChip" position="366px -7px" size="140px 20px"/>
+                        <Text profile="tc_chipText" id="inboxDetailHaulSkillChipText" position="366px -7px" size="140px 20px"/>
                         <Bitmap profile="tc_detailRowDivider"/>
                     </GuiElement>
                     <GuiElement profile="tc_detailRow" id="inboxRowDelivery" size="752px 34px">

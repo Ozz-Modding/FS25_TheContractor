@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8" standalone="no" ?>
+<!-- Edit worker dialog (066), see TCEditWorkerDialog.lua. Same dialog frame
+     as TCAdvertisingDialog.xml; anchorTopCenter profiles (tc_editWorker* in
+     guiProfiles.xml), so x positions are each element's centre relative to
+     the content container's top-centre. Portrait on the left, name and
+     gender on the right. -->
+<GUI onOpen="onOpen" onClose="onClose" onCreate="onCreate">
+    <GuiElement profile="newLayer"/>
+    <Bitmap profile="dialogFullscreenBg" id="dialogBg"/>
+    <GuiElement profile="fs25_dialogBg" id="dialogElement" size="760px 500px">
+        <ThreePartBitmap profile="fs25_dialogBgMiddle"/>
+        <ThreePartBitmap profile="fs25_dialogBgTop"/>
+        <ThreePartBitmap profile="fs25_dialogBgBottom"/>
+        <GuiElement profile="fs25_dialogContentContainer">
+
+            <Text profile="fs25_dialogTitle" id="dialogTitleElement" position="0px -30px" text="$l10n_tc_editWorker_title"/>
+
+            <Render profile="tc_editWorkerPortrait" id="portraitRender" position="-190px -80px"/>
+
+            <Text profile="tc_editWorkerLabel" position="170px -120px" text="$l10n_tc_editWorker_nameLabel"/>
+            <Text profile="tc_editWorkerName" id="nameText" position="170px -150px" text=""/>
+
+            <Text profile="tc_editWorkerLabel" position="170px -220px" text="$l10n_tc_editWorker_genderLabel"/>
+            <MultiTextOption profile="tc_adDialogPicker" id="genderOption" position="170px -250px" onClick="onClickGender" focusInit="onOpen">
+                <Text profile="fs25_multiTextOptionText" width="300px" name="text"/>
+            </MultiTextOption>
+            <Text profile="tc_editWorkerHint" position="170px -300px" text="$l10n_tc_editWorker_genderHint"/>
+        </GuiElement>
+
+        <BoxLayout profile="fs25_dialogButtonBox">
+            <Button profile="buttonOK" text="$l10n_tc_editWorker_save" onClick="onClickOk" id="saveButton"/>
+            <Bitmap profile="fs25_dialogButtonBoxSeparator"/>
+            <Button profile="buttonActivate" text="$l10n_tc_editWorker_roll" onClick="onClickRoll" id="rollButton"/>
+            <Bitmap profile="fs25_dialogButtonBoxSeparator"/>
+            <Button profile="buttonExtra1" text="$l10n_tc_editWorker_rename" onClick="onClickRename" id="renameButton"/>
+            <Bitmap profile="fs25_dialogButtonBoxSeparator"/>
+            <Button profile="buttonBack" text="$l10n_button_back" onClick="onClickBack" id="backButton"/>
+        </BoxLayout>
+    </GuiElement>
+</GUI>

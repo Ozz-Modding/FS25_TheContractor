@@ -269,6 +269,17 @@ function TCIdleStaff.freeModel(figure)
     figure.isVisible = false
 end
 
+-- The worker's look changed (066): they stay on their spot and the next
+-- update loads the new model, if they're close enough to need one.
+function TCIdleStaff.reloadLook(worker)
+    TCIdleStaff.noStyle[worker.id] = nil
+    local figure = TCIdleStaff.figures[worker.id]
+    if figure ~= nil then
+        figure.worker = worker
+        TCIdleStaff.freeModel(figure)
+    end
+end
+
 function TCIdleStaff.putOnSpot(workerId, worker, spot)
     local figure = { worker = worker, spot = spot, yaw = spot.yaw, graphics = nil, isReady = false,
         isVisible = false }
