@@ -369,6 +369,14 @@ function TCFieldPreparation.prepareFieldForJob(job)
     deleteSpawnedBales(job)
     job.workTotal = nil
 
+    -- 072: a joyrider plow job is the damage, so the field stays as it is -
+    -- unless someone's dealt with the grass since (then the usual stubble,
+    -- or the job could count their work as ours).
+    if job.keepFieldState and TheContractorJoyriders.isGrassField(field) then
+        Logging.info("TheContractor: left field %d as it is for job %d (%s)", job.fieldId, job.id, job.jobType)
+        return true
+    end
+
     local jobType = job.jobType
     local fieldState = field:getFieldState()
     local ok = true

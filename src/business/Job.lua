@@ -76,10 +76,14 @@ function TheContractorJob.new(id, farmId, jobType, fieldId, requiredSkillLevel, 
     self.requiredSkillLevel = requiredSkillLevel
     self.targetPeriod = targetPeriod
     self.targetDayInPeriod = targetDayInPeriod
-    self.price = price
+    -- Both prices are stored without FS25_EconomyScale's factor and read
+    -- through getPrice/getOfferedPrice, which apply it, so a job that
+    -- hasn't been paid yet follows that mod's setting the way a vanilla
+    -- contract's reward does. paymentAmount fixes it at completion.
+    self.basePrice = price
     -- The price as first offered, before any negotiation (026): the
     -- baseline TheContractorNegotiation measures counters against.
-    self.offeredPrice = price
+    self.baseOfferedPrice = price
 
     self.state = TheContractorJob.STATE.OFFERED
     self.assignedWorkerId = nil
@@ -199,6 +203,13 @@ function TheContractorJob.new(id, farmId, jobType, fieldId, requiredSkillLevel, 
     -- progress is measured against, so it's sent to clients too.
     self.startState = nil
 
+    -- 072, server-only, saved: a joyrider plow job leaves its field as it is
+    -- at allocation (TCFieldPreparation), ruts and grass and all, and may
+    -- lead to a grass sow job when it's done (TheContractorJoyriders:
+    -- onJobCompleted).
+    self.keepFieldState = false
+    self.followOnSow = false
+
     -- 032, server-only, saved: the baseline a serverMeasured job's progress
     -- is measured against, set once its field has been prepared at
     -- allocation - litres of windrow spawned (tedder/bale), weed area at the
@@ -305,10 +316,25 @@ function TheContractorJob:getSummaryText()
         g_i18n:formatMoney(self.fuelCost, 0, true, true), self.fuelUsedLiters, self.qualityScore or 0)
 end
 
+-- The price at FS25_EconomyScale's price level (TCEconomyScale).
+function TheContractorJob:getPrice()
+    return TCEconomyScale.scale(self.basePrice)
+end
+
+function TheContractorJob:getOfferedPrice()
+    return TCEconomyScale.scale(self.baseOfferedPrice)
+end
+
+-- Sets the price from an amount at the current price level (a counter
+-- offer the player typed, say).
+function TheContractorJob:setPrice(price)
+    self.basePrice = price / TCEconomyScale.getFactor()
+end
+
 -- 049: "Invoiced £X, expected around June 10, Year 2", or "Paid £X" for a
 -- job paid on completion.
 function TheContractorJob:getPaymentText()
-    local amount = g_i18n:formatMoney(self.paymentAmount or self.price, 0, true, true)
+    local amount = g_i18n:formatMoney(self.paymentAmount or self:getPrice(), 0, true, true)
     if self.invoiceDueDay ~= nil then
         return string.format(g_i18n:getText("tc_summary_invoiced"), amount, TCCalendar.formatDay(self.invoiceDueDay))
     end

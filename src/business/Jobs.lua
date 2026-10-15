@@ -235,23 +235,23 @@ function TheContractorJobs:proposeCounterOffer(farmId, jobId, counterPrice)
     local eagernessBottomedOut = job.eagerness <= 0
 
     if outcome == TheContractorNegotiation.OUTCOME.ACCEPTED then
-        job.price = resultPrice
+        job:setPrice(resultPrice)
         job:transitionTo(TheContractorJob.STATE.ACCEPTED)
     elseif outcome == TheContractorNegotiation.OUTCOME.REJECTED or roundCapHit or eagernessBottomedOut then
         outcome = TheContractorNegotiation.OUTCOME.REJECTED
         job:transitionTo(TheContractorJob.STATE.DECLINED)
     else
-        job.price = resultPrice
+        job:setPrice(resultPrice)
     end
 
     Logging.info("TheContractor: farm %d job %d negotiation round %d -> %s ($%.0f)", farmId, jobId,
-        job.negotiationRounds, outcome, job.price)
+        job.negotiationRounds, outcome, job:getPrice())
 
     if g_server ~= nil then
         g_server:broadcastEvent(TCJobNegotiationUpdatedEvent.new(job))
     end
 
-    return outcome, job.price
+    return outcome, job:getPrice()
 end
 
 -- Validates the transition against the job's state machine, applies
@@ -545,7 +545,7 @@ end
 -- worker goes straight back to idle. Equipment that had left the yard (a
 -- dispatch under way, or anything hidden, haulage rig included) goes to
 -- the parking return queue (062); a player's own equipment, never hidden,
--- stays where they left it.
+-- stays where they left it (startCooldown skips a player-driven job too).
 function TheContractorJobs:releaseMissedJobResources(job)
     local dispatch = g_currentMission.TheContractor.Dispatch
     local wasDispatched = job.assignedWorkerId ~= nil and dispatch:isJobActive(job)
@@ -869,7 +869,7 @@ function TheContractorJobs:completeJob(job, isForced)
     -- 049: invoiced rather than paid, unless late/unpaid invoices are
     -- switched off - see TheContractorFinances:invoiceJob. Sets
     -- job.invoiceDueDay before the completion broadcast below carries it.
-    job.paymentAmount = job.price
+    job.paymentAmount = job:getPrice()
     g_currentMission.TheContractor.Finances:invoiceJob(job)
 
     local reputationReward = self:calculateReputationReward(job)
@@ -928,6 +928,11 @@ function TheContractorJobs:completeJob(job, isForced)
     -- 030: the job's workers may grow from it. After the completion
     -- broadcast so the "job complete" notification comes first.
     g_currentMission.TheContractor.Staff:applyGrowthFromJob(job)
+
+    -- 072: a joyrider plow job may lead to a grass sow job.
+    if job.followOnSow then
+        g_currentMission.TheContractor.Joyriders:onJobCompleted(job)
+    end
 end
 
 -- Wire serialization, shared by TCJobCreatedEvent and initial client state.
@@ -942,7 +947,7 @@ function TheContractorJobs.writeJob(streamId, job)
     streamWriteInt32(streamId, job.requiredSkillLevel)
     streamWriteInt32(streamId, job.targetPeriod)
     streamWriteInt32(streamId, job.targetDayInPeriod)
-    streamWriteFloat32(streamId, job.price)
+    streamWriteFloat32(streamId, job.basePrice)
     streamWriteString(streamId, job.state)
     streamWriteFloat32(streamId, job.completionPercentage)
     streamWriteBool(streamId, job.equipmentAvailable)
@@ -974,7 +979,7 @@ function TheContractorJobs.writeJob(streamId, job)
     streamWriteString(streamId, job.deliveryStationName or "")
     streamWriteFloat32(streamId, job.requiredLiters)
     streamWriteFloat32(streamId, job.deliveredLiters)
-    streamWriteFloat32(streamId, job.offeredPrice)
+    streamWriteFloat32(streamId, job.baseOfferedPrice)
 
     -- Completion summary (029). -1 stands in for "not recorded".
     streamWriteFloat32(streamId, job.workStartedAt or -1)
@@ -1053,7 +1058,7 @@ function TheContractorJobs.readJob(streamId)
     end
     job.requiredLiters = streamReadFloat32(streamId)
     job.deliveredLiters = streamReadFloat32(streamId)
-    job.offeredPrice = streamReadFloat32(streamId)
+    job.baseOfferedPrice = streamReadFloat32(streamId)
 
     local workStartedAt = streamReadFloat32(streamId)
     local completedAt = streamReadFloat32(streamId)
@@ -1141,7 +1146,8 @@ function TheContractorJobs:loadFromXMLFile(xmlFile)
 
             -- Saves from before 026 have no offeredPrice - the current price
             -- (Job.new's default) is the best baseline left.
-            job.offeredPrice = Utils.getNoNil(getXMLFloat(xmlFile, jobKey .. "#offeredPrice"), job.offeredPrice)
+            job.baseOfferedPrice = Utils.getNoNil(getXMLFloat(xmlFile, jobKey .. "#offeredPrice"),
+                job.baseOfferedPrice)
             job.state = Utils.getNoNil(getXMLString(xmlFile, jobKey .. "#state"), job.state)
             job.completionPercentage = Utils.getNoNil(getXMLFloat(xmlFile, jobKey .. "#completionPercentage"), 0)
             job.equipmentAvailable = Utils.getNoNil(getXMLBool(xmlFile, jobKey .. "#equipmentAvailable"), true)
@@ -1176,6 +1182,8 @@ function TheContractorJobs:loadFromXMLFile(xmlFile)
             job.stuckInterventions = Utils.getNoNil(getXMLInt(xmlFile, jobKey .. ".summary#stuckInterventions"), 0)
             job.qualityScore = getXMLInt(xmlFile, jobKey .. ".summary#qualityScore")
             job.startState = getXMLInt(xmlFile, jobKey .. "#startState")
+            job.keepFieldState = Utils.getNoNil(getXMLBool(xmlFile, jobKey .. "#keepFieldState"), false)
+            job.followOnSow = Utils.getNoNil(getXMLBool(xmlFile, jobKey .. "#followOnSow"), false)
             -- 044: nil for a job saved before it existed - getOperationSkill
             -- works it out on first use.
             job.operationSkill = getXMLString(xmlFile, jobKey .. "#operationSkill")
@@ -1244,8 +1252,8 @@ function TheContractorJobs:saveToXmlFile(xmlFile)
             setXMLInt(xmlFile, jobKey .. "#requiredSkillLevel", job.requiredSkillLevel)
             setXMLInt(xmlFile, jobKey .. "#targetPeriod", job.targetPeriod)
             setXMLInt(xmlFile, jobKey .. "#targetDayInPeriod", job.targetDayInPeriod)
-            setXMLFloat(xmlFile, jobKey .. "#price", job.price)
-            setXMLFloat(xmlFile, jobKey .. "#offeredPrice", job.offeredPrice)
+            setXMLFloat(xmlFile, jobKey .. "#price", job.basePrice)
+            setXMLFloat(xmlFile, jobKey .. "#offeredPrice", job.baseOfferedPrice)
             setXMLString(xmlFile, jobKey .. "#state", job.state)
             setXMLFloat(xmlFile, jobKey .. "#completionPercentage", job.completionPercentage)
             setXMLBool(xmlFile, jobKey .. "#equipmentAvailable", job.equipmentAvailable)
@@ -1259,6 +1267,12 @@ function TheContractorJobs:saveToXmlFile(xmlFile)
             end
             if job.startState ~= nil then
                 setXMLInt(xmlFile, jobKey .. "#startState", job.startState)
+            end
+            if job.keepFieldState then
+                setXMLBool(xmlFile, jobKey .. "#keepFieldState", true)
+            end
+            if job.followOnSow then
+                setXMLBool(xmlFile, jobKey .. "#followOnSow", true)
             end
             if job.operationSkill ~= nil then
                 setXMLString(xmlFile, jobKey .. "#operationSkill", job.operationSkill)
@@ -1406,7 +1420,7 @@ function TheContractorJobs.registerConsoleCommands()
                 local field = g_fieldManager:getFieldById(job.fieldId)
                 table.insert(lines, string.format("#%d %s, field %s - %s, %s%s", job.id, job:getDisplayTitle(),
                     field ~= nil and field:getName() or tostring(job.fieldId), job.state,
-                    g_i18n:formatMoney(job.price, 0, true, true),
+                    g_i18n:formatMoney(job:getPrice(), 0, true, true),
                     #details > 0 and (", " .. table.concat(details, ", ")) or ""))
             end
             return table.concat(lines, "\n")
@@ -1426,8 +1440,10 @@ function TheContractorJobs.registerConsoleCommands()
                 return false
             end
 
+            -- Typed at the current price level; jobs store it without
+            -- FS25_EconomyScale's factor (TheContractorJob:getPrice).
             g_client:getServerConnection():sendEvent(TCDebugCreateJobEvent.new(farmId, jobType, fieldId, skill,
-                targetPeriod, targetDay, price))
+                targetPeriod, targetDay, price / TCEconomyScale.getFactor()))
             return string.format("Requested job creation for farm %d", farmId)
         end,
     })

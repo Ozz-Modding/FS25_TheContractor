@@ -11,6 +11,11 @@ TheContractorCompany_mt = Class(TheContractorCompany)
 
 TheContractorCompany.CREATION_COST = 500
 
+-- CREATION_COST at FS25_EconomyScale's price level (TCEconomyScale).
+function TheContractorCompany.getCreationCost()
+    return TCEconomyScale.scale(TheContractorCompany.CREATION_COST)
+end
+
 table.insert(FinanceStats.statNames, "tcCompanyCreation")
 FinanceStats.statNameToIndex["tcCompanyCreation"] = #FinanceStats.statNames
 
@@ -44,15 +49,15 @@ function TheContractorCompany:canCreateCompany(farmId)
         return false
     end
 
-    return farm:getBalance() >= TheContractorCompany.CREATION_COST
+    return farm:getBalance() >= TheContractorCompany.getCreationCost()
 end
 
 -- Server-authoritative: deducts the creation cost from farm money. Only
 -- call after canCreateCompany() has been checked (see TCCreateCompanyEvent).
 function TheContractorCompany:createCompany(farmId, name)
     if g_currentMission:getIsServer() then
-        g_currentMission:addMoney(-TheContractorCompany.CREATION_COST, farmId, MoneyType.TC_COMPANY_CREATION, true,
-            true)
+        g_currentMission:addMoney(-TheContractorCompany.getCreationCost(), farmId, MoneyType.TC_COMPANY_CREATION,
+            true, true)
     end
 
     self:applyCompanyCreation(farmId, name)

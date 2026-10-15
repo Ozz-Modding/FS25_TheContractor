@@ -429,6 +429,10 @@ function stubs.install()
         dofile(path)
     end
 
+    -- Read by every price and pay helper. Without FS25_EconomyScale
+    -- (g_currentMission.EconomyScale unset) its factor is 1.
+    world:load("src/util/TCEconomyScale.lua")
+
     return world
 end
 

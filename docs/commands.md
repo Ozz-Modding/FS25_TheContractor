@@ -254,7 +254,7 @@ Creates a job with every detail set by hand. Unlike `tcJob offer`, nothing is ch
 | `jobType` | One of the job types listed under `tcJob offer` |
 | `fieldId` | Field id |
 | `skill` | Required skill level, 1–10 |
-| `price` | Payout in money |
+| `price` | Payout in money, at the current price level. With FS25_EconomyScale loaded, the job's price follows that mod's factor afterwards, like any other job |
 | `period` | Due period (1–12) |
 | `day` | Due day within that period |
 
@@ -428,10 +428,11 @@ Seeds:
 
 ### `tcCompany event <type>`
 
-Makes a random event happen to your farm now, ignoring the odds, the Random events setting and the event type's cooldown. It still needs something to act on (a theft needs a vehicle that can be stolen), and says so if there isn't anything. It starts the event's cooldown like a real one. `<type>` is the event type's key, case-insensitive. With no type, or an unknown one, it lists the ones there are.
+Makes a random event happen to your farm now, ignoring the odds, the Random events setting and the event type's cooldown. It still needs something to act on (a theft needs a vehicle that can be stolen, joyriders a grass field outside winter), and says so if there isn't anything. It starts the event's cooldown like a real one. `<type>` is the event type's key, case-insensitive. With no type, or an unknown one, it lists the ones there are.
 
 ```
 tcCompany event theft
+tcCompany event joyriders
 ```
 
 ### `tcCompany events`
