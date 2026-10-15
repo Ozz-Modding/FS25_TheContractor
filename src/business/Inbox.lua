@@ -8,6 +8,8 @@
 --       onExpire = function(farmId, message) ... end,             -- optional, server
 --       chipKey = "tc_inbox_chipStaff",                           -- optional
 --       chipTone = "info",                                        -- optional
+--       getConfirmText = function(message, actionKey) ... end,    -- optional, client:
+--                                                                 -- text for a Yes/No first, or nil
 --   })
 --   local id = tc.Inbox:postMessage(farmId, "certRequest", titleKey, bodyKey,
 --       args, actions, payload, expiresInDays)                    -- server only

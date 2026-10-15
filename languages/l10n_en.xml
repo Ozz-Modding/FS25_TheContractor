@@ -6,6 +6,11 @@
 		<text name="tc_setting_jobPayRate" text="Job pay rate"/>
 		<text name="tc_setting_lateInvoices" text="Late/unpaid invoices"/>
 		<text name="tc_toolTip_lateInvoices" text="On: completed jobs are invoiced and paid up to three months later, some late and a few never. Off: jobs pay in full on completion. Invoices already sent still run their course."/>
+		<text name="tc_setting_randomEvents" text="Random events"/>
+		<text name="tc_toolTip_randomEvents" text="How often rare events, such as a vehicle being stolen, happen to your business. Rare halves the odds, Off stops new ones. Anything already under way still runs its course."/>
+		<text name="tc_setting_randomEvents_off" text="Off"/>
+		<text name="tc_setting_randomEvents_rare" text="Rare"/>
+		<text name="tc_setting_randomEvents_normal" text="Normal"/>
 		<text name="tc_toolTip_jobPayRate" text="Scales what new contract offers pay. 100% is half of base-game contract pay. Jobs already offered or accepted keep their price. Business costs (insurance, memberships, training, claims and fines) scale with it; staff pay doesn't."/>
 		<text name="tc_header_inbox" text="Inbox"/>
 		<text name="tc_header_calendar" text="Calendar"/>
@@ -109,6 +114,7 @@
 		<text name="tc_overview_currentJobLine" text="Field %s: %s - %d%%"/>
 		<text name="tc_overview_deliveredSuffix" text=" (%d%% delivered to %s)"/>
 		<text name="tc_overview_supplySuffix" text=" - %s"/>
+		<text name="tc_overview_courtesyDueSuffix" text=" - courtesy %s goes back to the insurer after this job"/>
 		<text name="tc_actions_createButton" text="Create Company"/>
 		<text name="tc_actions_createCompanyPrompt" text="Name your new contracting company (cost: %s):"/>
 		<text name="tc_actions_defaultCompanyName" text="Untitled Contracting Co."/>
@@ -183,6 +189,7 @@
 		<text name="tc_inbox_chipMessage" text="Message"/>
 		<text name="tc_inbox_chipAdmin" text="Admin"/>
 		<text name="tc_inbox_chipClaim" text="Claim"/>
+		<text name="tc_inbox_chipTheft" text="Theft"/>
 		<text name="tc_inbox_chipLegal" text="Legal"/>
 		<text name="tc_inbox_chipTraining" text="Training"/>
 		<text name="tc_calendar_yearLabel" text="Year %d"/>
@@ -238,6 +245,8 @@
 		<text name="finance_tcTraining" text="Staff training"/>
 		<text name="tc_moneyType_fines" text="Fines"/>
 		<text name="finance_tcFines" text="Fines"/>
+		<text name="tc_moneyType_insurancePayout" text="Insurance payouts"/>
+		<text name="finance_tcInsurancePayout" text="Insurance payouts"/>
 		<text name="tc_staff_viewRoster" text="Roster"/>
 		<text name="tc_staff_viewCandidates" text="Candidates"/>
 		<text name="tc_staff_columnName" text="Name"/>
@@ -508,6 +517,55 @@
 		<text name="tc_overhead_publicLiability" text="Public liability insurance"/>
 		<text name="tc_overhead_publicLiability_desc" text="Covers job damage to customers' crops or land, less a %s excess per claim. %s a year plus %s per worker, +35%% per claim in the last 3 years."/>
 		<text name="tc_claims_title" text="Compensation claim: field %d"/>
+		<text name="tc_theft_eventName" text="Vehicle theft"/>
+		<text name="tc_theft_stolenTitle" text="Stolen: %s"/>
+		<text name="tc_theft_stolenBody" text="Your %s has been stolen. It's been reported to the police under crime reference %s. You'll hear back once the police have finished their enquiries."/>
+		<text name="tc_theft_stolenNotice" text="%s stolen and reported to the police"/>
+		<text name="tc_theft_recoveredTitle" text="Recovered: %s"/>
+		<text name="tc_theft_recoveredBody" text="Good news: the police have found your %s (crime reference %s). It's been knocked about and needs a wash, and it'll be back in your yard as soon as there's a free parking slot."/>
+		<text name="tc_theft_recoveredNotice" text="%s recovered by the police"/>
+		<text name="tc_theft_lostTitle" text="Written off: %s"/>
+		<text name="tc_theft_lostBody" text="The police have closed their enquiries into the theft of your %s (crime reference %s) without finding it. It's gone for good and has been taken off your fleet."/>
+		<text name="tc_theft_lostNotice" text="%s not found: written off"/>
+		<text name="tc_theft_lostBodyInsured" text="The police have closed their enquiries into the theft of your %s (crime reference %s) without finding it. It's gone for good, but it was insured on the day it was taken, so you can claim for it."/>
+		<text name="tc_overheads_priceLevel" text="%s cover: %s"/>
+		<text name="tc_overheads_levelSwitching" text="%s (%s cover from renewal)"/>
+		<text name="tc_overheads_priceFrom" text="From %s a year paid annually, or %s a month"/>
+		<text name="tc_overheads_nameWithLevel" text="%s (%s cover)"/>
+		<text name="tc_overheads_changeLevelButton" text="Change cover"/>
+		<text name="tc_overheads_levelTitle" text="Level of cover"/>
+		<text name="tc_overheads_levelPrompt" text="Choose the level of cover for %s."/>
+		<text name="tc_overheads_levelChangePrompt" text="Choose the level of cover for %s from its renewal. You're on %s cover now."/>
+		<text name="tc_overheads_levelDetail_annual" text="%s cover: %s a year."/>
+		<text name="tc_overheads_levelDetail_monthly" text="%s cover: %s a month."/>
+		<text name="tc_overhead_machineryInsurance" text="Machinery insurance"/>
+		<text name="tc_overhead_machineryInsurance_desc" text="Covers your machinery against theft. Basic pays 80%% of a lost vehicle's value less a %s excess, Standard pays 90%% of it less %s, Comprehensive its full value less %s and lends you a similar tractor while the claim settles. Priced at 1%%, 1.4%% or 1.8%% of your fleet's value a year, +35%% per claim in the last 3 years."/>
+		<text name="tc_insurance_level_basic" text="Basic"/>
+		<text name="tc_insurance_level_standard" text="Standard"/>
+		<text name="tc_insurance_level_comprehensive" text="Comprehensive"/>
+		<text name="tc_insurance_levelDescription" text="Pays %d%% of a lost vehicle's value, less a %s excess."/>
+		<text name="tc_insurance_levelDescriptionCourtesy" text="Pays %d%% of a lost vehicle's value, less a %s excess, and lends you a courtesy vehicle until the claim settles."/>
+		<text name="tc_inbox_chipInsurance" text="Insurance"/>
+		<text name="tc_insurance_claimTitle" text="Insurance claim: %s"/>
+		<text name="tc_insurance_claimBody" text="Your %s is insured (%s cover), so you can claim for it. Once the claim's in, the insurer takes 1-2 months to settle. If you don't submit it within the month, it goes in anyway. An office administrator would have sent it straight off and had it settled sooner."/>
+		<text name="tc_insurance_claimByAdminBody" text="Your administrator has submitted the insurance claim for your %s (%s cover). The insurer should settle it within the month."/>
+		<text name="tc_insurance_submitButton" text="Submit claim"/>
+		<text name="tc_insurance_submitConfirm" text="Submit the insurance claim for your stolen %s? The insurer takes 1-2 months to settle it."/>
+		<text name="tc_insurance_claimNotice" text="Insurance claim in for the stolen %s: waiting for the insurer to settle"/>
+		<text name="tc_insurance_settledTitle" text="Claim settled: %s"/>
+		<text name="tc_insurance_settledBody" text="Your insurer has settled the claim for your stolen %s, valued at %s. %s cover pays %d%% of that, less the %s excess: %s has been paid to you. The claim goes on your record and will raise your premium for the next 3 years."/>
+		<text name="tc_insurance_settledNotice" text="Insurance paid %s for the stolen %s"/>
+		<text name="tc_courtesy_lentTitle" text="Courtesy vehicle: %s"/>
+		<text name="tc_courtesy_lentBody" text="Your comprehensive cover includes a courtesy vehicle, so your insurer has lent you a %s in place of your stolen %s. It's at %s. Use it as your own, jobs included: it can't be sold, and it costs nothing to run beyond its fuel. The insurer takes it back when the claim settles."/>
+		<text name="tc_courtesy_lentNotice" text="Courtesy %s lent by your insurer, at %s"/>
+		<text name="tc_courtesy_placeSlot" text="one of your parking slots"/>
+		<text name="tc_courtesy_placeShop" text="the shop"/>
+		<text name="tc_courtesy_dueTitle" text="Courtesy vehicle due back: %s"/>
+		<text name="tc_courtesy_dueBody" text="Your claim has settled, so your insurer wants the courtesy %s back. It's busy right now, so they'll collect it as soon as it's free: if it's out on a job, when the job's equipment comes home."/>
+		<text name="tc_courtesy_returnedTitle" text="Courtesy vehicle collected: %s"/>
+		<text name="tc_courtesy_returnedBody" text="Your insurer has collected the courtesy %s now that your claim has settled."/>
+		<text name="tc_courtesy_returnedNotice" text="Courtesy %s collected by your insurer"/>
+		<text name="tc_finances_claimsWithPayouts" text="%s (insurers paid %s)"/>
 		<text name="tc_claims_bodyInsured" text="The owner of field %d says %s %s during the %s job, and is claiming %s for the damage. Your public liability insurance covers it, less the excess: %s has been charged. The claim goes on your record and will raise your premium for the next 3 years. Word gets around, too: your reputation has taken a knock."/>
 		<text name="tc_claims_bodyUninsured" text="The owner of field %d says %s %s during the %s job, and is claiming %s for the damage. You don't have public liability insurance, so the whole %s has been charged. Word gets around, too: your reputation has taken a knock."/>
 		<text name="tc_claims_noticeInsured" text="Compensation claim on field %d: %s excess paid by you, the rest by your insurer."/>
@@ -689,6 +747,8 @@
 		<text name="tc_logbook_role_hauler" text="Haulage"/>
 		<text name="tc_logbook_role_player" text="Driven by"/>
 		<text name="tc_logbook_aPlayer" text="A player"/>
+		<text name="tc_logbook_stolen" text="Stolen"/>
+		<text name="tc_logbook_recoveredChip" text="Recovered"/>
 		<text name="tc_logbook_machine" text="Machine"/>
 		<text name="tc_logbook_usedBy" text="Used by"/>
 		<text name="tc_logbook_condition" text="Condition"/>

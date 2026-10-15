@@ -2,8 +2,8 @@
 -- "The Contractor" header (see TCSettingsMenu). Server-wide, one value per
 -- savegame - not farm-scoped, unlike the rest of the mod.
 --
--- Adding a setting: a DEFINITIONS entry (values + display strings + default
--- index), its id in ITEMS, and tc_setting_<id>/tc_toolTip_<id> l10n keys.
+-- Adding a setting: a DEFINITIONS entry (values + display strings, or
+-- stringKeys for l10n keys, + default index), its id in ITEMS, and tc_setting_<id>/tc_toolTip_<id> l10n keys.
 -- Save/load, MP sync and the menu control all follow from ITEMS. Values are
 -- numbers or booleans.
 --
@@ -47,7 +47,16 @@ TheContractorSettings.DEFINITIONS.lateInvoices = {
     default = 1
 }
 
-TheContractorSettings.ITEMS = { "jobPayRate", "lateInvoices" }
+-- 068: how often random events (theft and the like) happen, as a
+-- multiplier on every event type's monthly rate. Its display strings are
+-- the mod's own l10n keys (stringKeys), looked up when the menu is built.
+TheContractorSettings.DEFINITIONS.randomEvents = {
+    values = { 0, 0.5, 1 },
+    stringKeys = { "tc_setting_randomEvents_off", "tc_setting_randomEvents_rare", "tc_setting_randomEvents_normal" },
+    default = 3
+}
+
+TheContractorSettings.ITEMS = { "jobPayRate", "lateInvoices", "randomEvents" }
 
 function TheContractorSettings.new()
     local self = {}

@@ -8,12 +8,12 @@ You type these into the developer console. You don't need cheats on. There are f
 | `tcWorker` | Hire, list and change your staff |
 | `tcJob` | List, offer, create and force jobs |
 | `tcFinance` | Invoices, claims and botched jobs |
-| `tcCompany` | Reputation and Overview notices |
+| `tcCompany` | Reputation, Overview notices and random events |
 
 Type a group on its own (or with `help`) to list its subcommands and their arguments. Subcommand names aren't case-sensitive. If you get the arguments wrong, the command prints that subcommand's usage.
 
 - **Your farm:** every command acts on your current farm. Most need that farm to have created a company first.
-- **Server only:** commands that change something only work on the server, which means single player or the host of a multiplayer game. The read-only lists `tcWorker list`, `tcWorker pool`, `tcJob list`, `tcJob log`, `tcCompany storages`, `tcCompany notices`, `tcCompany vehicleLog` and `tcWorker standing` also work on a joined client.
+- **Server only:** commands that change something only work on the server, which means single player or the host of a multiplayer game. The read-only lists `tcWorker list`, `tcWorker pool`, `tcJob list`, `tcJob log`, `tcCompany storages`, `tcCompany notices`, `tcCompany vehicleLog`, `tcCompany events` and `tcWorker standing` also work on a joined client.
 - **`<worker>`:** a hired worker's id, or the start of their first or last name. `amy`, `Hall` and `3` could all mean Amy Hall (#3). If a name matches more than one worker, the command lists them and asks for the id. `tcWorker list` shows ids and names.
 
 ## Workers — `tcWorker`
@@ -358,6 +358,19 @@ tcFinance botch
 tcFinance botch 0
 ```
 
+### `tcFinance insurance`
+
+Shows your farm's machinery insurance: whether you're insured and at what level of cover (and any change from renewal), what your fleet is worth, and how many claims you've had in the last 3 years. Then each level's premium today (after the claims loading) and what it pays out, and your open claims: the stolen vehicle, its value and level of cover, whether the claim is waiting to be submitted or the day it settles, and the courtesy vehicle you've been lent for it on comprehensive cover (with its vehicle id). A settled claim whose courtesy vehicle is still busy is listed too, until the insurer collects it. Read-only, so it also works on a joined client.
+
+```
+Farm 1: insured, standard cover. Fleet value 412000, 0 claim(s) in the last 3 years
+  basic: 4120 a year, pays 80% less 5000 excess
+  standard: 5768 a year, pays 90% less 2500 excess
+  comprehensive: 7416 a year, pays 100% less 1250 excess
+Open claims: 1
+  #3 Fendt 724 Vario (98000, comprehensive): settles day 112, courtesy John Deere 6R 250 (412)
+```
+
 ## Company — `tcCompany`
 
 ### `tcCompany rep <amount>`
@@ -411,4 +424,25 @@ tcCompany storages seeds
 ```
 Seeds:
   Farm Silo [FS25_SomeMap] - 0 of 500000, 1.2 km north-east of you
+```
+
+### `tcCompany event <type>`
+
+Makes a random event happen to your farm now, ignoring the odds, the Random events setting and the event type's cooldown. It still needs something to act on (a theft needs a vehicle that can be stolen), and says so if there isn't anything. It starts the event's cooldown like a real one. `<type>` is the event type's key, case-insensitive. With no type, or an unknown one, it lists the ones there are.
+
+```
+tcCompany event theft
+```
+
+### `tcCompany events`
+
+Lists every random event type with its odds for your farm (a month and a day, after the Random events setting) and any cooldown left, then your farm's open incidents: the stage each one is at, the day it moves on (or "waiting" if it's waiting on something else, like a reply in the inbox), when it started and the event's own details. Read-only, so it also works on a joined client.
+
+### `tcCompany theftRecover <recovered|lost>`
+
+Decides how the next police report on a stolen vehicle comes out, instead of the usual 35% chance of recovery: `recovered` brings it back (damaged, through the parking queue), `lost` writes it off and removes it (or, if the farm had machinery insurance on the day of the theft, starts the insurance claim, and the vehicle goes when it settles). It applies once, to whichever theft's report comes back next, then the odds are back to normal. Pair it with `tcCompany event theft` to try both outcomes.
+
+```
+tcCompany event theft
+tcCompany theftRecover recovered
 ```

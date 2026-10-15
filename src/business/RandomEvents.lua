@@ -1,0 +1,748 @@
+-- Random events (068): rare things that happen to the business - a vehicle
+-- stolen (069), and whatever comes later. This file knows nothing about any
+-- one event. An event type registers itself on every machine at load:
+--
+--   tc.RandomEvents:registerEventType("theft", {
+--       l10nKey = "tc_randomEvent_theft",          -- its name, for lists
+--       ratePerPeriod = function(farmId) ... end,  -- expected events a month (before the setting)
+--       canTrigger = function(farmId) ... end,     -- -> the incident's starting data, or nil
+--       cooldownPeriods = 12,                      -- no repeat on this farm for this many months
+--       peril = "theft",                           -- optional: what insurance must cover (070)
+--       stages = {
+--           { key = "stolen", run = function(incident) ... end },
+--           { key = "policeReport", delayPeriods = { 0.1, 0.35 }, run = function(incident) ... end },
+--       },
+--   })
+--
+-- Rates are per month, not per day or year: the server's daily roll is
+-- ratePerPeriod * the setting's multiplier / days per period, so a month
+-- carries the same odds at 1 day per period as at 28. A hit asks canTrigger
+-- for something to act on (069 picks the vehicle there); nil means no event.
+--
+-- A triggered event becomes an incident: { id, farmId, eventType, stage,
+-- nextStageDay, openedPeriod, data }. data is the event type's own, a flat
+-- table of number/string/boolean values (canTrigger's return value to start
+-- with), saved and synced as it is. The incident runs through the stages in
+-- order. A stage with delayPeriods waits that long first - written in months
+-- and turned into days when the stage is entered (at least 1), so waits scale
+-- with days per period like the rates do. A stage's run(incident) returns:
+--   nil         the next stage in the list (none left: the incident ends)
+--   "<key>"     that stage
+--   "done"      the incident ends
+--   "wait"      stay on this stage with no timer, until something calls
+--               goToStage (an inbox action, say)
+-- Inbox messages, notices and money are the event type's business, from its
+-- stages; the framework posts nothing itself.
+--
+-- Server: rolls, runs stages, saves. Every machine: holds the incidents and
+-- each farm's cooldowns (TCRandomEventIncidentEvent, initial client state),
+-- so menus can show them later.
+
+TheContractorRandomEvents = {}
+TheContractorRandomEvents_mt = Class(TheContractorRandomEvents)
+
+TheContractorRandomEvents.DONE = "done"
+TheContractorRandomEvents.WAIT = "wait"
+
+-- Guards against stages that send each other round in a loop with no delay.
+TheContractorRandomEvents.MAX_STAGES_PER_STEP = 20
+
+TheContractorRandomEvents.VALUE_TYPE = {
+    NUMBER = 1,
+    STRING = 2,
+    BOOLEAN = 3,
+}
+
+function TheContractorRandomEvents.new()
+    local self = {}
+    setmetatable(self, TheContractorRandomEvents_mt)
+
+    -- eventTypes[key] = definition; eventTypeOrder = { key, ... } (registration order).
+    self.eventTypes = {}
+    self.eventTypeOrder = {}
+
+    -- incidents[id] = incident.
+    self.incidents = {}
+    self.nextIncidentId = 1
+
+    -- lastPeriodByFarm[farmId][eventType] = the period index an incident of
+    -- that type last opened on that farm.
+    self.lastPeriodByFarm = {}
+
+    return self
+end
+
+-- Registration ------------------------------------------------------------------
+
+function TheContractorRandomEvents:registerEventType(key, definition)
+    if self.eventTypes[key] == nil then
+        table.insert(self.eventTypeOrder, key)
+    end
+    definition.key = key
+    definition.stages = definition.stages or {}
+    definition.cooldownPeriods = definition.cooldownPeriods or 0
+    self.eventTypes[key] = definition
+end
+
+function TheContractorRandomEvents:getEventType(key)
+    return self.eventTypes[key]
+end
+
+function TheContractorRandomEvents:getEventTypeKeys()
+    return self.eventTypeOrder
+end
+
+local function getStageIndex(definition, stageKey)
+    for i, stage in ipairs(definition.stages) do
+        if stage.key == stageKey then
+            return i
+        end
+    end
+    return nil
+end
+
+-- Reading -----------------------------------------------------------------------
+
+function TheContractorRandomEvents:getIncident(id)
+    return self.incidents[id]
+end
+
+-- A farm's open incidents, oldest first.
+function TheContractorRandomEvents:getIncidents(farmId)
+    local result = {}
+    for _, incident in pairs(self.incidents) do
+        if incident.farmId == farmId then
+            table.insert(result, incident)
+        end
+    end
+    table.sort(result, function(a, b)
+        return a.id < b.id
+    end)
+    return result
+end
+
+function TheContractorRandomEvents:getLastPeriod(farmId, key)
+    local farmPeriods = self.lastPeriodByFarm[farmId]
+    return farmPeriods ~= nil and farmPeriods[key] or nil
+end
+
+-- Months left before this type can happen again on this farm (0 = it can).
+function TheContractorRandomEvents:getCooldownLeft(farmId, key)
+    local definition = self.eventTypes[key]
+    local lastPeriod = self:getLastPeriod(farmId, key)
+    if definition == nil or lastPeriod == nil then
+        return 0
+    end
+    return math.max(0, lastPeriod + definition.cooldownPeriods - TCCalendar.getPeriodIndex())
+end
+
+-- The setting's multiplier: 0 (off), 0.5 (rare) or 1 (normal).
+function TheContractorRandomEvents.getRateMultiplier()
+    local settings = g_currentMission.TheContractor.Settings
+    return settings ~= nil and settings:get("randomEvents") or 1
+end
+
+-- Today's chance of this type on this farm: a month's rate spread over the
+-- month's days.
+function TheContractorRandomEvents.getDailyChance(ratePerPeriod, multiplier, daysPerPeriod)
+    return math.min(1, math.max(0, ratePerPeriod * multiplier / math.max(1, daysPerPeriod)))
+end
+
+-- A stage's wait in days: delayPeriods { min, max } months at daysPerPeriod,
+-- roll (0-1) picking within the range, never under a day.
+function TheContractorRandomEvents.getDelayDays(delayPeriods, daysPerPeriod, roll)
+    local minPeriods = delayPeriods[1] or 0
+    local maxPeriods = delayPeriods[2] or minPeriods
+    local periods = minPeriods + (maxPeriods - minPeriods) * roll
+    return math.max(1, math.floor(periods * daysPerPeriod + 0.5))
+end
+
+local function getToday()
+    return g_currentMission.environment.currentMonotonicDay
+end
+
+local function getDaysPerPeriod()
+    return TCCalendar.getDaysPerPeriodOn(getToday())
+end
+
+-- Rolling (server) ----------------------------------------------------------------
+
+function TheContractorRandomEvents:startDailyTick()
+    if not g_currentMission:getIsServer() then
+        return
+    end
+    g_messageCenter:subscribe(MessageType.DAY_CHANGED, self.onDayChanged, self)
+end
+
+function TheContractorRandomEvents:stopDailyTick()
+    g_messageCenter:unsubscribe(MessageType.DAY_CHANGED, self)
+end
+
+function TheContractorRandomEvents:onDayChanged()
+    self:advanceDueIncidents()
+    self:rollNewEvents()
+end
+
+function TheContractorRandomEvents:getCompanyFarmIds()
+    local farmIds = {}
+    for farmId in pairs(g_currentMission.TheContractor.Company.companyNames) do
+        table.insert(farmIds, farmId)
+    end
+    table.sort(farmIds)
+    return farmIds
+end
+
+function TheContractorRandomEvents:rollNewEvents()
+    local multiplier = TheContractorRandomEvents.getRateMultiplier()
+    if multiplier <= 0 then
+        return
+    end
+
+    local daysPerPeriod = getDaysPerPeriod()
+    for _, farmId in ipairs(self:getCompanyFarmIds()) do
+        for _, key in ipairs(self.eventTypeOrder) do
+            if self:getCooldownLeft(farmId, key) == 0 then
+                local definition = self.eventTypes[key]
+                local rate = definition.ratePerPeriod ~= nil and definition.ratePerPeriod(farmId) or 0
+                local chance = TheContractorRandomEvents.getDailyChance(rate, multiplier, daysPerPeriod)
+                if chance > 0 and math.random() < chance then
+                    local incident = self:triggerEvent(farmId, key)
+                    Logging.info("TheContractor: farm %d random event '%s' rolled (%.4f a day)%s", farmId, key,
+                        chance, incident == nil and ", but nothing to act on" or "")
+                end
+            end
+        end
+    end
+end
+
+-- Opens an incident now (server), cooldown or not - the roll and the
+-- console come here. Returns the incident, or nil and why not.
+function TheContractorRandomEvents:triggerEvent(farmId, key)
+    local definition = self.eventTypes[key]
+    if definition == nil then
+        return nil, "unknown event type"
+    end
+
+    local data = definition.canTrigger ~= nil and definition.canTrigger(farmId) or nil
+    if data == nil then
+        return nil, "nothing to act on"
+    end
+
+    local incident = {
+        id = self.nextIncidentId,
+        farmId = farmId,
+        eventType = key,
+        stage = "",
+        nextStageDay = 0,
+        openedPeriod = TCCalendar.getPeriodIndex(),
+        data = data,
+    }
+    self.nextIncidentId = self.nextIncidentId + 1
+
+    self:applyIncident(incident)
+    Logging.info("TheContractor: farm %d incident %d (%s) opened", farmId, incident.id, key)
+
+    if #definition.stages == 0 then
+        self:closeIncident(incident)
+        return incident
+    end
+    self:enterStage(incident, 1)
+    return incident
+end
+
+-- Stages (server) -----------------------------------------------------------------
+
+function TheContractorRandomEvents:advanceDueIncidents()
+    local today = getToday()
+    local due = {}
+    for _, incident in pairs(self.incidents) do
+        if incident.nextStageDay > 0 and incident.nextStageDay <= today then
+            table.insert(due, incident)
+        end
+    end
+    table.sort(due, function(a, b)
+        return a.id < b.id
+    end)
+
+    for _, incident in ipairs(due) do
+        if g_farmManager:getFarmById(incident.farmId) == nil then
+            self:closeIncident(incident)
+        else
+            self:runStage(incident, getStageIndex(self.eventTypes[incident.eventType], incident.stage))
+        end
+    end
+end
+
+-- Moves an incident to a stage (server): its wait starts, or it runs now.
+-- For whatever ends a "wait" stage, e.g. an inbox action.
+function TheContractorRandomEvents:goToStage(incident, stageKey)
+    local definition = self.eventTypes[incident.eventType]
+    local stageIndex = definition ~= nil and getStageIndex(definition, stageKey) or nil
+    if stageIndex == nil then
+        Logging.warning("TheContractor: incident %d (%s) has no stage '%s', closing it", incident.id,
+            incident.eventType, tostring(stageKey))
+        self:closeIncident(incident)
+        return
+    end
+    self:enterStage(incident, stageIndex)
+end
+
+function TheContractorRandomEvents:enterStage(incident, stageIndex)
+    local stage = self.eventTypes[incident.eventType].stages[stageIndex]
+    incident.stage = stage.key
+
+    if stage.delayPeriods ~= nil then
+        incident.nextStageDay = getToday() +
+            TheContractorRandomEvents.getDelayDays(stage.delayPeriods, getDaysPerPeriod(), math.random())
+        self:commitIncident(incident)
+        return
+    end
+    self:runStage(incident, stageIndex)
+end
+
+-- Runs a stage and follows the result through any stages with no wait,
+-- until one waits or the incident ends.
+function TheContractorRandomEvents:runStage(incident, stageIndex)
+    local definition = self.eventTypes[incident.eventType]
+
+    for _ = 1, TheContractorRandomEvents.MAX_STAGES_PER_STEP do
+        local stage = stageIndex ~= nil and definition.stages[stageIndex] or nil
+        if stage == nil then
+            self:closeIncident(incident)
+            return
+        end
+
+        incident.stage = stage.key
+        incident.nextStageDay = 0
+
+        local result = stage.run ~= nil and stage.run(incident) or nil
+        if self.incidents[incident.id] == nil then
+            -- The stage closed it itself.
+            return
+        end
+
+        if result == TheContractorRandomEvents.DONE then
+            self:closeIncident(incident)
+            return
+        elseif result == TheContractorRandomEvents.WAIT then
+            self:commitIncident(incident)
+            return
+        end
+
+        local nextIndex = stageIndex + 1
+        if result ~= nil then
+            nextIndex = getStageIndex(definition, result)
+            if nextIndex == nil then
+                Logging.warning("TheContractor: incident %d (%s) stage '%s' went to unknown stage '%s', closing it",
+                    incident.id, incident.eventType, stage.key, tostring(result))
+                self:closeIncident(incident)
+                return
+            end
+        end
+
+        local nextStage = definition.stages[nextIndex]
+        if nextStage == nil then
+            self:closeIncident(incident)
+            return
+        end
+        if nextStage.delayPeriods ~= nil then
+            self:enterStage(incident, nextIndex)
+            return
+        end
+        stageIndex = nextIndex
+    end
+
+    Logging.warning("TheContractor: incident %d (%s) ran more than %d stages in one go, closing it", incident.id,
+        incident.eventType, TheContractorRandomEvents.MAX_STAGES_PER_STEP)
+    self:closeIncident(incident)
+end
+
+-- Server: the incident's new stage/data to every machine.
+function TheContractorRandomEvents:commitIncident(incident)
+    self:applyIncident(incident)
+    if g_server ~= nil then
+        g_server:broadcastEvent(TCRandomEventIncidentEvent.new(incident, false))
+    end
+end
+
+function TheContractorRandomEvents:closeIncident(incident)
+    self:applyIncidentClosed(incident.id)
+    Logging.info("TheContractor: farm %d incident %d (%s) closed", incident.farmId, incident.id, incident.eventType)
+    if g_server ~= nil then
+        g_server:broadcastEvent(TCRandomEventIncidentEvent.new(incident, true))
+    end
+end
+
+-- Every machine -------------------------------------------------------------------
+
+function TheContractorRandomEvents:applyIncident(incident)
+    self.incidents[incident.id] = incident
+    self.nextIncidentId = math.max(self.nextIncidentId, incident.id + 1)
+
+    if self.lastPeriodByFarm[incident.farmId] == nil then
+        self.lastPeriodByFarm[incident.farmId] = {}
+    end
+    local farmPeriods = self.lastPeriodByFarm[incident.farmId]
+    farmPeriods[incident.eventType] = math.max(farmPeriods[incident.eventType] or 0, incident.openedPeriod)
+end
+
+function TheContractorRandomEvents:applyIncidentClosed(id)
+    self.incidents[id] = nil
+end
+
+-- Wire serialization ----------------------------------------------------------------
+
+local function getSortedKeys(data)
+    local keys = {}
+    for key in pairs(data) do
+        table.insert(keys, key)
+    end
+    table.sort(keys)
+    return keys
+end
+
+-- data's string keys, sorted (anything else in it isn't saved or synced).
+local function getSortedDataKeys(data)
+    local keys = {}
+    for key in pairs(data) do
+        if type(key) == "string" then
+            table.insert(keys, key)
+        end
+    end
+    table.sort(keys)
+    return keys
+end
+
+local function getValueType(value)
+    local valueType = type(value)
+    if valueType == "number" then
+        return TheContractorRandomEvents.VALUE_TYPE.NUMBER
+    elseif valueType == "string" then
+        return TheContractorRandomEvents.VALUE_TYPE.STRING
+    elseif valueType == "boolean" then
+        return TheContractorRandomEvents.VALUE_TYPE.BOOLEAN
+    end
+    return nil
+end
+
+function TheContractorRandomEvents.writeData(streamId, data)
+    local keys = {}
+    for _, key in ipairs(getSortedDataKeys(data)) do
+        if getValueType(data[key]) ~= nil then
+            table.insert(keys, key)
+        end
+    end
+
+    streamWriteInt32(streamId, #keys)
+    for _, key in ipairs(keys) do
+        local value = data[key]
+        local valueType = getValueType(value)
+        streamWriteString(streamId, key)
+        streamWriteUInt8(streamId, valueType)
+        if valueType == TheContractorRandomEvents.VALUE_TYPE.NUMBER then
+            streamWriteFloat32(streamId, value)
+        elseif valueType == TheContractorRandomEvents.VALUE_TYPE.STRING then
+            streamWriteString(streamId, value)
+        else
+            streamWriteBool(streamId, value)
+        end
+    end
+end
+
+function TheContractorRandomEvents.readData(streamId)
+    local data = {}
+    local count = streamReadInt32(streamId)
+    for _ = 1, count do
+        local key = streamReadString(streamId)
+        local valueType = streamReadUInt8(streamId)
+        if valueType == TheContractorRandomEvents.VALUE_TYPE.NUMBER then
+            data[key] = streamReadFloat32(streamId)
+        elseif valueType == TheContractorRandomEvents.VALUE_TYPE.STRING then
+            data[key] = streamReadString(streamId)
+        else
+            data[key] = streamReadBool(streamId)
+        end
+    end
+    return data
+end
+
+function TheContractorRandomEvents.writeIncident(streamId, incident)
+    streamWriteInt32(streamId, incident.id)
+    streamWriteInt32(streamId, incident.farmId)
+    streamWriteString(streamId, incident.eventType)
+    streamWriteString(streamId, incident.stage)
+    streamWriteInt32(streamId, incident.nextStageDay)
+    streamWriteInt32(streamId, incident.openedPeriod)
+    TheContractorRandomEvents.writeData(streamId, incident.data)
+end
+
+function TheContractorRandomEvents.readIncident(streamId)
+    return {
+        id = streamReadInt32(streamId),
+        farmId = streamReadInt32(streamId),
+        eventType = streamReadString(streamId),
+        stage = streamReadString(streamId),
+        nextStageDay = streamReadInt32(streamId),
+        openedPeriod = streamReadInt32(streamId),
+        data = TheContractorRandomEvents.readData(streamId),
+    }
+end
+
+-- Persistence -------------------------------------------------------------------------
+
+function TheContractorRandomEvents:loadFromXMLFile(xmlFile)
+    if not g_currentMission:getIsServer() then return end
+
+    self.incidents = {}
+    self.lastPeriodByFarm = {}
+
+    local rootKey = string.format("%s.randomEvents", TheContractor.SaveKey)
+    self.nextIncidentId = Utils.getNoNil(getXMLInt(xmlFile, rootKey .. "#nextIncidentId"), 1)
+
+    local index = 0
+    while true do
+        local key = string.format("%s.cooldown(%d)", rootKey, index)
+        if not hasXMLProperty(xmlFile, key) then
+            break
+        end
+        local farmId = getXMLInt(xmlFile, key .. "#farmId")
+        local eventType = getXMLString(xmlFile, key .. "#eventType")
+        local period = getXMLInt(xmlFile, key .. "#period")
+        if farmId ~= nil and eventType ~= nil and period ~= nil then
+            if self.lastPeriodByFarm[farmId] == nil then
+                self.lastPeriodByFarm[farmId] = {}
+            end
+            self.lastPeriodByFarm[farmId][eventType] = period
+        end
+        index = index + 1
+    end
+
+    index = 0
+    while true do
+        local key = string.format("%s.incident(%d)", rootKey, index)
+        if not hasXMLProperty(xmlFile, key) then
+            break
+        end
+        local incident = {
+            id = getXMLInt(xmlFile, key .. "#id"),
+            farmId = getXMLInt(xmlFile, key .. "#farmId"),
+            eventType = getXMLString(xmlFile, key .. "#eventType"),
+            stage = Utils.getNoNil(getXMLString(xmlFile, key .. "#stage"), ""),
+            nextStageDay = Utils.getNoNil(getXMLInt(xmlFile, key .. "#nextStageDay"), 0),
+            openedPeriod = Utils.getNoNil(getXMLInt(xmlFile, key .. "#openedPeriod"), 0),
+            data = {},
+        }
+
+        local valueIndex = 0
+        while true do
+            local valueKey = string.format("%s.value(%d)", key, valueIndex)
+            if not hasXMLProperty(xmlFile, valueKey) then
+                break
+            end
+            local name = getXMLString(xmlFile, valueKey .. "#name")
+            local valueType = getXMLInt(xmlFile, valueKey .. "#type")
+            if name ~= nil then
+                if valueType == TheContractorRandomEvents.VALUE_TYPE.NUMBER then
+                    incident.data[name] = getXMLFloat(xmlFile, valueKey .. "#number")
+                elseif valueType == TheContractorRandomEvents.VALUE_TYPE.STRING then
+                    incident.data[name] = getXMLString(xmlFile, valueKey .. "#string")
+                elseif valueType == TheContractorRandomEvents.VALUE_TYPE.BOOLEAN then
+                    incident.data[name] = getXMLBool(xmlFile, valueKey .. "#bool")
+                end
+            end
+            valueIndex = valueIndex + 1
+        end
+
+        -- An event type that's no longer registered (a mod update dropped
+        -- it) has no stages to run: drop its incidents.
+        local definition = incident.eventType ~= nil and self.eventTypes[incident.eventType] or nil
+        if incident.id == nil or incident.farmId == nil or definition == nil then
+            Logging.warning("TheContractor: dropping saved incident %s of unknown event type '%s'",
+                tostring(incident.id), tostring(incident.eventType))
+        elseif getStageIndex(definition, incident.stage) == nil then
+            Logging.warning("TheContractor: dropping saved incident %d (%s) at unknown stage '%s'", incident.id,
+                incident.eventType, incident.stage)
+        else
+            self:applyIncident(incident)
+        end
+        index = index + 1
+    end
+end
+
+function TheContractorRandomEvents:saveToXmlFile(xmlFile)
+    if not g_currentMission:getIsServer() then return end
+
+    local rootKey = string.format("%s.randomEvents", TheContractor.SaveKey)
+    setXMLInt(xmlFile, rootKey .. "#nextIncidentId", self.nextIncidentId)
+
+    local index = 0
+    for _, farmId in ipairs(getSortedKeys(self.lastPeriodByFarm)) do
+        local farmPeriods = self.lastPeriodByFarm[farmId]
+        for _, eventType in ipairs(getSortedKeys(farmPeriods)) do
+            local key = string.format("%s.cooldown(%d)", rootKey, index)
+            setXMLInt(xmlFile, key .. "#farmId", farmId)
+            setXMLString(xmlFile, key .. "#eventType", eventType)
+            setXMLInt(xmlFile, key .. "#period", farmPeriods[eventType])
+            index = index + 1
+        end
+    end
+
+    index = 0
+    for _, id in ipairs(getSortedKeys(self.incidents)) do
+        local incident = self.incidents[id]
+        local key = string.format("%s.incident(%d)", rootKey, index)
+        setXMLInt(xmlFile, key .. "#id", incident.id)
+        setXMLInt(xmlFile, key .. "#farmId", incident.farmId)
+        setXMLString(xmlFile, key .. "#eventType", incident.eventType)
+        setXMLString(xmlFile, key .. "#stage", incident.stage)
+        setXMLInt(xmlFile, key .. "#nextStageDay", incident.nextStageDay)
+        setXMLInt(xmlFile, key .. "#openedPeriod", incident.openedPeriod)
+
+        local valueIndex = 0
+        for _, name in ipairs(getSortedDataKeys(incident.data)) do
+            local value = incident.data[name]
+            local valueType = getValueType(value)
+            if valueType ~= nil then
+                local valueKey = string.format("%s.value(%d)", key, valueIndex)
+                setXMLString(xmlFile, valueKey .. "#name", name)
+                setXMLInt(xmlFile, valueKey .. "#type", valueType)
+                if valueType == TheContractorRandomEvents.VALUE_TYPE.NUMBER then
+                    setXMLFloat(xmlFile, valueKey .. "#number", value)
+                elseif valueType == TheContractorRandomEvents.VALUE_TYPE.STRING then
+                    setXMLString(xmlFile, valueKey .. "#string", value)
+                else
+                    setXMLBool(xmlFile, valueKey .. "#bool", value)
+                end
+                valueIndex = valueIndex + 1
+            end
+        end
+        index = index + 1
+    end
+end
+
+function TheContractorRandomEvents:writeInitialClientState(streamId, connection)
+    local cooldowns = {}
+    for _, farmId in ipairs(getSortedKeys(self.lastPeriodByFarm)) do
+        for _, eventType in ipairs(getSortedKeys(self.lastPeriodByFarm[farmId])) do
+            table.insert(cooldowns, { farmId = farmId, eventType = eventType,
+                period = self.lastPeriodByFarm[farmId][eventType] })
+        end
+    end
+
+    streamWriteInt32(streamId, #cooldowns)
+    for _, cooldown in ipairs(cooldowns) do
+        streamWriteInt32(streamId, cooldown.farmId)
+        streamWriteString(streamId, cooldown.eventType)
+        streamWriteInt32(streamId, cooldown.period)
+    end
+
+    local ids = getSortedKeys(self.incidents)
+    streamWriteInt32(streamId, #ids)
+    for _, id in ipairs(ids) do
+        TheContractorRandomEvents.writeIncident(streamId, self.incidents[id])
+    end
+end
+
+function TheContractorRandomEvents:readInitialClientState(streamId, connection)
+    local cooldownCount = streamReadInt32(streamId)
+    for _ = 1, cooldownCount do
+        local farmId = streamReadInt32(streamId)
+        local eventType = streamReadString(streamId)
+        local period = streamReadInt32(streamId)
+        if self.lastPeriodByFarm[farmId] == nil then
+            self.lastPeriodByFarm[farmId] = {}
+        end
+        self.lastPeriodByFarm[farmId][eventType] = period
+    end
+
+    local incidentCount = streamReadInt32(streamId)
+    for _ = 1, incidentCount do
+        self:applyIncident(TheContractorRandomEvents.readIncident(streamId))
+    end
+end
+
+-- Console commands (tcCompany - see TCConsole) -----------------------------------------
+
+function TheContractorRandomEvents:getEventTypeName(key)
+    local definition = self.eventTypes[key]
+    if definition ~= nil and definition.l10nKey ~= nil then
+        return g_i18n:getText(definition.l10nKey)
+    end
+    return key
+end
+
+function TheContractorRandomEvents.registerConsoleCommands()
+    TCConsole.register("company", "event", {
+        args = "<type>",
+        description = "Make a random event happen to your farm now (ignores the odds and the cooldown)",
+        run = function(farmId, args)
+            local randomEvents = g_currentMission.TheContractor.RandomEvents
+            local wanted = args[1]
+            if wanted == nil then
+                local keys = randomEvents:getEventTypeKeys()
+                return string.format("Usage: tcCompany event <type>. Types: %s",
+                    #keys > 0 and table.concat(keys, ", ") or "none yet")
+            end
+
+            local key = nil
+            for _, candidate in ipairs(randomEvents:getEventTypeKeys()) do
+                if string.lower(candidate) == string.lower(wanted) then
+                    key = candidate
+                end
+            end
+            if key == nil then
+                local keys = randomEvents:getEventTypeKeys()
+                return string.format("Error: no event type '%s'. Known types: %s", wanted,
+                    #keys > 0 and table.concat(keys, ", ") or "none yet")
+            end
+
+            local incident, reason = randomEvents:triggerEvent(farmId, key)
+            if incident == nil then
+                return string.format("No %s: %s", key, reason)
+            end
+            return string.format("Incident %d (%s) opened on farm %d, now at stage '%s'%s", incident.id, key, farmId,
+                incident.stage, randomEvents:getIncident(incident.id) == nil and " (already over)" or "")
+        end,
+    })
+
+    TCConsole.register("company", "events", {
+        description = "Your farm's open incidents, and each event type's odds and cooldown",
+        serverOnly = false,
+        run = function(farmId, args)
+            local randomEvents = g_currentMission.TheContractor.RandomEvents
+            local multiplier = TheContractorRandomEvents.getRateMultiplier()
+            local daysPerPeriod = getDaysPerPeriod()
+            local lines = { string.format("Random events at %d%% (today is day %d, %d day(s) a month):",
+                math.floor(multiplier * 100 + 0.5), getToday(), daysPerPeriod) }
+
+            local keys = randomEvents:getEventTypeKeys()
+            if #keys == 0 then
+                table.insert(lines, "  no event types registered")
+            end
+            for _, key in ipairs(keys) do
+                local definition = randomEvents:getEventType(key)
+                local rate = definition.ratePerPeriod ~= nil and definition.ratePerPeriod(farmId) or 0
+                local cooldownLeft = randomEvents:getCooldownLeft(farmId, key)
+                table.insert(lines, string.format("  %s (%s): %.3f a month, %.4f a day%s", key,
+                    randomEvents:getEventTypeName(key), rate * multiplier,
+                    TheContractorRandomEvents.getDailyChance(rate, multiplier, daysPerPeriod),
+                    cooldownLeft > 0 and string.format(", cooling down for %d more month(s)", cooldownLeft) or ""))
+            end
+
+            local incidents = randomEvents:getIncidents(farmId)
+            table.insert(lines, string.format("Open incidents: %d", #incidents))
+            for _, incident in ipairs(incidents) do
+                local values = {}
+                for _, name in ipairs(getSortedDataKeys(incident.data)) do
+                    table.insert(values, string.format("%s=%s", name, tostring(incident.data[name])))
+                end
+                table.insert(lines, string.format("  #%d %s, stage '%s'%s, opened %s%s", incident.id,
+                    incident.eventType, incident.stage,
+                    incident.nextStageDay > 0 and string.format(" until day %d", incident.nextStageDay) or
+                    " (waiting)", TCCalendar.formatPeriodIndex(incident.openedPeriod),
+                    #values > 0 and (": " .. table.concat(values, ", ")) or ""))
+            end
+            return table.concat(lines, "\n")
+        end,
+    })
+end
