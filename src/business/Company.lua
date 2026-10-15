@@ -78,6 +78,14 @@ function TheContractorCompany:applyCompanyCreation(farmId, name)
     if tc ~= nil and tc.Reputation ~= nil then
         tc.Reputation:reset(farmId)
     end
+
+    -- On an MP client this lands a round trip after the player confirmed
+    -- the name, with the menu still open on the "create a company" state.
+    local menu = tc ~= nil and tc.MenuContractor or nil
+    if menu ~= nil and menu.isFrameOpen and farmId == g_currentMission:getFarmId() then
+        menu:refreshCompanyState()
+        menu:setMenuButtonInfoDirty()
+    end
 end
 
 function TheContractorCompany:loadFromXMLFile(xmlFile)
