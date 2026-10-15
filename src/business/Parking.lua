@@ -124,6 +124,13 @@ function TheContractorParking:returnVehicles(farmId, vehicleIds)
         return
     end
 
+    -- 071: a courtesy vehicle the insurer's waiting for goes back to them
+    -- instead.
+    local courtesy = g_currentMission.TheContractor.CourtesyVehicle
+    if courtesy ~= nil then
+        vehicleIds = courtesy:collectDueVehicles(vehicleIds)
+    end
+
     local cooldown = g_currentMission.TheContractor.Cooldown
     local batchId = self.nextBatchId
     local entries = {}

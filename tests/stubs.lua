@@ -72,6 +72,25 @@ local function installXML()
     end
 end
 
+-- A stream is a plain table used as a queue: every streamWrite* appends,
+-- every streamRead* takes the oldest value. world:newStream() makes one.
+-- Float32 values aren't rounded to 32 bits.
+local function installStreams()
+    local function write(streamId, value)
+        table.insert(streamId.values, value)
+    end
+    local function read(streamId)
+        streamId.position = streamId.position + 1
+        return streamId.values[streamId.position]
+    end
+    for _, name in ipairs({ "Bool", "Int8", "Int16", "Int32", "UInt8", "UInt16", "UInt32", "Float32", "String" }) do
+        _G["streamWrite" .. name] = write
+        _G["streamRead" .. name] = read
+    end
+    streamWriteUIntN = function(streamId, value) write(streamId, value) end
+    streamReadUIntN = function(streamId) return read(streamId) end
+end
+
 function stubs.install()
     local world = {
         farms = { { farmId = 1 } },
@@ -173,6 +192,11 @@ function stubs.install()
     }
 
     installXML()
+    installStreams()
+
+    function world:newStream()
+        return { values = {}, position = 0 }
+    end
 
     -- Engine classes the mod patches as it loads. Motorized's
     -- updateConsumers reports one fuel step through g_farmManager (like

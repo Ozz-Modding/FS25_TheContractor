@@ -54,6 +54,8 @@ TheContractorLogbook.KIND = {
     JOB = "job",
     DRIVER = "driver",
     PLAYER = "player",
+    -- 069: stolen and recovered; minutes is how long it was missing.
+    THEFT = "theft",
 }
 
 TheContractorLogbook.ROLE = {
@@ -575,6 +577,26 @@ function TheContractorLogbook:addVehicleEntry(record, entry)
     if g_server ~= nil then
         g_server:broadcastEvent(TCLogVehicleEntryEvent.new(record, entry))
     end
+end
+
+-- 069 (server): a stolen vehicle the police recovered. startSnapshot is its
+-- condition before the thieves' damage was added.
+function TheContractorLogbook:recordTheftRecovered(farmId, vehicle, startSnapshot, minutes)
+    local record = self:getVehicleRecord(vehicle, true)
+    if record == nil then
+        return
+    end
+    local endSnapshot = TCVehicleCondition.capture(vehicle)
+    self:addVehicleEntry(record, {
+        kind = TheContractorLogbook.KIND.THEFT,
+        farmId = farmId,
+        day = getToday(),
+        endedAt = TheContractorJobs.getGameMinutes(),
+        minutes = minutes,
+        startSnapshot = startSnapshot,
+        endSnapshot = endSnapshot,
+        wearCost = TCVehicleCondition.getWearCost(vehicle, startSnapshot, endSnapshot),
+    })
 end
 
 -- Player sessions (server) ------------------------------------------------------

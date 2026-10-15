@@ -43,7 +43,8 @@ end
 -- A vehicle counts as free if it isn't sitting in another of this farm's
 -- allocated/in_progress jobs' equipment (008 - field and haulage equipment
 -- alike), and isn't currently sitting in 023's post-completion buffer
--- (still physically hidden). Waiting to be parked (062) doesn't stop it.
+-- (still physically hidden) or stolen (069). Waiting to be parked (062)
+-- doesn't stop it.
 function TheContractorAllocation:isVehicleFree(farmId, vehicle)
     local vehicleId = NetworkUtil.getObjectId(vehicle)
     if vehicleId == nil then
@@ -51,6 +52,11 @@ function TheContractorAllocation:isVehicleFree(farmId, vehicle)
     end
 
     if g_currentMission.TheContractor.Cooldown:isVehicleInCooldown(vehicleId) then
+        return false
+    end
+
+    -- 069: stolen, waiting on the police.
+    if g_currentMission.TheContractor.Theft:isStolen(vehicleId) then
         return false
     end
 

@@ -66,6 +66,10 @@ source(TheContractor.dir .. "src/business/PayReviews.lua")
 source(TheContractor.dir .. "src/business/Administrator.lua")
 source(TheContractor.dir .. "src/business/Logbook.lua")
 source(TheContractor.dir .. "src/business/Parking.lua")
+source(TheContractor.dir .. "src/business/RandomEvents.lua")
+source(TheContractor.dir .. "src/business/MachineryInsurance.lua")
+source(TheContractor.dir .. "src/business/Theft.lua")
+source(TheContractor.dir .. "src/business/CourtesyVehicle.lua")
 source(TheContractor.dir .. "src/events/TCInitialClientStateEvent.lua")
 source(TheContractor.dir .. "src/events/TCSettingsEvent.lua")
 source(TheContractor.dir .. "src/events/TCCreateCompanyEvent.lua")
@@ -120,6 +124,7 @@ source(TheContractor.dir .. "src/events/TCMessageActionEvent.lua")
 source(TheContractor.dir .. "src/events/TCOverheadStateEvent.lua")
 source(TheContractor.dir .. "src/events/TCOverheadRequestEvent.lua")
 source(TheContractor.dir .. "src/events/TCClaimRecordedEvent.lua")
+source(TheContractor.dir .. "src/events/TCInsuranceClaimRecordedEvent.lua")
 source(TheContractor.dir .. "src/events/TCPursueInvoiceEvent.lua")
 source(TheContractor.dir .. "src/events/TCWorkerTrainingChangedEvent.lua")
 source(TheContractor.dir .. "src/events/TCBookTrainingEvent.lua")
@@ -137,6 +142,7 @@ source(TheContractor.dir .. "src/events/TCLogClaimEvent.lua")
 source(TheContractor.dir .. "src/events/TCParkingQueuedEvent.lua")
 source(TheContractor.dir .. "src/events/TCParkingRemovedEvent.lua")
 source(TheContractor.dir .. "src/events/TCParkingNoticeEvent.lua")
+source(TheContractor.dir .. "src/events/TCRandomEventIncidentEvent.lua")
 
 -- The top-level Contractor page itself stays always-visible (see Company.lua
 -- and MenuContractor's Overview tab): "Create Company" has to live somewhere
@@ -187,6 +193,17 @@ function TheContractor:loadMap()
     self.Logbook = TheContractorLogbook.new()
     self.Parking = TheContractorParking.new()
     self.Parking:register(self.Inbox)
+    -- 068: event types (069 on) register with it before the save loads, so
+    -- their saved incidents find their stages.
+    self.RandomEvents = TheContractorRandomEvents.new()
+    self.Theft = TheContractorTheft.new()
+    -- 070: before Theft, which puts its claim stages in its own.
+    self.MachineryInsurance = TheContractorMachineryInsurance.new()
+    self.MachineryInsurance:register(self.Overheads, self.Inbox, self.RandomEvents)
+    -- 071: before Theft too, for its return stages.
+    self.CourtesyVehicle = TheContractorCourtesyVehicle.new()
+    self.CourtesyVehicle:register(self.RandomEvents, self.Inbox)
+    self.Theft:register(self.RandomEvents, self.Inbox, self.MachineryInsurance, self.CourtesyVehicle)
     self.InboxHUD = TCInboxHUD.new()
 
     -- Module-level caches outlive a savegame; start each load clean.
@@ -247,6 +264,7 @@ function TheContractor:loadMap()
     self.Claims:startDailyTick()
     -- 060: every machine prunes its own copy.
     self.Logbook:startDailyTick()
+    self.RandomEvents:startDailyTick()
 
     -- Console commands: each subsystem registers its own (see TCConsole).
     TCConsole.reset()
@@ -263,6 +281,9 @@ function TheContractor:loadMap()
     TheContractorNotices.registerConsoleCommands()
     TheContractorLogbook.registerConsoleCommands()
     TheContractorParking.registerConsoleCommands()
+    TheContractorRandomEvents.registerConsoleCommands()
+    TheContractorTheft.registerConsoleCommands()
+    TheContractorMachineryInsurance.registerConsoleCommands()
     TCSupplyStock.registerConsoleCommands()
     TCIdleStaff.registerConsoleCommands()
     TCConsole.install()
@@ -314,6 +335,8 @@ function TheContractor:loadFromXMLFile()
     self.Administrator:loadFromXMLFile(xmlFile)
     self.Logbook:loadFromXMLFile(xmlFile)
     self.Parking:loadFromXMLFile(xmlFile)
+    self.RandomEvents:loadFromXMLFile(xmlFile)
+    self.MachineryInsurance:loadFromXMLFile(xmlFile)
 
     delete(xmlFile)
 end
@@ -332,6 +355,8 @@ function TheContractor:resolveSavedVehicles()
     self.Cooldown:resolveSavedVehicles()
     self.Logbook:resolveSavedVehicles()
     self.Parking:resolveSavedVehicles()
+    self.Theft:resolveSavedVehicles()
+    self.CourtesyVehicle:resolveSavedVehicles()
 end
 
 -- Appended onto FSBaseMission.saveSavegame (see installSaveHook below), so
@@ -372,6 +397,8 @@ function TheContractor:saveToXmlFile()
     tc.Administrator:saveToXmlFile(xmlFile)
     tc.Logbook:saveToXmlFile(xmlFile)
     tc.Parking:saveToXmlFile(xmlFile)
+    tc.RandomEvents:saveToXmlFile(xmlFile)
+    tc.MachineryInsurance:saveToXmlFile(xmlFile)
 
     saveXMLFile(xmlFile)
     delete(xmlFile)
@@ -459,6 +486,10 @@ function TheContractor:deleteMap()
 
     if self.Logbook ~= nil then
         self.Logbook:stopDailyTick()
+    end
+
+    if self.RandomEvents ~= nil then
+        self.RandomEvents:stopDailyTick()
     end
 
     if self.InboxHUD ~= nil then

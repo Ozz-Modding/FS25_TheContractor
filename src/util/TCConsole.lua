@@ -32,7 +32,7 @@ TCConsole.GROUPS = {
     { key = "worker", command = "tcWorker", description = "Hire, list and change your staff" },
     { key = "job", command = "tcJob", description = "Offer, create and force jobs" },
     { key = "finance", command = "tcFinance", description = "Invoices, claims and botched jobs" },
-    { key = "company", command = "tcCompany", description = "Reputation and Overview notices" },
+    { key = "company", command = "tcCompany", description = "Reputation, Overview notices and random events" },
 }
 
 -- groups[key] = { key, command, description, order = { names }, subcommands = { [lowerName] = def } }

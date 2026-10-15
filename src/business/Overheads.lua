@@ -14,6 +14,12 @@
 --                                                  -- claimCount, loadingPercent for the renewal notice (052)
 --       descriptionAmounts = { 800, 60 },          -- optional: 1x UK money for the description's %s,
 --                                                  -- in order, scaled and formatted in the player's currency
+--       unscaled = true,                           -- optional: annualCost is already a game price
+--                                                  -- (a share of vehicle values, say), not 1x UK
+--       levels = {                                 -- optional (070): levels of cover, each with its
+--           { key = "basic", l10nKey = "...",      -- own price, used instead of annualCost
+--             annualCost = function(farmId) ... end },
+--       },
 --   })
 --
 -- Register on every machine, at load: clients need the name and the cost
@@ -37,10 +43,15 @@
 -- employer's liability, once the farm employs anyone) and can't be
 -- cancelled; once it's no longer required it just isn't renewed.
 --
+-- An overhead with levels (070) is taken out at a level the player picks,
+-- and the level can be changed for the next term (pendingLevel, like
+-- pendingBilling). Overheads without levels have level nil.
+--
 -- State, per farm per overhead: { enabled, billing, pendingBilling,
--- renewalPeriod, paidUntil, termCost, quotedCost, cancelled } - periods are
--- TCCalendar period indices. paidUntil is the first period not paid for.
--- noticePeriod (the renewal a notice went out for) stays on the server.
+-- renewalPeriod, paidUntil, termCost, quotedCost, cancelled, level,
+-- pendingLevel } - periods are TCCalendar period indices. paidUntil is the
+-- first period not paid for. noticePeriod (the renewal a notice went out
+-- for) stays on the server.
 
 TheContractorOverheads = {}
 TheContractorOverheads_mt = Class(TheContractorOverheads)
@@ -153,10 +164,49 @@ function TheContractorOverheads:isRequired(farmId, definition)
     return definition.isRequired == nil or definition.isRequired(farmId)
 end
 
--- The price for a year's cover right now, scaled from the definition's 1x UK
--- price (TheContractorSettings:scaleCost).
-function TheContractorOverheads:getAnnualCost(farmId, definition)
-    return g_currentMission.TheContractor.Settings:scaleCost(math.max(0, definition.annualCost(farmId)))
+-- A level of cover (070) by key, falling back to the first; nil for an
+-- overhead without levels.
+function TheContractorOverheads.getLevel(definition, levelKey)
+    if definition.levels == nil or #definition.levels == 0 then
+        return nil
+    end
+    for _, level in ipairs(definition.levels) do
+        if level.key == levelKey then
+            return level
+        end
+    end
+    return definition.levels[1]
+end
+
+-- Whether levelKey is one of the definition's levels (nil for one without).
+function TheContractorOverheads.isValidLevel(definition, levelKey)
+    if definition.levels == nil or #definition.levels == 0 then
+        return levelKey == nil
+    end
+    for _, level in ipairs(definition.levels) do
+        if level.key == levelKey then
+            return true
+        end
+    end
+    return false
+end
+
+-- The level the next term will use.
+function TheContractorOverheads.getNextLevel(state)
+    return state.pendingLevel or state.level
+end
+
+-- The price for a year's cover right now (at levelKey, for an overhead with
+-- levels), scaled from the 1x UK price (TheContractorSettings:scaleCost)
+-- unless the definition is unscaled.
+function TheContractorOverheads:getAnnualCost(farmId, definition, levelKey)
+    local level = TheContractorOverheads.getLevel(definition, levelKey)
+    local annualCost = level ~= nil and level.annualCost or definition.annualCost
+    local cost = math.max(0, annualCost(farmId))
+    if definition.unscaled then
+        return cost
+    end
+    return g_currentMission.TheContractor.Settings:scaleCost(cost)
 end
 
 -- What one charge comes to for a term costing annualCost.
@@ -193,7 +243,8 @@ function TheContractorOverheads:getChargeInPeriod(farmId, definition, state, per
         if not self:willRenew(farmId, definition, state) then
             return 0
         end
-        local annualCost = state.quotedCost or self:getAnnualCost(farmId, definition)
+        local annualCost = state.quotedCost or
+            self:getAnnualCost(farmId, definition, TheContractorOverheads.getNextLevel(state))
         return TheContractorOverheads.getChargeAmount(annualCost, TheContractorOverheads.getNextBilling(state))
     end
 
@@ -258,10 +309,13 @@ function TheContractorOverheads:charge(farmId, definition, amount)
     Logging.info("TheContractor: farm %d paid %.2f for overhead %s", farmId, amount, definition.key)
 end
 
--- Starts a new term now, priced now, and takes its first payment.
-function TheContractorOverheads:startPolicy(farmId, definition, billing)
+-- Starts a new term now, priced now, and takes its first payment. levelKey
+-- only for an overhead with levels (nil picks its first).
+function TheContractorOverheads:startPolicy(farmId, definition, billing, levelKey)
     local periodIndex = TCCalendar.getPeriodIndex()
-    local termCost = self:getAnnualCost(farmId, definition)
+    local level = TheContractorOverheads.getLevel(definition, levelKey)
+    levelKey = level ~= nil and level.key or nil
+    local termCost = self:getAnnualCost(farmId, definition, levelKey)
     local renewalPeriod = periodIndex + TheContractorOverheads.TERM_PERIODS
 
     local state = {
@@ -274,12 +328,14 @@ function TheContractorOverheads:startPolicy(farmId, definition, billing)
         quotedCost = nil,
         cancelled = false,
         noticePeriod = nil,
+        level = levelKey,
+        pendingLevel = nil,
     }
     self:charge(farmId, definition, TheContractorOverheads.getChargeAmount(termCost, billing))
     self:commitState(farmId, definition.key, state)
 
-    Logging.info("TheContractor: farm %d took out overhead %s (%s, %.0f a year, renews period %d)", farmId,
-        definition.key, billing, termCost, renewalPeriod)
+    Logging.info("TheContractor: farm %d took out overhead %s (%s%s, %.0f a year, renews period %d)", farmId,
+        definition.key, billing, levelKey ~= nil and (", " .. levelKey) or "", termCost, renewalPeriod)
 end
 
 -- Starts any mandatory overhead the farm now needs and doesn't have.
@@ -315,10 +371,13 @@ function TheContractorOverheads:renewPolicy(farmId, definition, state)
 
     local periodIndex = TCCalendar.getPeriodIndex()
     local billing = TheContractorOverheads.getNextBilling(state)
-    state.termCost = state.quotedCost or self:getAnnualCost(farmId, definition)
+    local levelKey = TheContractorOverheads.getNextLevel(state)
+    state.termCost = state.quotedCost or self:getAnnualCost(farmId, definition, levelKey)
     state.quotedCost = nil
     state.billing = billing
     state.pendingBilling = nil
+    state.level = levelKey
+    state.pendingLevel = nil
     state.renewalPeriod = periodIndex + TheContractorOverheads.TERM_PERIODS
     state.paidUntil = billing == TheContractorOverheads.BILLING.ANNUAL and state.renewalPeriod or periodIndex + 1
 
@@ -364,7 +423,7 @@ function TheContractorOverheads:postRenewalNotice(farmId, definition, state)
         return
     end
 
-    state.quotedCost = self:getAnnualCost(farmId, definition)
+    state.quotedCost = self:getAnnualCost(farmId, definition, TheContractorOverheads.getNextLevel(state))
     state.noticePeriod = state.renewalPeriod
     self:commitState(farmId, definition.key, state)
 
@@ -438,18 +497,20 @@ TheContractorOverheads.REQUEST = {
     CANCEL = "cancel",
     KEEP = "keep",
     SWITCH_BILLING = "switchBilling",
+    SET_LEVEL = "setLevel",
 }
 
 -- Taking one out pays its first charge, so that has to be affordable.
-function TheContractorOverheads:canAffordEnable(farmId, definition, billing)
+function TheContractorOverheads:canAffordEnable(farmId, definition, billing, levelKey)
     local farm = g_farmManager:getFarmById(farmId)
-    return farm ~= nil and
-        farm:getBalance() >= TheContractorOverheads.getChargeAmount(self:getAnnualCost(farmId, definition), billing)
+    return farm ~= nil and farm:getBalance() >=
+        TheContractorOverheads.getChargeAmount(self:getAnnualCost(farmId, definition, levelKey), billing)
 end
 
 -- Re-checks everything: the farm's own company, the overhead exists, and
--- the request makes sense for its state. billing is only for ENABLE.
-function TheContractorOverheads:handleRequest(farmId, key, request, billing)
+-- the request makes sense for its state. billing is only for ENABLE;
+-- levelKey is for ENABLE and SET_LEVEL on an overhead with levels.
+function TheContractorOverheads:handleRequest(farmId, key, request, billing, levelKey)
     if not g_currentMission:getIsServer() then
         return
     end
@@ -465,10 +526,12 @@ function TheContractorOverheads:handleRequest(farmId, key, request, billing)
 
     if request == TheContractorOverheads.REQUEST.ENABLE then
         if isActive or definition.mandatory or (billing ~= TheContractorOverheads.BILLING.ANNUAL and
-                billing ~= TheContractorOverheads.BILLING.MONTHLY) or not self:canAffordEnable(farmId, definition, billing) then
+                billing ~= TheContractorOverheads.BILLING.MONTHLY) or
+            not TheContractorOverheads.isValidLevel(definition, levelKey) or
+            not self:canAffordEnable(farmId, definition, billing, levelKey) then
             return
         end
-        self:startPolicy(farmId, definition, billing)
+        self:startPolicy(farmId, definition, billing, levelKey)
     elseif request == TheContractorOverheads.REQUEST.CANCEL then
         if not isActive or definition.mandatory or state.cancelled then
             return
@@ -488,6 +551,17 @@ function TheContractorOverheads:handleRequest(farmId, key, request, billing)
         local nextBilling = TheContractorOverheads.getNextBilling(state) == TheContractorOverheads.BILLING.ANNUAL and
             TheContractorOverheads.BILLING.MONTHLY or TheContractorOverheads.BILLING.ANNUAL
         state.pendingBilling = nextBilling ~= state.billing and nextBilling or nil
+        self:commitState(farmId, key, state)
+    elseif request == TheContractorOverheads.REQUEST.SET_LEVEL then
+        -- For the next term. A renewal already quoted is quoted again.
+        if not isActive or state.cancelled or definition.levels == nil or
+            not TheContractorOverheads.isValidLevel(definition, levelKey) then
+            return
+        end
+        state.pendingLevel = levelKey ~= state.level and levelKey or nil
+        if state.quotedCost ~= nil then
+            state.quotedCost = self:getAnnualCost(farmId, definition, TheContractorOverheads.getNextLevel(state))
+        end
         self:commitState(farmId, key, state)
     end
 end
@@ -539,7 +613,8 @@ function TheContractorOverheads:onPeriodChanged()
 end
 
 -- Wire serialization -------------------------------------------------------------------
--- Numbers that can be nil go as -1; pendingBilling as "".
+-- Numbers that can be nil go as -1; pendingBilling, level and pendingLevel
+-- as "".
 
 function TheContractorOverheads.writeState(streamId, state)
     streamWriteBool(streamId, state.enabled)
@@ -550,6 +625,8 @@ function TheContractorOverheads.writeState(streamId, state)
     streamWriteFloat32(streamId, state.termCost)
     streamWriteFloat32(streamId, state.quotedCost or -1)
     streamWriteBool(streamId, state.cancelled)
+    streamWriteString(streamId, state.level or "")
+    streamWriteString(streamId, state.pendingLevel or "")
 end
 
 function TheContractorOverheads.readState(streamId)
@@ -562,9 +639,17 @@ function TheContractorOverheads.readState(streamId)
         termCost = streamReadFloat32(streamId),
         quotedCost = streamReadFloat32(streamId),
         cancelled = streamReadBool(streamId),
+        level = streamReadString(streamId),
+        pendingLevel = streamReadString(streamId),
     }
     if state.pendingBilling == "" then
         state.pendingBilling = nil
+    end
+    if state.level == "" then
+        state.level = nil
+    end
+    if state.pendingLevel == "" then
+        state.pendingLevel = nil
     end
     if state.quotedCost < 0 then
         state.quotedCost = nil
@@ -600,6 +685,8 @@ function TheContractorOverheads:loadFromXMLFile(xmlFile)
                 quotedCost = getXMLFloat(xmlFile, key .. "#quotedCost"),
                 cancelled = Utils.getNoNil(getXMLBool(xmlFile, key .. "#cancelled"), false),
                 noticePeriod = getXMLInt(xmlFile, key .. "#noticePeriod"),
+                level = getXMLString(xmlFile, key .. "#level"),
+                pendingLevel = getXMLString(xmlFile, key .. "#pendingLevel"),
             })
         end
 
@@ -632,6 +719,12 @@ function TheContractorOverheads:saveToXmlFile(xmlFile)
                 setXMLBool(xmlFile, key .. "#cancelled", state.cancelled)
                 if state.noticePeriod ~= nil then
                     setXMLInt(xmlFile, key .. "#noticePeriod", state.noticePeriod)
+                end
+                if state.level ~= nil then
+                    setXMLString(xmlFile, key .. "#level", state.level)
+                end
+                if state.pendingLevel ~= nil then
+                    setXMLString(xmlFile, key .. "#pendingLevel", state.pendingLevel)
                 end
                 index = index + 1
             end

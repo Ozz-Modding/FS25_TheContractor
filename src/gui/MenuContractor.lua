@@ -438,10 +438,20 @@ function MenuContractor:initialize()
             self:onClickSwitchOverheadBilling()
         end
     }
+    -- 070: an overhead with levels of cover can change level from renewal.
+    self.btnChangeOverheadLevel = {
+        inputAction = InputAction.MENU_EXTRA_2,
+        text = g_i18n:getText("tc_overheads_changeLevelButton"),
+        callback = function()
+            self:onClickChangeOverheadLevel()
+        end
+    }
     self.menuButtonInfoOverheadNotTaken = { self.btnBack, self.btnNextPage, self.btnPrevPage,
         self.btnEnableOverheadAnnual, self.btnEnableOverheadMonthly }
     self.menuButtonInfoOverheadActive = { self.btnBack, self.btnNextPage, self.btnPrevPage,
         self.btnCancelOverhead, self.btnSwitchOverheadBilling }
+    self.menuButtonInfoOverheadActiveLevels = { self.btnBack, self.btnNextPage, self.btnPrevPage,
+        self.btnCancelOverhead, self.btnSwitchOverheadBilling, self.btnChangeOverheadLevel }
     self.menuButtonInfoOverheadMandatory = { self.btnBack, self.btnNextPage, self.btnPrevPage,
         self.btnSwitchOverheadBilling }
     self.menuButtonInfoOverheadCancelled = { self.btnBack, self.btnNextPage, self.btnPrevPage,
@@ -1031,6 +1041,11 @@ function MenuContractor:refreshCurrentJobsState(farmId, jobs)
         -- On hold for supplies (032).
         if job:isWaitingForSupplies() then
             line = line .. string.format(g_i18n:getText("tc_overview_supplySuffix"), job:getSupplyStatusText())
+        end
+        -- 071: a courtesy vehicle on it goes back to the insurer afterwards.
+        local courtesyName = g_currentMission.TheContractor.CourtesyVehicle:getDueOnJob(job)
+        if courtesyName ~= nil then
+            line = line .. string.format(g_i18n:getText("tc_overview_courtesyDueSuffix"), courtesyName)
         end
         table.insert(lines, line)
     end
@@ -1761,8 +1776,25 @@ function MenuContractor:onClickMessageAction(index)
         return
     end
 
+    -- A kind can ask for a confirm first (070's Submit claim).
+    local definition = g_currentMission.TheContractor.Inbox:getKind(message.kind)
+    local confirmText = definition ~= nil and definition.getConfirmText ~= nil and
+        definition.getConfirmText(message, action.key) or nil
+    if confirmText ~= nil then
+        local messageId = message.id
+        YesNoDialog.show(function(target, clickOk)
+            if clickOk then
+                target:sendMessageAction(messageId, action.key)
+            end
+        end, self, confirmText)
+        return
+    end
+    self:sendMessageAction(message.id, action.key)
+end
+
+function MenuContractor:sendMessageAction(messageId, actionKey)
     local farmId = g_currentMission:getFarmId()
-    g_client:getServerConnection():sendEvent(TCMessageActionEvent.new(farmId, message.id, action.key))
+    g_client:getServerConnection():sendEvent(TCMessageActionEvent.new(farmId, messageId, actionKey))
 
     -- Same "already applied on the server, catches up next visit on a
     -- remote client" caveat as respondToSelectedInboxJob.
@@ -3481,7 +3513,13 @@ function MenuContractor:refreshFinanceYearState(farmId, finances)
     self.financesYearOverheads:setText(formatMoney(stats.overheads or 0))
     -- 053/055: solicitors' fees and H&S fines share the claims row - there's
     -- no room for another.
-    self.financesYearClaims:setText(formatMoney((stats.claims or 0) + (stats.legal or 0) + (stats.fines or 0)))
+    -- 070: as is what insurers paid back.
+    local claimsText = formatMoney((stats.claims or 0) + (stats.legal or 0) + (stats.fines or 0))
+    if (stats.insurancePayouts or 0) > 0 then
+        claimsText = string.format(g_i18n:getText("tc_finances_claimsWithPayouts"), claimsText,
+            formatMoney(stats.insurancePayouts))
+    end
+    self.financesYearClaims:setText(claimsText)
 
     self.financesYearRows:invalidateLayout()
 end
@@ -3756,6 +3794,16 @@ function MenuContractor:updateOverheadDetails()
             priceText = string.format(g_i18n:getText("tc_overheads_priceQuoted"), priceText,
                 formatMoney(state.quotedCost))
         end
+        -- 070: the level of cover, and any change from renewal.
+        local level = TheContractorOverheads.getLevel(definition, state.level)
+        if level ~= nil then
+            priceText = string.format(g_i18n:getText("tc_overheads_priceLevel"), g_i18n:getText(level.l10nKey),
+                priceText)
+            if state.pendingLevel ~= nil and not state.cancelled then
+                priceText = string.format(g_i18n:getText("tc_overheads_levelSwitching"), priceText,
+                    g_i18n:getText(TheContractorOverheads.getLevel(definition, state.pendingLevel).l10nKey))
+            end
+        end
         self.financesOverheadPrice:setText(priceText)
 
         local nextPeriod, nextAmount = overheads:getNextCharge(farmId, definition, state)
@@ -3763,9 +3811,11 @@ function MenuContractor:updateOverheadDetails()
             string.format(g_i18n:getText("tc_overheads_nextChargeLine"), formatMoney(nextAmount),
                 TCCalendar.formatPeriodIndex(nextPeriod)) or g_i18n:getText("tc_overheads_nextChargeNone"))
     else
+        -- 070: with levels, the cheapest (the first).
         local annualCost = overheads:getAnnualCost(farmId, definition)
         self.financesOverheadBilling:setText("-")
-        self.financesOverheadPrice:setText(string.format(g_i18n:getText("tc_overheads_priceQuote"),
+        self.financesOverheadPrice:setText(string.format(g_i18n:getText(definition.levels ~= nil and
+            "tc_overheads_priceFrom" or "tc_overheads_priceQuote"),
             formatMoney(TheContractorOverheads.getChargeAmount(annualCost, TheContractorOverheads.BILLING.ANNUAL)),
             formatMoney(TheContractorOverheads.getChargeAmount(annualCost, TheContractorOverheads.BILLING.MONTHLY))))
         self.financesOverheadNext:setText(g_i18n:getText("tc_overheads_nextChargeNone"))
@@ -3801,16 +3851,68 @@ function MenuContractor:getOverheadButtonInfo()
     local switchTo = TheContractorOverheads.getNextBilling(state) == TheContractorOverheads.BILLING.ANNUAL and
         TheContractorOverheads.BILLING.MONTHLY or TheContractorOverheads.BILLING.ANNUAL
     self.btnSwitchOverheadBilling.text = g_i18n:getText("tc_overheads_switchTo_" .. switchTo)
-    return definition.mandatory and self.menuButtonInfoOverheadMandatory or self.menuButtonInfoOverheadActive
+    if definition.mandatory then
+        return self.menuButtonInfoOverheadMandatory
+    end
+    return definition.levels ~= nil and self.menuButtonInfoOverheadActiveLevels or self.menuButtonInfoOverheadActive
 end
 
 -- Sends the request, then redraws - same "synchronous for host/SP, catches
 -- up on next refresh for a remote client" caveat as onClickHireWorker.
-function MenuContractor:sendOverheadRequest(definition, request, billing)
+function MenuContractor:sendOverheadRequest(definition, request, billing, levelKey)
     local farmId = g_currentMission:getFarmId()
-    g_client:getServerConnection():sendEvent(TCOverheadRequestEvent.new(farmId, definition.key, request, billing))
+    g_client:getServerConnection():sendEvent(TCOverheadRequestEvent.new(farmId, definition.key, request, billing,
+        levelKey))
     self:refreshFinancesState(farmId, g_currentMission.TheContractor.Finances)
     self:setMenuButtonInfoDirty()
+end
+
+-- 070: an OptionDialog of the definition's levels by name, then
+-- onPicked(levelKey). The dialog's text shows the prompt and the highlighted
+-- level's price at billing and description, updated as the selector moves
+-- (vanilla's option has no change callback of its own, so one is set for
+-- the dialog's lifetime and put back after). OptionDialog closes before its
+-- callback runs, so onPicked can open its own dialog.
+function MenuContractor:pickOverheadLevel(definition, billing, prompt, onPicked)
+    local farmId = g_currentMission:getFarmId()
+    local overheads = g_currentMission.TheContractor.Overheads
+    local options = {}
+    local texts = {}
+    for i, level in ipairs(definition.levels) do
+        local name = g_i18n:getText(level.l10nKey)
+        local amount = TheContractorOverheads.getChargeAmount(overheads:getAnnualCost(farmId, definition, level.key),
+            billing)
+        local detail = string.format(g_i18n:getText("tc_overheads_levelDetail_" .. billing), name, formatMoney(amount))
+        if level.getDescription ~= nil then
+            detail = detail .. " " .. level.getDescription()
+        end
+        options[i] = name
+        texts[i] = prompt .. "\n\n" .. detail
+    end
+
+    local dialog = OptionDialog.INSTANCE
+    local optionElement = dialog ~= nil and dialog.optionElement or nil
+    local previousCallback = optionElement ~= nil and optionElement.onClickCallback or nil
+    if optionElement ~= nil then
+        optionElement.onClickCallback = function(_, state)
+            if texts[state] ~= nil then
+                dialog:setText(texts[state])
+            end
+        end
+    end
+
+    local definitionKey = definition.key
+    OptionDialog.show(function(index)
+        if optionElement ~= nil then
+            optionElement.onClickCallback = previousCallback
+        end
+        local level = definition.levels[index]
+        -- Still the same overhead: the list could have refreshed meanwhile.
+        if level == nil or self.selectedOverheadKey ~= definitionKey then
+            return
+        end
+        onPicked(level.key)
+    end, texts[1], g_i18n:getText("tc_overheads_levelTitle"), options)
 end
 
 function MenuContractor:onClickEnableOverhead(billing)
@@ -3819,21 +3921,52 @@ function MenuContractor:onClickEnableOverhead(billing)
         return
     end
 
+    if definition.levels ~= nil then
+        self:pickOverheadLevel(definition, billing, string.format(g_i18n:getText("tc_overheads_levelPrompt"),
+            g_i18n:getText(definition.l10nKey)), function(levelKey)
+            self:confirmEnableOverhead(definition, billing, levelKey)
+        end)
+        return
+    end
+    self:confirmEnableOverhead(definition, billing, nil)
+end
+
+function MenuContractor:confirmEnableOverhead(definition, billing, levelKey)
     local farmId = g_currentMission:getFarmId()
     local overheads = g_currentMission.TheContractor.Overheads
-    local amount = TheContractorOverheads.getChargeAmount(overheads:getAnnualCost(farmId, definition), billing)
+    local amount = TheContractorOverheads.getChargeAmount(overheads:getAnnualCost(farmId, definition, levelKey),
+        billing)
     local name = g_i18n:getText(definition.l10nKey)
+    local level = TheContractorOverheads.getLevel(definition, levelKey)
+    if level ~= nil then
+        name = string.format(g_i18n:getText("tc_overheads_nameWithLevel"), name, g_i18n:getText(level.l10nKey))
+    end
 
-    if not overheads:canAffordEnable(farmId, definition, billing) then
+    if not overheads:canAffordEnable(farmId, definition, billing, levelKey) then
         InfoDialog.show(string.format(g_i18n:getText("tc_overheads_cannotAfford"), name, formatMoney(amount)))
         return
     end
 
     YesNoDialog.show(function(target, clickOk)
         if clickOk then
-            target:sendOverheadRequest(definition, TheContractorOverheads.REQUEST.ENABLE, billing)
+            target:sendOverheadRequest(definition, TheContractorOverheads.REQUEST.ENABLE, billing, levelKey)
         end
     end, self, string.format(g_i18n:getText("tc_overheads_enableConfirm_" .. billing), name, formatMoney(amount)))
+end
+
+-- 070: no confirm, like switching billing: it only changes the next term.
+function MenuContractor:onClickChangeOverheadLevel()
+    local definition, state = self:getSelectedOverhead()
+    if definition == nil or definition.levels == nil or state == nil or not state.enabled or state.cancelled then
+        return
+    end
+
+    local current = TheContractorOverheads.getLevel(definition, state.level)
+    self:pickOverheadLevel(definition, TheContractorOverheads.getNextBilling(state),
+        string.format(g_i18n:getText("tc_overheads_levelChangePrompt"), g_i18n:getText(definition.l10nKey),
+            g_i18n:getText(current.l10nKey)), function(levelKey)
+            self:sendOverheadRequest(definition, TheContractorOverheads.REQUEST.SET_LEVEL, nil, levelKey)
+        end)
 end
 
 function MenuContractor:onClickCancelOverhead()
@@ -3994,6 +4127,15 @@ local function getCrewText(entry)
         table.insert(names, getCrewName(member))
     end
     return #names > 0 and table.concat(names, ", ") or "-"
+end
+
+-- Who a vehicle history entry was: the driver, "Stolen" for a theft (069),
+-- or "A player".
+local function getVehicleEntryWho(entry)
+    if entry.kind == TheContractorLogbook.KIND.THEFT then
+        return g_i18n:getText("tc_logbook_stolen")
+    end
+    return entry.who or g_i18n:getText("tc_logbook_aPlayer")
 end
 
 -- The margin chip: money, or "Missed".
@@ -4225,12 +4367,20 @@ function MenuContractor:populateLogbookVehicleCell(index, cell)
     end
     local last = row.summary.last
     cell:getAttribute("name"):setText(row.name)
-    cell:getAttribute("lastUsedBy"):setText(last ~= nil and (last.who or "-") or g_i18n:getText("tc_logbook_neverUsed"))
+    local lastWho = last ~= nil and (last.kind == TheContractorLogbook.KIND.THEFT and getVehicleEntryWho(last) or
+        last.who or "-") or g_i18n:getText("tc_logbook_neverUsed")
+    cell:getAttribute("lastUsedBy"):setText(lastWho)
     cell:getAttribute("lastUsed"):setText(last ~= nil and TCCalendar.formatDayShort(last.day) or "-")
 
-    local snapshot = TCVehicleCondition.capture(row.vehicle)
-    setChip(cell:getAttribute("conditionChip"), cell:getAttribute("conditionChipText"),
-        TCVehicleCondition.getHeadline(snapshot) or "-", TCVehicleCondition.getTone(snapshot))
+    -- 069: a stolen vehicle's condition isn't known, just that it's gone.
+    if g_currentMission.TheContractor.Theft:isStolen(row.id) then
+        setChip(cell:getAttribute("conditionChip"), cell:getAttribute("conditionChipText"),
+            g_i18n:getText("tc_logbook_stolen"), "bad")
+    else
+        local snapshot = TCVehicleCondition.capture(row.vehicle)
+        setChip(cell:getAttribute("conditionChip"), cell:getAttribute("conditionChipText"),
+            TCVehicleCondition.getHeadline(snapshot) or "-", TCVehicleCondition.getTone(snapshot))
+    end
 
     -- A fault one of our people caused on it this year.
     setChip(cell:getAttribute("faultChip"), cell:getAttribute("faultChipText"),
@@ -4504,8 +4654,13 @@ function MenuContractor:getLogbookVehicleRows(vehicleRow)
 
     section("tc_logbook_sectionNow")
     local snapshot = TCVehicleCondition.capture(vehicleRow.vehicle)
-    row(text("tc_logbook_status"), text("tc_logbook_inFleet"), TCVehicleCondition.getHeadline(snapshot),
-        TCVehicleCondition.getTone(snapshot))
+    -- 069: missing while the police look for it.
+    if g_currentMission.TheContractor.Theft:isStolen(vehicleRow.id) then
+        row(text("tc_logbook_status"), text("tc_logbook_stolen"), text("tc_logbook_stolen"), "bad")
+    else
+        row(text("tc_logbook_status"), text("tc_logbook_inFleet"), TCVehicleCondition.getHeadline(snapshot),
+            TCVehicleCondition.getTone(snapshot))
+    end
     for _, state in ipairs(TCVehicleCondition.getStateRows(snapshot)) do
         row(state.label, state.value, state.tone ~= nil and text("tc_logbook_faultShort") or nil, state.tone)
     end
@@ -4542,13 +4697,15 @@ function MenuContractor:getLogbookVehicleRows(vehicleRow)
         local chip, tone = nil, nil
         if entry.outcome == TheContractorLogbook.OUTCOME.MISSED then
             chip, tone = text("tc_logbook_missed"), "bad"
+        elseif entry.kind == TheContractorLogbook.KIND.THEFT then
+            chip, tone = text("tc_logbook_recoveredChip"), "warn"
         elseif entry.faultCaused then
             chip, tone = text("tc_logbook_faultChip"), "bad"
         elseif entry.wash == TCJobConsequences.WASH.UNWASHED then
             chip, tone = text("tc_logbook_dirtyChip"), "warn"
         end
         table.insert(rows, {
-            history = { TCCalendar.formatDayShort(entry.day), entry.who or text("tc_logbook_aPlayer"),
+            history = { TCCalendar.formatDayShort(entry.day), getVehicleEntryWho(entry),
                 formatWorse(damage), formatWorse(wear) },
             chip = chip,
             tone = tone,

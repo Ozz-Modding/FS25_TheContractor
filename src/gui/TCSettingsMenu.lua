@@ -118,7 +118,15 @@ function TCSettingsMenu.addOption(settingsPage, id)
     option.elements[1]:setText(g_i18n:getText("tc_toolTip_" .. id))
     box.elements[2]:setText(g_i18n:getText("tc_setting_" .. id))
 
-    option:setTexts({ table.unpack(definition.strings) })
+    local texts = {}
+    if definition.stringKeys ~= nil then
+        for i, key in ipairs(definition.stringKeys) do
+            texts[i] = g_i18n:getText(key)
+        end
+    else
+        texts = { table.unpack(definition.strings) }
+    end
+    option:setTexts(texts)
     option:setState(TheContractorSettings.getValueIndex(id, g_currentMission.TheContractor.Settings:get(id)))
 
     updateFocusIds(box)
