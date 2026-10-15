@@ -120,7 +120,9 @@ function TheContractorSettings.getCanConnectionChange(connection)
     return connection:getIsLocal() or g_currentMission.userManager:getIsConnectionMasterUser(connection)
 end
 
--- 048: the multiplier on a new job's price.
+-- 048: the multiplier on a new job's price. FS25_EconomyScale's factor
+-- isn't in it: jobs store their price without it and apply it as it's read
+-- (TheContractorJob:getPrice), until they're paid.
 function TheContractorSettings:getJobPayMultiplier()
     return self.values.jobPayRate / 100 * TheContractorJobGeneration.JOB_PAY_BASELINE
 end
@@ -131,10 +133,12 @@ end
 -- rate too, so they keep the same weight against job income whatever the
 -- setting. Job pay is far above real UK contractor rates (047), so at 1x UK
 -- they'd hardly register. Wages, bonuses and severance stay at UK pay.
+-- FS25_EconomyScale's factor (TCEconomyScale) applies on top, as it does
+-- to job pay and wages.
 TheContractorSettings.COST_BASELINE = 5
 
 function TheContractorSettings:getCostMultiplier()
-    return self.values.jobPayRate / 100 * TheContractorSettings.COST_BASELINE
+    return self.values.jobPayRate / 100 * TheContractorSettings.COST_BASELINE * TCEconomyScale.getFactor()
 end
 
 -- A 1x UK cost at the current scale, to the nearest whole unit.

@@ -128,7 +128,7 @@ function TCAdvertisingDialog:refresh()
     local cost = TheContractorAdvertising.getCost(levelDef.key, durationPeriods)
 
     self.costText:setText(string.format(g_i18n:getText("tc_advertising_dialog_cost"),
-        g_i18n:formatMoney(levelDef.costPerPeriod, 0, true, true), g_i18n:formatMoney(cost, 0, true, true)))
+        g_i18n:formatMoney(TheContractorAdvertising.getCostPerPeriod(levelDef), 0, true, true), g_i18n:formatMoney(cost, 0, true, true)))
 
     self.effectText:setText(string.format(g_i18n:getText("tc_advertising_dialog_effect"),
         math.floor(advertising:getEffectiveness(farmId) * 100 + 0.5)))

@@ -1492,7 +1492,7 @@ function MenuContractor:onClickGiveBonus()
     local amounts = TheContractorMorale.BONUS_AMOUNTS
     local options = {}
     for _, amount in ipairs(amounts) do
-        table.insert(options, g_i18n:formatMoney(amount, 0, true, true))
+        table.insert(options, g_i18n:formatMoney(TheContractorMorale.getBonusCost(amount), 0, true, true))
     end
 
     OptionDialog.show(function(index)
@@ -1503,7 +1503,7 @@ function MenuContractor:onClickGiveBonus()
 
         if not TheContractorMorale.canAfford(farmId, amount) then
             InfoDialog.show(string.format(g_i18n:getText("tc_morale_bonusCannotAfford"),
-                g_i18n:formatMoney(amount, 0, true, true), worker.name))
+                g_i18n:formatMoney(TheContractorMorale.getBonusCost(amount), 0, true, true), worker.name))
             return
         end
 
@@ -1516,7 +1516,7 @@ function MenuContractor:onClickGiveBonus()
         -- A blocking confirmation as well as the notification. Worded
         -- without the new morale, which a remote client won't have yet.
         InfoDialog.show(string.format(g_i18n:getText("tc_morale_bonusConfirm"), worker.name,
-            g_i18n:formatMoney(amount, 0, true, true)))
+            g_i18n:formatMoney(TheContractorMorale.getBonusCost(amount), 0, true, true)))
     end, string.format(g_i18n:getText("tc_morale_bonusPrompt"), worker.name), g_i18n:getText("tc_morale_bonusTitle"),
         options)
 end
@@ -1832,7 +1832,7 @@ function MenuContractor:updateInboxDetails()
     end
     self.inboxDetailField:setText(fieldText)
     self.inboxDetailTargetDate:setText(formatTargetDate(job.targetPeriod, job.targetDayInPeriod))
-    self.inboxDetailPrice:setText(g_i18n:formatMoney(job.price, 0, true, true))
+    self.inboxDetailPrice:setText(g_i18n:formatMoney(job:getPrice(), 0, true, true))
     self.inboxDetailCrew:setText(self:getJobCrewText(job))
     setChip(self.inboxDetailSkillChip, self.inboxDetailSkillChipText, string.format(
         g_i18n:getText("tc_inbox_skillValue"), job:getOperationSkillText() or "-", job.requiredSkillLevel), "info")
@@ -2142,7 +2142,7 @@ function MenuContractor:populateCellForItemInSection(list, section, index, cell)
     cell:getAttribute("field"):setText(field ~= nil and field:getName() or tostring(job.fieldId))
 
     cell:getAttribute("targetDate"):setText(formatTargetDate(job.targetPeriod, job.targetDayInPeriod))
-    cell:getAttribute("price"):setText(g_i18n:formatMoney(job.price, 0, true, true))
+    cell:getAttribute("price"):setText(g_i18n:formatMoney(job:getPrice(), 0, true, true))
 
     -- Live, same reasoning as updateInboxDetails.
     local jobDef = TheContractorJobGeneration.JOB_TYPES[job.jobType]
@@ -2584,7 +2584,7 @@ function MenuContractor:populateCalendarDayJobCell(index, cell)
     local field = g_fieldManager:getFieldById(job.fieldId)
     cell:getAttribute("field"):setText(field ~= nil and field:getName() or tostring(job.fieldId))
 
-    cell:getAttribute("price"):setText(g_i18n:formatMoney(job.price, 0, true, true))
+    cell:getAttribute("price"):setText(g_i18n:formatMoney(job:getPrice(), 0, true, true))
 
     -- Allocated vs not-yet-allocated (Q25) — selecting a row here just moves
     -- selectedCalendarDayJobId (see onListSelectionChanged); the actual
@@ -3302,7 +3302,7 @@ function MenuContractor:showJobAcceptedNotification(job)
     local fieldLabel = field ~= nil and field:getName() or tostring(job.fieldId)
 
     InfoDialog.show(string.format(g_i18n:getText("tc_inbox_jobAcceptedInfo"),
-        job:getTypeText(), fieldLabel, g_i18n:formatMoney(job.price, 0, true, true)))
+        job:getTypeText(), fieldLabel, g_i18n:formatMoney(job:getPrice(), 0, true, true)))
 end
 
 -- Counterpart to showJobAcceptedNotification for the other terminal outcome
@@ -3328,7 +3328,7 @@ function MenuContractor:onClickCounterOffer()
         return
     end
 
-    self:showCounterOfferDialog(job.id, tostring(math.floor(job.price)))
+    self:showCounterOfferDialog(job.id, tostring(math.floor(job:getPrice())))
 end
 
 -- Reopens with the same (invalid) text on a bad entry rather than just
@@ -3344,7 +3344,7 @@ function MenuContractor:showCounterOfferDialog(jobId, defaultText)
     end
 
     local dialogPrompt = string.format(g_i18n:getText("tc_inbox_counterPrompt"),
-        g_i18n:formatMoney(job.price, 0, true, true))
+        g_i18n:formatMoney(job:getPrice(), 0, true, true))
 
     TextInputDialog.show(function(target, text, clickOk)
         if not clickOk then
@@ -3375,7 +3375,7 @@ function MenuContractor:sendCounterOffer(jobId, counterPrice)
     local jobs = g_currentMission.TheContractor.Jobs
 
     local previousJob = jobs:getJob(farmId, jobId)
-    local previousPrice = previousJob ~= nil and previousJob.price or nil
+    local previousPrice = previousJob ~= nil and previousJob:getPrice() or nil
     local previousRounds = previousJob ~= nil and previousJob.negotiationRounds or nil
 
     g_client:getServerConnection():sendEvent(TCCounterOfferEvent.new(farmId, jobId, counterPrice))
@@ -3402,17 +3402,17 @@ end
 function MenuContractor:describeNegotiationOutcome(previousPrice, previousRounds, job, counterPrice)
     if job.state == TheContractorJob.STATE.ACCEPTED then
         return string.format(g_i18n:getText("tc_inbox_negotiationAccepted"),
-            g_i18n:formatMoney(job.price, 0, true, true))
+            g_i18n:formatMoney(job:getPrice(), 0, true, true))
     elseif job.state == TheContractorJob.STATE.DECLINED then
         return g_i18n:getText("tc_inbox_negotiationDeclined")
-    elseif job.price ~= previousPrice then
+    elseif job:getPrice() ~= previousPrice then
         return string.format(g_i18n:getText("tc_inbox_negotiationCountered"),
-            g_i18n:formatMoney(counterPrice, 0, true, true), g_i18n:formatMoney(job.price, 0, true, true))
+            g_i18n:formatMoney(counterPrice, 0, true, true), g_i18n:formatMoney(job:getPrice(), 0, true, true))
     elseif job.negotiationRounds > previousRounds then
         -- Countered at the price they'd already offered (026's negotiation
         -- never lets their counter drop) - they're holding firm.
         return string.format(g_i18n:getText("tc_inbox_negotiationHolding"),
-            g_i18n:formatMoney(job.price, 0, true, true))
+            g_i18n:formatMoney(job:getPrice(), 0, true, true))
     end
     return nil
 end
@@ -5243,7 +5243,7 @@ function MenuContractor:onClickCreateCompany()
     end
 
     local dialogPrompt = string.format(g_i18n:getText("tc_actions_createCompanyPrompt"),
-        g_i18n:formatMoney(TheContractorCompany.CREATION_COST, 0, true, true))
+        g_i18n:formatMoney(TheContractorCompany.getCreationCost(), 0, true, true))
 
     TextInputDialog.show(function(target, text, clickOk)
         if not clickOk then

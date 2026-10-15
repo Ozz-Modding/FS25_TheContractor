@@ -190,6 +190,7 @@
 		<text name="tc_inbox_chipAdmin" text="Admin"/>
 		<text name="tc_inbox_chipClaim" text="Claim"/>
 		<text name="tc_inbox_chipTheft" text="Theft"/>
+		<text name="tc_inbox_chipJoyriders" text="Vandalism"/>
 		<text name="tc_inbox_chipLegal" text="Legal"/>
 		<text name="tc_inbox_chipTraining" text="Training"/>
 		<text name="tc_calendar_yearLabel" text="Year %d"/>
@@ -528,6 +529,13 @@
 		<text name="tc_theft_lostBody" text="The police have closed their enquiries into the theft of your %s (crime reference %s) without finding it. It's gone for good and has been taken off your fleet."/>
 		<text name="tc_theft_lostNotice" text="%s not found: written off"/>
 		<text name="tc_theft_lostBodyInsured" text="The police have closed their enquiries into the theft of your %s (crime reference %s) without finding it. It's gone for good, but it was insured on the day it was taken, so you can claim for it."/>
+		<text name="tc_joyriders_eventName" text="Joyriders"/>
+		<text name="tc_joyriders_ownTitle" text="Joyriders on Field %s"/>
+		<text name="tc_joyriders_ownBody" text="Joyriders have been driving round your grass on Field %s and torn it up. It'll need plowing and sowing again."/>
+		<text name="tc_joyriders_offerTitle" text="Joyriders on Field %s"/>
+		<text name="tc_joyriders_offerBody" text="Joyriders have been driving round the grass on Field %s and torn it up. The farmer wants it plowed so it can be sown again, and has offered you the job."/>
+		<text name="tc_joyriders_sowTitle" text="Sow Field %s with grass"/>
+		<text name="tc_joyriders_sowBody" text="The farmer was pleased with the plowing on Field %s and has offered you the job of sowing it back to grass."/>
 		<text name="tc_overheads_priceLevel" text="%s cover: %s"/>
 		<text name="tc_overheads_levelSwitching" text="%s (%s cover from renewal)"/>
 		<text name="tc_overheads_priceFrom" text="From %s a year paid annually, or %s a month"/>

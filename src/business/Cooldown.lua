@@ -113,12 +113,19 @@ local hideVehicles = TCEquipmentVisibility.hideVehicles
 
 -- Starts a job's post-completion buffer: its workers (if any) and every
 -- piece of its equipment - haulage rig included (035) - go into cooldown
--- for getBufferDurationMs (a player-driven job has no worker - see
--- TheContractorWorker.PLAYER_WORK_SPEED). Called from
--- TheContractorJobs:completeJob (022) in place of the direct idle flip that
--- ticket's Outcome left as a stand-in for this one.
+-- for getBufferDurationMs. Called from TheContractorJobs:completeJob (022)
+-- in place of the direct idle flip that ticket's Outcome left as a stand-in
+-- for this one, and from missJob for a job that got some work done.
+--
+-- A player-driven job (no worker) has no cooldown at all: the player is
+-- already where the work finished, so their equipment is left where they
+-- left it for them to put away, never hidden or sent to the parking queue.
 function TheContractorCooldown:startCooldown(job)
     if not g_currentMission:getIsServer() then
+        return
+    end
+
+    if #job:getWorkerIds() == 0 then
         return
     end
 

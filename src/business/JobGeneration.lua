@@ -372,6 +372,36 @@ function TheContractorJobGeneration:tryGenerateJob(farmId, onlyJobType)
         TheContractorJobGeneration.getFieldStartState(field, jobDef))
 end
 
+-- 072: a job of this type on this field, offered now, for work something
+-- else has caused (a random event's damage, a follow-on job) rather than
+-- the hourly roll. The field's eligibility isn't checked - the caller knows
+-- why it needs the work (vanilla's plow rules turn down standing grass,
+-- say) - but it's dated, priced and flagged like any offer. No haulage.
+-- sameMonth keeps the deadline in the current month (see getDeadlineDay).
+-- Returns the job, or nil if it can't be dated (getDeadlineDay).
+function TheContractorJobGeneration:createJobOnField(farmId, jobType, field, sameMonth)
+    local jobDef = TheContractorJobGeneration.JOB_TYPES[jobType]
+    if jobDef == nil or field == nil then
+        return nil
+    end
+    local deadlineDay = self:getDeadlineDay(field, jobDef, sameMonth)
+    if deadlineDay == nil then
+        return nil
+    end
+
+    local requiredSkillLevel = self:rollRequiredSkillLevel(farmId)
+    local fruitTypeName = jobDef.recordsCrop and TheContractorJobGeneration.getFieldFruitTypeName(field) or nil
+    local equipmentAvailable = self:canFulfill(farmId, jobDef,
+        TheContractorJobGeneration.getFruitTypeIndexByName(fruitTypeName))
+    local price = self:estimatePrice(field, jobDef, farmId, requiredSkillLevel, nil)
+
+    local environment = g_currentMission.environment
+    return g_currentMission.TheContractor.Jobs:createJob(farmId, jobType, field:getId(), requiredSkillLevel,
+        environment:getPeriodFromDay(deadlineDay), environment:getDayInPeriodFromDay(deadlineDay), price,
+        equipmentAvailable, fruitTypeName, deadlineDay, false, nil,
+        TheContractorJobGeneration.getFieldStartState(field, jobDef))
+end
+
 -- The field state a job starts from (see JOB_TYPES' startState), or nil
 -- for job types that don't record one.
 function TheContractorJobGeneration.getFieldStartState(field, jobDef)
@@ -725,14 +755,17 @@ end
 --
 --   earliest  today, or tomorrow if fewer than MIN_HOURS_LEFT_TODAY hours
 --             remain; for a future harvest, its predicted ready day
---   desired   earliest + 0..MAX_EXTRA_DAYS random slack
+--   desired   earliest + 0..MAX_EXTRA_DAYS random slack; with sameMonth
+--             (072's urgent jobs) no later than the current month's last
+--             day, unless earliest is already past it (too late on the
+--             month's last day)
 --   deadline  the last day from the start of the work window up to
 --             `desired` on which the job is still doable, walking forward
 --             and stopping at the first day it isn't (isDoableOnDay)
 --
 -- Returns nil if the job isn't doable through `earliest` — better no offer
 -- than one that expires a few hours after it arrives.
-function TheContractorJobGeneration:getDeadlineDay(field, jobDef)
+function TheContractorJobGeneration:getDeadlineDay(field, jobDef, sameMonth)
     local environment = g_currentMission.environment
     local today = environment.currentMonotonicDay
 
@@ -756,6 +789,10 @@ function TheContractorJobGeneration:getDeadlineDay(field, jobDef)
     end
 
     local desired = earliest + math.random(0, TheContractorJobGeneration.MAX_EXTRA_DAYS)
+    if sameMonth then
+        local monthEnd = today + environment.daysPerPeriod - environment:getDayInPeriodFromDay(today)
+        desired = math.max(earliest, math.min(desired, monthEnd))
+    end
 
     local lastDoable = nil
     for day = workStartDay, desired do
@@ -979,7 +1016,7 @@ function TheContractorJobGeneration.registerConsoleCommands()
             local job = tc.JobGeneration:tryGenerateJob(farmId, jobType)
             if job ~= nil then
                 return string.format("Offered %s job %d on field %d to farm %d (%s, due period %d day %d, skill %d%s)",
-                    jobType, job.id, job.fieldId, farmId, g_i18n:formatMoney(job.price, 0, true, true),
+                    jobType, job.id, job.fieldId, farmId, g_i18n:formatMoney(job:getPrice(), 0, true, true),
                     job.targetPeriod, job.targetDayInPeriod, job.requiredSkillLevel,
                     job.equipmentAvailable and "" or ", farm lacks the equipment")
             end

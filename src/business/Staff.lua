@@ -239,9 +239,11 @@ function TheContractorStaff.getPayFactor(daysPerPeriod)
     return minPay + (1 - minPay) * progress
 end
 
--- A full-month amount as it's paid this month, in whole money.
+-- A full-month amount as it's paid this month, in whole money, at
+-- FS25_EconomyScale's price level (TCEconomyScale). Salaries are stored
+-- unscaled, so changing that mod's setting moves them straight away.
 function TheContractorStaff.scalePay(amount)
-    return math.floor(amount * TheContractorStaff.getPayFactor() + 0.5)
+    return math.floor(amount * TheContractorStaff.getPayFactor() * TCEconomyScale.getFactor() + 0.5)
 end
 
 -- The farm's salary bill per period (036): every hired worker, whatever
@@ -1054,8 +1056,8 @@ end
 
 -- From this month's pay (scalePay), unrounded.
 function TheContractorStaff.getWeeklyPay(worker)
-    return worker.salary * TheContractorStaff.getPayFactor() * Environment.PERIODS_IN_YEAR /
-        TheContractorStaff.WEEKS_PER_YEAR
+    return worker.salary * TheContractorStaff.getPayFactor() * TCEconomyScale.getFactor() *
+        Environment.PERIODS_IN_YEAR / TheContractorStaff.WEEKS_PER_YEAR
 end
 
 -- What releasing the worker today costs. Every machine works it out the

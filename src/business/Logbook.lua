@@ -292,9 +292,9 @@ function TheContractorLogbook:buildJobEntry(job, outcome, reputation)
         requiredSkillLevel = job.requiredSkillLevel,
         day = getToday(),
         completedAt = now,
-        offeredPrice = job.offeredPrice,
-        agreedPrice = job.price,
-        price = isCompleted and (job.paymentAmount or job.price) or 0,
+        offeredPrice = job:getOfferedPrice(),
+        agreedPrice = job:getPrice(),
+        price = isCompleted and (job.paymentAmount or job:getPrice()) or 0,
         reputation = reputation,
         qualityScore = job.qualityScore,
         stuckInterventions = job.stuckInterventions or 0,
@@ -309,7 +309,8 @@ function TheContractorLogbook:buildJobEntry(job, outcome, reputation)
 
     -- Time: travel out, fieldwork, then the trip back (and washing) - the
     -- cooldown the job's just gone into, or would have for a missed job
-    -- that got some work done.
+    -- that got some work done. A player-driven job has no trip back (no
+    -- cooldown - see TheContractorCooldown:startCooldown).
     if job.workStartedAt ~= nil then
         local arrivedAt = pending.arrivedAt
         if arrivedAt ~= nil then
@@ -320,7 +321,7 @@ function TheContractorLogbook:buildJobEntry(job, outcome, reputation)
             entry.travelMinutes = math.max(0, now - job.workStartedAt)
             entry.fieldMinutes = 0
         end
-        if isCompleted or job.completionPercentage > 0 then
+        if (isCompleted or job.completionPercentage > 0) and #job:getWorkerIds() > 0 then
             entry.returnMinutes = TheContractorCooldown.getBufferDurationMs(job) / 60000
         end
     end

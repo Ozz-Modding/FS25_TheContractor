@@ -139,12 +139,18 @@ function TheContractorAdvertising.isValidDuration(durationPeriods)
     return false
 end
 
+-- A level's price per period at FS25_EconomyScale's price level
+-- (TCEconomyScale).
+function TheContractorAdvertising.getCostPerPeriod(levelDef)
+    return TCEconomyScale.scale(levelDef.costPerPeriod)
+end
+
 function TheContractorAdvertising.getCost(levelKey, durationPeriods)
     local levelDef = TheContractorAdvertising.LEVELS_BY_KEY[levelKey]
     if levelDef == nil then
         return 0
     end
-    return levelDef.costPerPeriod * durationPeriods
+    return TheContractorAdvertising.getCostPerPeriod(levelDef) * durationPeriods
 end
 
 function TheContractorAdvertising:isUnlocked(farmId, levelKey)

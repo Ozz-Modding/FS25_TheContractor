@@ -78,7 +78,8 @@ TheContractorMorale.BONUS_MORALE_PER_STEP = 8
 TheContractorMorale.BONUS_EXPONENT = 0.7
 
 -- One-off bonuses from the Staff tab, and the harvest bonus's two sizes
--- (each, per worker).
+-- (each, per worker). These are the base amounts: they're what's picked,
+-- sent and judged for morale. What's charged and shown is getBonusCost.
 TheContractorMorale.BONUS_AMOUNTS = { 250, 500, 1000 }
 TheContractorMorale.HARVEST_SMALL = 250
 TheContractorMorale.HARVEST_GENEROUS = 750
@@ -171,9 +172,17 @@ function TheContractorMorale.isBonusAmount(amount)
     return false
 end
 
+-- What a base bonus amount costs, at FS25_EconomyScale's price level
+-- (TCEconomyScale). Morale still follows the base amount, so a cheaper
+-- economy doesn't make bonuses count for less.
+function TheContractorMorale.getBonusCost(amount)
+    return TCEconomyScale.scale(amount)
+end
+
+-- Whether the farm can pay a base bonus amount (getBonusCost).
 function TheContractorMorale.canAfford(farmId, amount)
     local farm = g_farmManager:getFarmById(farmId)
-    return farm ~= nil and farm:getBalance() >= amount
+    return farm ~= nil and farm:getBalance() >= TheContractorMorale.getBonusCost(amount)
 end
 
 -- Effects (server) --------------------------------------------------------------
@@ -373,7 +382,8 @@ function TheContractorMorale:postHarvestBonus(farmId)
         return false
     end
 
-    local small, generous = TheContractorMorale.HARVEST_SMALL, TheContractorMorale.HARVEST_GENEROUS
+    local small = TheContractorMorale.getBonusCost(TheContractorMorale.HARVEST_SMALL)
+    local generous = TheContractorMorale.getBonusCost(TheContractorMorale.HARVEST_GENEROUS)
     Logging.info("TheContractor: farm %d asked about a harvest bonus (%d staff)", farmId, count)
 
     g_currentMission.TheContractor.Inbox:postMessage(farmId, TheContractorMorale.MESSAGE_KIND,
@@ -419,13 +429,14 @@ function TheContractorMorale:onHarvestBonusAnswered(farmId, actionKey)
         return
     end
 
-    local total = each * #workers
+    local cost = TheContractorMorale.getBonusCost(each)
+    local total = cost * #workers
     g_currentMission:addMoney(-total, farmId, MoneyType.TC_WAGES, true, true)
     g_currentMission.TheContractor.Finances:recordWages(farmId, total)
-    Logging.info("TheContractor: farm %d paid a harvest bonus of %.0f each (%.0f)", farmId, each, total)
+    Logging.info("TheContractor: farm %d paid a harvest bonus of %.0f each (%.0f)", farmId, cost, total)
 
     self:adjust(farmId, workers, TheContractorMorale.getBonusMorale(each), TheContractorMorale.NOTIFY.HARVEST_BONUS,
-        each)
+        cost)
 end
 
 -- One-off bonus (server) ---------------------------------------------------------
@@ -443,12 +454,13 @@ function TheContractorMorale:requestBonus(farmId, workerId, amount)
         return false
     end
 
-    g_currentMission:addMoney(-amount, farmId, MoneyType.TC_WAGES, true, true)
-    g_currentMission.TheContractor.Finances:recordWages(farmId, amount)
-    Logging.info("TheContractor: farm %d gave worker %d (%s) a bonus of %.0f", farmId, workerId, worker.name, amount)
+    local cost = TheContractorMorale.getBonusCost(amount)
+    g_currentMission:addMoney(-cost, farmId, MoneyType.TC_WAGES, true, true)
+    g_currentMission.TheContractor.Finances:recordWages(farmId, cost)
+    Logging.info("TheContractor: farm %d gave worker %d (%s) a bonus of %.0f", farmId, workerId, worker.name, cost)
 
     self:adjust(farmId, { worker }, TheContractorMorale.getBonusMorale(amount), TheContractorMorale.NOTIFY.BONUS,
-        amount)
+        cost)
     return true
 end
 

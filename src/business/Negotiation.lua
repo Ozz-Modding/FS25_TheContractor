@@ -29,7 +29,7 @@ TheContractorNegotiation.MAX_INITIAL_EAGERNESS = 100
 TheContractorNegotiation.BASE_EAGERNESS_DEGRADE = 15
 TheContractorNegotiation.EAGERNESS_DEGRADE_STEP = 5
 
--- How far above the *original* offer (job.offeredPrice) the client will go
+-- How far above the *original* offer (job:getOfferedPrice()) the client will go
 -- (026). maxTolerance runs linearly on Reputation:getStanding from MIN
 -- (a brand new company: +5%) to MAX (a prestigious one: +25%), scaled by
 -- eagerness/100 into this round's tolerance. Then, against the original
@@ -71,12 +71,13 @@ end
 -- they've offered a figure they stand by it, even after eagerness shrinks
 -- their ceiling below it.
 function TheContractorNegotiation.resolveCounterOffer(job, counterPrice)
+    local price = job:getPrice()
     -- Asking for the same or less than the current price is always taken.
-    if counterPrice <= job.price then
+    if counterPrice <= price then
         return TheContractorNegotiation.OUTCOME.ACCEPTED, counterPrice
     end
 
-    local offeredPrice = job.offeredPrice or job.price
+    local offeredPrice = job:getOfferedPrice()
     local tolerance = TheContractorNegotiation.getTolerance(job)
     local ceiling = math.floor(offeredPrice * (1 + tolerance))
 
@@ -85,10 +86,10 @@ function TheContractorNegotiation.resolveCounterOffer(job, counterPrice)
     end
 
     if counterPrice > offeredPrice * (1 + tolerance * TheContractorNegotiation.WALKAWAY_MULTIPLIER) then
-        return TheContractorNegotiation.OUTCOME.REJECTED, job.price
+        return TheContractorNegotiation.OUTCOME.REJECTED, price
     end
 
-    return TheContractorNegotiation.OUTCOME.COUNTERED, math.max(job.price, ceiling)
+    return TheContractorNegotiation.OUTCOME.COUNTERED, math.max(price, ceiling)
 end
 
 -- Call after job.negotiationRounds has been incremented for this round.
