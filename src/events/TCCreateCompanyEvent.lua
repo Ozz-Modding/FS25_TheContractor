@@ -38,7 +38,10 @@ function TCCreateCompanyEvent:run(connection)
             -- Apply directly rather than relying on the broadcast to loop
             -- back to us — it won't, in single-player (see events/README.md).
             company:createCompany(self.farmId, self.name)
-            g_server:broadcastEvent(TCCreateCompanyEvent.new(self.farmId, self.name), false, connection)
+            -- To every client, the requester included: it only sent a
+            -- request and hasn't applied anything itself (unlike
+            -- TCSettingsEvent's sender, which is why that one excludes it).
+            g_server:broadcastEvent(TCCreateCompanyEvent.new(self.farmId, self.name))
         end
     else
         company:applyCompanyCreation(self.farmId, self.name)

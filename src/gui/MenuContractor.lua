@@ -5258,7 +5258,27 @@ function MenuContractor:onClickCreateCompany()
         g_client:getServerConnection():sendEvent(TCCreateCompanyEvent.new(farmId, name))
         target:refreshCompanyState()
         target:setMenuButtonInfoDirty()
+        target:showCompanyWelcome(name)
     end, self, "", dialogPrompt, dialogPrompt, 30, g_i18n:getText("tc_actions_createButton"))
+end
+
+-- Getting-started tips shown once the company's been named. Each tip is its
+-- own l10n key so they can be reworded or reordered without touching layout.
+MenuContractor.WELCOME_TIPS = {
+    "tc_actions_welcomeTip_staff",
+    "tc_actions_welcomeTip_supplies",
+    "tc_actions_welcomeTip_overheads",
+    "tc_actions_welcomeTip_advertising",
+    "tc_actions_welcomeTip_jobs",
+}
+
+function MenuContractor:showCompanyWelcome(name)
+    local lines = { string.format(g_i18n:getText("tc_actions_welcomeIntro"), name) }
+    for _, key in ipairs(MenuContractor.WELCOME_TIPS) do
+        table.insert(lines, "- " .. g_i18n:getText(key))
+    end
+
+    InfoDialog.show(table.concat(lines, "\n\n"))
 end
 
 -- Level/duration choice, cost preview and the funds/tier checks all live in

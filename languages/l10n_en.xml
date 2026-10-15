@@ -119,6 +119,12 @@
 		<text name="tc_actions_createCompanyPrompt" text="Name your new contracting company (cost: %s):"/>
 		<text name="tc_actions_defaultCompanyName" text="Untitled Contracting Co."/>
 		<text name="tc_actions_cannotAfford" text="You can't afford to start a company right now."/>
+		<text name="tc_actions_welcomeIntro" text="%s is open for business! A few tips to get started:"/>
+		<text name="tc_actions_welcomeTip_staff" text="Look through the candidates on the Staff tab and hire some workers."/>
+		<text name="tc_actions_welcomeTip_supplies" text="Plan out your supplies: seed, fertiliser, herbicide and diesel come from your own stock. The Supplies tab shows what you have."/>
+		<text name="tc_actions_welcomeTip_overheads" text="Check Finances -> Overheads to make sure you're insured and have the cover you need."/>
+		<text name="tc_actions_welcomeTip_advertising" text="Take out some advertising from the Overview tab to get your name known."/>
+		<text name="tc_actions_welcomeTip_jobs" text="Job offers will arrive in your Inbox, and more will come as your reputation grows."/>
 		<text name="tc_moneyType_companyCreation" text="Company creation"/>
 		<text name="finance_tcCompanyCreation" text="Company creation"/>
 		<text name="tc_reputationTier_unknownContractor" text="Unknown Contractor"/>

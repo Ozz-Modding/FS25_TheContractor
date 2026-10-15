@@ -46,9 +46,9 @@ TheContractorDispatch.SETTLE_MS = 1000
 -- - a two-worker haulage job (035) travels at its slower half's pace.
 -- 026: 30 in-game minutes for the slowest worker down to 10 for the
 -- fastest, a bit under Cooldown's buffer since that also covers unloading
--- and cleaning down.
-TheContractorDispatch.TRANSPORT_MAX_MINUTES = 30
-TheContractorDispatch.TRANSPORT_MIN_MINUTES = 10
+-- and cleaning down. Trimmed by 20% since (24 down to 8).
+TheContractorDispatch.TRANSPORT_MAX_MINUTES = 24
+TheContractorDispatch.TRANSPORT_MIN_MINUTES = 8
 
 TheContractorDispatch.TRANSPORT_WAIT_FACTORS = {
     -- Worker speed (016): linear between a slowest worker's
