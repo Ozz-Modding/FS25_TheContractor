@@ -868,6 +868,14 @@ function MenuContractor:hasCompany()
     return tc.Company:hasCompany(g_currentMission:getFarmId())
 end
 
+-- The player's own logo from modSettings if there is one, else ours, the
+-- whole image stretched to the 5:2 box. Looked up on every refresh, so a
+-- logo dropped in mid-game shows the next time the menu opens.
+function MenuContractor:refreshCompanyLogo()
+    self.companyLogo:setImageFilename(TCCompanyLogo.getFilename())
+    self.companyLogo:setImageUVs(nil, unpack(Overlay.DEFAULT_UVS))
+end
+
 -- Inbox/Calendar/Staff stay visible as tabs (see main.lua's note on the
 -- always-visible top-level predicate) but their content is gated on the
 -- farm having a company, until the real per-tab content lands in later
@@ -921,6 +929,7 @@ function MenuContractor:refreshCompanyState()
         local tc = g_currentMission.TheContractor
         local name = tc.Company:getCompanyName(farmId)
         self.textCompanyName:setText(name)
+        self:refreshCompanyLogo()
 
         local progress = tc.Reputation:getProgress(farmId)
         self.rankTierText:setText(g_i18n:getText("tc_reputationTier_" .. progress.tier.key))

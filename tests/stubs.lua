@@ -132,6 +132,9 @@ function stubs.install()
                 newFunc(...)
             end
         end,
+        getFilename = function(filename, baseDir)
+            return (baseDir or "") .. filename
+        end,
     }
 
     Logging = {
