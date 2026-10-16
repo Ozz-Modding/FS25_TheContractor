@@ -15,6 +15,9 @@
 -- Both are local per-machine state, never networked, so every machine
 -- derives the locked set itself from its own synced job/cooldown data every
 -- REFRESH_INTERVAL_MS - same approach as TCFieldAccess.
+--
+-- Selling one is refused too (SellVehicleEvent hook below): the shop's
+-- garage list still offers equipment that's hidden away on a job.
 
 TCVehicleLock = {}
 
@@ -67,10 +70,12 @@ local function applyLock(vehicleId, isLocked)
     end
 end
 
-function TCVehicleLock.refresh()
+-- vehicleId -> true for everything that should be locked right now, or nil
+-- before the subsystems exist.
+local function collectLockedVehicleIds()
     local tc = g_currentMission.TheContractor
     if tc == nil or tc.Jobs == nil or tc.Cooldown == nil then
-        return
+        return nil
     end
 
     local shouldLock = {}
@@ -98,6 +103,14 @@ function TCVehicleLock.refresh()
             shouldLock[vehicleId] = true
         end
     end
+    return shouldLock
+end
+
+function TCVehicleLock.refresh()
+    local shouldLock = collectLockedVehicleIds()
+    if shouldLock == nil then
+        return
+    end
 
     for vehicleId in pairs(shouldLock) do
         if not lockedVehicleIds[vehicleId] then
@@ -121,4 +134,41 @@ function TCVehicleLock.update(dt)
     accumulatedMs = 0
 
     TCVehicleLock.refresh()
+end
+
+-- Selling: the server refuses a locked vehicle, or anything hitched to one,
+-- with vanilla's own "in use" reply. Worked out live rather than from the
+-- last refresh, so a job allocated a moment ago already counts.
+-- getIsInUse isn't hooked for this: our own dispatch's AI start checks it
+-- (AIJob:getIsStartable) and would refuse the job's equipment.
+function TCVehicleLock.isBusyForSale(vehicle)
+    local lockedIds = collectLockedVehicleIds()
+    if lockedIds == nil then
+        return false
+    end
+    while vehicle ~= nil do
+        local vehicleId = NetworkUtil.getObjectId(vehicle)
+        if vehicleId ~= nil and lockedIds[vehicleId] then
+            return true
+        end
+        vehicle = vehicle.getAttacherVehicle ~= nil and vehicle:getAttacherVehicle() or nil
+    end
+    return false
+end
+
+-- The server's half of SellVehicleEvent (a client's request arrives with a
+-- client connection, single-player included).
+function TCVehicleLock.sellVehicleEventRun(event, superFunc, connection)
+    local vehicle = event.vehicle
+    if not connection:getIsServer() and vehicle ~= nil and TCVehicleLock.isBusyForSale(vehicle) then
+        connection:sendEvent(SellVehicleEvent.newServerToClient(SellVehicleEvent.SELL_VEHICLE_IN_USE, 0,
+            event.isDirectSell, vehicle.propertyState == VehiclePropertyState.OWNED, vehicle:getOwnerFarmId()))
+        return
+    end
+    return superFunc(event, connection)
+end
+
+if SellVehicleEvent ~= nil and not SellVehicleEvent.tcVehicleLockHookInstalled then
+    SellVehicleEvent.run = Utils.overwrittenFunction(SellVehicleEvent.run, TCVehicleLock.sellVehicleEventRun)
+    SellVehicleEvent.tcVehicleLockHookInstalled = true
 end
