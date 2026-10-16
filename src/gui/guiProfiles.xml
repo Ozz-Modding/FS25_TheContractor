@@ -152,6 +152,11 @@
     <Profile name="tc_progressBox" extends="emptyPanel" with="anchorTopLeft">
         <size value="752px 80px"/>
     </Profile>
+    <!-- Overview company card logo, square (TCCompanyLogo picks the image). -->
+    <Profile name="tc_companyLogo" extends="baseReference" with="anchorTopLeft">
+        <size value="204px 204px"/>
+        <imageColor value="1 1 1 1"/>
+    </Profile>
     <Profile name="tc_progressTitle" extends="fs25_textDefault" with="anchorTopLeft">
         <size value="500px 26px"/>
         <textSize value="16px"/>

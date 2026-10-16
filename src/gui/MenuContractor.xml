@@ -48,20 +48,21 @@
                 <RoundCorner profile="tc_panel" position="30px -20px" size="800px 300px"/>
                 <Text profile="tc_sectionTitle" text="$l10n_tc_overview_companyHeading" position="54px -36px" size="752px 24px"/>
                 <Bitmap profile="tc_divider" position="54px -64px" size="752px 1px"/>
-                <Text profile="tc_panelHeading" id="textCompanyName" text="" position="54px -76px" size="752px 32px"/>
+                <Text profile="tc_panelHeading" id="textCompanyName" text="" position="54px -76px" size="528px 32px"/>
+                <Bitmap profile="tc_companyLogo" id="companyLogo" position="602px -76px"/>
 
-                <GuiElement profile="tc_progressBox" id="progressBox" position="54px -122px">
-                    <Text profile="tc_progressTitle" id="rankTierText"/>
-                    <Text profile="tc_progressValue" id="progressText"/>
-                    <ThreePartBitmap profile="fs25_contractsProgressBarBg" id="progressBarBg" position="0px -34px">
+                <GuiElement profile="tc_progressBox" id="progressBox" position="54px -122px" size="528px 80px">
+                    <Text profile="tc_progressTitle" id="rankTierText" size="346px 26px"/>
+                    <Text profile="tc_progressValue" id="progressText" size="180px 26px"/>
+                    <ThreePartBitmap profile="fs25_contractsProgressBarBg" id="progressBarBg" position="0px -34px" size="528px 33px">
                         <ThreePartBitmap profile="fs25_contractsProgressBar" id="progressBar"/>
                     </ThreePartBitmap>
                 </GuiElement>
 
-                <BoxLayout profile="tc_detailRows" id="overviewCompanyRows" position="54px -212px" size="752px 34px">
-                    <GuiElement profile="tc_detailRow" size="752px 34px">
+                <BoxLayout profile="tc_detailRows" id="overviewCompanyRows" position="54px -212px" size="528px 34px">
+                    <GuiElement profile="tc_detailRow" size="528px 34px">
                         <Text profile="tc_detailLabel" text="$l10n_tc_detail_nextRank" position="0px 0px"/>
-                        <Text profile="tc_detailValue" id="nextRankText" text="" position="220px 0px" size="532px 34px"/>
+                        <Text profile="tc_detailValue" id="nextRankText" text="" position="220px 0px" size="308px 34px"/>
                     </GuiElement>
                 </BoxLayout>
 

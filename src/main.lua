@@ -27,6 +27,7 @@ source(TheContractor.dir .. "src/util/TCAutoDrive.lua")
 source(TheContractor.dir .. "src/util/TCCourseplay.lua")
 source(TheContractor.dir .. "src/util/TCEconomyScale.lua")
 source(TheContractor.dir .. "src/util/TCCalendar.lua")
+source(TheContractor.dir .. "src/util/TCCompanyLogo.lua")
 source(TheContractor.dir .. "src/util/TCConsole.lua")
 source(TheContractor.dir .. "src/util/TCWorkerAppearance.lua")
 source(TheContractor.dir .. "src/util/TCAINotifications.lua")
@@ -162,6 +163,8 @@ end
 function TheContractor:loadMap()
     g_currentMission.TheContractor = self
     self.hasResolvedSavedVehicles = false
+
+    TCCompanyLogo.createSettingsFolder()
 
     self.Settings = TheContractorSettings.new()
     self.Reputation = TheContractorReputation.new()
