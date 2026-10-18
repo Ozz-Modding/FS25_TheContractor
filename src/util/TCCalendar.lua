@@ -19,6 +19,30 @@ function TCCalendar.getYearOfPeriodIndex(periodIndex)
     return math.floor((periodIndex - 1) / Environment.PERIODS_IN_YEAR) + 1
 end
 
+-- The year to show for a date. The game's year runs March to February
+-- (period 1 == March), so January and February (periods 11 and 12) still
+-- carry the previous currentYear. Players read "January, Year 1" as coming
+-- before March, Year 1, so those two months are shown as the next year, the
+-- same as FS25_RedTape's getActualYear. Only for display: anything that
+-- counts or compares game years (year-to-date stats, holiday allowance)
+-- keeps currentYear.
+function TCCalendar.getDisplayYear(year, period)
+    if period > Environment.PERIODS_IN_YEAR - 2 then
+        return year + 1
+    end
+    return year
+end
+
+function TCCalendar.getDisplayYearOfPeriodIndex(periodIndex)
+    local period = (periodIndex - 1) % Environment.PERIODS_IN_YEAR + 1
+    return TCCalendar.getDisplayYear(TCCalendar.getYearOfPeriodIndex(periodIndex), period)
+end
+
+-- e.g. "Year 3", for a game year and period.
+function TCCalendar.formatYear(year, period)
+    return string.format(g_i18n:getText("tc_calendar_yearLabel"), TCCalendar.getDisplayYear(year, period))
+end
+
 -- Same period->month mapping (period 1 == March) as MenuContractor's
 -- periodToMonth. The key on its own is for text rendered elsewhere (051's
 -- inbox message args).
@@ -33,7 +57,7 @@ local function getMonthName(periodIndex)
 end
 
 local function formatYear(periodIndex)
-    return string.format(g_i18n:getText("tc_calendar_yearLabel"), TCCalendar.getYearOfPeriodIndex(periodIndex))
+    return string.format(g_i18n:getText("tc_calendar_yearLabel"), TCCalendar.getDisplayYearOfPeriodIndex(periodIndex))
 end
 
 -- e.g. "September" (049's forecast rows).
@@ -140,7 +164,7 @@ function TCCalendar.formatDayRange(firstDay, lastDay)
 
     local first = formatMonthDay(firstIndex, firstDayInPeriod, firstDaysPerPeriod)
     local last = formatMonthDay(lastIndex, lastDayInPeriod, lastDaysPerPeriod)
-    if TCCalendar.getYearOfPeriodIndex(firstIndex) == TCCalendar.getYearOfPeriodIndex(lastIndex) then
+    if TCCalendar.getDisplayYearOfPeriodIndex(firstIndex) == TCCalendar.getDisplayYearOfPeriodIndex(lastIndex) then
         return string.format("%s - %s, %s", first, last, formatYear(lastIndex))
     end
     return string.format("%s, %s - %s, %s", first, formatYear(firstIndex), last, formatYear(lastIndex))

@@ -40,6 +40,7 @@ source(TheContractor.dir .. "src/gui/MenuContractor.lua")
 source(TheContractor.dir .. "src/gui/TCSettingsMenu.lua")
 source(TheContractor.dir .. "src/gui/TCAdvertisingDialog.lua")
 source(TheContractor.dir .. "src/gui/TCDriverPickerDialog.lua")
+source(TheContractor.dir .. "src/gui/TCWardrobe.lua")
 source(TheContractor.dir .. "src/gui/TCEditWorkerDialog.lua")
 source(TheContractor.dir .. "src/hud/TCInboxHUD.lua")
 source(TheContractor.dir .. "src/business/Settings.lua")
@@ -252,6 +253,8 @@ function TheContractor:loadMap()
     TCAdvertisingDialog.register()
     TCDriverPickerDialog.register()
     TCEditWorkerDialog.register()
+    -- 077: a worker's look is edited in the vanilla wardrobe.
+    TCWardrobe.install()
 
     local menuContractor = MenuContractor.new(g_i18n)
     g_gui:loadGui(TheContractor.dir .. "src/gui/MenuContractor.xml", "menuContractor", menuContractor, true)
@@ -468,6 +471,8 @@ end
 
 function TheContractor:deleteMap()
     Logging.info("TheContractor: deleteMap")
+
+    TCWardrobe.endSession()
 
     if self.JobGeneration ~= nil then
         self.JobGeneration:stopHourlyTick()

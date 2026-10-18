@@ -3,7 +3,8 @@
      as TCAdvertisingDialog.xml; anchorTopCenter profiles (tc_editWorker* in
      guiProfiles.xml), so x positions are each element's centre relative to
      the content container's top-centre. Portrait on the left, name and
-     gender on the right. -->
+     gender on the right. The look is edited in the wardrobe (077), so
+     gender is shown, not picked. -->
 <GUI onOpen="onOpen" onClose="onClose" onCreate="onCreate">
     <GuiElement profile="newLayer"/>
     <Bitmap profile="dialogFullscreenBg" id="dialogBg"/>
@@ -21,17 +22,15 @@
             <Text profile="tc_editWorkerName" id="nameText" position="170px -150px" text=""/>
 
             <Text profile="tc_editWorkerLabel" position="170px -220px" text="$l10n_tc_editWorker_genderLabel"/>
-            <MultiTextOption profile="tc_adDialogPicker" id="genderOption" position="170px -250px" onClick="onClickGender" focusInit="onOpen">
-                <Text profile="fs25_multiTextOptionText" width="300px" name="text"/>
-            </MultiTextOption>
+            <Text profile="tc_editWorkerName" id="genderText" position="170px -250px" text=""/>
             <Text profile="tc_editWorkerHint" position="170px -300px" text="$l10n_tc_editWorker_genderHint"/>
         </GuiElement>
 
         <BoxLayout profile="fs25_dialogButtonBox">
             <Button profile="buttonOK" text="$l10n_tc_editWorker_save" onClick="onClickOk" id="saveButton"/>
             <Bitmap profile="fs25_dialogButtonBoxSeparator"/>
-            <Button profile="buttonActivate" text="$l10n_tc_editWorker_roll" onClick="onClickRoll" id="rollButton"/>
-            <Bitmap profile="fs25_dialogButtonBoxSeparator"/>
+            <Button profile="buttonActivate" text="$l10n_tc_editWorker_wardrobe" onClick="onClickWardrobe" id="wardrobeButton"/>
+            <Bitmap profile="fs25_dialogButtonBoxSeparator" id="wardrobeSeparator"/>
             <Button profile="buttonExtra1" text="$l10n_tc_editWorker_rename" onClick="onClickRename" id="renameButton"/>
             <Bitmap profile="fs25_dialogButtonBoxSeparator"/>
             <Button profile="buttonBack" text="$l10n_button_back" onClick="onClickBack" id="backButton"/>

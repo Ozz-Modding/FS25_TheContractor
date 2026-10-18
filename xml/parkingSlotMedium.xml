@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8" standalone="no" ?>
 <!--
     062 parking slot, medium: where equipment back from a contract job is parked
+    (vehicle slot: drivable machines only; parkingSlotImplementMedium.xml is
+    the same size for implements)
     (src/placeables/PlaceableTCParkingSlot.lua). A marker only: no leveling
     or foliage clearing. Its stripes are terrain decals, shown only while
     the construction menu is open. The test area is inset 5 cm from the
@@ -10,7 +12,7 @@
     <storeData>
         <name>$l10n_tc_parkingSlotMedium_name</name>
         <functions>
-            <function>$l10n_tc_parkingSlot_function</function>
+            <function>$l10n_tc_parkingSlotVehicle_function</function>
         </functions>
         <image>images/store/parkingSlotMedium.dds</image>
         <price>0</price>
@@ -45,7 +47,7 @@
         </sounds>
     </placement>
 
-    <parkingSlot startNode="areaStart" widthNode="areaWidth" heightNode="areaHeight" visualsNode="visuals" />
+    <parkingSlot startNode="areaStart" widthNode="areaWidth" heightNode="areaHeight" visualsNode="visuals" slotType="vehicle" />
 
     <i3dMappings>
         <i3dMapping id="parkingSlot" node="0>" />

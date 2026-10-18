@@ -7,7 +7,10 @@
 -- findSpot works on any rectangle, not just a one-vehicle slot, so a later
 -- larger yard-area placeable is only a new i3d/xml. Each slot's rectangle
 -- comes from its start/width/height nodes, and a parked vehicle faces from
--- the start edge towards the height node (the slot's arrow). The rectangle
+-- the start edge towards the height node (the slot's arrow). Self-propelled
+-- harvesters only go in harvester slots, other drivable machines only in
+-- vehicle slots and everything else only in implement slots
+-- (PlaceableTCParkingSlot.SLOT_TYPE). The rectangle
 -- is scanned in rows as deep as the vehicle, starting at the arrow end, and
 -- each row is stepped along. A row or column with room for only one
 -- vehicle uses the middle, so a single slot parks its vehicle centred.
@@ -15,7 +18,10 @@
 -- is inside the rectangle by construction - only the overlap test can turn
 -- one down.
 --
--- The overlap test filters like vanilla's PlacementUtil.collisionTestCallback:
+-- The overlap test is a box the vehicle's own size standing just off the
+-- ground, so a slot inside a shed works: the floor is below it and a roof
+-- the vehicle fits under is above it, while posts and walls in the way
+-- still block. It filters like vanilla's PlacementUtil.collisionTestCallback:
 -- only hits that resolve to an object (a vehicle, a player, a placeable...)
 -- block. Terrain doesn't, and neither do the slots themselves - their pick
 -- collision is in the ROAD group, which isn't in the mask, and they're
@@ -31,9 +37,14 @@ TCParking.CLEARANCE = 0.5
 -- Step along a row, in metres.
 TCParking.ROW_STEP = 0.5
 -- How far above the terrain a vehicle is put down (it drops the rest).
-TCParking.PLACE_HEIGHT_OFFSET = 0.5
--- Overlap box height, centred like vanilla's getPlace test.
-TCParking.TEST_HEIGHT = 10
+TCParking.PLACE_HEIGHT_OFFSET = 0.3
+-- The overlap box is the vehicle's own size: its footprint, from
+-- GROUND_GAP above the terrain (so a shed's floor slab doesn't count) up to
+-- its height plus HEIGHT_CLEARANCE (so a roof it fits under doesn't
+-- either). DEFAULT_HEIGHT is for a vehicle with no size.height.
+TCParking.GROUND_GAP = 0.2
+TCParking.HEIGHT_CLEARANCE = 0.2
+TCParking.DEFAULT_HEIGHT = 4
 
 -- FindPlaceTask.DEFAULT_COLLISION_MASK.
 TCParking.COLLISION_MASK = CollisionFlag.VEHICLE + CollisionFlag.PLAYER + CollisionFlag.DYNAMIC_OBJECT +
@@ -47,8 +58,9 @@ TCParking.SHOP_WIDTH_OFFSET = 1
 
 -- Slots -------------------------------------------------------------------
 
--- The farm's placed parking slots, in placement order.
-function TCParking.getSlots(farmId)
+-- The farm's placed parking slots, in placement order. slotType (a
+-- PlaceableTCParkingSlot.SLOT_TYPE) keeps only that kind; nil gives all.
+function TCParking.getSlots(farmId, slotType)
     local slots = {}
     local placeableSystem = g_currentMission.placeableSystem
     if placeableSystem == nil then
@@ -56,7 +68,8 @@ function TCParking.getSlots(farmId)
     end
     for _, placeable in ipairs(placeableSystem.placeables) do
         if PlaceableTCParkingSlot.isSlot(placeable) and not placeable.isDeleted and
-            not placeable.markedForDeletion and placeable:getOwnerFarmId() == farmId then
+            not placeable.markedForDeletion and placeable:getOwnerFarmId() == farmId and
+            (slotType == nil or PlaceableTCParkingSlot.getSlotType(placeable) == slotType) then
             table.insert(slots, placeable)
         end
     end
@@ -77,12 +90,13 @@ function TCParking:onOverlap(nodeId)
     return false
 end
 
--- Whether a width x length footprint centred on x, z and facing rotY is
--- clear of vehicles, players and objects.
-local function isClear(x, z, rotY, width, length)
+-- Whether a width x length x height box standing on the ground, centred on
+-- x, z and facing rotY, is clear of vehicles, players and objects.
+local function isClear(x, z, rotY, width, length, height)
     local terrainY = getTerrainHeightAtWorldPos(g_terrainNode, x, 0, z)
+    local halfHeight = (height + TCParking.HEIGHT_CLEARANCE - TCParking.GROUND_GAP) * 0.5
     overlapHit = false
-    overlapBox(x, terrainY + 0.5, z, 0, rotY, 0, width * 0.5, TCParking.TEST_HEIGHT * 0.5, length * 0.5,
+    overlapBox(x, terrainY + TCParking.GROUND_GAP + halfHeight, z, 0, rotY, 0, width * 0.5, halfHeight, length * 0.5,
         "onOverlap", TCParking, TCParking.COLLISION_MASK, true, true, true, true)
     return not overlapHit
 end
@@ -106,11 +120,11 @@ local function getPositions(span, size, step)
     return positions
 end
 
--- A vehicle's footprint size with clearance.
+-- A vehicle's footprint size with clearance, and its height.
 local function getFootprint(vehicle)
     local size = vehicle.size or {}
     return (size.width or 3) + TCParking.CLEARANCE, (size.length or 5) + TCParking.CLEARANCE,
-        size.widthOffset or 0, size.lengthOffset or 0
+        size.widthOffset or 0, size.lengthOffset or 0, size.height or TCParking.DEFAULT_HEIGHT
 end
 
 local function shuffle(list)
@@ -123,7 +137,7 @@ end
 -- The first free spot in one rectangle (PlaceableTCParkingSlot.getArea's
 -- shape), as the footprint's centre and the facing. isRandom tries the
 -- candidates in random order instead.
-local function findSpotInArea(area, width, length, isRandom)
+local function findSpotInArea(area, width, length, height, isRandom)
     local rotY = MathUtil.getYRotationFromDirection(area.vX, area.vZ)
     local rows = getPositions(area.length, length, length)
     local columns = getPositions(area.width, width)
@@ -141,26 +155,26 @@ local function findSpotInArea(area, width, length, isRandom)
     for _, candidate in ipairs(candidates) do
         local x = area.x + area.uX * candidate.u + area.vX * candidate.v
         local z = area.z + area.uZ * candidate.u + area.vZ * candidate.v
-        if isClear(x, z, rotY, width, length) then
+        if isClear(x, z, rotY, width, length, height) then
             return x, z, rotY
         end
     end
     return nil
 end
 
--- A free spot for the vehicle in one of farmId's slots: x, y, z, rotY for
--- setAbsolutePosition, or nil. isRandom (the tcJob park command) picks a
--- random free spot rather than the first.
+-- A free spot for the vehicle in one of farmId's slots of its kind (vehicle,
+-- implement or harvester): x, y, z, rotY for setAbsolutePosition, or nil. isRandom
+-- (the tcJob park command) picks a random free spot rather than the first.
 function TCParking.findSpot(vehicle, farmId, isRandom)
-    local width, length, widthOffset, lengthOffset = getFootprint(vehicle)
-    local slots = TCParking.getSlots(farmId)
+    local width, length, widthOffset, lengthOffset, height = getFootprint(vehicle)
+    local slots = TCParking.getSlots(farmId, PlaceableTCParkingSlot.getSlotTypeFor(vehicle))
     if isRandom then
         shuffle(slots)
     end
     for _, slot in ipairs(slots) do
         local area = PlaceableTCParkingSlot.getArea(slot)
         if area ~= nil then
-            local x, z, rotY = findSpotInArea(area, width, length, isRandom)
+            local x, z, rotY = findSpotInArea(area, width, length, height, isRandom)
             if x ~= nil then
                 -- The footprint's centre sits widthOffset to the vehicle's
                 -- right and lengthOffset ahead of its origin (as in

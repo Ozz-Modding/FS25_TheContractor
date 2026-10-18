@@ -33,12 +33,12 @@ TheContractorCooldown_mt = Class(TheContractorCooldown)
 -- BUFFER_FACTORS - each entry is a function(job, worker) returning that
 -- factor's contribution in minutes (worker nil for a player-driven job),
 -- summed by getBufferDurationMs. Add new factors (distance home, equipment
--- count, ...) by appending to the list. 026: 45 in-game minutes for the
--- slowest worker down to 15 for the fastest (or the player) - long enough
--- to read as driving back and cleaning down, short enough that a worker
--- can still fit a second job into the same day.
-TheContractorCooldown.MAX_BUFFER_MINUTES = 45
-TheContractorCooldown.MIN_BUFFER_MINUTES = 15
+-- count, ...) by appending to the list. 026: 30 in-game minutes for the
+-- slowest worker down to 10 for the fastest (or the player) - a bit over
+-- Dispatch's trip out (24 down to 8), for the unloading. Washing is its
+-- own factor. Trimmed from 45/15, which with washing on top ran to 90+.
+TheContractorCooldown.MAX_BUFFER_MINUTES = 30
+TheContractorCooldown.MIN_BUFFER_MINUTES = 10
 
 TheContractorCooldown.BUFFER_FACTORS = {
     -- Worker speed (016): linear between a slowest worker's

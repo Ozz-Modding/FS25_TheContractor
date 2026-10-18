@@ -57,14 +57,6 @@ local function formatTargetDate(period, dayInPeriod)
     return string.format("%s %d", g_i18n:getText("ui_month" .. periodToMonth(period)), dayInPeriod)
 end
 
--- In-game years are relative ("Year 1", "Year 2", ...), not a real calendar
--- year — environment.currentYear starts at 1 — so label it the same way
--- vanilla's own save/game-info UI would rather than printing the raw number
--- on its own, which reads as a real-world year.
-local function formatYear(year)
-    return string.format(g_i18n:getText("tc_calendar_yearLabel"), year)
-end
-
 -- Calendar-view-only variant that also shows the year — a Job's own
 -- targetPeriod/targetDayInPeriod (used by formatTargetDate above, for the
 -- Inbox and calendar-day-job lists) deliberately doesn't carry a year (008's
@@ -73,10 +65,11 @@ end
 -- forward from environment.currentYear/currentPeriod by a known offset, so
 -- the year here is always locally computable — worth showing since paging
 -- from December to January was otherwise ambiguous about which year you'd
--- landed on.
+-- landed on. year is the game year (environment.currentYear's count), and
+-- TCCalendar.formatYear shows January and February as the next one.
 local function formatCalendarDate(period, dayInPeriod, year)
     return string.format("%s %d, %s", g_i18n:getText("ui_month" .. periodToMonth(period)), dayInPeriod,
-        formatYear(year))
+        TCCalendar.formatYear(year, period))
 end
 
 -- Compact per-tier tractor rating for a list cell (e.g. "S5 M- L8"), as
@@ -1623,7 +1616,11 @@ function MenuContractor:onClickEditWorker()
     if worker == nil then
         return
     end
+    self:openEditWorker(worker)
+end
 
+-- draft: TCEditWorkerDialog.show's unsaved edit to carry on with, or nil.
+function MenuContractor:openEditWorker(worker, draft)
     self.isEditingWorker = true
     self:updateWorkerPortrait()
     TCEditWorkerDialog.show(worker, function(target)
@@ -1632,7 +1629,31 @@ function MenuContractor:onClickEditWorker()
         -- for a remote client" as the other Staff actions.
         target:refreshStaffState(g_currentMission:getFarmId(), g_currentMission.TheContractor.Staff,
             g_currentMission.TheContractor.Jobs)
-    end, self)
+    end, self, draft)
+end
+
+-- 077: back from the wardrobe. The menu closed when it opened, so this
+-- opens it again on the Staff tab's roster and puts the edit dialog back
+-- with its draft. A worker who's gone meanwhile just isn't reopened.
+function MenuContractor:reopenEditWorker(workerId, draft)
+    if g_gui.currentGuiName ~= "InGameMenu" then
+        g_gui:showGui("InGameMenu")
+    end
+    g_inGameMenu:goToPage(self)
+
+    self.subCategoryPaging:setState(MenuContractor.SUB_CATEGORY.STAFF, true)
+    if self.staffView ~= "roster" then
+        self.staffViewSelector:setState(1)
+        self:onClickStaffView()
+    end
+    self:setMenuButtonInfoDirty()
+
+    local worker = self:hasCompany() and
+        g_currentMission.TheContractor.Staff:getWorker(g_currentMission:getFarmId(), workerId) or nil
+    if worker == nil then
+        return
+    end
+    self:openEditWorker(worker, draft)
 end
 
 -- 066: a worker was edited (TheContractorStaff:applyWorkerEdited, every
@@ -2355,7 +2376,7 @@ function MenuContractor:refreshCalendarState(farmId, jobs)
         local period = rawPeriod % Environment.PERIODS_IN_YEAR + 1
         local year = environment.currentYear + math.floor(rawPeriod / Environment.PERIODS_IN_YEAR)
         table.insert(periodTexts, string.format("%s, %s", g_i18n:getText("ui_month" .. periodToMonth(period)),
-            formatYear(year)))
+            TCCalendar.formatYear(year, period)))
     end
     self.calendarPeriodSelector:setTexts(periodTexts)
     self.calendarPeriodSelector:setState(self.calendarPeriodOffset + 1)

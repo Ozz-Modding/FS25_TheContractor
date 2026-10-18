@@ -50,7 +50,7 @@ Run your farm as an agricultural contracting business in Farming Simulator 25. T
 - A **Logbook** of every job and every machine's history: who had it, what it was doing, and what state it came back in
 
 ### Equipment
-- Machines out on a job leave the yard and come back to placeable **parking slots** (three sizes)
+- Machines out on a job leave the yard and come back to placeable **parking slots** (three sizes, for vehicles or implements, plus a harvester slot)
 - Stuck AI helpers are detected and dealt with
 - Advanced Damage System support: careless workers cause ADS breakdowns, and its workshop stock shows in the Supplies tab
 

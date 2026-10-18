@@ -1,22 +1,21 @@
--- Edit worker dialog (066): rename a hired worker, change their gender and
--- re-roll their look, with the look previewed live. Opened from the Staff
--- tab's Edit button. Same MessageDialog shape as TCAdvertisingDialog.
+-- Edit worker dialog (066): rename a hired worker and change their look,
+-- with the look previewed live. Opened from the Staff tab's Edit button.
+-- Same MessageDialog shape as TCAdvertisingDialog.
 --
 -- Everything is a local draft until Save, which sends TCEditWorkerEvent;
--- Back throws it away. Looks are rolled here, on whichever machine has the
--- menu open (TCWorkerAppearance.roll only needs the wardrobe), and checked
--- again by the server. Changing gender rolls a look for it (the base model
--- depends on gender) but never touches the name - that's the player's call.
+-- Back throws it away. The look is edited in the vanilla wardrobe (077,
+-- TCWardrobe): the dialog closes while it's open and the menu reopens it
+-- with the draft when the wardrobe's done (MenuContractor:reopenEditWorker).
+-- Gender isn't picked here: it's the gender of the body chosen in the
+-- wardrobe. The server checks the look again.
 --
--- Gamepad: left/right on the gender option, the button bar for the rest.
+-- Gamepad: the button bar for everything.
 -- The preview is a TCWorkerPortrait on the dialog's own Render element.
 -- The Staff tab's portrait scene sits in the same spot in the world, so
--- the menu hides its own while this is open (MenuContractor:onClickEditWorker).
+-- the menu hides its own while this is open (MenuContractor:openEditWorker).
 
 TCEditWorkerDialog = {}
 local TCEditWorkerDialog_mt = Class(TCEditWorkerDialog, MessageDialog)
-
-TCEditWorkerDialog.GENDERS = { TCWorkerAppearance.GENDER.MALE, TCWorkerAppearance.GENDER.FEMALE }
 
 function TCEditWorkerDialog.register()
     local dialog = TCEditWorkerDialog.new()
@@ -24,8 +23,10 @@ function TCEditWorkerDialog.register()
     TCEditWorkerDialog.INSTANCE = dialog
 end
 
--- onClosed(target) runs when the dialog closes, saved or not.
-function TCEditWorkerDialog.show(worker, onClosed, target)
+-- onClosed(target) runs when the dialog closes, saved or not (including
+-- when it closes for the wardrobe). draft, if given, is the unsaved edit to
+-- carry on with: { workerName, appearance, isChanged }.
+function TCEditWorkerDialog.show(worker, onClosed, target, draft)
     local dialog = TCEditWorkerDialog.INSTANCE
     if dialog == nil then
         return
@@ -33,15 +34,21 @@ function TCEditWorkerDialog.show(worker, onClosed, target)
 
     dialog.farmId = worker.farmId
     dialog.workerId = worker.id
+    dialog.originalGender = worker.gender
     dialog.onClosed = onClosed
     dialog.onClosedTarget = target
     -- The draft. Never `self.name`: that's the GUI's own name for the
     -- dialog, and close() closes by it. appearance is only ever replaced,
     -- never changed in place, so sharing the worker's table is safe.
-    dialog.workerName = worker.name
-    dialog.gender = worker.gender
-    dialog.appearance = worker.appearance
-    dialog.isChanged = false
+    if draft ~= nil then
+        dialog.workerName = draft.workerName
+        dialog.appearance = draft.appearance
+        dialog.isChanged = draft.isChanged
+    else
+        dialog.workerName = worker.name
+        dialog.appearance = worker.appearance
+        dialog.isChanged = false
+    end
     g_gui:showDialog("TCEditWorkerDialog")
 end
 
@@ -50,15 +57,15 @@ function TCEditWorkerDialog.new(target, customMt)
 
     self.farmId = nil
     self.workerId = nil
+    self.originalGender = nil
     self.onClosed = nil
     self.onClosedTarget = nil
     self.workerName = nil
-    self.gender = nil
     self.appearance = nil
     self.isChanged = false
     self.portrait = nil
     -- Stand-in ids for previews, counting down from -1 so they never meet
-    -- a real worker's. A new one per roll makes the portrait load it.
+    -- a real worker's. A new one per look makes the portrait load it.
     self.nextPreviewId = -1
 
     return self
@@ -69,8 +76,10 @@ function TCEditWorkerDialog:onGuiSetupFinished()
 
     self.portraitRender = self:getDescendantById("portraitRender")
     self.nameText = self:getDescendantById("nameText")
-    self.genderOption = self:getDescendantById("genderOption")
+    self.genderText = self:getDescendantById("genderText")
     self.saveButton = self:getDescendantById("saveButton")
+    self.wardrobeButton = self:getDescendantById("wardrobeButton")
+    self.wardrobeSeparator = self:getDescendantById("wardrobeSeparator")
 end
 
 function TCEditWorkerDialog:onOpen()
@@ -80,23 +89,21 @@ function TCEditWorkerDialog:onOpen()
         self.portrait = TCWorkerPortrait.new(self.portraitRender)
     end
 
-    local genderTexts = {}
-    local genderState = 1
-    for i, gender in ipairs(TCEditWorkerDialog.GENDERS) do
-        table.insert(genderTexts, g_i18n:getText("tc_editWorker_gender_" .. gender))
-        if gender == self.gender then
-            genderState = i
-        end
+    -- No wardrobe on this platform: renaming is all that's left.
+    local hasWardrobe = TCWardrobe.isAvailable()
+    self.wardrobeButton:setVisible(hasWardrobe)
+    self.wardrobeSeparator:setVisible(hasWardrobe)
+
+    -- A draft's look is a stand-in, so a look from the wardrobe always
+    -- loads. The worker's own look is the Staff tab portrait's id, but this
+    -- is a separate TCWorkerPortrait, so it loads it.
+    local previewId = self.workerId
+    if self.isChanged then
+        previewId = self.nextPreviewId
+        self.nextPreviewId = self.nextPreviewId - 1
     end
-    self.genderOption:setTexts(genderTexts)
-    self.genderOption:setState(genderState)
-
-    -- The worker's own look first: same id as the Staff tab's portrait, but
-    -- this is a separate TCWorkerPortrait, so it loads it.
-    self.portrait:setWorker({ id = self.workerId, name = self.workerName, appearance = self.appearance })
+    self.portrait:setWorker({ id = previewId, name = self.workerName, appearance = self.appearance })
     self:refresh()
-
-    FocusManager:setFocus(self.genderOption)
 end
 
 function TCEditWorkerDialog:onClose()
@@ -123,46 +130,34 @@ function TCEditWorkerDialog:update(dt)
     end
 end
 
+function TCEditWorkerDialog:getGender()
+    return TCWorkerAppearance.getGender(self.appearance, self.originalGender)
+end
+
 function TCEditWorkerDialog:refresh()
     self.nameText:setText(self.workerName)
-    -- Nothing to save without a look: one that's invalid can't be sent.
+    self.genderText:setText(g_i18n:getText("tc_editWorker_gender_" .. self:getGender()))
     self.saveButton:setDisabled(not self.isChanged or self.appearance == nil)
 end
 
--- A new look for the draft's gender. Keeps the old one if none could be
--- made; returns whether it rolled.
-function TCEditWorkerDialog:rollLook()
-    local appearance = TCWorkerAppearance.roll(self.gender)
-    if appearance == nil then
-        return false
-    end
+-- 077: the dialog closes while the wardrobe's open (changeScreen closes
+-- every dialog), so the draft goes with it and comes back through the menu.
+function TCEditWorkerDialog:onClickWardrobe()
+    local menu = g_currentMission.TheContractor.MenuContractor
+    local workerId = self.workerId
+    local draft = { workerName = self.workerName, appearance = self.appearance, isChanged = self.isChanged }
 
-    self.appearance = appearance
-    self.isChanged = true
-    self.portrait:setWorker({ id = self.nextPreviewId, name = self.workerName, appearance = appearance })
-    self.nextPreviewId = self.nextPreviewId - 1
-    return true
-end
-
-function TCEditWorkerDialog:onClickGender(state)
-    local gender = TCEditWorkerDialog.GENDERS[state]
-    if gender == nil or gender == self.gender then
-        return
-    end
-
-    self.gender = gender
-    self.isChanged = true
-    if not self:rollLook() then
-        -- The old look is the other gender's: don't let that be saved.
-        self.appearance = nil
-        self.portrait:setWorker(nil)
-    end
-    self:refresh()
-end
-
-function TCEditWorkerDialog:onClickRoll()
-    self:rollLook()
-    self:refresh()
+    TCWardrobe.open(draft.appearance, function(data)
+        local isRefused = TCWorkerAppearance.toPlayerStyle(data) == nil
+        if not isRefused and not TCWorkerAppearance.isSameLook(data, draft.appearance) then
+            draft.appearance = data
+            draft.isChanged = true
+        end
+        menu:reopenEditWorker(workerId, draft)
+        if isRefused then
+            InfoDialog.show(g_i18n:getText("tc_editWorker_lookRefused"))
+        end
+    end)
     return false
 end
 
@@ -194,7 +189,7 @@ function TCEditWorkerDialog:onClickOk()
     end
 
     g_client:getServerConnection():sendEvent(TCEditWorkerEvent.new(self.farmId, self.workerId, self.workerName,
-        self.gender, self.appearance))
+        self:getGender(), self.appearance))
     self:close()
     return false
 end
