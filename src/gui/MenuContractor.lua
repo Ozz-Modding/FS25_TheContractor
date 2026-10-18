@@ -3515,7 +3515,13 @@ function MenuContractor:refreshFinanceYearState(farmId, finances)
     local stats = finances:getYearStats(farmId)
     self.financesYearTitle:setText(string.format(g_i18n:getText("tc_finances_yearHeading"), stats.year))
     self.financesYearInvoiced:setText(formatMoney(stats.invoiced))
-    self.financesYearReceived:setText(formatMoney(stats.received))
+    -- 073: good news refunds share the received row.
+    local receivedText = formatMoney(stats.received)
+    if (stats.goodNews or 0) > 0 then
+        receivedText = string.format(g_i18n:getText("tc_finances_receivedWithGoodNews"), receivedText,
+            formatMoney(stats.goodNews))
+    end
+    self.financesYearReceived:setText(receivedText)
     self.financesYearWrittenOff:setText(formatMoney(stats.writtenOff))
     -- 054: training courses share the wages row, for the same reason as below.
     self.financesYearWages:setText(formatMoney(stats.wages + (stats.training or 0)))

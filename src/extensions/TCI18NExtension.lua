@@ -41,6 +41,8 @@ TCI18NExtension.theContractorTexts = {
     ["finance_tcFines"] = true,
     ["tc_moneyType_insurancePayout"] = true,
     ["finance_tcInsurancePayout"] = true,
+    ["tc_moneyType_goodNews"] = true,
+    ["finance_tcGoodNews"] = true,
 }
 
 function TCI18NExtension:getText(superFunc, text, modEnv)
