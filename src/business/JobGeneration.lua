@@ -24,6 +24,10 @@ TheContractorJobGeneration_mt = Class(TheContractorJobGeneration)
 --                    header/harvester matching lives in TCEquipmentClass.
 --                    getMissingEquipment). weederType/supplyFillTypeNames
 --                    narrow it further (TCEquipmentClass.isJobImplement).
+--                    excludedSpecs rules out an implement that carries the
+--                    spec but does other work: a plow with a packer has
+--                    spec_cultivator (vanilla's PlowPacker needs it), but
+--                    it plows, so it's no use on a cultivate job.
 --                    Whether a tractor is needed too is worked out from the
 --                    equipment itself: only when nothing chosen is
 --                    self-propelled.
@@ -80,6 +84,14 @@ TheContractorJobGeneration_mt = Class(TheContractorJobGeneration)
 --   rewardPerItem    075: paid per piece rather than per hectare (fly-tipping,
 --                    see estimatePrice's itemCount), with reputationPerItem
 --                    in place of reputationPerHa.
+--   workAreaTypes    076: the WorkAreaType names the job's field can be
+--                    worked with (TCFieldAccess), copied from the vanilla
+--                    mission's own workAreaTypes, so a cultivate job lets
+--                    you cultivate the field and nothing else (harvest's
+--                    TEDDER is the one vanilla adds for onions). Names, not
+--                    the WorkAreaType values, since those are looked up
+--                    when the map loads. None at all for a job with no
+--                    ground work (bale wrap, deliveries, fly-tipping).
 -- A type left out of JOB_TYPE_KEYS (flyTipping) is never generated, shown
 -- by the availability snapshot or created by tcJob: only its random event
 -- (075) makes one, with createJobOnField.
@@ -90,19 +102,26 @@ TheContractorJobGeneration_mt = Class(TheContractorJobGeneration)
 -- slow/laborious each job is.
 TheContractorJobGeneration.JOB_TYPES = {
     harvest = { cropDependent = true, recordsCrop = true, rewardPerHa = 2500, reputationPerHa = 8.5,
-        skill = "harvesting" },
-    cultivate = { implementSpec = "spec_cultivator", vanillaMission = CultivateMission, rewardPerHa = 2300,
-        reputationPerHa = 7.8, skill = "tillage" },
+        skill = "harvesting",
+        workAreaTypes = { "CUTTER", "COMBINECHOPPER", "COMBINESWATH", "FRUITPREPARER", "TEDDER" } },
+    cultivate = { implementSpec = "spec_cultivator", excludedSpecs = { "spec_plow" }, vanillaMission = CultivateMission,
+        rewardPerHa = 2300, reputationPerHa = 7.8, skill = "tillage",
+        workAreaTypes = { "CULTIVATOR" } },
     sow = { implementSpec = "spec_sowingMachine", vanillaMission = SowMission, rewardPerHa = 2000,
-        reputationPerHa = 6.8, skill = "seeding" },
+        reputationPerHa = 6.8, skill = "seeding",
+        workAreaTypes = { "SOWINGMACHINE", "RIDGEMARKER" } },
     plow = { implementSpec = "spec_plow", vanillaMission = PlowMission, rewardPerHa = 2800, reputationPerHa = 9.5,
-        skill = "tillage" },
+        skill = "tillage",
+        workAreaTypes = { "PLOW" } },
     mow = { implementSpec = "spec_mower", vanillaMission = MowMission, recordsCrop = true,
-        seasonRule = "noWinterOrEarlySpring", rewardPerHa = 2500, reputationPerHa = 8.5, skill = "grassland" },
+        seasonRule = "noWinterOrEarlySpring", rewardPerHa = 2500, reputationPerHa = 8.5, skill = "grassland",
+        workAreaTypes = { "MOWER" } },
     tedder = { implementSpec = "spec_tedder", vanillaMission = TedderMission, seasonRule = "noWinterOrEarlySpring",
-        serverMeasured = true, rewardPerHa = 1500, reputationPerHa = 5.1, skill = "grassland" },
+        serverMeasured = true, rewardPerHa = 1500, reputationPerHa = 5.1, skill = "grassland",
+        workAreaTypes = { "TEDDER" } },
     bale = { implementSpec = "spec_baler", vanillaMission = BaleMission, recordsCrop = true, seasonRule = "noWinter",
-        serverMeasured = true, deliversBales = true, rewardPerHa = 2200, reputationPerHa = 7.5, skill = "baling" },
+        serverMeasured = true, deliversBales = true, rewardPerHa = 2200, reputationPerHa = 7.5, skill = "baling",
+        workAreaTypes = { "BALER" } },
     baleWrap = { implementSpec = "spec_baleWrapper", vanillaMission = BaleWrapMission, seasonRule = "noWinter",
         serverMeasured = true, playerOnly = true, rewardPerBale = 300, skill = "baling" },
     strawDelivery = { vanillaMission = BaleMission, recordsCrop = true, seasonRule = "noWinter", serverMeasured = true,
@@ -110,18 +129,23 @@ TheContractorJobGeneration.JOB_TYPES = {
         skill = "haulage" },
     fertilize = { implementSpec = "spec_sprayer", vanillaMission = FertilizeMission, startState = "sprayLevel",
         supplyFillTypeNames = { "FERTILIZER", "LIQUIDFERTILIZER", "MANURE", "LIQUIDMANURE" }, seasonRule = "noWinter",
-        rewardPerHa = 1500, reputationPerHa = 5.1, skill = "cropCare" },
+        rewardPerHa = 1500, reputationPerHa = 5.1, skill = "cropCare",
+        workAreaTypes = { "SPRAYER" } },
     herbicide = { implementSpec = "spec_sprayer", vanillaMission = HerbicideMission, startState = "weedState",
         supplyFillTypeNames = { "HERBICIDE" }, seasonRule = "noWinter", requiresWeeds = true, rewardPerHa = 1500,
-        reputationPerHa = 5.1, skill = "cropCare", certification = "spraying" },
+        reputationPerHa = 5.1, skill = "cropCare", certification = "spraying",
+        workAreaTypes = { "SPRAYER" } },
     weed = { implementSpec = "spec_weeder", weederType = "weed", vanillaMission = WeedMission,
         startState = "weedState", seasonRule = "noWinter", requiresWeeds = true, serverMeasured = true,
-        rewardPerHa = 2000, reputationPerHa = 6.8, skill = "cropCare" },
+        rewardPerHa = 2000, reputationPerHa = 6.8, skill = "cropCare",
+        workAreaTypes = { "WEEDER" } },
     hoe = { implementSpec = "spec_weeder", weederType = "hoe", vanillaMission = HoeMission, startState = "weedState",
         seasonRule = "noWinter", requiresWeeds = true, serverMeasured = true, rewardPerHa = 1500,
-        reputationPerHa = 5.1, skill = "cropCare" },
+        reputationPerHa = 5.1, skill = "cropCare",
+        workAreaTypes = { "WEEDER" } },
     stonePick = { implementSpec = "spec_stonePicker", vanillaMission = StonePickMission, seasonRule = "noWinter",
-        requiresStones = true, rewardPerHa = 2200, reputationPerHa = 7.5, skill = "tillage" },
+        requiresStones = true, rewardPerHa = 2200, reputationPerHa = 7.5, skill = "tillage",
+        workAreaTypes = { "STONEPICKER" } },
     -- 075: clearing a fly-tipped pile by hand. A piece pays what a bale
     -- wrap's bale does, and earns about the reputation that pay would on
     -- a plow job (REPUTATION_PER_REWARD).

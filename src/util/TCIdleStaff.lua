@@ -28,6 +28,11 @@
 -- face a local player who walks up (NPC:update's turn) and back to the
 -- spot's arrow when they leave. While someone's standing on a spot its
 -- blocker is in physics, so players can't walk through them.
+--
+-- They're only about during working hours (START_HOUR to END_HOUR, game
+-- time): outside them nobody is wanted, so everyone goes home as their
+-- spot drops out of view, and turns up again the same way in the morning.
+-- The time of day is vanilla's, synced to every machine.
 
 TCIdleStaff = {}
 
@@ -47,6 +52,10 @@ TCIdleStaff.ROTATION_SPEED = 0.006283185307179587
 -- seen.
 TCIdleStaff.VIEW_HEIGHT = 1
 TCIdleStaff.VIEW_MARGIN = 0.2
+-- Working hours (game time, hours of the day): from START_HOUR up to but
+-- not including END_HOUR.
+TCIdleStaff.START_HOUR = 7
+TCIdleStaff.END_HOUR = 19
 
 local HASH_MODULUS = 2147483647
 
@@ -111,6 +120,12 @@ function TCIdleStaff.assign(farmId, day, workerIds, spotKeys)
     return assignment
 end
 
+-- Are staff on site at this time of day (ms since midnight)?
+function TCIdleStaff.isWorkingHours(dayTime)
+    local hour = (dayTime or 0) / 3600000
+    return hour >= TCIdleStaff.START_HOUR and hour < TCIdleStaff.END_HOUR
+end
+
 -- Who should stand where right now: workerId -> { worker, spot }, spot
 -- being { key, placeable, x, y, z, yaw }.
 function TCIdleStaff.getWanted()
@@ -118,6 +133,9 @@ function TCIdleStaff.getWanted()
     local mission = g_currentMission
     local tc = mission.TheContractor
     if tc == nil or tc.Staff == nil or mission.placeableSystem == nil or mission.environment == nil then
+        return wanted
+    end
+    if not TCIdleStaff.isWorkingHours(mission.environment.dayTime) then
         return wanted
     end
 
@@ -439,6 +457,11 @@ function TCIdleStaff.describe(farmId)
 
     local lines = { string.format("Farm %d: %d standing spot(s), day %d", farmId, spotCount,
         mission.environment.currentMonotonicDay or 0) }
+    local isWorkingHours = TCIdleStaff.isWorkingHours(mission.environment.dayTime)
+    if not isWorkingHours then
+        table.insert(lines, string.format("Outside working hours (%02d:00-%02d:00): staff have gone home",
+            TCIdleStaff.START_HOUR, TCIdleStaff.END_HOUR))
+    end
     local roster = mission.TheContractor.Staff:getRoster(farmId)
     table.sort(roster, function(a, b) return a.id < b.id end)
     for _, worker in ipairs(roster) do
@@ -447,6 +470,8 @@ function TCIdleStaff.describe(farmId)
         local text
         if not TCIdleStaff.isStandingStatus(worker.status) then
             text = "not standing (" .. worker.status .. ")"
+        elseif not isWorkingHours then
+            text = figure ~= nil and "gone home once you look away" or "gone home"
         elseif entry == nil then
             text = "no spot free"
         else

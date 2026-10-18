@@ -33,11 +33,10 @@ TCJobProgress = {}
 -- call, so a single poll never stalls the frame on a big field.
 TCJobProgress.SQM_PER_PARTITION = 2500
 
--- Placeholder cadence for the background tracker below — no watchdog
--- interval exists yet to inherit from (021 isn't built), so this is its own
--- reasonable-looking number per the ticket's Q18 "configurable" call.
--- 021 can either reuse this constant or replace the tracker entirely once
--- its own interval is decided.
+-- How often the tracker below rebuilds its list of active jobs and
+-- refreshes the jobs that count objects rather than scanning the field
+-- (density-map scans advance every frame). The watchdog, haulage and
+-- supplies polls share it.
 TCJobProgress.POLL_INTERVAL_MS = 3000
 
 -- jobId -> { completionModifier, completionFilter, isMulti, matchingPixels,
@@ -524,9 +523,9 @@ local function updateFieldPercentageDone(state, totalArea, job)
 end
 
 -- Public entry point: advances one partition of this job's scan and returns
--- its current completion fraction (0-1). Cheap enough to call on a periodic
--- poll (see update() below) without stalling the frame, since only one
--- partition's worth of density-map reads happens per call. Returns 0 for a
+-- its current completion fraction (0-1). Cheap enough to call every frame
+-- (see update() below), since only one partition's worth of density-map
+-- reads happens per call. Returns 0 for a
 -- job whose scan state can't be built yet (see getOrCreateState).
 function TCJobProgress.getCompletion(job)
     local handler = JOB_TYPE_HANDLERS[job.jobType]
@@ -610,18 +609,37 @@ local function refreshJob(job, isServer)
     end
 end
 
--- Background tracker: every POLL_INTERVAL_MS, refresh completionPercentage
--- (0-100, matching Job.lua/MenuContractor's existing scale) for every
--- allocated/in_progress job across every farm, on whichever machine this
--- runs on. No server/client gating needed — density-map state is already
--- simulation-replicated, so every machine derives the same answer locally,
--- same as vanilla AbstractFieldMission's own per-machine update() (bar
--- serverMeasured jobs, see refreshJob). Runs for every farm rather than
--- just the local player's, since the server needs accurate
+-- Background tracker, on whichever machine this runs on, for every farm's
+-- allocated/in_progress jobs. No server/client gating needed: density-map
+-- state is already simulation-replicated, so every machine derives the same
+-- answer locally, same as vanilla AbstractFieldMission's own per-machine
+-- update() (bar serverMeasured jobs, see refreshJob). Runs for every farm
+-- rather than just the local player's, since the server needs accurate
 -- completionPercentage for all farms' missed-job checks (Jobs.lua's
 -- missJob), not just whichever farm happens to be local on the server
 -- machine.
+--
+-- A density-map scan only reads one partition per call, so it has to run
+-- often: a scan job moves on a partition every frame, like vanilla's
+-- missions do every tick (AbstractMission:updateTick), or a 10 ha field's
+-- 40 partitions would take two minutes to come round. Every POLL_INTERVAL_MS
+-- the list of active jobs is rebuilt (so the per-frame pass makes no
+-- garbage), jobs with their own getCompletion (counting bales, pieces or
+-- deliveries) are refreshed, and scan state for anything no longer active
+-- is dropped.
+local scanJobs = {}
+
+local function isActive(job)
+    return job.state == TheContractorJob.STATE.ALLOCATED or job.state == TheContractorJob.STATE.IN_PROGRESS
+end
+
+local function isScanJob(job)
+    local handler = JOB_TYPE_HANDLERS[job.jobType]
+    return handler == nil or handler.getCompletion == nil
+end
+
 local function refreshActiveJobs()
+    scanJobs = {}
     local tc = g_currentMission.TheContractor
     if tc == nil or tc.Jobs == nil then
         return
@@ -631,14 +649,15 @@ local function refreshActiveJobs()
     local activeJobIds = {}
 
     for _, farm in ipairs(g_farmManager:getFarms()) do
-        local farmId = farm.farmId
-        for _, job in ipairs(tc.Jobs:getJobsByState(farmId, TheContractorJob.STATE.ALLOCATED)) do
-            activeJobIds[job.id] = true
-            refreshJob(job, isServer)
-        end
-        for _, job in ipairs(tc.Jobs:getJobsByState(farmId, TheContractorJob.STATE.IN_PROGRESS)) do
-            activeJobIds[job.id] = true
-            refreshJob(job, isServer)
+        for _, job in ipairs(tc.Jobs:getAllJobs(farm.farmId)) do
+            if isActive(job) then
+                activeJobIds[job.id] = true
+                if isScanJob(job) then
+                    table.insert(scanJobs, job)
+                else
+                    refreshJob(job, isServer)
+                end
+            end
         end
     end
 
@@ -657,14 +676,19 @@ local function refreshActiveJobs()
     end
 end
 
--- Called from TheContractor:update(dt) every frame; only actually does
--- anything once accumulatedMs crosses POLL_INTERVAL_MS.
+-- Called from TheContractor:update(dt) every frame.
 function TCJobProgress.update(dt)
     accumulatedMs = accumulatedMs + dt
-    if accumulatedMs < TCJobProgress.POLL_INTERVAL_MS then
-        return
+    if accumulatedMs >= TCJobProgress.POLL_INTERVAL_MS then
+        accumulatedMs = 0
+        refreshActiveJobs()
     end
-    accumulatedMs = 0
 
-    refreshActiveJobs()
+    local isServer = g_currentMission:getIsServer()
+    for _, job in ipairs(scanJobs) do
+        -- A job that's finished since the list was built is left as it is.
+        if isActive(job) then
+            refreshJob(job, isServer)
+        end
+    end
 end

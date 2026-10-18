@@ -3758,6 +3758,14 @@ local function getOverheadStatus(farmId, definition, state)
     return definition.mandatory and "mandatory" or "active", renewText
 end
 
+-- The Next charge line, with the status note after it when there is one.
+local function withOverheadNote(nextText, note)
+    if note == nil or note == "" then
+        return nextText
+    end
+    return string.format(g_i18n:getText("tc_overheads_nextChargeWithNote"), nextText, note)
+end
+
 function MenuContractor:populateOverheadCell(index, cell)
     local definition = self.overheadRows[index]
     if definition == nil then
@@ -3795,14 +3803,12 @@ function MenuContractor:updateOverheadDetails()
 
     local farmId = g_currentMission:getFarmId()
     local overheads = g_currentMission.TheContractor.Overheads
-    local status, note = getOverheadStatus(farmId, definition, state)
+    local _, note = getOverheadStatus(farmId, definition, state)
     local isActive = state ~= nil and state.enabled
 
     self.financesInvoiceTitle:setText(g_i18n:getText(definition.l10nKey))
-    setChip(self.financesOverheadStatusChip, self.financesOverheadStatusChipText,
-        g_i18n:getText("tc_overheads_status_" .. status), OVERHEAD_STATUS_TONES[status])
-    self.financesOverheadStatusNote:setText(note)
 
+    local nextText
     if isActive then
         local billingText = g_i18n:getText("tc_overheads_billingDetail_" .. state.billing)
         if state.pendingBilling ~= nil and not state.cancelled then
@@ -3829,9 +3835,9 @@ function MenuContractor:updateOverheadDetails()
         self.financesOverheadPrice:setText(priceText)
 
         local nextPeriod, nextAmount = overheads:getNextCharge(farmId, definition, state)
-        self.financesOverheadNext:setText(nextPeriod ~= nil and
+        nextText = nextPeriod ~= nil and
             string.format(g_i18n:getText("tc_overheads_nextChargeLine"), formatMoney(nextAmount),
-                TCCalendar.formatPeriodIndex(nextPeriod)) or g_i18n:getText("tc_overheads_nextChargeNone"))
+                TCCalendar.formatPeriodIndex(nextPeriod)) or g_i18n:getText("tc_overheads_nextChargeNone")
     else
         -- 070: with levels, the cheapest (the first).
         local annualCost = overheads:getAnnualCost(farmId, definition)
@@ -3840,8 +3846,10 @@ function MenuContractor:updateOverheadDetails()
             "tc_overheads_priceFrom" or "tc_overheads_priceQuote"),
             formatMoney(TheContractorOverheads.getChargeAmount(annualCost, TheContractorOverheads.BILLING.ANNUAL)),
             formatMoney(TheContractorOverheads.getChargeAmount(annualCost, TheContractorOverheads.BILLING.MONTHLY))))
-        self.financesOverheadNext:setText(g_i18n:getText("tc_overheads_nextChargeNone"))
+        nextText = g_i18n:getText("tc_overheads_nextChargeNone")
     end
+    -- The status itself is the list row's chip; what happens next goes here.
+    self.financesOverheadNext:setText(withOverheadNote(nextText, note))
 
     local amounts = {}
     for i, amount in ipairs(definition.descriptionAmounts or {}) do
@@ -4045,16 +4053,12 @@ function MenuContractor:updateAdministratorDetails()
     self.financesInvoiceTitle:setText(g_i18n:getText("tc_admin_title"))
 
     if admin ~= nil then
-        setChip(self.financesOverheadStatusChip, self.financesOverheadStatusChipText,
-            g_i18n:getText("tc_admin_status_employed"), "good")
-        self.financesOverheadStatusNote:setText(string.format(g_i18n:getText("tc_admin_noteEmployed"), admin.name,
-            TCCalendar.formatPeriodIndex(admin.hiredPeriod)))
-        self.financesOverheadNext:setText(string.format(g_i18n:getText("tc_overheads_nextChargeLine"),
-            formatMoney(salary + pension), TCCalendar.formatPeriodIndex(TCCalendar.getPeriodIndex() + 1)))
+        self.financesOverheadNext:setText(withOverheadNote(
+            string.format(g_i18n:getText("tc_overheads_nextChargeLine"), formatMoney(salary + pension),
+                TCCalendar.formatPeriodIndex(TCCalendar.getPeriodIndex() + 1)),
+            string.format(g_i18n:getText("tc_admin_noteEmployed"), admin.name,
+                TCCalendar.formatPeriodIndex(admin.hiredPeriod))))
     else
-        setChip(self.financesOverheadStatusChip, self.financesOverheadStatusChipText,
-            g_i18n:getText("tc_admin_status_vacant"), "neutral")
-        self.financesOverheadStatusNote:setText("")
         self.financesOverheadNext:setText(g_i18n:getText("tc_overheads_nextChargeNone"))
     end
 

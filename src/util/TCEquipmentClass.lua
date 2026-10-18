@@ -143,7 +143,8 @@ function TCEquipmentClass.isCutterCompatible(harvester, cutter)
 end
 
 -- Whether `vehicle` is the implement a non-harvest job type needs (032):
--- it carries the job's implementSpec, and on top of that a weeder has to be
+-- it carries the job's implementSpec and none of its excludedSpecs (a plow
+-- with a packer isn't a cultivator), and on top of that a weeder has to be
 -- the right kind (a hoe for hoeing, a tine weeder for weeding - vanilla's
 -- WeedMission/HoeMission tell them apart by Weeder's isHoeWeeder), and a
 -- sprayer has to take one of the job's products (fertilizer or herbicide -
@@ -152,6 +153,11 @@ end
 function TCEquipmentClass.isJobImplement(vehicle, jobDef)
     if jobDef.implementSpec == nil or vehicle[jobDef.implementSpec] == nil then
         return false
+    end
+    for _, spec in ipairs(jobDef.excludedSpecs or {}) do
+        if vehicle[spec] ~= nil then
+            return false
+        end
     end
 
     if jobDef.weederType ~= nil then

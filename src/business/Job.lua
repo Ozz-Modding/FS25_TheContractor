@@ -225,6 +225,12 @@ function TheContractorJob.new(id, farmId, jobType, fieldId, requiredSkillLevel, 
     self.debrisIds = {}
     self.debrisDisposed = 0
 
+    -- 076: real-time ms left in a completed player-driven job's grace
+    -- period (TheContractorJobs.GRACE_PERIOD_MS), while its field can still
+    -- be worked to finish it off. nil otherwise. Counted down on every
+    -- machine, sent to clients and saved.
+    self.graceRemainingMs = nil
+
     -- 032: why work is on hold for supplies, or nil - "noStock" (the farm
     -- is out of what the job's equipment needs) or "wrongFill" (a tank
     -- holds something else). supplyFillTypeName is the product concerned.

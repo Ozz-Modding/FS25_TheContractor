@@ -186,7 +186,7 @@ tcWorker certify 2 off
 
 ### `tcWorker standing`
 
-Shows, for each of your hired workers, whether they're standing on one of your farm's standing spots, and if not, why. Only workers who are idle or in a cooldown stand. Each line gives the spot they're assigned today (its position in decimetres) and how far it is from the camera, then one of:
+Shows, for each of your hired workers, whether they're standing on one of your farm's standing spots, and if not, why. Only workers who are idle or in a cooldown stand, and only between 07:00 and 19:00 game time. Outside those hours a line under the heading says so and every idle worker shows `gone home` (or `gone home once you look away`, if they're still on a spot you can see). Otherwise each line gives the spot they're assigned today (its position in decimetres) and how far it is from the camera, then one of:
 - waiting until you look away (nobody appears on a spot you can see)
 - waiting for another worker to leave the spot
 - standing, model not loaded (models load within 150 m)
