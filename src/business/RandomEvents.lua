@@ -34,6 +34,15 @@
 -- Inbox messages, notices and money are the event type's business, from its
 -- stages; the framework posts nothing itself.
 --
+-- Job events (074): an event type with chancePerJob (a number, 0-1) instead
+-- of ratePerPeriod isn't rolled daily. It's rolled when one of the farm's
+-- jobs completes (Jobs:completeJob -> onJobCompleted), and canTrigger gets
+-- the job as well: canTrigger(farmId, job). An optional minJobQuality
+-- (0-100) skips jobs with a lower quality score. The setting's multiplier
+-- and the cooldown apply as for daily events, and at most one job event
+-- happens per completed job. Forced from the console (no job), the farm's
+-- latest completed job that canTrigger accepts is used.
+--
 -- Server: rolls, runs stages, saves. Every machine: holds the incidents and
 -- each farm's cooldowns (TCRandomEventIncidentEvent, initial client state),
 -- so menus can show them later.
@@ -215,15 +224,99 @@ function TheContractorRandomEvents:rollNewEvents()
     end
 end
 
--- Opens an incident now (server), cooldown or not - the roll and the
--- console come here. Returns the incident, or nil and why not.
-function TheContractorRandomEvents:triggerEvent(farmId, key)
+-- Job events (server) -------------------------------------------------------------
+
+function TheContractorRandomEvents.isJobEvent(definition)
+    return definition.chancePerJob ~= nil
+end
+
+-- Whether a job's quality score is good enough for this job event.
+function TheContractorRandomEvents.meetsJobQuality(definition, job)
+    return definition.minJobQuality == nil or (job.qualityScore or 0) >= definition.minJobQuality
+end
+
+-- The chance of a job event on one completed job, after the setting.
+function TheContractorRandomEvents.getJobChance(chancePerJob, multiplier)
+    return math.min(1, math.max(0, (chancePerJob or 0) * multiplier))
+end
+
+-- From TheContractorJobs:completeJob, once everything else about the job is
+-- settled (paid or invoiced, growth rolled). Rolls every job event type
+-- that isn't cooling down on the farm; of those that hit, one picked at
+-- random happens (the next if it has nothing to act on). Returns the
+-- incident, or nil. random is for the tests.
+function TheContractorRandomEvents:onJobCompleted(job, random)
+    if not g_currentMission:getIsServer() then
+        return nil
+    end
+    random = random or math.random
+
+    local multiplier = TheContractorRandomEvents.getRateMultiplier()
+    if multiplier <= 0 then
+        return nil
+    end
+
+    local hits = {}
+    for _, key in ipairs(self.eventTypeOrder) do
+        local definition = self.eventTypes[key]
+        if TheContractorRandomEvents.isJobEvent(definition) and self:getCooldownLeft(job.farmId, key) == 0 and
+                TheContractorRandomEvents.meetsJobQuality(definition, job) then
+            local chance = TheContractorRandomEvents.getJobChance(definition.chancePerJob, multiplier)
+            if chance > 0 and random() < chance then
+                table.insert(hits, key)
+            end
+        end
+    end
+
+    while #hits > 0 do
+        local key = table.remove(hits, random(1, #hits))
+        local incident = self:triggerEvent(job.farmId, key, job)
+        Logging.info("TheContractor: farm %d job %d: job event '%s' rolled%s", job.farmId, job.id, key,
+            incident == nil and ", but nothing to act on" or "")
+        if incident ~= nil then
+            return incident
+        end
+    end
+    return nil
+end
+
+-- For a job event forced with no job: the farm's latest completed job
+-- canTrigger accepts, and its data - or nil.
+function TheContractorRandomEvents:findLatestJobFor(farmId, definition)
+    local jobs = g_currentMission.TheContractor.Jobs:getJobsByState(farmId, TheContractorJob.STATE.COMPLETED)
+    table.sort(jobs, function(a, b)
+        local aAt, bAt = a.completedAt or 0, b.completedAt or 0
+        if aAt ~= bAt then
+            return aAt > bAt
+        end
+        return a.id > b.id
+    end)
+    for _, job in ipairs(jobs) do
+        local data = definition.canTrigger(farmId, job)
+        if data ~= nil then
+            return job, data
+        end
+    end
+    return nil, nil
+end
+
+-- Opens an incident now (server), cooldown or not - the rolls and the
+-- console come here. job: the completed job a job event is for (nil from
+-- the console, which finds one). Returns the incident, or nil and why not.
+function TheContractorRandomEvents:triggerEvent(farmId, key, job)
     local definition = self.eventTypes[key]
     if definition == nil then
         return nil, "unknown event type"
     end
 
-    local data = definition.canTrigger ~= nil and definition.canTrigger(farmId) or nil
+    local data = nil
+    if definition.canTrigger ~= nil then
+        if job == nil and TheContractorRandomEvents.isJobEvent(definition) then
+            job, data = self:findLatestJobFor(farmId, definition)
+        else
+            data = definition.canTrigger(farmId, job)
+        end
+    end
     if data == nil then
         return nil, "nothing to act on"
     end
@@ -721,11 +814,19 @@ function TheContractorRandomEvents.registerConsoleCommands()
             end
             for _, key in ipairs(keys) do
                 local definition = randomEvents:getEventType(key)
-                local rate = definition.ratePerPeriod ~= nil and definition.ratePerPeriod(farmId) or 0
                 local cooldownLeft = randomEvents:getCooldownLeft(farmId, key)
-                table.insert(lines, string.format("  %s (%s): %.3f a month, %.4f a day%s", key,
-                    randomEvents:getEventTypeName(key), rate * multiplier,
-                    TheContractorRandomEvents.getDailyChance(rate, multiplier, daysPerPeriod),
+                local odds
+                if TheContractorRandomEvents.isJobEvent(definition) then
+                    odds = string.format("%.1f%% a completed job%s",
+                        TheContractorRandomEvents.getJobChance(definition.chancePerJob, multiplier) * 100,
+                        definition.minJobQuality ~= nil and
+                        string.format(" (quality %d%%+)", definition.minJobQuality) or "")
+                else
+                    local rate = definition.ratePerPeriod ~= nil and definition.ratePerPeriod(farmId) or 0
+                    odds = string.format("%.3f a month, %.4f a day", rate * multiplier,
+                        TheContractorRandomEvents.getDailyChance(rate, multiplier, daysPerPeriod))
+                end
+                table.insert(lines, string.format("  %s (%s): %s%s", key, randomEvents:getEventTypeName(key), odds,
                     cooldownLeft > 0 and string.format(", cooling down for %d more month(s)", cooldownLeft) or ""))
             end
 

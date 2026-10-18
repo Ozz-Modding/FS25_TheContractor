@@ -75,6 +75,7 @@ source(TheContractor.dir .. "src/business/MachineryInsurance.lua")
 source(TheContractor.dir .. "src/business/Theft.lua")
 source(TheContractor.dir .. "src/business/Joyriders.lua")
 source(TheContractor.dir .. "src/business/GoodNews.lua")
+source(TheContractor.dir .. "src/business/JobNews.lua")
 source(TheContractor.dir .. "src/business/CourtesyVehicle.lua")
 source(TheContractor.dir .. "src/events/TCInitialClientStateEvent.lua")
 source(TheContractor.dir .. "src/events/TCSettingsEvent.lua")
@@ -216,6 +217,9 @@ function TheContractor:loadMap()
     self.Joyriders:register(self.RandomEvents, self.Inbox)
     self.GoodNews = TheContractorGoodNews.new()
     self.GoodNews:register(self.RandomEvents, self.Inbox)
+    -- 074: after GoodNews, whose inbox kind its messages use.
+    self.JobNews = TheContractorJobNews.new()
+    self.JobNews:register(self.RandomEvents)
     self.InboxHUD = TCInboxHUD.new()
 
     -- Module-level caches outlive a savegame; start each load clean.

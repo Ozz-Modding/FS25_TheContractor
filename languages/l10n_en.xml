@@ -559,6 +559,16 @@
 		<text name="tc_goodNews_loyaltyRebate_body" text="Your regular supplier is grateful for your custom and has sent you a loyalty rebate: %s."/>
 		<text name="tc_goodNews_ratesRefund_title" text="Business rates refund"/>
 		<text name="tc_goodNews_ratesRefund_body" text="The council has recalculated your business rates and found you've been paying too much. They've refunded the overpayment: %s."/>
+		<text name="tc_jobNews_kettle_eventName" text="The customer puts the kettle on"/>
+		<text name="tc_jobNews_kettle_title" text="The customer put the kettle on"/>
+		<text name="tc_jobNews_kettle_bodyOne" text="As %s was finishing up on Field %s, the farmer came out with tea and bacon butties. They're in better spirits for it."/>
+		<text name="tc_jobNews_kettle_bodyTwo" text="As %s and %s were finishing up on Field %s, the farmer came out with tea and bacon butties. They're both in better spirits for it."/>
+		<text name="tc_jobNews_paidEarly_eventName" text="Paid before you've asked"/>
+		<text name="tc_jobNews_paidEarly_title" text="Paid before you've asked"/>
+		<text name="tc_jobNews_paidEarly_body" text="The farmer on Field %s is so pleased with the work that they've paid your invoice straight away: %s."/>
+		<text name="tc_jobNews_stepsUp_eventName" text="A worker steps up"/>
+		<text name="tc_jobNews_stepsUp_title" text="A worker steps up"/>
+		<text name="tc_jobNews_stepsUp_body" text="Something finally clicked for %s on Field %s. Their %s is up to %s, and they're feeling more confident."/>
 		<text name="tc_joyriders_sowBody" text="The farmer was pleased with the plowing on Field %s and has offered you the job of sowing it back to grass."/>
 		<text name="tc_overheads_priceLevel" text="%s cover: %s"/>
 		<text name="tc_overheads_levelSwitching" text="%s (%s cover from renewal)"/>
