@@ -38,6 +38,7 @@ function TCInitialClientStateEvent:writeStream(streamId, connection)
     tc.Parking:writeInitialClientState(streamId, connection)
     tc.RandomEvents:writeInitialClientState(streamId, connection)
     tc.MachineryInsurance:writeInitialClientState(streamId, connection)
+    tc.GoodNews:writeInitialClientState(streamId, connection)
     TCEquipmentVisibility.writeInitialClientState(streamId, connection)
 end
 
@@ -68,6 +69,7 @@ function TCInitialClientStateEvent:readStream(streamId, connection)
     tc.Parking:readInitialClientState(streamId, connection)
     tc.RandomEvents:readInitialClientState(streamId, connection)
     tc.MachineryInsurance:readInitialClientState(streamId, connection)
+    tc.GoodNews:readInitialClientState(streamId, connection)
     TCEquipmentVisibility.readInitialClientState(streamId, connection)
 
     self:run(connection)

@@ -433,6 +433,16 @@ Makes a random event happen to your farm now, ignoring the odds, the Random even
 ```
 tcCompany event theft
 tcCompany event joyriders
+tcCompany event goodNews
+```
+
+### `tcCompany goodNews [story]`
+
+Gives your farm a piece of good news now: that story, or a random one other than the last you had. It ignores the odds, the Random events setting, the cooldown and the usual wait for your first completed job, but starts the cooldown like a real one. The story's reward is applied and its inbox message posted. `[story]` is case-insensitive; an unknown one lists them: `photoPosted`, `parishNews`, `parishCouncil`, `youngFarmers` (reputation, scaled to your tier), `supplierRefund`, `loyaltyRebate`, `ratesRefund` (cash, scaled by the job pay setting).
+
+```
+tcCompany goodNews
+tcCompany goodNews supplierRefund
 ```
 
 ### `tcCompany events`

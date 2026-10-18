@@ -197,6 +197,7 @@
 		<text name="tc_inbox_chipClaim" text="Claim"/>
 		<text name="tc_inbox_chipTheft" text="Theft"/>
 		<text name="tc_inbox_chipJoyriders" text="Vandalism"/>
+		<text name="tc_inbox_chipGoodNews" text="Good news"/>
 		<text name="tc_inbox_chipLegal" text="Legal"/>
 		<text name="tc_inbox_chipTraining" text="Training"/>
 		<text name="tc_calendar_yearLabel" text="Year %d"/>
@@ -254,6 +255,8 @@
 		<text name="finance_tcFines" text="Fines"/>
 		<text name="tc_moneyType_insurancePayout" text="Insurance payouts"/>
 		<text name="finance_tcInsurancePayout" text="Insurance payouts"/>
+		<text name="tc_moneyType_goodNews" text="Refunds and rebates"/>
+		<text name="finance_tcGoodNews" text="Refunds and rebates"/>
 		<text name="tc_staff_viewRoster" text="Roster"/>
 		<text name="tc_staff_viewCandidates" text="Candidates"/>
 		<text name="tc_staff_columnName" text="Name"/>
@@ -541,6 +544,21 @@
 		<text name="tc_joyriders_offerTitle" text="Joyriders on Field %s"/>
 		<text name="tc_joyriders_offerBody" text="Joyriders have been driving round the grass on Field %s and torn it up. The farmer wants it plowed so it can be sown again, and has offered you the job."/>
 		<text name="tc_joyriders_sowTitle" text="Sow Field %s with grass"/>
+		<text name="tc_goodNews_eventName" text="Good news"/>
+		<text name="tc_goodNews_photoPosted_title" text="Credit where it's due"/>
+		<text name="tc_goodNews_photoPosted_body" text="Someone has posted a photo of your work in the local farming group, and the comments are full of praise. You gained %s reputation."/>
+		<text name="tc_goodNews_parishNews_title" text="Local business of the month"/>
+		<text name="tc_goodNews_parishNews_body" text="Your business gets a write-up in the parish newsletter as local business of the month. You gained %s reputation."/>
+		<text name="tc_goodNews_parishCouncil_title" text="Thanks from the parish council"/>
+		<text name="tc_goodNews_parishCouncil_body" text="The parish council has written to thank you for keeping the lanes clean after your machines have been through. You gained %s reputation."/>
+		<text name="tc_goodNews_youngFarmers_title" text="A word from the Young Farmers"/>
+		<text name="tc_goodNews_youngFarmers_body" text="The local Young Farmers' club has named you as an example of a highly professional contractor in their newsletter. You gained %s reputation."/>
+		<text name="tc_goodNews_supplierRefund_title" text="An honest mistake"/>
+		<text name="tc_goodNews_supplierRefund_body" text="One of your suppliers has spotted that they overcharged you on an earlier bill, and has refunded the difference: %s."/>
+		<text name="tc_goodNews_loyaltyRebate_title" text="A good word from the supplier"/>
+		<text name="tc_goodNews_loyaltyRebate_body" text="Your regular supplier is grateful for your custom and has sent you a loyalty rebate: %s."/>
+		<text name="tc_goodNews_ratesRefund_title" text="Business rates refund"/>
+		<text name="tc_goodNews_ratesRefund_body" text="The council has recalculated your business rates and found you've been paying too much. They've refunded the overpayment: %s."/>
 		<text name="tc_joyriders_sowBody" text="The farmer was pleased with the plowing on Field %s and has offered you the job of sowing it back to grass."/>
 		<text name="tc_overheads_priceLevel" text="%s cover: %s"/>
 		<text name="tc_overheads_levelSwitching" text="%s (%s cover from renewal)"/>
@@ -580,6 +598,7 @@
 		<text name="tc_courtesy_returnedBody" text="Your insurer has collected the courtesy %s now that your claim has settled."/>
 		<text name="tc_courtesy_returnedNotice" text="Courtesy %s collected by your insurer"/>
 		<text name="tc_finances_claimsWithPayouts" text="%s (insurers paid %s)"/>
+		<text name="tc_finances_receivedWithGoodNews" text="%s (plus %s in refunds)"/>
 		<text name="tc_claims_bodyInsured" text="The owner of field %d says %s %s during the %s job, and is claiming %s for the damage. Your public liability insurance covers it, less the excess: %s has been charged. The claim goes on your record and will raise your premium for the next 3 years. Word gets around, too: your reputation has taken a knock."/>
 		<text name="tc_claims_bodyUninsured" text="The owner of field %d says %s %s during the %s job, and is claiming %s for the damage. You don't have public liability insurance, so the whole %s has been charged. Word gets around, too: your reputation has taken a knock."/>
 		<text name="tc_claims_noticeInsured" text="Compensation claim on field %d: %s excess paid by you, the rest by your insurer."/>
