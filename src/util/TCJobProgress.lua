@@ -19,9 +19,10 @@
 -- Except (032) for job types marked serverMeasured in JobGeneration's
 -- JOB_TYPES: tedder/bale (litres of windrow left, against what was spawned
 -- at allocation), weed/hoe (weed area left, against what was there at
--- allocation), bale wrap (the spawned bales' wrapping) and straw delivery
--- (what's been delivered, 067) are measured against a baseline only the
--- server has (job.workTotal/spawnedBaleIds/requiredLiters),
+-- allocation), bale wrap (the spawned bales' wrapping), straw delivery
+-- (what's been delivered, 067) and fly-tipping (pieces taken to a skip,
+-- 075) are measured against a baseline only the server has
+-- (job.workTotal/spawnedBaleIds/requiredLiters/debrisIds),
 -- so only the server measures them, and sends the result to clients
 -- (TCJobProgressEvent) whenever it moves by a whole percent.
 
@@ -288,7 +289,24 @@ local function getDeliveryCompletion(job)
     return math.min(1, job.deliveredLiters / job.requiredLiters)
 end
 
--- One entry per generatable job type (JobGeneration.JOB_TYPE_KEYS):
+-- Fly-tipping (075, server-only): the pieces taken to a skip, against those
+-- plus the ones still lying about. A piece gone some other way drops out of
+-- the total, so the job can't get stuck short of done.
+local function getFlyTippingCompletion(job)
+    local remaining = 0
+    for _, uniqueId in ipairs(job.debrisIds) do
+        if g_currentMission.itemSystem:getItemByUniqueId(uniqueId) ~= nil then
+            remaining = remaining + 1
+        end
+    end
+    local total = job.debrisDisposed + remaining
+    if total <= 0 then
+        return 0
+    end
+    return job.debrisDisposed / total
+end
+
+-- One entry per job type (JobGeneration.JOB_TYPES):
 --   createModifier(state, job)  builds the scan's modifier/filter
 --   fruitTypeSource  a target fruit type has to be resolved first, and
 --                    from where: sow reads the field's planned fruit,
@@ -314,6 +332,7 @@ local JOB_TYPE_HANDLERS = {
     bale = { createModifier = createWindrowModifier, measure = "remainingLiters" },
     baleWrap = { getCompletion = getBaleWrapCompletion },
     strawDelivery = { getCompletion = getDeliveryCompletion },
+    flyTipping = { getCompletion = getFlyTippingCompletion },
     fertilize = { createModifier = createFertilizeModifier },
     herbicide = { createModifier = createHerbicideModifier },
     weed = { createModifier = createWeedModifier, measure = "remainingArea" },

@@ -25,6 +25,12 @@
 --
 -- The ruts are never painted PLOWED: plow progress counts PLOWED ground
 -- (TCJobProgress), so plowed ruts would read as work already done.
+--
+-- 075 borrows it for fly-tipping's evidence: planDumpSite picks a spot a few
+-- metres in from the field's edge (by its gate where it can) and a straight
+-- run in to it from outside, and paintDumpSite paints that run's ruts and a
+-- churned-up patch where the pile goes, so a player can park at the edge,
+-- follow the tracks in and find it.
 
 TCJoyriderRuts = {}
 
@@ -558,6 +564,133 @@ function TCJoyriderRuts.getTrackPieces(track, boundary)
     return pieces
 end
 
+-- Fly-tipping dump site (075) ---------------------------------------------------
+
+-- How far in from the field's edge the pile goes (metres, a random distance
+-- in the range), measured to the nearest edge, not just the one it came in
+-- over - a spot by a corner is tried again elsewhere.
+TCJoyriderRuts.DUMP_DEPTH = { 4, 7 }
+-- The van's run starts this far outside the edge, give or take
+-- DUMP_ANGLE_SPREAD off square to it.
+TCJoyriderRuts.DUMP_APPROACH = 8
+TCJoyriderRuts.DUMP_ANGLE_SPREAD = math.rad(20)
+-- The churned-up patch under the pile, a square this wide.
+TCJoyriderRuts.DUMP_PATCH_SIZE = 5
+-- Random edge points tried after the one by the gate.
+TCJoyriderRuts.DUMP_TRIES = 30
+
+-- Distance from (x, z) to the nearest point of the boundary.
+function TCJoyriderRuts.getDistanceToBoundary(x, z, boundary)
+    local best = math.huge
+    local count = #boundary
+    for i = 1, count do
+        local ax, az = boundary[i][1], boundary[i][2]
+        local bx, bz = boundary[i % count + 1][1], boundary[i % count + 1][2]
+        local dx, dz = bx - ax, bz - az
+        local lengthSq = dx * dx + dz * dz
+        local t = lengthSq > 0 and math.max(0, math.min(1, ((x - ax) * dx + (z - az) * dz) / lengthSq)) or 0
+        local px, pz = ax + dx * t, az + dz * t
+        best = math.min(best, math.sqrt((px - x) ^ 2 + (pz - z) ^ 2))
+    end
+    return best
+end
+
+-- The boundary point nearest (x, z), and the inward direction square to
+-- that edge there.
+local function getNearestEdge(boundary, x, z)
+    local bestX, bestZ, bestNX, bestNZ, bestDistance = nil, nil, nil, nil, math.huge
+    local count = #boundary
+    for i = 1, count do
+        local ax, az = boundary[i][1], boundary[i][2]
+        local bx, bz = boundary[i % count + 1][1], boundary[i % count + 1][2]
+        local dx, dz = bx - ax, bz - az
+        local lengthSq = dx * dx + dz * dz
+        if lengthSq > 0.000001 then
+            local t = math.max(0, math.min(1, ((x - ax) * dx + (z - az) * dz) / lengthSq))
+            local px, pz = ax + dx * t, az + dz * t
+            local distance = (px - x) ^ 2 + (pz - z) ^ 2
+            if distance < bestDistance then
+                local length = math.sqrt(lengthSq)
+                bestX, bestZ, bestNX, bestNZ, bestDistance = px, pz, dz / length, -dx / length, distance
+            end
+        end
+    end
+    if bestX == nil then
+        return nil
+    end
+    -- Whichever side of the edge is the field's.
+    if not TCJoyriderRuts.isPointInside(bestX + bestNX * 0.5, bestZ + bestNZ * 0.5, boundary) then
+        bestNX, bestNZ = -bestNX, -bestNZ
+    end
+    return bestX, bestZ, bestNX, bestNZ
+end
+
+-- A dump spot DUMP_DEPTH in from the edge nearest (edgeX, edgeZ), or nil if
+-- it isn't that far from every edge (a corner, a thin strip).
+local function tryDumpSpot(boundary, edgeX, edgeZ, random)
+    local x, z, nx, nz = getNearestEdge(boundary, edgeX, edgeZ)
+    if x == nil then
+        return nil
+    end
+    local depth = randomIn(TCJoyriderRuts.DUMP_DEPTH, random)
+    local dumpX, dumpZ = x + nx * depth, z + nz * depth
+    if not TCJoyriderRuts.isPointInside(dumpX, dumpZ, boundary) or
+        TCJoyriderRuts.getDistanceToBoundary(dumpX, dumpZ, boundary) < TCJoyriderRuts.DUMP_DEPTH[1] - 0.01 then
+        return nil
+    end
+
+    -- The van comes in from outside, a little off square to the edge.
+    local inward = math.atan2(nx, nz) + (random() * 2 - 1) * TCJoyriderRuts.DUMP_ANGLE_SPREAD
+    local length = depth + TCJoyriderRuts.DUMP_APPROACH
+    local startX, startZ = dumpX - math.sin(inward) * length, dumpZ - math.cos(inward) * length
+    local points = {}
+    local steps = math.max(1, math.ceil(length / TCJoyriderRuts.STEP))
+    for i = 0, steps do
+        local t = i / steps
+        local px, pz = startX + (dumpX - startX) * t, startZ + (dumpZ - startZ) * t
+        table.insert(points, { x = px, z = pz, heading = inward, curvature = 0,
+            inside = TCJoyriderRuts.isPointInside(px, pz, boundary) })
+    end
+    return { x = dumpX, z = dumpZ, heading = inward, depth = depth, edgeX = x, edgeZ = z, points = points }
+end
+
+-- Where a fly-tipper dumps on this field: { x, z, heading, depth, edgeX,
+-- edgeZ, points } - the spot, the van's heading coming in, how far in it
+-- is from the edge it came over, where it crossed that edge, and its path
+-- from outside to the spot (generatePath's point shape). By the gate
+-- (gateX, gateZ, may be nil) if that works, else a random stretch of edge.
+-- nil if nowhere on the field will do. random is for the tests.
+function TCJoyriderRuts.planDumpSite(boundary, gateX, gateZ, random)
+    random = random or math.random
+    if boundary == nil or #boundary < 3 then
+        return nil
+    end
+    if gateX ~= nil then
+        local site = tryDumpSpot(boundary, gateX, gateZ, random)
+        if site ~= nil then
+            return site
+        end
+    end
+    for _ = 1, TCJoyriderRuts.DUMP_TRIES do
+        local edgeX, edgeZ = getRandomEdgePoint(boundary, random)
+        local site = tryDumpSpot(boundary, edgeX, edgeZ, random)
+        if site ~= nil then
+            return site
+        end
+    end
+    return nil
+end
+
+-- The churned-up square under the pile, as one paint piece (see
+-- getTrackPieces), square to the van's heading.
+function TCJoyriderRuts.getDumpPatchPiece(site)
+    local half = TCJoyriderRuts.DUMP_PATCH_SIZE / 2
+    local dx, dz = math.sin(site.heading), math.cos(site.heading)
+    local nx, nz = dz, -dx
+    local sx, sz = site.x - dx * half - nx * half, site.z - dz * half - nz * half
+    return { sx, sz, sx + nx * 2 * half, sz + nz * 2 * half, sx + dx * 2 * half, sz + dz * 2 * half, site.heading }
+end
+
 -- Painting (server) -----------------------------------------------------------
 
 -- The field's boundary as { {x, z}, ... }, from its polygon nodes.
@@ -579,6 +712,41 @@ local function paintPiece(piece, style, maxAngle)
         FSDensityMapUtil.updateCultivatorArea(sx, sz, wx, wz, hx, hz, false, true, angle, nil, false, true)
     end
     FSDensityMapUtil.clearDecoArea(sx, sz, wx, wz, hx, hz)
+end
+
+-- 075: plans a fly-tipping dump site on the field (planDumpSite) and paints
+-- the van's ruts in from the edge and the churned patch under the pile.
+-- Returns the site, or nil if it can't (not the server, no boundary,
+-- nowhere suitable).
+function TCJoyriderRuts.paintDumpSite(field, random)
+    if not g_currentMission:getIsServer() or field == nil then
+        return nil
+    end
+    local boundary = TCJoyriderRuts.getFieldBoundary(field)
+    local gateX, gateZ = nil, nil
+    if field.getTeleportPosition ~= nil then
+        gateX, gateZ = field:getTeleportPosition()
+    end
+    local site = TCJoyriderRuts.planDumpSite(boundary, gateX, gateZ, random)
+    if site == nil then
+        return nil
+    end
+
+    local style = TCJoyriderRuts.DEFAULT_STYLE
+    local maxAngle = g_currentMission.fieldGroundSystem:getGroundAngleMaxValue()
+    local tracks = TCJoyriderRuts.getWheelTracks(site.points)
+    local pieceCount = 0
+    for _, track in ipairs({ tracks.left, tracks.right }) do
+        for _, piece in ipairs(TCJoyriderRuts.getTrackPieces(track, boundary)) do
+            paintPiece(piece, style, maxAngle)
+            pieceCount = pieceCount + 1
+        end
+    end
+    paintPiece(TCJoyriderRuts.getDumpPatchPiece(site), style, maxAngle)
+
+    Logging.info("TheContractor: fly-tipping site on field %s: %.1f m in from the edge at (%.0f, %.0f), %d rut pieces",
+        tostring(field:getId()), site.depth, site.edgeX, site.edgeZ, pieceCount)
+    return site
 end
 
 -- Tears up the field. Returns { length, insideLength, pieces, coverage,

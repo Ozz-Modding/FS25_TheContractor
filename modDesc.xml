@@ -22,6 +22,7 @@
     <placeableSpecializations>
         <specialization name="tcParkingSlot" className="PlaceableTCParkingSlot" filename="src/placeables/PlaceableTCParkingSlot.lua" />
         <specialization name="tcStandingSpot" className="PlaceableTCStandingSpot" filename="src/placeables/PlaceableTCStandingSpot.lua" />
+        <specialization name="tcDisposalSkip" className="PlaceableTCDisposalSkip" filename="src/placeables/PlaceableTCDisposalSkip.lua" />
     </placeableSpecializations>
     <placeableTypes>
         <type name="tcParkingSlot" parent="placeable" className="Placeable" filename="$dataS/scripts/placeables/Placeable.lua">
@@ -32,12 +33,17 @@
             <specialization name="placement" />
             <specialization name="tcStandingSpot" />
         </type>
+        <type name="tcDisposalSkip" parent="placeable" className="Placeable" filename="$dataS/scripts/placeables/Placeable.lua">
+            <specialization name="placement" />
+            <specialization name="tcDisposalSkip" />
+        </type>
     </placeableTypes>
     <storeItems>
         <storeItem xmlFilename="xml/parkingSlot.xml" />
         <storeItem xmlFilename="xml/parkingSlotMedium.xml" />
         <storeItem xmlFilename="xml/parkingSlotLarge.xml" />
         <storeItem xmlFilename="xml/standingSpot.xml" />
+        <storeItem xmlFilename="xml/disposalSkip.xml" />
     </storeItems>
 
     <constructionCategories>

@@ -39,6 +39,7 @@
 		<text name="tc_inbox_equipmentHeading" text="Equipment needed"/>
 		<text name="tc_inbox_fieldValue" text="%s (%s)"/>
 		<text name="tc_inbox_skillValue" text="%s %d"/>
+		<text name="tc_inbox_skillNone" text="N/A"/>
 		<text name="tc_inbox_crewOne" text="1 worker, or yourself"/>
 		<text name="tc_inbox_crewHaul" text="2 workers (one harvesting, one hauling), or harvest and haul it all yourself"/>
 		<text name="tc_inbox_crewPlayerOnly" text="Yourself only - workers can't do this job"/>
@@ -71,6 +72,7 @@
 		<text name="tc_equipment_need_implement_hoe" text="Hoe"/>
 		<text name="tc_equipment_need_implement_stonePick" text="Stone picker"/>
 		<text name="tc_equipment_need_baleTransport" text="Whatever you move bales with (bale loader, trailer, front loader)"/>
+		<text name="tc_equipment_need_disposalSkip" text="A disposal skip to carry the pieces to (Contractor tab of the construction menu)"/>
 		<text name="tc_detail_age" text="Age"/>
 		<text name="tc_detail_workSpeed" text="Work speed"/>
 		<text name="tc_detail_tiers" text="Tractors"/>
@@ -167,6 +169,7 @@
 		<text name="tc_jobType_baleWrap" text="Wrap Bales"/>
 		<text name="tc_jobType_baleHaul" text="Bale &amp; Deliver"/>
 		<text name="tc_jobType_strawDelivery" text="Deliver Straw"/>
+		<text name="tc_jobType_flyTipping" text="Clear Fly-tipping"/>
 		<text name="tc_jobType_fertilize" text="Fertilize"/>
 		<text name="tc_jobType_herbicide" text="Spray Herbicide"/>
 		<text name="tc_jobType_weed" text="Weed"/>
@@ -197,6 +200,7 @@
 		<text name="tc_inbox_chipClaim" text="Claim"/>
 		<text name="tc_inbox_chipTheft" text="Theft"/>
 		<text name="tc_inbox_chipJoyriders" text="Vandalism"/>
+		<text name="tc_inbox_chipFlyTipping" text="Fly-tipping"/>
 		<text name="tc_inbox_chipGoodNews" text="Good news"/>
 		<text name="tc_inbox_chipLegal" text="Legal"/>
 		<text name="tc_inbox_chipTraining" text="Training"/>
@@ -257,6 +261,8 @@
 		<text name="finance_tcInsurancePayout" text="Insurance payouts"/>
 		<text name="tc_moneyType_goodNews" text="Refunds and rebates"/>
 		<text name="finance_tcGoodNews" text="Refunds and rebates"/>
+		<text name="tc_moneyType_wasteDisposal" text="Tipping fees"/>
+		<text name="finance_tcWasteDisposal" text="Tipping fees"/>
 		<text name="tc_staff_viewRoster" text="Roster"/>
 		<text name="tc_staff_viewCandidates" text="Candidates"/>
 		<text name="tc_staff_columnName" text="Name"/>
@@ -348,6 +354,8 @@
 		<text name="tc_parkingSlot_function" text="Marks a parking space for equipment coming back from contract jobs, facing the arrow. Only visible in the construction menu."/>
 		<text name="tc_standingSpot_name" text="Standing Spot"/>
 		<text name="tc_standingSpot_function" text="Somewhere for one of your staff to stand while they've nothing on, facing the arrow. Only visible in the construction menu."/>
+		<text name="tc_disposalSkip_name" text="Disposal Skip"/>
+		<text name="tc_disposalSkip_function" text="Where fly-tipped junk from a clearing job goes. Drop each piece in or right next to it and it's taken away. Every piece from a job costs a small tipping fee."/>
 		<text name="tc_inbox_chipParking" text="Parking"/>
 		<text name="tc_parking_sendToShopButton" text="Send to shop"/>
 		<text name="tc_parking_messageTitle" text="Machines waiting for parking"/>
@@ -570,6 +578,9 @@
 		<text name="tc_jobNews_stepsUp_title" text="A worker steps up"/>
 		<text name="tc_jobNews_stepsUp_body" text="Something finally clicked for %s on Field %s. Their %s is up to %s, and they're feeling more confident."/>
 		<text name="tc_joyriders_sowBody" text="The farmer was pleased with the plowing on Field %s and has offered you the job of sowing it back to grass."/>
+		<text name="tc_flyTipping_eventName" text="Fly-tipping"/>
+		<text name="tc_flyTipping_offerTitle" text="Fly-tipping on Field %s"/>
+		<text name="tc_flyTipping_offerBody" text="Someone has dumped a load of junk just inside the gate of Field %s, %s pieces in all. The farmer wants it cleared and has offered you the job. Carry each piece to a disposal skip (from the Contractor tab of the construction menu) and drop it there."/>
 		<text name="tc_overheads_priceLevel" text="%s cover: %s"/>
 		<text name="tc_overheads_levelSwitching" text="%s (%s cover from renewal)"/>
 		<text name="tc_overheads_priceFrom" text="From %s a year paid annually, or %s a month"/>

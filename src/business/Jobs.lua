@@ -240,6 +240,7 @@ function TheContractorJobs:proposeCounterOffer(farmId, jobId, counterPrice)
     elseif outcome == TheContractorNegotiation.OUTCOME.REJECTED or roundCapHit or eagernessBottomedOut then
         outcome = TheContractorNegotiation.OUTCOME.REJECTED
         job:transitionTo(TheContractorJob.STATE.DECLINED)
+        self:onJobDeclined(job)
     else
         job:setPrice(resultPrice)
     end
@@ -273,7 +274,18 @@ function TheContractorJobs:transitionJobState(farmId, jobId, newState)
         g_server:broadcastEvent(TCJobStateChangedEvent.new(farmId, jobId, newState))
     end
 
+    if newState == TheContractorJob.STATE.DECLINED then
+        self:onJobDeclined(job)
+    end
+
     return true
+end
+
+-- Server: an offer turned down, run out or walked away from in negotiation.
+-- Anything laid out for it before it was even taken (075's fly-tipped pile)
+-- goes - the farmer has found someone else.
+function TheContractorJobs:onJobDeclined(job)
+    TCFieldPreparation.clearUpAfterJob(job)
 end
 
 -- Server-only, for the tcJob state console command: like
@@ -758,6 +770,10 @@ end
 -- its reputationPerHa already says so.
 function TheContractorJobs.getBaseReputationReward(job)
     local jobDef = TheContractorJobGeneration.JOB_TYPES[job.jobType]
+    -- 075: a job paid per piece earns per piece too.
+    if jobDef ~= nil and jobDef.reputationPerItem ~= nil then
+        return jobDef.reputationPerItem * (job.workTotal or 0)
+    end
     local field = g_fieldManager:getFieldById(job.fieldId)
     local areaHa = field ~= nil and field:getAreaHa() or 1
     local reputationPerHa = jobDef ~= nil and TheContractorJobGeneration.getReputationPerHa(jobDef) or 0
@@ -1202,6 +1218,16 @@ function TheContractorJobs:loadFromXMLFile(xmlFile)
                 table.insert(job.spawnedBaleIds, getXMLString(xmlFile, baleKey .. "#uniqueId"))
                 baleIndex = baleIndex + 1
             end
+            local debrisIndex = 0
+            while true do
+                local debrisKey = string.format("%s.debris(%d)", jobKey, debrisIndex)
+                if not hasXMLProperty(xmlFile, debrisKey) then
+                    break
+                end
+                table.insert(job.debrisIds, getXMLString(xmlFile, debrisKey .. "#uniqueId"))
+                debrisIndex = debrisIndex + 1
+            end
+            job.debrisDisposed = Utils.getNoNil(getXMLInt(xmlFile, jobKey .. "#debrisDisposed"), 0)
 
             self.jobsByFarm[farmId] = self.jobsByFarm[farmId] or {}
             self.jobsByFarm[farmId][id] = job
@@ -1287,6 +1313,12 @@ function TheContractorJobs:saveToXmlFile(xmlFile)
             end
             for i, uniqueId in ipairs(job.spawnedBaleIds) do
                 setXMLString(xmlFile, string.format("%s.spawnedBale(%d)#uniqueId", jobKey, i - 1), uniqueId)
+            end
+            for i, uniqueId in ipairs(job.debrisIds) do
+                setXMLString(xmlFile, string.format("%s.debris(%d)#uniqueId", jobKey, i - 1), uniqueId)
+            end
+            if job.debrisDisposed > 0 then
+                setXMLInt(xmlFile, jobKey .. "#debrisDisposed", job.debrisDisposed)
             end
 
             if job.assignedWorkerId ~= nil then

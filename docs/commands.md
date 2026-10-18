@@ -428,13 +428,14 @@ Seeds:
 
 ### `tcCompany event <type>`
 
-Makes a random event happen to your farm now, ignoring the odds, the Random events setting and the event type's cooldown. It still needs something to act on (a theft needs a vehicle that can be stolen, joyriders a grass field outside winter), and says so if there isn't anything. It starts the event's cooldown like a real one. `<type>` is the event type's key, case-insensitive. With no type, or an unknown one, it lists the ones there are.
+Makes a random event happen to your farm now, ignoring the odds, the Random events setting and the event type's cooldown. It still needs something to act on (a theft needs a vehicle that can be stolen, joyriders a grass field outside winter, fly-tipping an NPC's field with no job on it), and says so if there isn't anything. It starts the event's cooldown like a real one. `<type>` is the event type's key, case-insensitive. With no type, or an unknown one, it lists the ones there are.
 
 The events that happen as a job ends (`kettle`, `paidEarly`, `stepsUp`) use your latest completed job they can act on, whatever its quality score: one with hired workers for `kettle`, one whose invoice isn't due yet for `paidEarly` (so none with the late invoices setting off), and one with a worker rated 5 or under for their part of it for `stepsUp`.
 
 ```
 tcCompany event theft
 tcCompany event joyriders
+tcCompany event flyTipping
 tcCompany event goodNews
 tcCompany event kettle
 tcCompany event paidEarly
@@ -462,3 +463,16 @@ Decides how the next police report on a stolen vehicle comes out, instead of the
 tcCompany event theft
 tcCompany theftRecover recovered
 ```
+
+### `tcCompany debris [count] [prop]`
+
+Drops a pile of loose debris about 4 m in front of you, the same props fly-tipping (075) dumps, for testing props the player can pick up and carry by hand. Debris from here belongs to no job: a disposal skip takes it away free. Every piece weighs 10 kg. `[count]` defaults to 8 (at most 50). Without `[prop]` each piece is a random prop; name one to spawn only that: `barrel`, `pipe`, `bicycle`, `board`, `cardboard`, `sawhorse`, `trashCan`, `trashCan2`, `wheelBarrow`, `chair`, `ladder`, `grill`, `stool`, `pitchFork`, `crate`, `crate2`, `crate3`, or `bakeryBox` (a vanilla prop already built to move, never picked at random, used to check whether a prop's collision is the problem). An unknown prop lists them. The pieces are saved with the savegame. Needs a local player, so it doesn't work from a dedicated server's console.
+
+```
+tcCompany debris
+tcCompany debris 20 ladder
+```
+
+### `tcCompany debrisClear`
+
+Removes every piece of debris from the map.

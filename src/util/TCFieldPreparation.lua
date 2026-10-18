@@ -167,6 +167,20 @@ local function deleteSpawnedBales(job)
     job.spawnedBaleIds = {}
 end
 
+-- 075: whatever's left of a fly-tipping job's pile.
+local function deleteDebris(job)
+    if job.debrisIds == nil or #job.debrisIds == 0 then
+        return
+    end
+    for _, uniqueId in ipairs(job.debrisIds) do
+        local debris = g_currentMission.itemSystem:getItemByUniqueId(uniqueId)
+        if debris ~= nil then
+            debris:delete()
+        end
+    end
+    job.debrisIds = {}
+end
+
 local function getJobFruitTypeIndex(job)
     if job.jobType == "tedder" or job.jobType == "baleWrap" then
         return FruitType.GRASS
@@ -365,6 +379,13 @@ function TCFieldPreparation.prepareFieldForJob(job)
         return false
     end
 
+    -- 075: a fly-tipping job is the pile already lying there, nothing to
+    -- do to the field (and its workTotal is the pile's size, set at
+    -- creation).
+    if jobDef.rewardPerItem ~= nil then
+        return true
+    end
+
     -- Anything left from an earlier go (a re-prepare after a load mid-spawn).
     deleteSpawnedBales(job)
     job.workTotal = nil
@@ -445,7 +466,8 @@ end
 -- delivered, wherever it is); for a baling job, the bales our baler left
 -- on the field - ours, of the job's crop, lying on the job's farmland. The
 -- client keeps the crop, the same way harvest jobs' grain is carted away
--- (TCHaulage). Called on completion and on a miss alike.
+-- (TCHaulage). Called on completion and on a miss alike, and (075) when an
+-- offer is declined or runs out, which takes a fly-tipped pile away again.
 function TCFieldPreparation.clearUpAfterJob(job)
     if not g_currentMission:getIsServer() then
         return
@@ -453,6 +475,7 @@ function TCFieldPreparation.clearUpAfterJob(job)
 
     spawningJobIds[job.id] = nil
     deleteSpawnedBales(job)
+    deleteDebris(job)
     if job.jobType == "bale" then
         TCFieldPreparation.removeBaledCrop(job)
     end

@@ -415,3 +415,82 @@ test("a client or a field with no boundary paints nothing", function()
     assertEquals(TCJoyriderRuts.paintField(empty, nil, seeded(1)), nil)
     assertEquals(#world.painted, 0)
 end)
+
+-- 075: fly-tipping's dump site ------------------------------------------------
+
+test("the dump site is 4-7 m straight in from the edge by the gate, the van coming in from outside", function()
+    load()
+    local field = rectangle(0, 0, 100, 60)
+    local site = TCJoyriderRuts.planDumpSite(field, -5, 30, seeded(4))
+    assertTrue(site ~= nil)
+    assertNear(site.edgeX, 0, 1e-6)
+    assertNear(site.edgeZ, 30, 1e-6)
+    assertTrue(site.depth >= 4 and site.depth <= 7)
+    assertNear(site.x, site.depth, 1e-6)
+    assertNear(site.z, 30, 1e-6)
+
+    local first, last = site.points[1], site.points[#site.points]
+    assertTrue(not first.inside, "starts outside the field")
+    assertNear(last.x, site.x, 1e-6)
+    assertNear(last.z, site.z, 1e-6)
+    assertTrue(math.abs(site.heading - math.pi / 2) <= TCJoyriderRuts.DUMP_ANGLE_SPREAD + 1e-6,
+        "roughly square to the edge, heading in")
+    for i = 2, #site.points do
+        local a, b = site.points[i - 1], site.points[i]
+        assertTrue(math.sqrt((b.x - a.x) ^ 2 + (b.z - a.z) ^ 2) <= TCJoyriderRuts.STEP + 1e-6)
+    end
+end)
+
+test("wherever it lands, the spot is 4-7 m from the nearest edge", function()
+    load()
+    local shapes = {
+        rectangle(0, 0, 100, 60),
+        rectangle(0, 0, 20, 300),
+        { { 0, 0 }, { 80, 0 }, { 80, 80 }, { 40, 30 }, { 0, 80 } }, -- a notch
+    }
+    for _, field in ipairs(shapes) do
+        for seed = 1, 40 do
+            -- By a corner, or no gate at all: random stretches of edge.
+            local gateX = seed % 2 == 0 and -1 or nil
+            local site = TCJoyriderRuts.planDumpSite(field, gateX, -1, seeded(seed))
+            assertTrue(site ~= nil)
+            assertTrue(TCJoyriderRuts.isPointInside(site.x, site.z, field))
+            local distance = distanceToEdge(site.x, site.z, field)
+            assertTrue(distance >= 4 - 0.01 and distance <= 7 + 0.01, "4-7 m in, got " .. distance)
+        end
+    end
+end)
+
+test("a field too thin for a spot that far in has no dump site", function()
+    load()
+    assertEquals(TCJoyriderRuts.planDumpSite(rectangle(0, 0, 6, 200), -1, 50, seeded(1)), nil)
+    assertEquals(TCJoyriderRuts.planDumpSite({}, 0, 0, seeded(1)), nil)
+end)
+
+test("painting a dump site: the ruts in, inside the field only, and the patch under the pile", function()
+    local world = load()
+    local boundary = rectangle(0, 0, 100, 60)
+    local field = setupPainting(world, boundary)
+    field.getTeleportPosition = function()
+        return -5, 30
+    end
+
+    local site = TCJoyriderRuts.paintDumpSite(field, seeded(4))
+    assertTrue(site ~= nil)
+    assertTrue(#world.painted >= 3, "two ruts and the patch")
+    for _, call in ipairs(world.painted) do
+        assertEquals(call.style, "cultivator")
+        assertEquals(call.createField, false)
+        local mx, mz = (call.wx + call.hx) / 2, (call.wz + call.hz) / 2
+        assertTrue(TCJoyriderRuts.isPointInside(mx, mz, boundary), "painted inside the field")
+    end
+    -- The patch is the last piece, centred on the spot.
+    local patch = world.painted[#world.painted]
+    assertNear((patch.wx + patch.hx) / 2, site.x, 1e-6)
+    assertNear((patch.wz + patch.hz) / 2, site.z, 1e-6)
+
+    g_currentMission.getIsServer = function()
+        return false
+    end
+    assertEquals(TCJoyriderRuts.paintDumpSite(field, seeded(4)), nil)
+end)
