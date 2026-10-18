@@ -380,6 +380,7 @@ function TheContractor:resolveSavedVehicles()
     self.Parking:resolveSavedVehicles()
     self.Theft:resolveSavedVehicles()
     self.CourtesyVehicle:resolveSavedVehicles()
+    TCVehicleLock.repairSavedTabbable()
 end
 
 -- Appended onto FSBaseMission.saveSavegame (see installSaveHook below), so

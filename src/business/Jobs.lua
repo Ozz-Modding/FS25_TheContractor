@@ -34,6 +34,13 @@ TheContractorJobs.MIN_COMPLETION_REPUTATION_REWARD = 1
 -- TCJobProgress) reaches this.
 TheContractorJobs.COMPLETION_THRESHOLD_PERCENTAGE = 100
 
+-- 076: that threshold leaves a strip unworked (vanilla's SUCCESS_FACTOR
+-- leniency), and players like to finish the field off. A player-driven
+-- job's field stays workable this long after it completes (TCFieldAccess),
+-- in real time while the game runs (mod updates stop while it's paused),
+-- and the bales the job leaves are only cleared up once it's over.
+TheContractorJobs.GRACE_PERIOD_MS = 10 * 60 * 1000
+
 -- Quality score (029), 0-100, set on completion (calculateQualityScore): a
 -- weighted blend of skill (the crew's qualification ratio, the same one
 -- that scales the reputation reward) and reliability (1 minus
@@ -66,6 +73,11 @@ function TheContractorJobs.new()
     -- itself actually refreshes, same reasoning 021's Watchdog already uses
     -- for its own check interval.
     self.completionCheckAccumulatedMs = 0
+
+    -- 076: jobId -> job for completed jobs still in their grace period, so
+    -- the countdown doesn't walk every job ever completed. Kept on every
+    -- machine (registerJob, loadFromXMLFile, completeJob).
+    self.graceJobs = {}
 
     MoneyType.TC_JOB_PAYOUT = MoneyType.register("tcJobPayout", "tc_moneyType_jobPayout")
     MoneyType.LAST_ID = MoneyType.LAST_ID + 1
@@ -187,6 +199,10 @@ function TheContractorJobs:registerJob(job, isNewArrival)
     if job.id >= self.nextJobId then
         self.nextJobId = job.id + 1
     end
+
+    -- 076: a client's copy is replaced by each snapshot, so this keeps the
+    -- countdown on the latest one.
+    self.graceJobs[job.id] = job.graceRemainingMs ~= nil and job or nil
 
     Logging.info("TheContractor: farm %d created job %d (%s)", job.farmId, job.id, job.jobType)
 
@@ -612,6 +628,8 @@ function TheContractorJobs:resolveLegacyDeadlines()
 end
 
 function TheContractorJobs:update(dt)
+    self:updateGracePeriods(dt)
+
     if not g_currentMission:getIsServer() then
         return
     end
@@ -627,6 +645,36 @@ function TheContractorJobs:update(dt)
     self.completionCheckAccumulatedMs = 0
 
     self:checkForCompletions()
+end
+
+-- Grace period (076) ---------------------------------------------------------
+
+-- A completed job the player drove themselves, with field work to finish
+-- off. A hired worker's machines go into their cooldown and out of sight,
+-- and a job with no equipment (a straw delivery, fly-tipping) has none.
+function TheContractorJobs.getsGracePeriod(job)
+    local jobDef = TheContractorJobGeneration.JOB_TYPES[job.jobType]
+    return #job:getWorkerIds() == 0 and jobDef ~= nil and not jobDef.noEquipment
+end
+
+-- Every machine counts down its own copy, so field access ends at about
+-- the same moment everywhere without an event. The server's count is the
+-- one saved and sent to joining clients, and only the server clears up.
+function TheContractorJobs:updateGracePeriods(dt)
+    for _, job in pairs(self.graceJobs) do
+        job.graceRemainingMs = job.graceRemainingMs - dt
+        if job.graceRemainingMs <= 0 then
+            self:endGracePeriod(job)
+        end
+    end
+end
+
+function TheContractorJobs:endGracePeriod(job)
+    job.graceRemainingMs = nil
+    self.graceJobs[job.id] = nil
+    if g_currentMission:getIsServer() then
+        TCFieldPreparation.clearUpAfterJob(job)
+    end
 end
 
 -- Also where a player-driven job's work start gets recorded (029): nothing
@@ -925,7 +973,15 @@ function TheContractorJobs:completeJob(job, isForced)
 
     TCJobProgress.clearJob(job.id)
     TCHaulage.stopDelivery(job)
-    TCFieldPreparation.clearUpAfterJob(job)
+    -- 076: the field stays workable for a while, and its bales stay with
+    -- it (endGracePeriod clears up). Set before the completion broadcast,
+    -- which carries it.
+    if TheContractorJobs.getsGracePeriod(job) then
+        job.graceRemainingMs = TheContractorJobs.GRACE_PERIOD_MS
+        self.graceJobs[job.id] = job
+    else
+        TCFieldPreparation.clearUpAfterJob(job)
+    end
     self:setJobSupplyStatus(job, nil, nil)
 
     Logging.info("TheContractor: farm %d job %d completed (%s, field %d) - billed %.0f, +%d reputation, %s taken, %.0f l fuel (%.0f), quality %d",
@@ -1022,6 +1078,9 @@ function TheContractorJobs.writeJob(streamId, job)
 
     -- 049. -1 stands in for "paid on completion".
     streamWriteInt32(streamId, job.invoiceDueDay or -1)
+
+    -- 076. -1 stands in for "no grace period".
+    streamWriteFloat32(streamId, job.graceRemainingMs or -1)
 end
 
 function TheContractorJobs.readJob(streamId)
@@ -1105,6 +1164,9 @@ function TheContractorJobs.readJob(streamId)
     local invoiceDueDay = streamReadInt32(streamId)
     job.invoiceDueDay = invoiceDueDay >= 0 and invoiceDueDay or nil
 
+    local graceRemainingMs = streamReadFloat32(streamId)
+    job.graceRemainingMs = graceRemainingMs >= 0 and graceRemainingMs or nil
+
     return job
 end
 
@@ -1132,6 +1194,7 @@ function TheContractorJobs:loadFromXMLFile(xmlFile)
     if not g_currentMission:getIsServer() then return end
 
     self.jobsByFarm = {}
+    self.graceJobs = {}
     self.nextJobId = 1
 
     local rootKey = string.format("%s.jobs", TheContractor.SaveKey)
@@ -1228,9 +1291,13 @@ function TheContractorJobs:loadFromXMLFile(xmlFile)
                 debrisIndex = debrisIndex + 1
             end
             job.debrisDisposed = Utils.getNoNil(getXMLInt(xmlFile, jobKey .. "#debrisDisposed"), 0)
+            job.graceRemainingMs = getXMLFloat(xmlFile, jobKey .. "#graceRemainingMs")
 
             self.jobsByFarm[farmId] = self.jobsByFarm[farmId] or {}
             self.jobsByFarm[farmId][id] = job
+            if job.graceRemainingMs ~= nil then
+                self.graceJobs[id] = job
+            end
 
             if id >= self.nextJobId then
                 self.nextJobId = id + 1
@@ -1319,6 +1386,9 @@ function TheContractorJobs:saveToXmlFile(xmlFile)
             end
             if job.debrisDisposed > 0 then
                 setXMLInt(xmlFile, jobKey .. "#debrisDisposed", job.debrisDisposed)
+            end
+            if job.graceRemainingMs ~= nil then
+                setXMLFloat(xmlFile, jobKey .. "#graceRemainingMs", job.graceRemainingMs)
             end
 
             if job.assignedWorkerId ~= nil then

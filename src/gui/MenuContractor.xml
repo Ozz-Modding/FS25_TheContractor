@@ -690,13 +690,6 @@
                 <!-- Highlighted overhead (051), in the same panel -->
                 <BoxLayout profile="tc_detailRows" id="financesOverheadRows" position="704px -84px" size="752px 200px">
                     <GuiElement profile="tc_detailRow" size="752px 34px">
-                        <Text profile="tc_detailLabel" text="$l10n_tc_overheads_status" position="0px 0px"/>
-                        <RoundCorner profile="tc_chip" id="financesOverheadStatusChip" position="220px -7px" size="110px 20px"/>
-                        <Text profile="tc_chipText" id="financesOverheadStatusChipText" position="220px -7px" size="110px 20px"/>
-                        <Text profile="tc_detailValue" id="financesOverheadStatusNote" text="" position="345px 0px" size="407px 34px"/>
-                        <Bitmap profile="tc_detailRowDivider"/>
-                    </GuiElement>
-                    <GuiElement profile="tc_detailRow" size="752px 34px">
                         <Text profile="tc_detailLabel" text="$l10n_tc_overheads_billing" position="0px 0px"/>
                         <Text profile="tc_detailValue" id="financesOverheadBilling" text="" position="220px 0px" size="532px 34px"/>
                         <Bitmap profile="tc_detailRowDivider"/>
@@ -711,9 +704,9 @@
                         <Text profile="tc_detailValue" id="financesOverheadNext" text="" position="220px 0px" size="532px 34px"/>
                         <Bitmap profile="tc_detailRowDivider"/>
                     </GuiElement>
-                    <GuiElement profile="tc_detailRowTall" size="752px 64px">
+                    <GuiElement profile="tc_detailRowTall" size="752px 98px">
                         <Text profile="tc_detailLabel" text="$l10n_tc_overheads_about" position="0px 0px"/>
-                        <Text profile="tc_detailValueTall" id="financesOverheadAbout" text="" position="220px -9px" size="532px 58px" textMaxNumLines="2"/>
+                        <Text profile="tc_detailValueTall" id="financesOverheadAbout" text="" position="220px -9px" size="532px 89px" textMaxNumLines="4"/>
                     </GuiElement>
                 </BoxLayout>
 

@@ -1,7 +1,7 @@
--- Grants a farm working access to the land under its own allocated/
--- in_progress jobs' fields. Contractor fields are by definition not owned by
--- the farm working them, and vanilla refuses to work land a farm can't
--- access - the AI Helper stops with "field not owned"/"no field found"
+-- Grants a farm working access to its own allocated/in_progress jobs'
+-- fields. Contractor fields are by definition not owned by the farm working
+-- them, and vanilla refuses to work land a farm can't access - the AI
+-- Helper stops with "field not owned"/"no field found"
 -- (FieldCourse.findClosestField), and implements' work areas simply don't
 -- change the ground (WorkArea:getIsAccessibleAtWorldPosition).
 --
@@ -12,22 +12,56 @@
 -- are disabled (DisableVanillaContracts.lua), so nothing else competes for
 -- it.
 --
--- Access is per farmland (the vanilla ownership unit), looked up from a
--- cache rebuilt every REFRESH_INTERVAL_MS rather than walking every job on
--- every call - work areas query this many times per frame. Every machine
--- runs its own refresh from its own synced job data, same as TCJobProgress.
+-- 076: as strict as a vanilla contract. Access is to the job's field alone
+-- (its polygon, not the whole farmland, which can hold other fields), and
+-- only for the work the job is for (JOB_TYPES' workAreaTypes, vanilla's
+-- AbstractFieldMission:getIsWorkAllowed). A check with no work area type
+-- (the AI finding its field, auto-steering) is allowed anywhere on the
+-- field, as in vanilla. A player-driven job keeps its access for a short
+-- while after it completes (TheContractorJobs.GRACE_PERIOD_MS), so the
+-- player can finish the strip the completion threshold left.
+--
+-- Looked up from a cache rebuilt every REFRESH_INTERVAL_MS rather than
+-- walking every job on every call - work areas query this many times per
+-- frame - with the cheap farmland lookup first and the polygon test only on
+-- a match. Every machine runs its own refresh from its own synced job data,
+-- same as TCJobProgress: clients check access too (WorkArea's
+-- getTypedNetworkAreas).
 
 TCFieldAccess = {}
 
 TCFieldAccess.REFRESH_INTERVAL_MS = 1000
 
--- farmId -> { farmlandId -> true }
-local farmlandsByFarm = {}
+-- farmId -> { { farmlandId, boundary = { {x, z}, ... }, workAreaTypes = { [type] = true } }, ... }
+local sitesByFarm = {}
 local accumulatedMs = 0
 
 function TCFieldAccess.reset()
-    farmlandsByFarm = {}
+    sitesByFarm = {}
     accumulatedMs = 0
+end
+
+-- Allocated, in progress, or completed and still in its grace period.
+function TCFieldAccess.isJobWorkable(job)
+    local state = job.state
+    if state == TheContractorJob.STATE.ALLOCATED or state == TheContractorJob.STATE.IN_PROGRESS then
+        return true
+    end
+    return state == TheContractorJob.STATE.COMPLETED and job.graceRemainingMs ~= nil
+end
+
+-- The job type's workAreaTypes as a set of WorkAreaType values. A name the
+-- game doesn't have is left out.
+function TCFieldAccess.getWorkAreaTypeSet(jobType)
+    local set = {}
+    local jobDef = TheContractorJobGeneration.JOB_TYPES[jobType]
+    for _, name in ipairs(jobDef ~= nil and jobDef.workAreaTypes or {}) do
+        local workAreaType = WorkAreaType[name]
+        if workAreaType ~= nil then
+            set[workAreaType] = true
+        end
+    end
+    return set
 end
 
 function TCFieldAccess.refresh()
@@ -39,17 +73,21 @@ function TCFieldAccess.refresh()
     local result = {}
     for _, farm in ipairs(g_farmManager:getFarms()) do
         for _, job in ipairs(tc.Jobs:getAllJobs(farm.farmId)) do
-            if job.state == TheContractorJob.STATE.ALLOCATED or job.state == TheContractorJob.STATE.IN_PROGRESS then
+            if TCFieldAccess.isJobWorkable(job) then
                 local field = g_fieldManager:getFieldById(job.fieldId)
                 local farmland = field ~= nil and field:getFarmland() or nil
                 if farmland ~= nil then
                     result[farm.farmId] = result[farm.farmId] or {}
-                    result[farm.farmId][farmland.id] = true
+                    table.insert(result[farm.farmId], {
+                        farmlandId = farmland.id,
+                        boundary = TCJoyriderRuts.getFieldBoundary(field),
+                        workAreaTypes = TCFieldAccess.getWorkAreaTypeSet(job.jobType),
+                    })
                 end
             end
         end
     end
-    farmlandsByFarm = result
+    sitesByFarm = result
 end
 
 function TCFieldAccess.update(dt)
@@ -62,14 +100,24 @@ function TCFieldAccess.update(dt)
     TCFieldAccess.refresh()
 end
 
-function TCFieldAccess.isJobSiteAt(farmId, x, z)
-    local farmlands = farmlandsByFarm[farmId]
-    if farmlands == nil then
+function TCFieldAccess.isJobSiteAt(farmId, x, z, workAreaType)
+    local sites = sitesByFarm[farmId]
+    if sites == nil then
         return false
     end
 
     local farmlandId = g_farmlandManager:getFarmlandIdAtWorldPosition(x, z)
-    return farmlandId ~= nil and farmlands[farmlandId] == true
+    if farmlandId == nil then
+        return false
+    end
+
+    for _, site in ipairs(sites) do
+        if site.farmlandId == farmlandId and (workAreaType == nil or site.workAreaTypes[workAreaType]) and
+            TCJoyriderRuts.isPointInside(x, z, site.boundary) then
+            return true
+        end
+    end
+    return false
 end
 
 -- Class-level patch, same as DisableVanillaContracts' - MissionManager
@@ -81,6 +129,6 @@ if MissionManager.tcOriginalGetIsMissionWorkAllowed == nil then
         if MissionManager.tcOriginalGetIsMissionWorkAllowed(self, farmId, x, z, workAreaType, vehicle) then
             return true
         end
-        return TCFieldAccess.isJobSiteAt(farmId, x, z)
+        return TCFieldAccess.isJobSiteAt(farmId, x, z, workAreaType)
     end
 end

@@ -16,7 +16,7 @@ local function setup()
     localDirectionToWorld = function(node) return 0, 0, 1 end
     MathUtil = { getYRotationFromDirection = function(dx, dz) return math.atan2(dx, dz) end }
 
-    g_currentMission.environment = { currentMonotonicDay = 1 }
+    g_currentMission.environment = { currentMonotonicDay = 1, dayTime = 12 * 3600000 }
     g_currentMission.placeableSystem = { placeables = {} }
     g_currentMission.TheContractor.Staff = { workersByFarm = {} }
     return world
@@ -168,4 +168,20 @@ test("a sold spot drops out", function()
     assertTrue(TCIdleStaff.getWanted()[1] ~= nil, "standing while the spot's there")
     spot.markedForDeletion = true
     assertEquals(TCIdleStaff.getWanted()[1], nil)
+end)
+
+test("staff are only about during working hours", function()
+    setup()
+    addSpot(1, 0, 0)
+    addWorker(1, 1, TheContractorWorker.STATUS.IDLE)
+    local environment = g_currentMission.environment
+    local function at(hour, minute)
+        environment.dayTime = (hour * 60 + minute) * 60000
+        return TCIdleStaff.getWanted()[1] ~= nil
+    end
+    assertTrue(not at(6, 59), "before 07:00")
+    assertTrue(at(7, 0), "from 07:00")
+    assertTrue(at(18, 59), "until 19:00")
+    assertTrue(not at(19, 0), "gone home at 19:00")
+    assertTrue(not at(0, 0), "midnight")
 end)

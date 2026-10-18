@@ -1,7 +1,8 @@
 -- TCVehicleLock: equipment away on a hired-worker job (travelling, working
 -- or on hold), in a cooldown, waiting to be parked or stolen can't be sold.
 -- The server refuses the SellVehicleEvent with vanilla's "in use" reply;
--- anything else sells as normal.
+-- anything else sells as normal. It also drops out of the Tab cycle without
+-- vanilla's saved isTabbable flag changing.
 
 local STATE = { ALLOCATED = "allocated", IN_PROGRESS = "in_progress", COMPLETED = "completed" }
 
@@ -145,6 +146,71 @@ test("idle equipment, a player's own job and a finished job's sell as normal", f
 
     assertEquals(#world.sold, 3, "all sold")
     assertEquals(#world.replies, 0, "vanilla replies itself")
+end)
+
+-- Tab cycle ------------------------------------------------------------------
+
+-- A Drivable, Enterable vehicle with vanilla's flag and the xml's default.
+local function addEnterable(world, name, def)
+    def = def or {}
+    local vehicle = world:addVehicle({ name = name, farmId = def.farmId })
+    vehicle.spec_drivable = {}
+    vehicle.spec_enterable = { isTabbable = def.isTabbable ~= false }
+    function vehicle:registerPlayerVehicleControlAllowedFunction() end
+    function vehicle:getIsTabbable() return self.spec_enterable.isTabbable end
+    function vehicle:setIsTabbable(isTabbable) self.spec_enterable.isTabbable = isTabbable end
+    local xmlTabbable = def.xmlTabbable ~= false
+    vehicle.xmlFile = { getValue = function(_, key, default) return xmlTabbable end }
+    return vehicle
+end
+
+test("a hired worker's tractor drops out of Tab without touching the saved flag", function()
+    local world = setup()
+    local tractor = addEnterable(world, "Tractor")
+    local job = addJob(world, STATE.ALLOCATED, 7, { tractor })
+    TCVehicleLock.refresh()
+
+    assertEquals(tractor:getIsTabbable(), false, "locked: not tabbable")
+    assertEquals(tractor.spec_enterable.isTabbable, true, "vanilla's saved flag untouched")
+
+    job.state = STATE.COMPLETED
+    TCVehicleLock.refresh()
+    assertEquals(tractor:getIsTabbable(), true, "tabbable again")
+end)
+
+test("a player's own job's tractor stays tabbable", function()
+    local world = setup()
+    local tractor = addEnterable(world, "Tractor")
+    addJob(world, STATE.IN_PROGRESS, nil, { tractor })
+    TCVehicleLock.refresh()
+
+    assertEquals(tractor:getIsTabbable(), true, "tabbable")
+end)
+
+test("a vehicle that's never tabbable stays that way after a lock", function()
+    local world = setup()
+    local odd = addEnterable(world, "Odd", { isTabbable = false, xmlTabbable = false })
+    local job = addJob(world, STATE.ALLOCATED, 7, { odd })
+    TCVehicleLock.refresh()
+    job.state = STATE.COMPLETED
+    TCVehicleLock.refresh()
+
+    assertEquals(odd:getIsTabbable(), false, "still not tabbable")
+end)
+
+test("a save from the old lock gets its farm's machines back in Tab", function()
+    local world = setup()
+    FarmManager = FarmManager or {}
+    FarmManager.SPECTATOR_FARM_ID = 15
+    local baked = addEnterable(world, "Baked", { isTabbable = false })
+    local alwaysOff = addEnterable(world, "Always off", { isTabbable = false, xmlTabbable = false })
+    local yard = addEnterable(world, "Yard", { isTabbable = false, farmId = 15 })
+
+    TCVehicleLock.repairSavedTabbable()
+
+    assertEquals(baked.spec_enterable.isTabbable, true, "farm's machine repaired")
+    assertEquals(alwaysOff.spec_enterable.isTabbable, false, "xml says never")
+    assertEquals(yard.spec_enterable.isTabbable, false, "not the farm's: left alone")
 end)
 
 -- The client's half (the server's reply arriving) is vanilla's business.

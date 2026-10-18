@@ -491,7 +491,6 @@
 		<text name="tc_overheads_heading" text="Overhead"/>
 		<text name="tc_overheads_columnName" text="Overhead"/>
 		<text name="tc_overheads_columnStatus" text="Status"/>
-		<text name="tc_overheads_status" text="Status"/>
 		<text name="tc_overheads_billing" text="Billing"/>
 		<text name="tc_overheads_price" text="Price"/>
 		<text name="tc_overheads_nextCharge" text="Next charge"/>
@@ -515,6 +514,7 @@
 		<text name="tc_overheads_priceQuote" text="%s a year paid annually, or %s a month"/>
 		<text name="tc_overheads_nextChargeLine" text="%s, %s"/>
 		<text name="tc_overheads_nextChargeNone" text="None"/>
+		<text name="tc_overheads_nextChargeWithNote" text="%s. %s"/>
 		<text name="tc_overheads_enableAnnualButton" text="Take out (annual)"/>
 		<text name="tc_overheads_enableMonthlyButton" text="Take out (monthly)"/>
 		<text name="tc_overheads_cancelButton" text="Cancel policy"/>

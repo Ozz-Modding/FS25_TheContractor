@@ -4,13 +4,15 @@
 -- stolen (069), can't be tabbed to or driven. A player
 -- self-allocated job is never locked - the player is the one driving it.
 --
--- Technique from the user's FS25_UsedEquipmentYards mod
--- (UsedEquipmentYards.applyClientRestrictions): Enterable:setIsTabbable(false)
--- to drop it from the Tab cycle, and a Drivable player-control-allowed
--- function to refuse control. Unlike UEY's, our control function checks the
--- lock live, so it's registered once per vehicle and never needs removing
--- (UEY clears the whole playerControlAllowedFunctions table to undo it,
--- which would also drop anyone else's).
+-- Adapted from the user's FS25_UsedEquipmentYards mod
+-- (UsedEquipmentYards.applyClientRestrictions): the vehicle's own
+-- getIsTabbable is wrapped to drop it from the Tab cycle, and a Drivable
+-- player-control-allowed function refuses control. Both check the lock live,
+-- so they're installed once per vehicle and never need removing (UEY clears
+-- the whole playerControlAllowedFunctions table to undo it, which would also
+-- drop anyone else's). Never Enterable:setIsTabbable: vanilla saves that flag
+-- with the vehicle, so a machine saved while locked came back un-tabbable for
+-- good (repairSavedTabbable heals saves from before this).
 --
 -- Both are local per-machine state, never networked, so every machine
 -- derives the locked set itself from its own synced job/cooldown data every
@@ -25,14 +27,12 @@ TCVehicleLock.REFRESH_INTERVAL_MS = 1000
 
 -- vehicleId -> true
 local lockedVehicleIds = {}
--- vehicleId -> the vehicle's own isTabbable before we locked it
-local originalTabbableById = {}
 local controlFunctionRegistered = setmetatable({}, { __mode = "k" })
+local tabbableWrapped = setmetatable({}, { __mode = "k" })
 local accumulatedMs = 0
 
 function TCVehicleLock.reset()
     lockedVehicleIds = {}
-    originalTabbableById = {}
     accumulatedMs = 0
 end
 
@@ -48,7 +48,7 @@ local function isPlayerControlAllowed(vehicle)
     return true
 end
 
-local function applyLock(vehicleId, isLocked)
+local function applyLock(vehicleId)
     local vehicle = NetworkUtil.getObject(vehicleId)
     if vehicle == nil then
         return
@@ -59,13 +59,35 @@ local function applyLock(vehicleId, isLocked)
         controlFunctionRegistered[vehicle] = true
     end
 
-    if vehicle.setIsTabbable ~= nil then
-        if isLocked then
-            originalTabbableById[vehicleId] = vehicle:getIsTabbable()
-            vehicle:setIsTabbable(false)
-        else
-            vehicle:setIsTabbable(originalTabbableById[vehicleId] ~= false)
-            originalTabbableById[vehicleId] = nil
+    if vehicle.getIsTabbable ~= nil and not tabbableWrapped[vehicle] then
+        local getIsTabbable = vehicle.getIsTabbable
+        vehicle.getIsTabbable = function(self, ...)
+            if TCVehicleLock.isLocked(self) then
+                return false
+            end
+            return getIsTabbable(self, ...)
+        end
+        tabbableWrapped[vehicle] = true
+    end
+end
+
+-- Older versions locked through setIsTabbable(false), which vanilla saved
+-- with the vehicle, so a farm's machine saved mid-job loads un-tabbable for
+-- good. Puts back the vehicle xml's own isTabbable on farm-owned vehicles
+-- (not spectator/NPC ones, which other mods may hide on purpose). Server,
+-- once, before any client streams the flag in (resolveSavedVehicles).
+function TCVehicleLock.repairSavedTabbable()
+    if g_currentMission.vehicleSystem == nil then
+        return
+    end
+    local spectatorFarmId = FarmManager ~= nil and FarmManager.SPECTATOR_FARM_ID or nil
+    for _, vehicle in ipairs(g_currentMission.vehicleSystem.vehicles) do
+        local spec = vehicle.spec_enterable
+        local farmId = vehicle.getOwnerFarmId ~= nil and vehicle:getOwnerFarmId() or 0
+        if spec ~= nil and spec.isTabbable == false and vehicle.xmlFile ~= nil and
+                farmId ~= 0 and farmId ~= spectatorFarmId and
+                vehicle.xmlFile:getValue("vehicle.enterable#isTabbable", true) then
+            spec.isTabbable = true
         end
     end
 end
@@ -112,15 +134,10 @@ function TCVehicleLock.refresh()
         return
     end
 
+    -- Every time, not just newly locked ones: a client may not have the
+    -- vehicle streamed in yet. Installing is once per vehicle anyway.
     for vehicleId in pairs(shouldLock) do
-        if not lockedVehicleIds[vehicleId] then
-            applyLock(vehicleId, true)
-        end
-    end
-    for vehicleId in pairs(lockedVehicleIds) do
-        if not shouldLock[vehicleId] then
-            applyLock(vehicleId, false)
-        end
+        applyLock(vehicleId)
     end
 
     lockedVehicleIds = shouldLock
