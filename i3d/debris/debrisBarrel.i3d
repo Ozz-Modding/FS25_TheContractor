@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="iso-8859-1"?>
+
+<i3D name="debrisBarrel.i3d" version="1.6" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://i3d.giants.ch/schema/i3d-1.6.xsd">
+  <Asset>
+    <Export program="GIANTS Editor 64bit" version="10.0.13"/>
+  </Asset>
+
+  <Files>
+    <File fileId="5" filename="$data/maps/textures/shared/props/motorex/motorexDecal_diffuse.png"/>
+    <File fileId="3" filename="$data/shared/default_normal.png"/>
+  </Files>
+
+
+  <Materials>
+    <Material name="lambert1" materialId="5" diffuseColor="0.501961 0.501961 0.501961 1">
+    </Material>
+    <Material name="motorexDecal_mat" materialId="7" specularColor="0.74902 1 0">
+      <Texture fileId="5"/>
+      <Normalmap fileId="3"/>
+    </Material>
+    <Material name="paintBarrel_mat" materialId="6" diffuseColor="0 0.396078 0.305882 1" specularColor="0.74902 1 0">
+      <Normalmap fileId="3"/>
+    </Material>
+  </Materials>
+
+
+  <Shapes externalShapesFile="debrisBarrel.i3d.shapes">
+  </Shapes>
+
+  <Scene>
+    <Shape name="motorexOilBarrel" shapeId="1" dynamic="true" collisionFilterMask="0xfe3ffb83" density="0.22" nodeId="12" castsShadows="true" receiveShadows="true" nonRenderable="true" materialIds="5">
+      <Shape name="vis" shapeId="2" clipDistance="150" nodeId="13" castsShadows="true" receiveShadows="true" materialIds="6"/>
+      <Shape name="decal" shapeId="3" clipDistance="65" nodeId="14" castsShadows="false" receiveShadows="true" decalLayer="1" materialIds="7"/>
+    </Shape>
+  </Scene>
+
+</i3D>

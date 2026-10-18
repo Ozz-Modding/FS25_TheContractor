@@ -77,6 +77,12 @@ TheContractorJobGeneration_mt = Class(TheContractorJobGeneration)
 --                    bale in vanilla (rewardPerBale 300), turned into a
 --                    per-hectare figure by getRewardPerHa. estimatePrice
 --                    layers reputation and skill on top (026).
+--   rewardPerItem    075: paid per piece rather than per hectare (fly-tipping,
+--                    see estimatePrice's itemCount), with reputationPerItem
+--                    in place of reputationPerHa.
+-- A type left out of JOB_TYPE_KEYS (flyTipping) is never generated, shown
+-- by the availability snapshot or created by tcJob: only its random event
+-- (075) makes one, with createJobOnField.
 -- reputationPerHa is the completion reputation reward per hectare (see
 -- TheContractorJobs:calculateReputationReward): plow anchored at ~10 for a
 -- 1.07 ha (2.65 acre) field, the rest scaled from it by the same ratios as
@@ -116,6 +122,11 @@ TheContractorJobGeneration.JOB_TYPES = {
         reputationPerHa = 5.1, skill = "cropCare" },
     stonePick = { implementSpec = "spec_stonePicker", vanillaMission = StonePickMission, seasonRule = "noWinter",
         requiresStones = true, rewardPerHa = 2200, reputationPerHa = 7.5, skill = "tillage" },
+    -- 075: clearing a fly-tipped pile by hand. A piece pays what a bale
+    -- wrap's bale does, and earns about the reputation that pay would on
+    -- a plow job (REPUTATION_PER_REWARD).
+    flyTipping = { serverMeasured = true, playerOnly = true, noEquipment = true, rewardPerItem = 300,
+        reputationPerItem = 1 },
 }
 TheContractorJobGeneration.JOB_TYPE_KEYS = { "harvest", "cultivate", "sow", "plow", "mow", "tedder", "bale",
     "baleWrap", "strawDelivery", "fertilize", "herbicide", "weed", "hoe", "stonePick" }
@@ -378,8 +389,9 @@ end
 -- why it needs the work (vanilla's plow rules turn down standing grass,
 -- say) - but it's dated, priced and flagged like any offer. No haulage.
 -- sameMonth keeps the deadline in the current month (see getDeadlineDay).
+-- itemCount prices a job paid per piece (075's rewardPerItem).
 -- Returns the job, or nil if it can't be dated (getDeadlineDay).
-function TheContractorJobGeneration:createJobOnField(farmId, jobType, field, sameMonth)
+function TheContractorJobGeneration:createJobOnField(farmId, jobType, field, sameMonth, itemCount)
     local jobDef = TheContractorJobGeneration.JOB_TYPES[jobType]
     if jobDef == nil or field == nil then
         return nil
@@ -393,7 +405,7 @@ function TheContractorJobGeneration:createJobOnField(farmId, jobType, field, sam
     local fruitTypeName = jobDef.recordsCrop and TheContractorJobGeneration.getFieldFruitTypeName(field) or nil
     local equipmentAvailable = self:canFulfill(farmId, jobDef,
         TheContractorJobGeneration.getFruitTypeIndexByName(fruitTypeName))
-    local price = self:estimatePrice(field, jobDef, farmId, requiredSkillLevel, nil)
+    local price = self:estimatePrice(field, jobDef, farmId, requiredSkillLevel, nil, itemCount)
 
     local environment = g_currentMission.environment
     return g_currentMission.TheContractor.Jobs:createJob(farmId, jobType, field:getId(), requiredSkillLevel,
@@ -850,11 +862,15 @@ end
 -- (rewardPerHa * areaHa * (1.3 - 0.1 * economicDifficulty)), then layers in
 -- reputation, required skill and a small random spread (see the pricing
 -- constants above). A straw delivery (067) swaps rewardPerHa * areaHa for
--- getStrawDeliveryReward to its deliveryStation.
-function TheContractorJobGeneration:estimatePrice(field, jobDef, farmId, requiredSkillLevel, deliveryStation)
+-- getStrawDeliveryReward to its deliveryStation, and a job paid per piece
+-- (075's rewardPerItem) rewardPerItem * itemCount.
+function TheContractorJobGeneration:estimatePrice(field, jobDef, farmId, requiredSkillLevel, deliveryStation,
+                                                  itemCount)
     local difficultyMultiplier = 1.3 - 0.1 * g_currentMission.missionInfo.economicDifficulty
     local reward
-    if jobDef.deliveryOnly then
+    if jobDef.rewardPerItem ~= nil then
+        reward = jobDef.rewardPerItem * (itemCount or 0)
+    elseif jobDef.deliveryOnly then
         reward = TheContractorJobGeneration.getStrawDeliveryReward(field, deliveryStation)
     else
         reward = TheContractorJobGeneration.getRewardPerHa(jobDef) * (field:getAreaHa() or 1)

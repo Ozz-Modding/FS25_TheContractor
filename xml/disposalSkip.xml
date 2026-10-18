@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8" standalone="no" ?>
+<!--
+    075 disposal skip: where fly-tipped debris from a clearing job is taken
+    (src/placeables/PlaceableTCDisposalSkip.lua). The base game's industrial
+    garbage container with its own static collision, plus a trigger box
+    around it (Static + Trigger, mask DYNAMIC_OBJECT): a piece of debris
+    dropped in or next to it disappears and counts towards its job.
+    The trigger box is the root's last child, added in GIANTS Editor.
+-->
+<placeable type="FS25_TheContractor.tcDisposalSkip">
+    <storeData>
+        <name>$l10n_tc_disposalSkip_name</name>
+        <functions>
+            <function>$l10n_tc_disposalSkip_function</function>
+        </functions>
+        <image>images/store/disposalSkip.dds</image>
+        <price>500</price>
+        <dailyUpkeep>0</dailyUpkeep>
+        <lifetime>1000</lifetime>
+        <rotation>0</rotation>
+        <brand>NONE</brand>
+        <species>PLACEABLE</species>
+        <category>misc</category>
+        <canBeSold>true</canBeSold>
+        <showInStore>true</showInStore>
+
+        <brush>
+            <type>placeable</type>
+            <category>buildings</category>
+            <tab>contractor</tab>
+        </brush>
+    </storeData>
+
+    <base>
+        <filename>i3d/disposalSkip.i3d</filename>
+        <canBeRenamed>false</canBeRenamed>
+        <boughtWithFarmland>false</boughtWithFarmland>
+    </base>
+
+    <placement useRandomYRotation="false" useManualYRotation="true">
+        <testAreas>
+            <testArea startNode="testAreaStart" endNode="testAreaEnd" />
+        </testAreas>
+        <sounds>
+            <place template="smallImp" />
+        </sounds>
+    </placement>
+
+    <disposalSkip triggerNode="disposalTrigger" />
+
+    <i3dMappings>
+        <i3dMapping id="disposalSkip" node="0>" />
+        <i3dMapping id="visualLod" node="0>0" />
+        <i3dMapping id="collision" node="0>1" />
+        <i3dMapping id="testAreaStart" node="0>2|0" />
+        <i3dMapping id="testAreaEnd" node="0>2|0|0" />
+        <i3dMapping id="disposalTrigger" node="0>3" />
+    </i3dMappings>
+</placeable>

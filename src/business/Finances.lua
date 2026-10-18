@@ -82,7 +82,7 @@ TheContractorFinances.KEEP_SETTLED_PERIODS = 12
 TheContractorFinances.FORECAST_PERIODS = 3
 
 TheContractorFinances.YEAR_STAT_KEYS = { "invoiced", "received", "writtenOff", "wages", "overheads", "claims",
-    "legal", "training", "fines", "insurancePayouts", "goodNews" }
+    "legal", "training", "fines", "insurancePayouts", "goodNews", "disposal" }
 
 function TheContractorFinances.new()
     local self = {}
@@ -93,7 +93,8 @@ function TheContractorFinances.new()
     self.nextInvoiceId = 1
 
     -- yearStatsByFarm[farmId] = { year, invoiced, received, writtenOff, wages,
-    -- overheads, claims, legal, training, fines, insurancePayouts, goodNews }
+    -- overheads, claims, legal, training, fines, insurancePayouts, goodNews,
+    -- disposal }
     self.yearStatsByFarm = {}
 
     return self
@@ -151,7 +152,7 @@ function TheContractorFinances:getYearStats(farmId)
     if stats == nil or stats.year ~= g_currentMission.environment.currentYear then
         return { year = g_currentMission.environment.currentYear, invoiced = 0, received = 0, writtenOff = 0, wages = 0,
             overheads = 0, claims = 0, legal = 0, training = 0, fines = 0, insurancePayouts = 0,
-            goodNews = 0 }
+            goodNews = 0, disposal = 0 }
     end
     return stats
 end
@@ -556,6 +557,11 @@ end
 -- Refunds and rebates from good news stories (073).
 function TheContractorFinances:recordGoodNews(farmId, amount)
     self:addToYearStats(farmId, "goodNews", amount)
+end
+
+-- Tipping fees for fly-tipped debris taken to a skip (075).
+function TheContractorFinances:recordDisposal(farmId, amount)
+    self:addToYearStats(farmId, "disposal", amount)
 end
 
 -- Wire serialization ---------------------------------------------------------

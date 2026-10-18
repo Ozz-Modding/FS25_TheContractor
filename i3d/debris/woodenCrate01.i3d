@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="iso-8859-1"?>
+
+<i3D name="woodenCrate01.i3d" version="1.6" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://i3d.giants.ch/schema/i3d-1.6.xsd">
+  <Asset>
+    <Export program="GIANTS Editor 64bit" version="10.0.13"/>
+  </Asset>
+
+  <Files>
+    <File fileId="2" filename="$data/maps/mapUS/textures/props/vintageTools/woodenCrate01_diffuse.png"/>
+    <File fileId="3" filename="$data/maps/mapUS/textures/props/vintageTools/woodenCrate01_normal.png"/>
+    <File fileId="4" filename="$data/maps/mapUS/textures/props/vintageTools/woodenCrate01_specular.png"/>
+  </Files>
+
+
+  <Materials>
+    <Material name="lambert1" materialId="5" diffuseColor="0.501961 0.501961 0.501961 1">
+    </Material>
+    <Material name="woodenCrate01_mat" materialId="6">
+      <Texture fileId="2"/>
+      <Normalmap fileId="3"/>
+      <Glossmap fileId="4"/>
+    </Material>
+  </Materials>
+
+
+  <Shapes externalShapesFile="woodenCrate01.i3d.shapes">
+  </Shapes>
+
+  <Scene>
+    <Shape name="col" shapeId="1" dynamic="true" collisionFilterMask="0xfe3ffb83" density="0.22" nodeId="11" castsShadows="true" receiveShadows="true" nonRenderable="true" materialIds="5">
+      <TransformGroup name="woodenCrate01" lodDistance="0 5" clipDistance="30" nodeId="12">
+        <Shape name="LOD0" shapeId="2" nodeId="13" castsShadows="true" receiveShadows="true" materialIds="6"/>
+        <Shape name="LOD1" shapeId="3" nodeId="14" castsShadows="true" receiveShadows="true" materialIds="6"/>
+      </TransformGroup>
+    </Shape>
+  </Scene>
+
+</i3D>

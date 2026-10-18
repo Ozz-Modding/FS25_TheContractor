@@ -214,11 +214,16 @@ function TheContractorJob.new(id, farmId, jobType, fieldId, requiredSkillLevel, 
     -- is measured against, set once its field has been prepared at
     -- allocation - litres of windrow spawned (tedder/bale), weed area at the
     -- start (weed/hoe), bales spawned (bale wrap, straw delivery). nil
-    -- until then.
+    -- until then. 075: a fly-tipping job's pile size, set at creation.
     self.workTotal = nil
     -- Bale wrap and straw delivery only (server-only, saved): uniqueIds of
     -- the bales spawned for the job, removed again once it's over.
     self.spawnedBaleIds = {}
+    -- 075, fly-tipping only (server-only, saved): item uniqueIds of the
+    -- pile's pieces still out there (a piece taken to a skip comes off),
+    -- and how many have been taken. workTotal is the pile's size.
+    self.debrisIds = {}
+    self.debrisDisposed = 0
 
     -- 032: why work is on hold for supplies, or nil - "noStock" (the farm
     -- is out of what the job's equipment needs) or "wrongFill" (a tank

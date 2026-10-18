@@ -1843,8 +1843,12 @@ function MenuContractor:updateInboxDetails()
     self.inboxDetailTargetDate:setText(formatTargetDate(job.targetPeriod, job.targetDayInPeriod))
     self.inboxDetailPrice:setText(g_i18n:formatMoney(job:getPrice(), 0, true, true))
     self.inboxDetailCrew:setText(self:getJobCrewText(job))
-    setChip(self.inboxDetailSkillChip, self.inboxDetailSkillChipText, string.format(
-        g_i18n:getText("tc_inbox_skillValue"), job:getOperationSkillText() or "-", job.requiredSkillLevel), "info")
+    -- 075: a job type with no operation skill (fly-tipping, carried by
+    -- hand) has no level to meet either.
+    local skillText = job:getOperationSkillText()
+    setChip(self.inboxDetailSkillChip, self.inboxDetailSkillChipText, skillText ~= nil and string.format(
+        g_i18n:getText("tc_inbox_skillValue"), skillText, job.requiredSkillLevel) or
+        g_i18n:getText("tc_inbox_skillNone"), "info")
     -- Harvest & haul (035): the hauler is judged on haulage, to the same level.
     -- There's no hauler on a job only the player does (067's bales).
     local hasHauler = job.includesHaulage and not TheContractorJobGeneration.isPlayerOnly(job)
@@ -1959,9 +1963,11 @@ function MenuContractor:getInboxEquipmentRows(job, missingFree, haulageMissingFr
     end
 
     -- 067: a straw delivery needs nothing in particular - whatever the
-    -- player moves bales with. One unchecked row says so.
+    -- player moves bales with. One unchecked row says so. 075: fly-tipping
+    -- is carried by hand to a skip.
     if jobDef.noEquipment then
-        table.insert(rows, { key = "baleTransport", isHaulage = false, isUnchecked = true })
+        local key = jobDef.rewardPerItem ~= nil and "disposalSkip" or "baleTransport"
+        table.insert(rows, { key = key, isHaulage = false, isUnchecked = true })
         return rows
     end
 
@@ -3525,7 +3531,8 @@ function MenuContractor:refreshFinanceYearState(farmId, finances)
     self.financesYearWrittenOff:setText(formatMoney(stats.writtenOff))
     -- 054: training courses share the wages row, for the same reason as below.
     self.financesYearWages:setText(formatMoney(stats.wages + (stats.training or 0)))
-    self.financesYearOverheads:setText(formatMoney(stats.overheads or 0))
+    -- 075: tipping fees share the overheads row.
+    self.financesYearOverheads:setText(formatMoney((stats.overheads or 0) + (stats.disposal or 0)))
     -- 053/055: solicitors' fees and H&S fines share the claims row - there's
     -- no room for another.
     -- 070: as is what insurers paid back.
