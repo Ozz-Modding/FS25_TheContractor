@@ -1315,10 +1315,28 @@ function TheContractorStaff:growWorker(farmId, workerId, tier, skill)
     end
 
     worker.growthPotential = worker.growthPotential - 1
+    self:raiseWorkerStat(farmId, worker, stat, value)
+end
+
+-- 074: one point on a stat (a tier rating or operation skill) that doesn't
+-- come out of growthPotential - a worker stepping up. Returns the new value,
+-- or nil if the stat's already at its maximum.
+function TheContractorStaff:boostWorker(farmId, workerId, stat)
+    local worker = self:getWorker(farmId, workerId)
+    local oldValue = worker ~= nil and worker:getStat(stat) or nil
+    if oldValue == nil or oldValue >= TheContractorWorker.MAX_SKILL then
+        return nil
+    end
+    self:raiseWorkerStat(farmId, worker, stat, oldValue + 1)
+    return oldValue + 1
+end
+
+-- Sets a grown stat and tells everyone. A tier reaching the threshold
+-- qualifies them on the next one up too, for the same point (see
+-- GROWTH_WEIGHTS above).
+function TheContractorStaff:raiseWorkerStat(farmId, worker, stat, value)
     self:announceGrowth(farmId, worker, stat, value)
 
-    -- A tier reaching the threshold qualifies them on the next one up too,
-    -- for the same point (see GROWTH_WEIGHTS above).
     local nextTier = TheContractorStaff.getNextTier(stat)
     if nextTier ~= nil and value >= TheContractorStaff.CERTIFY_THRESHOLD and not worker:isCapableOfTier(nextTier) then
         self:announceGrowth(farmId, worker, nextTier, TheContractorStaff.CERTIFY_START_RATING)

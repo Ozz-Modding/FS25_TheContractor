@@ -430,10 +430,15 @@ Seeds:
 
 Makes a random event happen to your farm now, ignoring the odds, the Random events setting and the event type's cooldown. It still needs something to act on (a theft needs a vehicle that can be stolen, joyriders a grass field outside winter), and says so if there isn't anything. It starts the event's cooldown like a real one. `<type>` is the event type's key, case-insensitive. With no type, or an unknown one, it lists the ones there are.
 
+The events that happen as a job ends (`kettle`, `paidEarly`, `stepsUp`) use your latest completed job they can act on, whatever its quality score: one with hired workers for `kettle`, one whose invoice isn't due yet for `paidEarly` (so none with the late invoices setting off), and one with a worker rated 5 or under for their part of it for `stepsUp`.
+
 ```
 tcCompany event theft
 tcCompany event joyriders
 tcCompany event goodNews
+tcCompany event kettle
+tcCompany event paidEarly
+tcCompany event stepsUp
 ```
 
 ### `tcCompany goodNews [story]`
@@ -447,7 +452,7 @@ tcCompany goodNews supplierRefund
 
 ### `tcCompany events`
 
-Lists every random event type with its odds for your farm (a month and a day, after the Random events setting) and any cooldown left, then your farm's open incidents: the stage each one is at, the day it moves on (or "waiting" if it's waiting on something else, like a reply in the inbox), when it started and the event's own details. Read-only, so it also works on a joined client.
+Lists every random event type with its odds for your farm (a month and a day, after the Random events setting; for an event that happens as a job ends, the chance on each completed job and the quality score it needs) and any cooldown left, then your farm's open incidents: the stage each one is at, the day it moves on (or "waiting" if it's waiting on something else, like a reply in the inbox), when it started and the event's own details. Read-only, so it also works on a joined client.
 
 ### `tcCompany theftRecover <recovered|lost>`
 

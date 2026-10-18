@@ -318,3 +318,150 @@ test("the console forces an event and lists them", function()
     assertTrue(list:find("cooling down for 12 more month") ~= nil, list)
     assertTrue(list:find("#1 dummy, stage 'report' until day") ~= nil, list)
 end)
+
+-- Job events (074) ------------------------------------------------------------------
+
+-- A job event type: canTrigger takes jobs on field 2 or up only, unless overridden.
+local function registerJobEvent(randomEvents, key, overrides)
+    local log = {}
+    local definition = {
+        chancePerJob = 0.1,
+        minJobQuality = 75,
+        cooldownPeriods = 2,
+        canTrigger = function(farmId, job)
+            if job.fieldId < 2 then
+                return nil
+            end
+            return { jobId = job.id }
+        end,
+        stages = {
+            { key = "announce", run = function(incident)
+                table.insert(log, incident.data.jobId)
+                return TheContractorRandomEvents.DONE
+            end },
+        },
+    }
+    for name, value in pairs(overrides or {}) do
+        definition[name] = value
+    end
+    randomEvents:registerEventType(key, definition)
+    return log
+end
+
+local function setupJobs(world)
+    TheContractorJob = { STATE = { COMPLETED = "completed" } }
+    world.jobs = {}
+    g_currentMission.TheContractor.Jobs = {
+        getJobsByState = function(_, farmId, state)
+            local result = {}
+            for _, job in ipairs(world.jobs) do
+                if job.farmId == farmId and job.state == state then
+                    table.insert(result, job)
+                end
+            end
+            return result
+        end,
+    }
+    function world:addCompletedJob(id, fieldId, qualityScore, completedAt)
+        local job = { id = id, farmId = 1, fieldId = fieldId, qualityScore = qualityScore,
+            completedAt = completedAt or id, state = "completed" }
+        table.insert(self.jobs, job)
+        return job
+    end
+end
+
+-- A fake math.random: rolls (0-1) come from the list, picks take the first.
+local function rolls(list)
+    local index = 0
+    return function(low, high)
+        if low ~= nil then
+            return low
+        end
+        index = index + 1
+        return list[index] or 1
+    end
+end
+
+test("a job event is rolled on completion, not daily", function()
+    local world, randomEvents = setup(1)
+    setupJobs(world)
+    local log = registerJobEvent(randomEvents, "kettle")
+
+    randomEvents:rollNewEvents()
+    assertEquals(#randomEvents:getIncidents(1), 0, "never in the daily roll")
+
+    local job = world:addCompletedJob(1, 5, 80)
+    assertEquals(randomEvents:onJobCompleted(job, rolls({ 0.2 })), nil, "missed the 10% roll")
+    local incident = randomEvents:onJobCompleted(job, rolls({ 0.05 }))
+    assertTrue(incident ~= nil, "hit")
+    assertEquals(log[1], 1, "for that job")
+    assertEquals(randomEvents:getCooldownLeft(1, "kettle"), 2, "cooldown started")
+    assertEquals(randomEvents:onJobCompleted(job, rolls({ 0 })), nil, "cooling down")
+end)
+
+test("a job event needs the quality score and the setting", function()
+    local world, randomEvents = setup(1)
+    setupJobs(world)
+    registerJobEvent(randomEvents, "kettle")
+
+    assertEquals(randomEvents:onJobCompleted(world:addCompletedJob(1, 5, 74), rolls({ 0 })), nil, "74% is too low")
+    assertEquals(randomEvents:onJobCompleted(world:addCompletedJob(2, 5, nil), rolls({ 0 })), nil, "no score")
+
+    g_currentMission.TheContractor.Settings:set("randomEvents", 0)
+    assertEquals(randomEvents:onJobCompleted(world:addCompletedJob(3, 5, 100), rolls({ 0 })), nil, "off")
+
+    g_currentMission.TheContractor.Settings:set("randomEvents", 0.5)
+    assertNear(TheContractorRandomEvents.getJobChance(0.1, 0.5), 0.05, 1e-9, "rare halves it")
+    assertEquals(randomEvents:onJobCompleted(world:addCompletedJob(4, 5, 75), rolls({ 0.07 })), nil,
+        "0.07 misses at rare")
+    assertTrue(randomEvents:onJobCompleted(world:addCompletedJob(5, 5, 75), rolls({ 0.04 })) ~= nil, "75% is enough")
+end)
+
+test("one job event per job, the next hit if the first has nothing to act on", function()
+    local world, randomEvents = setup(1)
+    setupJobs(world)
+    local firstLog = registerJobEvent(randomEvents, "first", {
+        canTrigger = function()
+            return nil
+        end,
+    })
+    local secondLog = registerJobEvent(randomEvents, "second")
+    local thirdLog = registerJobEvent(randomEvents, "third")
+
+    local incident = randomEvents:onJobCompleted(world:addCompletedJob(1, 5, 90), rolls({ 0, 0, 0 }))
+    assertEquals(incident.eventType, "second", "first had nothing, so the next")
+    assertEquals(#firstLog + #secondLog + #thirdLog, 1, "only one")
+    assertEquals(randomEvents:getCooldownLeft(1, "first"), 0, "no cooldown for the one with nothing")
+    assertEquals(randomEvents:getCooldownLeft(1, "third"), 0, "nor the one that didn't happen")
+end)
+
+test("forced with no job, a job event takes the latest completed job it can", function()
+    local world, randomEvents = setup(1)
+    setupJobs(world)
+    local log = registerJobEvent(randomEvents, "kettle")
+    world:addCompletedJob(1, 5, 50, 100)
+    world:addCompletedJob(2, 1, 90, 300)
+    world:addCompletedJob(3, 7, 90, 200)
+
+    local incident = randomEvents:triggerEvent(1, "kettle")
+    assertTrue(incident ~= nil, "found one")
+    assertEquals(log[1], 3, "the latest canTrigger accepts (job 2's field is refused); quality isn't checked")
+
+    world.jobs = {}
+    local none, reason = randomEvents:triggerEvent(1, "kettle")
+    assertEquals(none, nil)
+    assertEquals(reason, "nothing to act on")
+end)
+
+test("the console lists a job event's odds per job", function()
+    local world, randomEvents = setup(5)
+    setupJobs(world)
+    registerJobEvent(randomEvents, "kettle")
+    TCConsole.reset()
+    TheContractorRandomEvents.registerConsoleCommands()
+    g_farmManager.getFarmByUserId = function()
+        return { farmId = 1 }
+    end
+    local list = TCConsole.dispatch(TCConsole.groups.company, { "events" })
+    assertTrue(list:find("kettle (kettle): 10.0% a completed job (quality 75%+)", 1, true) ~= nil, list)
+end)

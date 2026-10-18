@@ -123,6 +123,17 @@ function TheContractorFinances:getUnpaidInvoices(farmId)
     return result
 end
 
+-- The invoice for one of the farm's jobs, or nil (none kept with the
+-- lateInvoices setting off, or dropped from the save once settled).
+function TheContractorFinances:getInvoiceForJob(farmId, jobId)
+    for _, invoice in pairs(self.invoicesById) do
+        if invoice.farmId == farmId and invoice.jobId == jobId then
+            return invoice
+        end
+    end
+    return nil
+end
+
 -- Total of the farm's invoices with this status.
 function TheContractorFinances:getTotal(farmId, status)
     local total = 0

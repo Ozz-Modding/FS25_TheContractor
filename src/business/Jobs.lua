@@ -933,6 +933,10 @@ function TheContractorJobs:completeJob(job, isForced)
     if job.followOnSow then
         g_currentMission.TheContractor.Joyriders:onJobCompleted(job)
     end
+
+    -- 074: maybe a random event at the job's end (the kettle on, paid
+    -- early, a worker stepping up). Last, so it follows everything above.
+    g_currentMission.TheContractor.RandomEvents:onJobCompleted(job)
 end
 
 -- Wire serialization, shared by TCJobCreatedEvent and initial client state.
