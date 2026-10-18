@@ -50,7 +50,7 @@ function TCWorkerAppearance.rollGender()
     return TCWorkerAppearance.GENDER.MALE
 end
 
--- Rolling (server, or a client's edit preview - 066) -------------------------
+-- Rolling (server) ---------------------------------------------------------------
 
 local function pickRandom(list)
     if #list == 0 then
@@ -236,6 +236,39 @@ function TCWorkerAppearance.isValidLook(data, gender)
         end
     end
     return TCWorkerAppearance.toPlayerStyle(data) ~= nil
+end
+
+-- The gender of the model a look is on (077: in the wardrobe the gender
+-- follows the body picked), or `fallback` for a model that's gone or has
+-- no gender of ours.
+function TCWorkerAppearance.getGender(data, fallback)
+    local entry = data ~= nil and data.model ~= nil and PlayerSystem.PLAYER_STYLES_BY_FILENAME[data.model] or nil
+    if entry ~= nil and (entry.gender == TCWorkerAppearance.GENDER.MALE or
+            entry.gender == TCWorkerAppearance.GENDER.FEMALE) then
+        return entry.gender
+    end
+    return fallback
+end
+
+-- Whether two looks' data are the same look (077: back from the wardrobe
+-- with nothing changed).
+function TCWorkerAppearance.isSameLook(a, b)
+    if a == nil or b == nil then
+        return a == b
+    end
+    if a.model ~= b.model then
+        return false
+    end
+    for _, configName in ipairs(TCWorkerAppearance.CONFIG_NAMES) do
+        local savedA, savedB = a.configs[configName], b.configs[configName]
+        if (savedA == nil) ~= (savedB == nil) then
+            return false
+        end
+        if savedA ~= nil and (savedA.name ~= savedB.name or savedA.color ~= savedB.color) then
+            return false
+        end
+    end
+    return true
 end
 
 -- The worker's PlayerStyle, built once per machine and cached (nil if they

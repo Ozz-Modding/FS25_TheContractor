@@ -71,6 +71,10 @@ TCJobConsequences.WASH_CHANCE_MAX = 0.95
 -- In-game minutes to wash one fully dirty vehicle, cleanliness 1 to 10.
 TCJobConsequences.WASH_MAX_MINUTES = 40
 TCJobConsequences.WASH_MIN_MINUTES = 15
+-- Each other vehicle adds this many minutes per unit of its dirt, and a
+-- worker's whole wash is capped at WASH_CAP_MINUTES.
+TCJobConsequences.WASH_EXTRA_VEHICLE_MINUTES = 5
+TCJobConsequences.WASH_CAP_MINUTES = 30
 
 -- workerReports' wash outcome.
 TCJobConsequences.WASH = {
@@ -198,6 +202,15 @@ function TCJobConsequences.rollBreakdown(job, worker, vehicle, vehicleId, gap)
     return breakdownId
 end
 
+-- In-game minutes for one worker to wash their vehicles: the dirtiest one
+-- at the full per-vehicle rate (by cleanliness factor t), the rest's dirt
+-- at WASH_EXTRA_VEHICLE_MINUTES, capped at WASH_CAP_MINUTES.
+function TCJobConsequences.getWashMinutes(maxDirt, totalDirt, t)
+    local minutes = maxDirt * lerp(TCJobConsequences.WASH_MAX_MINUTES, TCJobConsequences.WASH_MIN_MINUTES, t)
+        + (totalDirt - maxDirt) * TCJobConsequences.WASH_EXTRA_VEHICLE_MINUTES
+    return math.min(TCJobConsequences.WASH_CAP_MINUTES, minutes)
+end
+
 -- Server-only, from TheContractorJobs:completeJob before the cooldown
 -- starts (it reads washMinutes) and before the completed job is broadcast
 -- (it carries workerReports).
@@ -259,13 +272,16 @@ function TCJobConsequences.applyOnCompletion(job)
                 local t = getCleanlinessFactor(worker)
                 local extraDirt = TCJobConsequences.MAX_EXTRA_DIRT * (1 - t)
                 local totalDirt = 0
+                local maxDirt = 0
                 local washableIds = {}
                 for _, entry in ipairs(vehicles) do
                     if entry.vehicle.spec_washable ~= nil then
                         if extraDirt > 0 then
                             entry.vehicle:addDirtAmount(extraDirt, true)
                         end
-                        totalDirt = totalDirt + entry.vehicle:getDirtAmount()
+                        local dirt = entry.vehicle:getDirtAmount()
+                        totalDirt = totalDirt + dirt
+                        maxDirt = math.max(maxDirt, dirt)
                         table.insert(washableIds, entry.id)
                     end
                 end
@@ -276,10 +292,9 @@ function TCJobConsequences.applyOnCompletion(job)
                     for _, vehicleId in ipairs(washableIds) do
                         table.insert(job.washVehicleIds, vehicleId)
                     end
-                    -- By how dirty it all is, summed over their vehicles.
+                    minutes = TCJobConsequences.getWashMinutes(maxDirt, totalDirt, t)
                     -- Each worker washes their own; the cooldown waits for
                     -- the slower one.
-                    minutes = totalDirt * lerp(TCJobConsequences.WASH_MAX_MINUTES, TCJobConsequences.WASH_MIN_MINUTES, t)
                     job.washMinutes = math.max(job.washMinutes, minutes)
                 else
                     report.wash = TCJobConsequences.WASH.UNWASHED

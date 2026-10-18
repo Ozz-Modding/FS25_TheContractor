@@ -42,6 +42,10 @@
         <storeItem xmlFilename="xml/parkingSlot.xml" />
         <storeItem xmlFilename="xml/parkingSlotMedium.xml" />
         <storeItem xmlFilename="xml/parkingSlotLarge.xml" />
+        <storeItem xmlFilename="xml/parkingSlotImplement.xml" />
+        <storeItem xmlFilename="xml/parkingSlotImplementMedium.xml" />
+        <storeItem xmlFilename="xml/parkingSlotImplementLarge.xml" />
+        <storeItem xmlFilename="xml/parkingSlotHarvester.xml" />
         <storeItem xmlFilename="xml/standingSpot.xml" />
         <storeItem xmlFilename="xml/disposalSkip.xml" />
     </storeItems>

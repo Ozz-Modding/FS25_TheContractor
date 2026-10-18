@@ -146,11 +146,15 @@ function TheContractorFinances:getTotal(farmId, status)
     return total
 end
 
--- This year's totals for the farm; zeros if nothing's happened this year.
+-- This calendar year's totals for the farm; zeros if nothing's happened
+-- this year. Keyed by the display year (TCCalendar.getDisplayYear), so they
+-- run January to December, not the game's March to February.
 function TheContractorFinances:getYearStats(farmId)
+    local environment = g_currentMission.environment
+    local year = TCCalendar.getDisplayYear(environment.currentYear, environment.currentPeriod)
     local stats = self.yearStatsByFarm[farmId]
-    if stats == nil or stats.year ~= g_currentMission.environment.currentYear then
-        return { year = g_currentMission.environment.currentYear, invoiced = 0, received = 0, writtenOff = 0, wages = 0,
+    if stats == nil or stats.year ~= year then
+        return { year = year, invoiced = 0, received = 0, writtenOff = 0, wages = 0,
             overheads = 0, claims = 0, legal = 0, training = 0, fines = 0, insurancePayouts = 0,
             goodNews = 0, disposal = 0 }
     end

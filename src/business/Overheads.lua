@@ -442,7 +442,7 @@ function TheContractorOverheads:postRenewalNotice(farmId, definition, state)
     local args = {
         "$l10n_" .. definition.l10nKey,
         "$l10n_" .. TCCalendar.getMonthTextKey(state.renewalPeriod),
-        TCCalendar.getYearOfPeriodIndex(state.renewalPeriod),
+        TCCalendar.getDisplayYearOfPeriodIndex(state.renewalPeriod),
         "$money_" .. TheContractorOverheads.getChargeAmount(state.quotedCost, TheContractorOverheads.BILLING.ANNUAL),
         "$money_" .. TheContractorOverheads.getChargeAmount(state.quotedCost, TheContractorOverheads.BILLING.MONTHLY),
         "$l10n_tc_overheads_billing_" .. TheContractorOverheads.getNextBilling(state),

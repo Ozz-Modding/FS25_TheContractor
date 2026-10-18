@@ -348,10 +348,16 @@
 		<text name="tc_allocation_cancelButton" text="Cancel"/>
 		<text name="tc_vehicleLock_busy" text="This vehicle is out on a contract job."/>
 		<text name="tc_construction_tab" text="Contractor"/>
-		<text name="tc_parkingSlot_name" text="Parking Slot"/>
-		<text name="tc_parkingSlotMedium_name" text="Parking Slot (Medium)"/>
-		<text name="tc_parkingSlotLarge_name" text="Parking Slot (Large)"/>
-		<text name="tc_parkingSlot_function" text="Marks a parking space for equipment coming back from contract jobs, facing the arrow. Only visible in the construction menu."/>
+		<text name="tc_parkingSlot_name" text="Vehicle Parking Slot"/>
+		<text name="tc_parkingSlotMedium_name" text="Vehicle Parking Slot (Medium)"/>
+		<text name="tc_parkingSlotLarge_name" text="Vehicle Parking Slot (Large)"/>
+		<text name="tc_parkingSlotImplement_name" text="Implement Parking Slot"/>
+		<text name="tc_parkingSlotImplementMedium_name" text="Implement Parking Slot (Medium)"/>
+		<text name="tc_parkingSlotImplementLarge_name" text="Implement Parking Slot (Large)"/>
+		<text name="tc_parkingSlotHarvester_name" text="Harvester Parking Slot"/>
+		<text name="tc_parkingSlotVehicle_function" text="Marks a parking space for vehicles (tractors, loaders, self-propelled machines) coming back from contract jobs, facing the arrow. Implements go in implement parking slots and harvesters in harvester parking slots. Only visible in the construction menu."/>
+		<text name="tc_parkingSlotHarvester_function" text="Marks a parking space for a self-propelled harvester (combine, forage or beet harvester) coming back from contract jobs, facing the arrow. Its header goes in an implement parking slot. Only visible in the construction menu."/>
+		<text name="tc_parkingSlotImplement_function" text="Marks a parking space for implements and trailers coming back from contract jobs, facing the arrow. Vehicles go in vehicle parking slots. Only visible in the construction menu."/>
 		<text name="tc_standingSpot_name" text="Standing Spot"/>
 		<text name="tc_standingSpot_function" text="Somewhere for one of your staff to stand while they've nothing on, facing the arrow. Only visible in the construction menu."/>
 		<text name="tc_disposalSkip_name" text="Disposal Skip"/>
@@ -359,9 +365,9 @@
 		<text name="tc_inbox_chipParking" text="Parking"/>
 		<text name="tc_parking_sendToShopButton" text="Send to shop"/>
 		<text name="tc_parking_messageTitle" text="Machines waiting for parking"/>
-		<text name="tc_parking_messageBody" text="These machines are back from a job, but none of your parking slots has room for them: %s. They'll be parked as soon as a slot is free. Place more parking slots from the construction menu, clear the ones you have, or send them to the shop."/>
+		<text name="tc_parking_messageBody" text="These machines are back from a job, but none of your parking slots of the right kind has room for them: %s. They'll be parked as soon as a slot is free. Harvesters go in harvester parking slots, other vehicles in vehicle parking slots, implements and trailers in implement parking slots. Place more from the construction menu, clear the ones you have, or send them to the shop."/>
 		<text name="tc_parking_returnedNotification" text="Back and parked: %s"/>
-		<text name="tc_parking_waitingNotification" text="No free parking space for %s. Place a parking slot or clear one."/>
+		<text name="tc_parking_waitingNotification" text="No free parking space for %s. Place a vehicle, implement or harvester parking slot to suit, or clear one."/>
 		<text name="tc_parking_shopFullNotification" text="No room at the shop for %s. Still waiting for a parking space."/>
 		<text name="tc_parking_allocationRefusedNotification" text="Couldn't allocate: %s is waiting for a parking space and there's no room at the shop to put it."/>
 		<text name="tc_parking_noticeOne" text="1 machine waiting for a free parking space"/>
@@ -471,7 +477,7 @@
 		<text name="tc_finances_forecastLine" text="Invoices %s, wages %s, overheads %s, net %s"/>
 		<text name="tc_finances_forecastNote" text="Invoices by due date, overdue ones not counted. Wages and overheads are charged at the start of each month."/>
 		<text name="tc_finances_salaryBillWithPension" text="%s a month (incl. %s pension)"/>
-		<text name="tc_finances_yearHeading" text="This year so far (Year %d)"/>
+		<text name="tc_finances_yearHeading" text="This calendar year (Year %d)"/>
 		<text name="tc_finances_invoiced" text="Invoiced"/>
 		<text name="tc_finances_received" text="Received"/>
 		<text name="tc_finances_writtenOff" text="Written off"/>
@@ -745,9 +751,10 @@
 		<text name="tc_editWorker_genderLabel" text="Gender"/>
 		<text name="tc_editWorker_gender_male" text="Male"/>
 		<text name="tc_editWorker_gender_female" text="Female"/>
-		<text name="tc_editWorker_genderHint" text="Changing gender rolls a new look."/>
+		<text name="tc_editWorker_genderHint" text="Follows the body picked in the wardrobe."/>
 		<text name="tc_editWorker_save" text="Save"/>
-		<text name="tc_editWorker_roll" text="Roll look"/>
+		<text name="tc_editWorker_wardrobe" text="Wardrobe"/>
+		<text name="tc_editWorker_lookRefused" text="That look can't be used for a worker, so their look hasn't changed."/>
 		<text name="tc_editWorker_rename" text="Rename"/>
 		<text name="tc_editWorker_renamePrompt" text="Enter a new name for this worker"/>
 		<text name="tc_editWorker_invalidName" text="A name must be between 1 and %d characters."/>

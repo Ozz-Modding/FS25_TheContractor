@@ -8,6 +8,15 @@
 -- clearArea/levelArea use (and FS22 UsedEquipmentYards' yard extension).
 -- Parked vehicles face from the start edge towards the height node.
 --
+-- Slot types: each store item is for one kind of machine, set by its xml's
+-- parkingSlot#slotType - "harvester" (a drivable machine with a Combine
+-- spec: combines, forage and beet harvesters), "vehicle" (anything else
+-- drivable: tractors, loaders, other self-propelled machines) or
+-- "implement" (everything else: trailers, tools, headers). Each of the three
+-- sizes comes as a vehicle and an implement slot, and there's one harvester
+-- slot. A slot only ever takes its own kind (TCParking.findSpot); an xml
+-- without the attribute is a vehicle slot.
+--
 -- Visuals: terrain decals under one node, so they follow slopes. They only
 -- show while the construction menu is open, on each machine by itself and
 -- never networked: here at load for a slot that appears while it's open (a
@@ -26,6 +35,12 @@ PlaceableTCParkingSlot = {}
 
 PlaceableTCParkingSlot.KEY = "tcParkingSlotData"
 
+PlaceableTCParkingSlot.SLOT_TYPE = {
+    VEHICLE = "vehicle",
+    IMPLEMENT = "implement",
+    HARVESTER = "harvester",
+}
+
 function PlaceableTCParkingSlot.prerequisitesPresent(specializations)
     return true
 end
@@ -38,6 +53,8 @@ function PlaceableTCParkingSlot.registerXMLPaths(schema, basePath)
         "Footprint height node (parked vehicles face this way)")
     schema:register(XMLValueType.NODE_INDEX, basePath .. ".parkingSlot#visualsNode",
         "Visuals shown only in the construction menu")
+    schema:register(XMLValueType.STRING, basePath .. ".parkingSlot#slotType",
+        "What the slot takes: 'vehicle' (drivable), 'implement' or 'harvester'", PlaceableTCParkingSlot.SLOT_TYPE.VEHICLE)
     schema:setXMLSpecializationType()
 end
 
@@ -52,7 +69,14 @@ function PlaceableTCParkingSlot:onLoad(savegame)
         widthNode = xmlFile:getValue("placeable.parkingSlot#widthNode", nil, self.components, self.i3dMappings),
         heightNode = xmlFile:getValue("placeable.parkingSlot#heightNode", nil, self.components, self.i3dMappings),
         visualsNode = xmlFile:getValue("placeable.parkingSlot#visualsNode", nil, self.components, self.i3dMappings),
+        slotType = PlaceableTCParkingSlot.SLOT_TYPE.VEHICLE,
     }
+    local slotType = xmlFile:getValue("placeable.parkingSlot#slotType")
+    if slotType == PlaceableTCParkingSlot.SLOT_TYPE.IMPLEMENT or slotType == PlaceableTCParkingSlot.SLOT_TYPE.HARVESTER then
+        data.slotType = slotType
+    elseif slotType ~= nil and slotType ~= PlaceableTCParkingSlot.SLOT_TYPE.VEHICLE then
+        Logging.xmlWarning(xmlFile, "Unknown parkingSlot#slotType '%s', using 'vehicle'", slotType)
+    end
     self[PlaceableTCParkingSlot.KEY] = data
 
     PlaceableTCParkingSlot.setVisualsVisible(self, g_currentMission.lastConstructionScreenOpenTime > -1)
@@ -60,6 +84,25 @@ end
 
 function PlaceableTCParkingSlot.isSlot(object)
     return type(object) == "table" and object[PlaceableTCParkingSlot.KEY] ~= nil
+end
+
+-- The slot's SLOT_TYPE.
+function PlaceableTCParkingSlot.getSlotType(placeable)
+    local data = placeable[PlaceableTCParkingSlot.KEY]
+    return data ~= nil and data.slotType or PlaceableTCParkingSlot.SLOT_TYPE.VEHICLE
+end
+
+-- The SLOT_TYPE a vehicle parks in: self-propelled harvesters in harvester
+-- slots, other drivable machines in vehicle slots, everything else
+-- (trailed harvesters too) in implement slots.
+function PlaceableTCParkingSlot.getSlotTypeFor(vehicle)
+    if vehicle.spec_drivable ~= nil then
+        if vehicle.spec_combine ~= nil then
+            return PlaceableTCParkingSlot.SLOT_TYPE.HARVESTER
+        end
+        return PlaceableTCParkingSlot.SLOT_TYPE.VEHICLE
+    end
+    return PlaceableTCParkingSlot.SLOT_TYPE.IMPLEMENT
 end
 
 function PlaceableTCParkingSlot.setVisualsVisible(placeable, isVisible)
