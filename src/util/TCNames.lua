@@ -19,7 +19,7 @@ TCNames.STYLES = {
             "Andrew", "Richard", "William", "George", "Harry", "Jack", "Oliver", "Charlie", "Alfie", "Henry",
             "Edward", "Samuel", "Joseph", "Matthew", "Christopher", "Stephen", "Simon", "Ian", "Gareth", "Rhys",
             "Owen", "Callum", "Jamie", "Liam", "Ben", "Tom", "Adam", "Luke", "Nathan", "Ryan",
-            "Craig", "Stuart", "Graham", "Neil", "Alan", "Colin", "Dean", "Lewis",
+            "Craig", "Stuart", "Graham", "Neil", "Alan", "Colin", "Dean", "Lewis", "Steve", "Joe", "Mike"
         },
         female = {
             "Mary", "Sarah", "Emma", "Olivia", "Sophie", "Grace", "Amy", "Laura", "Hannah", "Rachel",
@@ -34,7 +34,7 @@ TCNames.STYLES = {
             "Wright", "Robinson", "Edwards", "Lewis", "Harris", "Jackson", "Lee", "Cooper", "Hill", "Ward",
             "Morris", "Moore", "King", "Harrison", "Morgan", "Allen", "Scott", "Young", "Mitchell", "Watson",
             "Price", "Bennett", "Griffiths", "Fletcher", "Shaw", "Carter", "Phillips", "Holmes", "Marshall", "Fisher",
-            "Mason", "Barker", "Cartwright", "Hobbs", "Pritchard", "MacDonald", "Campbell", "Stewart", "Fraser", "Reid",
+            "Mason", "Parker", "Cartwright", "Hobbs", "Pritchard", "MacDonald", "Campbell", "Stewart", "Fraser", "Reid",
         },
     },
 
