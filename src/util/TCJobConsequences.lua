@@ -124,7 +124,13 @@ function TCJobConsequences.recordStartCondition(job)
     for _, vehicleId in ipairs(job:getAllEquipmentIds()) do
         local vehicle = NetworkUtil.getObject(vehicleId)
         if vehicle ~= nil and vehicle.spec_wearable ~= nil then
-            job.startCondition[vehicleId] = { damage = vehicle:getDamageAmount(), wear = vehicle:getWearTotalAmount() }
+            local condition = { damage = vehicle:getDamageAmount(), wear = vehicle:getWearTotalAmount() }
+            -- 080: ADS zeroes vanilla damage, so job quality reads its
+            -- condition instead.
+            if TCVehicleCondition.isManagedByADS(vehicle) then
+                condition.adsCondition = vehicle:getConditionLevel()
+            end
+            job.startCondition[vehicleId] = condition
         end
     end
 end
@@ -415,6 +421,9 @@ function TCJobConsequences.saveToXML(xmlFile, jobKey, job)
                 setXMLString(xmlFile, key .. "#uniqueId", uniqueId)
                 setXMLFloat(xmlFile, key .. "#damage", condition.damage)
                 setXMLFloat(xmlFile, key .. "#wear", condition.wear)
+                if condition.adsCondition ~= nil then
+                    setXMLFloat(xmlFile, key .. "#adsCondition", condition.adsCondition)
+                end
                 index = index + 1
             end
         end
@@ -453,6 +462,7 @@ function TCJobConsequences.loadFromXML(xmlFile, jobKey, job)
             job.savedStartCondition[uniqueId] = {
                 damage = Utils.getNoNil(getXMLFloat(xmlFile, key .. "#damage"), 0),
                 wear = Utils.getNoNil(getXMLFloat(xmlFile, key .. "#wear"), 0),
+                adsCondition = getXMLFloat(xmlFile, key .. "#adsCondition"),
             }
         end
         index = index + 1

@@ -1,5 +1,5 @@
--- TheContractorJobs:getReputationQualificationRatio (022, 035): a job's
--- reputation and quality are scored on everyone who worked it - on a
+-- TheContractorJobs:getCrewSkillFactor (022, 035, 080): a job's quality
+-- (and so its reputation) is scored on everyone who worked it - on a
 -- harvest & haul job both workers count, the combine driver for
 -- OPERATOR_SCORE_WEIGHT of it.
 
@@ -58,29 +58,34 @@ local function harvestJob(operatorId, haulerId)
     }
 end
 
-test("one worker: their own ratio", function()
+-- Under the requirement: the at-level factor times (0.5 + 0.5 x ratio).
+local function under(rating, required)
+    return TheContractorJobs.QUALITY_SKILL_BY_MARGIN[0] * (0.5 + 0.5 * rating / required)
+end
+
+test("one worker: their own factor", function()
     local world, jobs = setup()
     local operator = addWorker(world, 1, { harvesting = 5 })
-    assertNear(jobs:getReputationQualificationRatio(harvestJob(operator)), 0.5, 1e-9)
+    assertNear(jobs:getCrewSkillFactor(harvestJob(operator)), under(5, 10), 1e-9)
 end)
 
 test("two workers: both count, the combine driver more", function()
     local world, jobs = setup()
     local operator = addWorker(world, 1, { harvesting = 8 })
-    local hauler = addWorker(world, 2, { haulage = 3 })
+    local hauler = addWorker(world, 2, { haulage = 10 })
     local weight = TheContractorJobs.OPERATOR_SCORE_WEIGHT
-    assertNear(jobs:getReputationQualificationRatio(harvestJob(operator, hauler)), weight * 0.8 + (1 - weight) * 0.3,
-        1e-9)
+    assertNear(jobs:getCrewSkillFactor(harvestJob(operator, hauler)),
+        weight * under(8, 10) + (1 - weight) * TheContractorJobs.QUALITY_SKILL_BY_MARGIN[0], 1e-9)
 end)
 
-test("a weak hauler no longer sets the score on their own", function()
+test("a weak hauler doesn't set the score on their own", function()
     local world, jobs = setup()
     local operator = addWorker(world, 1, { harvesting = 10 })
     local hauler = addWorker(world, 2, { haulage = 2 })
-    assertTrue(jobs:getReputationQualificationRatio(harvestJob(operator, hauler)) > 0.2)
+    assertTrue(jobs:getCrewSkillFactor(harvestJob(operator, hauler)) > under(2, 10))
 end)
 
 test("the player alone always scores in full", function()
     local _, jobs = setup()
-    assertNear(jobs:getReputationQualificationRatio(harvestJob(nil)), 1, 1e-9)
+    assertNear(jobs:getCrewSkillFactor(harvestJob(nil)), 1, 1e-9)
 end)

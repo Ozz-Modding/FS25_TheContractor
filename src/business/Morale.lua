@@ -20,7 +20,8 @@
 --   A bonus while they're working their notice doesn't change their mind.
 -- - Below RETIREMENT_LOW_MORALE, 039's birthday retirement roll is more
 --   likely, up to RETIREMENT_MAX_MULTIPLIER at 0.
--- - Below QUALITY_LOW_MORALE, job quality (029) drops, up to
+-- - Below QUALITY_HIGH_MORALE, job quality (029, 080) drops a little, by
+--   QUALITY_LOW_PENALTY at QUALITY_LOW_MORALE, and more below that, up to
 --   QUALITY_MAX_PENALTY at 0. The lowest morale on the crew counts.
 -- - From GROWTH_HIGH_MORALE, growth rolls (030) are GROWTH_MULTIPLIER as
 --   likely.
@@ -94,7 +95,9 @@ TheContractorMorale.QUIT_NOTICE_MONTHS = 1
 -- Effects.
 TheContractorMorale.RETIREMENT_LOW_MORALE = 50
 TheContractorMorale.RETIREMENT_MAX_MULTIPLIER = 2
+TheContractorMorale.QUALITY_HIGH_MORALE = 70
 TheContractorMorale.QUALITY_LOW_MORALE = 30
+TheContractorMorale.QUALITY_LOW_PENALTY = 0.04
 TheContractorMorale.QUALITY_MAX_PENALTY = 0.1
 TheContractorMorale.GROWTH_HIGH_MORALE = 80
 TheContractorMorale.GROWTH_MULTIPLIER = 1.2
@@ -205,9 +208,9 @@ function TheContractorMorale.getGrowthMultiplier(worker)
     return 1
 end
 
--- 029's quality score is multiplied by this, for the lowest morale on the
--- job's crew (operator, and hauler on a haulage job). 1 for a player-driven
--- job.
+-- 029's quality score is multiplied by this (080), for the lowest morale on
+-- the job's crew (operator, and hauler on a haulage job). 1 for a
+-- player-driven job.
 function TheContractorMorale.getJobQualityMultiplier(job)
     local staff = g_currentMission.TheContractor.Staff
     local lowest
@@ -220,11 +223,23 @@ function TheContractorMorale.getJobQualityMultiplier(job)
     consider(job.assignedWorkerId)
     consider(job.haulerWorkerId)
 
-    local low = TheContractorMorale.QUALITY_LOW_MORALE
-    if lowest == nil or lowest >= low then
+    if lowest == nil then
         return 1
     end
-    return 1 - TheContractorMorale.QUALITY_MAX_PENALTY * (low - lowest) / low
+    return TheContractorMorale.getQualityMultiplierFor(lowest)
+end
+
+-- 1 from QUALITY_HIGH_MORALE, down to 1 - QUALITY_LOW_PENALTY at
+-- QUALITY_LOW_MORALE, then down to 1 - QUALITY_MAX_PENALTY at 0.
+function TheContractorMorale.getQualityMultiplierFor(morale)
+    local high, low = TheContractorMorale.QUALITY_HIGH_MORALE, TheContractorMorale.QUALITY_LOW_MORALE
+    local lowPenalty, maxPenalty = TheContractorMorale.QUALITY_LOW_PENALTY, TheContractorMorale.QUALITY_MAX_PENALTY
+    if morale >= high then
+        return 1
+    elseif morale >= low then
+        return 1 - lowPenalty * (high - morale) / (high - low)
+    end
+    return 1 - lowPenalty - (maxPenalty - lowPenalty) * (low - math.max(0, morale)) / low
 end
 
 -- The month's drift target: the workload's (getWorkloadTarget), moved by

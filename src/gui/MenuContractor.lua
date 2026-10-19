@@ -187,7 +187,7 @@ local OVERHEAD_STATUS_TONES = {
 local function getQualityChipTone(qualityScore)
     if qualityScore >= 80 then
         return "good"
-    elseif qualityScore >= 50 then
+    elseif qualityScore >= 60 then
         return "warn"
     end
     return "bad"

@@ -430,7 +430,7 @@ Seeds:
 
 Makes a random event happen to your farm now, ignoring the odds, the Random events setting, the event type's cooldown and its time of day (diesel theft normally comes to light between 07:00 and 09:00). It still needs something to act on (a theft needs a vehicle that can be stolen, joyriders a grass field outside winter, fly-tipping an NPC's field with no job on it, diesel theft some diesel in a storage of yours or in a parked machine), and says so if there isn't anything. It starts the event's cooldown like a real one. `<type>` is the event type's key, case-insensitive. With no type, or an unknown one, it lists the ones there are.
 
-The events that happen as a job ends (`kettle`, `paidEarly`, `stepsUp`) use your latest completed job they can act on, whatever its quality score: one with hired workers for `kettle`, one whose invoice isn't due yet for `paidEarly` (so none with the late invoices setting off), and one with a worker rated 5 or under for their part of it for `stepsUp`.
+The events that happen as a job ends (`kettle`, `paidEarly`, `stepsUp`, `roadAccident`) use your latest completed job they can act on, whatever its quality score: one with hired workers for `kettle`, one whose invoice isn't due yet for `paidEarly` (so none with the late invoices setting off), one with a worker rated 5 or under for their part of it for `stepsUp`, and one a hired worker drove whose machines are still yours for `roadAccident` (its machines are damaged wherever they are now; use `tcCompany accidentFault` first to pick who's to blame).
 
 ```
 tcCompany event theft
@@ -441,6 +441,7 @@ tcCompany event goodNews
 tcCompany event kettle
 tcCompany event paidEarly
 tcCompany event stepsUp
+tcCompany event roadAccident
 ```
 
 ### `tcCompany goodNews [story]`
@@ -463,6 +464,15 @@ Decides how the next police report on a stolen vehicle comes out, instead of the
 ```
 tcCompany event theft
 tcCompany theftRecover recovered
+```
+
+### `tcCompany accidentFault <ours|theirs>`
+
+Decides who's to blame for the next road accident, instead of the usual roll from the driver's tractor rating and the state of the machines: `ours` (a claim through public liability, a reputation hit and a morale knock for the driver), `theirs` (the other driver's insurer pays an estimated repair cost a month or two later). It applies once, to the next accident, then the odds are back to normal. Pair it with `tcCompany event roadAccident` to try both.
+
+```
+tcCompany accidentFault theirs
+tcCompany event roadAccident
 ```
 
 ### `tcCompany debris [count] [prop]`

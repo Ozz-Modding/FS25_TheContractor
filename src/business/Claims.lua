@@ -254,24 +254,33 @@ function TheContractorClaims:onDayChanged()
     self.pendingClaims = remaining
 end
 
+-- Charges a liability claim of amount (already scaled) to the farm: the
+-- excess if insured, which also puts the claim on its history for the
+-- premium loading, else the lot (even into the red). Returns what the farm
+-- paid. Server-only; also used by 079's road accidents.
+function TheContractorClaims:chargeClaim(farmId, amount, insured)
+    local excess = g_currentMission.TheContractor.Settings:scaleCost(TheContractorClaims.EXCESS)
+    local paid = insured and math.min(amount, excess) or amount
+    g_currentMission:addMoney(-paid, farmId, MoneyType.TC_CLAIMS, true, true)
+    g_currentMission.TheContractor.Finances:recordClaims(farmId, paid)
+
+    if insured then
+        local record = { periodIndex = TCCalendar.getPeriodIndex(), amount = amount }
+        self:applyClaimRecorded(farmId, record)
+        if g_server ~= nil then
+            g_server:broadcastEvent(TCClaimRecordedEvent.new(farmId, record))
+        end
+    end
+    return paid
+end
+
 function TheContractorClaims:deliverClaim(claim)
     local tc = g_currentMission.TheContractor
     if g_farmManager:getFarmById(claim.farmId) == nil then
         return
     end
 
-    local excess = tc.Settings:scaleCost(TheContractorClaims.EXCESS)
-    local paid = claim.insured and math.min(claim.amount, excess) or claim.amount
-    g_currentMission:addMoney(-paid, claim.farmId, MoneyType.TC_CLAIMS, true, true)
-    tc.Finances:recordClaims(claim.farmId, paid)
-
-    if claim.insured then
-        local record = { periodIndex = TCCalendar.getPeriodIndex(), amount = claim.amount }
-        self:applyClaimRecorded(claim.farmId, record)
-        if g_server ~= nil then
-            g_server:broadcastEvent(TCClaimRecordedEvent.new(claim.farmId, record))
-        end
-    end
+    local paid = self:chargeClaim(claim.farmId, claim.amount, claim.insured)
 
     tc.Reputation:addReputation(claim.farmId, -claim.reputationPenalty)
 

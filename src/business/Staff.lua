@@ -102,8 +102,8 @@ TheContractorStaff.GROWTH_POTENTIAL_ZERO_AGE = 55
 TheContractorStaff.GROWTH_POTENTIAL_MIN_ROLL = 0.4
 
 -- Each completed job gives every worker on it one growth roll:
--- GROWTH_BASE_CHANCE x the job's quality (029, 0-1) x how much the job
--- stretched them. At or under the job's requiredSkillLevel on their weaker
+-- GROWTH_BASE_CHANCE x the job's quality (029, getGrowthQualityMultiplier)
+-- x how much the job stretched them. At or under the job's requiredSkillLevel on their weaker
 -- rating for the job (tractor or operation skill, 044) is a stretch; more
 -- than GROWTH_EASY_MARGIN above it is easy work. A successful roll spends
 -- one growthPotential point on one stat, picked by GROWTH_WEIGHTS among
@@ -116,6 +116,8 @@ TheContractorStaff.GROWTH_POTENTIAL_MIN_ROLL = 0.4
 -- good jobs grow a worker, so a young worker's full pool takes around 40
 -- jobs to use up.
 TheContractorStaff.GROWTH_BASE_CHANCE = 0.3
+TheContractorStaff.GROWTH_QUALITY_REFERENCE = 0.85
+TheContractorStaff.GROWTH_QUALITY_MAX = 1.15
 TheContractorStaff.GROWTH_STRETCH_MULTIPLIER = 1.5
 TheContractorStaff.GROWTH_EASY_MULTIPLIER = 0.5
 TheContractorStaff.GROWTH_EASY_MARGIN = 2
@@ -1285,7 +1287,7 @@ function TheContractorStaff:rollWorkerGrowth(job, workerId, equipmentIds, isHaul
         end
     end
 
-    local quality = (job.qualityScore or 100) / 100
+    local quality = TheContractorStaff.getGrowthQualityMultiplier(job.qualityScore)
     -- 056: happy staff learn a little faster.
     local morale = TheContractorMorale.getGrowthMultiplier(worker)
     if math.random() >= TheContractorStaff.GROWTH_BASE_CHANCE * stretch * quality * morale then
@@ -1293,6 +1295,14 @@ function TheContractorStaff:rollWorkerGrowth(job, workerId, equipmentIds, isHaul
     end
 
     self:growWorker(job.farmId, workerId, ratings.tractorTier, ratings.operationSkill)
+end
+
+-- The job's quality score (029) as a growth multiplier (080): against
+-- GROWTH_QUALITY_REFERENCE, an ordinary qualified crew's score, so a job
+-- like that grows workers at the base rate, capped at GROWTH_QUALITY_MAX.
+function TheContractorStaff.getGrowthQualityMultiplier(qualityScore)
+    return math.min(TheContractorStaff.GROWTH_QUALITY_MAX,
+        (qualityScore or 100) / 100 / TheContractorStaff.GROWTH_QUALITY_REFERENCE)
 end
 
 -- A successful growth roll, wherever it came from (a completed job above,
