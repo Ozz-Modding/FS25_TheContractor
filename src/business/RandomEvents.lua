@@ -34,8 +34,9 @@
 -- Inbox messages, notices and money are the event type's business, from its
 -- stages; the framework posts nothing itself.
 --
--- Job events (074): an event type with chancePerJob (a number, 0-1) instead
--- of ratePerPeriod isn't rolled daily. It's rolled when one of the farm's
+-- Job events (074): an event type with chancePerJob (a number, 0-1, or a
+-- function(farmId, job) returning one, for odds that depend on the job, 081)
+-- instead of ratePerPeriod isn't rolled daily. It's rolled when one of the farm's
 -- jobs completes (Jobs:completeJob -> onJobCompleted), and canTrigger gets
 -- the job as well: canTrigger(farmId, job). An optional minJobQuality
 -- (0-100) skips jobs with a lower quality score. The setting's multiplier
@@ -329,6 +330,14 @@ function TheContractorRandomEvents.getJobChance(chancePerJob, multiplier)
     return math.min(1, math.max(0, (chancePerJob or 0) * multiplier))
 end
 
+-- A job event's chancePerJob for this job: the number, or the function's answer.
+function TheContractorRandomEvents.resolveJobChance(definition, farmId, job)
+    if type(definition.chancePerJob) == "function" then
+        return definition.chancePerJob(farmId, job) or 0
+    end
+    return definition.chancePerJob
+end
+
 -- From TheContractorJobs:completeJob, once everything else about the job is
 -- settled (paid or invoiced, growth rolled). Rolls every job event type
 -- that isn't cooling down on the farm; of those that hit, one picked at
@@ -350,7 +359,8 @@ function TheContractorRandomEvents:onJobCompleted(job, random)
         local definition = self.eventTypes[key]
         if TheContractorRandomEvents.isJobEvent(definition) and self:getCooldownLeft(job.farmId, key) == 0 and
                 TheContractorRandomEvents.meetsJobQuality(definition, job) then
-            local chance = TheContractorRandomEvents.getJobChance(definition.chancePerJob, multiplier)
+            local chance = TheContractorRandomEvents.getJobChance(
+                TheContractorRandomEvents.resolveJobChance(definition, job.farmId, job), multiplier)
             if chance > 0 and random() < chance then
                 table.insert(hits, key)
             end
@@ -934,8 +944,10 @@ function TheContractorRandomEvents.registerConsoleCommands()
                 local cooldownLeft = randomEvents:getCooldownLeft(farmId, key)
                 local odds
                 if TheContractorRandomEvents.isJobEvent(definition) then
-                    odds = string.format("%.1f%% a completed job%s",
-                        TheContractorRandomEvents.getJobChance(definition.chancePerJob, multiplier) * 100,
+                    local chanceText = type(definition.chancePerJob) == "function" and "depends on the job" or
+                        string.format("%.1f%%", TheContractorRandomEvents.getJobChance(definition.chancePerJob,
+                            multiplier) * 100)
+                    odds = string.format("%s a completed job%s", chanceText,
                         definition.minJobQuality ~= nil and
                         string.format(" (quality %d%%+)", definition.minJobQuality) or "")
                 else

@@ -274,6 +274,32 @@ function TheContractorClaims:chargeClaim(farmId, amount, insured)
     return paid
 end
 
+-- Whether a botch claim from this job is still on its way (081 skips
+-- a job that has one).
+function TheContractorClaims:hasPendingClaimForJob(jobId)
+    for _, claim in ipairs(self.pendingClaims) do
+        if claim.jobId == jobId then
+            return true
+        end
+    end
+    return false
+end
+
+-- A claim that isn't the job's botch (079's accidents, 081's drift) on the
+-- job's logbook entry (060), off its margin. The entry keeps one claim, so
+-- one already there gets this one added to it: amounts and reputation
+-- summed, its cause kept, insured only if both were. Server-only.
+function TheContractorClaims:addToJobLog(farmId, jobId, claim)
+    local logbook = g_currentMission.TheContractor.Logbook
+    local entry = logbook:getJobEntry(farmId, jobId)
+    if entry ~= nil and entry.claim ~= nil then
+        claim = { cause = entry.claim.cause, amount = entry.claim.amount + claim.amount,
+            paid = entry.claim.paid + claim.paid, insured = entry.claim.insured and claim.insured,
+            reputationPenalty = (entry.claim.reputationPenalty or 0) + claim.reputationPenalty }
+    end
+    logbook:recordClaim(farmId, jobId, claim)
+end
+
 function TheContractorClaims:deliverClaim(claim)
     local tc = g_currentMission.TheContractor
     if g_farmManager:getFarmById(claim.farmId) == nil then
