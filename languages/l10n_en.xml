@@ -202,6 +202,7 @@
 		<text name="tc_inbox_chipJoyriders" text="Vandalism"/>
 		<text name="tc_inbox_chipFlyTipping" text="Fly-tipping"/>
 		<text name="tc_inbox_chipGoodNews" text="Good news"/>
+		<text name="tc_inbox_chipDieselTheft" text="Theft"/>
 		<text name="tc_inbox_chipLegal" text="Legal"/>
 		<text name="tc_inbox_chipTraining" text="Training"/>
 		<text name="tc_calendar_yearLabel" text="Year %d"/>
@@ -558,6 +559,12 @@
 		<text name="tc_joyriders_offerTitle" text="Joyriders on Field %s"/>
 		<text name="tc_joyriders_offerBody" text="Joyriders have been driving round the grass on Field %s and torn it up. The farmer wants it plowed so it can be sown again, and has offered you the job."/>
 		<text name="tc_joyriders_sowTitle" text="Sow Field %s with grass"/>
+		<text name="tc_dieselTheft_eventName" text="Diesel theft"/>
+		<text name="tc_dieselTheft_tankTitle" text="Diesel tank drained"/>
+		<text name="tc_dieselTheft_tankBody" text="Thieves got into the yard overnight and drained the diesel tank: about %s gone. It's been reported to the police, but there's little chance of seeing it again. Jobs needing diesel will wait if there isn't enough left."/>
+		<text name="tc_dieselTheft_siphonTitle" text="Machines siphoned overnight"/>
+		<text name="tc_dieselTheft_siphonBody" text="Thieves got into the yard overnight and siphoned the diesel out of %s of your parked machines: about %s gone. It's been reported to the police, but there's little chance of seeing it again."/>
+		<text name="tc_dieselTheft_notice" text="Diesel stolen overnight: about %s"/>
 		<text name="tc_goodNews_eventName" text="Good news"/>
 		<text name="tc_goodNews_photoPosted_title" text="Credit where it's due"/>
 		<text name="tc_goodNews_photoPosted_body" text="Someone has posted a photo of your work in the local farming group, and the comments are full of praise. You gained %s reputation."/>

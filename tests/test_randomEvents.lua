@@ -465,3 +465,114 @@ test("the console lists a job event's odds per job", function()
     local list = TCConsole.dispatch(TCConsole.groups.company, { "events" })
     assertTrue(list:find("kettle (kettle): 10.0% a completed job (quality 75%+)", 1, true) ~= nil, list)
 end)
+
+-- Time of day (078) -------------------------------------------------------------
+
+-- A certain-hit dummy held for 07:00-09:00, with no cooldown.
+local function registerMorning(randomEvents)
+    return registerDummy(randomEvents, { triggerHours = { 7, 9 }, cooldownPeriods = 0 })
+end
+
+test("a time-of-day window's roll lands on its start hour to the hour before its end", function()
+    setup()
+    assertEquals(TheContractorRandomEvents.getTriggerHour({ 7, 9 }, 0), 7, "start")
+    assertEquals(TheContractorRandomEvents.getTriggerHour({ 7, 9 }, 0.49), 7, "first half")
+    assertEquals(TheContractorRandomEvents.getTriggerHour({ 7, 9 }, 0.5), 8, "second half")
+    assertEquals(TheContractorRandomEvents.getTriggerHour({ 7, 9 }, 1), 8, "never the end hour")
+    assertEquals(TheContractorRandomEvents.getTriggerHour({ 7, 7 }, 0.5), 7, "an empty window is its start")
+end)
+
+test("a hit with a time of day waits for its hour, then happens once", function()
+    local _, randomEvents = setup(1)
+    local log = registerMorning(randomEvents)
+    g_currentMission.environment.currentHour = 0
+
+    randomEvents:rollNewEvents()
+    assertEquals(#randomEvents:getIncidents(1), 0, "nothing at midnight")
+    assertEquals(#randomEvents.pendingTriggers, 1, "held")
+    local hour = randomEvents.pendingTriggers[1].hour
+    assertTrue(hour == 7 or hour == 8, "due 07:00 or 08:00")
+
+    randomEvents:rollNewEvents()
+    assertEquals(#randomEvents.pendingTriggers, 1, "not rolled again while it's held")
+
+    g_currentMission.environment.currentHour = hour - 1
+    randomEvents:firePendingTriggers()
+    assertEquals(#log, 0, "not before its hour")
+
+    g_currentMission.environment.currentHour = hour
+    randomEvents:firePendingTriggers()
+    assertEquals(#log, 1, "happened")
+    assertEquals(#randomEvents.pendingTriggers, 0, "no longer held")
+
+    randomEvents:firePendingTriggers()
+    assertEquals(#log, 1, "only once")
+end)
+
+test("a held event whose hour was skipped happens late, not never", function()
+    local world, randomEvents = setup(1)
+    local log = registerMorning(randomEvents)
+    g_currentMission.environment.currentHour = 0
+    randomEvents:rollNewEvents()
+
+    -- Slept through the morning and into the next day.
+    world:nextDay()
+    g_currentMission.environment.currentHour = 1
+    randomEvents:firePendingTriggers()
+    assertEquals(#log, 1, "happened the next hour it could")
+end)
+
+test("a held event is dropped if the setting goes Off or the farm's company goes", function()
+    local _, randomEvents = setup(1)
+    local log = registerMorning(randomEvents)
+    g_currentMission.environment.currentHour = 0
+    randomEvents:rollNewEvents()
+    g_currentMission.TheContractor.Settings:set("randomEvents", 0)
+    g_currentMission.environment.currentHour = 9
+    randomEvents:firePendingTriggers()
+    assertEquals(#log, 0, "off")
+    assertEquals(#randomEvents.pendingTriggers, 0, "dropped")
+
+    g_currentMission.TheContractor.Settings:set("randomEvents", 1)
+    g_currentMission.environment.currentHour = 0
+    randomEvents:rollNewEvents()
+    g_currentMission.TheContractor.Company.companyNames[1] = nil
+    g_currentMission.environment.currentHour = 9
+    randomEvents:firePendingTriggers()
+    assertEquals(#log, 0, "no company")
+    assertEquals(#randomEvents.pendingTriggers, 0, "dropped too")
+end)
+
+test("save and load keep a held event", function()
+    local _, randomEvents = setup(1)
+    registerMorning(randomEvents)
+    g_currentMission.environment.currentHour = 0
+    randomEvents:rollNewEvents()
+    local held = randomEvents.pendingTriggers[1]
+
+    local xmlFile = {}
+    randomEvents:saveToXmlFile(xmlFile)
+
+    local loaded = TheContractorRandomEvents.new()
+    local log = registerMorning(loaded)
+    loaded:loadFromXMLFile(xmlFile)
+    assertEquals(#loaded.pendingTriggers, 1, "held")
+    assertEquals(loaded.pendingTriggers[1].day, held.day, "day")
+    assertEquals(loaded.pendingTriggers[1].hour, held.hour, "hour")
+
+    g_currentMission.environment.currentHour = 9
+    loaded:firePendingTriggers()
+    assertEquals(#log, 1, "happens after the load")
+
+    local orphaned = TheContractorRandomEvents.new()
+    orphaned:loadFromXMLFile(xmlFile)
+    assertEquals(#orphaned.pendingTriggers, 0, "an event type that's gone is dropped")
+end)
+
+test("forcing an event ignores its time of day", function()
+    local _, randomEvents = setup(1)
+    local log = registerMorning(randomEvents)
+    g_currentMission.environment.currentHour = 2
+    assertTrue(randomEvents:triggerEvent(1, "dummy") ~= nil, "opened")
+    assertEquals(#log, 1, "now")
+end)
