@@ -11,6 +11,20 @@
 		<text name="tc_setting_randomEvents_off" text="Off"/>
 		<text name="tc_setting_randomEvents_rare" text="Rare"/>
 		<text name="tc_setting_randomEvents_normal" text="Normal"/>
+		<text name="tc_setting_nameStyle" text="Staff name style"/>
+		<text name="tc_toolTip_nameStyle" text="Where the names of new job candidates and office administrators come from. European mix and Mixed pick a different style for each person. Staff you already have keep their names."/>
+		<text name="tc_nameStyle_british" text="British"/>
+		<text name="tc_nameStyle_irish" text="Irish"/>
+		<text name="tc_nameStyle_american" text="American"/>
+		<text name="tc_nameStyle_french" text="French"/>
+		<text name="tc_nameStyle_german" text="German"/>
+		<text name="tc_nameStyle_dutch" text="Dutch"/>
+		<text name="tc_nameStyle_scandinavian" text="Scandinavian"/>
+		<text name="tc_nameStyle_spanish" text="Spanish"/>
+		<text name="tc_nameStyle_italian" text="Italian"/>
+		<text name="tc_nameStyle_polish" text="Polish"/>
+		<text name="tc_nameStyle_european" text="European mix"/>
+		<text name="tc_nameStyle_all" text="Mixed"/>
 		<text name="tc_toolTip_jobPayRate" text="Scales what new contract offers pay. 100% is half of base-game contract pay. Jobs already offered or accepted keep their price. Business costs (insurance, memberships, training, claims and fines) scale with it; staff pay doesn't."/>
 		<text name="tc_header_inbox" text="Inbox"/>
 		<text name="tc_header_calendar" text="Calendar"/>

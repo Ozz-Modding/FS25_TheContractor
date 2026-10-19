@@ -64,7 +64,7 @@ Run your farm as an agricultural contracting business in Farming Simulator 25. T
 
 ### General
 - Full multiplayer support, with everything farm by farm
-- Settings for job pay rate, late invoices, random event frequency and more, in the game's own Settings page
+- Settings for job pay rate, late invoices, random event frequency, staff name style (British, Irish, American, French, German, Dutch, Scandinavian, Spanish, Italian, Polish or a mix) and more, in the game's own Settings page
 - Works with FS25_EconomyScale
 - Console commands for tailoring your game (see [Console commands](#console-commands))
 

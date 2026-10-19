@@ -165,22 +165,6 @@ TheContractorStaff.RETIREMENT_MIN_CHANCE = 0.02
 TheContractorStaff.RETIREMENT_CURVE_EXPONENT = 3
 TheContractorStaff.RETIREMENT_NOTICE_MONTHS = 6
 
--- First names by gender (041), so the name matches the look in the cab.
-TheContractorStaff.FIRST_NAMES = {
-    male = {
-        "James", "John", "Robert", "Michael", "David", "Daniel", "Thomas", "Peter",
-        "Mark", "Paul", "Andrew", "Richard",
-    },
-    female = {
-        "Mary", "Sarah", "Emma", "Olivia", "Sophie", "Grace", "Amy", "Laura",
-        "Hannah", "Rachel", "Lucy", "Kate",
-    },
-}
-TheContractorStaff.LAST_NAMES = {
-    "Smith", "Jones", "Taylor", "Brown", "Wilson", "Evans", "Walker", "White",
-    "Roberts", "Green", "Hall", "Wood", "Baker", "Clarke", "Turner", "Hughes",
-}
-
 -- tcHiring is unused since 036 (salaries replaced the hire fee) but stays
 -- registered: old saves' finance history may reference it, and dropping it
 -- would shift every later stat's index.
@@ -437,25 +421,19 @@ function TheContractorStaff.getSalary(workSpeed, tierCapability, skills)
     return salary
 end
 
+-- A new name in the nameStyle setting's style (TCNames). Server only, as
+-- with everything else rolled for a candidate.
 function TheContractorStaff.generateName(gender)
-    local firstNames = TheContractorStaff.FIRST_NAMES[gender] or TheContractorStaff.FIRST_NAMES.male
-    local firstName = firstNames[math.random(#firstNames)]
-    local lastName = TheContractorStaff.LAST_NAMES[math.random(#TheContractorStaff.LAST_NAMES)]
-    return firstName .. " " .. lastName
+    local tc = g_currentMission.TheContractor
+    local styleKey = tc ~= nil and tc.Settings ~= nil and tc.Settings:getNameStyle() or TCNames.DEFAULT_STYLE
+    return TCNames.generate(gender, styleKey)
 end
 
 -- A worker saved before 041 has a name but no gender: go by their first
--- name, or roll one if it's not in either list.
+-- name, or roll one if it's not in any style.
 function TheContractorStaff.guessGender(name)
     local firstName = string.match(name or "", "^(%S+)")
-    for gender, firstNames in pairs(TheContractorStaff.FIRST_NAMES) do
-        for _, candidate in ipairs(firstNames) do
-            if candidate == firstName then
-                return gender
-            end
-        end
-    end
-    return TCWorkerAppearance.rollGender()
+    return TCNames.findGender(firstName) or TCWorkerAppearance.rollGender()
 end
 
 function TheContractorStaff.formatTierCapability(tierCapability)
