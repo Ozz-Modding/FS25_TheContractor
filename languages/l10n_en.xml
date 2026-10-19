@@ -641,6 +641,25 @@
 		<text name="tc_sprayDrift_upheldBodyInsured" text="The complaint about spraying on Field %s has been upheld: %s carried on spraying when the conditions said stop, and it drifted. They're claiming %s for %s. Your public liability insurance covers it, less the excess: %s has been charged. The claim goes on your record and will raise your premium for the next 3 years, and word has got around: your reputation has taken a knock."/>
 		<text name="tc_sprayDrift_upheldBodyUninsured" text="The complaint about spraying on Field %s has been upheld: %s carried on spraying when the conditions said stop, and it drifted. They're claiming %s for %s. You don't have public liability insurance, so the whole %s has been charged, and word has got around: your reputation has taken a knock."/>
 		<text name="tc_sprayDrift_upheldNotice" text="Spray drift complaint about Field %s upheld: %s paid"/>
+		<text name="tc_poaching_eventName" text="Worker poached by a rival"/>
+		<text name="tc_inbox_chipPoaching" text="Staff"/>
+		<text name="tc_poaching_rival1" text="%s Agri Services"/>
+		<text name="tc_poaching_rival2" text="%s &amp; Sons Contracting"/>
+		<text name="tc_poaching_rival3" text="%s Agricultural Contractors"/>
+		<text name="tc_poaching_rival4" text="%s Farm Services"/>
+		<text name="tc_poaching_offerTitle" text="Rival offer for %s"/>
+		<text name="tc_poaching_offerBody" text="%s has been approached by %s, who want them for the coming harvest and have offered %s a month. They're paid %s now, and their morale is %s. You can match the offer, or do nothing and leave it to them. If you do nothing they'll most likely take the offer and hand in a month's notice, though a happy, well-paid worker might stay. A matched offer is a permanent rise from the next salary run."/>
+		<text name="tc_poaching_morale_happy" text="happy"/>
+		<text name="tc_poaching_morale_content" text="content"/>
+		<text name="tc_poaching_morale_unsettled" text="unsettled"/>
+		<text name="tc_poaching_morale_unhappy" text="unhappy"/>
+		<text name="tc_poaching_matchButton" text="Match the offer"/>
+		<text name="tc_poaching_nothingButton" text="Do nothing"/>
+		<text name="tc_poaching_matchConfirm" text="Raise %s's pay to %s a month to match the offer? A rise is permanent and starts from the next salary run."/>
+		<text name="tc_poaching_stayedTitle" text="%s is staying"/>
+		<text name="tc_poaching_stayedBody" text="%s has turned down the offer from %s and is staying with you, on the same pay."/>
+		<text name="tc_poaching_leftTitle" text="%s has taken the offer"/>
+		<text name="tc_poaching_leftBody" text="%s has accepted the offer from %s and handed in their notice. They leave at the start of %s."/>
 		<text name="tc_joyriders_sowBody" text="The farmer was pleased with the plowing on Field %s and has offered you the job of sowing it back to grass."/>
 		<text name="tc_flyTipping_eventName" text="Fly-tipping"/>
 		<text name="tc_flyTipping_offerTitle" text="Fly-tipping on Field %s"/>

@@ -426,11 +426,16 @@ Seeds:
   Farm Silo [FS25_SomeMap] - 0 of 500000, 1.2 km north-east of you
 ```
 
-### `tcCompany event <type>`
+### `tcCompany event <type> [details]`
 
-Makes a random event happen to your farm now, ignoring the odds, the Random events setting, the event type's cooldown and its time of day (diesel theft normally comes to light between 07:00 and 09:00). It still needs something to act on (a theft needs a vehicle that can be stolen, joyriders a grass field outside winter, fly-tipping an NPC's field with no job on it, diesel theft some diesel in a storage of yours or in a parked machine), and says so if there isn't anything. It starts the event's cooldown like a real one. `<type>` is the event type's key, case-insensitive. With no type, or an unknown one, it lists the ones there are.
+Makes a random event happen to your farm now, ignoring the odds, the Random events setting, the event type's cooldown, its months (poaching only comes March to May) and its time of day (diesel theft normally comes to light between 07:00 and 09:00). It still needs something to act on (a theft needs a vehicle that can be stolen, joyriders a grass field outside winter, fly-tipping an NPC's field with no job on it, diesel theft some diesel in a storage of yours or in a parked machine, poaching a worker who isn't leaving), and says so if there isn't anything. It starts the event's cooldown like a real one. `<type>` is the event type's key, case-insensitive. With no type, or an unknown one, it lists the ones there are.
 
-The events that happen as a job ends (`kettle`, `paidEarly`, `stepsUp`, `roadAccident`, `sprayDrift`) use your latest completed job they can act on, whatever its quality score: one with hired workers for `kettle`, one whose invoice isn't due yet for `paidEarly` (so none with the late invoices setting off), one with a worker rated 5 or under for their part of it for `stepsUp`, and one a hired worker drove whose machines are still yours for `roadAccident` (its machines are damaged wherever they are now; use `tcCompany accidentFault` first to pick who's to blame), and a hired worker's herbicide job with no botch claim on its way for `sprayDrift` (judged on the wind right now, not on the day; use `tcCompany driftUpheld` first to pick the findings).
+`[details]` picks what the event acts on, for the types that take one (any other type refuses them):
+
+- `goodNews [story]`: that story, or a random one other than the last you had, even before your first completed job. The story's reward is applied and its inbox message posted. `[story]` is case-insensitive; an unknown one lists them: `photoPosted`, `parishNews`, `parishCouncil`, `youngFarmers` (reputation, scaled to your tier), `supplierRefund`, `loyaltyRebate`, `ratesRefund` (cash, scaled by the job pay setting).
+- `poaching [worker]`: the rival goes after that worker (a `<worker>` as for `tcWorker`: an id or the start of a name), however long they've been with you. Without one it picks as the real event does: someone with at least 3 months' service, nearly always one of your most valuable. Not someone who's leaving or already has an offer.
+
+The events that happen as a job ends (`kettle`, `paidEarly`, `stepsUp`, `roadAccident`, `sprayDrift`) use your latest completed job they can act on, whatever its quality score: one with hired workers for `kettle`, one whose invoice isn't due yet for `paidEarly` (so none with the late invoices setting off), one with a worker rated 5 or under for their part of it for `stepsUp`, and one a hired worker drove whose machines are still yours for `roadAccident` (its machines are damaged wherever they are now), and a hired worker's herbicide job with no botch claim on its way for `sprayDrift` (judged on the wind right now, not on the day). Use `tcCompany outcome` first to decide how an event comes out.
 
 ```
 tcCompany event theft
@@ -438,51 +443,40 @@ tcCompany event joyriders
 tcCompany event flyTipping
 tcCompany event dieselTheft
 tcCompany event goodNews
+tcCompany event goodNews supplierRefund
 tcCompany event kettle
 tcCompany event paidEarly
 tcCompany event stepsUp
 tcCompany event roadAccident
 tcCompany event sprayDrift
-```
-
-### `tcCompany goodNews [story]`
-
-Gives your farm a piece of good news now: that story, or a random one other than the last you had. It ignores the odds, the Random events setting, the cooldown and the usual wait for your first completed job, but starts the cooldown like a real one. The story's reward is applied and its inbox message posted. `[story]` is case-insensitive; an unknown one lists them: `photoPosted`, `parishNews`, `parishCouncil`, `youngFarmers` (reputation, scaled to your tier), `supplierRefund`, `loyaltyRebate`, `ratesRefund` (cash, scaled by the job pay setting).
-
-```
-tcCompany goodNews
-tcCompany goodNews supplierRefund
+tcCompany event poaching
+tcCompany event poaching amy
 ```
 
 ### `tcCompany events`
 
 Lists every random event type with its odds for your farm (a month and a day, after the Random events setting; for an event that happens as a job ends, the chance on each completed job, or "depends on the job" for one whose odds come from the job itself like `sprayDrift`, and the quality score it needs) and any cooldown left (and, for an event with a time of day, its hours), then any event that's been rolled and is waiting for its hour (the day and hour it's due), then your farm's open incidents: the stage each one is at, the day it moves on (or "waiting" if it's waiting on something else, like a reply in the inbox), when it started and the event's own details. Read-only, so it also works on a joined client.
 
-### `tcCompany theftRecover <recovered|lost>`
+### `tcCompany outcome <type> <outcome>`
 
-Decides how the next police report on a stolen vehicle comes out, instead of the usual 35% chance of recovery: `recovered` brings it back (damaged, through the parking queue), `lost` writes it off and removes it (or, if the farm had machinery insurance on the day of the theft, starts the insurance claim, and the vehicle goes when it settles). It applies once, to whichever theft's report comes back next, then the odds are back to normal. Pair it with `tcCompany event theft` to try both outcomes.
+Decides how the next event of that type comes out, instead of the usual roll. It applies once, to the next incident of that type to reach that point, then the odds are back to normal. Pair it with `tcCompany event` to try each outcome. With no type, or one that has no outcomes, it lists the types that do. Both arguments are case-insensitive.
+
+| Type | Outcomes | What it decides |
+|---|---|---|
+| `theft` | `recovered`, `lost` | The next police report on a stolen vehicle: `recovered` brings it back (damaged, through the parking queue), `lost` writes it off and removes it (or, if the farm had machinery insurance on the day of the theft, starts the insurance claim, and the vehicle goes when it settles). Normally a 35% chance of recovery. |
+| `roadAccident` | `ours`, `theirs` | Who's to blame for the next road accident: `ours` (a claim through public liability, a reputation hit and a morale knock for the driver), `theirs` (the other driver's insurer pays an estimated repair cost a month or two later). Normally rolled from the driver's tractor rating and the state of the machines. |
+| `sprayDrift` | `upheld`, `cleared` | The findings on the next spray drift complaint: `upheld` (the complainant's claim through public liability, a reputation hit and a morale knock for the operator), `cleared` (nothing else happens). Normally rolled from the operator's crop care and the wind. |
+| `poaching` | `stays`, `leaves` | What the next poached worker you do nothing about decides (matching the offer always keeps them): `stays` on the same pay, or `leaves`, handing in a month's notice. Normally they stay with a 5-25% chance, from their morale and their pay against what they expect. |
 
 ```
+tcCompany outcome theft recovered
 tcCompany event theft
-tcCompany theftRecover recovered
-```
 
-### `tcCompany accidentFault <ours|theirs>`
-
-Decides who's to blame for the next road accident, instead of the usual roll from the driver's tractor rating and the state of the machines: `ours` (a claim through public liability, a reputation hit and a morale knock for the driver), `theirs` (the other driver's insurer pays an estimated repair cost a month or two later). It applies once, to the next accident, then the odds are back to normal. Pair it with `tcCompany event roadAccident` to try both.
-
-```
-tcCompany accidentFault theirs
+tcCompany outcome roadAccident theirs
 tcCompany event roadAccident
-```
 
-### `tcCompany driftUpheld <yes|no>`
-
-Decides how the findings on the next spray drift complaint come out, instead of the usual roll from the operator's crop care and the wind: `yes` upholds it (the complainant's claim through public liability, a reputation hit and a morale knock for the operator), `no` clears it (nothing else happens). It applies once, to the next complaint, then the odds are back to normal. Pair it with `tcCompany event sprayDrift` to try both.
-
-```
-tcCompany driftUpheld yes
-tcCompany event sprayDrift
+tcCompany outcome poaching leaves
+tcCompany event poaching amy
 ```
 
 ### `tcCompany debris [count] [prop]`

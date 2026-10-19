@@ -214,17 +214,23 @@ test("the last story survives a save and load", function()
     assertEquals(loaded.lastStoryByFarm[1], "ratesRefund")
 end)
 
-test("tcCompany goodNews forces a story, or says which there are", function()
+test("tcCompany event goodNews forces a story, or says which there are", function()
     local world, tc = setup({ completedJobs = 0 })
     TCConsole.reset()
-    TheContractorGoodNews.registerConsoleCommands()
-    local command = TCConsole.groups.company.subcommands.goodnews
-    local output = command.run(1, { "PARISHCOUNCIL" })
-    assertTrue(string.find(output, "parishCouncil", 1, true) ~= nil, output)
+    TheContractorRandomEvents.registerConsoleCommands()
+    local command = TCConsole.groups.company.subcommands.event
+    local output = command.run(1, { "goodNews", "PARISHCOUNCIL" })
+    assertTrue(string.find(output, "(goodNews) opened", 1, true) ~= nil, output)
     assertEquals(world.messages[1].title, "Thanks from the parish council")
     assertEquals(tc.GoodNews.forcedStory, nil, "cleared")
 
-    output = command.run(1, { "nope" })
+    output = command.run(1, { "goodNews", "nope" })
     assertTrue(string.find(output, "Stories: photoPosted", 1, true) ~= nil, output)
     assertEquals(#world.messages, 1)
+
+    -- No story: a random one, even before the first completed job.
+    tc.RandomEvents.lastPeriodByFarm = {}
+    command.run(1, { "goodNews" })
+    assertEquals(#world.messages, 2, "random story")
+    assertEquals(tc.GoodNews.forcedStory, nil, "cleared again")
 end)

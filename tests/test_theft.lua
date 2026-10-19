@@ -421,13 +421,15 @@ test("a stolen vehicle that's gone after a reload is simply written off", functi
     assertEquals(world.messages[2].titleKey, "tc_theft_lostTitle", "written off")
 end)
 
-test("tcCompany theftRecover sets the next outcome", function()
+test("tcCompany outcome theft sets the next outcome", function()
     local _, tc = setup()
     TCConsole.reset()
-    TheContractorTheft.registerConsoleCommands()
+    TheContractorRandomEvents.registerConsoleCommands()
     local group = TCConsole.groups.company
 
-    assertTrue(TCConsole.dispatch(group, { "theftRecover", "Lost" }):find("not been found") ~= nil, "lost")
+    assertTrue(TCConsole.dispatch(group, { "outcome", "THEFT", "Lost" }):find("not been found") ~= nil, "lost")
     assertEquals(tc.Theft.forcedOutcome, "lost", "set")
-    assertTrue(TCConsole.dispatch(group, { "theftRecover", "maybe" }):find("^Usage") ~= nil, "bad argument")
+    assertTrue(TCConsole.dispatch(group, { "outcome", "theft", "maybe" }):find("^Usage: tcCompany outcome theft <recovered|lost>") ~= nil,
+        "bad argument")
+    assertTrue(TCConsole.dispatch(group, { "outcome" }):find("theft <recovered|lost>", 1, true) ~= nil, "lists types")
 end)

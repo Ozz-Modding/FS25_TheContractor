@@ -100,7 +100,7 @@ function TheContractorTheft.new()
     local self = {}
     setmetatable(self, TheContractorTheft_mt)
 
-    -- tcCompany theftRecover: the next police report's outcome. Server-only,
+    -- tcCompany outcome theft: the next police report's outcome. Server-only,
     -- not saved.
     self.forcedOutcome = nil
 
@@ -148,6 +148,14 @@ function TheContractorTheft:register(randomEvents, inbox, insurance, courtesy)
             return self:pickVehicle(farmId)
         end,
         stages = stages,
+        console = {
+            outcomes = { TheContractorTheft.OUTCOME.RECOVERED, TheContractorTheft.OUTCOME.LOST },
+            setOutcome = function(outcome)
+                self.forcedOutcome = outcome
+                return string.format("The next police report on a stolen vehicle will say it's %s",
+                    outcome == TheContractorTheft.OUTCOME.RECOVERED and "been recovered" or "not been found")
+            end,
+        },
     })
 
     inbox:registerMessageKind(TheContractorTheft.MESSAGE_KIND, {
@@ -509,22 +517,4 @@ function TheContractorTheft:resolveSavedVehicles()
         TCEquipmentVisibility.setVisibleEverywhere(hidden, false)
         TCVehicleLock.refresh()
     end
-end
-
--- Console commands (tcCompany - see TCConsole) -----------------------------------------
-
-function TheContractorTheft.registerConsoleCommands()
-    TCConsole.register("company", "theftRecover", {
-        args = "<recovered|lost>",
-        description = "Decide how the next police report on a stolen vehicle comes out",
-        run = function(farmId, args)
-            local outcome = args[1] ~= nil and string.lower(args[1]) or nil
-            if outcome ~= TheContractorTheft.OUTCOME.RECOVERED and outcome ~= TheContractorTheft.OUTCOME.LOST then
-                return false
-            end
-            g_currentMission.TheContractor.Theft.forcedOutcome = outcome
-            return string.format("The next police report on a stolen vehicle will say it's %s",
-                outcome == TheContractorTheft.OUTCOME.RECOVERED and "been recovered" or "not been found")
-        end,
-    })
 end

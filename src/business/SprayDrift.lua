@@ -85,7 +85,7 @@ function TheContractorSprayDrift.new()
     local self = {}
     setmetatable(self, TheContractorSprayDrift_mt)
 
-    -- tcCompany driftUpheld: true/false for the next complaint's findings.
+    -- tcCompany outcome sprayDrift: true/false for the next complaint's findings.
     -- Server-only, not saved.
     self.forcedUpheld = nil
 
@@ -105,6 +105,13 @@ function TheContractorSprayDrift:register(randomEvents, inbox)
         canTrigger = function(farmId, job)
             return self:rollComplaint(farmId, job, math.random)
         end,
+        console = {
+            outcomes = { "upheld", "cleared" },
+            setOutcome = function(outcome)
+                self.forcedUpheld = outcome == "upheld"
+                return string.format("The next spray drift complaint will be %s", outcome)
+            end,
+        },
         stages = {
             { key = stage.COMPLAINT, run = function(incident)
                 return self:onComplaint(incident)
@@ -331,22 +338,4 @@ function TheContractorSprayDrift:onFindings(incident)
         farmId, incident.id, data.claimAmount, paid, data.insured and "insured" or "uninsured",
         data.reputationPenalty)
     return TheContractorRandomEvents.DONE
-end
-
--- Console commands (tcCompany - see TCConsole) -------------------------------------------
-
-function TheContractorSprayDrift.registerConsoleCommands()
-    TCConsole.register("company", "driftUpheld", {
-        args = "<yes|no>",
-        description = "Decide whether the next spray drift complaint is upheld",
-        run = function(farmId, args)
-            local answer = args[1] ~= nil and string.lower(args[1]) or nil
-            if answer ~= "yes" and answer ~= "no" then
-                return false
-            end
-            g_currentMission.TheContractor.SprayDrift.forcedUpheld = answer == "yes"
-            return string.format("The next spray drift complaint will be %s",
-                answer == "yes" and "upheld" or "cleared")
-        end,
-    })
 end
