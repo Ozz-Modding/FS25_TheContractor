@@ -95,8 +95,8 @@ TheContractorJobGeneration_mt = Class(TheContractorJobGeneration)
 -- A type left out of JOB_TYPE_KEYS (flyTipping) is never generated, shown
 -- by the availability snapshot or created by tcJob: only its random event
 -- (075) makes one, with createJobOnField.
--- reputationPerHa is the completion reputation reward per hectare (see
--- TheContractorJobs:calculateReputationReward): plow anchored at ~10 for a
+-- reputationPerHa is the completion reputation reward per hectare for a
+-- 100% job (see TheContractorJobs:calculateReputationReward, 080): plow anchored at ~10 for a
 -- 1.07 ha (2.65 acre) field, the rest scaled from it by the same ratios as
 -- rewardPerHa (REPUTATION_PER_REWARD), since those already reflect how
 -- slow/laborious each job is.

@@ -248,8 +248,9 @@ function TheContractorJob.new(id, farmId, jobType, fieldId, requiredSkillLevel, 
 
     -- 045 (see TCJobConsequences): hired-worker jobs only. startCondition
     -- is each piece of equipment's damage/wear when the worker set off -
-    -- { [vehicleId] = { damage, wear } } - server-only, saved while the job
-    -- runs. workerReports is what each worker did to the machines (extra
+    -- { [vehicleId] = { damage, wear, adsCondition } }, adsCondition only
+    -- for a machine ADS manages (080 reads it for job quality) -
+    -- server-only, saved while the job runs. workerReports is what each worker did to the machines (extra
     -- wear, washed or not), set on completion, sent to clients and saved.
     -- washVehicleIds (server-only, saved) is what gets washed when the
     -- cooldown ends; washMinutes (server-only, transient) the washing time

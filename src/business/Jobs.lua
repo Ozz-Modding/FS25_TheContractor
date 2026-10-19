@@ -24,10 +24,13 @@ TheContractorJobs.MISSED_JOB_PENALTY_MULTIPLIER = 1.5
 TheContractorJobs.MIN_MISSED_JOB_REPUTATION_PENALTY = 10
 
 -- Completion reputation reward (022) is the field's area times the job
--- type's reputationPerHa (JobGeneration's JOB_TYPES), scaled down by
--- operator under-qualification (see calculateReputationReward). Never less
--- than MIN_COMPLETION_REPUTATION_REWARD, so a tiny field still counts.
+-- type's reputationPerHa (JobGeneration's JOB_TYPES), scaled by the job's
+-- quality score (080, see getQualityReputationFactor): the full reward only
+-- at 100, none at REPUTATION_ZERO_QUALITY, and a loss below it. A reward
+-- is never less than MIN_COMPLETION_REPUTATION_REWARD, so a tiny field
+-- still counts.
 TheContractorJobs.MIN_COMPLETION_REPUTATION_REWARD = 1
+TheContractorJobs.REPUTATION_ZERO_QUALITY = 50
 
 -- A job's field work counts as "finished" once 019's completionPercentage
 -- (0-100 scale, already normalized against AbstractMission.SUCCESS_FACTOR by
@@ -41,14 +44,31 @@ TheContractorJobs.COMPLETION_THRESHOLD_PERCENTAGE = 100
 -- and the bales the job leaves are only cleared up once it's over.
 TheContractorJobs.GRACE_PERIOD_MS = 10 * 60 * 1000
 
--- Quality score (029), 0-100, set on completion (calculateQualityScore): a
--- weighted blend of skill (the crew's qualification ratio, the same one
--- that scales the reputation reward) and reliability (1 minus
--- QUALITY_PENALTY_PER_INTERVENTION for each time 021's watchdog had to step
--- in, floored at 0). The player driving personally always scores 100.
-TheContractorJobs.QUALITY_SKILL_WEIGHT = 0.7
-TheContractorJobs.QUALITY_RELIABILITY_WEIGHT = 0.3
-TheContractorJobs.QUALITY_PENALTY_PER_INTERVENTION = 0.5
+-- Quality score (029, reworked by 080), 0-100, set on completion
+-- (calculateQualityScore). A hired crew's score is the product of five
+-- factors, each 0-1, so 100 needs every one of them at its best:
+--   skill        headroom over the job's requiredSkillLevel on the crew's
+--                weakest rating (getSkillFactorFor): QUALITY_SKILL_BY_MARGIN
+--                for 0-3+ points over; under it, the at-level factor times
+--                (0.5 + 0.5 x rating / required)
+--   reliability  1 less QUALITY_PENALTY_PER_INTERVENTION for each time 021's
+--                watchdog had to step in, floored at QUALITY_RELIABILITY_FLOOR
+--   morale       TheContractorMorale.getJobQualityMultiplier (056)
+--   condition    the worst damage on the job's equipment when it set off
+--                (045's startCondition): 1 up to QUALITY_DAMAGE_ALLOWANCE,
+--                falling to 1 - QUALITY_CONDITION_PENALTY at full damage
+--   form         the crew's day, min(1, QUALITY_FORM_MIN + QUALITY_FORM_RANGE
+--                x random): exactly 1 one time in six
+-- An ordinary qualified crew scores in the low 80s, a perfect one 100 about
+-- one job in five. The player driving personally always scores 100.
+TheContractorJobs.QUALITY_SKILL_BY_MARGIN = { [0] = 0.90, [1] = 0.94, [2] = 0.97, [3] = 1.00 }
+TheContractorJobs.QUALITY_MAX_MARGIN = 3
+TheContractorJobs.QUALITY_PENALTY_PER_INTERVENTION = 0.15
+TheContractorJobs.QUALITY_RELIABILITY_FLOOR = 0.55
+TheContractorJobs.QUALITY_DAMAGE_ALLOWANCE = 0.1
+TheContractorJobs.QUALITY_CONDITION_PENALTY = 0.1
+TheContractorJobs.QUALITY_FORM_MIN = 0.90
+TheContractorJobs.QUALITY_FORM_RANGE = 0.12
 
 -- A two-worker harvest & haul crew (035) is scored on both workers, each
 -- for their own part: the combine driver counts for OPERATOR_SCORE_WEIGHT
@@ -830,38 +850,51 @@ function TheContractorJobs.getBaseReputationReward(job)
     return reputationPerHa * areaHa * haulageMultiplier
 end
 
--- Reputation reward, scaled by the operator's skill relative to the job's
--- requiredSkillLevel (022's design decision): the player operating
--- personally, or a hired worker who meets/exceeds the requirement, gets the
--- full base reward; an under-qualified-but-still-assignable worker (018
--- already allows this, just warns - see TheContractorAllocation.CAPABILITY.
--- WARN) gets it scaled down linearly by workerSkill/requiredSkillLevel,
--- workerSkill being the weaker of their tractor rating and operation skill
--- for the job (044). A job with no tractor (e.g. a self-propelled combine)
--- is judged on the operation skill alone.
--- Trade association members (053) get a little extra on top.
+-- Reputation reward (022), scaled by the job's quality score (080, see
+-- getQualityReputationFactor), so the score must be set first. A reward is
+-- at least MIN_COMPLETION_REPUTATION_REWARD, and trade association members
+-- (053) get a little extra on top. A poor job (below
+-- REPUTATION_ZERO_QUALITY) loses reputation instead, with no minimum or
+-- bonus. The player driving personally always scores 100, so earns in full.
 function TheContractorJobs:calculateReputationReward(job)
-    local reward = TheContractorJobs.getBaseReputationReward(job) * self:getReputationQualificationRatio(job)
+    local factor = TheContractorJobs.getQualityReputationFactor(job.qualityScore or 100)
+    local reward = TheContractorJobs.getBaseReputationReward(job) * factor
+    if factor <= 0 then
+        -- Rounded toward zero: a hair under the line costs nothing.
+        return -math.floor(-reward)
+    end
     reward = math.max(TheContractorJobs.MIN_COMPLETION_REPUTATION_REWARD, math.floor(reward))
     return reward + g_currentMission.TheContractor.Association:getReputationBonus(job.farmId, reward)
 end
 
--- 1 for a fully-qualified operator (see calculateReputationReward), else
--- workerSkill/requiredSkillLevel. On a two-worker haulage job (035) each
--- worker is judged against their own equipment's tier and their own
--- operation skill (haulage for the hauler), and the two are blended by
--- OPERATOR_SCORE_WEIGHT.
-function TheContractorJobs:getReputationQualificationRatio(job)
-    local ratio = self:getWorkerQualificationRatio(job, job.assignedWorkerId, job.assignedEquipmentIds, false)
-    if job.haulerWorkerId ~= nil then
-        local haulerRatio = self:getWorkerQualificationRatio(job, job.haulerWorkerId, job.haulageEquipmentIds, true)
-        local weight = TheContractorJobs.OPERATOR_SCORE_WEIGHT
-        ratio = weight * ratio + (1 - weight) * haulerRatio
-    end
-    return ratio
+-- The share of the base reputation reward a job of this quality earns: 1 at
+-- 100, 0 at REPUTATION_ZERO_QUALITY, and on the same line below it, so a
+-- (theoretical) 0 loses one base reward - still less than a missed job's
+-- MISSED_JOB_PENALTY_MULTIPLIER.
+function TheContractorJobs.getQualityReputationFactor(qualityScore)
+    local zero = TheContractorJobs.REPUTATION_ZERO_QUALITY
+    return (qualityScore - zero) / (100 - zero)
 end
 
-function TheContractorJobs:getWorkerQualificationRatio(job, workerId, equipmentIds, isHauler)
+-- The crew's skill factor (080): getWorkerSkillFactor for the operator, and
+-- on a two-worker haulage job (035) the hauler too, each judged against
+-- their own equipment's tier and their own operation skill (haulage for the
+-- hauler), blended by OPERATOR_SCORE_WEIGHT.
+function TheContractorJobs:getCrewSkillFactor(job)
+    local factor = self:getWorkerSkillFactor(job, job.assignedWorkerId, job.assignedEquipmentIds, false)
+    if job.haulerWorkerId ~= nil then
+        local haulerFactor = self:getWorkerSkillFactor(job, job.haulerWorkerId, job.haulageEquipmentIds, true)
+        local weight = TheContractorJobs.OPERATOR_SCORE_WEIGHT
+        factor = weight * factor + (1 - weight) * haulerFactor
+    end
+    return factor
+end
+
+-- One worker's skill factor (getSkillFactorFor) from their weakest rating
+-- for the job: the tractor tier they drove or the operation skill (044). No
+-- worker, or nothing to judge, is 1. A job with no tractor (a
+-- self-propelled combine) is judged on the operation skill alone.
+function TheContractorJobs:getWorkerSkillFactor(job, workerId, equipmentIds, isHauler)
     if workerId == nil then
         return 1
     end
@@ -879,23 +912,67 @@ function TheContractorJobs:getWorkerQualificationRatio(job, workerId, equipmentI
         ratings.tractorTier = nil
     end
 
-    local workerSkill = TheContractorAllocation.getWeakestRating(ratings)
-    if workerSkill == nil or workerSkill >= job.requiredSkillLevel then
+    local rating = TheContractorAllocation.getWeakestRating(ratings)
+    if rating == nil then
         return 1
     end
-
-    return workerSkill / job.requiredSkillLevel
+    return TheContractorJobs.getSkillFactorFor(rating, job.requiredSkillLevel)
 end
 
--- 0-100 (029), see QUALITY_SKILL_WEIGHT. Reuses 022's qualification ratio
--- rather than a second skill formula. 056: an unhappy crew does worse work.
-function TheContractorJobs:calculateQualityScore(job)
-    local skill = self:getReputationQualificationRatio(job)
-    local reliability = math.max(0,
-        1 - job.stuckInterventions * TheContractorJobs.QUALITY_PENALTY_PER_INTERVENTION)
-    local score = (TheContractorJobs.QUALITY_SKILL_WEIGHT * skill +
-        TheContractorJobs.QUALITY_RELIABILITY_WEIGHT * reliability) * TheContractorMorale.getJobQualityMultiplier(job)
-    return math.floor(math.max(0, math.min(1, score)) * 100 + 0.5)
+-- QUALITY_SKILL_BY_MARGIN for a rating at or over the requirement (capped
+-- at QUALITY_MAX_MARGIN points over); under it, the at-level factor times
+-- (0.5 + 0.5 x rating / required).
+function TheContractorJobs.getSkillFactorFor(rating, requiredSkillLevel)
+    local byMargin = TheContractorJobs.QUALITY_SKILL_BY_MARGIN
+    local margin = math.floor(rating - requiredSkillLevel)
+    if margin >= 0 then
+        return byMargin[math.min(margin, TheContractorJobs.QUALITY_MAX_MARGIN)]
+    end
+    return byMargin[0] * (0.5 + 0.5 * math.max(0, rating) / requiredSkillLevel)
+end
+
+function TheContractorJobs.getReliabilityFactor(stuckInterventions)
+    return math.max(TheContractorJobs.QUALITY_RELIABILITY_FLOOR,
+        1 - (stuckInterventions or 0) * TheContractorJobs.QUALITY_PENALTY_PER_INTERVENTION)
+end
+
+-- The worst damage (0-1) on the job's equipment when it set off (045's
+-- startCondition: vanilla damage, or 1 - ADS condition for a machine ADS
+-- manages), as a factor: 1 up to QUALITY_DAMAGE_ALLOWANCE, falling to
+-- 1 - QUALITY_CONDITION_PENALTY at full damage. No baseline is 1.
+function TheContractorJobs.getConditionFactor(job)
+    local worst = 0
+    for _, condition in pairs(job.startCondition or {}) do
+        local damage = condition.adsCondition ~= nil and (1 - condition.adsCondition) or condition.damage or 0
+        worst = math.max(worst, damage)
+    end
+    local allowance = TheContractorJobs.QUALITY_DAMAGE_ALLOWANCE
+    if worst <= allowance then
+        return 1
+    end
+    return 1 - TheContractorJobs.QUALITY_CONDITION_PENALTY * (math.min(1, worst) - allowance) / (1 - allowance)
+end
+
+-- How the crew's day went, from a roll (0-1): exactly 1 one time in six,
+-- else anywhere from QUALITY_FORM_MIN to 1.
+function TheContractorJobs.getFormFactor(roll)
+    return math.min(1, TheContractorJobs.QUALITY_FORM_MIN + TheContractorJobs.QUALITY_FORM_RANGE * roll)
+end
+
+-- 0-100 (029, 080): see the QUALITY_ constants. Rounded down, so 100 means
+-- every factor was at its best, not nearly. A job with no hired worker on
+-- it (the player driving personally) always scores 100. random is for the
+-- tests.
+function TheContractorJobs:calculateQualityScore(job, random)
+    if job.assignedWorkerId == nil and job.haulerWorkerId == nil then
+        return 100
+    end
+    random = random or math.random
+
+    local score = self:getCrewSkillFactor(job) * TheContractorJobs.getReliabilityFactor(job.stuckInterventions) *
+        TheContractorMorale.getJobQualityMultiplier(job) * TheContractorJobs.getConditionFactor(job) *
+        TheContractorJobs.getFormFactor(random())
+    return math.floor(math.max(0, math.min(1, score)) * 100 + 1e-6)
 end
 
 -- Bills the full negotiated price (an invoice since 049) and awards scaled
@@ -936,13 +1013,14 @@ function TheContractorJobs:completeJob(job, isForced)
     job.paymentAmount = job:getPrice()
     g_currentMission.TheContractor.Finances:invoiceJob(job)
 
-    local reputationReward = self:calculateReputationReward(job)
-    g_currentMission.TheContractor.Reputation:addReputation(job.farmId, reputationReward)
-
     -- Summary (029): computed here, alongside the payout, and sent to
-    -- clients in the TCJobCompletedEvent snapshot below.
+    -- clients in the TCJobCompletedEvent snapshot below. Quality first: the
+    -- reputation reward follows it (080).
     job.completedAt = TheContractorJobs.getGameMinutes()
     job.qualityScore = self:calculateQualityScore(job)
+
+    local reputationReward = self:calculateReputationReward(job)
+    g_currentMission.TheContractor.Reputation:addReputation(job.farmId, reputationReward)
 
     -- 045: extra wear from skill gaps, dirt, and whether the workers wash
     -- the equipment - before the cooldown (it adds the washing time) and
@@ -984,7 +1062,7 @@ function TheContractorJobs:completeJob(job, isForced)
     end
     self:setJobSupplyStatus(job, nil, nil)
 
-    Logging.info("TheContractor: farm %d job %d completed (%s, field %d) - billed %.0f, +%d reputation, %s taken, %.0f l fuel (%.0f), quality %d",
+    Logging.info("TheContractor: farm %d job %d completed (%s, field %d) - billed %.0f, %+d reputation, %s taken, %.0f l fuel (%.0f), quality %d",
         job.farmId, job.id, job.jobType, job.fieldId, job.paymentAmount, reputationReward,
         TheContractorJob.formatMinutes(job:getTimeTakenMinutes()), job.fuelUsedLiters, job.fuelCost,
         job.qualityScore)

@@ -14,7 +14,7 @@ Run your farm as an agricultural contracting business in Farming Simulator 25. T
 
 ### Your company
 - Found a contracting company for your farm from the new **Contractor** menu
-- **Reputation** grows with good work and drops with missed or botched jobs, and it decides how much work comes your way
+- **Reputation** grows with good work and drops with missed, poor or botched jobs, and it decides how much work comes your way. Only a perfect job earns the full reward
 - **Advertising** campaigns (newspapers through to TV) bring in extra work
 - Your own **company logo** on the Overview (see [Company logo](#company-logo))
 
@@ -27,6 +27,7 @@ Run your farm as an agricultural contracting business in Farming Simulator 25. T
 - **Calendar** of booked jobs, and a choice of who does each job and with which machines (a worker or you)
 - Progress is read from the field itself, whoever's driving
 - Missed deadlines have consequences
+- Every job gets a **quality score**. 100% is rare: it takes a crew with skill to spare, in good spirits, with well-kept machines, a clean run and a good day
 
 ### Staff
 - Hire workers from a pool of candidates, each with their own skills, potential and personality
@@ -58,6 +59,7 @@ Run your farm as an agricultural contracting business in Farming Simulator 25. T
 - **Vehicle theft**, with police reports, insurance claims and a courtesy vehicle while you wait
 - **Joyriders** tearing up grass fields, which can turn into repair work for you
 - **Diesel theft**: the yard tank drained or parked machines siphoned overnight, found first thing in the morning
+- **Road accidents** on the way back from a job: a skilled driver in well-kept machines is rarely to blame. If yours was, the other driver claims through your public liability cover. If not, their insurer pays for your repair, eventually
 
 ### General
 - Full multiplayer support, with everything farm by farm

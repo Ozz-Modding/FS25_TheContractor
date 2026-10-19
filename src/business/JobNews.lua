@@ -22,7 +22,7 @@ TheContractorJobNews = {}
 TheContractorJobNews_mt = Class(TheContractorJobNews)
 
 -- Quality score (0-100) a job needs for any of these.
-TheContractorJobNews.MIN_JOB_QUALITY = 75
+TheContractorJobNews.MIN_JOB_QUALITY = 85
 
 TheContractorJobNews.KETTLE = "kettle"
 TheContractorJobNews.KETTLE_CHANCE = 0.05

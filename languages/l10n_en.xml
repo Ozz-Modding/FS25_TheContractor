@@ -199,6 +199,7 @@
 		<text name="tc_inbox_chipAdmin" text="Admin"/>
 		<text name="tc_inbox_chipClaim" text="Claim"/>
 		<text name="tc_inbox_chipTheft" text="Theft"/>
+		<text name="tc_inbox_chipRoadAccident" text="Accident"/>
 		<text name="tc_inbox_chipJoyriders" text="Vandalism"/>
 		<text name="tc_inbox_chipFlyTipping" text="Fly-tipping"/>
 		<text name="tc_inbox_chipGoodNews" text="Good news"/>
@@ -590,6 +591,22 @@
 		<text name="tc_jobNews_stepsUp_eventName" text="A worker steps up"/>
 		<text name="tc_jobNews_stepsUp_title" text="A worker steps up"/>
 		<text name="tc_jobNews_stepsUp_body" text="Something finally clicked for %s on Field %s. Their %s is up to %s, and they're feeling more confident."/>
+		<text name="tc_roadAccident_eventName" text="Road accident"/>
+		<text name="tc_roadAccident_title" text="Road accident after Field %s"/>
+		<text name="tc_roadAccident_rearEnded_atFaultBody" text="On the way back from Field %s, %s turned off the road without signalling and a car ran into the back of the %s. The police have put it down to our driver, so expect a claim from the other driver in the next few days. Your driver is shaken up, and word gets around: your reputation has taken a knock."/>
+		<text name="tc_roadAccident_rearEnded_notAtFaultBody" text="On the way back from Field %s, %s was hit from behind by a car that didn't stop in time, and the %s is damaged. It wasn't our driver's fault: the other driver's insurer will be in touch about the repair."/>
+		<text name="tc_roadAccident_clipped_atFaultBody" text="On the way back from Field %s, %s took a bend too wide and a car coming the other way clipped the %s. The police have put it down to our driver, so expect a claim from the other driver in the next few days. Your driver is shaken up, and word gets around: your reputation has taken a knock."/>
+		<text name="tc_roadAccident_clipped_notAtFaultBody" text="On the way back from Field %s, %s was overtaken on a bend by a car that cut in too soon and clipped the %s. It wasn't our driver's fault: the other driver's insurer will be in touch about the repair."/>
+		<text name="tc_roadAccident_notice" text="Road accident on the way back from Field %s: the %s is damaged"/>
+		<text name="tc_roadAccident_claimTitle" text="Accident claim: Field %s"/>
+		<text name="tc_roadAccident_claimBodyInsured" text="The other driver in the accident on the way back from Field %s (%s was driving for you) is claiming %s for their car and their injuries. Your public liability insurance covers it, less the excess: %s has been charged. The claim goes on your record and will raise your premium for the next 3 years."/>
+		<text name="tc_roadAccident_claimBodyUninsured" text="The other driver in the accident on the way back from Field %s (%s was driving for you) is claiming %s for their car and their injuries. You don't have public liability insurance, so the whole %s has been charged."/>
+		<text name="tc_roadAccident_claimNotice" text="Road accident claim: %s paid"/>
+		<text name="tc_roadAccident_assessedTitle" text="Repair estimate: %s"/>
+		<text name="tc_roadAccident_assessedBody" text="The other driver's insurer has accepted the blame for the accident with your %s and estimates the repair at %s. They'll pay it, but don't expect it quickly."/>
+		<text name="tc_roadAccident_paymentNotice" text="%s due from the other driver's insurer for the %s"/>
+		<text name="tc_roadAccident_paidTitle" text="Repair paid: %s"/>
+		<text name="tc_roadAccident_paidBody" text="The other driver's insurer has finally paid for the repair to your %s: %s."/>
 		<text name="tc_joyriders_sowBody" text="The farmer was pleased with the plowing on Field %s and has offered you the job of sowing it back to grass."/>
 		<text name="tc_flyTipping_eventName" text="Fly-tipping"/>
 		<text name="tc_flyTipping_offerTitle" text="Fly-tipping on Field %s"/>
@@ -644,6 +661,7 @@
 		<text name="tc_claims_cause_scorch" text="overlapped the passes and scorched the crop"/>
 		<text name="tc_claims_cause_drift" text="let the spray drift onto the neighbouring crop"/>
 		<text name="tc_claims_cause_cropDamage" text="went too close and tore out part of the crop"/>
+		<text name="tc_claims_cause_roadAccident" text="caused a road accident on the way back"/>
 		<text name="tc_overhead_tradeAssociation" text="Agricultural Contractors' Association"/>
 		<text name="tc_overhead_tradeAssociation_desc" text="Trade association membership, %s a year. Members earn 5%% more reputation per job, get 25%% off certification courses and cheaper legal cover."/>
 		<text name="tc_overhead_legalExpenses" text="Legal expenses insurance"/>
