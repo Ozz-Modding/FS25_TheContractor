@@ -57,6 +57,7 @@ Run your farm as an agricultural contracting business in Farming Simulator 25. T
 ### Random events
 - **Vehicle theft**, with police reports, insurance claims and a courtesy vehicle while you wait
 - **Joyriders** tearing up grass fields, which can turn into repair work for you
+- **Diesel theft**: the yard tank drained or parked machines siphoned overnight, found first thing in the morning
 
 ### General
 - Full multiplayer support, with everything farm by farm

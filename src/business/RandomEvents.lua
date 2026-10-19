@@ -43,6 +43,14 @@
 -- happens per completed job. Forced from the console (no job), the farm's
 -- latest completed job that canTrigger accepts is used.
 --
+-- Time of day (078): an event type with triggerHours = { startHour, endHour }
+-- is still rolled at the day change, but a hit doesn't trigger then. It's
+-- held as a pending trigger for a random hour from startHour to endHour - 1
+-- that day, and the hourly tick triggers it once that hour has come (late
+-- rather than never, if the hour was skipped). While one is pending, that
+-- type isn't rolled again on that farm. Pending triggers are server-only
+-- and saved. The console's tcCompany event ignores the window.
+--
 -- Server: rolls, runs stages, saves. Every machine: holds the incidents and
 -- each farm's cooldowns (TCRandomEventIncidentEvent, initial client state),
 -- so menus can show them later.
@@ -77,6 +85,10 @@ function TheContractorRandomEvents.new()
     -- lastPeriodByFarm[farmId][eventType] = the period index an incident of
     -- that type last opened on that farm.
     self.lastPeriodByFarm = {}
+
+    -- Rolled events waiting for their hour (triggerHours, 078): { farmId,
+    -- eventType, day, hour }, oldest first. Server-only.
+    self.pendingTriggers = {}
 
     return self
 end
@@ -174,6 +186,10 @@ local function getDaysPerPeriod()
     return TCCalendar.getDaysPerPeriodOn(getToday())
 end
 
+local function getCurrentHour()
+    return g_currentMission.environment.currentHour or 0
+end
+
 -- Rolling (server) ----------------------------------------------------------------
 
 function TheContractorRandomEvents:startDailyTick()
@@ -181,10 +197,16 @@ function TheContractorRandomEvents:startDailyTick()
         return
     end
     g_messageCenter:subscribe(MessageType.DAY_CHANGED, self.onDayChanged, self)
+    g_messageCenter:subscribe(MessageType.HOUR_CHANGED, self.onHourChanged, self)
 end
 
 function TheContractorRandomEvents:stopDailyTick()
     g_messageCenter:unsubscribe(MessageType.DAY_CHANGED, self)
+    g_messageCenter:unsubscribe(MessageType.HOUR_CHANGED, self)
+end
+
+function TheContractorRandomEvents:onHourChanged()
+    self:firePendingTriggers()
 end
 
 function TheContractorRandomEvents:onDayChanged()
@@ -210,16 +232,83 @@ function TheContractorRandomEvents:rollNewEvents()
     local daysPerPeriod = getDaysPerPeriod()
     for _, farmId in ipairs(self:getCompanyFarmIds()) do
         for _, key in ipairs(self.eventTypeOrder) do
-            if self:getCooldownLeft(farmId, key) == 0 then
+            if self:getCooldownLeft(farmId, key) == 0 and not self:hasPendingTrigger(farmId, key) then
                 local definition = self.eventTypes[key]
                 local rate = definition.ratePerPeriod ~= nil and definition.ratePerPeriod(farmId) or 0
                 local chance = TheContractorRandomEvents.getDailyChance(rate, multiplier, daysPerPeriod)
                 if chance > 0 and math.random() < chance then
-                    local incident = self:triggerEvent(farmId, key)
-                    Logging.info("TheContractor: farm %d random event '%s' rolled (%.4f a day)%s", farmId, key,
-                        chance, incident == nil and ", but nothing to act on" or "")
+                    if definition.triggerHours ~= nil then
+                        local pending = self:addPendingTrigger(farmId, key, math.random())
+                        Logging.info("TheContractor: farm %d random event '%s' rolled (%.4f a day), due at %02d:00",
+                            farmId, key, chance, pending.hour)
+                    else
+                        local incident = self:triggerEvent(farmId, key)
+                        Logging.info("TheContractor: farm %d random event '%s' rolled (%.4f a day)%s", farmId, key,
+                            chance, incident == nil and ", but nothing to act on" or "")
+                    end
                 end
             end
+        end
+    end
+end
+
+-- Time of day (server, 078) ---------------------------------------------------------
+
+-- The hour a triggerHours window's roll (0-1) lands on: startHour to
+-- endHour - 1.
+function TheContractorRandomEvents.getTriggerHour(triggerHours, roll)
+    local startHour = triggerHours[1] or 0
+    local endHour = math.max(startHour + 1, triggerHours[2] or startHour + 1)
+    return math.min(endHour - 1, startHour + math.floor(roll * (endHour - startHour)))
+end
+
+function TheContractorRandomEvents:hasPendingTrigger(farmId, key)
+    for _, pending in ipairs(self.pendingTriggers) do
+        if pending.farmId == farmId and pending.eventType == key then
+            return true
+        end
+    end
+    return false
+end
+
+-- Holds a rolled event until its hour today. roll (0-1) picks the hour.
+function TheContractorRandomEvents:addPendingTrigger(farmId, key, roll)
+    local pending = {
+        farmId = farmId,
+        eventType = key,
+        day = getToday(),
+        hour = TheContractorRandomEvents.getTriggerHour(self.eventTypes[key].triggerHours, roll),
+    }
+    table.insert(self.pendingTriggers, pending)
+    return pending
+end
+
+-- Triggers every pending event whose hour has come (or gone: an hour
+-- skipped, or a day change in between). One whose farm no longer has a
+-- company, whose type has gone, or with the setting now Off is dropped.
+function TheContractorRandomEvents:firePendingTriggers()
+    if #self.pendingTriggers == 0 then
+        return
+    end
+    local today, hour = getToday(), getCurrentHour()
+    local companyNames = g_currentMission.TheContractor.Company.companyNames
+    local isOff = TheContractorRandomEvents.getRateMultiplier() <= 0
+
+    local due, waiting = {}, {}
+    for _, pending in ipairs(self.pendingTriggers) do
+        if today > pending.day or (today == pending.day and hour >= pending.hour) then
+            table.insert(due, pending)
+        else
+            table.insert(waiting, pending)
+        end
+    end
+    self.pendingTriggers = waiting
+
+    for _, pending in ipairs(due) do
+        if companyNames[pending.farmId] ~= nil and self.eventTypes[pending.eventType] ~= nil and not isOff then
+            local incident = self:triggerEvent(pending.farmId, pending.eventType)
+            Logging.info("TheContractor: farm %d random event '%s' due at %02d:00 triggered%s", pending.farmId,
+                pending.eventType, pending.hour, incident == nil and ", but nothing to act on" or "")
         end
     end
 end
@@ -588,11 +677,31 @@ function TheContractorRandomEvents:loadFromXMLFile(xmlFile)
 
     self.incidents = {}
     self.lastPeriodByFarm = {}
+    self.pendingTriggers = {}
 
     local rootKey = string.format("%s.randomEvents", TheContractor.SaveKey)
     self.nextIncidentId = Utils.getNoNil(getXMLInt(xmlFile, rootKey .. "#nextIncidentId"), 1)
 
     local index = 0
+    while true do
+        local key = string.format("%s.pending(%d)", rootKey, index)
+        if not hasXMLProperty(xmlFile, key) then
+            break
+        end
+        local pending = {
+            farmId = getXMLInt(xmlFile, key .. "#farmId"),
+            eventType = getXMLString(xmlFile, key .. "#eventType"),
+            day = getXMLInt(xmlFile, key .. "#day"),
+            hour = getXMLInt(xmlFile, key .. "#hour"),
+        }
+        if pending.farmId ~= nil and pending.eventType ~= nil and self.eventTypes[pending.eventType] ~= nil and
+                pending.day ~= nil and pending.hour ~= nil then
+            table.insert(self.pendingTriggers, pending)
+        end
+        index = index + 1
+    end
+
+    index = 0
     while true do
         local key = string.format("%s.cooldown(%d)", rootKey, index)
         if not hasXMLProperty(xmlFile, key) then
@@ -667,6 +776,14 @@ function TheContractorRandomEvents:saveToXmlFile(xmlFile)
 
     local rootKey = string.format("%s.randomEvents", TheContractor.SaveKey)
     setXMLInt(xmlFile, rootKey .. "#nextIncidentId", self.nextIncidentId)
+
+    for i, pending in ipairs(self.pendingTriggers) do
+        local key = string.format("%s.pending(%d)", rootKey, i - 1)
+        setXMLInt(xmlFile, key .. "#farmId", pending.farmId)
+        setXMLString(xmlFile, key .. "#eventType", pending.eventType)
+        setXMLInt(xmlFile, key .. "#day", pending.day)
+        setXMLInt(xmlFile, key .. "#hour", pending.hour)
+    end
 
     local index = 0
     for _, farmId in ipairs(getSortedKeys(self.lastPeriodByFarm)) do
@@ -767,7 +884,7 @@ end
 function TheContractorRandomEvents.registerConsoleCommands()
     TCConsole.register("company", "event", {
         args = "<type>",
-        description = "Make a random event happen to your farm now (ignores the odds and the cooldown)",
+        description = "Make a random event happen to your farm now (ignores the odds, the cooldown and the time of day)",
         run = function(farmId, args)
             local randomEvents = g_currentMission.TheContractor.RandomEvents
             local wanted = args[1]
@@ -825,9 +942,20 @@ function TheContractorRandomEvents.registerConsoleCommands()
                     local rate = definition.ratePerPeriod ~= nil and definition.ratePerPeriod(farmId) or 0
                     odds = string.format("%.3f a month, %.4f a day", rate * multiplier,
                         TheContractorRandomEvents.getDailyChance(rate, multiplier, daysPerPeriod))
+                    if definition.triggerHours ~= nil then
+                        odds = odds .. string.format(", happens %02d:00-%02d:00", definition.triggerHours[1],
+                            definition.triggerHours[2])
+                    end
                 end
                 table.insert(lines, string.format("  %s (%s): %s%s", key, randomEvents:getEventTypeName(key), odds,
                     cooldownLeft > 0 and string.format(", cooling down for %d more month(s)", cooldownLeft) or ""))
+            end
+
+            for _, pending in ipairs(randomEvents.pendingTriggers) do
+                if pending.farmId == farmId then
+                    table.insert(lines, string.format("  %s rolled, due day %d at %02d:00", pending.eventType,
+                        pending.day, pending.hour))
+                end
             end
 
             local incidents = randomEvents:getIncidents(farmId)
