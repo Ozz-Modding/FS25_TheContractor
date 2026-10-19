@@ -60,6 +60,7 @@ Run your farm as an agricultural contracting business in Farming Simulator 25. T
 - **Joyriders** tearing up grass fields, which can turn into repair work for you
 - **Diesel theft**: the yard tank drained or parked machines siphoned overnight, found first thing in the morning
 - **Road accidents** on the way back from a job: a skilled driver in well-kept machines is rarely to blame. If yours was, the other driver claims through your public liability cover. If not, their insurer pays for your repair, eventually
+- **Spray drift complaints** after herbicide jobs: a skilled operator who stops when the wind gets up is rarely in the wrong. A poor one spraying on a windy day often is, and the neighbour, beekeeper or organic grower claims through your public liability cover
 
 ### General
 - Full multiplayer support, with everything farm by farm

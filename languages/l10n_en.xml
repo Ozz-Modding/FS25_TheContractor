@@ -200,6 +200,7 @@
 		<text name="tc_inbox_chipClaim" text="Claim"/>
 		<text name="tc_inbox_chipTheft" text="Theft"/>
 		<text name="tc_inbox_chipRoadAccident" text="Accident"/>
+		<text name="tc_inbox_chipSprayDrift" text="Complaint"/>
 		<text name="tc_inbox_chipJoyriders" text="Vandalism"/>
 		<text name="tc_inbox_chipFlyTipping" text="Fly-tipping"/>
 		<text name="tc_inbox_chipGoodNews" text="Good news"/>
@@ -607,6 +608,25 @@
 		<text name="tc_roadAccident_paymentNotice" text="%s due from the other driver's insurer for the %s"/>
 		<text name="tc_roadAccident_paidTitle" text="Repair paid: %s"/>
 		<text name="tc_roadAccident_paidBody" text="The other driver's insurer has finally paid for the repair to your %s: %s."/>
+		<text name="tc_sprayDrift_eventName" text="Spray drift complaint"/>
+		<text name="tc_sprayDrift_complaintTitle" text="Spray drift complaint: Field %s"/>
+		<text name="tc_sprayDrift_neighbour_complaintBody" text="A neighbour of Field %s says the herbicide %s put on it drifted over the hedge and scorched their garden and paddock. We're looking into it: expect the findings in a week or two."/>
+		<text name="tc_sprayDrift_neighbour_complaintBodyField" text="A neighbour of Field %s says the herbicide %s put on it drifted over the hedge and scorched their garden and paddock, by Field %s. We're looking into it: expect the findings in a week or two."/>
+		<text name="tc_sprayDrift_beekeeper_complaintBody" text="A beekeeper with hives next to Field %s says the herbicide %s put on it drifted onto them while the bees were out foraging, and they've lost colonies. We're looking into it: expect the findings in a week or two."/>
+		<text name="tc_sprayDrift_beekeeper_complaintBodyField" text="A beekeeper with hives next to Field %s says the herbicide %s put on it drifted onto them, on Field %s, while the bees were out foraging, and they've lost colonies. We're looking into it: expect the findings in a week or two."/>
+		<text name="tc_sprayDrift_organicGrower_complaintBody" text="An organic grower next to Field %s says the herbicide %s put on it drifted onto their crop, which could cost it its organic status. We're looking into it: expect the findings in a week or two."/>
+		<text name="tc_sprayDrift_organicGrower_complaintBodyField" text="An organic grower says the herbicide put on Field %s by %s drifted onto their crop on Field %s, which could cost it its organic status. We're looking into it: expect the findings in a week or two."/>
+		<text name="tc_sprayDrift_notice" text="Spray drift complaint about Field %s: being looked into"/>
+		<text name="tc_sprayDrift_clearedTitle" text="Spray drift complaint cleared: Field %s"/>
+		<text name="tc_sprayDrift_clearedBodyCalm" text="The complaint about spraying on Field %s has been dropped. %s's spray records and certificate were in order, and it was a calm day: whatever they found, it wasn't from us."/>
+		<text name="tc_sprayDrift_clearedBodyBreezy" text="The complaint about spraying on Field %s has been dropped. %s's spray records and certificate were in order, and the wind on the day was within limits for the nozzles used: whatever they found, it wasn't from us."/>
+		<text name="tc_sprayDrift_damage_neighbour" text="their scorched garden and paddock"/>
+		<text name="tc_sprayDrift_damage_beekeeper" text="the colonies they lost"/>
+		<text name="tc_sprayDrift_damage_organicGrower" text="the crop that lost its organic status"/>
+		<text name="tc_sprayDrift_upheldTitle" text="Spray drift complaint upheld: Field %s"/>
+		<text name="tc_sprayDrift_upheldBodyInsured" text="The complaint about spraying on Field %s has been upheld: %s carried on spraying when the conditions said stop, and it drifted. They're claiming %s for %s. Your public liability insurance covers it, less the excess: %s has been charged. The claim goes on your record and will raise your premium for the next 3 years, and word has got around: your reputation has taken a knock."/>
+		<text name="tc_sprayDrift_upheldBodyUninsured" text="The complaint about spraying on Field %s has been upheld: %s carried on spraying when the conditions said stop, and it drifted. They're claiming %s for %s. You don't have public liability insurance, so the whole %s has been charged, and word has got around: your reputation has taken a knock."/>
+		<text name="tc_sprayDrift_upheldNotice" text="Spray drift complaint about Field %s upheld: %s paid"/>
 		<text name="tc_joyriders_sowBody" text="The farmer was pleased with the plowing on Field %s and has offered you the job of sowing it back to grass."/>
 		<text name="tc_flyTipping_eventName" text="Fly-tipping"/>
 		<text name="tc_flyTipping_offerTitle" text="Fly-tipping on Field %s"/>
@@ -662,6 +682,7 @@
 		<text name="tc_claims_cause_drift" text="let the spray drift onto the neighbouring crop"/>
 		<text name="tc_claims_cause_cropDamage" text="went too close and tore out part of the crop"/>
 		<text name="tc_claims_cause_roadAccident" text="caused a road accident on the way back"/>
+		<text name="tc_claims_cause_sprayDrift" text="let the spray drift onto a neighbour's land"/>
 		<text name="tc_overhead_tradeAssociation" text="Agricultural Contractors' Association"/>
 		<text name="tc_overhead_tradeAssociation_desc" text="Trade association membership, %s a year. Members earn 5%% more reputation per job, get 25%% off certification courses and cheaper legal cover."/>
 		<text name="tc_overhead_legalExpenses" text="Legal expenses insurance"/>

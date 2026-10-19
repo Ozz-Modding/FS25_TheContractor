@@ -368,15 +368,8 @@ function TheContractorRoadAccident:onClaim(incident)
     local paid = tc.Claims:chargeClaim(farmId, data.claimAmount, data.insured)
     data.claimPaid = paid
 
-    local claim = { cause = "roadAccident", amount = data.claimAmount, paid = paid, insured = data.insured,
-        reputationPenalty = data.reputationPenalty }
-    local entry = tc.Logbook:getJobEntry(farmId, data.jobId)
-    if entry ~= nil and entry.claim ~= nil then
-        claim = { cause = entry.claim.cause, amount = entry.claim.amount + claim.amount,
-            paid = entry.claim.paid + claim.paid, insured = entry.claim.insured and claim.insured,
-            reputationPenalty = (entry.claim.reputationPenalty or 0) + claim.reputationPenalty }
-    end
-    tc.Logbook:recordClaim(farmId, data.jobId, claim)
+    tc.Claims:addToJobLog(farmId, data.jobId, { cause = "roadAccident", amount = data.claimAmount, paid = paid,
+        insured = data.insured, reputationPenalty = data.reputationPenalty })
 
     tc.Inbox:postMessage(farmId, TheContractorRoadAccident.MESSAGE_KIND, "tc_roadAccident_claimTitle",
         data.insured and "tc_roadAccident_claimBodyInsured" or "tc_roadAccident_claimBodyUninsured",
