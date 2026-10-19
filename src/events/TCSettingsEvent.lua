@@ -37,7 +37,6 @@ function TCSettingsEvent:run(connection)
         if TheContractorSettings.getCanConnectionChange(connection) then
             settings:applyValues(self.values)
             g_server:broadcastEvent(TCSettingsEvent.new(), false, connection)
-            Logging.info("TheContractor: settings changed, job pay rate %d%%", settings:get("jobPayRate"))
         else
             connection:sendEvent(TCSettingsEvent.new())
         end

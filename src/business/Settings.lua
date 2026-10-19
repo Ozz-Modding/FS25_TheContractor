@@ -56,7 +56,27 @@ TheContractorSettings.DEFINITIONS.randomEvents = {
     default = 3
 }
 
-TheContractorSettings.ITEMS = { "jobPayRate", "lateInvoices", "randomEvents" }
+-- Where new workers' and administrators' names come from (TCNames): one
+-- style, or a mix. Saved as the option's number, so a new style goes on the
+-- end of NAME_STYLES. Names already given never change.
+TheContractorSettings.NAME_STYLES = {
+    "british", "irish", "american", "french", "german", "dutch", "scandinavian", "spanish", "italian", "polish",
+    "european", "all",
+}
+do
+    local values, stringKeys = {}, {}
+    for i, key in ipairs(TheContractorSettings.NAME_STYLES) do
+        values[i] = i
+        stringKeys[i] = "tc_nameStyle_" .. key
+    end
+    TheContractorSettings.DEFINITIONS.nameStyle = {
+        values = values,
+        stringKeys = stringKeys,
+        default = 1
+    }
+end
+
+TheContractorSettings.ITEMS = { "jobPayRate", "lateInvoices", "randomEvents", "nameStyle" }
 
 function TheContractorSettings.new()
     local self = {}
@@ -118,6 +138,11 @@ end
 -- A request from this connection may change settings (server side).
 function TheContractorSettings.getCanConnectionChange(connection)
     return connection:getIsLocal() or g_currentMission.userManager:getIsConnectionMasterUser(connection)
+end
+
+-- The nameStyle setting's style or mix key, for TCNames.generate.
+function TheContractorSettings:getNameStyle()
+    return TheContractorSettings.NAME_STYLES[self.values.nameStyle] or TheContractorSettings.NAME_STYLES[1]
 end
 
 -- 048: the multiplier on a new job's price. FS25_EconomyScale's factor
