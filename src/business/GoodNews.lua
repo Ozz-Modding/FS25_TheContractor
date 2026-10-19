@@ -51,7 +51,7 @@ function TheContractorGoodNews.new()
 
     -- lastStoryByFarm[farmId] = the story key that farm last had (server).
     self.lastStoryByFarm = {}
-    -- Set by tcCompany goodNews <story> around its triggerEvent.
+    -- Set by tcCompany event goodNews [story] around its triggerEvent.
     self.forcedStory = nil
 
     return self
@@ -68,6 +68,16 @@ function TheContractorGoodNews:register(randomEvents, inbox)
         canTrigger = function(farmId)
             return self:pickStory(farmId)
         end,
+        -- tcCompany event goodNews [story]: that story, or a random one other
+        -- than the last, with or without a completed job.
+        console = {
+            prepareTrigger = function(farmId, details)
+                return self:prepareConsoleStory(farmId, details[1])
+            end,
+            clearTrigger = function()
+                self.forcedStory = nil
+            end,
+        },
         stages = {
             { key = "announce", run = function(incident)
                 return self:onAnnounce(incident)
@@ -262,4 +272,24 @@ function TheContractorGoodNews.registerConsoleCommands()
             return string.format("Good news '%s' for farm %d (incident %d)", storyKey, farmId, incident.id)
         end,
     })
+end
+
+-- Console (068's tcCompany event) ---------------------------------------------------
+
+-- Sets forcedStory for the trigger, or returns why not.
+function TheContractorGoodNews:prepareConsoleStory(farmId, wanted)
+    if wanted == nil then
+        self.forcedStory = TheContractorGoodNews.chooseStory(self.lastStoryByFarm[farmId]).key
+        return nil
+    end
+
+    local keys = {}
+    for _, story in ipairs(TheContractorGoodNews.STORIES) do
+        table.insert(keys, story.key)
+        if string.lower(story.key) == string.lower(wanted) then
+            self.forcedStory = story.key
+            return nil
+        end
+    end
+    return string.format("Error: no story '%s'. Stories: %s", wanted, table.concat(keys, ", "))
 end

@@ -870,6 +870,8 @@ function TheContractorStaff:retireWorker(farmId, workerId)
     g_currentMission.TheContractor.Training:removeMessagesFor(farmId, workerId)
     -- 058: and any pay review.
     g_currentMission.TheContractor.PayReviews:removeMessagesFor(farmId, workerId)
+    -- 083: and any rival's offer.
+    g_currentMission.TheContractor.Poaching:onWorkerGone(farmId, workerId)
 end
 
 -- Worker ids are unique across the pool and every roster (one shared
@@ -1129,6 +1131,8 @@ function TheContractorStaff:releaseWorker(farmId, workerId)
     g_currentMission.TheContractor.Training:removeMessagesFor(farmId, workerId)
     -- 058: and any pay review.
     g_currentMission.TheContractor.PayReviews:removeMessagesFor(farmId, workerId)
+    -- 083: and any rival's offer.
+    g_currentMission.TheContractor.Poaching:onWorkerGone(farmId, workerId)
 
     Logging.info("TheContractor: farm %d released worker %d (%s) after %d year(s): %.1f weeks' notice pay (%.0f), %.1f weeks' redundancy pay (%.0f)",
         farmId, workerId, worker.name, cost.years, cost.noticeWeeks, cost.noticePay, cost.redundancyWeeks,

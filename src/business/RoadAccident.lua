@@ -96,7 +96,7 @@ function TheContractorRoadAccident.new()
     local self = {}
     setmetatable(self, TheContractorRoadAccident_mt)
 
-    -- tcCompany accidentFault: who's to blame for the next accident.
+    -- tcCompany outcome roadAccident: who's to blame for the next accident.
     -- Server-only, not saved.
     self.forcedFault = nil
 
@@ -115,6 +115,14 @@ function TheContractorRoadAccident:register(randomEvents, inbox)
         canTrigger = function(farmId, job)
             return self:rollAccident(farmId, job, math.random)
         end,
+        console = {
+            outcomes = { TheContractorRoadAccident.FAULT.OURS, TheContractorRoadAccident.FAULT.THEIRS },
+            setOutcome = function(fault)
+                self.forcedFault = fault
+                return string.format("The next road accident will be %s fault",
+                    fault == TheContractorRoadAccident.FAULT.OURS and "your driver's" or "the other driver's")
+            end,
+        },
         stages = {
             { key = stage.REPORT, run = function(incident)
                 return self:onReport(incident)
@@ -438,22 +446,4 @@ function TheContractorRoadAccident:resolveSavedVehicles()
             incident.data.vehicleId = uniqueId ~= nil and uniqueId ~= "" and TCVehicleIds.getObjectId(uniqueId) or 0
         end
     end
-end
-
--- Console commands (tcCompany - see TCConsole) -------------------------------------------
-
-function TheContractorRoadAccident.registerConsoleCommands()
-    TCConsole.register("company", "accidentFault", {
-        args = "<ours|theirs>",
-        description = "Decide who's to blame for the next road accident",
-        run = function(farmId, args)
-            local fault = args[1] ~= nil and string.lower(args[1]) or nil
-            if fault ~= TheContractorRoadAccident.FAULT.OURS and fault ~= TheContractorRoadAccident.FAULT.THEIRS then
-                return false
-            end
-            g_currentMission.TheContractor.RoadAccident.forcedFault = fault
-            return string.format("The next road accident will be %s fault",
-                fault == TheContractorRoadAccident.FAULT.OURS and "your driver's" or "the other driver's")
-        end,
-    })
 end
