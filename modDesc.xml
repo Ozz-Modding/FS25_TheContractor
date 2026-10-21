@@ -54,6 +54,7 @@
         <storeItem xmlFilename="xml/standingSpot.xml" />
         <storeItem xmlFilename="xml/disposalSkip.xml" />
         <storeItem xmlFilename="xml/logoSign.xml" />
+        <storeItem xmlFilename="xml/customSign.xml" />
     </storeItems>
 
     <constructionCategories>

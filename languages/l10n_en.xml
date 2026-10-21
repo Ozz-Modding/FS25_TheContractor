@@ -380,7 +380,11 @@
 		<text name="tc_disposalSkip_name" text="Disposal Skip"/>
 		<text name="tc_disposalSkip_function" text="Where fly-tipped junk from a clearing job goes. Drop each piece in or right next to it and it's taken away. Every piece from a job costs a small tipping fee."/>
 		<text name="tc_logoSign_name" text="Company Logo Sign"/>
-		<text name="tc_logoSign_function" text="A sign showing your company logo. Put your own square logo.dds (or logo.png) in modSettings/FS25_TheContractor to replace the default."/>
+		<text name="tc_logoSign_function" text="A sign showing your company logo. Put your own square logo.dds in modSettings/FS25_TheContractor to replace the default."/>
+		<text name="tc_customSign_name" text="Custom Sign"/>
+		<text name="tc_customSign_function" text="A sign showing your company logo or a design of your own. Put square .dds images in modSettings/FS25_TheContractor/signs and reload the save to pick them here (see the README there). Single-player only."/>
+		<text name="tc_config_signDesign" text="Design"/>
+		<text name="tc_signDesign_logo" text="Company logo"/>
 		<text name="tc_inbox_chipParking" text="Parking"/>
 		<text name="tc_parking_sendToShopButton" text="Send to shop"/>
 		<text name="tc_parking_messageTitle" text="Machines waiting for parking"/>

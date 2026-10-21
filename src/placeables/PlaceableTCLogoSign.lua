@@ -9,15 +9,60 @@
 -- player changes farm. Visual only: nothing saved or streamed, vanilla
 -- owns the placeable's saving, sync and ownership.
 --
+-- The custom sign (085, xml/customSign.xml) is the same placeable with a
+-- tcSignDesign configuration: the company logo or one of the player's
+-- images in modSettings (TCSignImages). A chosen image shows whoever owns
+-- the sign; the custom sign is single-player only, so that's always the
+-- player. Its options are built by TCSignDesignConfigurationItem.postLoad,
+-- as vanilla's tree sapling configuration builds one per tree type.
+--
 -- Loaded by the base game's placeable specialization manager (modDesc), not
 -- sourced by main.lua.
 
 PlaceableTCLogoSign = {}
 
 PlaceableTCLogoSign.KEY = "tcLogoSignData"
+PlaceableTCLogoSign.DESIGN_CONFIG = "tcSignDesign"
+
+-- One option of the custom sign's design. The xml declares one, the company
+-- logo (filename nil); postLoad adds one per image in signs/, saved by file
+-- name.
+TCSignDesignConfigurationItem = {}
+local TCSignDesignConfigurationItem_mt = Class(TCSignDesignConfigurationItem, PlaceableConfigurationItem)
+
+function TCSignDesignConfigurationItem.new(configName, customMt)
+    local self = PlaceableConfigurationItem.new(configName, customMt or TCSignDesignConfigurationItem_mt)
+    self.filename = nil
+    return self
+end
+
+function TCSignDesignConfigurationItem.postLoad(xmlFile, baseKey, baseDir, customEnvironment, isMod, configurationItems,
+                                                storeItem, configName)
+    local logoItem = configurationItems[1]
+    if logoItem ~= nil then
+        for _, image in ipairs(TCSignImages.getDesigns()) do
+            local item = TCSignDesignConfigurationItem.new(configName)
+            item.name = image.name
+            item.saveId = image.saveId
+            item.filename = image.filename
+            item.configKey = logoItem.configKey
+            item.overwrittenTitle = logoItem.overwrittenTitle
+            table.insert(configurationItems, item)
+            item:setIndex(#configurationItems)
+        end
+    end
+    PlaceableConfigurationItem.postLoad(xmlFile, baseKey, baseDir, customEnvironment, isMod, configurationItems,
+        storeItem, configName)
+end
 
 function PlaceableTCLogoSign.prerequisitesPresent(specializations)
     return true
+end
+
+function PlaceableTCLogoSign.initSpecialization()
+    -- The title shown is the xml's own (tcSignDesignConfigurations#title).
+    g_placeableConfigurationManager:addConfigurationType(PlaceableTCLogoSign.DESIGN_CONFIG, "Design", nil,
+        TCSignDesignConfigurationItem)
 end
 
 function PlaceableTCLogoSign.registerXMLPaths(schema, basePath)
@@ -73,13 +118,33 @@ function PlaceableTCLogoSign:onDelete()
     g_messageCenter:unsubscribeAll(self)
 end
 
--- The file a sign should show: the player's logo on their own farm's signs
--- (and while placing one), the default on anyone else's.
-function PlaceableTCLogoSign.getLogoFilename(ownerFarmId, localFarmId, isPreview)
+-- The file a sign should show: a custom sign's chosen image, else the
+-- player's logo on their own farm's signs (and while placing one), the
+-- default on anyone else's.
+function PlaceableTCLogoSign.getLogoFilename(ownerFarmId, localFarmId, isPreview, designFilename)
+    if designFilename ~= nil then
+        return designFilename
+    end
     if isPreview or (ownerFarmId ~= nil and ownerFarmId == localFarmId) then
         return TCCompanyLogo.getFilename()
     end
     return TCCompanyLogo.getDefaultFilename()
+end
+
+-- The custom sign's chosen image, or nil for the company logo (and on the
+-- logo sign, which has no design configuration).
+function PlaceableTCLogoSign.getDesignFilename(placeable)
+    local configId = placeable.configurations ~= nil and placeable.configurations[PlaceableTCLogoSign.DESIGN_CONFIG] or nil
+    local storeItem = placeable.storeItem
+    if configId == nil or storeItem == nil or storeItem.configurations == nil then
+        return nil
+    end
+    local items = storeItem.configurations[PlaceableTCLogoSign.DESIGN_CONFIG]
+    local item = items ~= nil and items[configId] or nil
+    if item == nil or item.filename == nil or not fileExists(item.filename) then
+        return nil
+    end
+    return item.filename
 end
 
 function PlaceableTCLogoSign:tcUpdateLogo()
@@ -88,7 +153,7 @@ function PlaceableTCLogoSign:tcUpdateLogo()
         return
     end
     local filename = PlaceableTCLogoSign.getLogoFilename(self:getOwnerFarmId(), g_currentMission:getFarmId(),
-        self.propertyState == PlaceablePropertyState.CONSTRUCTION_PREVIEW)
+        self.propertyState == PlaceablePropertyState.CONSTRUCTION_PREVIEW, PlaceableTCLogoSign.getDesignFilename(self))
     if filename == data.filename then
         return
     end
