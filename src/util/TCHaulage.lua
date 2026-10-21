@@ -350,7 +350,9 @@ local function isOnFarmland(vehicle, farmlandId)
     return g_farmlandManager:getFarmlandIdAtWorldPosition(x, z) == farmlandId
 end
 
-local function autoEmptyJobHarvesters(job)
+-- isFinal: the job's over (emptyHarvestersAfterJob), so whatever's left of
+-- its crop goes, however little and wherever the combine is.
+local function autoEmptyJobHarvesters(job, isFinal)
     local field = g_fieldManager:getFieldById(job.fieldId)
     local farmland = field ~= nil and field:getFarmland() or nil
     local fruitTypeIndex = job:getFruitTypeIndex()
@@ -358,6 +360,7 @@ local function autoEmptyJobHarvesters(job)
         return
     end
     local fillTypeIndex = g_fruitTypeManager:getFillTypeIndexByFruitTypeIndex(fruitTypeIndex)
+    local emptyRatio = isFinal and 0 or TCHaulage.AUTO_EMPTY_FILL_RATIO
 
     for _, vehicleId in ipairs(job.assignedEquipmentIds) do
         local vehicle = NetworkUtil.getObject(vehicleId)
@@ -369,8 +372,8 @@ local function autoEmptyJobHarvesters(job)
             -- its own to empty.
             if capacity ~= nil and capacity > 0 and capacity ~= math.huge and
                 vehicle:getFillUnitFillType(fillUnitIndex) == fillTypeIndex and
-                vehicle:getFillUnitFillLevel(fillUnitIndex) >= capacity * TCHaulage.AUTO_EMPTY_FILL_RATIO and
-                isOnFarmland(vehicle, farmland.id) then
+                vehicle:getFillUnitFillLevel(fillUnitIndex) >= math.max(capacity * emptyRatio, 0.001) and
+                (isFinal or isOnFarmland(vehicle, farmland.id)) then
                 local level = vehicle:getFillUnitFillLevel(fillUnitIndex)
                 vehicle:addFillUnitFillLevel(vehicle:getOwnerFarmId(), fillUnitIndex, -math.huge, fillTypeIndex,
                     ToolType.UNDEFINED, nil)
@@ -394,6 +397,18 @@ local function autoEmptyHarvesters()
                 autoEmptyJobHarvesters(job)
             end
         end
+    end
+end
+
+-- A hired worker's harvest job that's finished (or missed part-way): the
+-- last part-load in the combine goes with the hauler too, so the machine
+-- comes home empty. Left in, it would stop the combine being allocated
+-- again (TheContractorAllocation.getFilledHarvester). A player-driven
+-- job's combine is the player's to empty. Server-only.
+function TCHaulage.emptyHarvestersAfterJob(job)
+    local jobDef = TheContractorJobGeneration.JOB_TYPES[job.jobType]
+    if job.assignedWorkerId ~= nil and jobDef ~= nil and jobDef.cropDependent then
+        autoEmptyJobHarvesters(job, true)
     end
 end
 

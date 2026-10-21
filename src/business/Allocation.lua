@@ -385,8 +385,10 @@ end
 -- hauling. Otherwise the field work decides: the better-rated operator for
 -- it (the better harvester on the combine), then the better hauler. Returns
 -- operatorId, haulerId, capability. A one-worker (or no-worker) crew just
--- gets its operator checked.
-function TheContractorAllocation:assignCrewRoles(farmId, job, workerIds, equipmentIds, haulageEquipmentIds)
+-- gets its operator checked. With fixedRoles the player has chosen the
+-- roles themselves (to bring a weaker worker on, say): workerIds[1]
+-- operates and workerIds[2] hauls, and only that pairing is checked.
+function TheContractorAllocation:assignCrewRoles(farmId, job, workerIds, equipmentIds, haulageEquipmentIds, fixedRoles)
     local staff = g_currentMission.TheContractor.Staff
 
     if #workerIds < 2 then
@@ -395,9 +397,14 @@ function TheContractorAllocation:assignCrewRoles(farmId, job, workerIds, equipme
         return operatorId, nil, self:previewWorkerCapability(operator, job, equipmentIds, false)
     end
 
+    local pairings = { { workerIds[1], workerIds[2] } }
+    if not fixedRoles then
+        table.insert(pairings, { workerIds[2], workerIds[1] })
+    end
+
     local BLOCKED = TheContractorAllocation.CAPABILITY.BLOCKED
     local best = nil
-    for _, pairing in ipairs({ { workerIds[1], workerIds[2] }, { workerIds[2], workerIds[1] } }) do
+    for _, pairing in ipairs(pairings) do
         local operator = staff:getWorker(farmId, pairing[1])
         local hauler = staff:getWorker(farmId, pairing[2])
         local candidate = {
@@ -480,6 +487,28 @@ function TheContractorAllocation:getMissingHaulageFromSelection(job, haulageEqui
     return TCEquipmentClass.getMissingHaulageEquipment(vehicles, self:getJobFillTypeIndex(job))
 end
 
+-- A combine among equipmentIds with crop in its tank, and that fill type,
+-- or nil. The allocation's refused until it's emptied: a different crop
+-- would stop the AI Helper straight away (it can't harvest on top of it,
+-- and blames the field), and even the job's own crop is the farm's to sell,
+-- which would be lost with the job's harvest (TCHaulage carts that away).
+-- A forage harvester has no tank to check (capacity math.huge, as in
+-- TCHaulage's auto-empty).
+function TheContractorAllocation.getFilledHarvester(equipmentIds)
+    for _, vehicleId in ipairs(equipmentIds) do
+        local vehicle = NetworkUtil.getObject(vehicleId)
+        local spec = vehicle ~= nil and vehicle.spec_combine or nil
+        if spec ~= nil then
+            local capacity = vehicle:getFillUnitCapacity(spec.fillUnitIndex)
+            if capacity ~= nil and capacity > 0 and capacity ~= math.huge and
+                vehicle:getFillUnitFillLevel(spec.fillUnitIndex) > 0.001 then
+                return vehicle, vehicle:getFillUnitFillType(spec.fillUnitIndex)
+            end
+        end
+    end
+    return nil
+end
+
 -- Allocation (server-authoritative) ----------------------------------------
 
 local function checkVehicles(self, farmId, vehicleIds, seen)
@@ -501,8 +530,10 @@ end
 -- `allocated`. Re-validates everything fresh against current server state
 -- (the MP double-booking race point between clients on the same farm —
 -- first request processed wins, same "re-check membership, no lock needed"
--- shape as TheContractorStaff:hireWorker). Returns true on success.
-function TheContractorAllocation:allocateJob(farmId, jobId, workerIds, equipmentIds, haulageEquipmentIds)
+-- shape as TheContractorStaff:hireWorker). fixedRoles: the player chose who
+-- operates and who hauls (workerIds in that order, see assignCrewRoles).
+-- Returns true on success.
+function TheContractorAllocation:allocateJob(farmId, jobId, workerIds, equipmentIds, haulageEquipmentIds, fixedRoles)
     if not g_currentMission:getIsServer() then
         return false
     end
@@ -565,6 +596,9 @@ function TheContractorAllocation:allocateJob(farmId, jobId, workerIds, equipment
     if needsHaulageRig and #self:getMissingHaulageFromSelection(job, haulageEquipmentIds) > 0 then
         return false
     end
+    if TheContractorAllocation.getFilledHarvester(equipmentIds) ~= nil then
+        return false
+    end
 
     local staff = g_currentMission.TheContractor.Staff
     for i, workerId in ipairs(workerIds) do
@@ -580,7 +614,7 @@ function TheContractorAllocation:allocateJob(farmId, jobId, workerIds, equipment
     end
 
     local operatorId, haulerId, capability = self:assignCrewRoles(farmId, job, workerIds, equipmentIds,
-        haulageEquipmentIds)
+        haulageEquipmentIds, fixedRoles)
     if capability == TheContractorAllocation.CAPABILITY.BLOCKED then
         return false
     end

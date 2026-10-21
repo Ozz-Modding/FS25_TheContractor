@@ -601,6 +601,7 @@ function TheContractorJobs:releaseMissedJobResources(job)
     dispatch:stopJob(job.id, AIMessageSuccessStoppedByUser.new())
     TCJobProgress.clearJob(job.id)
     TCHaulage.stopDelivery(job)
+    TCHaulage.emptyHarvestersAfterJob(job)
     TCFieldPreparation.clearUpAfterJob(job)
     self:setJobSupplyStatus(job, nil, nil)
 
@@ -1051,6 +1052,7 @@ function TheContractorJobs:completeJob(job, isForced)
 
     TCJobProgress.clearJob(job.id)
     TCHaulage.stopDelivery(job)
+    TCHaulage.emptyHarvestersAfterJob(job)
     -- 076: the field stays workable for a while, and its bales stay with
     -- it (endGracePeriod clears up). Set before the completion broadcast,
     -- which carries it.
