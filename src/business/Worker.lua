@@ -170,6 +170,9 @@ function TheContractorWorker.new(id, farmId, name, workSpeed, tierCapability, sa
     self.holidayStartDay = nil
     self.holidayDays = 0
     self.holidayDaysPerPeriod = nil
+    -- 089: holiday requests refused (declined or left to expire) this
+    -- year, reset with the allowance. Server-only.
+    self.holidayDeclines = 0
 
     -- 041: "male"/"female" (their first name matches it) and their look in
     -- the cab, rolled once at creation - appearance data, see

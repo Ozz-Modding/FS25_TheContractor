@@ -885,6 +885,8 @@ function TheContractorStaff:retireWorker(farmId, workerId)
 
     -- 040: any holiday they'd booked comes off the Overview.
     g_currentMission.TheContractor.Holidays:refreshNotices(farmId)
+    -- 089: and any holiday request leaves the inbox.
+    g_currentMission.TheContractor.Holidays:removeMessagesFor(farmId, workerId)
     -- 054: and any training message about them leaves the inbox.
     g_currentMission.TheContractor.Training:removeMessagesFor(farmId, workerId)
     -- 058: and any pay review.
@@ -1146,6 +1148,8 @@ function TheContractorStaff:releaseWorker(farmId, workerId)
 
     -- 040: any holiday they'd booked comes off the Overview.
     g_currentMission.TheContractor.Holidays:refreshNotices(farmId)
+    -- 089: and any holiday request leaves the inbox.
+    g_currentMission.TheContractor.Holidays:removeMessagesFor(farmId, workerId)
     -- 054: and any training message about them leaves the inbox.
     g_currentMission.TheContractor.Training:removeMessagesFor(farmId, workerId)
     -- 058: and any pay review.
@@ -1699,6 +1703,10 @@ function TheContractorStaff.writeWorkerXML(xmlFile, key, worker)
         setXMLInt(xmlFile, key .. "#holidayDays", worker.holidayDays)
         setXMLInt(xmlFile, key .. "#holidayDaysPerPeriod", worker.holidayDaysPerPeriod)
     end
+    -- 089.
+    if worker.holidayDeclines > 0 then
+        setXMLInt(xmlFile, key .. "#holidayDeclines", worker.holidayDeclines)
+    end
 
     for _, tier in ipairs(TheContractorWorker.TIERS) do
         local rating = worker.tierCapability[tier]
@@ -1810,6 +1818,8 @@ function TheContractorStaff.readWorkerXML(xmlFile, key, farmId)
         worker.holidayDays = holidayDays
         worker.holidayDaysPerPeriod = holidayDaysPerPeriod
     end
+    -- 089.
+    worker.holidayDeclines = getXMLInt(xmlFile, key .. "#holidayDeclines") or 0
     -- 054.
     TheContractorTraining.readXML(xmlFile, key, worker)
     -- 056: a worker from a save made before 056 starts at MORALE_START and
@@ -2001,6 +2011,15 @@ function TheContractorStaff.registerConsoleCommands()
                 if worker:hasHolidayBooked() then
                     table.insert(extras, string.format("holiday days %d-%d", worker.holidayStartDay,
                         worker:getHolidayEndDay()))
+                end
+                -- 089.
+                local holidayRequest = TheContractorHolidays.findRequest(farmId, worker.id)
+                if holidayRequest ~= nil then
+                    table.insert(extras, string.format("holiday asked for days %d-%d", holidayRequest.payload.startDay,
+                        TheContractorHolidays.getRequestEndDay(holidayRequest)))
+                end
+                if worker.holidayDeclines > 0 then
+                    table.insert(extras, string.format("%d holiday refusal(s) this year", worker.holidayDeclines))
                 end
                 if worker:isLeaving() then
                     table.insert(extras, (worker.isQuitting and "quitting " or "retiring ") ..

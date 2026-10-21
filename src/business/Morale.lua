@@ -71,6 +71,11 @@ TheContractorMorale.BUSY_RATIO = 0.8
 TheContractorMorale.DECLINED_REQUEST = -8
 TheContractorMorale.COLLEAGUE_RELEASED = -5
 TheContractorMorale.NO_HARVEST_BONUS = -5
+-- 089: a holiday request approved, or refused - by the refusal's number
+-- this year (the last entry for any after), worse when it was ignored.
+TheContractorMorale.HOLIDAY_APPROVED = 3
+TheContractorMorale.HOLIDAY_DECLINED = { -5, -8 }
+TheContractorMorale.HOLIDAY_IGNORED = { -8, -12 }
 -- A bonus of `amount` lifts morale by BONUS_MORALE_PER_STEP x (amount /
 -- BONUS_STEP) ^ BONUS_EXPONENT, rounded: 250 = +8, 500 = +13, 750 = +17,
 -- 1,000 = +21. Doubling the money doesn't double the effect.
@@ -299,6 +304,21 @@ end
 -- 054: a training request turned down or left to expire.
 function TheContractorMorale:onRequestDeclined(worker)
     self:adjust(worker.farmId, { worker }, TheContractorMorale.DECLINED_REQUEST)
+end
+
+-- 089.
+function TheContractorMorale:onHolidayApproved(worker)
+    self:adjust(worker.farmId, { worker }, TheContractorMorale.HOLIDAY_APPROVED)
+end
+
+-- refusalCount: this one's number this year (1 for the first).
+function TheContractorMorale.getHolidayRefusedDelta(refusalCount, isIgnored)
+    local deltas = isIgnored and TheContractorMorale.HOLIDAY_IGNORED or TheContractorMorale.HOLIDAY_DECLINED
+    return deltas[math.max(1, math.min(refusalCount, #deltas))]
+end
+
+function TheContractorMorale:onHolidayRefused(worker, refusalCount, isIgnored)
+    self:adjust(worker.farmId, { worker }, TheContractorMorale.getHolidayRefusedDelta(refusalCount, isIgnored))
 end
 
 -- A colleague was let go (Staff:releaseWorker - not a retirement or a quit):

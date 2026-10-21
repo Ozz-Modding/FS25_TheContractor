@@ -72,5 +72,8 @@ function TCWorkerHolidayChangedEvent.showNotification(worker, notify)
     elseif notify == TheContractorHolidays.NOTIFY.CANCELLED then
         g_currentMission:addIngameNotification(FSBaseMission.INGAME_NOTIFICATION_INFO,
             string.format(g_i18n:getText("tc_holiday_cancelled"), worker.name))
+    elseif notify == TheContractorHolidays.NOTIFY.REQUEST_WITHDRAWN then
+        g_currentMission:addIngameNotification(FSBaseMission.INGAME_NOTIFICATION_INFO,
+            string.format(g_i18n:getText("tc_holiday_requestWithdrawn"), worker.name))
     end
 end

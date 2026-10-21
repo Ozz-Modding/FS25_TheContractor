@@ -30,6 +30,18 @@
 -- soon as they're back, for whatever's left of it (Staff:setWorkerStatus) -
 -- a holiday never pulls anyone off a job, same as sickness (031).
 --
+-- Requests (089): a worker doesn't book straight off. The roll above posts
+-- a request to the inbox (050) for the player to approve or decline, with
+-- who else is off on those days worked out live on each client. Nothing's
+-- spent until it's approved. A request left to expire (at the day change
+-- into its first day) counts as declined, and upsets them more. Two
+-- refusals a year is the limit: the second brings a warning, and after it
+-- the worker books whatever, as an inbox notice. So does a worker running
+-- out of year (UK leave has to be allowed within the year). The request
+-- itself lives in its inbox message's payload, so it's saved and streamed
+-- with the inbox; only the refusal count (holidayDeclines, server-only) is
+-- on the worker.
+--
 -- The Overview's notices board (038) gets one notice per run of days with
 -- the same workers off, e.g. "June 10-12, Year 2: 2 workers on holiday
 -- (Amy Hall, John Smith)", rebuilt whenever bookings change and every day.
@@ -50,6 +62,24 @@ TheContractorHolidays.NOTIFY = {
     NONE = 0,
     BOOKED = 1,
     CANCELLED = 2,
+    REQUEST_WITHDRAWN = 3,
+}
+
+-- 089: refusals a year before the worker books whatever.
+TheContractorHolidays.MAX_DECLINES = 2
+
+TheContractorHolidays.MESSAGE_KIND = "holidayRequest"
+TheContractorHolidays.MESSAGE_TYPE = {
+    -- Approve or Decline.
+    REQUEST = "request",
+    -- Booked whatever (after two refusals, or running out of year): Dismiss only.
+    BOOKED = "booked",
+    -- The second refusal: the next one's booked whatever. Dismiss only.
+    WARNING = "warning",
+}
+TheContractorHolidays.ACTION = {
+    APPROVE = "approve",
+    DECLINE = "decline",
 }
 
 function TheContractorHolidays.new()
@@ -61,6 +91,21 @@ function TheContractorHolidays.new()
     self.noticeIdsByFarm = {}
 
     return self
+end
+
+-- Every machine, at load, once the Inbox exists.
+function TheContractorHolidays:register(inbox)
+    inbox:registerMessageKind(TheContractorHolidays.MESSAGE_KIND, {
+        onAction = function(farmId, message, actionKey)
+            self:onMessageAnswered(farmId, message, actionKey)
+        end,
+        onExpire = function(farmId, message)
+            self:onMessageExpired(farmId, message)
+        end,
+        getArgs = TheContractorHolidays.getMessageArgs,
+        chipKey = "tc_inbox_chipHoliday",
+        chipTone = "info",
+    })
 end
 
 -- Allowance ---------------------------------------------------------------
@@ -112,10 +157,12 @@ function TheContractorHolidays:onDayChanged()
             elseif worker.holidayYear ~= currentYear then
                 worker.holidayAllowance = 1
                 worker.holidayYear = currentYear
+                worker.holidayDeclines = 0
                 self:sendHolidayChanged(worker, TheContractorHolidays.NOTIFY.NONE)
             end
 
             self:reconcileBooking(worker)
+            self:reconcileRequest(worker)
 
             if worker:hasHolidayBooked() and worker:getHolidayEndDay() < today then
                 self:endHoliday(worker)
@@ -165,13 +212,17 @@ end
 
 -- Booking -------------------------------------------------------------------
 
--- Rolls for a worker with no booking to book one, and books it. Workers
--- who are leaving (retiring or quitting) don't book; neither does anyone
--- whose allowance is worth less than a day, nor anyone booked on training
--- (054) until it's over.
-function TheContractorHolidays:tryBookHoliday(worker)
-    if worker:hasHolidayBooked() or worker:isLeaving() or worker:hasTrainingBooked() then
-        return
+-- Rolls for a worker with no booking or request to ask for one (089), or
+-- to book it whatever if they've been refused twice this year or are
+-- running out of year. Workers who are leaving (retiring or quitting) don't
+-- ask; neither does anyone whose allowance is worth less than a day, nor
+-- anyone booked on training (054) until it's over. isForced (the tcWorker
+-- holidayRequest console command) skips the daily chance and asks for the
+-- earliest start. Returns true if it asked or booked.
+function TheContractorHolidays:tryBookHoliday(worker, isForced)
+    if worker:hasHolidayBooked() or worker:isLeaving() or worker:hasTrainingBooked() or
+        TheContractorHolidays.findRequest(worker.farmId, worker.id) ~= nil then
+        return false
     end
 
     local environment = g_currentMission.environment
@@ -179,35 +230,43 @@ function TheContractorHolidays:tryBookHoliday(worker)
     local lastDay = TCCalendar.getLastDayOfYear()
     local window = lastDay - earliestDay + 1
     if window < 1 then
-        return
+        return false
     end
 
     local earliestDaysPerPeriod = TCCalendar.getDaysPerPeriodOn(earliestDay)
     local earliestAllowanceDays = TheContractorHolidays.getAllowanceDays(worker.holidayAllowance,
         earliestDaysPerPeriod)
     if earliestAllowanceDays < 1 then
-        return
+        return false
     end
 
     -- Running out of year: book now while the allowance still fits.
     local mustBook = window <= earliestAllowanceDays + earliestDaysPerPeriod
     local dailyChance = TheContractorHolidays.BOOKINGS_PER_YEAR /
         (Environment.PERIODS_IN_YEAR * environment.daysPerPeriod)
-    if not mustBook and math.random() >= dailyChance then
-        return
+    if not mustBook and not isForced and math.random() >= dailyChance then
+        return false
     end
 
     local maxExtra = math.min(earliestDaysPerPeriod * TheContractorHolidays.MAX_EXTRA_NOTICE_PERIODS,
         window - earliestAllowanceDays)
-    local startDay = earliestDay + (maxExtra > 0 and math.random(0, maxExtra) or 0)
+    local startDay = earliestDay
+    if maxExtra > 0 and not isForced then
+        startDay = startDay + math.random(0, maxExtra)
+    end
 
     -- Out of time for a second booking: take the lot.
     local days = TheContractorHolidays.pickDays(worker, startDay, mustBook)
     if days == nil then
-        return
+        return false
     end
 
-    self:bookHoliday(worker, startDay, days)
+    if mustBook or worker.holidayDeclines >= TheContractorHolidays.MAX_DECLINES then
+        self:bookWhatever(worker, startDay, days)
+    else
+        self:postRequest(worker, startDay, days)
+    end
+    return true
 end
 
 -- How many days a booking from startDay should be: half to all of what the
@@ -238,9 +297,9 @@ function TheContractorHolidays.pickDays(worker, startDay, takeAll)
     return days
 end
 
--- Books it, spends the allowance and tells everyone. Also the tcWorker holiday
--- console command's way in, so it doesn't check notice or allowance itself.
-function TheContractorHolidays:bookHoliday(worker, startDay, days)
+-- Books it, spends the allowance and tells everyone (notify defaults to
+-- BOOKED). Always at least MIN_NOTICE_DAYS ahead, so never for today.
+function TheContractorHolidays:bookHoliday(worker, startDay, days, notify)
     local daysPerPeriod = TCCalendar.getDaysPerPeriodOn(startDay)
 
     worker.holidayStartDay = startDay
@@ -251,13 +310,271 @@ function TheContractorHolidays:bookHoliday(worker, startDay, days)
     Logging.info("TheContractor: farm %d worker %d (%s) booked %d day(s) holiday from day %d (%.2f periods left)",
         worker.farmId, worker.id, worker.name, days, startDay, worker.holidayAllowance)
 
-    self:sendHolidayChanged(worker, TheContractorHolidays.NOTIFY.BOOKED)
+    self:sendHolidayChanged(worker, notify or TheContractorHolidays.NOTIFY.BOOKED)
     self:refreshNotices(worker.farmId)
+end
 
-    -- Booked for today (console command): off they go.
-    if worker:isHolidayOn(g_currentMission.environment.currentMonotonicDay) then
-        self:startHoliday(worker)
+-- Requests (089) ---------------------------------------------------------------
+
+-- The worker's open request, if they have one: the inbox message, whose
+-- payload holds { workerId, startDay, days, daysPerPeriod, type }. Every
+-- machine (the inbox is on all of them).
+function TheContractorHolidays.findRequest(farmId, workerId)
+    local inbox = g_currentMission.TheContractor.Inbox
+    for _, message in ipairs(inbox:getMessages(farmId)) do
+        if message.kind == TheContractorHolidays.MESSAGE_KIND and message.payload.workerId == workerId and
+            message.payload.type == TheContractorHolidays.MESSAGE_TYPE.REQUEST then
+            return message
+        end
     end
+    return nil
+end
+
+-- The request's last day (inclusive).
+function TheContractorHolidays.getRequestEndDay(message)
+    return message.payload.startDay + message.payload.days - 1
+end
+
+-- Server-only. Expires at the day change into its first day, so the player
+-- has until the end of the day before.
+function TheContractorHolidays:postRequest(worker, startDay, days)
+    local today = g_currentMission.environment.currentMonotonicDay
+
+    Logging.info("TheContractor: farm %d worker %d (%s) asked for %d day(s) holiday from day %d", worker.farmId,
+        worker.id, worker.name, days, startDay)
+
+    return g_currentMission.TheContractor.Inbox:postMessage(worker.farmId, TheContractorHolidays.MESSAGE_KIND,
+        "tc_holidayRequest_title", "tc_holidayRequest_body",
+        { worker.name, days, string.format("$days_%d_%d", startDay, startDay + days - 1) },
+        {
+            { key = TheContractorHolidays.ACTION.APPROVE, textKey = "tc_holidayRequest_approveButton" },
+            { key = TheContractorHolidays.ACTION.DECLINE, textKey = "tc_holidayRequest_declineButton" },
+        },
+        {
+            workerId = worker.id,
+            startDay = startDay,
+            days = days,
+            daysPerPeriod = TCCalendar.getDaysPerPeriodOn(startDay),
+            type = TheContractorHolidays.MESSAGE_TYPE.REQUEST,
+        },
+        startDay - today)
+end
+
+-- Server-only: refused twice this year, or running out of year. Booked
+-- now, and the inbox just says so.
+function TheContractorHolidays:bookWhatever(worker, startDay, days)
+    local bodyKey = worker.holidayDeclines >= TheContractorHolidays.MAX_DECLINES and
+        "tc_holidayRequest_bookedBodyDeclined" or "tc_holidayRequest_bookedBodyYearEnd"
+
+    self:bookHoliday(worker, startDay, days, TheContractorHolidays.NOTIFY.NONE)
+
+    g_currentMission.TheContractor.Inbox:postMessage(worker.farmId, TheContractorHolidays.MESSAGE_KIND,
+        "tc_holidayRequest_bookedTitle", bodyKey,
+        { worker.name, days, string.format("$days_%d_%d", startDay, startDay + days - 1) },
+        nil,
+        { workerId = worker.id, type = TheContractorHolidays.MESSAGE_TYPE.BOOKED })
+end
+
+function TheContractorHolidays:onMessageAnswered(farmId, message, actionKey)
+    if message.payload.type ~= TheContractorHolidays.MESSAGE_TYPE.REQUEST then
+        return
+    end
+    local worker = g_currentMission.TheContractor.Staff:getWorker(farmId, message.payload.workerId)
+    if worker == nil then
+        return
+    end
+
+    if actionKey == TheContractorHolidays.ACTION.APPROVE then
+        self:approveRequest(worker, message)
+    elseif actionKey == TheContractorHolidays.ACTION.DECLINE then
+        self:recordDecline(worker, false)
+    end
+end
+
+function TheContractorHolidays:onMessageExpired(farmId, message)
+    if message.payload.type ~= TheContractorHolidays.MESSAGE_TYPE.REQUEST then
+        return
+    end
+    local worker = g_currentMission.TheContractor.Staff:getWorker(farmId, message.payload.workerId)
+    if worker ~= nil then
+        self:recordDecline(worker, true)
+    end
+end
+
+-- Booked as asked. The allowance can't have shrunk since they asked (only
+-- a booking spends it, and they can't have one), but the days are kept
+-- within it anyway.
+function TheContractorHolidays:approveRequest(worker, message)
+    if worker:hasHolidayBooked() then
+        return
+    end
+
+    local startDay = message.payload.startDay
+    local days = math.min(message.payload.days, TheContractorHolidays.getAllowanceDays(worker.holidayAllowance,
+        TCCalendar.getDaysPerPeriodOn(startDay)))
+    if days < 1 then
+        return
+    end
+
+    self:bookHoliday(worker, startDay, days, TheContractorHolidays.NOTIFY.NONE)
+    g_currentMission.TheContractor.Morale:onHolidayApproved(worker)
+end
+
+-- Declined, or left to expire (isIgnored). The second this year brings a
+-- warning that the next one's booked whatever.
+function TheContractorHolidays:recordDecline(worker, isIgnored)
+    worker.holidayDeclines = worker.holidayDeclines + 1
+    Logging.info("TheContractor: farm %d worker %d (%s) holiday request %s (%d this year)", worker.farmId,
+        worker.id, worker.name, isIgnored and "ignored" or "declined", worker.holidayDeclines)
+
+    g_currentMission.TheContractor.Morale:onHolidayRefused(worker, worker.holidayDeclines, isIgnored)
+
+    if worker.holidayDeclines == TheContractorHolidays.MAX_DECLINES then
+        g_currentMission.TheContractor.Inbox:postMessage(worker.farmId, TheContractorHolidays.MESSAGE_KIND,
+            "tc_holidayRequest_warningTitle", "tc_holidayRequest_warningBody", { worker.name }, nil,
+            { workerId = worker.id, type = TheContractorHolidays.MESSAGE_TYPE.WARNING })
+    end
+end
+
+-- Server-only: once they're off the roster, every holiday message about
+-- them goes.
+function TheContractorHolidays:removeMessagesFor(farmId, workerId)
+    local inbox = g_currentMission.TheContractor.Inbox
+    for _, message in ipairs(inbox:getMessages(farmId)) do
+        if message.kind == TheContractorHolidays.MESSAGE_KIND and message.payload.workerId == workerId then
+            inbox:removeMessage(message.id)
+        end
+    end
+end
+
+-- Server-only: a request whose days no longer all have the days per period
+-- it was made at is withdrawn - no morale either way, and they ask again
+-- later with fresh notice. Run every day and whenever the player changes
+-- the setting.
+function TheContractorHolidays:reconcileRequest(worker)
+    local message = TheContractorHolidays.findRequest(worker.farmId, worker.id)
+    if message == nil then
+        return
+    end
+
+    for day = message.payload.startDay, TheContractorHolidays.getRequestEndDay(message) do
+        if TCCalendar.getDaysPerPeriodOn(day) ~= message.payload.daysPerPeriod then
+            Logging.info("TheContractor: farm %d worker %d (%s) holiday request withdrawn - days per period changed",
+                worker.farmId, worker.id, worker.name)
+            g_currentMission.TheContractor.Inbox:removeMessage(message.id)
+            self:sendHolidayChanged(worker, TheContractorHolidays.NOTIFY.REQUEST_WITHDRAWN)
+            return
+        end
+    end
+end
+
+-- Inbox text (every machine) ------------------------------------------------------
+
+-- The message's own args, plus for a request who else is off on its days,
+-- worked out live so it follows other requests being answered.
+function TheContractorHolidays.getMessageArgs(message)
+    local args = {}
+    for i, arg in ipairs(message.args) do
+        args[i] = arg
+    end
+    if message.payload.type == TheContractorHolidays.MESSAGE_TYPE.REQUEST then
+        local othersOff = TheContractorHolidays.getOthersOffText(message.farmId, message.payload.workerId,
+            message.payload.startDay, TheContractorHolidays.getRequestEndDay(message))
+        table.insert(args, othersOff or g_i18n:getText("tc_holidayRequest_nobodyOff"))
+    end
+    return args
+end
+
+-- The days from firstDay to lastDay that isOff(day) is true on, as runs:
+-- { { startDay, endDay }, ... }.
+local function getRuns(firstDay, lastDay, isOff)
+    local runs = {}
+    local run = nil
+    for day = firstDay, lastDay do
+        if isOff(day) then
+            if run == nil then
+                run = { day, day }
+                table.insert(runs, run)
+            else
+                run[2] = day
+            end
+        else
+            run = nil
+        end
+    end
+    return runs
+end
+
+-- 054: a course day (the course runs on consecutive days from trainingDay)
+-- or the assessment.
+function TheContractorHolidays.isTrainingOn(worker, day)
+    if not worker:hasTrainingBooked() then
+        return false
+    end
+    if worker.courseDaysLeft > 0 and worker.trainingDay ~= nil and day >= worker.trainingDay and
+        day < worker.trainingDay + worker.courseDaysLeft then
+        return true
+    end
+    return worker.assessmentDay == day
+end
+
+-- The roster's other workers off on any day from firstDay to lastDay, as
+-- text, e.g. "Amy Hall (holiday June 10-12, Year 2), John Smith (asked for
+-- June 12, Year 2)": booked holidays, open requests and training days
+-- (054). nil if nobody is. Sickness can't be known ahead (and how long it
+-- lasts is server-only), so it isn't listed.
+function TheContractorHolidays.getOthersOffText(farmId, workerId, firstDay, lastDay)
+    local workers = {}
+    for _, worker in ipairs(g_currentMission.TheContractor.Staff:getRoster(farmId)) do
+        if worker.id ~= workerId then
+            table.insert(workers, worker)
+        end
+    end
+    table.sort(workers, function(a, b)
+        return a.name < b.name
+    end)
+
+    local entries = {}
+    for _, worker in ipairs(workers) do
+        local request = TheContractorHolidays.findRequest(farmId, worker.id)
+        local reasons = {
+            {
+                key = "tc_holidayRequest_offHoliday",
+                isOff = function(day)
+                    return worker:isHolidayOn(day)
+                end,
+            },
+            {
+                key = "tc_holidayRequest_offRequested",
+                isOff = function(day)
+                    return request ~= nil and day >= request.payload.startDay and
+                        day <= TheContractorHolidays.getRequestEndDay(request)
+                end,
+            },
+            {
+                key = "tc_holidayRequest_offTraining",
+                isOff = function(day)
+                    return TheContractorHolidays.isTrainingOn(worker, day)
+                end,
+            },
+        }
+
+        local parts = {}
+        for _, reason in ipairs(reasons) do
+            for _, run in ipairs(getRuns(firstDay, lastDay, reason.isOff)) do
+                table.insert(parts, string.format(g_i18n:getText(reason.key),
+                    TCCalendar.formatDayRange(run[1], run[2])))
+            end
+        end
+        if #parts > 0 then
+            table.insert(entries, string.format("%s (%s)", worker.name, table.concat(parts, "; ")))
+        end
+    end
+
+    if #entries == 0 then
+        return nil
+    end
+    return table.concat(entries, ", ")
 end
 
 -- Days per period changes (server-only) ---------------------------------------
@@ -317,6 +634,7 @@ function TheContractorHolidays:onPlannedDaysPerPeriodChanged()
     for farmId, farmWorkers in pairs(staff.workersByFarm) do
         for _, worker in pairs(farmWorkers) do
             self:reconcileBooking(worker)
+            self:reconcileRequest(worker)
         end
         self:refreshNotices(farmId)
     end
@@ -509,28 +827,40 @@ end
 -- Console commands (tcWorker - see TCConsole) ------------------------------------------
 
 function TheContractorHolidays.registerConsoleCommands()
-    TCConsole.register("worker", "holiday", {
-        args = "<worker> [daysFromNow=0] [days=1]",
-        description = "Book a holiday, skipping the notice and allowance rules",
+    -- 089.
+    TCConsole.register("worker", "holidayRequest", {
+        description = "A worker asks for a holiday now, as the daily roll would (whoever's been refused most first)",
         run = function(farmId, args)
-            local worker, problem = TCConsole.findWorker(farmId, args[1])
-            if worker == nil then
-                return problem or false
-            end
-            local daysFromNow = TCConsole.toCount(args[2], 0)
-            local days = TCConsole.toCount(args[3], 1)
-            if daysFromNow == nil or days == nil or days < 1 then
-                return false
-            end
-            if worker:hasHolidayBooked() then
-                return string.format("%s already has a holiday booked (%s)", worker.name,
-                    TCCalendar.formatDayRange(worker.holidayStartDay, worker:getHolidayEndDay()))
+            local holidays = g_currentMission.TheContractor.Holidays
+
+            -- Whoever's been refused most this year goes first, so running
+            -- it again walks one worker through decline, warning and booking
+            -- whatever.
+            local roster = g_currentMission.TheContractor.Staff:getRoster(farmId)
+            table.sort(roster, function(a, b)
+                if a.holidayDeclines ~= b.holidayDeclines then
+                    return a.holidayDeclines > b.holidayDeclines
+                end
+                return a.id < b.id
+            end)
+
+            for _, worker in ipairs(roster) do
+                if holidays:tryBookHoliday(worker, true) then
+                    local request = TheContractorHolidays.findRequest(farmId, worker.id)
+                    if request ~= nil then
+                        return string.format("%s asked for a holiday: %s (%d refusal(s) so far this year)",
+                            worker.name, TCCalendar.formatDayRange(request.payload.startDay,
+                                TheContractorHolidays.getRequestEndDay(request)), worker.holidayDeclines)
+                    end
+                    return string.format("%s booked a holiday without asking (%s): %s", worker.name,
+                        worker.holidayDeclines >= TheContractorHolidays.MAX_DECLINES and "refused twice this year" or
+                        "running out of year", TCCalendar.formatDayRange(worker.holidayStartDay,
+                            worker:getHolidayEndDay()))
+                end
             end
 
-            local startDay = g_currentMission.environment.currentMonotonicDay + daysFromNow
-            g_currentMission.TheContractor.Holidays:bookHoliday(worker, startDay, days)
-            return string.format("%s booked a holiday: %s", worker.name,
-                TCCalendar.formatDayRange(worker.holidayStartDay, worker:getHolidayEndDay()))
+            return "Nobody can ask for a holiday now: everyone has one booked or asked for, is leaving, is booked " ..
+                "on training or has no allowance left."
         end,
     })
 end

@@ -10,6 +10,8 @@
 --       chipTone = "info",                                        -- optional
 --       getConfirmText = function(message, actionKey) ... end,    -- optional, client:
 --                                                                 -- text for a Yes/No first, or nil
+--       getArgs = function(message) ... end,                      -- optional, client: the args to
+--                                                                 -- render with, worked out live
 --   })
 --   local id = tc.Inbox:postMessage(farmId, "certRequest", titleKey, bodyKey,
 --       args, actions, payload, expiresInDays)                    -- server only
@@ -25,7 +27,8 @@
 -- starting "$money_" (then a number) is formatted as money, and "$pay_"
 -- likewise after TheContractorStaff.scalePay, so a full-month salary shows
 -- at this month's pay even if days per period changes later. "$volume_"
--- (then litres, 078) is formatted in the reader's own units. args and
+-- (then litres, 078) is formatted in the reader's own units, and
+-- "$days_<first>_<last>" (monotonic days, 089) as a date range. args and
 -- payload hold plain values only (numbers, strings, booleans) - never a
 -- node (see src/events/README.md). A message with no actions gets a single
 -- Dismiss. Ids are unique across all farms.
@@ -108,6 +111,9 @@ local function resolveArgs(args)
                 true)
         elseif type(arg) == "string" and string.sub(arg, 1, 8) == "$volume_" then
             resolved[i] = g_i18n:formatVolume(tonumber(string.sub(arg, 9)) or 0, 0)
+        elseif type(arg) == "string" and string.sub(arg, 1, 6) == "$days_" then
+            local firstDay, lastDay = string.match(arg, "^%$days_(%d+)_(%d+)$")
+            resolved[i] = firstDay ~= nil and TCCalendar.formatDayRange(tonumber(firstDay), tonumber(lastDay)) or ""
         else
             resolved[i] = arg
         end
@@ -123,12 +129,22 @@ local function formatText(key, args)
     return string.format(text, unpack(resolveArgs(args)))
 end
 
+-- The kind's own live args (getArgs), if it has them.
+local function getArgs(message)
+    local tc = g_currentMission.TheContractor
+    local definition = tc ~= nil and tc.Inbox ~= nil and tc.Inbox:getKind(message.kind) or nil
+    if definition ~= nil and definition.getArgs ~= nil then
+        return definition.getArgs(message)
+    end
+    return message.args
+end
+
 function TheContractorInbox.getTitle(message)
-    return formatText(message.titleKey, message.args)
+    return formatText(message.titleKey, getArgs(message))
 end
 
 function TheContractorInbox.getBody(message)
-    return formatText(message.bodyKey, message.args)
+    return formatText(message.bodyKey, getArgs(message))
 end
 
 -- The type chip's label and tone; unregistered kinds get the default.
