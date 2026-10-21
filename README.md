@@ -45,7 +45,7 @@ Run your farm as an agricultural contracting business in Farming Simulator 25. T
 - Jobs are **invoiced**. Clients pay late, and some never pay
 - Recurring **overheads**: mandatory insurance, plus optional public liability, machinery insurance (with levels of cover), a trade association, legal cover and a health and safety programme
 - Compensation claims when a job goes wrong
-- An **office administrator** to keep invoicing and credit control on track
+- An **office administrator** to keep invoicing and credit control on track, hired from the Staff tab with their own look and portrait
 - **Finances** tab with year-to-date figures and a cash forecast
 - Job diesel, seed, fertiliser and other supplies come from your own farm stock, and a **Supplies** tab shows what you've got
 - A **Logbook** of every job and every machine's history: who had it, what it was doing, and what state it came back in
@@ -53,7 +53,7 @@ Run your farm as an agricultural contracting business in Farming Simulator 25. T
 ### Equipment
 - Machines out on a job leave the yard and come back to placeable **parking slots** (three sizes, for vehicles or implements, plus a harvester slot). Stand in one and press the activate key to keep it for some kinds of machine (small tractors, trailers) or particular machines. They're only visible in the construction menu, unless you turn on Show parking slots in the settings or press Right Ctrl+P
 - Stuck AI helpers are detected and dealt with
-- Advanced Damage System support: careless workers cause ADS breakdowns, and its workshop stock shows in the Supplies tab
+- Advanced Damage System support: careless workers cause ADS breakdowns, its workshop stock shows in the Supplies tab, your office administrator and a storekeeper staff its own workshop as advisor and storekeeper (trained up a level at a time), and workers with mechanic, electrician or bodyworker skills work there whenever they're not out on a job (send them on a course to learn a trade or raise one a level)
 
 ### Random events
 - **Vehicle theft**, with police reports, insurance claims and a courtesy vehicle while you wait

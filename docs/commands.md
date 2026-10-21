@@ -152,18 +152,20 @@ Has one of your hired workers ask for a holiday now, as the daily roll would, bu
 tcWorker holidayRequest
 ```
 
-### `tcWorker train <worker> [daysFromNow] [pass|fail]`
+### `tcWorker train <worker> [daysFromNow] [pass|fail|mechanic|electrician|bodyworker]`
 
-Books one of your hired workers on spraying training for free, skipping the readiness check.
-- **What gets booked:** a worker who failed their assessment gets the retake (an assessment day only). Anyone else gets the 2-day course, with the assessment 2-5 days after it.
+Books one of your hired workers on spraying training, or on an Advanced Damage System workshop trade course (092), for free, skipping the readiness check.
+- **What gets booked:** a worker who failed their assessment gets the retake (an assessment day only). Anyone else gets the 2-day course, with the assessment 2-5 days after it (at short months the course is capped at a month and the wait shrinks with it: at 1 day a month, a 1-day course and the assessment the next day).
 - **`daysFromNow`:** defaults to 0, so an idle worker starts today.
 - **`pass` or `fail`:** fixes the assessment's result. Without it, the result is rolled from their crop care skill.
+- **`mechanic`, `electrician` or `bodyworker`:** books a trade course instead (`diagnostician`, ADS's own id for the electrician, works too): the next level of that trade (level 1 if they don't have it), with no assessment. The trade goes up a level when the last course day is done. It works without ADS, but not past level 3 or for a third trade.
 
-It fails if the worker is already certified or already has training booked.
+It fails if the worker is already certified (for spraying) or already has training booked.
 
 ```
 tcWorker train 2
 tcWorker train amy 0 fail
+tcWorker train amy 0 mechanic
 ```
 
 ### `tcWorker askTraining <worker>`
@@ -199,6 +201,15 @@ This only shows what your own machine is displaying, so it also works on a joine
 Farm 1: 2 standing spot(s), day 104
 #3 Amy Hall - wants spot 1203:-455, 12 m away, standing, shown
 #7 John Smith - not standing (assigned)
+```
+
+### `tcWorker adsSkill <worker> <mechanic|electrician|bodyworker> <0-3>`
+
+Sets one of a hired worker's Advanced Damage System workshop skills (091) to a level, or removes it with `0`. The trades are named as ADS shows them; `diagnostician`, its own id for the electrician, works too. A worker can have at most two: set one to `0` before adding a third. Removing the skill a worker is working in the workshop as takes them out of the workshop. `<worker>` is their id or name. It prints the worker's skills afterwards. It works without ADS too, but the skills only show and count toward pay while ADS's own workshop is taking your staff.
+
+```
+tcWorker adsSkill 7 mechanic 2
+tcWorker adsSkill Sam Hill bodyworker 0
 ```
 
 ## Jobs — `tcJob`
@@ -476,6 +487,23 @@ tcCompany event roadAccident
 
 tcCompany outcome poaching leaves
 tcCompany event poaching amy
+```
+
+### `tcCompany office`
+
+Lists your farm's office staff (090): for the administrator and the storekeeper, who's employed, their id, level, whether they're in the office or training (and until which day), and their monthly salary. The last line says whether Advanced Damage System's own workshop is taking your staff, and what state its staff provider is in. Read-only, so it also works on a joined client.
+
+```
+tcCompany office
+```
+
+### `tcCompany officeLevel <administrator|storekeeper> <1-3>`
+
+Sets an office role's level straight away, with that level's salary, and ends any course they're on, for testing Advanced Damage System's workshop at each level. The role has to be filled.
+
+```
+tcCompany officeLevel administrator 3
+tcCompany officeLevel storekeeper 2
 ```
 
 ### `tcCompany debris [count] [prop]`

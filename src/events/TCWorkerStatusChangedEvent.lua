@@ -72,13 +72,14 @@ function TCWorkerStatusChangedEvent.showNotification(worker, oldStatus, newStatu
     -- (TCWorkerTrainingChangedEvent), which arrives first.
     local training = TheContractorWorker.STATUS.TRAINING
     if newStatus == training and worker:hasTrainingBooked() then
-        local certName = TheContractorTraining.getCertName(worker.trainingCert)
+        local certName = TheContractorTraining.getCourseName(worker, worker.trainingCert)
         local key = worker.courseDaysLeft > 0 and "tc_training_started" or "tc_training_assessmentStarted"
         g_currentMission:addIngameNotification(FSBaseMission.INGAME_NOTIFICATION_INFO,
             string.format(g_i18n:getText(key), worker.name, certName))
         return
     elseif oldStatus == training then
-        if worker:hasTrainingBooked() then
+        -- 092: a trade course has no assessment to come back for.
+        if worker:hasTrainingBooked() and worker.assessmentDay ~= nil then
             g_currentMission:addIngameNotification(FSBaseMission.INGAME_NOTIFICATION_INFO,
                 string.format(g_i18n:getText("tc_training_courseDone"), worker.name,
                     TheContractorTraining.getCertName(worker.trainingCert), TCCalendar.formatDay(worker.assessmentDay)))

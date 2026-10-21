@@ -269,7 +269,7 @@ function TheContractorMachineryInsurance:onClaim(incident)
     local data = incident.data
     local args = { data.name, "$l10n_" .. TheContractorMachineryInsurance.getLevelTextKey(data.coverLevel) }
 
-    if tc.Administrator:isEmployed(incident.farmId) then
+    if tc.Office:hasAdministrator(incident.farmId) then
         data.claimSubmittedDay = getToday()
         self:publishClaimNotice(incident)
         tc.Inbox:postMessage(incident.farmId, TheContractorMachineryInsurance.MESSAGE_KIND,
