@@ -1,5 +1,5 @@
 -- 085's sign designs: one per image in modSettings' signs/ folder,
--- single-player only, on every sign (084, 087), and the README written once
+-- single-player only, on every sign (084, 087), and the README written
 -- into modSettings.
 
 local SETTINGS = "modSettings/FS25_TheContractor/"
@@ -198,7 +198,7 @@ test("every sign store item offers designs and maps its logo faces to shapes", f
     assertEquals(signs, 7)
 end)
 
--- The README: written with createFile/fileWrite, never over one already there.
+-- The README: written with createFile/fileWrite on every load, over any one already there.
 local function setupFiles(readmeExists)
     setup({})
     local written = {}
@@ -224,8 +224,9 @@ test("the settings folder gets a signs folder and a README covering the logo and
     assertTrue(written.text:find("\r\n", 1, true) ~= nil)
 end)
 
-test("a README that's already there is left alone", function()
+test("a README that's already there is rewritten", function()
     local written = setupFiles(true)
     TCCompanyLogo.createSettingsFolder()
-    assertEquals(nil, written.path)
+    assertEquals(SETTINGS .. "README.txt", written.path)
+    assertTrue(written.text:find("savegame1", 1, true) ~= nil)
 end)
