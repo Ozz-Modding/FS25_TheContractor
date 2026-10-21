@@ -70,7 +70,7 @@ Run your farm as an agricultural contracting business in Farming Simulator 25. T
 
 ## Company logo and signs
 
-The Overview's company card and the signs (construction menu, Contractor tab: the freestanding **Company Sign** and the **Company Wall Sign**, 1.5 m or 3 m square, at 1 m, 3 m or 6 m) show a logo. To use your own, save it as `logo.dds` in `Documents/My Games/FarmingSimulator2025/modSettings/FS25_TheContractor/` (the mod creates the folder, its `signs` folder and a `README.txt` explaining both the first time a save loads).
+The Overview's company card and the signs (construction menu, Contractor tab: the freestanding **Company Sign** and the **Company Wall Sign**, 1.5 m or 3 m square, at 1 m, 3 m or 6 m) show a logo. To use your own, save it as `logo.dds` in `Documents/My Games/FarmingSimulator2025/modSettings/FS25_TheContractor/` (the mod creates the folder, its `signs` folder and a `README.txt` explaining both when a save loads; the README is rewritten on every load, so edits to it are lost). To give one save a different logo, put it in a `savegame<N>` folder in there named after the save's slot (`savegame1/logo.dds` for save 1); a save without one uses the shared `logo.dds`.
 
 - It must be square, with sides a multiple of 4 (512×512 or 1024×1024 work well). Any other shape is stretched to fit.
 - It must be a DDS, ideally with mipmaps (GIANTS Texture Tool, or paint.net's DDS export). Other formats such as PNG are ignored.

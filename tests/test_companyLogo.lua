@@ -1,5 +1,6 @@
 -- The Overview's company logo: the player's own logo.dds from
--- modSettings if there is one, else the mod's default.
+-- modSettings if there is one (the save's own savegame<N>/ folder first),
+-- else the mod's default.
 
 local function setup(files)
     stubs.install()
@@ -27,6 +28,30 @@ end)
 
 test("a logo.dds in modSettings is used", function()
     setup({ "modSettings/FS25_TheContractor/logo.dds" })
+    assertEquals("modSettings/FS25_TheContractor/logo.dds", TCCompanyLogo.getFilename())
+end)
+
+test("a logo.dds in the save's own folder comes before the shared one", function()
+    setup({ "modSettings/FS25_TheContractor/logo.dds", "modSettings/FS25_TheContractor/savegame1/logo.dds" })
+    g_currentMission.missionInfo.savegameIndex = 1
+    assertEquals("modSettings/FS25_TheContractor/savegame1/logo.dds", TCCompanyLogo.getFilename())
+end)
+
+test("another save's folder is ignored", function()
+    setup({ "modSettings/FS25_TheContractor/logo.dds", "modSettings/FS25_TheContractor/savegame1/logo.dds" })
+    g_currentMission.missionInfo.savegameIndex = 2
+    assertEquals("modSettings/FS25_TheContractor/logo.dds", TCCompanyLogo.getFilename())
+end)
+
+test("a save's own logo is used with no shared one", function()
+    setup({ "modSettings/FS25_TheContractor/savegame3/logo.dds" })
+    g_currentMission.missionInfo.savegameIndex = 3
+    assertEquals("modSettings/FS25_TheContractor/savegame3/logo.dds", TCCompanyLogo.getFilename())
+end)
+
+test("a joining client (save index 0) only uses the shared logo", function()
+    setup({ "modSettings/FS25_TheContractor/logo.dds", "modSettings/FS25_TheContractor/savegame0/logo.dds" })
+    g_currentMission.missionInfo.savegameIndex = 0
     assertEquals("modSettings/FS25_TheContractor/logo.dds", TCCompanyLogo.getFilename())
 end)
 
