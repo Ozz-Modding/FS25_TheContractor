@@ -1,9 +1,12 @@
 <?xml version="1.0" encoding="utf-8" standalone="no" ?>
 <!--
-    084 logo sign: a board on two posts with the company logo on both faces
-    (src/placeables/PlaceableTCLogoSign.lua). The i3d comes from
-    docs/tools/genLogoSignI3d.py, saved in GIANTS Editor.
-    The store image is the default logo until the sign has an icon of its own.
+    084 company sign: a board on two posts with the company logo on both
+    faces (src/placeables/PlaceableTCLogoSign.lua), or one of the player's
+    own images from modSettings/FS25_TheContractor/signs/ (085's design
+    configuration, TCSignImages). In multiplayer the only design is the
+    logo, so the picker doesn't show. The i3d comes from
+    docs/tools/genLogoSignI3d.py, saved in GIANTS Editor. 087's wall signs
+    are the same placeable on a wall.
 -->
 <placeable type="FS25_TheContractor.tcLogoSign">
     <storeData>
@@ -43,6 +46,10 @@
             <place template="smallImp" />
         </sounds>
     </placement>
+
+    <tcSignDesignConfigurations title="$l10n_tc_config_signDesign">
+        <tcSignDesignConfiguration name="$l10n_tc_signDesign_logo" saveId="logo" isDefault="true" />
+    </tcSignDesignConfigurations>
 
     <logoSign>
         <face node="logoFront" />

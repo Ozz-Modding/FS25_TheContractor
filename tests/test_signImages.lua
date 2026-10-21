@@ -1,5 +1,6 @@
--- 085's custom sign: one design per image in modSettings' signs/ folder,
--- single-player only, and the README written once into modSettings.
+-- 085's sign designs: one per image in modSettings' signs/ folder,
+-- single-player only, on every sign (084, 087), and the README written once
+-- into modSettings.
 
 local SETTINGS = "modSettings/FS25_TheContractor/"
 local SIGNS = SETTINGS .. "signs/"
@@ -53,7 +54,7 @@ local function setup(files, isMultiplayer)
     return world
 end
 
--- The custom sign's options as the store item builds them: the xml's company
+-- A sign's design options as the store item builds them: the xml's company
 -- logo, then whatever postLoad adds.
 local function buildOptions()
     local logo = TCSignDesignConfigurationItem.new("tcSignDesign")
@@ -128,26 +129,73 @@ test("the company logo design, a missing image or the logo sign show the logo", 
     assertEquals(nil, PlaceableTCLogoSign.getDesignFilename({ configurations = {}, storeItem = {} }))
 end)
 
-test("in multiplayer the custom sign leaves the construction menu", function()
-    setup({}, true)
-    local storeItem = { brush = {}, showInStore = true }
-    g_storeManager = {
-        getItemByXMLFilename = function(_, filename)
-            assertEquals("mods/FS25_TheContractor/xml/customSign.xml", filename)
-            return storeItem
-        end,
-    }
-    TCSignImages.hideCustomSignInMultiplayer()
-    assertEquals(nil, storeItem.brush)
-    assertEquals(false, storeItem.showInStore)
-end)
+-- Every sign store item (084's company sign, 087's wall signs) offers the
+-- designs, and its logo faces' mappings reach a shape in its i3d.
+local function readFile(path)
+    local file = assert(io.open(path, "rb"))
+    local text = file:read("*a")
+    file:close()
+    return text
+end
 
-test("in single-player the custom sign stays in the construction menu", function()
-    setup({}, false)
-    local storeItem = { brush = {}, showInStore = true }
-    g_storeManager = { getItemByXMLFilename = function() return storeItem end }
-    TCSignImages.hideCustomSignInMultiplayer()
-    assertTrue(storeItem.brush ~= nil)
+-- An i3dMapping's "0>0|2" in an i3d's <Scene>: the first top-level node,
+-- then its first child, then that child's third. Returns the tag name and
+-- the node's name.
+local function resolveMapping(i3d, mapping)
+    local component, path = mapping:match("^(%d+)>(.*)$")
+    local indexes = { tonumber(component) }
+    for index in path:gmatch("%d+") do
+        table.insert(indexes, tonumber(index))
+    end
+    local scene = i3d:match("<Scene>(.-)</Scene>")
+    -- Walk the tags, keeping the child index at each depth.
+    local depth, counts, found = 0, { [0] = -1 }, nil
+    for closing, tag, attributes, selfClosing in scene:gmatch("<(/?)(%w+)([^>]-)(/?)>") do
+        if closing == "/" then
+            depth = depth - 1
+        else
+            counts[depth] = counts[depth] + 1
+            local matches = depth < #indexes
+            for d = 0, depth do
+                matches = matches and counts[d] == indexes[d + 1]
+            end
+            if matches and depth == #indexes - 1 then
+                found = { tag = tag, name = attributes:match('name="([^"]*)"') }
+            end
+            if selfClosing ~= "/" then
+                depth = depth + 1
+                counts[depth] = -1
+            end
+        end
+    end
+    return found
+end
+
+test("every sign store item offers designs and maps its logo faces to shapes", function()
+    local signs = 0
+    for xmlFilename in readFile("modDesc.xml"):gmatch('<storeItem xmlFilename="([^"]+)"') do
+        local xml = readFile(xmlFilename)
+        if xml:find('type="FS25_TheContractor.tcLogoSign"', 1, true) ~= nil then
+            signs = signs + 1
+            assertTrue(xml:find('<tcSignDesignConfiguration name="$l10n_tc_signDesign_logo" saveId="logo" isDefault="true"', 1, true) ~= nil,
+                xmlFilename .. " has no design configuration")
+            local i3d = readFile(xml:match("<filename>([^<]+)</filename>"))
+            local mappings = {}
+            for id, node in xml:gmatch('<i3dMapping id="([^"]+)" node="([^"]+)"') do
+                mappings[id] = node
+            end
+            local faces = 0
+            for face in xml:gmatch('<face node="([^"]+)"') do
+                faces = faces + 1
+                local node = resolveMapping(i3d, assert(mappings[face], xmlFilename .. ": no mapping for " .. face))
+                assertTrue(node ~= nil and node.tag == "Shape", xmlFilename .. ": " .. face .. " isn't a shape")
+                assertEquals(node.name, face)
+            end
+            assertTrue(faces > 0, xmlFilename .. " has no logo faces")
+        end
+    end
+    -- The company sign and six wall signs.
+    assertEquals(signs, 7)
 end)
 
 -- The README: written with createFile/fileWrite, never over one already there.

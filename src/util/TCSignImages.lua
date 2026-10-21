@@ -1,14 +1,15 @@
--- The custom sign's images (085): one design per image the player puts in
--- modSettings/FS25_TheContractor/signs/, offered as options of the sign's
--- tcSignDesign configuration (PlaceableTCLogoSign's TCSignDesignConfigurationItem).
+-- The signs' own images (085): one design per image the player puts in
+-- modSettings/FS25_TheContractor/signs/, offered as options of the company
+-- and wall signs' tcSignDesign configuration (PlaceableTCLogoSign's
+-- TCSignDesignConfigurationItem).
 -- A design is saved by its file name, so adding, removing or reordering
 -- images doesn't change what an existing sign shows; one whose image has
 -- gone falls back to the company logo.
 --
 -- Single-player only. Configurations are synced by index, and every
 -- machine would build its list from its own folder, so in multiplayer the
--- list is just the company logo and the custom sign is taken off the
--- construction menu (hideCustomSignInMultiplayer).
+-- list is just the company logo on every machine. With one option the
+-- construction menu shows no picker, so the signs are logo signs there.
 --
 -- The list is read when the save loads (store items are built then), so a
 -- new image shows after reloading the save.
@@ -16,7 +17,6 @@
 TCSignImages = {}
 
 TCSignImages.FOLDER = "signs/"
-TCSignImages.STORE_XML = "xml/customSign.xml"
 -- Configurations are sent in 7 bits (ConfigurationUtil.SEND_NUM_BITS), and
 -- the company logo takes one option.
 TCSignImages.MAX_IMAGES = 127
@@ -107,27 +107,14 @@ function TCSignImages.getImages()
     return images
 end
 
--- The designs the custom sign offers on this machine: none in multiplayer.
+-- The designs the signs offer on this machine: none in multiplayer. Run
+-- once per sign store item, so the folder is listed for each.
 function TCSignImages.getDesigns()
     if TCSignImages.getIsMultiplayer() then
-        Logging.info("TheContractor: multiplayer, so the custom sign only offers the company logo")
+        Logging.info("TheContractor: multiplayer, so signs only offer the company logo")
         return {}
     end
     local images = TCSignImages.getImages()
-    Logging.info("TheContractor: %d custom sign design(s) found in %s", #images, tostring(TCSignImages.getFolder()))
+    Logging.info("TheContractor: %d sign design(s) found in %s", #images, tostring(TCSignImages.getFolder()))
     return images
-end
-
--- Called from loadMap: the construction menu lists every store item with a
--- brush, rebuilt each time it opens, so taking the brush away hides it.
-function TCSignImages.hideCustomSignInMultiplayer()
-    if not TCSignImages.getIsMultiplayer() then
-        return
-    end
-    local storeItem = g_storeManager:getItemByXMLFilename(
-        Utils.getFilename(TCSignImages.STORE_XML, TheContractor.dir))
-    if storeItem ~= nil then
-        storeItem.brush = nil
-        storeItem.showInStore = false
-    end
 end

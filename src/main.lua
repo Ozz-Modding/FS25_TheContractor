@@ -180,7 +180,6 @@ function TheContractor:loadMap()
     self.hasResolvedSavedVehicles = false
 
     TCCompanyLogo.createSettingsFolder()
-    TCSignImages.hideCustomSignInMultiplayer()
 
     self.Settings = TheContractorSettings.new()
     -- 086: this machine's own display settings.

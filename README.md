@@ -16,7 +16,7 @@ Run your farm as an agricultural contracting business in Farming Simulator 25. T
 - Found a contracting company for your farm from the new **Contractor** menu
 - **Reputation** grows with good work and drops with missed, poor or botched jobs, and it decides how much work comes your way. Only a perfect job earns the full reward
 - **Advertising** campaigns (newspapers through to TV) bring in extra work
-- Your own **company logo** on the Overview and on a placeable sign, plus a **custom sign** showing designs of your own in single-player (see [Company logo and signs](#company-logo-and-signs))
+- Your own **company logo** on the Overview and on placeable signs, freestanding or on a wall at three heights, which can also show designs of your own in single-player (see [Company logo and signs](#company-logo-and-signs))
 
 ### Jobs
 - Vanilla contracts are switched off and replaced by the mod's own job offers
@@ -70,14 +70,16 @@ Run your farm as an agricultural contracting business in Farming Simulator 25. T
 
 ## Company logo and signs
 
-The Overview's company card and the **Company Logo Sign** (construction menu, Contractor tab) show a logo. To use your own, save it as `logo.dds` in `Documents/My Games/FarmingSimulator2025/modSettings/FS25_TheContractor/` (the mod creates the folder, its `signs` folder and a `README.txt` explaining both the first time a save loads).
+The Overview's company card and the signs (construction menu, Contractor tab: the freestanding **Company Sign** and the **Company Wall Sign**, 1.5 m or 3 m square, at 1 m, 3 m or 6 m) show a logo. To use your own, save it as `logo.dds` in `Documents/My Games/FarmingSimulator2025/modSettings/FS25_TheContractor/` (the mod creates the folder, its `signs` folder and a `README.txt` explaining both the first time a save loads).
 
 - It must be square, with sides a multiple of 4 (512×512 or 1024×1024 work well). Any other shape is stretched to fit.
 - It must be a DDS, ideally with mipmaps (GIANTS Texture Tool, or paint.net's DDS export). Other formats such as PNG are ignored.
 - A new logo shows the next time you open the menu, but replacing one you've already seen needs a game restart.
 - The logo is read from your own PC only: in multiplayer, your logo shows only on your own farm's signs, and other players see their own logo file, or the default.
 
-The **Custom Sign** (single-player only) shows the company logo or a design of your own. Put square `.dds` images in the `signs` folder; each becomes a design you pick when placing the sign, named after its file (`for_sale.dds` is "For Sale"). New images show after you reload the save, and the same size and format rules apply. In multiplayer the Custom Sign isn't in the construction menu.
+In single-player, a sign can show a design of your own instead. Put square `.dds` images in the `signs` folder; each becomes a design you pick when placing a sign, named after its file (`for_sale.dds` is "For Sale"). New images show after you reload the save, and the same size and format rules apply. In multiplayer there's no design picker and every sign shows the company logo.
+
+A wall sign's height is that of its bottom edge. Place it from just in front of the wall, with its face pointing away from it; the construction menu's free mode helps get it flush against a building.
 
 ## Console commands
 

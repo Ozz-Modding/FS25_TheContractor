@@ -1,7 +1,9 @@
--- Logo sign (084): a board on two posts showing the company logo on both
--- faces. The faces' texture is swapped at load for TCCompanyLogo's file
--- (the player's logo in modSettings, else ours), the way vanilla's pallets
--- swap theirs (Pallet:onPostLoad).
+-- Company sign (084): a board on two posts showing the company logo on both
+-- faces, and the wall signs (087, xml/wallSign<height>m.xml), a board with
+-- one face against a wall. Each xml lists its faces as <logoSign><face>.
+-- The faces' texture is swapped at load for TCCompanyLogo's file (the
+-- player's logo in modSettings, else ours), the way vanilla's pallets swap
+-- theirs (Pallet:onPostLoad).
 --
 -- The logo file is read on each machine, so in multiplayer a player's own
 -- logo only goes on their own farm's signs; everyone else's show the
@@ -9,12 +11,13 @@
 -- player changes farm. Visual only: nothing saved or streamed, vanilla
 -- owns the placeable's saving, sync and ownership.
 --
--- The custom sign (085, xml/customSign.xml) is the same placeable with a
--- tcSignDesign configuration: the company logo or one of the player's
--- images in modSettings (TCSignImages). A chosen image shows whoever owns
--- the sign; the custom sign is single-player only, so that's always the
--- player. Its options are built by TCSignDesignConfigurationItem.postLoad,
--- as vanilla's tree sapling configuration builds one per tree type.
+-- Every sign has a tcSignDesign configuration (085): the company logo or
+-- one of the player's images in modSettings (TCSignImages). A chosen image
+-- shows whoever owns the sign; images are only offered in single-player,
+-- so that's always the player. In multiplayer the logo is the only option
+-- and the construction menu shows no picker. The options are built by
+-- TCSignDesignConfigurationItem.postLoad, as vanilla's tree sapling
+-- configuration builds one per tree type.
 --
 -- Loaded by the base game's placeable specialization manager (modDesc), not
 -- sourced by main.lua.
@@ -24,7 +27,7 @@ PlaceableTCLogoSign = {}
 PlaceableTCLogoSign.KEY = "tcLogoSignData"
 PlaceableTCLogoSign.DESIGN_CONFIG = "tcSignDesign"
 
--- One option of the custom sign's design. The xml declares one, the company
+-- One option of a sign's design. The xml declares one, the company
 -- logo (filename nil); postLoad adds one per image in signs/, saved by file
 -- name.
 TCSignDesignConfigurationItem = {}
@@ -118,7 +121,7 @@ function PlaceableTCLogoSign:onDelete()
     g_messageCenter:unsubscribeAll(self)
 end
 
--- The file a sign should show: a custom sign's chosen image, else the
+-- The file a sign should show: its chosen design's image, else the
 -- player's logo on their own farm's signs (and while placing one), the
 -- default on anyone else's.
 function PlaceableTCLogoSign.getLogoFilename(ownerFarmId, localFarmId, isPreview, designFilename)
@@ -131,8 +134,8 @@ function PlaceableTCLogoSign.getLogoFilename(ownerFarmId, localFarmId, isPreview
     return TCCompanyLogo.getDefaultFilename()
 end
 
--- The custom sign's chosen image, or nil for the company logo (and on the
--- logo sign, which has no design configuration).
+-- The sign's chosen design's image, or nil for the company logo (and for a
+-- sign with no design configuration).
 function PlaceableTCLogoSign.getDesignFilename(placeable)
     local configId = placeable.configurations ~= nil and placeable.configurations[PlaceableTCLogoSign.DESIGN_CONFIG] or nil
     local storeItem = placeable.storeItem
