@@ -491,12 +491,10 @@ function TheContractorDrivers:rollDrivingGrowth(binding, vehicle)
     if worker ~= nil then
         chance = chance * TheContractorMorale.getGrowthMultiplier(worker)
     end
-    if math.random() >= chance then
-        return
-    end
 
+    -- growWorker rolls it, scaled for the stat it picks (030's level curve).
     g_currentMission.TheContractor.Staff:growWorker(binding.farmId, binding.workerId,
-        TheContractorDrivers.getVehicleTier(vehicle), TheContractorDrivers.getVehicleOperationSkill(vehicle))
+        TheContractorDrivers.getVehicleTier(vehicle), TheContractorDrivers.getVehicleOperationSkill(vehicle), chance)
 end
 
 -- Notifications --------------------------------------------------------------

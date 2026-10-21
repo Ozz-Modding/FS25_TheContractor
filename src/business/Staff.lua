@@ -18,9 +18,10 @@
 --
 -- Salary (036, replacing 026's one-off hire fee) is charged per period, on
 -- PERIOD_CHANGED, for every hired worker whatever their status. 047
--- re-baselined it to real UK monthly pay (a period is a month): ~2.2k for
+-- re-baselined it to real UK monthly pay (a period is a month): ~2.1k for
 -- the weakest possible worker (about the National Living Wage full time),
--- ~2.8k for an average one (~33k a year), up to ~3.55k for the best. The
+-- ~3k for an average one (~36k a year), up to ~4.55k for the best, with
+-- the gap widened by paying ratings on a curve (SALARY_RATING_EXPONENT). The
 -- first period is paid up front at hire, so hiring just
 -- after a period change and releasing just before the next isn't free. No
 -- refund on release, no proration. Pool sizing and the daily add/remove odds
@@ -32,7 +33,7 @@
 TheContractorStaff = {}
 TheContractorStaff_mt = Class(TheContractorStaff)
 
-TheContractorStaff.BASE_SALARY = 2050
+TheContractorStaff.BASE_SALARY = 1950
 
 -- Short months: a month of fewer days is fewer working days, so pay
 -- (salaries, the administrator, notice and redundancy) is scaled by the
@@ -47,11 +48,17 @@ TheContractorStaff.FULL_PAY_DAYS = 5
 -- Workplace pension (051): auto-enrolment's employer minimum, a share of
 -- the salary bill, paid with each salary run under TC_WAGES.
 TheContractorStaff.PENSION_RATE = 0.03
-TheContractorStaff.SALARY_PER_WORK_SPEED = 35
-TheContractorStaff.SALARY_PER_TIER_POINT = 25
+-- Each rating is paid as rating ^ SALARY_RATING_EXPONENT x its weight, so
+-- the top of the scale costs far more per point than the bottom: a 10 is
+-- paid 4x a 5, not 2x. Simulated over the candidate rolls: ~2.1k for the
+-- weakest, ~2.55k at the 10th percentile, ~3.05k median, ~3.65k at the 90th
+-- and ~4.55k for the best possible worker.
+TheContractorStaff.SALARY_RATING_EXPONENT = 2
+TheContractorStaff.SALARY_PER_WORK_SPEED = 8
+TheContractorStaff.SALARY_PER_TIER_POINT = 4
 -- 044: only a worker's SALARIED_SKILL_COUNT best operation skills are paid
 -- for - you pay for their specialisms, not for being average at everything.
-TheContractorStaff.SALARY_PER_SKILL_POINT = 20
+TheContractorStaff.SALARY_PER_SKILL_POINT = 4.5
 TheContractorStaff.SALARIED_SKILL_COUNT = 2
 
 -- Tractor experience is a ladder (small -> medium -> large), rolled the way
@@ -112,10 +119,21 @@ TheContractorStaff.GROWTH_POTENTIAL_MIN_ROLL = 0.4
 -- also certifies the worker on the next tier up, starting at
 -- CERTIFY_START_RATING, as part of the same growth (it's the same kind of
 -- machine, only bigger). certify is only for a worker rolled before that
--- rule, already past the threshold with nothing above it. About 3 in 10
--- good jobs grow a worker, so a young worker's full pool takes around 40
--- jobs to use up.
+-- rule, already past the threshold with nothing above it.
+-- The stat is picked first, and the roll's chance is then multiplied by
+-- GROWTH_LEVEL_MULTIPLIERS for that stat's current value (capped at
+-- GROWTH_MAX_CHANCE), so the basics come quickly and the top of the scale
+-- is slow: on a stretching job, a skill at 1-2 moves up in ~3 jobs, one at
+-- 5 in ~5-6, one at 8 in ~12 and one at 9 in ~18 (several times that on
+-- easy work). Growing a stat that's still under GROWTH_FREE_BELOW doesn't
+-- spend growthPotential, so even an older worker with none left picks the
+-- basics up.
 TheContractorStaff.GROWTH_BASE_CHANCE = 0.3
+TheContractorStaff.GROWTH_MAX_CHANCE = 0.9
+-- Indexed by the stat's current value (growing from 1 is [1]). A new
+-- certification (certify) has no current value and uses 1.
+TheContractorStaff.GROWTH_LEVEL_MULTIPLIERS = { 3, 2.5, 1.8, 1.3, 1, 0.8, 0.6, 0.45, 0.3 }
+TheContractorStaff.GROWTH_FREE_BELOW = 3
 TheContractorStaff.GROWTH_QUALITY_REFERENCE = 0.85
 TheContractorStaff.GROWTH_QUALITY_MAX = 1.15
 TheContractorStaff.GROWTH_STRETCH_MULTIPLIER = 1.5
@@ -399,12 +417,13 @@ end
 -- growth raises their market value (TheContractorPayReviews.getMarketValue)
 -- instead.
 function TheContractorStaff.getSalary(workSpeed, tierCapability, skills)
-    local salary = TheContractorStaff.BASE_SALARY + workSpeed * TheContractorStaff.SALARY_PER_WORK_SPEED
+    local exponent = TheContractorStaff.SALARY_RATING_EXPONENT
+    local salary = TheContractorStaff.BASE_SALARY + workSpeed ^ exponent * TheContractorStaff.SALARY_PER_WORK_SPEED
 
     for _, tier in ipairs(TheContractorWorker.TIERS) do
         local rating = tierCapability[tier]
         if rating ~= nil then
-            salary = salary + rating * TheContractorStaff.SALARY_PER_TIER_POINT
+            salary = salary + rating ^ exponent * TheContractorStaff.SALARY_PER_TIER_POINT
         end
     end
 
@@ -415,10 +434,10 @@ function TheContractorStaff.getSalary(workSpeed, tierCapability, skills)
     end
     table.sort(ratings, function(a, b) return a > b end)
     for i = 1, math.min(TheContractorStaff.SALARIED_SKILL_COUNT, #ratings) do
-        salary = salary + ratings[i] * TheContractorStaff.SALARY_PER_SKILL_POINT
+        salary = salary + ratings[i] ^ exponent * TheContractorStaff.SALARY_PER_SKILL_POINT
     end
 
-    return salary
+    return math.floor(salary + 0.5)
 end
 
 -- A new name in the nameStyle setting's style (TCNames). Server only, as
@@ -1252,7 +1271,7 @@ end
 
 function TheContractorStaff:rollWorkerGrowth(job, workerId, equipmentIds, isHauler)
     local worker = self:getWorker(job.farmId, workerId)
-    if worker == nil or worker.growthPotential <= 0 then
+    if worker == nil then
         return
     end
 
@@ -1272,11 +1291,8 @@ function TheContractorStaff:rollWorkerGrowth(job, workerId, equipmentIds, isHaul
     local quality = TheContractorStaff.getGrowthQualityMultiplier(job.qualityScore)
     -- 056: happy staff learn a little faster.
     local morale = TheContractorMorale.getGrowthMultiplier(worker)
-    if math.random() >= TheContractorStaff.GROWTH_BASE_CHANCE * stretch * quality * morale then
-        return
-    end
-
-    self:growWorker(job.farmId, workerId, ratings.tractorTier, ratings.operationSkill)
+    self:growWorker(job.farmId, workerId, ratings.tractorTier, ratings.operationSkill,
+        TheContractorStaff.GROWTH_BASE_CHANCE * stretch * quality * morale)
 end
 
 -- The job's quality score (029) as a growth multiplier (080): against
@@ -1287,27 +1303,52 @@ function TheContractorStaff.getGrowthQualityMultiplier(qualityScore)
         (qualityScore or 100) / 100 / TheContractorStaff.GROWTH_QUALITY_REFERENCE)
 end
 
--- A successful growth roll, wherever it came from (a completed job above,
--- or driving under AutoDrive/Courseplay - 037's TheContractorDrivers):
--- spends one growthPotential point on a stat picked by pickGrowth for
--- `tier` (nil if the equipment had no tier) and operation `skill` (044,
--- nil if the work didn't map to one), and tells everyone.
-function TheContractorStaff:growWorker(farmId, workerId, tier, skill)
+-- A growth roll, wherever it came from (a completed job above, or driving
+-- under AutoDrive/Courseplay - 037's TheContractorDrivers): picks a stat
+-- with pickGrowth for `tier` (nil if the equipment had no tier) and
+-- operation `skill` (044, nil if the work didn't map to one), then rolls
+-- `chance` x that stat's GROWTH_LEVEL_MULTIPLIERS (no `chance`: it grows).
+-- A success spends one growthPotential point (none under
+-- GROWTH_FREE_BELOW) and tells everyone. With no potential left, only the
+-- free stats can be picked.
+function TheContractorStaff:growWorker(farmId, workerId, tier, skill, chance)
     local worker = self:getWorker(farmId, workerId)
-    if worker == nil or worker.growthPotential <= 0 then
+    if worker == nil then
         return
     end
 
+    local freeOnly = worker.growthPotential <= 0
     local rating = tier ~= nil and worker:getTierCapability(tier) or nil
-    local stat, value = TheContractorStaff.pickGrowth(worker, tier, rating, skill)
+    local stat, value = TheContractorStaff.pickGrowth(worker, tier, rating, skill, freeOnly)
     if stat == nil then
-        -- Nothing left that can move (everything maxed); the leftover
-        -- potential just goes unused.
+        -- Nothing left that can move (everything maxed, or no potential
+        -- and nothing basic left); any leftover potential goes unused.
         return
     end
 
-    worker.growthPotential = worker.growthPotential - 1
+    local oldValue = worker:getStat(stat)
+    if chance ~= nil and math.random() >= TheContractorStaff.getGrowthChance(chance, oldValue) then
+        return
+    end
+
+    if not TheContractorStaff.isFreeGrowth(oldValue) then
+        worker.growthPotential = worker.growthPotential - 1
+    end
     self:raiseWorkerStat(farmId, worker, stat, value)
+end
+
+-- A growth roll's chance for a stat currently at `currentValue` (nil for a
+-- new certification).
+function TheContractorStaff.getGrowthChance(chance, currentValue)
+    local multipliers = TheContractorStaff.GROWTH_LEVEL_MULTIPLIERS
+    local multiplier = currentValue ~= nil and multipliers[math.max(1, math.min(#multipliers, currentValue))] or 1
+    return math.min(TheContractorStaff.GROWTH_MAX_CHANCE, chance * multiplier)
+end
+
+-- Growing from `currentValue` costs no growthPotential (a new
+-- certification always costs one).
+function TheContractorStaff.isFreeGrowth(currentValue)
+    return currentValue ~= nil and currentValue < TheContractorStaff.GROWTH_FREE_BELOW
 end
 
 -- 074: one point on a stat (a tier rating or operation skill) that doesn't
@@ -1354,9 +1395,10 @@ end
 
 -- Weighted pick (GROWTH_WEIGHTS) among the growths still possible for this
 -- worker after a job on `tier` (nil if the equipment had no tier) using
--- operation `skill` (nil if none). Returns stat, newValue - or nil if none
--- are possible.
-function TheContractorStaff.pickGrowth(worker, tier, rating, skill)
+-- operation `skill` (nil if none). `freeOnly`: only stats that would grow
+-- for free (isFreeGrowth). Returns stat, newValue - or nil if none are
+-- possible.
+function TheContractorStaff.pickGrowth(worker, tier, rating, skill, freeOnly)
     local weights = TheContractorStaff.GROWTH_WEIGHTS
     local options = {}
 
@@ -1379,6 +1421,16 @@ function TheContractorStaff.pickGrowth(worker, tier, rating, skill)
             table.insert(options, { stat = nextTier, value = TheContractorStaff.CERTIFY_START_RATING,
                 weight = weights.certify })
         end
+    end
+
+    if freeOnly then
+        local free = {}
+        for _, option in ipairs(options) do
+            if TheContractorStaff.isFreeGrowth(worker:getStat(option.stat)) then
+                table.insert(free, option)
+            end
+        end
+        options = free
     end
 
     local totalWeight = 0
