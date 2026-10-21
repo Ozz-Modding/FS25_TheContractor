@@ -60,12 +60,32 @@ end
 -- copy, since the broadcast doesn't loop back to it).
 function TCWorkerTrainingChangedEvent.showNotification(worker, notify, cert, amount)
     if worker == nil or worker.farmId ~= g_currentMission:getFarmId() or
-            notify == TheContractorTraining.NOTIFY.NONE or TheContractorTraining.getDefinition(cert) == nil then
+            notify == TheContractorTraining.NOTIFY.NONE or not TheContractorTraining.isKnownCourse(cert) then
+        return
+    end
+
+    local NOTIFY = TheContractorTraining.NOTIFY
+
+    -- 092: a trade course: booked, done, or couldn't be paid for.
+    local role = TheContractorWorkshop.getCourseRole(cert)
+    if role ~= nil then
+        local roleName = string.lower(TheContractorWorkshop.getRoleName(role))
+        if notify == NOTIFY.BOOKED and worker:hasTrainingBooked() then
+            g_currentMission:addIngameNotification(FSBaseMission.INGAME_NOTIFICATION_INFO,
+                string.format(g_i18n:getText("tc_workshop_courseBooked"), worker.name,
+                    TheContractorTraining.getCourseName(worker, cert), TheContractorTraining.formatCourseDates(worker)))
+        elseif notify == NOTIFY.COMPLETED then
+            g_currentMission:addIngameNotification(FSBaseMission.INGAME_NOTIFICATION_OK,
+                string.format(g_i18n:getText("tc_workshop_courseDone"), worker.name, amount, roleName))
+        elseif notify == NOTIFY.CANNOT_AFFORD then
+            g_currentMission:addIngameNotification(FSBaseMission.INGAME_NOTIFICATION_CRITICAL,
+                string.format(g_i18n:getText("tc_training_cannotAffordNotice"), worker.name,
+                    TheContractorTraining.getCourseName(worker, cert), TheContractorTraining.formatPrice(amount)))
+        end
         return
     end
 
     local certName = TheContractorTraining.getCertName(cert)
-    local NOTIFY = TheContractorTraining.NOTIFY
 
     if notify == NOTIFY.BOOKED and worker:hasTrainingBooked() then
         local courseDates = TheContractorTraining.formatCourseDates(worker)

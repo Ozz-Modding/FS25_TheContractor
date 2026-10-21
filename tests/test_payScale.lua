@@ -12,12 +12,12 @@ local function setup(daysPerPeriod)
         end,
     }
     world:load("src/business/Staff.lua")
-    world:load("src/business/Administrator.lua")
+    world:load("src/business/Office.lua")
 
     g_currentMission.environment = { daysPerPeriod = daysPerPeriod }
     local staff = setmetatable({ workersByFarm = {} }, TheContractorStaff_mt)
-    local administrator = setmetatable({ adminByFarm = {} }, TheContractorAdministrator_mt)
-    g_currentMission.TheContractor = { Staff = staff, Administrator = administrator }
+    local administrator = setmetatable({ membersByFarm = {} }, TheContractorOffice_mt)
+    g_currentMission.TheContractor = { Staff = staff, Office = administrator }
     return staff, administrator
 end
 
@@ -66,7 +66,8 @@ end)
 test("the administrator and pension are scaled too", function()
     local staff, administrator = setup(1)
     addWorker(staff, 2000)
-    administrator.adminByFarm[1] = { name = "Ann", salary = 2000, hiredPeriod = 40, ageAtHire = 30 }
+    administrator.membersByFarm[1] = { administrator = { id = 9, role = "administrator", name = "Ann", salary = 2000,
+        level = 1, hiredPeriod = 40, ageAtHire = 30 } }
     assertEquals(administrator:getSalary(1), 1200, "administrator")
     assertEquals(staff:getPayroll(1), 2400, "payroll")
     assertNear(staff:getWageBill(1), 2400 * (1 + TheContractorStaff.PENSION_RATE), 0.0001, "wage bill")

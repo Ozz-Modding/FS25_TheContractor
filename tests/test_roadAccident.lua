@@ -102,8 +102,8 @@ local function setup()
             return key == TheContractorClaims.OVERHEAD_KEY and world.insured
         end,
     }
-    tc.Administrator = {
-        isEmployed = function()
+    tc.Office = {
+        hasAdministrator = function()
             return world.hasAdmin
         end,
     }

@@ -161,6 +161,31 @@ test("each farm's idle workers go on that farm's own spots", function()
     assertEquals(wanted[6], nil, "farm 3 has no spots")
 end)
 
+-- 090: office staff stand about too, unless they're away training. A farm
+-- with only office staff still gets its spots used.
+test("office staff stand on their farm's spots unless training", function()
+    setup()
+    dofile("src/business/Office.lua")
+    addSpot(1, 0, 0)
+    addSpot(1, 5, 0)
+    addSpot(1, 10, 0)
+    addWorker(1, 1, TheContractorWorker.STATUS.IDLE)
+    local office = TheContractorOffice.new()
+    office.membersByFarm[1] = {
+        administrator = { id = 7, role = "administrator", farmId = 1, name = "Ann", level = 1 },
+        storekeeper = { id = 8, role = "storekeeper", farmId = 1, name = "Bob", level = 1, trainingUntilDay = 4 },
+    }
+    g_currentMission.TheContractor.Office = office
+
+    local wanted = TCIdleStaff.getWanted()
+    assertTrue(wanted[1] ~= nil, "the idle worker")
+    assertEquals(wanted[7].worker.name, "Ann", "the administrator")
+    assertEquals(wanted[8], nil, "the storekeeper's on a course")
+
+    g_currentMission.TheContractor.Staff.workersByFarm = {}
+    assertTrue(TCIdleStaff.getWanted()[7] ~= nil, "office only")
+end)
+
 test("a sold spot drops out", function()
     setup()
     local spot = addSpot(1, 0, 0)

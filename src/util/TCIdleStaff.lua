@@ -154,28 +154,44 @@ function TCIdleStaff.getWanted()
     end
 
     local day = mission.environment.currentMonotonicDay or 0
-    for farmId, farmWorkers in pairs(tc.Staff.workersByFarm) do
-        local spots = spotsByFarm[farmId]
-        if spots ~= nil then
-            local workerIds = {}
-            for _, worker in pairs(farmWorkers) do
-                if TCIdleStaff.isStandingStatus(worker.status) then
-                    table.insert(workerIds, worker.id)
-                end
-            end
-            table.sort(workerIds)
-            local spotKeys = {}
-            for key in pairs(spots) do
-                table.insert(spotKeys, key)
-            end
-            table.sort(spotKeys)
+    for farmId, spots in pairs(spotsByFarm) do
+        local people = TCIdleStaff.getStandingPeople(tc, farmId)
+        local workerIds = {}
+        for workerId in pairs(people) do
+            table.insert(workerIds, workerId)
+        end
+        table.sort(workerIds)
+        local spotKeys = {}
+        for key in pairs(spots) do
+            table.insert(spotKeys, key)
+        end
+        table.sort(spotKeys)
 
-            for workerId, spotKey in pairs(TCIdleStaff.assign(farmId, day, workerIds, spotKeys)) do
-                wanted[workerId] = { worker = farmWorkers[workerId], spot = spots[spotKey] }
-            end
+        for workerId, spotKey in pairs(TCIdleStaff.assign(farmId, day, workerIds, spotKeys)) do
+            wanted[workerId] = { worker = people[workerId], spot = spots[spotKey] }
         end
     end
     return wanted
+end
+
+-- Everyone of the farm's who'd be standing about, by id: workers with
+-- nothing on, and the office staff (090) unless they're away training.
+-- Office ids come from the worker counter, so they never collide.
+function TCIdleStaff.getStandingPeople(tc, farmId)
+    local people = {}
+    for _, worker in pairs(tc.Staff.workersByFarm[farmId] or {}) do
+        if TCIdleStaff.isStandingStatus(worker.status) then
+            people[worker.id] = worker
+        end
+    end
+    if tc.Office ~= nil then
+        for _, member in ipairs(tc.Office:getMembers(farmId)) do
+            if not TheContractorOffice.isTraining(member) then
+                people[member.id] = member
+            end
+        end
+    end
+    return people
 end
 
 -- Showing them (clients) ------------------------------------------------------

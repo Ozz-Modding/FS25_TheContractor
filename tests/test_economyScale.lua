@@ -33,7 +33,7 @@ local function setup()
     world:load("src/business/Settings.lua")
     world:load("src/business/Overheads.lua")
     world:load("src/business/Staff.lua")
-    world:load("src/business/Administrator.lua")
+    world:load("src/business/Office.lua")
     world:load("src/business/Company.lua")
     world:load("src/business/Advertising.lua")
     world:load("src/business/Morale.lua")
@@ -42,7 +42,7 @@ local function setup()
     g_currentMission.TheContractor = {
         Settings = TheContractorSettings.new(),
         Staff = setmetatable({ workersByFarm = {} }, TheContractorStaff_mt),
-        Administrator = setmetatable({ adminByFarm = {} }, TheContractorAdministrator_mt),
+        Office = setmetatable({ membersByFarm = {} }, TheContractorOffice_mt),
         Finances = {
             recordWages = function(_, farmId, amount) world.wages = world.wages + amount end,
         },
@@ -141,7 +141,8 @@ test("salaries, the administrator and notice pay follow the factor, stored unsca
     local worker = { id = 1, salary = 2600, hiredPeriod = 40 - 3 * 12, age = 40,
         isLeaving = function() return false end }
     tc.Staff.workersByFarm[1] = { [1] = worker }
-    tc.Administrator.adminByFarm[1] = { name = "Ann", salary = 2000, hiredPeriod = 40, ageAtHire = 30 }
+    tc.Office.membersByFarm[1] = { administrator = { id = 9, role = "administrator", name = "Ann", salary = 2000, level = 1,
+        hiredPeriod = 40, ageAtHire = 30 } }
     local noticeBefore = TheContractorStaff.getReleaseCost(worker).noticePay
 
     setEconomyFactor(0.5)

@@ -289,6 +289,26 @@
 		<text name="tc_staff_columnBestSkills" text="Best skill"/>
 		<text name="tc_staff_columnStatus" text="Status"/>
 		<text name="tc_staff_columnJob" text="Job"/>
+		<text name="tc_staff_columnADS" text="ADS"/>
+		<text name="tc_staff_adsYes" text="Yes"/>
+		<text name="tc_staff_workshopHeading" text="Workshop"/>
+		<text name="tc_staff_workshopNoteTicked" text="Works in the workshop as %s when not on a job."/>
+		<text name="tc_staff_workshopNoteNotTicked" text="Not working in the workshop. Use Manage to send them there."/>
+		<text name="tc_staff_workshopButton" text="Work in the workshop as %s"/>
+		<text name="tc_staff_workshopReplaceButton" text="Work in the workshop as %s (instead of %s)"/>
+		<text name="tc_staff_workshopStopButton" text="Stop working in the workshop"/>
+		<text name="tc_workshop_courseName" text="level %d %s"/>
+		<text name="tc_workshop_trainingButton" text="Workshop training"/>
+		<text name="tc_workshop_courseTitle" text="Workshop training"/>
+		<text name="tc_workshop_coursePrompt" text="Which course should %s take?"/>
+		<text name="tc_workshop_courseOptionLearn" text="Learn %s: %s, %d days"/>
+		<text name="tc_workshop_courseOptionRaise" text="%s to level %d: %s, %d days"/>
+		<text name="tc_workshop_courseConfirm" text="Book %s on a %s course for %s? Training is on %s. They can't take jobs on those days. If they're out on a job when it's due, it moves back."/>
+		<text name="tc_workshop_courseConfirmTicked" text="While they're on it, the workshop's %s work waits for them."/>
+		<text name="tc_workshop_courseBooked" text="%s is booked on a %s course: %s"/>
+		<text name="tc_workshop_courseDone" text="%s finished their course and is now a level %d %s"/>
+		<text name="tc_workshop_noteCourse" text="On a %s course: %s."/>
+		<text name="tc_allocation_workshopNote" text="%s works in your workshop as %s: the workshop's %s work waits until they're back."/>
 		<text name="tc_staff_columnSalary" text="Salary"/>
 		<text name="tc_staff_rosterEmpty" text="No workers hired yet — switch to the Candidates view to hire your first worker."/>
 		<text name="tc_staff_candidatesEmpty" text="No candidates currently available to hire — check back later."/>
@@ -792,21 +812,49 @@
 		<text name="tc_legal_failedNotice" text="Pursuit failed: the invoice for %s (%s) has been written off."/>
 		<text name="tc_overhead_healthSafety" text="Health &amp; safety programme"/>
 		<text name="tc_overhead_healthSafety_desc" text="PPE, first aid, training and risk assessments: %s per worker a year. Staff get sick less and recover sooner. Without it, sickness risks an inspection and a fine."/>
-		<text name="tc_admin_title" text="Office administrator"/>
-		<text name="tc_admin_status_employed" text="Employed"/>
-		<text name="tc_admin_status_vacant" text="None"/>
-		<text name="tc_admin_noteEmployed" text="%s, since %s"/>
-		<text name="tc_admin_billing" text="Monthly salary, paid with the salary run"/>
-		<text name="tc_admin_price" text="%s a month"/>
-		<text name="tc_admin_desc" text="Handles invoicing and credit control: customers pay sooner, and fewer pay late or not at all. Only invoices issued while employed."/>
-		<text name="tc_admin_hireButton" text="Hire administrator"/>
-		<text name="tc_admin_releaseButton" text="Release administrator"/>
-		<text name="tc_admin_hireConfirm" text="Hire an office administrator for %s a month? The first month is paid now. Customers will pay sooner, and fewer will pay late or not at all."/>
-		<text name="tc_admin_cannotAfford" text="You can't afford an office administrator right now: the first month's salary is %s."/>
-		<text name="tc_admin_releaseConfirmNotice" text="Release %s, your office administrator? After %d full year(s) of service, you'll pay them %s in lieu of %s week(s)' notice. This cannot be undone."/>
-		<text name="tc_admin_releaseConfirmRedundancy" text="Release %s, your office administrator? After %d full years of service, you'll pay them %s: %s in lieu of %s weeks' notice and %s redundancy pay. This cannot be undone."/>
-		<text name="tc_admin_hiredNotification" text="%s has started as your office administrator"/>
-		<text name="tc_admin_releasedNotification" text="%s, your office administrator, has left"/>
+		<text name="tc_office_role_administrator" text="Office administrator"/>
+		<text name="tc_office_role_storekeeper" text="Storekeeper"/>
+		<text name="tc_office_roleNoun_administrator" text="office administrator"/>
+		<text name="tc_office_roleNoun_storekeeper" text="storekeeper"/>
+		<text name="tc_office_vacant" text="Vacant"/>
+		<text name="tc_office_vacancyTitle" text="%s: vacant"/>
+		<text name="tc_office_status_vacant" text="Vacant"/>
+		<text name="tc_office_status_available" text="In the office"/>
+		<text name="tc_office_status_training" text="Training"/>
+		<text name="tc_office_detailRole" text="Role"/>
+		<text name="tc_office_detailLevel" text="Level"/>
+		<text name="tc_office_detailSince" text="Employed since"/>
+		<text name="tc_office_detailWorkshop" text="Workshop"/>
+		<text name="tc_office_aboutHeading" text="The role"/>
+		<text name="tc_office_level" text="Level %d"/>
+		<text name="tc_office_salary" text="%s a month"/>
+		<text name="tc_office_about_administrator" text="Handles invoicing and credit control: customers pay sooner, and fewer pay late or not at all (only invoices issued while employed). With Advanced Damage System, also your own workshop's advisor: more vehicles worked on at once, and faster work, the higher their level."/>
+		<text name="tc_office_about_storekeeper" text="Your own workshop's storekeeper, with Advanced Damage System: buys the parts a job needs instead of waiting for stock you've bought yourself, and can sell the parts taken out. From level 2, parts are cheaper and removed parts sell for more."/>
+		<text name="tc_office_adsRole_receptionist" text="Advisor"/>
+		<text name="tc_office_adsRole_storekeeper" text="Storekeeper"/>
+		<text name="tc_office_adsRole_mechanic" text="Mechanic"/>
+		<text name="tc_office_adsRole_diagnostician" text="Electrician"/>
+		<text name="tc_office_adsRole_bodyworker" text="Bodyworker"/>
+		<text name="tc_office_workshopNone" text="Not in use"/>
+		<text name="tc_office_workshopRole" text="%s, level %d"/>
+		<text name="tc_office_noteVacant" text="The first month's salary is paid when you hire."/>
+		<text name="tc_office_noteTraining" text="On a course to level %d, back on %s. The workshop goes without their help until then."/>
+		<text name="tc_office_noteNoWorkshop" text="Advanced Damage System's own workshop isn't taking your staff (its Staff via Contractor setting is off), so there's nothing for them to do."/>
+		<text name="tc_office_noteNeedsPartsStorage" text="Your workshop has no parts storage, so they can't do anything there until you add one."/>
+		<text name="tc_office_noteFullyTrained" text="Fully trained."/>
+		<text name="tc_office_noteCanTrain" text="Can train to level %d: %s, away for %d day(s)."/>
+		<text name="tc_office_hireButton" text="Hire"/>
+		<text name="tc_office_hireConfirm_administrator" text="Hire an office administrator for %s a month? The first month is paid now. Customers will pay sooner, and fewer will pay late or not at all."/>
+		<text name="tc_office_hireConfirm_storekeeper" text="Hire a storekeeper for %s a month? The first month is paid now."/>
+		<text name="tc_office_cannotAfford" text="You can't afford a %s right now: the first month's salary is %s."/>
+		<text name="tc_office_releaseConfirmNotice" text="Release %s, your %s? After %d full year(s) of service, you'll pay them %s in lieu of %s week(s)' notice. This cannot be undone."/>
+		<text name="tc_office_releaseConfirmRedundancy" text="Release %s, your %s? After %d full years of service, you'll pay them %s: %s in lieu of %s weeks' notice and %s redundancy pay. This cannot be undone."/>
+		<text name="tc_office_trainButton" text="Train to level %d"/>
+		<text name="tc_office_trainConfirm" text="Send %s on a course to level %d? It costs %s, paid now, and they're away for %d day(s), so the workshop goes without their help until they're back."/>
+		<text name="tc_office_trainCannotAfford" text="You can't afford the course right now: it costs %s."/>
+		<text name="tc_office_hiredNotification" text="%s has started as your %s"/>
+		<text name="tc_office_releasedNotification" text="%s, your %s, has left"/>
+		<text name="tc_office_trainedNotification" text="%s has finished their course: now level %d"/>
 		<text name="tc_healthSafety_chipActive" text="H&amp;S programme"/>
 		<text name="tc_healthSafety_chipInactive" text="No H&amp;S programme"/>
 		<text name="tc_healthSafety_inspectionNotice" text="Workplace inspection after %s fell sick: no health and safety programme in place. Fined %s, and your reputation has taken a knock."/>
@@ -824,6 +872,7 @@
 		<text name="tc_training_bookItButton" text="Book it"/>
 		<text name="tc_training_notNowButton" text="Not now"/>
 		<text name="tc_training_confirmCourse" text="Book %s on a %s course for %s? Training is on %s, with the assessment %d-%d days after. They can't take jobs on those days. If they're out on a job when it's due, it moves back."/>
+		<text name="tc_training_confirmCourseFixedGap" text="Book %s on a %s course for %s? Training is on %s, with the assessment %d day(s) after. They can't take jobs on those days. If they're out on a job when it's due, it moves back."/>
 		<text name="tc_training_confirmRetake" text="Book %s a retake of the %s assessment for %s? The assessment is on %s. They can't take jobs that day. If they're out on a job when it's due, it moves back."/>
 		<text name="tc_training_cannotAfford" text="You can't afford %s's %s course right now: it costs %s."/>
 		<text name="tc_training_cannotAffordNotice" text="Couldn't book %s's %s course: you can't afford %s."/>

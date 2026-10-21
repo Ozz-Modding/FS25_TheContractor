@@ -25,7 +25,7 @@
 -- fields: pursuitStartDay, pursuitFee (0 under legal cover); the day it
 -- resolves, pursuitResolveDay, stays on the server like paymentDay.
 --
--- 057: an office administrator (TheContractorAdministrator) swaps in
+-- 057: an office administrator (TheContractorOffice, 090) swaps in
 -- shorter delays and lower bad-debt and late-payer chances for the
 -- invoices issued while they're employed.
 --
@@ -234,7 +234,7 @@ function TheContractorFinances:invoiceJob(job)
     local today = environment.currentMonotonicDay
     local daysPerPeriod = environment.daysPerPeriod
     -- 057: credit control, if they employ an office administrator.
-    local administrator = g_currentMission.TheContractor.Administrator
+    local administrator = g_currentMission.TheContractor.Office
 
     -- At least a day, so even a prompt payer pays on a later day tick.
     local delayDays = math.max(1, rollDelayPeriods(administrator:getDelayWeights(job.farmId)) * daysPerPeriod +

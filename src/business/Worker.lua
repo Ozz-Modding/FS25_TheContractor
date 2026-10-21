@@ -202,6 +202,12 @@ function TheContractorWorker.new(id, farmId, name, workSpeed, tierCapability, sa
     self.declinedRequests = 0
     self.forcedAssessmentResult = nil
 
+    -- 091: ADS workshop skills ({ mechanic = 1-3, ... }, at most two) and
+    -- the role they're ticked into, if any (see Workshop.lua). Both
+    -- visible, so they're sent to clients.
+    self.adsSkills = {}
+    self.workshopRole = nil
+
     return self
 end
 

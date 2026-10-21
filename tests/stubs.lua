@@ -74,10 +74,12 @@ end
 
 -- A stream is a plain table used as a queue: every streamWrite* appends,
 -- every streamRead* takes the oldest value. world:newStream() makes one.
--- Float32 values aren't rounded to 32 bits.
+-- Float32 values aren't rounded to 32 bits. A write returns the value
+-- written, as the engine's do (`if streamWriteBool(id, x ~= nil) then`).
 local function installStreams()
     local function write(streamId, value)
         table.insert(streamId.values, value)
+        return value
     end
     local function read(streamId)
         streamId.position = streamId.position + 1
