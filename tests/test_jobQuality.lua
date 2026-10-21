@@ -252,7 +252,7 @@ test("completeJob scores quality before the reward, so a poor job loses reputati
     tc.RandomEvents = { onJobCompleted = function() end }
     TCJobConsequences = { applyOnCompletion = function() end }
     TCJobProgress = { clearJob = function() end }
-    TCHaulage = { stopDelivery = function() end }
+    TCHaulage = { stopDelivery = function() end, emptyHarvestersAfterJob = function() end }
     TCFieldPreparation = { clearUpAfterJob = function() end }
     TCJobCompletedEvent = { showNotification = function() end }
     AIMessageSuccessFinishedJob = { new = function() return {} end }

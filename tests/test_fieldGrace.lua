@@ -147,7 +147,7 @@ local function fakeCompletion(world, tc)
     tc.Staff = { applyGrowthFromJob = function() end }
     tc.RandomEvents = { onJobCompleted = function() end }
     TCJobProgress = { clearJob = function() end }
-    TCHaulage = { stopDelivery = function() end }
+    TCHaulage = { stopDelivery = function() end, emptyHarvestersAfterJob = function() end }
     TCJobCompletedEvent = { showNotification = function() end }
     AIMessageSuccessFinishedJob = { new = function() return {} end }
     tc.Jobs.calculateReputationReward = function() return 1 end

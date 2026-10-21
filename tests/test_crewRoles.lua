@@ -136,3 +136,29 @@ test("equal harvesters: the better hauler hauls", function()
     assertEquals(operatorId, a)
     assertEquals(haulerId, b)
 end)
+
+test("roles the player chose are kept, even the weaker way round", function()
+    local world, allocation = setup()
+    local weak = addWorker(world, 1, { harvesting = 3, haulage = 5 }, { medium = 9 })
+    local strong = addWorker(world, 2, { harvesting = 8, haulage = 5 }, { medium = 9 })
+    local combine = addMachine(world, nil)
+    local haulTractor = addMachine(world, "medium")
+
+    local operatorId, haulerId, capability = allocation:assignCrewRoles(1, harvestJob(), { weak, strong },
+        { combine }, { haulTractor }, true)
+    assertEquals(operatorId, weak, "on the combine, to bring them on")
+    assertEquals(haulerId, strong)
+    assertEquals(capability, TheContractorAllocation.CAPABILITY.WARN, "under-qualified, but allowed")
+end)
+
+test("chosen roles that leave someone on a tractor they can't drive are blocked", function()
+    local world, allocation = setup()
+    local bigTractorDriver = addWorker(world, 1, { harvesting = 4, haulage = 5 }, { large = 5 })
+    local harvester = addWorker(world, 2, { harvesting = 8, haulage = 5 }, { medium = 5 })
+    local combine = addMachine(world, nil)
+    local haulTractor = addMachine(world, "large")
+
+    local _, _, capability = allocation:assignCrewRoles(1, harvestJob(), { bigTractorDriver, harvester },
+        { combine }, { haulTractor }, true)
+    assertEquals(capability, TheContractorAllocation.CAPABILITY.BLOCKED)
+end)

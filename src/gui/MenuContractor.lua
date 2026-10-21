@@ -3023,6 +3023,12 @@ function MenuContractor:getAllocationProblem(job)
             TCEquipmentClass.getMissingEquipmentText(missing, job.jobType, cropTitle)), true
     end
 
+    local filledHarvester, heldFillType = TheContractorAllocation.getFilledHarvester(equipmentIds)
+    if filledHarvester ~= nil then
+        return string.format(g_i18n:getText("tc_allocation_filledHarvesterWarning"), filledHarvester:getName(),
+            g_fillTypeManager:getFillTypeTitleByIndex(heldFillType) or "?"), true
+    end
+
     if capability == TheContractorAllocation.CAPABILITY.WARN then
         return self:getCrewWeaknessText(job, operatorId, haulerId, equipmentIds, haulageIds), false
     end
@@ -3193,13 +3199,92 @@ function MenuContractor:onClickConfirmAllocation()
         return
     end
 
+    local workerIds = self.allocationSelectedWorkerIds
+    local equipmentIds = self:getSelectedAllocationEquipmentIds(false)
     local haulageIds = {}
-    if job.includesHaulage and #self.allocationSelectedWorkerIds > 0 then
+    if job.includesHaulage and #workerIds > 0 then
         haulageIds = self:getSelectedAllocationEquipmentIds(true)
     end
 
-    g_client:getServerConnection():sendEvent(TCAllocateJobEvent.new(farmId, job.id, self.allocationSelectedWorkerIds,
-        self:getSelectedAllocationEquipmentIds(false), haulageIds))
+    if #workerIds == 2 then
+        self:pickCrewRoles(job, workerIds, equipmentIds, haulageIds, function(orderedIds)
+            self:sendAllocation(job, orderedIds, equipmentIds, haulageIds, true)
+        end)
+        return
+    end
+    self:sendAllocation(job, workerIds, equipmentIds, haulageIds, false)
+end
+
+-- Harvest & haul (035): who harvests and who hauls. assignCrewRoles' pick
+-- is the default, but the player can swap them round (to bring on a
+-- weaker harvester, say) unless the swap leaves someone unable to do their
+-- part, in which case there's nothing to ask. The dialog's text follows
+-- the highlighted option (as pickOverheadLevel's does), with any
+-- under-qualified warning for that way round. onPicked gets the worker ids,
+-- operator first; Back leaves the allocation panel open.
+function MenuContractor:pickCrewRoles(job, workerIds, equipmentIds, haulageIds, onPicked)
+    local farmId = g_currentMission:getFarmId()
+    local allocation = g_currentMission.TheContractor.Allocation
+    local staff = g_currentMission.TheContractor.Staff
+
+    local operatorId, haulerId = allocation:assignCrewRoles(farmId, job, workerIds, equipmentIds, haulageIds)
+    local pairings = { { operatorId, haulerId } }
+    local _, _, swappedCapability = allocation:assignCrewRoles(farmId, job, { haulerId, operatorId }, equipmentIds,
+        haulageIds, true)
+    if swappedCapability ~= TheContractorAllocation.CAPABILITY.BLOCKED then
+        table.insert(pairings, { haulerId, operatorId })
+    end
+    if #pairings == 1 then
+        onPicked(pairings[1])
+        return
+    end
+
+    local options = {}
+    local texts = {}
+    for i, pairing in ipairs(pairings) do
+        local operator = staff:getWorker(farmId, pairing[1])
+        local hauler = staff:getWorker(farmId, pairing[2])
+        if operator == nil or hauler == nil then
+            return
+        end
+        local label = string.format(g_i18n:getText("tc_allocation_crewRolesOption"), operator.name, hauler.name)
+        if i == 1 then
+            label = string.format(g_i18n:getText("tc_allocation_crewRolesRecommended"), label)
+        end
+        options[i] = label
+        local detail = self:getCrewWeaknessText(job, pairing[1], pairing[2], equipmentIds, haulageIds) or
+            g_i18n:getText("tc_allocation_crewRolesQualified")
+        texts[i] = g_i18n:getText("tc_allocation_crewRolesPrompt") .. "\n\n" .. detail
+    end
+
+    local dialog = OptionDialog.INSTANCE
+    local optionElement = dialog ~= nil and dialog.optionElement or nil
+    local previousCallback = optionElement ~= nil and optionElement.onClickCallback or nil
+    if optionElement ~= nil then
+        optionElement.onClickCallback = function(_, state)
+            if texts[state] ~= nil then
+                dialog:setText(texts[state])
+            end
+        end
+    end
+
+    local jobId = job.id
+    OptionDialog.show(function(index)
+        if optionElement ~= nil then
+            optionElement.onClickCallback = previousCallback
+        end
+        -- Still allocating the same job: the panel could have closed meanwhile.
+        if pairings[index] == nil or self.allocatingJobId ~= jobId then
+            return
+        end
+        onPicked(pairings[index])
+    end, texts[1], g_i18n:getText("tc_allocation_crewRolesTitle"), options)
+end
+
+function MenuContractor:sendAllocation(job, workerIds, equipmentIds, haulageIds, fixedRoles)
+    local farmId = g_currentMission:getFarmId()
+    g_client:getServerConnection():sendEvent(TCAllocateJobEvent.new(farmId, job.id, workerIds, equipmentIds,
+        haulageIds, fixedRoles))
 
     self.allocatingJobId = nil
     -- Same "synchronous for host/SP, catches up on next refresh for a remote

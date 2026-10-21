@@ -468,7 +468,13 @@
 		<text name="tc_supplies_noticeMany" text="Out of %s: %d jobs are on hold until you restock."/>
 		<text name="tc_allocation_blockedWarning" text="%s isn't certified on %s."/>
 		<text name="tc_allocation_notCertifiedWarning" text="%s doesn't hold a %s certificate. Book them on a course from the Staff tab."/>
-		<text name="tc_allocation_underqualifiedWarning" text="%s is under-qualified: %s %d, the job needs %d - expect a reduced reward and extra wear on the machines."/>
+		<text name="tc_allocation_filledHarvesterWarning" text="%s still has %s in its tank. Empty it before it goes out on a job."/>
+		<text name="tc_allocation_crewRolesTitle"text="Who does what"/>
+		<text name="tc_allocation_crewRolesPrompt" text="Choose who harvests and who hauls. The recommended way round suits their skills best, but you can swap them round to give the other one the practice."/>
+		<text name="tc_allocation_crewRolesOption" text="%s harvests, %s hauls"/>
+		<text name="tc_allocation_crewRolesRecommended" text="%s (recommended)"/>
+		<text name="tc_allocation_crewRolesQualified" text="Both are qualified for their part."/>
+		<text name="tc_allocation_underqualifiedWarning"text="%s is under-qualified: %s %d, the job needs %d - expect a reduced reward and extra wear on the machines."/>
 		<text name="tc_overview_noticesHeading" text="Important"/>
 		<text name="tc_overview_noticesEmpty" text="Nothing to report."/>
 		<text name="tc_overview_noticeLine" text="- %s"/>
