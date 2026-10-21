@@ -253,7 +253,7 @@ Creates a job with every detail set by hand. Unlike `tcJob offer`, nothing is ch
 |---|---|
 | `jobType` | One of the job types listed under `tcJob offer` |
 | `fieldId` | Field id |
-| `skill` | Required skill level, 1–10 |
+| `skill` | Expected skill level, 1–10 |
 | `price` | Payout in money, at the current price level. With FS25_EconomyScale loaded, the job's price follows that mod's factor afterwards, like any other job |
 | `period` | Due period (1–12) |
 | `day` | Due day within that period |

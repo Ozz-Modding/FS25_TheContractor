@@ -44,7 +44,7 @@
 		<text name="tc_detail_lastJob" text="Last job"/>
 		<text name="tc_detail_field" text="Field"/>
 		<text name="tc_detail_dueBy" text="Due by end of"/>
-		<text name="tc_detail_skill" text="Required skill"/>
+		<text name="tc_detail_skill" text="Expected skill"/>
 		<text name="tc_detail_price" text="Offered price"/>
 		<text name="tc_detail_crew" text="Crew"/>
 		<text name="tc_detail_deliverTo" text="Deliver to"/>

@@ -39,6 +39,7 @@ source(TheContractor.dir .. "src/util/TCAIRestart.lua")
 source(TheContractor.dir .. "src/util/TCIdleStaff.lua")
 source(TheContractor.dir .. "src/util/TCJoyriderRuts.lua")
 source(TheContractor.dir .. "src/util/TCDebris.lua")
+source(TheContractor.dir .. "src/util/TCJobHotspots.lua")
 source(TheContractor.dir .. "src/gui/TCWorkerPortrait.lua")
 source(TheContractor.dir .. "src/gui/MenuContractor.lua")
 source(TheContractor.dir .. "src/gui/TCSettingsMenu.lua")
@@ -256,6 +257,7 @@ function TheContractor:loadMap()
     TCFieldPreparation.reset()
     TCJobSupplies.reset()
     TCIdleStaff.reset()
+    TCJobHotspots.reset()
 
     -- 064: which parts of FS25_AdvancedDamageSystem's stock the Supplies
     -- tab can show (none without the mod).
@@ -554,6 +556,8 @@ function TheContractor:deleteMap()
 
     -- 065: frees the standing workers' models.
     TCIdleStaff.reset()
+    -- 088: the due jobs' map markers.
+    TCJobHotspots.reset()
 
     TCConsole.uninstall()
 
@@ -610,6 +614,9 @@ function TheContractor:update(dt)
 
     -- 065: idle staff on standing spots (clients only).
     TCIdleStaff.update(dt)
+
+    -- 088: map markers on the fields of jobs due this month.
+    TCJobHotspots.update(dt)
 end
 
 function TheContractor:draw()
