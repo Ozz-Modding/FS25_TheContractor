@@ -13,6 +13,8 @@
 		<text name="tc_setting_randomEvents_normal" text="Normal"/>
 		<text name="tc_setting_nameStyle" text="Staff name style"/>
 		<text name="tc_toolTip_nameStyle" text="Where the names of new job candidates and office administrators come from. European mix and Mixed pick a different style for each person. Staff you already have keep their names."/>
+		<text name="tc_setting_showParkingSlots" text="Show parking slots"/>
+		<text name="tc_toolTip_showParkingSlots" text="Show your parking slots' markings outside the construction menu too. Just for you: other players choose their own. Right Ctrl+P switches it by default."/>
 		<text name="tc_nameStyle_british" text="British"/>
 		<text name="tc_nameStyle_irish" text="Irish"/>
 		<text name="tc_nameStyle_american" text="American"/>
@@ -372,9 +374,30 @@
 		<text name="tc_parkingSlotImplementMedium_name" text="Implement Parking Slot (Medium)"/>
 		<text name="tc_parkingSlotImplementLarge_name" text="Implement Parking Slot (Large)"/>
 		<text name="tc_parkingSlotHarvester_name" text="Harvester Parking Slot"/>
-		<text name="tc_parkingSlotVehicle_function" text="Marks a parking space for vehicles (tractors, loaders, self-propelled machines) coming back from contract jobs, facing the arrow. Implements go in implement parking slots and harvesters in harvester parking slots. Only visible in the construction menu."/>
-		<text name="tc_parkingSlotHarvester_function" text="Marks a parking space for a self-propelled harvester (combine, forage or beet harvester) coming back from contract jobs, facing the arrow. Its header goes in an implement parking slot. Only visible in the construction menu."/>
-		<text name="tc_parkingSlotImplement_function" text="Marks a parking space for implements and trailers coming back from contract jobs, facing the arrow. Vehicles go in vehicle parking slots. Only visible in the construction menu."/>
+		<text name="tc_parkingSlotVehicle_function" text="Marks a parking space for vehicles (tractors, loaders, self-propelled machines) coming back from contract jobs, facing the arrow. Implements go in implement parking slots and harvesters in harvester parking slots. Stand in a placed slot to choose what it takes. Only visible in the construction menu, unless you turn on Show parking slots (Right Ctrl+P)."/>
+		<text name="tc_parkingSlotHarvester_function" text="Marks a parking space for a self-propelled harvester (combine, forage or beet harvester) coming back from contract jobs, facing the arrow. Its header goes in an implement parking slot. Stand in a placed slot to choose what it takes. Only visible in the construction menu, unless you turn on Show parking slots (Right Ctrl+P)."/>
+		<text name="tc_parkingSlotImplement_function" text="Marks a parking space for implements and trailers coming back from contract jobs, facing the arrow. Vehicles go in vehicle parking slots. Stand in a placed slot to choose what it takes. Only visible in the construction menu, unless you turn on Show parking slots (Right Ctrl+P)."/>
+		<text name="tc_parking_slotsShown" text="Parking slots shown"/>
+		<text name="tc_parking_slotsHidden" text="Parking slots hidden"/>
+		<text name="input_TC_TOGGLE_PARKING_SLOTS" text="Show/hide parking slots"/>
+		<text name="tc_parkingSlot_activate" text="Set parking slot filter"/>
+		<text name="tc_parkingSlot_dialogTitle" text="Parking Slot Filter"/>
+		<text name="tc_parkingSlot_dialogHeading" text="Takes: %s"/>
+		<text name="tc_parkingSlot_dialogHint_vehicle" text="Tick categories or machines to keep this slot for them. They'll come here first, and go to an unfiltered vehicle slot if it's full. Tick nothing to take any vehicle."/>
+		<text name="tc_parkingSlot_dialogHint_implement" text="Tick categories or machines to keep this slot for them. They'll come here first, and go to an unfiltered implement slot if it's full. Tick nothing to take any implement."/>
+		<text name="tc_parkingSlot_dialogHint_harvester" text="Tick categories or machines to keep this slot for them. They'll come here first, and go to an unfiltered harvester slot if it's full. Tick nothing to take any harvester."/>
+		<text name="tc_parkingSlot_takesAny_vehicle" text="Any vehicle"/>
+		<text name="tc_parkingSlot_takesAny_implement" text="Any implement"/>
+		<text name="tc_parkingSlot_takesAny_harvester" text="Any harvester"/>
+		<text name="tc_parkingSlot_takesCount" text="%d choices"/>
+		<text name="tc_parkingSlot_kind_category" text="Category"/>
+		<text name="tc_parkingSlot_kind_vehicle" text="Machine"/>
+		<text name="tc_parkingSlot_here" text="Here"/>
+		<text name="tc_parkingSlot_nothingToPick" text="Your farm has nothing that parks in this kind of slot yet."/>
+		<text name="tc_parkingSlot_tick" text="Tick"/>
+		<text name="tc_parkingSlot_untick" text="Untick"/>
+		<text name="tc_parkingSlot_save" text="Save"/>
+		<text name="tc_parkingSlot_clear" text="Clear all"/>
 		<text name="tc_standingSpot_name" text="Standing Spot"/>
 		<text name="tc_standingSpot_function" text="Somewhere for one of your staff to stand while they've nothing on, facing the arrow. Only visible in the construction menu."/>
 		<text name="tc_disposalSkip_name" text="Disposal Skip"/>

@@ -9,6 +9,8 @@
 --
 -- Only the server/host or an admin (master user) can change them, as with
 -- RedTape's server settings; the server re-checks it (TCSettingsEvent).
+-- The exception is LOCAL_ITEMS (086): each machine's own display
+-- preferences, kept in modSettings and never synced.
 
 TheContractorSettings = {}
 TheContractorSettings_mt = Class(TheContractorSettings)
@@ -78,6 +80,31 @@ end
 
 TheContractorSettings.ITEMS = { "jobPayRate", "lateInvoices", "randomEvents", "nameStyle" }
 
+-- 086: whether parking slots show outside the construction menu too. A
+-- display preference, so it's a local item (below). onChanged runs on this
+-- machine whenever it changes.
+TheContractorSettings.DEFINITIONS.showParkingSlots = {
+    values = { true, false },
+    strings = { g_i18n:getText("ui_on"), g_i18n:getText("ui_off") },
+    default = 2,
+    onChanged = function()
+        TCParking.updateVisuals()
+    end
+}
+
+-- Local items: one value per machine (each player's own), not per savegame.
+-- Shown in the same menu section and changeable by anyone, never synced,
+-- and kept in LOCAL_FILENAME in this machine's modSettings folder rather
+-- than the savegame. Adding one: a DEFINITIONS entry, its id here and the
+-- same two l10n keys.
+TheContractorSettings.LOCAL_ITEMS = { "showParkingSlots" }
+TheContractorSettings.LOCAL_FILENAME = "localSettings.xml"
+TheContractorSettings.LOCAL_SAVE_KEY = "TheContractorLocal"
+
+-- modSettings/FS25_TheContractor/; g_currentModSettingsDirectory is only
+-- set while the mod's scripts are sourced.
+TheContractorSettings.localSettingsDir = g_currentModSettingsDirectory
+
 function TheContractorSettings.new()
     local self = {}
     setmetatable(self, TheContractorSettings_mt)
@@ -86,8 +113,85 @@ function TheContractorSettings.new()
     for _, id in ipairs(TheContractorSettings.ITEMS) do
         self.values[id] = TheContractorSettings.getDefaultValue(id)
     end
+    for _, id in ipairs(TheContractorSettings.LOCAL_ITEMS) do
+        self.values[id] = TheContractorSettings.getDefaultValue(id)
+    end
 
     return self
+end
+
+function TheContractorSettings.isLocalItem(id)
+    for _, localId in ipairs(TheContractorSettings.LOCAL_ITEMS) do
+        if localId == id then
+            return true
+        end
+    end
+    return false
+end
+
+-- A local item's new value on this machine: kept, saved to the local file
+-- and acted on (its onChanged).
+function TheContractorSettings:setLocal(id, value)
+    local definition = TheContractorSettings.DEFINITIONS[id]
+    if definition == nil or not TheContractorSettings.isLocalItem(id) then
+        return
+    end
+    self:set(id, value)
+    self:saveLocalFile()
+    if definition.onChanged ~= nil then
+        definition.onChanged(self.values[id])
+    end
+end
+
+function TheContractorSettings.getLocalFilename()
+    local dir = TheContractorSettings.localSettingsDir
+    return dir ~= nil and dir .. TheContractorSettings.LOCAL_FILENAME or nil
+end
+
+-- Every machine at loadMap (after TCCompanyLogo.createSettingsFolder has
+-- made the folder).
+function TheContractorSettings:loadLocalFile()
+    local filename = TheContractorSettings.getLocalFilename()
+    if filename == nil or not fileExists(filename) then
+        return
+    end
+    local xmlFile = loadXMLFile(TheContractorSettings.LOCAL_SAVE_KEY, filename)
+    if xmlFile == nil or xmlFile == 0 then
+        return
+    end
+    for _, id in ipairs(TheContractorSettings.LOCAL_ITEMS) do
+        local key = string.format("%s.%s#value", TheContractorSettings.LOCAL_SAVE_KEY, id)
+        if hasXMLProperty(xmlFile, key) then
+            if type(TheContractorSettings.getDefaultValue(id)) == "boolean" then
+                self:set(id, getXMLBool(xmlFile, key))
+            else
+                self:set(id, getXMLFloat(xmlFile, key))
+            end
+        end
+    end
+    delete(xmlFile)
+end
+
+function TheContractorSettings:saveLocalFile()
+    local filename = TheContractorSettings.getLocalFilename()
+    if filename == nil then
+        return
+    end
+    local xmlFile = createXMLFile(TheContractorSettings.LOCAL_SAVE_KEY, filename, TheContractorSettings.LOCAL_SAVE_KEY)
+    if xmlFile == nil or xmlFile == 0 then
+        return
+    end
+    for _, id in ipairs(TheContractorSettings.LOCAL_ITEMS) do
+        local key = string.format("%s.%s#value", TheContractorSettings.LOCAL_SAVE_KEY, id)
+        local value = self.values[id]
+        if type(value) == "boolean" then
+            setXMLBool(xmlFile, key, value)
+        else
+            setXMLFloat(xmlFile, key, value)
+        end
+    end
+    saveXMLFile(xmlFile)
+    delete(xmlFile)
 end
 
 function TheContractorSettings.getDefaultValue(id)

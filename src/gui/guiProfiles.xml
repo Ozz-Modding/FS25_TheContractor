@@ -281,6 +281,8 @@
         <color value="$preset_fs25_colorMainHighlight"/>
     </Profile>
     <Profile name="tc_slider_box" extends="fs25_listSliderBox" with="anchorTopLeft" />
+    <!-- The same, for the anchorTopCenter dialog layouts (086). -->
+    <Profile name="tc_dialogSlider_box" extends="fs25_listSliderBox" with="anchorTopCenter" />
 
     <!-- Calendar (015) month selector — the same vanilla "< value >" chevron
          widget FS25_RedTape uses for its Active/New scheme switcher
@@ -304,6 +306,14 @@
     <!-- Staff driver picker dialog (037). anchorTopCenter for the same
          reason as the advertising dialog's profiles above. -->
     <Profile name="tc_driverPickerList" extends="emptyPanel" with="anchorTopCenter" />
+    <!-- Parking slot filter dialog (086): a muted two-line hint under the
+         heading. -->
+    <Profile name="tc_parkingSlotHint" extends="fs25_dialogText" with="anchorTopCenter">
+        <size value="680px 48px" />
+        <textSize value="15px" />
+        <textAlignment value="center" />
+        <textColor value="$preset_colorWhite_50" />
+    </Profile>
     <Profile name="tc_driverPickerColumn" extends="fs25_dialogText" with="anchorTopCenter">
         <textSize value="16px" />
         <textBold value="true" />

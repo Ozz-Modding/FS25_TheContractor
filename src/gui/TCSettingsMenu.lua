@@ -24,7 +24,13 @@ function TCSettingsControls.onMenuOptionChanged(self, state, menuOption)
         return
     end
 
-    g_currentMission.TheContractor.Settings:set(id, definition.values[state])
+    local settings = g_currentMission.TheContractor.Settings
+    if TheContractorSettings.isLocalItem(id) then
+        -- 086: this machine's own, never sent.
+        settings:setLocal(id, definition.values[state])
+        return
+    end
+    settings:set(id, definition.values[state])
     g_client:getServerConnection():sendEvent(TCSettingsEvent.new())
 end
 
@@ -59,6 +65,9 @@ function TCSettingsMenu.inject()
 
     TCSettingsMenu.addSectionHeader(settingsPage, g_i18n:getText("tc_settings_header"))
     for _, id in ipairs(TheContractorSettings.ITEMS) do
+        TCSettingsMenu.addOption(settingsPage, id)
+    end
+    for _, id in ipairs(TheContractorSettings.LOCAL_ITEMS) do
         TCSettingsMenu.addOption(settingsPage, id)
     end
     settingsPage.gameSettingsLayout:invalidateLayout()
@@ -135,7 +144,7 @@ function TCSettingsMenu.addOption(settingsPage, id)
 end
 
 -- Shows each control's current value, and disables it for anyone but the
--- host or an admin.
+-- host or an admin (local items, 086, stay open to everyone).
 function TCSettingsMenu.refreshControls()
     if g_currentMission == nil or g_currentMission.TheContractor == nil then
         return
@@ -148,6 +157,13 @@ function TCSettingsMenu.refreshControls()
         if option ~= nil then
             option:setState(TheContractorSettings.getValueIndex(id, settings:get(id)))
             option:setDisabled(not canChange)
+        end
+    end
+    for _, id in ipairs(TheContractorSettings.LOCAL_ITEMS) do
+        local option = TCSettingsMenu.controls[id]
+        if option ~= nil then
+            option:setState(TheContractorSettings.getValueIndex(id, settings:get(id)))
+            option:setDisabled(false)
         end
     end
 end

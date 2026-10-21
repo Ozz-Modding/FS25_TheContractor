@@ -63,5 +63,14 @@
 
     <l10n filenamePrefix="languages/l10n" />
 
+    <!-- 086: shows/hides parking slots outside the construction menu (TCParking). -->
+    <actions>
+        <action name="TC_TOGGLE_PARKING_SLOTS" category="SYSTEM" axisType="HALF" ignoreComboMask="false" />
+    </actions>
+    <inputBinding>
+        <actionBinding action="TC_TOGGLE_PARKING_SLOTS">
+            <binding device="KB_MOUSE_DEFAULT" input="KEY_rctrl KEY_p" />
+        </actionBinding>
+    </inputBinding>
     <multiplayer supported="true"/>
 </modDesc>
