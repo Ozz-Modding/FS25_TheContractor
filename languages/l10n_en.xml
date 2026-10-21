@@ -402,10 +402,15 @@
 		<text name="tc_standingSpot_function" text="Somewhere for one of your staff to stand while they've nothing on, facing the arrow. Only visible in the construction menu."/>
 		<text name="tc_disposalSkip_name" text="Disposal Skip"/>
 		<text name="tc_disposalSkip_function" text="Where fly-tipped junk from a clearing job goes. Drop each piece in or right next to it and it's taken away. Every piece from a job costs a small tipping fee."/>
-		<text name="tc_logoSign_name" text="Company Logo Sign"/>
-		<text name="tc_logoSign_function" text="A sign showing your company logo. Put your own square logo.dds in modSettings/FS25_TheContractor to replace the default."/>
-		<text name="tc_customSign_name" text="Custom Sign"/>
-		<text name="tc_customSign_function" text="A sign showing your company logo or a design of your own. Put square .dds images in modSettings/FS25_TheContractor/signs and reload the save to pick them here (see the README there). Single-player only."/>
+		<text name="tc_logoSign_name" text="Company Sign"/>
+		<text name="tc_logoSign_function" text="A freestanding sign showing your company logo, or in single-player a design of your own. Put your square logo.dds in modSettings/FS25_TheContractor, and designs as square .dds images in its signs folder (see the README there). Reload the save to pick new designs."/>
+		<text name="tc_wallSign1m_name" text="Company Wall Sign (1 m)"/>
+		<text name="tc_wallSign3m_name" text="Company Wall Sign (3 m)"/>
+		<text name="tc_wallSign6m_name" text="Company Wall Sign (6 m)"/>
+		<text name="tc_wallSignLarge1m_name" text="Large Company Wall Sign (1 m)"/>
+		<text name="tc_wallSignLarge3m_name" text="Large Company Wall Sign (3 m)"/>
+		<text name="tc_wallSignLarge6m_name" text="Large Company Wall Sign (6 m)"/>
+		<text name="tc_wallSign_function" text="A flat sign for a wall (1.5 m square, or 3 m for the large one), its bottom edge at the height shown, with your company logo or (single-player) one of your own designs, like the Company Sign. Place it from just in front of the wall; free mode helps against a building."/>
 		<text name="tc_config_signDesign" text="Design"/>
 		<text name="tc_signDesign_logo" text="Company logo"/>
 		<text name="tc_inbox_chipParking" text="Parking"/>

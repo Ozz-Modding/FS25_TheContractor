@@ -1,20 +1,21 @@
 <?xml version="1.0" encoding="utf-8" standalone="no" ?>
 <!--
-    085 custom sign: the logo sign's model and specialization
-    (src/placeables/PlaceableTCLogoSign.lua) with a design configuration:
-    the company logo, plus one option per image in the player's
-    modSettings/FS25_TheContractor/signs/ (TCSignImages), built when the
-    save loads. Single-player only: in multiplayer the options are just the
-    company logo and the sign is taken off the construction menu.
+    087 wall sign: 084's company sign as a flat 1.5 m board against a wall,
+    its bottom edge 1 m up, its whole front the logo or a design. The same
+    placeable and design configuration as xml/logoSign.xml. One of three
+    heights (1, 3 and 6 m) in two sizes (1.5 and 3 m), each its own i3d
+    from docs/tools/genWallSignI3d.py, the way FS25_placeableWallLights does
+    its heights. Placed from 0.5 m in front of the wall, with no test areas
+    (they'd always hit the wall).
 -->
 <placeable type="FS25_TheContractor.tcLogoSign">
     <storeData>
-        <name>$l10n_tc_customSign_name</name>
+        <name>$l10n_tc_wallSign1m_name</name>
         <functions>
-            <function>$l10n_tc_customSign_function</function>
+            <function>$l10n_tc_wallSign_function</function>
         </functions>
-        <image>images/store/logoSign.dds</image>
-        <price>250</price>
+        <image>images/store/wallSign1m.dds</image>
+        <price>150</price>
         <dailyUpkeep>0</dailyUpkeep>
         <lifetime>1000</lifetime>
         <rotation>0</rotation>
@@ -32,15 +33,13 @@
     </storeData>
 
     <base>
-        <filename>i3d/logoSign.i3d</filename>
+        <filename>i3d/wallSign1m.i3d</filename>
         <canBeRenamed>false</canBeRenamed>
         <boughtWithFarmland>false</boughtWithFarmland>
     </base>
 
     <placement useRandomYRotation="false" useManualYRotation="true">
-        <testAreas>
-            <testArea startNode="testAreaStart" endNode="testAreaEnd" />
-        </testAreas>
+        <testAreas />
         <sounds>
             <place template="smallImp" />
         </sounds>
@@ -52,16 +51,13 @@
 
     <logoSign>
         <face node="logoFront" />
-        <face node="logoBack" />
     </logoSign>
 
     <i3dMappings>
-        <i3dMapping id="logoSign" node="0>" />
-        <i3dMapping id="visuals" node="0>0" />
-        <i3dMapping id="logoFront" node="0>0|2" />
-        <i3dMapping id="logoBack" node="0>0|3" />
-        <i3dMapping id="collision" node="0>1" />
-        <i3dMapping id="testAreaStart" node="0>2|0" />
-        <i3dMapping id="testAreaEnd" node="0>2|0|0" />
+        <i3dMapping id="wallSign" node="0>" />
+        <i3dMapping id="sign" node="0>0" />
+        <i3dMapping id="visuals" node="0>0|0" />
+        <i3dMapping id="logoFront" node="0>0|0|1" />
+        <i3dMapping id="collision" node="0>0|1" />
     </i3dMappings>
 </placeable>

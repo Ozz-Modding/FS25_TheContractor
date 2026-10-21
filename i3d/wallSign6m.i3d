@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="iso-8859-1"?>
+
+<i3D name="wallSign6m.i3d" version="1.6" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://i3d.giants.ch/schema/i3d-1.6.xsd">
+  <Asset>
+    <Export program="GIANTS Editor 64bit" version="10.0.13"/>
+  </Asset>
+
+  <Files>
+    <File fileId="4" filename="$data/shaders/placeableShader.xml"/>
+    <File fileId="1" filename="$data/shared/detailLibrary/nonMetallic/wood/wood2Oak_diffuse.dds"/>
+    <File fileId="2" filename="$data/shared/detailLibrary/nonMetallic/wood/wood2_normal.dds"/>
+    <File fileId="3" filename="$data/shared/detailLibrary/nonMetallic/wood/wood2_specular.dds"/>
+    <File fileId="7" filename="../images/defaultLogo.dds"/>
+  </Files>
+
+
+  <Materials>
+    <Material name="signBoard_mat" materialId="6" customShaderId="4">
+      <Texture fileId="1"/>
+      <Normalmap fileId="2"/>
+      <Glossmap fileId="3"/>
+    </Material>
+    <Material name="signLogo_mat" materialId="7">
+      <Texture fileId="7"/>
+    </Material>
+  </Materials>
+
+
+  <Shapes externalShapesFile="wallSign6m.i3d.shapes">
+  </Shapes>
+
+  <Scene>
+    <TransformGroup name="wallSign" clipDistance="300" nodeId="12">
+      <TransformGroup name="sign" translation="0 6 -0.5" nodeId="13">
+        <TransformGroup name="visuals" nodeId="14">
+          <Shape name="board" shapeId="1" nodeId="15" castsShadows="true" receiveShadows="true" materialIds="6"/>
+          <Shape name="logoFront" shapeId="2" nodeId="16" castsShadows="false" receiveShadows="true" materialIds="7"/>
+        </TransformGroup>
+        <Shape name="col" shapeId="1" static="true" collisionFilterGroup="0x3e" collisionFilterMask="0xfffffbff" density="0.0001" nodeId="17" castsShadows="false" receiveShadows="false" nonRenderable="true" materialIds="6"/>
+      </TransformGroup>
+    </TransformGroup>
+  </Scene>
+
+</i3D>

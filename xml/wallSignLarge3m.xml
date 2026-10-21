@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8" standalone="no" ?>
+<!--
+    087 wall sign: 084's company sign as a flat 3 m board against a wall,
+    its bottom edge 3 m up, its whole front the logo or a design. The same
+    placeable and design configuration as xml/logoSign.xml. One of three
+    heights (1, 3 and 6 m) in two sizes (1.5 and 3 m), each its own i3d
+    from docs/tools/genWallSignI3d.py, the way FS25_placeableWallLights does
+    its heights. Placed from 0.5 m in front of the wall, with no test areas
+    (they'd always hit the wall).
+-->
+<placeable type="FS25_TheContractor.tcLogoSign">
+    <storeData>
+        <name>$l10n_tc_wallSignLarge3m_name</name>
+        <functions>
+            <function>$l10n_tc_wallSign_function</function>
+        </functions>
+        <image>images/store/wallSignLarge3m.dds</image>
+        <price>300</price>
+        <dailyUpkeep>0</dailyUpkeep>
+        <lifetime>1000</lifetime>
+        <rotation>0</rotation>
+        <brand>NONE</brand>
+        <species>PLACEABLE</species>
+        <category>misc</category>
+        <canBeSold>true</canBeSold>
+        <showInStore>true</showInStore>
+
+        <brush>
+            <type>placeable</type>
+            <category>buildings</category>
+            <tab>contractor</tab>
+        </brush>
+    </storeData>
+
+    <base>
+        <filename>i3d/wallSignLarge3m.i3d</filename>
+        <canBeRenamed>false</canBeRenamed>
+        <boughtWithFarmland>false</boughtWithFarmland>
+    </base>
+
+    <placement useRandomYRotation="false" useManualYRotation="true">
+        <testAreas />
+        <sounds>
+            <place template="smallImp" />
+        </sounds>
+    </placement>
+
+    <tcSignDesignConfigurations title="$l10n_tc_config_signDesign">
+        <tcSignDesignConfiguration name="$l10n_tc_signDesign_logo" saveId="logo" isDefault="true" />
+    </tcSignDesignConfigurations>
+
+    <logoSign>
+        <face node="logoFront" />
+    </logoSign>
+
+    <i3dMappings>
+        <i3dMapping id="wallSign" node="0>" />
+        <i3dMapping id="sign" node="0>0" />
+        <i3dMapping id="visuals" node="0>0|0" />
+        <i3dMapping id="logoFront" node="0>0|0|1" />
+        <i3dMapping id="collision" node="0>0|1" />
+    </i3dMappings>
+</placeable>

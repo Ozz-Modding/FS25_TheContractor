@@ -20,7 +20,7 @@ TCCompanyLogo.settingsDir = g_currentModSettingsDirectory
 TCCompanyLogo.README_FILENAME = "README.txt"
 
 -- What the README in the settings folder says: where the logo and the
--- custom sign's images go (085). Written once; a player's edits are kept.
+-- signs' own images go (085). Written once; a player's edits are kept.
 TCCompanyLogo.README_TEXT = [[
 THE CONTRACTOR - YOUR LOGO AND SIGNS
 ====================================
@@ -31,14 +31,13 @@ it the mod uses its own placeholder logo.
 YOUR COMPANY LOGO
 -----------------
 Put your logo here as logo.dds to replace the placeholder.
-It shows on the Overview tab's company card and on the Company Logo Sign
-(construction menu, Contractor tab).
+It shows on the Overview tab's company card and on the Company Sign and
+Company Wall Signs (construction menu, Contractor tab).
 
 SIGN DESIGNS
 ------------
 Put images in the signs folder next to this file. Each one becomes a design
-you can pick for the Custom Sign (construction menu, Contractor tab) when
-you place it. The file name is the design's name: "for_sale.dds" is offered
+you can pick for a Company Sign or Wall Sign when you place it. The file name is the design's name: "for_sale.dds" is offered
 as "For Sale". The company logo is always the first design.
 
 New images show after you reload the save. A sign keeps its design by file
@@ -56,11 +55,11 @@ MULTIPLAYER
 -----------
 Images are read from each player's own computer and can't be sent to other
 players, so:
-- Your logo shows only on your own farm's Company Logo Signs. Everyone
-  else's show the placeholder.
-- The Custom Sign is single-player only. In multiplayer it isn't in the
-  construction menu, and any already placed show the company logo. If such
-  a save is saved in multiplayer, those signs keep the company logo after.
+- Your logo shows only on your own farm's signs. Everyone else's show the
+  placeholder.
+- Sign designs are single-player only. In multiplayer every sign shows the
+  company logo, including any placed with a design. If such a save is
+  saved in multiplayer, those signs keep the company logo after.
 ]]
 
 -- Makes the folder so players can find where to put their logo, its signs
