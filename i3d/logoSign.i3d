@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="iso-8859-1"?>
+
+<i3D name="logoSign.i3d" version="1.6" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://i3d.giants.ch/schema/i3d-1.6.xsd">
+  <Asset>
+    <Export program="GIANTS Editor 64bit" version="10.0.13"/>
+  </Asset>
+
+  <Files>
+    <File fileId="4" filename="$data/shaders/placeableShader.xml"/>
+    <File fileId="1" filename="$data/shared/detailLibrary/metallic/zincGalvanized_diffuse.dds"/>
+    <File fileId="2" filename="$data/shared/detailLibrary/metallic/zincGalvanized_normal.dds"/>
+    <File fileId="3" filename="$data/shared/detailLibrary/metallic/zincGalvanized_specular.dds"/>
+    <File fileId="7" filename="$data/shared/detailLibrary/nonMetallic/wood/wood2Oak_diffuse.dds"/>
+    <File fileId="8" filename="$data/shared/detailLibrary/nonMetallic/wood/wood2_normal.dds"/>
+    <File fileId="9" filename="$data/shared/detailLibrary/nonMetallic/wood/wood2_specular.dds"/>
+    <File fileId="10" filename="../My FS 25 Mods/FS25_TheContractor/images/defaultLogo.dds"/>
+  </Files>
+
+
+  <Materials>
+    <Material name="signBoard_mat" materialId="6" customShaderId="4">
+      <Texture fileId="7"/>
+      <Normalmap fileId="8"/>
+      <Glossmap fileId="9"/>
+    </Material>
+    <Material name="signFrame_mat" materialId="5" customShaderId="4">
+      <Texture fileId="1"/>
+      <Normalmap fileId="2"/>
+      <Glossmap fileId="3"/>
+    </Material>
+    <Material name="signLogo_mat" materialId="7">
+      <Texture fileId="10"/>
+    </Material>
+  </Materials>
+
+
+  <Shapes externalShapesFile="logoSign.i3d.shapes">
+  </Shapes>
+
+  <Scene>
+    <TransformGroup name="logoSign" clipDistance="300" nodeId="14">
+      <TransformGroup name="visuals" nodeId="15">
+        <Shape name="posts" shapeId="1" nodeId="16" castsShadows="true" receiveShadows="true" materialIds="5"/>
+        <Shape name="board" shapeId="2" nodeId="17" castsShadows="true" receiveShadows="true" materialIds="6"/>
+        <Shape name="logoFront" shapeId="3" nodeId="18" castsShadows="false" receiveShadows="true" materialIds="7"/>
+        <Shape name="logoBack" shapeId="4" nodeId="19" castsShadows="false" receiveShadows="true" materialIds="7"/>
+      </TransformGroup>
+      <Shape name="col" shapeId="5" static="true" collisionFilterGroup="0x3e" collisionFilterMask="0xfffffbff" density="0.0001" nodeId="20" castsShadows="false" receiveShadows="false" nonRenderable="true" materialIds="5"/>
+      <TransformGroup name="testAreas" nodeId="21">
+        <TransformGroup name="testAreaStart" translation="-1.05 0 -0.2" nodeId="22">
+          <TransformGroup name="testAreaEnd" translation="2.1 2.9 0.4" nodeId="23"/>
+        </TransformGroup>
+      </TransformGroup>
+    </TransformGroup>
+  </Scene>
+
+</i3D>
