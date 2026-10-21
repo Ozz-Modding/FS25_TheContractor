@@ -27,6 +27,7 @@ source(TheContractor.dir .. "src/util/TCAutoDrive.lua")
 source(TheContractor.dir .. "src/util/TCCourseplay.lua")
 source(TheContractor.dir .. "src/util/TCEconomyScale.lua")
 source(TheContractor.dir .. "src/util/TCCalendar.lua")
+source(TheContractor.dir .. "src/util/TCSignImages.lua")
 source(TheContractor.dir .. "src/util/TCCompanyLogo.lua")
 source(TheContractor.dir .. "src/util/TCConsole.lua")
 source(TheContractor.dir .. "src/util/TCWorkerAppearance.lua")
@@ -175,6 +176,7 @@ function TheContractor:loadMap()
     self.hasResolvedSavedVehicles = false
 
     TCCompanyLogo.createSettingsFolder()
+    TCSignImages.hideCustomSignInMultiplayer()
 
     self.Settings = TheContractorSettings.new()
     self.Reputation = TheContractorReputation.new()

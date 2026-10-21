@@ -1,4 +1,4 @@
--- The Overview's company logo: the player's own logo.png/logo.dds from
+-- The Overview's company logo: the player's own logo.dds from
 -- modSettings if there is one, else the mod's default.
 
 local function setup(files)
@@ -20,18 +20,13 @@ test("no logo of the player's own shows the default", function()
     assertEquals("mods/FS25_TheContractor/images/defaultLogo.dds", TCCompanyLogo.getFilename())
 end)
 
-test("a logo.png in modSettings is used", function()
+test("a logo.png in modSettings is ignored", function()
     setup({ "modSettings/FS25_TheContractor/logo.png" })
-    assertEquals("modSettings/FS25_TheContractor/logo.png", TCCompanyLogo.getFilename())
+    assertEquals("mods/FS25_TheContractor/images/defaultLogo.dds", TCCompanyLogo.getFilename())
 end)
 
 test("a logo.dds in modSettings is used", function()
     setup({ "modSettings/FS25_TheContractor/logo.dds" })
-    assertEquals("modSettings/FS25_TheContractor/logo.dds", TCCompanyLogo.getFilename())
-end)
-
-test("logo.dds wins when both are there", function()
-    setup({ "modSettings/FS25_TheContractor/logo.png", "modSettings/FS25_TheContractor/logo.dds" })
     assertEquals("modSettings/FS25_TheContractor/logo.dds", TCCompanyLogo.getFilename())
 end)
 
