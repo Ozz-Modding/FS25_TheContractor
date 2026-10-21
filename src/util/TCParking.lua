@@ -10,7 +10,8 @@
 -- the start edge towards the height node (the slot's arrow). Self-propelled
 -- harvesters only go in harvester slots, other drivable machines only in
 -- vehicle slots and everything else only in implement slots
--- (PlaceableTCParkingSlot.SLOT_TYPE). The rectangle
+-- (PlaceableTCParkingSlot.SLOT_TYPE), and a slot's filter (086) can narrow
+-- that further (getSlotRank, getSlotsFor). The rectangle
 -- is scanned in rows as deep as the vehicle, starting at the arrow end, and
 -- each row is stepped along. A row or column with room for only one
 -- vehicle uses the middle, so a single slot parks its vehicle centred.
@@ -162,16 +163,79 @@ local function findSpotInArea(area, width, length, height, isRandom)
     return nil
 end
 
+-- Filters (086) ---------------------------------------------------------------
+-- A slot's filter only ever narrows what it takes, and a vehicle tries the
+-- slots meant most for it first: those naming it, then those taking its
+-- store category, then unfiltered ones. A vehicle whose own slots are full
+-- falls back to an unfiltered slot rather than waiting.
+
+TCParking.RANK = {
+    VEHICLE = 1,
+    CATEGORY = 2,
+    ANY = 3,
+}
+
+-- How well a slot's filter suits the vehicle (a TCParking.RANK), or nil if
+-- the filter shuts it out. Type isn't checked here; getSlots does that.
+function TCParking.getSlotRank(slot, vehicle)
+    local filter = PlaceableTCParkingSlot.getFilter(slot)
+    if not PlaceableTCParkingSlot.isFilterActive(filter) then
+        return TCParking.RANK.ANY
+    end
+    local vehicleId = NetworkUtil.getObjectId(vehicle)
+    if vehicleId ~= nil and filter.vehicleSet[vehicleId] then
+        return TCParking.RANK.VEHICLE
+    end
+    local category = TCEquipmentClass.getCategory(vehicle)
+    if category ~= nil and filter.categorySet[category] then
+        return TCParking.RANK.CATEGORY
+    end
+    return nil
+end
+
+-- The farm's slots of the vehicle's kind that will take it, best rank
+-- first, placement order within a rank (shuffled within it if isRandom).
+function TCParking.getSlotsFor(vehicle, farmId, isRandom)
+    local byRank = { {}, {}, {} }
+    for _, slot in ipairs(TCParking.getSlots(farmId, PlaceableTCParkingSlot.getSlotTypeFor(vehicle))) do
+        local rank = TCParking.getSlotRank(slot, vehicle)
+        if rank ~= nil then
+            table.insert(byRank[rank], slot)
+        end
+    end
+    local slots = {}
+    for _, rankSlots in ipairs(byRank) do
+        if isRandom then
+            shuffle(rankSlots)
+        end
+        for _, slot in ipairs(rankSlots) do
+            table.insert(slots, slot)
+        end
+    end
+    return slots
+end
+
+-- Server, once vehicles exist: slots loaded from the save get their
+-- filters' machines back (TheContractor:resolveSavedVehicles).
+function TCParking.resolveSavedVehicles()
+    local placeableSystem = g_currentMission.placeableSystem
+    if placeableSystem == nil then
+        return
+    end
+    for _, placeable in ipairs(placeableSystem.placeables) do
+        if PlaceableTCParkingSlot.isSlot(placeable) then
+            PlaceableTCParkingSlot.resolveSavedVehicles(placeable)
+        end
+    end
+end
+
 -- A free spot for the vehicle in one of farmId's slots of its kind (vehicle,
--- implement or harvester): x, y, z, rotY for setAbsolutePosition, or nil. isRandom
--- (the tcJob park command) picks a random free spot rather than the first.
+-- implement or harvester) whose filter takes it (getSlotsFor): x, y, z, rotY
+-- for setAbsolutePosition, or nil. isRandom (the tcJob park command) picks
+-- a random free spot rather than the first, still in rank order.
 function TCParking.findSpot(vehicle, farmId, isRandom)
     local width, length, widthOffset, lengthOffset, height = getFootprint(vehicle)
-    local slots = TCParking.getSlots(farmId, PlaceableTCParkingSlot.getSlotTypeFor(vehicle))
-    if isRandom then
-        shuffle(slots)
-    end
-    for _, slot in ipairs(slots) do
+    for _, slot in ipairs(TCParking.getSlotsFor(vehicle, farmId, isRandom)) do
         local area = PlaceableTCParkingSlot.getArea(slot)
         if area ~= nil then
             local x, z, rotY = findSpotInArea(area, width, length, height, isRandom)
@@ -220,32 +284,51 @@ function TCParking.placeVehicle(vehicle, x, y, z, rotY)
 end
 
 -- Construction menu ---------------------------------------------------------
--- Slots only show while the construction menu is open, on each machine by
--- itself - never networked. A slot loaded while the menu's open (a preview,
--- or one just placed) sets itself from lastConstructionScreenOpenTime in
--- its own onLoad.
+-- Slots show while the construction menu is open, and outside it too while
+-- the player's showParkingSlots setting (086) is on, toggled from the
+-- settings page or TC_TOGGLE_PARKING_SLOTS (right ctrl + P). On each
+-- machine by itself - never networked. Standing spots (065) share the hook
+-- but only ever show in the construction menu. A slot loaded while they
+-- should show (a preview, one just placed, a slot streaming in) sets itself
+-- in its own onLoad (areSlotsShown).
 
-function TCParking.setSlotsVisible(isVisible)
+-- Whether the construction menu is open.
+TCParking.isConstructionScreenOpen = false
+
+-- The local showParkingSlots setting (false before the settings exist).
+function TCParking.getShowSlotsSetting()
+    local tc = g_currentMission ~= nil and g_currentMission.TheContractor or nil
+    return tc ~= nil and tc.Settings ~= nil and tc.Settings:get("showParkingSlots") == true
+end
+
+-- Whether parking slots should show on this machine now.
+function TCParking.areSlotsShown()
+    return TCParking.isConstructionScreenOpen or TCParking.getShowSlotsSetting()
+end
+
+function TCParking.updateVisuals()
     local placeableSystem = g_currentMission ~= nil and g_currentMission.placeableSystem or nil
     if placeableSystem == nil then
         return
     end
+    local showSlots = TCParking.areSlotsShown()
     for _, placeable in ipairs(placeableSystem.placeables) do
         if PlaceableTCParkingSlot.isSlot(placeable) then
-            PlaceableTCParkingSlot.setVisualsVisible(placeable, isVisible)
+            PlaceableTCParkingSlot.setVisualsVisible(placeable, showSlots)
         elseif PlaceableTCStandingSpot.isSpot(placeable) then
-            -- 065: standing spots share the hook.
-            PlaceableTCStandingSpot.setVisualsVisible(placeable, isVisible)
+            PlaceableTCStandingSpot.setVisualsVisible(placeable, TCParking.isConstructionScreenOpen)
         end
     end
 end
 
 local function onConstructionScreenOpen()
-    TCParking.setSlotsVisible(true)
+    TCParking.isConstructionScreenOpen = true
+    TCParking.updateVisuals()
 end
 
 local function onConstructionScreenClose()
-    TCParking.setSlotsVisible(false)
+    TCParking.isConstructionScreenOpen = false
+    TCParking.updateVisuals()
 end
 
 -- Hooking ConstructionScreen.onOpen/onClose on the class does nothing: when
@@ -262,6 +345,7 @@ end
 -- so the originals are kept and each load wraps them afresh rather than
 -- stacking on the last load's wrapper.
 function TCParking.installConstructionScreenHook()
+    TCParking.isConstructionScreenOpen = false
     local element = g_gui ~= nil and g_gui.screens[ConstructionScreen] or nil
     if element == nil then
         Logging.warning("[TheContractor] Construction screen not found; parking slots won't show in it.")
@@ -299,13 +383,8 @@ function TCParking.getSlotAt(x, z)
             elseif PlaceableTCStandingSpot.isSpot(placeable) then
                 area = PlaceableTCStandingSpot.getArea(placeable)
             end
-            if area ~= nil then
-                local dx, dz = x - area.x, z - area.z
-                local u = dx * area.uX + dz * area.uZ
-                local v = dx * area.vX + dz * area.vZ
-                if u >= 0 and u <= area.width and v >= 0 and v <= area.length then
-                    return placeable
-                end
+            if area ~= nil and PlaceableTCParkingSlot.isInArea(area, x, z) then
+                return placeable
             end
         end
     end
@@ -329,3 +408,42 @@ end
 
 GuiTopDownCursor.getHitPlaceable = Utils.overwrittenFunction(GuiTopDownCursor.getHitPlaceable,
     TCParking.getHitPlaceable)
+
+-- Show/hide toggle (086) ----------------------------------------------------
+-- TC_TOGGLE_PARKING_SLOTS (modDesc <actions>, right ctrl + P by default)
+-- flips this machine's showParkingSlots setting, registered with the
+-- player's global action events as FS25_MoistureSystem's menu key is.
+
+function TCParking.onToggleSlotsAction()
+    local tc = g_currentMission.TheContractor
+    if tc == nil or tc.Settings == nil then
+        return
+    end
+    local isShown = not TCParking.getShowSlotsSetting()
+    tc.Settings:setLocal("showParkingSlots", isShown)
+    TCSettingsMenu.refreshControls()
+    g_currentMission:addIngameNotification(FSBaseMission.INGAME_NOTIFICATION_INFO,
+        g_i18n:getText(isShown and "tc_parking_slotsShown" or "tc_parking_slotsHidden"))
+end
+
+function TCParking.registerToggleAction(inputComponent, superFunc, ...)
+    superFunc(inputComponent, ...)
+    if InputAction.TC_TOGGLE_PARKING_SLOTS == nil then
+        return
+    end
+    local _, eventId = g_inputBinding:registerActionEvent(InputAction.TC_TOGGLE_PARKING_SLOTS, TCParking,
+        TCParking.onToggleSlotsAction, false, true, false, true)
+    if eventId ~= nil then
+        g_inputBinding:setActionEventTextVisibility(eventId, false)
+    end
+end
+
+-- Installed once: the class outlives a savegame, and the wrapper looks
+-- TCParking up by name when it runs.
+if PlayerInputComponent ~= nil and not PlayerInputComponent.tcToggleSlotsHookInstalled then
+    PlayerInputComponent.registerGlobalPlayerActionEvents = Utils.overwrittenFunction(
+        PlayerInputComponent.registerGlobalPlayerActionEvents, function(inputComponent, superFunc, ...)
+            TCParking.registerToggleAction(inputComponent, superFunc, ...)
+        end)
+    PlayerInputComponent.tcToggleSlotsHookInstalled = true
+end

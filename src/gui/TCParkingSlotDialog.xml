@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8" standalone="no" ?>
+<!-- Parking slot filter dialog (086), see TCParkingSlotDialog.lua. Same
+     dialog frame as TCDriverPickerDialog.xml (anchorTopCenter profiles, so
+     x positions are each element's centre relative to the content
+     container's top-centre). The list spans -320px..320px; each row is a
+     tick box, the category's or machine's name, a kind chip and, for a
+     machine standing in the slot, a "here" chip. Eight 32px rows show at
+     once, so the list ends clear of the button bar (about -500px);
+     vanilla's list slider to its right shows there are more. -->
+<GUI onOpen="onOpen" onClose="onClose" onCreate="onCreate">
+    <GuiElement profile="newLayer"/>
+    <Bitmap profile="dialogFullscreenBg" id="dialogBg"/>
+    <GuiElement profile="fs25_dialogBg" id="dialogElement" size="760px 580px">
+        <ThreePartBitmap profile="fs25_dialogBgMiddle"/>
+        <ThreePartBitmap profile="fs25_dialogBgTop"/>
+        <ThreePartBitmap profile="fs25_dialogBgBottom"/>
+        <GuiElement profile="fs25_dialogContentContainer">
+
+            <Text profile="fs25_dialogTitle" id="dialogTitleElement" position="0px -30px" text="$l10n_tc_parkingSlot_dialogTitle"/>
+            <Text profile="tc_adDialogInfoText" id="headingText" position="0px -80px" text=""/>
+            <Text profile="tc_parkingSlotHint" id="hintText" position="0px -112px" text=""/>
+
+            <SmoothList id="choiceList" profile="tc_driverPickerList" position="0px -180px" size="640px 256px">
+                <ListItem profile="tc_tableListItem">
+                    <RoundCorner profile="tc_tableRowSurface"/>
+                    <Bitmap profile="tc_tableRowAccent"/>
+                    <RoundCorner profile="tc_rowCheckBox" name="checkBox"/>
+                    <Text profile="tc_listRowCellLeft" position="36px 0px" size="400px 32px" name="name"/>
+                    <RoundCorner profile="tc_rowChip" position="442px 0px" size="96px 20px" name="kindChip"/>
+                    <Text profile="tc_rowChipText" position="442px 0px" size="96px 20px" name="kindChipText"/>
+                    <RoundCorner profile="tc_rowChip" position="544px 0px" size="84px 20px" name="hereChip"/>
+                    <Text profile="tc_rowChipText" position="544px 0px" size="84px 20px" name="hereChipText" text="$l10n_tc_parkingSlot_here"/>
+                </ListItem>
+            </SmoothList>
+            <!-- Just right of the list (its right edge is at 320px). -->
+            <ThreePartBitmap profile="tc_dialogSlider_box" position="332px -180px" size="6px 256px">
+                <Slider profile="fs25_listSlider" dataElementId="choiceList"/>
+            </ThreePartBitmap>
+            <Text profile="tc_adDialogInfoText" id="emptyText" position="0px -200px" text="$l10n_tc_parkingSlot_nothingToPick"/>
+        </GuiElement>
+
+        <BoxLayout profile="fs25_dialogButtonBox">
+            <Button profile="buttonOK" text="$l10n_tc_parkingSlot_tick" onClick="onClickOk" id="toggleButton"/>
+            <Bitmap profile="fs25_dialogButtonBoxSeparator"/>
+            <Button profile="buttonActivate" text="$l10n_tc_parkingSlot_save" onClick="onClickSave" id="saveButton"/>
+            <Bitmap profile="fs25_dialogButtonBoxSeparator"/>
+            <Button profile="buttonExtra1" text="$l10n_tc_parkingSlot_clear" onClick="onClickClear" id="clearButton"/>
+            <Bitmap profile="fs25_dialogButtonBoxSeparator"/>
+            <Button profile="buttonBack" text="$l10n_button_back" onClick="onClickBack" id="backButton"/>
+        </BoxLayout>
+    </GuiElement>
+</GUI>
