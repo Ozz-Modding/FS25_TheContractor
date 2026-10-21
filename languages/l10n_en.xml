@@ -474,12 +474,12 @@
 		<text name="tc_allocation_blockedWarning" text="%s isn't certified on %s."/>
 		<text name="tc_allocation_notCertifiedWarning" text="%s doesn't hold a %s certificate. Book them on a course from the Staff tab."/>
 		<text name="tc_allocation_filledHarvesterWarning" text="%s still has %s in its tank. Empty it before it goes out on a job."/>
-		<text name="tc_allocation_crewRolesTitle"text="Who does what"/>
+		<text name="tc_allocation_crewRolesTitle" text="Who does what"/>
 		<text name="tc_allocation_crewRolesPrompt" text="Choose who harvests and who hauls. The recommended way round suits their skills best, but you can swap them round to give the other one the practice."/>
 		<text name="tc_allocation_crewRolesOption" text="%s harvests, %s hauls"/>
 		<text name="tc_allocation_crewRolesRecommended" text="%s (recommended)"/>
 		<text name="tc_allocation_crewRolesQualified" text="Both are qualified for their part."/>
-		<text name="tc_allocation_underqualifiedWarning"text="%s is under-qualified: %s %d, the job needs %d - expect a reduced reward and extra wear on the machines."/>
+		<text name="tc_allocation_underqualifiedWarning" text="%s is under-qualified: %s %d, the job needs %d - expect a reduced reward and extra wear on the machines."/>
 		<text name="tc_overview_noticesHeading" text="Important"/>
 		<text name="tc_overview_noticesEmpty" text="Nothing to report."/>
 		<text name="tc_overview_noticeLine" text="- %s"/>
@@ -501,6 +501,23 @@
 		<text name="tc_holiday_ended" text="%s is back from holiday"/>
 		<text name="tc_holiday_noticeOne" text="%s: %s on holiday"/>
 		<text name="tc_holiday_noticeMany" text="%s: %d workers on holiday (%s)"/>
+		<!-- Holiday requests (089) -->
+		<text name="tc_staff_detailHolidayRequested" text="Asked for: %s"/>
+		<text name="tc_holiday_requestWithdrawn" text="%s has withdrawn their holiday request because the days per month setting changed. They'll ask again."/>
+		<text name="tc_inbox_chipHoliday" text="Holiday"/>
+		<text name="tc_holidayRequest_approveButton" text="Approve"/>
+		<text name="tc_holidayRequest_declineButton" text="Decline"/>
+		<text name="tc_holidayRequest_title" text="Holiday request: %s"/>
+		<text name="tc_holidayRequest_body" text="%s would like %d day(s) off: %s. Also off then: %s. Approving will please them. Declining will upset them, and leaving it unanswered until it expires will upset them more. Staff can only be refused twice a year; after that they'll book their holiday whatever."/>
+		<text name="tc_holidayRequest_nobodyOff" text="nobody"/>
+		<text name="tc_holidayRequest_offHoliday" text="holiday %s"/>
+		<text name="tc_holidayRequest_offRequested" text="asked for %s"/>
+		<text name="tc_holidayRequest_offTraining" text="training %s"/>
+		<text name="tc_holidayRequest_warningTitle" text="Holiday refused twice: %s"/>
+		<text name="tc_holidayRequest_warningBody" text="%s has had two holiday requests refused this year. They're entitled to their leave, so they'll book their next holiday whatever, without asking."/>
+		<text name="tc_holidayRequest_bookedTitle" text="Holiday booked: %s"/>
+		<text name="tc_holidayRequest_bookedBodyDeclined" text="%s has booked %d day(s) off: %s. They've been refused twice this year, so they haven't asked this time."/>
+		<text name="tc_holidayRequest_bookedBodyYearEnd" text="%s has booked %d day(s) off: %s. The year's nearly over and they still have leave to take, so they haven't asked this time."/>
 		<!-- Finances (049) -->
 		<text name="tc_finances_columnJob" text="Job"/>
 		<text name="tc_finances_columnField" text="Field"/>

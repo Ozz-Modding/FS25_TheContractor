@@ -26,7 +26,7 @@ Lists your farm's hired workers with their ids. Each line shows the name, status
 - failed, retake due
 - not certified, ready or not ready
 
-If any apply, it also shows declined training requests, a booked holiday (monotonic days) and when they're leaving (retiring or quitting).
+If any apply, it also shows declined training requests, a booked holiday or one they've asked for (monotonic days), holiday requests refused this year (server only) and when they're leaving (retiring or quitting).
 
 ```
 Farm 1 workers (today is day 104):
@@ -144,13 +144,12 @@ tcWorker sick 2
 tcWorker sick amy inspect
 ```
 
-### `tcWorker holiday <worker> [daysFromNow] [days]`
+### `tcWorker holidayRequest`
 
-Books a holiday for one of your hired workers, skipping the usual notice and allowance rules. `daysFromNow` defaults to 0 (starting today) and `days` defaults to 1. It fails if the worker already has a holiday booked.
+Has one of your hired workers ask for a holiday now, as the daily roll would, but certainly and for the earliest start: an inbox request you can approve or decline, starting in 3 days (the usual notice) for half to all of their allowance. It takes no arguments. Whoever has been refused most this year goes first (then the lowest id), so running it again walks one worker through a decline, the warning on the second refusal and then a holiday booked without asking. A worker running out of year also books without asking. Workers who already have a holiday booked or asked for, are leaving, are booked on training or have no allowance left are skipped.
 
 ```
-tcWorker holiday 2
-tcWorker holiday 2 3 5
+tcWorker holidayRequest
 ```
 
 ### `tcWorker train <worker> [daysFromNow] [pass|fail]`

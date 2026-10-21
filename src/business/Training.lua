@@ -186,12 +186,17 @@ function TheContractorTraining.getPassChance(worker, cert)
 end
 
 -- The first day a booking made today would start: BOOKING_LEAD_DAYS from
--- now, or the day after a holiday they've booked if that's later. Every
--- machine works it out the same way, so the confirm dialog can show it.
+-- now, or the day after a holiday they've booked or asked for (089) if
+-- that's later. Every machine works it out the same way, so the confirm
+-- dialog can show it.
 function TheContractorTraining.getFirstBookableDay(worker)
     local firstDay = g_currentMission.environment.currentMonotonicDay + TheContractorTraining.BOOKING_LEAD_DAYS
     if worker:hasHolidayBooked() then
         firstDay = math.max(firstDay, worker:getHolidayEndDay() + 1)
+    end
+    local request = TheContractorHolidays.findRequest(worker.farmId, worker.id)
+    if request ~= nil then
+        firstDay = math.max(firstDay, TheContractorHolidays.getRequestEndDay(request) + 1)
     end
     return firstDay
 end

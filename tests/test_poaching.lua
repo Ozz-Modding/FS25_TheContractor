@@ -83,7 +83,7 @@ local function setup()
         publish = function() return 1 end,
         remove = function() end,
     }
-    tc.Holidays = { refreshNotices = function() end }
+    tc.Holidays = { refreshNotices = function() end, removeMessagesFor = function() end }
     tc.Training = { removeMessagesFor = function() end }
     tc.Finances = { recordWages = function() end }
     g_currentMission.addMoney = function() end

@@ -1265,7 +1265,8 @@ function MenuContractor:updateStaffDetails()
     self.staffRowJob:setVisible(isRoster)
     self.staffRowRetirement:setVisible(leavingText ~= nil)
     self.staffRowHolidayLeft:setVisible(isRoster and leavingText == nil)
-    self.staffRowHoliday:setVisible(isRoster and worker:hasHolidayBooked())
+    self.staffRowHoliday:setVisible(isRoster and (worker:hasHolidayBooked() or
+        TheContractorHolidays.findRequest(worker.farmId, worker.id) ~= nil))
 
     if isRoster then
         setChip(self.staffDetailStatusChip, self.staffDetailStatusChipText,
@@ -1359,8 +1360,8 @@ function MenuContractor:getLeavingLine(worker)
 end
 
 -- 040: holiday days left this year at the days per period in force now,
--- and the booked holiday, if any (its row is hidden otherwise, see
--- updateStaffDetails).
+-- and the booked holiday, or else the one they've asked for (089), if any
+-- (its row is hidden otherwise, see updateStaffDetails).
 function MenuContractor:updateHolidayDetails(worker)
     local environment = g_currentMission.environment
     self.staffDetailHolidayLeft:setText(string.format(g_i18n:getText("tc_staff_detailHolidayLeft"),
@@ -1372,6 +1373,13 @@ function MenuContractor:updateHolidayDetails(worker)
         local key = worker.status == TheContractorWorker.STATUS.HOLIDAY and "tc_staff_detailHolidayNow" or
             "tc_staff_detailHolidayBooked"
         self.staffDetailHoliday:setText(string.format(g_i18n:getText(key), dates))
+        return
+    end
+
+    local request = TheContractorHolidays.findRequest(worker.farmId, worker.id)
+    if request ~= nil then
+        self.staffDetailHoliday:setText(string.format(g_i18n:getText("tc_staff_detailHolidayRequested"),
+            TCCalendar.formatDayRange(request.payload.startDay, TheContractorHolidays.getRequestEndDay(request))))
     end
 end
 
