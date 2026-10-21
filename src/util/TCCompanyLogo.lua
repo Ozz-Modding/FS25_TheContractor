@@ -35,5 +35,9 @@ function TCCompanyLogo.getFilename()
             end
         end
     end
+    return TCCompanyLogo.getDefaultFilename()
+end
+
+function TCCompanyLogo.getDefaultFilename()
     return Utils.getFilename(TCCompanyLogo.DEFAULT_FILENAME, TheContractor.dir)
 end
