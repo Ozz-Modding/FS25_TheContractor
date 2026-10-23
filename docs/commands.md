@@ -222,13 +222,14 @@ tcWorker duty Amy 22
 tcWorker duty 7 home
 ```
 
-### `tcWorker adsSkill <worker> <mechanic|electrician|bodyworker> <0-3>`
+### `tcWorker adsSkill <worker> <mechanic|electrician|bodyworker|storekeeper> <0-3>`
 
-Sets one of a hired worker's Advanced Damage System workshop skills (091) to a level, or removes it with `0`. The trades are named as ADS shows them; `diagnostician`, its own id for the electrician, works too. A worker can have at most two: set one to `0` before adding a third. Removing the skill a worker is working in the workshop as takes them out of the workshop. `<worker>` is their id or name. It prints the worker's skills afterwards. It works without ADS too, but the skills only show and count toward pay while ADS's own workshop is taking your staff.
+Sets one of a hired worker's Advanced Damage System workshop skills (091, and the storekeeper since 098) to a level, or removes it with `0`. The trades are named as ADS shows them; `diagnostician`, its own id for the electrician, works too. A worker can have at most two: set one to `0` before adding a third. Removing the skill a worker is working in the workshop as takes them out of the workshop. `<worker>` is their id or name. It prints the worker's skills afterwards. It works without ADS too, but the skills only show and count toward pay while ADS's own workshop is taking your staff.
 
 ```
 tcWorker adsSkill 7 mechanic 2
 tcWorker adsSkill Sam Hill bodyworker 0
+tcWorker adsSkill 7 storekeeper 1
 ```
 
 ## Jobs — `tcJob`
@@ -325,7 +326,7 @@ Job 7 is accepted. It can go to: allocated, missed
 
 ### `tcJob log [jobId]`
 
-Shows a job's entry in the Logbook. That's the crew, each machine's condition going out and coming back, the time split, supplies, costs, margin, reputation and any claim. With no job id it lists the farm's last 10 logged jobs, newest first, with their ids and margins. Read-only, so it also works on a joined client.
+Shows a job's entry in the Logbook. That's the crew, each machine's condition going out and coming back (for an FS25_AdvancedDamageSystem machine, what its last inspection showed and any fault found during the job), the time split, supplies, costs, margin, reputation and any claim. With no job id it lists the farm's last 10 logged jobs, newest first, with their ids and margins. Read-only, so it also works on a joined client.
 
 | Argument | Meaning |
 |---|---|
@@ -436,7 +437,7 @@ tcCompany removeNotice 4
 
 ### `tcCompany vehicleLog <vehicle>`
 
-Shows a vehicle's Logbook history for the last year. You get a summary line (jobs, hours worked, faults caused by your staff, wear cost), then every logged use: jobs, staff drivers and players, with who, how long and its condition before and after. `<vehicle>` is any part of its name, case-insensitive. Words after the first are included, so names with spaces work. Every logged vehicle that matches is shown. Only vehicles with history on your farm are searched. Read-only, so it also works on a joined client.
+Shows a vehicle's Logbook history for the last year. You get a summary line (jobs, hours worked, how many uses a fault was found in, wear cost), then every logged use: jobs, staff drivers and players, with who, how long and its condition before and after. `<vehicle>` is any part of its name, case-insensitive. Words after the first are included, so names with spaces work. Every logged vehicle that matches is shown. Only vehicles with history on your farm are searched. Read-only, so it also works on a joined client.
 
 ```
 tcCompany vehicleLog fendt
@@ -512,19 +513,18 @@ tcCompany event poaching amy
 
 ### `tcCompany office`
 
-Lists your farm's office staff (090): for the administrator and the storekeeper, who's employed, their id, level, whether they're in the office or training (and until which day), and their monthly salary. The last line says whether Advanced Damage System's own workshop is taking your staff, and what state its staff provider is in. Read-only, so it also works on a joined client.
+Lists your farm's office staff (090): for the administrator, who's employed, their id, level, whether they're in the office or training (and until which day), and their monthly salary. The last line says whether Advanced Damage System's own workshop is taking your staff, and what state its staff provider is in. Read-only, so it also works on a joined client.
 
 ```
 tcCompany office
 ```
 
-### `tcCompany officeLevel <administrator|storekeeper> <1-3>`
+### `tcCompany officeLevel <administrator> <1-3>`
 
-Sets an office role's level straight away, with that level's salary, and ends any course they're on, for testing Advanced Damage System's workshop at each level. The role has to be filled.
+Sets an office role's level straight away, with that level's salary, and ends any course they're on, for testing Advanced Damage System's workshop at each level. The role has to be filled. The administrator is the only office role (098 made the storekeeper a workshop trade: set it with `tcWorker adsSkill`).
 
 ```
 tcCompany officeLevel administrator 3
-tcCompany officeLevel storekeeper 2
 ```
 
 ### `tcCompany debris [count] [prop]`

@@ -1,5 +1,6 @@
--- Office staff (090): the office administrator (057) and the storekeeper.
--- Per-farm roles, not field workers - no roster entry, allocation, skills,
+-- Office staff (090): the office administrator (057). The storekeeper was
+-- one too until 098 made it a workshop trade (TheContractorWorkshop). A
+-- per-farm role, not a field worker - no roster entry, allocation, skills,
 -- growth, morale, sickness, holidays, pay reviews or poaching. But they are
 -- people: each has a name, gender and look (041), shown in the Staff tab's
 -- roster with their portrait, edited like a worker (066/077, through
@@ -25,9 +26,8 @@
 -- it only affects invoices issued from then on.
 --
 -- With FS25_AdvancedDamageSystem handing its own-workshop staff to us
--- (TCADSWorkshop), the administrator is its receptionist and the
--- storekeeper its storekeeper, at their level (1-3). The storekeeper can
--- only be hired then. Train raises a level: a fixed cost (1x UK, scaleCost)
+-- (TCADSWorkshop), the administrator is its receptionist, at their level
+-- (1-3). Train raises a level: a fixed cost (1x UK, scaleCost)
 -- and a few days away (reported to ADS as training), then the salary steps
 -- up to that level's figure. Pay is a fixed salary per level; there are no
 -- pay reviews or market value.
@@ -37,31 +37,23 @@ TheContractorOffice_mt = Class(TheContractorOffice)
 
 TheContractorOffice.ROLE = {
     ADMINISTRATOR = "administrator",
-    STOREKEEPER = "storekeeper",
 }
 
 -- Display order.
-TheContractorOffice.ROLE_ORDER = { "administrator", "storekeeper" }
+TheContractorOffice.ROLE_ORDER = { "administrator" }
 
 TheContractorOffice.MAX_LEVEL = 3
 
 -- salaries: full-month pay at levels 1-3 (1x UK, scalePay'd like a
 -- worker's). trainCosts/trainDays: the course to level 2, then to level 3
 -- (costs 1x UK, through scaleCost). adsRole: their role in ADS's own
--- workshop. requiresADS: only hired while ADS hands its staff to us.
+-- workshop.
 TheContractorOffice.ROLES = {
     administrator = {
         salaries = { 2000, 2250, 2500 },
         trainCosts = { 500, 900 },
         trainDays = { 2, 3 },
         adsRole = "receptionist",
-    },
-    storekeeper = {
-        salaries = { 1900, 2150, 2400 },
-        trainCosts = { 400, 800 },
-        trainDays = { 2, 3 },
-        adsRole = "storekeeper",
-        requiresADS = true,
     },
 }
 
@@ -232,14 +224,6 @@ end
 
 -- Hiring ---------------------------------------------------------------------------
 
--- Whether the role's row is offered at all: always for the administrator,
--- the storekeeper only while employed or while ADS hands its staff to us.
-function TheContractorOffice:isRoleShown(farmId, role)
-    local definition = TheContractorOffice.ROLES[role]
-    return definition ~= nil and
-        (not definition.requiresADS or self:isEmployed(farmId, role) or TCADSWorkshop.isActive())
-end
-
 -- Why `role` can't be hired now, or nil. Same on every machine.
 function TheContractorOffice:getHireProblem(farmId, role)
     local definition = TheContractorOffice.ROLES[role]
@@ -248,9 +232,6 @@ function TheContractorOffice:getHireProblem(farmId, role)
     end
     if self:isEmployed(farmId, role) then
         return TheContractorOffice.PROBLEM.EMPLOYED
-    end
-    if definition.requiresADS and not TCADSWorkshop.isActive() then
-        return TheContractorOffice.PROBLEM.NEEDS_ADS
     end
     return nil
 end
@@ -558,6 +539,7 @@ function TheContractorOffice:loadFromXMLFile(xmlFile)
 
         local farmId = getXMLInt(xmlFile, key .. "#farmId")
         local role = getXMLString(xmlFile, key .. "#role")
+        -- A storekeeper from before 098 isn't office staff any more: dropped.
         if farmId ~= nil and TheContractorOffice.ROLES[role] ~= nil then
             local name = Utils.getNoNil(getXMLString(xmlFile, key .. "#name"), "?")
             local level = math.max(1, math.min(Utils.getNoNil(getXMLInt(xmlFile, key .. "#level"), 1),
@@ -707,7 +689,7 @@ function TheContractorOffice.registerConsoleCommands()
     })
 
     TCConsole.register("company", "officeLevel", {
-        args = "<administrator|storekeeper> <1-3>",
+        args = "<administrator> <1-3>",
         description = "Set an office role's level (and salary) now, ending any course",
         run = function(farmId, args)
             local role = args[1]

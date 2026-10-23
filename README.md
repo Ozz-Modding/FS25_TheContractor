@@ -53,7 +53,7 @@ Run your farm as an agricultural contracting business in Farming Simulator 25. T
 ### Equipment
 - Machines out on a job leave the yard and come back to placeable **parking slots** (three sizes, for vehicles or implements, plus a harvester slot). Stand in one and press the activate key to keep it for some kinds of machine (small tractors, trailers) or particular machines. They're only visible in the construction menu, unless you turn on Show parking slots in the settings or press Right Ctrl+P
 - Stuck AI helpers are detected and dealt with
-- Advanced Damage System support: careless workers cause ADS breakdowns, its workshop stock shows in the Supplies tab, your office administrator and a storekeeper staff its own workshop as advisor and storekeeper (trained up a level at a time), and workers with mechanic, electrician or bodyworker skills work there whenever they're not out on a job (send them on a course to learn a trade or raise one a level)
+- Advanced Damage System support: careless workers cause ADS breakdowns, its workshop stock shows in the Supplies tab, your office administrator staffs its own workshop as advisor (trained up a level at a time), and workers with mechanic, electrician, bodyworker or storekeeper skills work there whenever they're not out on a job (send them on a course to learn a trade or raise one a level)
 
 ### Random events
 - **Vehicle theft**, with police reports, insurance claims and a courtesy vehicle while you wait

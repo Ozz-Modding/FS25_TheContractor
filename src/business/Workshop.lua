@@ -1,5 +1,6 @@
 -- ADS workshop trades (091). Field workers can have FS25_AdvancedDamageSystem
--- workshop skills - mechanic, diagnostician, bodyworker - at level 1-3, at
+-- workshop skills - mechanic, diagnostician, bodyworker, storekeeper (098) -
+-- at level 1-3, at
 -- most MAX_SKILLS of them (worker.adsSkills = { [role] = level }). A worker
 -- can be ticked to work in the farm's ADS own workshop in one of those
 -- roles whenever they aren't out on a job (worker.workshopRole, nil when
@@ -25,8 +26,9 @@
 
 TheContractorWorkshop = {}
 
--- In display order. The office roles (receptionist, storekeeper) are 090's.
-TheContractorWorkshop.ROLES = { "mechanic", "diagnostician", "bodyworker" }
+-- In display order. The receptionist is 090's office administrator. The
+-- storekeeper was an office role too until 098.
+TheContractorWorkshop.ROLES = { "mechanic", "diagnostician", "bodyworker", "storekeeper" }
 TheContractorWorkshop.IS_ROLE = {}
 for _, role in ipairs(TheContractorWorkshop.ROLES) do
     TheContractorWorkshop.IS_ROLE[role] = true
@@ -67,7 +69,11 @@ TheContractorWorkshop.COURSES = {
     mechanic = { costs = { 300, 600, 1000 }, days = { 2, 2, 3 } },
     diagnostician = { costs = { 400, 800, 1300 }, days = { 2, 2, 3 } },
     bodyworker = { costs = { 300, 600, 1000 }, days = { 2, 2, 3 } },
+    storekeeper = { costs = { 300, 600, 1000 }, days = { 2, 2, 3 } },
 }
+
+-- 098: the storekeeper does nothing in ADS without its parts storage.
+TheContractorWorkshop.NEEDS_PARTS_STORAGE = { storekeeper = true }
 -- A trade course's key in worker.trainingCert, next to 054's certificates.
 TheContractorWorkshop.COURSE_PREFIX = "workshop_"
 
@@ -463,7 +469,7 @@ end
 
 function TheContractorWorkshop.registerConsoleCommands()
     TCConsole.register("worker", "adsSkill", {
-        args = "<worker> <mechanic|electrician|bodyworker> <0-3>",
+        args = "<worker> <mechanic|electrician|bodyworker|storekeeper> <0-3>",
         description = "Set a hired worker's ADS workshop skill (0 removes it)",
         run = function(farmId, args)
             local level = tonumber(args[#args])

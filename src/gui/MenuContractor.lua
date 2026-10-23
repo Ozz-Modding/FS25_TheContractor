@@ -1148,13 +1148,11 @@ function MenuContractor:refreshStaffState(farmId, staff, jobs)
         return a.id < b.id
     end)
 
-    -- 090: the office roles offered, employed or not.
+    -- 090: the office roles, employed or not.
     local office = g_currentMission.TheContractor.Office
     self.officeRows = {}
     for _, role in ipairs(TheContractorOffice.ROLE_ORDER) do
-        if office:isRoleShown(farmId, role) then
-            table.insert(self.officeRows, { role = role, member = office:getMember(farmId, role) })
-        end
+        table.insert(self.officeRows, { role = role, member = office:getMember(farmId, role) })
     end
 
     self.staffViewSelector:setTexts({ g_i18n:getText("tc_staff_viewRoster"), g_i18n:getText("tc_staff_viewCandidates") })
@@ -1466,6 +1464,10 @@ function MenuContractor:updateWorkshopDetails(worker, isRoster)
     if isRoster and courseRole ~= nil then
         note = string.format(g_i18n:getText("tc_workshop_noteCourse"),
             TheContractorWorkshop.getCourseName(worker, courseRole), TheContractorTraining.formatCourseDates(worker) or "")
+    elseif isRoster and worker.workshopRole ~= nil and TheContractorWorkshop.NEEDS_PARTS_STORAGE[worker.workshopRole] and
+            TCADSWorkshop.hasPartsStorage(worker.farmId) == false then
+        -- 098: ADS ignores a storekeeper without it.
+        note = g_i18n:getText("tc_workshop_noteNeedsPartsStorage")
     elseif isRoster and worker.workshopRole ~= nil then
         note = string.format(g_i18n:getText("tc_staff_workshopNoteTicked"),
             string.lower(TheContractorWorkshop.getRoleName(worker.workshopRole)))
@@ -4837,7 +4839,6 @@ end
 -- The one note under the role's description: what they're doing, or why
 -- they can't do much, or what training costs.
 function MenuContractor:getOfficeNote(farmId, row)
-    local definition = TheContractorOffice.getDefinition(row.role)
     local member = row.member
     if member == nil then
         return g_i18n:getText("tc_office_noteVacant")
@@ -4845,14 +4846,6 @@ function MenuContractor:getOfficeNote(farmId, row)
     if TheContractorOffice.isTraining(member) then
         return string.format(g_i18n:getText("tc_office_noteTraining"), member.level + 1,
             TCCalendar.formatDay(member.trainingUntilDay))
-    end
-    if definition.requiresADS then
-        if not TCADSWorkshop.isActive() then
-            return g_i18n:getText("tc_office_noteNoWorkshop")
-        end
-        if TCADSWorkshop.hasPartsStorage(farmId) == false then
-            return g_i18n:getText("tc_office_noteNeedsPartsStorage")
-        end
     end
     if not TCADSWorkshop.isActive() then
         return nil
@@ -5316,7 +5309,7 @@ function MenuContractor:populateLogbookVehicleCell(index, cell)
             TCVehicleCondition.getHeadline(snapshot) or "-", TCVehicleCondition.getTone(snapshot))
     end
 
-    -- A fault one of our people caused on it this year.
+    -- A fault found while it was in use this year.
     setChip(cell:getAttribute("faultChip"), cell:getAttribute("faultChipText"),
         row.summary.faults > 0 and g_i18n:getText("tc_logbook_faultChip") or nil, "bad")
 end
@@ -5438,7 +5431,7 @@ function MenuContractor:getLogbookJobRows(entry)
         section("tc_logbook_sectionEquipment")
         for _, machine in ipairs(entry.equipment) do
             local chip, tone = nil, nil
-            if machine.faultCaused then
+            if TheContractorLogbook.hasFoundFault(machine) then
                 chip, tone = text("tc_logbook_faultChip"), "bad"
             elseif machine.extraWear ~= nil then
                 chip, tone = string.format(text("tc_logbook_extraWearChip"), machine.extraWear), "warn"
@@ -5610,7 +5603,7 @@ function MenuContractor:getLogbookVehicleRows(vehicleRow)
     section("tc_logbook_sectionYear")
     row(text("tc_logbook_jobs"), tostring(summary.jobs))
     row(text("tc_logbook_engineHours"), formatHours(summary.hours))
-    row(text("tc_logbook_faultsCaused"), tostring(summary.faults), summary.faults > 0 and
+    row(text("tc_logbook_faultsFound"), tostring(summary.faults), summary.faults > 0 and
         text("tc_logbook_faultChip") or nil, "bad")
     row(text("tc_logbook_wearCost"), formatMoney(summary.wearCost))
 
@@ -5637,7 +5630,7 @@ function MenuContractor:getLogbookVehicleRows(vehicleRow)
             chip, tone = text("tc_logbook_missed"), "bad"
         elseif entry.kind == TheContractorLogbook.KIND.THEFT then
             chip, tone = text("tc_logbook_recoveredChip"), "warn"
-        elseif entry.faultCaused then
+        elseif TheContractorLogbook.hasFoundFault(entry) then
             chip, tone = text("tc_logbook_faultChip"), "bad"
         elseif entry.wash == TCJobConsequences.WASH.UNWASHED then
             chip, tone = text("tc_logbook_dirtyChip"), "warn"

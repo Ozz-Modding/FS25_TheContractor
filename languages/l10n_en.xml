@@ -336,6 +336,7 @@
 		<text name="tc_workshop_courseConfirmTicked" text="While they're on it, the workshop's %s work waits for them."/>
 		<text name="tc_workshop_courseBooked" text="%s is booked on a %s course: %s"/>
 		<text name="tc_workshop_courseDone" text="%s finished their course and is now a level %d %s"/>
+		<text name="tc_workshop_noteNeedsPartsStorage" text="Your workshop has no parts storage, so they can't work there as storekeeper until you add one."/>
 		<text name="tc_workshop_noteCourse" text="On a %s course: %s."/>
 		<text name="tc_allocation_workshopNote" text="%s works in your workshop as %s: the workshop's %s work waits until they're back."/>
 		<text name="tc_staff_columnSalary" text="Salary"/>
@@ -364,7 +365,6 @@
 		<text name="tc_growth_stat_cropCare" text="crop care"/>
 		<text name="tc_growth_stat_haulage" text="haulage"/>
 		<text name="tc_consequences_extraWear" text="Extra wear from %s's skill gaps: %s"/>
-		<text name="tc_consequences_breakdown" text="%s caused a fault on: %s"/>
 		<text name="tc_consequences_unknownWorker" text="A former worker"/>
 		<text name="tc_sickness_offSick" text="%s has called in sick and can't take jobs for a few days"/>
 		<text name="tc_sickness_recovered" text="%s is back at work after being off sick"/>
@@ -867,9 +867,7 @@
 		<text name="tc_overhead_healthSafety" text="Health &amp; safety programme"/>
 		<text name="tc_overhead_healthSafety_desc" text="PPE, first aid, training and risk assessments: %s per worker a year. Staff get sick less and recover sooner. Without it, sickness risks an inspection and a fine."/>
 		<text name="tc_office_role_administrator" text="Office administrator"/>
-		<text name="tc_office_role_storekeeper" text="Storekeeper"/>
 		<text name="tc_office_roleNoun_administrator" text="office administrator"/>
-		<text name="tc_office_roleNoun_storekeeper" text="storekeeper"/>
 		<text name="tc_office_vacant" text="Vacant"/>
 		<text name="tc_office_vacancyTitle" text="%s: vacant"/>
 		<text name="tc_office_status_vacant" text="Vacant"/>
@@ -884,7 +882,6 @@
 		<text name="tc_office_level" text="Level %d"/>
 		<text name="tc_office_salary" text="%s a month"/>
 		<text name="tc_office_about_administrator" text="Handles invoicing and credit control: customers pay sooner, and fewer pay late or not at all (only invoices issued while employed). With Advanced Damage System, also your own workshop's advisor: more vehicles worked on at once, and faster work, the higher their level."/>
-		<text name="tc_office_about_storekeeper" text="Your own workshop's storekeeper, with Advanced Damage System: buys the parts a job needs instead of waiting for stock you've bought yourself, and can sell the parts taken out. From level 2, parts are cheaper and removed parts sell for more."/>
 		<text name="tc_office_adsRole_receptionist" text="Advisor"/>
 		<text name="tc_office_adsRole_storekeeper" text="Storekeeper"/>
 		<text name="tc_office_adsRole_mechanic" text="Mechanic"/>
@@ -894,13 +891,10 @@
 		<text name="tc_office_workshopRole" text="%s, level %d"/>
 		<text name="tc_office_noteVacant" text="The first month's salary is paid when you hire."/>
 		<text name="tc_office_noteTraining" text="On a course to level %d, back on %s. The workshop goes without their help until then."/>
-		<text name="tc_office_noteNoWorkshop" text="Advanced Damage System's own workshop isn't taking your staff (its Staff via Contractor setting is off), so there's nothing for them to do."/>
-		<text name="tc_office_noteNeedsPartsStorage" text="Your workshop has no parts storage, so they can't do anything there until you add one."/>
 		<text name="tc_office_noteFullyTrained" text="Fully trained."/>
 		<text name="tc_office_noteCanTrain" text="Can train to level %d: %s, away for %d day(s)."/>
 		<text name="tc_office_hireButton" text="Hire"/>
 		<text name="tc_office_hireConfirm_administrator" text="Hire an office administrator for %s a month? The first month is paid now. Customers will pay sooner, and fewer will pay late or not at all."/>
-		<text name="tc_office_hireConfirm_storekeeper" text="Hire a storekeeper for %s a month? The first month is paid now."/>
 		<text name="tc_office_cannotAfford" text="You can't afford a %s right now: the first month's salary is %s."/>
 		<text name="tc_office_releaseConfirmNotice" text="Release %s, your %s? After %d full year(s) of service, you'll pay them %s in lieu of %s week(s)' notice. This cannot be undone."/>
 		<text name="tc_office_releaseConfirmRedundancy" text="Release %s, your %s? After %d full years of service, you'll pay them %s: %s in lieu of %s weeks' notice and %s redundancy pay. This cannot be undone."/>
@@ -1056,10 +1050,10 @@
 		<text name="tc_logbook_damage" text="Damage"/>
 		<text name="tc_logbook_paint" text="Paint wear"/>
 		<text name="tc_logbook_change" text="%s to %s"/>
-		<text name="tc_logbook_newFault" text="New fault"/>
-		<text name="tc_logbook_worseFault" text="Fault worse"/>
-		<text name="tc_logbook_faultStage" text="%s (stage %d)"/>
-		<text name="tc_logbook_activeFaults" text="Active faults"/>
+		<text name="tc_logbook_newFault" text="Fault found"/>
+		<text name="tc_logbook_conditionOutdated" text="%s (outdated)"/>
+		<text name="tc_logbook_unknown" text="Unknown"/>
+		<text name="tc_logbook_activeFaults" text="Known faults"/>
 		<text name="tc_logbook_conditionShort" text="Cond. %s"/>
 		<text name="tc_logbook_damageShort" text="Damage %s"/>
 		<text name="tc_logbook_faultChip" text="Fault"/>
@@ -1103,7 +1097,7 @@
 		<text name="tc_logbook_columnDamage" text="Damage"/>
 		<text name="tc_logbook_columnWear" text="Wear"/>
 		<text name="tc_logbook_jobs" text="Jobs"/>
-		<text name="tc_logbook_faultsCaused" text="Faults caused"/>
+		<text name="tc_logbook_faultsFound" text="Faults found"/>
 		<text name="tc_logbook_neverUsed" text="Never used"/>
 		<text name="tc_logbook_noHistory" text="No use logged in the last year"/>
 		<text name="tc_supplies_viewSupplies" text="Supplies"/>
