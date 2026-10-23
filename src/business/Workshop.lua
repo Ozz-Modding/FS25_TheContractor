@@ -174,7 +174,8 @@ function TheContractorWorkshop.getADSStatus(worker)
     local STATUS = TheContractorWorker.STATUS
     local ADS = TheContractorWorkshop.ADS_STATUS
     if worker.status == STATUS.IDLE then
-        return ADS.AVAILABLE
+        -- 097: unless they've gone home.
+        return TheContractorWorkingHours.isOnSite(worker) and ADS.AVAILABLE or ADS.UNAVAILABLE
     elseif worker.status == STATUS.ASSIGNED or worker.status == STATUS.DRIVING or worker.status == STATUS.COOLDOWN then
         return ADS.WORKING
     elseif worker.status == STATUS.SICK then

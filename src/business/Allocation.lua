@@ -624,7 +624,8 @@ function TheContractorAllocation:allocateJob(farmId, jobId, workerIds, equipment
     local staff = g_currentMission.TheContractor.Staff
     for i, workerId in ipairs(workerIds) do
         local worker = staff:getWorker(farmId, workerId)
-        if worker == nil or not worker:isIdle() then
+        -- 097: and not gone home.
+        if worker == nil or not TheContractorWorkingHours.isAvailable(worker) then
             return false
         end
         for j = 1, i - 1 do

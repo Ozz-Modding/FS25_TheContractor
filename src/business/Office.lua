@@ -88,6 +88,8 @@ TheContractorOffice.REQUEST = {
 TheContractorOffice.STATUS = {
     AVAILABLE = "available",
     TRAINING = "training",
+    -- 097: outside working hours.
+    AT_HOME = "atHome",
 }
 
 -- Why a hire or a course can't go ahead (getHireProblem/getTrainProblem).
@@ -124,8 +126,11 @@ function TheContractorOffice.isTraining(member)
 end
 
 function TheContractorOffice.getStatus(member)
-    return TheContractorOffice.isTraining(member) and TheContractorOffice.STATUS.TRAINING or
-        TheContractorOffice.STATUS.AVAILABLE
+    if TheContractorOffice.isTraining(member) then
+        return TheContractorOffice.STATUS.TRAINING
+    end
+    return TheContractorWorkingHours.isOfficeOpen() and TheContractorOffice.STATUS.AVAILABLE or
+        TheContractorOffice.STATUS.AT_HOME
 end
 
 -- Full-month pay at a level (unscaled, like a worker's salary).

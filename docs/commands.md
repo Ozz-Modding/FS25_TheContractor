@@ -13,7 +13,7 @@ You type these into the developer console. You don't need cheats on. There are f
 Type a group on its own (or with `help`) to list its subcommands and their arguments. Subcommand names aren't case-sensitive. If you get the arguments wrong, the command prints that subcommand's usage.
 
 - **Your farm:** every command acts on your current farm. Most need that farm to have created a company first.
-- **Server only:** commands that change something only work on the server, which means single player or the host of a multiplayer game. The read-only lists `tcWorker list`, `tcWorker pool`, `tcJob list`, `tcJob log`, `tcCompany storages`, `tcCompany notices`, `tcCompany vehicleLog`, `tcCompany events` and `tcWorker standing` also work on a joined client.
+- **Server only:** commands that change something only work on the server, which means single player or the host of a multiplayer game. The read-only lists `tcWorker list`, `tcWorker pool`, `tcJob list`, `tcJob log`, `tcCompany storages`, `tcCompany notices`, `tcCompany vehicleLog`, `tcCompany events`, `tcWorker standing` and `tcWorker hours` also work on a joined client.
 - **`<worker>`:** a hired worker's id, or the start of their first or last name. `amy`, `Hall` and `3` could all mean Amy Hall (#3). If a name matches more than one worker, the command lists them and asks for the id. `tcWorker list` shows ids and names.
 
 ## Workers — `tcWorker`
@@ -187,7 +187,7 @@ tcWorker certify 2 off
 
 ### `tcWorker standing`
 
-Shows, for each of your hired workers, whether they're standing on one of your farm's standing spots, and if not, why. Only workers who are idle or in a cooldown stand, and only between 07:00 and 19:00 game time. Outside those hours a line under the heading says so and every idle worker shows `gone home` (or `gone home once you look away`, if they're still on a spot you can see). Otherwise each line gives the spot they're assigned today (its position in decimetres) and how far it is from the camera, then one of:
+Shows, for each of your hired workers, whether they're standing on one of your farm's standing spots, and if not, why. Only workers who are idle or in a cooldown stand. Idle workers only stand during working hours (08:00 to 18:00 game time) or while they're kept on after them (Stay late, or Call back once they're in); anyone in a cooldown stands whatever the time. Outside working hours a line under the heading says so, and every idle worker who isn't kept on shows `gone home` (or `gone home once you look away`, if they're still on a spot you can see). Otherwise each line gives the spot they're assigned today (its position in decimetres) and how far it is from the camera, then one of:
 - waiting until you look away (nobody appears on a spot you can see)
 - waiting for another worker to leave the spot
 - standing, model not loaded (models load within 150 m)
@@ -201,6 +201,25 @@ This only shows what your own machine is displaying, so it also works on a joine
 Farm 1: 2 standing spot(s), day 104
 #3 Amy Hall - wants spot 1203:-455, 12 m away, standing, shown
 #7 John Smith - not standing (assigned)
+```
+
+### `tcWorker hours`
+
+Shows the game time and whether it's working hours (08:00 to 18:00), then each of your hired workers: their status (an idle worker shows `atHome`, `comingIn` or `stayingLate` instead of `idle` when that's where they are), the time they're on duty until if they've been kept on (and when they'll be in, if they've been called back and aren't there yet), their overtime so far this month in minutes and money, and what an hour of overtime costs them now. Read-only, so it also works on a joined client.
+
+```
+Farm 1, 19:10: working hours 08:00-18:00, outside them
+#3 Amy Hall - stayingLate, on duty until 22:00, overtime 70 min this month (12 owed), 10.71 an hour
+#7 John Smith - atHome, overtime 0 min this month (0 owed), 10.71 an hour
+```
+
+### `tcWorker duty <worker> <hour|home>`
+
+Keeps a worker on until `hour` (0-24, the next time the clock reads it): Stay late if they're at work, or Call back if they've gone home (they're in 25 game minutes later). `home` sends a worker who's been kept on home now. The same checks as the Staff tab's Manage options apply: not while they're sick, on holiday or training, after 18:00 (or after they'd turn up), and no later than the next 08:00. They're paid overtime for every minute of it outside working hours. Prints their line as `tcWorker hours` does, or why it couldn't.
+
+```
+tcWorker duty Amy 22
+tcWorker duty 7 home
 ```
 
 ### `tcWorker adsSkill <worker> <mechanic|electrician|bodyworker> <0-3>`
@@ -371,13 +390,14 @@ tcFinance botch 0
 
 ### `tcFinance insurance`
 
-Shows your farm's machinery insurance: whether you're insured and at what level of cover (and any change from renewal), what your fleet is worth, and how many claims you've had in the last 3 years. Then each level's premium today (after the claims loading) and what it pays out, and your open claims: the stolen vehicle, its value and level of cover, whether the claim is waiting to be submitted or the day it settles, and the courtesy vehicle you've been lent for it on comprehensive cover (with its vehicle id). A settled claim whose courtesy vehicle is still busy is listed too, until the insurer collects it. Read-only, so it also works on a joined client.
+Shows your farm's machinery insurance: whether you're insured and at what level of cover (and any change from renewal), what your fleet is worth, and how many claims you've had in the last 3 years. If any of your vehicles have FS25_AdvancedDamageSystem's anti-theft system fitted, a second line says how many and the value the premium is worked out on (theirs counted at 15% less). Then each level's premium today (after the claims loading) and what it pays out, and your open claims: the stolen vehicle, its value and level of cover, whether the claim is waiting to be submitted or the day it settles, and the courtesy vehicle you've been lent for it on comprehensive cover (with its vehicle id). A settled claim whose courtesy vehicle is still busy is listed too, until the insurer collects it. Read-only, so it also works on a joined client.
 
 ```
 Farm 1: insured, standard cover. Fleet value 412000, 0 claim(s) in the last 3 years
-  basic: 4120 a year, pays 80% less 5000 excess
-  standard: 5768 a year, pays 90% less 2500 excess
-  comprehensive: 7416 a year, pays 100% less 1250 excess
+  2 vehicle(s) with an anti-theft system: priced on 389500 (15% off theirs)
+  basic: 3895 a year, pays 80% less 5000 excess
+  standard: 5453 a year, pays 90% less 2500 excess
+  comprehensive: 7011 a year, pays 100% less 1250 excess
 Open claims: 1
   #3 Fendt 724 Vario (98000, comprehensive): settles day 112, courtesy John Deere 6R 250 (412)
 ```
@@ -474,7 +494,7 @@ Decides how the next event of that type comes out, instead of the usual roll. It
 
 | Type | Outcomes | What it decides |
 |---|---|---|
-| `theft` | `recovered`, `lost` | The next police report on a stolen vehicle: `recovered` brings it back (damaged, through the parking queue), `lost` writes it off and removes it (or, if the farm had machinery insurance on the day of the theft, starts the insurance claim, and the vehicle goes when it settles). Normally a 35% chance of recovery. |
+| `theft` | `recovered`, `lost` | The next police report on a stolen vehicle: `recovered` brings it back (damaged, through the parking queue), `lost` writes it off and removes it (or, if the farm had machinery insurance on the day of the theft, starts the insurance claim, and the vehicle goes when it settles). Normally a 35% chance of recovery, 95% for a vehicle with FS25_AdvancedDamageSystem's anti-theft system fitted. |
 | `roadAccident` | `ours`, `theirs` | Who's to blame for the next road accident: `ours` (a claim through public liability, a reputation hit and a morale knock for the driver), `theirs` (the other driver's insurer pays an estimated repair cost a month or two later). Normally rolled from the driver's tractor rating and the state of the machines. |
 | `sprayDrift` | `upheld`, `cleared` | The findings on the next spray drift complaint: `upheld` (the complainant's claim through public liability, a reputation hit and a morale knock for the operator), `cleared` (nothing else happens). Normally rolled from the operator's crop care and the wind. |
 | `poaching` | `stays`, `leaves` | What the next poached worker you do nothing about decides (matching the offer always keeps them): `stays` on the same pay, or `leaves`, handing in a month's notice. Normally they stay with a 5-25% chance, from their morale and their pay against what they expect. |

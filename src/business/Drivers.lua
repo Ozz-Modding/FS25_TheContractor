@@ -342,7 +342,8 @@ function TheContractorDrivers:getAssignError(farmId, workerId, vehicle)
         return "tc_drivers_alreadyHasDriver"
     end
     local worker = g_currentMission.TheContractor.Staff:getWorker(farmId, workerId)
-    if worker == nil or not worker:isIdle() then
+    -- 097: and not gone home.
+    if worker == nil or not TheContractorWorkingHours.isAvailable(worker) then
         return "tc_drivers_workerUnavailable"
     end
     return nil

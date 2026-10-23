@@ -38,6 +38,7 @@ local function setup()
     world:load("src/business/Worker.lua")
     world:load("src/business/Staff.lua")
     world:load("src/business/Office.lua")
+    world:load("src/business/WorkingHours.lua")
     world:load("src/business/Training.lua")
     world:load("src/util/TCADSWorkshop.lua")
 
@@ -104,7 +105,7 @@ local function setup()
         world.balance = world.balance + amount
         table.insert(world.money, { amount = amount, farmId = farmId, moneyType = moneyType })
     end
-    g_currentMission.environment = { currentMonotonicDay = 10, daysPerPeriod = 28 }
+    g_currentMission.environment = { currentMonotonicDay = 10, daysPerPeriod = 28, dayTime = 12 * 3600000 }
     g_server = {
         broadcastEvent = function(_, event)
             table.insert(world.broadcasts, event)

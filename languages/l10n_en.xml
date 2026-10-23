@@ -540,6 +540,20 @@
 		<text name="tc_staff_detailRetiringDue" text="As soon as they're back"/>
 		<text name="tc_staff_status_holiday" text="Holiday"/>
 		<text name="tc_staff_status_training" text="Training"/>
+		<text name="tc_staff_status_atHome" text="At home"/>
+		<text name="tc_staff_status_comingIn" text="On the way in"/>
+		<text name="tc_staff_status_stayingLate" text="Staying late"/>
+		<text name="tc_hours_driversAllHome" text="Everyone free has gone home for the day. Ask someone to stay late, or call them back in, from Manage on the Staff tab."/>
+		<text name="tc_hours_detailOvertime" text="%s (+%s overtime this month)"/>
+		<text name="tc_hours_stayLateButton" text="Stay late"/>
+		<text name="tc_hours_stayLongerButton" text="Stay longer"/>
+		<text name="tc_hours_callBackButton" text="Call back in"/>
+		<text name="tc_hours_sendHomeButton" text="Send home"/>
+		<text name="tc_hours_stayLateTitle" text="Stay late"/>
+		<text name="tc_hours_callBackTitle" text="Call back in"/>
+		<text name="tc_hours_untilOption" text="Until %s (about %s overtime)"/>
+		<text name="tc_hours_stayLatePrompt" text="Ask %s to stay on after %s? They're paid overtime for every hour they stay, whether you give them work or not. If they're on a job when the time comes, they finish it."/>
+		<text name="tc_hours_callBackPrompt" text="Call %s back in? They'll be in %d minutes after you call, and are paid overtime from the call until they finish."/>
 		<text name="tc_staff_detailHolidayLeft" text="%d day(s) this year"/>
 		<text name="tc_staff_detailHolidayBooked" text="Booked: %s"/>
 		<text name="tc_staff_detailHolidayNow" text="On holiday now: %s"/>
@@ -681,6 +695,10 @@
 		<text name="tc_theft_lostBody" text="The police have closed their enquiries into the theft of your %s (crime reference %s) without finding it. It's gone for good and has been taken off your fleet."/>
 		<text name="tc_theft_lostNotice" text="%s not found: written off"/>
 		<text name="tc_theft_lostBodyInsured" text="The police have closed their enquiries into the theft of your %s (crime reference %s) without finding it. It's gone for good, but it was insured on the day it was taken, so you can claim for it."/>
+		<text name="tc_theft_stolenBodyTracker" text="Your %s has been stolen. It's been reported to the police under crime reference %s. Its anti-theft system is sending them its position, so there's a good chance they'll find it. You'll hear back once they've finished their enquiries."/>
+		<text name="tc_theft_recoveredBodyTracker" text="Good news: the police followed your %s's anti-theft tracker and found it (crime reference %s). It's been knocked about and needs a wash, and it'll be back in your yard as soon as there's a free parking slot."/>
+		<text name="tc_theft_lostBodyTracker" text="The police have closed their enquiries into the theft of your %s (crime reference %s) without finding it. Its anti-theft tracker went dead soon after it was taken. It's gone for good and has been taken off your fleet."/>
+		<text name="tc_theft_lostBodyInsuredTracker" text="The police have closed their enquiries into the theft of your %s (crime reference %s) without finding it. Its anti-theft tracker went dead soon after it was taken. It's gone for good, but it was insured on the day it was taken, so you can claim for it."/>
 		<text name="tc_joyriders_eventName" text="Joyriders"/>
 		<text name="tc_joyriders_ownTitle" text="Joyriders on Field %s"/>
 		<text name="tc_joyriders_ownBody" text="Joyriders have been driving round your grass on Field %s and torn it up. It'll need plowing and sowing again."/>
@@ -788,6 +806,7 @@
 		<text name="tc_overheads_levelDetail_monthly" text="%s cover: %s a month."/>
 		<text name="tc_overhead_machineryInsurance" text="Machinery insurance"/>
 		<text name="tc_overhead_machineryInsurance_desc" text="Covers your machinery against theft. Basic pays 80%% of a lost vehicle's value less a %s excess, Standard pays 90%% of it less %s, Comprehensive its full value less %s and lends you a similar tractor while the claim settles. Priced at 1%%, 1.4%% or 1.8%% of your fleet's value a year, +35%% per claim in the last 3 years."/>
+		<text name="tc_overhead_machineryInsurance_desc_antiTheft" text="Covers your machinery against theft. Basic pays 80%% of a lost vehicle's value less a %s excess, Standard pays 90%% of it less %s, Comprehensive its full value less %s and lends you a similar tractor while the claim settles. Priced at 1%%, 1.4%% or 1.8%% of your fleet's value a year, +35%% per claim in the last 3 years. A vehicle with an anti-theft system fitted in the workshop costs 15%% less to cover."/>
 		<text name="tc_insurance_level_basic" text="Basic"/>
 		<text name="tc_insurance_level_standard" text="Standard"/>
 		<text name="tc_insurance_level_comprehensive" text="Comprehensive"/>
@@ -856,6 +875,7 @@
 		<text name="tc_office_status_vacant" text="Vacant"/>
 		<text name="tc_office_status_available" text="In the office"/>
 		<text name="tc_office_status_training" text="Training"/>
+		<text name="tc_office_status_atHome" text="At home"/>
 		<text name="tc_office_detailRole" text="Role"/>
 		<text name="tc_office_detailLevel" text="Level"/>
 		<text name="tc_office_detailSince" text="Employed since"/>

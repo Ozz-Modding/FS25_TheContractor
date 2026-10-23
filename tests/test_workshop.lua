@@ -27,6 +27,9 @@ local function setup()
     world:load("src/business/Workshop.lua")
     world:load("src/util/TCADSWorkshop.lua")
     world:load("src/util/TCConsole.lua")
+    world:load("src/business/WorkingHours.lua")
+    -- 097: midday, so idle workers are at work.
+    g_currentMission.environment = { currentMonotonicDay = 1, dayTime = 12 * 3600000, daysPerPeriod = 1 }
 
     world.adsOn = true
     world.refreshes = {}

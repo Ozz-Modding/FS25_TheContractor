@@ -14,6 +14,8 @@
 --                                                  -- claimCount, loadingPercent for the renewal notice (052)
 --       descriptionAmounts = { 800, 60 },          -- optional: 1x UK money for the description's %s,
 --                                                  -- in order, scaled and formatted in the player's currency
+--       getDescriptionKey = function() ... end,    -- optional (096): the description's l10n key,
+--                                                  -- instead of "<l10nKey>_desc"
 --       unscaled = true,                           -- optional: annualCost is already a game price
 --                                                  -- (a share of vehicle values, say), not 1x UK
 --       levels = {                                 -- optional (070): levels of cover, each with its
