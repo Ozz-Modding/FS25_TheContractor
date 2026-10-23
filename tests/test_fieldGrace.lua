@@ -141,6 +141,7 @@ local function fakeCompletion(world, tc)
     tc.Finances = { invoiceJob = function() end }
     tc.Reputation = { addReputation = function() end }
     tc.Claims = { rollForJob = function() end }
+    tc.Inbox = { removeMessagesForJob = function() end }
     tc.Dispatch = { stopJob = function() end }
     tc.Cooldown = { startCooldown = function() end }
     tc.Logbook = { recordJobCompleted = function() end }

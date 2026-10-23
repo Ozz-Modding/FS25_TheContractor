@@ -80,7 +80,7 @@ test("display: ADS's own text, a word before a complete inspection", function()
     assertEquals(TCVehicleCondition.formatKnownCondition(partial), "Good")
     local complete = TCVehicleCondition.capture(adsVehicle({ known = 0.8, isExact = true }))
     assertEquals(TCVehicleCondition.formatKnownCondition(complete), "80%")
-    assertEquals(TCVehicleCondition.getHeadline(complete), "Cond. 80%")
+    assertEquals(TCVehicleCondition.getHeadline(complete), "80%")
 end)
 
 test("display: never inspected is ADS's unknown, and the chip's neutral", function()
@@ -99,6 +99,7 @@ test("display: an outdated inspection is marked", function()
     setup()
     local snapshot = TCVehicleCondition.capture(adsVehicle({ known = 0.8, isExact = true, isStale = true }))
     assertEquals(TCVehicleCondition.formatKnownCondition(snapshot), "80% (outdated)")
+    assertEquals(TCVehicleCondition.getHeadline(snapshot), "80%", "the chip has no room for it")
 end)
 
 test("display without ADS on this machine: a percentage only if exact", function()
@@ -140,14 +141,19 @@ test("change rows: one condition unless inspected in between, and faults found",
     assertEquals(TCVehicleCondition.getChangeRows(before, after)[1].value, "Good to 80%")
 end)
 
-test("state rows list the known faults only", function()
+test("known faults are listed by name, hidden ones left out; none for vanilla", function()
     setup()
-    local rows = TCVehicleCondition.getStateRows(TCVehicleCondition.capture(adsVehicle({ known = 0.8, breakdowns = {
+    local snapshot = TCVehicleCondition.capture(adsVehicle({ known = 0.8, breakdowns = {
         HYDRAULIC_LEAK = { isVisible = true },
+        ENGINE_KNOCK = { isVisible = true },
         BEARING_WEAR = { isVisible = false },
-    } })))
-    assertEquals(rows[3].label, "Known faults")
-    assertEquals(rows[3].value, "Hydraulic leak")
+    } }))
+    local names = TCVehicleCondition.getKnownFaultNames(snapshot)
+    assertEquals(#names, 2)
+    assertEquals(names[1], "Engine knock")
+    assertEquals(names[2], "Hydraulic leak")
+    assertEquals(#TCVehicleCondition.getStateRows(snapshot), 2, "condition and paint wear")
+    assertEquals(TCVehicleCondition.getKnownFaultNames({ model = MODEL().VANILLA, damage = 0 }), nil)
 end)
 
 test("wear cost is 0 for ADS until it has a repair cost function", function()

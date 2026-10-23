@@ -321,8 +321,8 @@
 		<text name="tc_staff_columnADS" text="ADS"/>
 		<text name="tc_staff_adsYes" text="Yes"/>
 		<text name="tc_staff_workshopHeading" text="Workshop"/>
-		<text name="tc_staff_workshopNoteTicked" text="Works in the workshop as %s when not on a job."/>
-		<text name="tc_staff_workshopNoteNotTicked" text="Not working in the workshop. Use Manage to send them there."/>
+		<text name="tc_staff_workshopAssigned" text="Assigned"/>
+		<text name="tc_staff_workshopNotAssigned" text="Not assigned"/>
 		<text name="tc_staff_workshopButton" text="Work in the workshop as %s"/>
 		<text name="tc_staff_workshopReplaceButton" text="Work in the workshop as %s (instead of %s)"/>
 		<text name="tc_staff_workshopStopButton" text="Stop working in the workshop"/>
@@ -336,8 +336,6 @@
 		<text name="tc_workshop_courseConfirmTicked" text="While they're on it, the workshop's %s work waits for them."/>
 		<text name="tc_workshop_courseBooked" text="%s is booked on a %s course: %s"/>
 		<text name="tc_workshop_courseDone" text="%s finished their course and is now a level %d %s"/>
-		<text name="tc_workshop_noteNeedsPartsStorage" text="Your workshop has no parts storage, so they can't work there as storekeeper until you add one."/>
-		<text name="tc_workshop_noteCourse" text="On a %s course: %s."/>
 		<text name="tc_allocation_workshopNote" text="%s works in your workshop as %s: the workshop's %s work waits until they're back."/>
 		<text name="tc_staff_columnSalary" text="Salary"/>
 		<text name="tc_staff_rosterEmpty" text="No workers hired yet — switch to the Candidates view to hire your first worker."/>
@@ -1054,7 +1052,6 @@
 		<text name="tc_logbook_conditionOutdated" text="%s (outdated)"/>
 		<text name="tc_logbook_unknown" text="Unknown"/>
 		<text name="tc_logbook_activeFaults" text="Known faults"/>
-		<text name="tc_logbook_conditionShort" text="Cond. %s"/>
 		<text name="tc_logbook_damageShort" text="Damage %s"/>
 		<text name="tc_logbook_faultChip" text="Fault"/>
 		<text name="tc_logbook_faultShort" text="Fault"/>

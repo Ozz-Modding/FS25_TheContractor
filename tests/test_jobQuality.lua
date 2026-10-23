@@ -245,6 +245,7 @@ test("completeJob scores quality before the reward, so a poor job loses reputati
         end,
     }
     tc.Claims = { rollForJob = function() end }
+    tc.Inbox = { removeMessagesForJob = function() end }
     tc.Dispatch = { stopJob = function() end }
     tc.Cooldown = { startCooldown = function() end }
     tc.Logbook = { recordJobCompleted = function() end }
