@@ -178,9 +178,10 @@ end
 -- The condition the player knows, as ADS's own workshop shows it
 -- (ADS_Utils.formatCondition): a percentage after a complete inspection,
 -- else a word ("Good"), or "Unknown" if it's never been inspected, marked
--- outdated once the vehicle has run a while since. Without ADS on this
--- machine: the percentage after a complete inspection, else "Unknown".
-function TCVehicleCondition.formatKnownCondition(snapshot)
+-- outdated once the vehicle has run a while since (unless noOutdated).
+-- Without ADS on this machine: the percentage after a complete inspection,
+-- else "Unknown".
+function TCVehicleCondition.formatKnownCondition(snapshot, noOutdated)
     local env = getADSEnv()
     local utils = env ~= nil and env.ADS_Utils or nil
     local text
@@ -191,21 +192,21 @@ function TCVehicleCondition.formatKnownCondition(snapshot)
     else
         text = g_i18n:getText("tc_logbook_unknown")
     end
-    if snapshot.knownCondition ~= nil and snapshot.conditionStale then
+    if snapshot.knownCondition ~= nil and snapshot.conditionStale and not noOutdated then
         text = string.format(g_i18n:getText("tc_logbook_conditionOutdated"), text)
     end
     return text
 end
 
 -- The headline figure for a list chip or summary: damage for vanilla,
--- the known condition for ADS.
+-- the known condition for ADS, as ADS words it ("Normal") and without the
+-- outdated mark, to fit a chip.
 function TCVehicleCondition.getHeadline(snapshot)
     if snapshot == nil then
         return nil
     end
     if snapshot.model == TCVehicleCondition.MODEL.ADS then
-        return string.format(g_i18n:getText("tc_logbook_conditionShort"),
-            TCVehicleCondition.formatKnownCondition(snapshot))
+        return TCVehicleCondition.formatKnownCondition(snapshot, true)
     end
     return string.format(g_i18n:getText("tc_logbook_damageShort"), percent(snapshot.damage))
 end
@@ -263,8 +264,20 @@ function TCVehicleCondition.getDeltas(before, after)
     return damage, (after.wear or 0) - (before.wear or 0)
 end
 
--- Label/value rows for one snapshot on its own (a vehicle as it is now),
--- with every fault found listed for ADS.
+-- The names of the faults found, for an ADS snapshot; nil for vanilla.
+function TCVehicleCondition.getKnownFaultNames(snapshot)
+    if snapshot == nil or snapshot.model ~= TCVehicleCondition.MODEL.ADS then
+        return nil
+    end
+    local names = {}
+    for _, fault in ipairs(snapshot.faults or {}) do
+        table.insert(names, TCVehicleCondition.getFaultName(fault.id))
+    end
+    return names
+end
+
+-- Label/value rows for one snapshot on its own (a vehicle as it is now).
+-- ADS's known faults aren't here: getKnownFaultNames lists them.
 function TCVehicleCondition.getStateRows(snapshot)
     if snapshot == nil then
         return {}
@@ -277,15 +290,6 @@ function TCVehicleCondition.getStateRows(snapshot)
         table.insert(rows, { label = g_i18n:getText("tc_logbook_damage"), value = percent(snapshot.damage) })
     end
     table.insert(rows, { label = g_i18n:getText("tc_logbook_paint"), value = percent(snapshot.wear) })
-    if snapshot.model == TCVehicleCondition.MODEL.ADS then
-        local faults = {}
-        for _, fault in ipairs(snapshot.faults or {}) do
-            table.insert(faults, TCVehicleCondition.getFaultName(fault.id))
-        end
-        table.insert(rows, { label = g_i18n:getText("tc_logbook_activeFaults"),
-            value = #faults > 0 and table.concat(faults, ", ") or g_i18n:getText("tc_logbook_none"),
-            tone = #faults > 0 and "bad" or nil })
-    end
     return rows
 end
 

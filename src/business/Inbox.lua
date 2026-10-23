@@ -12,6 +12,7 @@
 --                                                                 -- text for a Yes/No first, or nil
 --       getArgs = function(message) ... end,                      -- optional, client: the args to
 --                                                                 -- render with, worked out live
+--       endsWithJob = true,                                       -- optional: see below
 --   })
 --   local id = tc.Inbox:postMessage(farmId, "certRequest", titleKey, bodyKey,
 --       args, actions, payload, expiresInDays)                    -- server only
@@ -32,6 +33,11 @@
 -- payload hold plain values only (numbers, strings, booleans) - never a
 -- node (see src/events/README.md). A message with no actions gets a single
 -- Dismiss. Ids are unique across all farms.
+--
+-- A kind with endsWithJob (072's joyriders, 075's fly-tipping) posts offers
+-- of a job, named by payload.jobId: such a message expires with the job's
+-- deadline, and goes as soon as the job's over (declined or lapsed,
+-- completed, missed, or gone).
 
 TheContractorInbox = {}
 TheContractorInbox_mt = Class(TheContractorInbox)
@@ -179,12 +185,16 @@ function TheContractorInbox:postMessage(farmId, kind, titleKey, bodyKey, args, a
     end
 
     local today = g_currentMission.environment.currentMonotonicDay
+    local expiresDay = expiresInDays ~= nil and today + math.max(1, math.floor(expiresInDays)) or nil
+    if expiresDay == nil then
+        expiresDay = self:getJobExpiryDay(farmId, kind, payload)
+    end
     local message = {
         id = self.nextMessageId,
         farmId = farmId,
         kind = kind,
         createdDay = today,
-        expiresDay = expiresInDays ~= nil and today + math.max(1, math.floor(expiresInDays)) or nil,
+        expiresDay = expiresDay,
         titleKey = titleKey,
         bodyKey = bodyKey,
         args = args or {},
@@ -201,6 +211,62 @@ function TheContractorInbox:postMessage(farmId, kind, titleKey, bodyKey, args, a
         message.expiresDay ~= nil and ("expires day " .. message.expiresDay) or "no expiry")
 
     return message.id
+end
+
+-- Job-linked messages (endsWithJob, server) -------------------------------------
+
+local function isJobOver(job)
+    return job == nil or job.state == TheContractorJob.STATE.DECLINED or
+        job.state == TheContractorJob.STATE.COMPLETED or job.state == TheContractorJob.STATE.MISSED
+end
+
+-- The job an endsWithJob message offers, or nil (another kind, or none named).
+function TheContractorInbox:getMessageJobId(kind, payload)
+    local definition = self.kinds[kind]
+    if definition == nil or not definition.endsWithJob or payload == nil then
+        return nil
+    end
+    return payload.jobId
+end
+
+-- An offer lapses the day after its job's deadline (Jobs:onDayChanged).
+function TheContractorInbox:getJobExpiryDay(farmId, kind, payload)
+    local jobId = self:getMessageJobId(kind, payload)
+    if jobId == nil then
+        return nil
+    end
+    local job = g_currentMission.TheContractor.Jobs:getJob(farmId, jobId)
+    if job == nil or job.deadlineDay == nil then
+        return nil
+    end
+    return job.deadlineDay + 1
+end
+
+-- Server: the job's over, so its offer messages go.
+function TheContractorInbox:removeMessagesForJob(farmId, jobId)
+    for _, message in ipairs(self:getMessages(farmId)) do
+        if self:getMessageJobId(message.kind, message.payload) == jobId then
+            self:removeMessage(message.id)
+        end
+    end
+end
+
+-- Server, daily: catches any whose job ended without telling us (an older
+-- save's, from before endsWithJob).
+function TheContractorInbox:removeEndedJobMessages()
+    local jobs = g_currentMission.TheContractor.Jobs
+    local ended = {}
+    for _, message in pairs(self.messagesById) do
+        local jobId = self:getMessageJobId(message.kind, message.payload)
+        if jobId ~= nil and isJobOver(jobs:getJob(message.farmId, jobId)) then
+            table.insert(ended, message.id)
+        end
+    end
+    table.sort(ended)
+    for _, messageId in ipairs(ended) do
+        Logging.info("TheContractor: inbox message %d's job is over, removed", messageId)
+        self:removeMessage(messageId)
+    end
 end
 
 -- isNewArrival: false while replaying saved/initial state, so only a
@@ -299,6 +365,8 @@ function TheContractorInbox:onDayChanged()
         Logging.info("TheContractor: farm %d inbox message %d expired (%s)", message.farmId, message.id, message.kind)
         self:removeMessage(message.id)
     end
+
+    self:removeEndedJobMessages()
 end
 
 -- Plain values (args/payload) ---------------------------------------------------

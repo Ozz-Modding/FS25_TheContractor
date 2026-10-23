@@ -322,6 +322,7 @@ end
 -- goes - the farmer has found someone else.
 function TheContractorJobs:onJobDeclined(job)
     TCFieldPreparation.clearUpAfterJob(job)
+    g_currentMission.TheContractor.Inbox:removeMessagesForJob(job.farmId, job.id)
 end
 
 -- Server-only, for the tcJob state console command: like
@@ -573,6 +574,7 @@ function TheContractorJobs:missJob(job)
     if wasAllocated then
         self:releaseMissedJobResources(job)
     end
+    g_currentMission.TheContractor.Inbox:removeMessagesForJob(job.farmId, job.id)
 
     TCJobMissedEvent.showNotification(job.farmId, job.jobType, job.fieldId)
 
@@ -1145,6 +1147,7 @@ function TheContractorJobs:completeJob(job, isForced)
         TCFieldPreparation.clearUpAfterJob(job)
     end
     self:setJobSupplyStatus(job, nil, nil)
+    g_currentMission.TheContractor.Inbox:removeMessagesForJob(job.farmId, job.id)
 
     Logging.info("TheContractor: farm %d job %d completed (%s, field %d) - billed %.0f, %+d reputation, %s taken, %.0f l fuel (%.0f), quality %d",
         job.farmId, job.id, job.jobType, job.fieldId, job.paymentAmount, reputationReward,

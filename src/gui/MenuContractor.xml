@@ -460,7 +460,7 @@
             <GuiElement id="staffDetailsBox" position="680px -20px">
                 <!-- 091: taller while it has the Workshop section (only one shows). -->
                 <RoundCorner profile="tc_panel" id="staffPanelBg" position="0px 0px" size="800px 610px"/>
-                <RoundCorner profile="tc_panel" id="staffPanelBgTall" position="0px 0px" size="800px 700px"/>
+                <RoundCorner profile="tc_panel" id="staffPanelBgTall" position="0px 0px" size="800px 724px"/>
                 <Text profile="tc_panelHeading" id="staffDetailTitle" text="" position="24px -16px" size="752px 32px"/>
                 <Bitmap profile="tc_divider" position="24px -56px" size="752px 1px"/>
 
@@ -559,19 +559,20 @@
                 <Text profile="tc_chipText" id="staffDetailCertChipText" position="24px -568px" size="180px 22px"/>
                 <Text profile="tc_panelNote" id="staffDetailCertNote" text="" position="214px -568px" size="562px 24px"/>
 
-                <!-- 091: ADS workshop skills, one chip per trade, and whether they work there. Only while ADS takes our staff. -->
+                <!-- 091: ADS workshop skills: whether they work there, then one chip per trade. Only while ADS takes our staff. -->
                 <GuiElement id="staffWorkshopSection" position="0px 0px">
                     <Text profile="tc_sectionTitle" text="$l10n_tc_staff_workshopHeading" position="24px -604px" size="752px 24px"/>
                     <Bitmap profile="tc_divider" position="24px -632px" size="752px 1px"/>
-                    <RoundCorner profile="tc_chip" id="staffWorkshopChip1" position="24px -646px" size="120px 22px"/>
-                    <Text profile="tc_chipText" id="staffWorkshopChipText1" position="24px -646px" size="120px 22px"/>
-                    <RoundCorner profile="tc_chip" id="staffWorkshopChip2" position="152px -646px" size="120px 22px"/>
-                    <Text profile="tc_chipText" id="staffWorkshopChipText2" position="152px -646px" size="120px 22px"/>
-                    <RoundCorner profile="tc_chip" id="staffWorkshopChip3" position="280px -646px" size="120px 22px"/>
-                    <Text profile="tc_chipText" id="staffWorkshopChipText3" position="280px -646px" size="120px 22px"/>
-                    <RoundCorner profile="tc_chip" id="staffWorkshopChip4" position="408px -646px" size="120px 22px"/>
-                    <Text profile="tc_chipText" id="staffWorkshopChipText4" position="408px -646px" size="120px 22px"/>
-                    <Text profile="tc_panelNote" id="staffWorkshopNote" text="" position="540px -642px" size="236px 44px" textMaxNumLines="2"/>
+                    <RoundCorner profile="tc_chip" id="staffWorkshopChip1" position="24px -678px" size="120px 22px"/>
+                    <Text profile="tc_chipText" id="staffWorkshopChipText1" position="24px -678px" size="120px 22px"/>
+                    <RoundCorner profile="tc_chip" id="staffWorkshopChip2" position="152px -678px" size="120px 22px"/>
+                    <Text profile="tc_chipText" id="staffWorkshopChipText2" position="152px -678px" size="120px 22px"/>
+                    <RoundCorner profile="tc_chip" id="staffWorkshopChip3" position="280px -678px" size="120px 22px"/>
+                    <Text profile="tc_chipText" id="staffWorkshopChipText3" position="280px -678px" size="120px 22px"/>
+                    <RoundCorner profile="tc_chip" id="staffWorkshopChip4" position="408px -678px" size="120px 22px"/>
+                    <Text profile="tc_chipText" id="staffWorkshopChipText4" position="408px -678px" size="120px 22px"/>
+                    <RoundCorner profile="tc_chip" id="staffWorkshopAssignedChip" position="24px -646px" size="120px 22px"/>
+                    <Text profile="tc_chipText" id="staffWorkshopAssignedChipText" position="24px -646px" size="120px 22px"/>
                 </GuiElement>
 
             </GuiElement>

@@ -1432,7 +1432,7 @@ function MenuContractor:updateStaffDetails()
 end
 
 -- 091: ADS workshop skills, one chip per trade ("Mechanic 2", "Bodyworker -"),
--- green for the one they're ticked into, and a note saying whether they
+-- green for the one they're ticked into, and a chip saying whether they
 -- work there. The section (and the taller panel) only while ADS takes our
 -- staff.
 function MenuContractor:updateWorkshopDetails(worker, isRoster)
@@ -1456,25 +1456,17 @@ function MenuContractor:updateWorkshopDetails(worker, isRoster)
             string.format("%s %s", TheContractorWorkshop.getRoleName(role), level > 0 and tostring(level) or "-"), tone)
     end
 
-    -- Roster only, and only with skills (the chips already say when there
-    -- are none): whether they work there. A booked trade course (092) comes
-    -- first, since the note has room for one line of news.
-    local note = ""
-    local courseRole = TheContractorWorkshop.getCourseRole(worker.trainingCert)
-    if isRoster and courseRole ~= nil then
-        note = string.format(g_i18n:getText("tc_workshop_noteCourse"),
-            TheContractorWorkshop.getCourseName(worker, courseRole), TheContractorTraining.formatCourseDates(worker) or "")
-    elseif isRoster and worker.workshopRole ~= nil and TheContractorWorkshop.NEEDS_PARTS_STORAGE[worker.workshopRole] and
-            TCADSWorkshop.hasPartsStorage(worker.farmId) == false then
-        -- 098: ADS ignores a storekeeper without it.
-        note = g_i18n:getText("tc_workshop_noteNeedsPartsStorage")
-    elseif isRoster and worker.workshopRole ~= nil then
-        note = string.format(g_i18n:getText("tc_staff_workshopNoteTicked"),
-            string.lower(TheContractorWorkshop.getRoleName(worker.workshopRole)))
+    -- Roster only, and only with skills (the trade chips already say when
+    -- there are none).
+    local assigned
+    if isRoster and worker.workshopRole ~= nil then
+        assigned = "good"
     elseif isRoster and TheContractorWorkshop.hasSkills(worker) then
-        note = g_i18n:getText("tc_staff_workshopNoteNotTicked")
+        assigned = "neutral"
     end
-    self.staffWorkshopNote:setText(note)
+    setChip(self.staffWorkshopAssignedChip, self.staffWorkshopAssignedChipText, assigned ~= nil and
+        g_i18n:getText(assigned == "good" and "tc_staff_workshopAssigned" or "tc_staff_workshopNotAssigned") or nil,
+        assigned)
 end
 
 -- 054: the spraying certificate's chip - certified, in training or not -
@@ -5048,12 +5040,9 @@ local function getCrewName(member)
     return g_i18n:getText("tc_calendar_formerWorker")
 end
 
+-- The jobs list's crew column: just how many (the details name them).
 local function getCrewText(entry)
-    local names = {}
-    for _, member in ipairs(entry.crew) do
-        table.insert(names, getCrewName(member))
-    end
-    return #names > 0 and table.concat(names, ", ") or "-"
+    return #entry.crew > 0 and tostring(#entry.crew) or "-"
 end
 
 -- Who a vehicle history entry was: the driver, "Stolen" for a theft (069),
@@ -5598,6 +5587,19 @@ function MenuContractor:getLogbookVehicleRows(vehicleRow)
     local fuel = getFuelText(vehicleRow.vehicle)
     if fuel ~= nil then
         row(text("tc_logbook_fuel"), fuel)
+    end
+
+    -- 099: an ADS vehicle's known faults, one row each, so a long list
+    -- isn't cut off.
+    local faultNames = TCVehicleCondition.getKnownFaultNames(snapshot)
+    if faultNames ~= nil then
+        section("tc_logbook_activeFaults")
+        for _, name in ipairs(faultNames) do
+            row(name, "", text("tc_logbook_faultShort"), "bad")
+        end
+        if #faultNames == 0 then
+            row(text("tc_logbook_none"), "")
+        end
     end
 
     section("tc_logbook_sectionYear")
