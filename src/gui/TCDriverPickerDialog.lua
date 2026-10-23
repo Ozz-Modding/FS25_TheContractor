@@ -1,4 +1,4 @@
--- Staff driver picker (037): opened instead of an AutoDrive/Courseplay
+-- Staff driver picker (037): opened instead of an AutoDrive/Courseplay/Follow Me
 -- start while the farm has a company and the vehicle has no driver yet
 -- (TheContractorDrivers:gateClientStart). Lists the farm's idle workers;
 -- Assign and Back sit in the dialog's button bar and act on the

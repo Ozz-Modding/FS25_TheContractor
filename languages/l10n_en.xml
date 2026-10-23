@@ -366,9 +366,9 @@
 		<text name="tc_drivers_picker_columnSpeed" text="Speed"/>
 		<text name="tc_drivers_picker_columnTiers" text="Tractors (S/M/L) / skill"/>
 		<text name="tc_drivers_picker_assign" text="Assign"/>
-		<text name="tc_drivers_noIdleStaff" text="None of your staff are free to drive. Your company's vehicles need a staff driver for AI helpers, AutoDrive and Courseplay."/>
-		<text name="tc_drivers_contractorEquipmentDialog" text="This vehicle is out on a contract job, so AI helpers, AutoDrive and Courseplay can't drive it."/>
-		<text name="tc_drivers_contractorEquipment" text="%s is out on a contract job, so AI helpers, AutoDrive and Courseplay can't drive it."/>
+		<text name="tc_drivers_noIdleStaff" text="None of your staff are free to drive. Your company's vehicles need a staff driver for AI helpers, AutoDrive, Courseplay and Follow Me."/>
+		<text name="tc_drivers_contractorEquipmentDialog" text="This vehicle is out on a contract job, so AI helpers, AutoDrive, Courseplay and Follow Me can't drive it."/>
+		<text name="tc_drivers_contractorEquipment" text="%s is out on a contract job, so AI helpers, AutoDrive, Courseplay and Follow Me can't drive it."/>
 		<text name="tc_drivers_stoppedNoDriver" text="%s stopped: your company's vehicles need a staff driver. Start it again to pick one."/>
 		<text name="tc_drivers_notYourVehicle" text="Couldn't assign a driver to %s: it isn't your farm's vehicle."/>
 		<text name="tc_drivers_noCompany" text="Couldn't assign a driver to %s: you don't have a company."/>
