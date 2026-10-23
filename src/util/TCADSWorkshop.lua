@@ -15,7 +15,7 @@
 -- The entry points are looked up once per loadMap (detect), the
 -- TCADSStock way: anything missing or a different API version leaves us
 -- disconnected, with one warning. Checked against FS25_AdvancedDamageSystem
--- 0.10.0.6 (commit df79625).
+-- 0.10.0.6 (commit 2901e04).
 
 TCADSWorkshop = {}
 
@@ -139,11 +139,16 @@ function TCADSWorkshop.buildAssignments(members, workers)
     for _, member in ipairs(members) do
         local definition = TheContractorOffice.getDefinition(member.role)
         if definition ~= nil and definition.adsRole ~= nil then
+            -- 097: ADS has no "at home"; it's away all the same.
+            local status = TheContractorOffice.getStatus(member)
+            if status == TheContractorOffice.STATUS.AT_HOME then
+                status = TheContractorWorkshop.ADS_STATUS.UNAVAILABLE
+            end
             assignments[definition.adsRole] = {
                 id = member.id,
                 name = member.name,
                 level = member.level,
-                status = TheContractorOffice.getStatus(member),
+                status = status,
             }
         end
     end
@@ -151,7 +156,8 @@ function TCADSWorkshop.buildAssignments(members, workers)
 end
 
 -- ADS's workshop card's "Hire"/"Manage employee" (local client): the
--- Staff tab, on that role's row.
+-- Staff tab, on that role's row. Its management summary's "Contractor
+-- staff" button passes no role or worker: the roster, nothing selected.
 function TCADSWorkshop.openStaffMenu(farmId, adsRole, workerId)
     local tc = g_currentMission ~= nil and g_currentMission.TheContractor or nil
     local menu = tc ~= nil and tc.MenuContractor or nil

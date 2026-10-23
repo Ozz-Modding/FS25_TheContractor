@@ -26,6 +26,7 @@ local function setup()
         plannedDaysPerPeriod = 10,
         currentMonotonicDay = 100,
         currentHour = 0,
+        dayTime = 12 * 3600000,
     }
     g_farmManager.getFarmById = function(_, farmId)
         return { farmId = farmId }
@@ -46,6 +47,7 @@ local function setup()
     world:load("src/business/Morale.lua")
     world:load("src/business/PayReviews.lua")
     world:load("src/business/Poaching.lua")
+    world:load("src/business/WorkingHours.lua")
 
     TheContractorPayReviews.getMarketValue = function(worker)
         return worker.marketValue
@@ -79,6 +81,7 @@ local function setup()
     tc.Company = { companyNames = { [1] = "Test Contracting" } }
     tc.Staff = setmetatable({ workersByFarm = {}, candidatePool = {} }, TheContractorStaff_mt)
     tc.PayReviews = TheContractorPayReviews.new()
+    tc.WorkingHours = TheContractorWorkingHours.new()
     tc.Notices = {
         publish = function() return 1 end,
         remove = function() end,

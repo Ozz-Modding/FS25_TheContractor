@@ -149,7 +149,7 @@ local function setup(daysPerPeriod)
     tc.Theft = TheContractorTheft.new()
     tc.Theft:register(tc.RandomEvents, tc.Inbox, tc.MachineryInsurance)
 
-    -- def: { name, value, farmId, propertyState, drivable (default true), isPallet }
+    -- def: { name, value, farmId, propertyState, drivable (default true), isPallet, antiTheft (096) }
     function world:addMachine(def)
         local vehicle = self:addVehicle({ name = def.name, farmId = def.farmId })
         vehicle.spec_drivable = def.drivable ~= false and {} or nil
@@ -165,6 +165,9 @@ local function setup(daysPerPeriod)
         function vehicle:getAttachedImplements() return self.implements end
         function vehicle:getAttacherVehicle() return nil end
         function vehicle:delete() self.isDeleted = true end
+        if def.antiTheft then
+            function vehicle:hasBreakdown(id) return id == "ANTI_THEFT_SYSTEM" end
+        end
         return vehicle
     end
 
@@ -528,4 +531,38 @@ test("tcFinance insurance lists the cover, premiums and open claims", function()
     assertTrue(text:find("insured, standard cover", 1, true) ~= nil, "cover: " .. text)
     assertTrue(text:find("comprehensive: 0 a year", 1, true) ~= nil, "premiums (the stolen tractor's gone): " .. text)
     assertTrue(text:find("waiting to be submitted", 1, true) ~= nil, "open claim: " .. text)
+end)
+
+test("096: a vehicle with an anti-theft system is 15% cheaper to cover", function()
+    local world, tc = setup()
+    world:addMachine({ name = "Tractor", value = 100000, antiTheft = true })
+    world:addMachine({ name = "Loader", value = 50000 })
+    local insurance = tc.MachineryInsurance
+    local definition = tc.Overheads:getDefinition("machineryInsurance")
+
+    local total, insured, fitted = insurance:getFleetValue(1)
+    assertEquals(total, 150000, "real value")
+    assertNear(insured, 135000, 1e-6, "priced value")
+    assertEquals(fitted, 1, "one fitted")
+    assertNear(tc.Overheads:getAnnualCost(1, definition, "basic"), 1350, 1e-6, "basic 1% of the priced value")
+
+    TCConsole.reset()
+    TheContractorMachineryInsurance.registerConsoleCommands()
+    local text = TCConsole.dispatch(TCConsole.groups.finance, { "insurance" })
+    assertTrue(text:find("Fleet value 150000", 1, true) ~= nil, "console fleet value: " .. text)
+    assertTrue(text:find("1 vehicle(s) with an anti-theft system: priced on 135000 (15% off theirs)", 1, true) ~= nil,
+        "console: " .. text)
+end)
+
+test("096: the discount is only described where ADS can fit the system", function()
+    local _, tc = setup()
+    local definition = tc.Overheads:getDefinition("machineryInsurance")
+    assertEquals(definition.getDescriptionKey(), "tc_overhead_machineryInsurance_desc", "no ADS")
+    g_modIsLoaded = { FS25_AdvancedDamageSystem = true }
+    local key = definition.getDescriptionKey()
+    g_modIsLoaded = nil
+    assertEquals(key, "tc_overhead_machineryInsurance_desc_antiTheft", "ADS")
+    local text = string.format(g_i18n:getText(key), "a", "b", "c")
+    local percent = math.floor(TheContractorMachineryInsurance.ANTI_THEFT_DISCOUNT * 100 + 0.5)
+    assertTrue(text:find(percent .. "% less", 1, true) ~= nil, "the text's figure matches the constant: " .. text)
 end)

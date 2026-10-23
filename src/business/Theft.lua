@@ -19,13 +19,18 @@
 -- nor is anything hitched to it. Weighted by store category toward what
 -- really gets stolen (CATEGORY_WEIGHTS).
 --
+-- 096: a vehicle with FS25_AdvancedDamageSystem's anti-theft system fitted
+-- (hasAntiTheft) counts ANTI_THEFT_WEIGHT of its weight, and of a vehicle
+-- in the fleet factor, and is recovered at ANTI_THEFT_RECOVERY_CHANCE.
+-- Whether it had one is judged on the day of the theft (data.antiTheft).
+--
 -- The rate is per month (068): BASE_RATE_PER_PERIOD times a fleet factor
 -- from how many vehicles could be stolen, with a year's cooldown per farm.
 --
 -- State: none of its own. The incident's data (068, saved and synced) has
 -- the vehicle's object id, uniqueId (for the save), name, value and store
 -- item, copied at the theft so later messages (and 070's claim) don't need
--- the vehicle, plus coverLevel (070, "" when uninsured). Every machine reads the stolen vehicles off the open
+-- the vehicle, plus coverLevel (070, "" when uninsured) and antiTheft (096). Every machine reads the stolen vehicles off the open
 -- incidents (isStolen): TCVehicleLock locks them, allocation skips them and
 -- they can't be sold.
 
@@ -49,6 +54,14 @@ TheContractorTheft.COOLDOWN_PERIODS = 12
 -- The police report comes back this many months after the theft.
 TheContractorTheft.POLICE_DELAY_PERIODS = { 0.1, 0.35 }
 TheContractorTheft.RECOVERY_CHANCE = 0.35
+
+-- 096: ADS's anti-theft system (an ADS workshop upgrade, only offered while
+-- this mod is loaded). ADS saves and syncs it as a vehicle state and gives
+-- it no effect of its own.
+TheContractorTheft.ANTI_THEFT_MOD = "FS25_AdvancedDamageSystem"
+TheContractorTheft.ANTI_THEFT_STATE = "ANTI_THEFT_SYSTEM"
+TheContractorTheft.ANTI_THEFT_WEIGHT = 0.1
+TheContractorTheft.ANTI_THEFT_RECOVERY_CHANCE = 0.95
 
 -- A recovered vehicle comes back with this much more damage (0-1, on top of
 -- what it had), and filthy.
@@ -231,6 +244,18 @@ if not Vehicle.tcTheftHooksInstalled and Vehicle.getCanBeSold ~= nil and Vehicle
     Vehicle.tcTheftHooksInstalled = true
 end
 
+-- 096: the vehicle has ADS's anti-theft system fitted. Every machine gets
+-- the same answer (ADS syncs it); without ADS, never.
+function TheContractorTheft.hasAntiTheft(vehicle)
+    return vehicle ~= nil and vehicle.hasBreakdown ~= nil and
+        vehicle:hasBreakdown(TheContractorTheft.ANTI_THEFT_STATE) == true
+end
+
+-- 096: ADS is loaded, so the anti-theft system can be fitted.
+function TheContractorTheft.isAntiTheftOffered()
+    return g_modIsLoaded ~= nil and g_modIsLoaded[TheContractorTheft.ANTI_THEFT_MOD] == true
+end
+
 -- Eligibility (server) ------------------------------------------------------------
 
 local function getLiveVehicle(vehicleId)
@@ -297,7 +322,9 @@ function TheContractorTheft.isInUse(vehicle)
     return g_currentMission.TheContractor.Drivers:hasDriver(vehicle)
 end
 
--- The farm's vehicles that could be stolen right now, each with its weight.
+-- The farm's vehicles that could be stolen right now, each with its weight
+-- and its share of a vehicle in the fleet factor (096: less with an
+-- anti-theft system).
 function TheContractorTheft:getEligibleVehicles(farmId)
     local result = {}
     local jobVehicleIds = TheContractorTheft.getJobVehicleIds()
@@ -309,12 +336,15 @@ function TheContractorTheft:getEligibleVehicles(farmId)
                 not TheContractorTheft.isInUse(vehicle) and not self:isChainBusy(getChain(vehicle), jobVehicleIds) then
             local categoryName = TCEquipmentClass.getCategory(vehicle)
             local weight = categoryName ~= nil and TheContractorTheft.CATEGORY_WEIGHTS[categoryName] or nil
-            table.insert(result, { vehicle = vehicle, weight = weight or TheContractorTheft.DEFAULT_WEIGHT })
+            local share = TheContractorTheft.hasAntiTheft(vehicle) and TheContractorTheft.ANTI_THEFT_WEIGHT or 1
+            table.insert(result, { vehicle = vehicle, weight = (weight or TheContractorTheft.DEFAULT_WEIGHT) * share,
+                share = share })
         end
     end
     return result
 end
 
+-- eligibleCount: vehicles, each counting its share (096).
 function TheContractorTheft.getFleetFactor(eligibleCount)
     return math.min(TheContractorTheft.FLEET_FACTOR_MAX,
         TheContractorTheft.FLEET_FACTOR_BASE + eligibleCount / TheContractorTheft.FLEET_FACTOR_DIVISOR)
@@ -322,9 +352,13 @@ end
 
 -- Expected thefts a month (068), nothing if there's nothing to steal.
 function TheContractorTheft:getRatePerPeriod(farmId)
-    local count = #self:getEligibleVehicles(farmId)
-    if count == 0 then
+    local eligible = self:getEligibleVehicles(farmId)
+    if #eligible == 0 then
         return 0
+    end
+    local count = 0
+    for _, candidate in ipairs(eligible) do
+        count = count + candidate.share
     end
     return TheContractorTheft.BASE_RATE_PER_PERIOD * TheContractorTheft.getFleetFactor(count)
 end
@@ -363,10 +397,17 @@ function TheContractorTheft:pickVehicle(farmId)
         storeItem = vehicle.configFileName or "",
         stolenDay = g_currentMission.environment.currentMonotonicDay,
         crimeReference = string.format("%02d/%05d", math.random(10, 99), math.random(0, 99999)),
+        antiTheft = TheContractorTheft.hasAntiTheft(vehicle),
     }
 end
 
 -- Stages (server) ------------------------------------------------------------------
+
+-- A message body, its "Tracker" variant if the vehicle had an anti-theft
+-- system (096).
+function TheContractorTheft.getBodyKey(bodyKey, data)
+    return data.antiTheft == true and bodyKey .. "Tracker" or bodyKey
+end
 
 function TheContractorTheft:onStolen(incident)
     local data = incident.data
@@ -386,7 +427,8 @@ function TheContractorTheft:onStolen(incident)
     TCVehicleLock.refresh()
 
     data.stolenMessageId = tc.Inbox:postMessage(incident.farmId, TheContractorTheft.MESSAGE_KIND,
-        "tc_theft_stolenTitle", "tc_theft_stolenBody", { data.name, data.crimeReference }, nil,
+        "tc_theft_stolenTitle", TheContractorTheft.getBodyKey("tc_theft_stolenBody", data),
+        { data.name, data.crimeReference }, nil,
         { incidentId = incident.id })
     tc.Notices:publish(incident.farmId, string.format(g_i18n:getText("tc_theft_stolenNotice"), data.name),
         TheContractorTheft.NOTICE_MONTHS)
@@ -396,18 +438,20 @@ function TheContractorTheft:onStolen(incident)
     return nil
 end
 
-function TheContractorTheft:rollRecovered()
+-- antiTheft: it had ADS's anti-theft system on the day it was taken (096).
+function TheContractorTheft:rollRecovered(antiTheft)
     local forced = self.forcedOutcome
     self.forcedOutcome = nil
     if forced ~= nil then
         return forced == TheContractorTheft.OUTCOME.RECOVERED
     end
-    return math.random() < TheContractorTheft.RECOVERY_CHANCE
+    return math.random() < (antiTheft and TheContractorTheft.ANTI_THEFT_RECOVERY_CHANCE or
+        TheContractorTheft.RECOVERY_CHANCE)
 end
 
 function TheContractorTheft:onPoliceReport(incident)
     local data = incident.data
-    local recovered = self:rollRecovered()
+    local recovered = self:rollRecovered(data.antiTheft == true)
     local vehicle = getLiveVehicle(data.vehicleId)
     Logging.info("TheContractor: farm %d incident %d: police report on %s - %s%s", incident.farmId, incident.id,
         data.name, recovered and "recovered" or "not found", vehicle == nil and " (vehicle gone)" or "")
@@ -427,7 +471,8 @@ function TheContractorTheft:onPoliceReport(incident)
     -- theft: the claim (070) comes next, on the value copied at the theft.
     local isInsured = self.insurance ~= nil and data.coverLevel ~= nil and data.coverLevel ~= ""
     tc.Inbox:postMessage(incident.farmId, TheContractorTheft.MESSAGE_KIND, "tc_theft_lostTitle",
-        isInsured and "tc_theft_lostBodyInsured" or "tc_theft_lostBody", { data.name, data.crimeReference }, nil,
+        TheContractorTheft.getBodyKey(isInsured and "tc_theft_lostBodyInsured" or "tc_theft_lostBody", data),
+        { data.name, data.crimeReference }, nil,
         { incidentId = incident.id })
     tc.Notices:publish(incident.farmId, string.format(g_i18n:getText("tc_theft_lostNotice"), data.name),
         TheContractorTheft.NOTICE_MONTHS)
@@ -478,7 +523,8 @@ function TheContractorTheft:returnRecovered(incident, vehicle)
     tc.Parking:returnHiddenVehicles(incident.farmId, { data.vehicleId })
 
     tc.Inbox:postMessage(incident.farmId, TheContractorTheft.MESSAGE_KIND, "tc_theft_recoveredTitle",
-        "tc_theft_recoveredBody", { data.name, data.crimeReference }, nil, { incidentId = incident.id })
+        TheContractorTheft.getBodyKey("tc_theft_recoveredBody", data), { data.name, data.crimeReference }, nil,
+        { incidentId = incident.id })
     tc.Notices:publish(incident.farmId, string.format(g_i18n:getText("tc_theft_recoveredNotice"), data.name),
         TheContractorTheft.NOTICE_MONTHS)
 end

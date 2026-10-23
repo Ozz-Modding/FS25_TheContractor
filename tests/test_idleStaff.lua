@@ -6,6 +6,7 @@
 local function setup()
     local world = stubs.install()
     dofile("src/business/Worker.lua")
+    dofile("src/business/WorkingHours.lua")
     dofile("src/placeables/PlaceableTCParkingSlot.lua")
     dofile("src/placeables/PlaceableTCStandingSpot.lua")
     dofile("src/util/TCIdleStaff.lua")
@@ -204,9 +205,44 @@ test("staff are only about during working hours", function()
         environment.dayTime = (hour * 60 + minute) * 60000
         return TCIdleStaff.getWanted()[1] ~= nil
     end
-    assertTrue(not at(6, 59), "before 07:00")
-    assertTrue(at(7, 0), "from 07:00")
-    assertTrue(at(18, 59), "until 19:00")
-    assertTrue(not at(19, 0), "gone home at 19:00")
+    assertTrue(not at(7, 59), "before 08:00")
+    assertTrue(at(8, 0), "from 08:00")
+    assertTrue(at(17, 59), "until 18:00")
+    assertTrue(not at(18, 0), "gone home at 18:00")
     assertTrue(not at(0, 0), "midnight")
+end)
+
+-- 097: after hours, only those kept on (once they're in) and anyone still
+-- in a job's cooldown. The office goes home.
+test("after hours: staff kept on and in cooldown stand, the rest and the office go home", function()
+    setup()
+    dofile("src/business/Office.lua")
+    for i = 1, 4 do
+        addSpot(1, i * 5, 0)
+    end
+    local day = 1 * 24 * 60
+    local staying = addWorker(1, 1, TheContractorWorker.STATUS.IDLE)
+    staying.dutyFrom, staying.dutyArrive, staying.dutyUntil = day + 17 * 60, day + 17 * 60, day + 22 * 60
+    local comingIn = addWorker(1, 2, TheContractorWorker.STATUS.IDLE)
+    comingIn.dutyFrom, comingIn.dutyArrive, comingIn.dutyUntil = day + 19 * 60, day + 19 * 60 + 25, day + 22 * 60
+    addWorker(1, 3, TheContractorWorker.STATUS.IDLE)
+    addWorker(1, 4, TheContractorWorker.STATUS.COOLDOWN)
+    local office = TheContractorOffice.new()
+    office.membersByFarm[1] = { administrator = { id = 7, role = "administrator", farmId = 1, name = "Ann", level = 1 } }
+    g_currentMission.TheContractor.Office = office
+
+    g_currentMission.environment.dayTime = (19 * 60 + 10) * 60000
+    local wanted = TCIdleStaff.getWanted()
+    assertTrue(wanted[1] ~= nil, "staying late")
+    assertEquals(wanted[2], nil, "not in yet")
+    assertEquals(wanted[3], nil, "gone home")
+    assertTrue(wanted[4] ~= nil, "still in a cooldown")
+    assertEquals(wanted[7], nil, "the office has gone home")
+
+    g_currentMission.environment.dayTime = (19 * 60 + 30) * 60000
+    assertTrue(TCIdleStaff.getWanted()[2] ~= nil, "in now")
+    g_currentMission.environment.dayTime = 22 * 60 * 60000
+    wanted = TCIdleStaff.getWanted()
+    assertEquals(wanted[1], nil, "their time's up")
+    assertEquals(wanted[2], nil, "theirs too")
 end)

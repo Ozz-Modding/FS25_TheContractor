@@ -80,6 +80,7 @@ source(TheContractor.dir .. "src/business/Morale.lua")
 source(TheContractor.dir .. "src/business/PayReviews.lua")
 source(TheContractor.dir .. "src/business/Office.lua")
 source(TheContractor.dir .. "src/business/Workshop.lua")
+source(TheContractor.dir .. "src/business/WorkingHours.lua")
 source(TheContractor.dir .. "src/business/Logbook.lua")
 source(TheContractor.dir .. "src/business/Parking.lua")
 source(TheContractor.dir .. "src/business/RandomEvents.lua")
@@ -162,6 +163,8 @@ source(TheContractor.dir .. "src/events/TCWorkerEditedEvent.lua")
 source(TheContractor.dir .. "src/events/TCOfficeRequestEvent.lua")
 source(TheContractor.dir .. "src/events/TCOfficeChangedEvent.lua")
 source(TheContractor.dir .. "src/events/TCWorkerWorkshopEvent.lua")
+source(TheContractor.dir .. "src/events/TCWorkerDutyEvent.lua")
+source(TheContractor.dir .. "src/events/TCWorkerOvertimeEvent.lua")
 source(TheContractor.dir .. "src/events/TCLogJobRecordedEvent.lua")
 source(TheContractor.dir .. "src/events/TCLogVehicleEntryEvent.lua")
 source(TheContractor.dir .. "src/events/TCLogClaimEvent.lua")
@@ -223,6 +226,8 @@ function TheContractor:loadMap()
     self.PayReviews:register(self.Inbox)
     -- 090: the office administrator (057) and storekeeper.
     self.Office = TheContractorOffice.new()
+    -- 097: working hours and overtime.
+    self.WorkingHours = TheContractorWorkingHours.new()
     self.Logbook = TheContractorLogbook.new()
     self.Parking = TheContractorParking.new()
     self.Parking:register(self.Inbox)
@@ -339,6 +344,7 @@ function TheContractor:loadMap()
     TheContractorPayReviews.registerConsoleCommands()
     TheContractorOffice.registerConsoleCommands()
     TheContractorWorkshop.registerConsoleCommands()
+    TheContractorWorkingHours.registerConsoleCommands()
     TheContractorJobGeneration.registerConsoleCommands()
     TheContractorJobs.registerConsoleCommands()
     TheContractorFinances.registerConsoleCommands()
@@ -642,6 +648,11 @@ function TheContractor:update(dt)
 
     if self.Drivers ~= nil then
         self.Drivers:update(dt)
+    end
+
+    -- 097: overtime (server).
+    if self.WorkingHours ~= nil then
+        self.WorkingHours:update(dt)
     end
 
     -- After Drivers: its first update relinks saved bindings, which the

@@ -166,7 +166,7 @@ local function setup(daysPerPeriod)
     tc.Theft:register(tc.RandomEvents, tc.Inbox)
 
     -- def: { name, farmId, drivable (default true), propertyState, category,
-    --        value, controlled, aiActive, hasStaffDriver }
+    --        value, controlled, aiActive, hasStaffDriver, antiTheft (096: ADS's state) }
     function world:addMachine(def)
         local vehicle = self:addVehicle({ name = def.name, farmId = def.farmId, isAIActive = def.aiActive })
         vehicle.spec_drivable = def.drivable ~= false and {} or nil
@@ -192,6 +192,10 @@ local function setup(daysPerPeriod)
         function vehicle:delete() self.isDeleted = true end
         vehicle.getCanBeSold = Vehicle.getCanBeSold
         vehicle.getIsInUse = Vehicle.getIsInUse
+        if def.antiTheft ~= nil then
+            vehicle.states = { ANTI_THEFT_SYSTEM = def.antiTheft or nil }
+            function vehicle:hasBreakdown(id) return self.states[id] == true end
+        end
         return vehicle
     end
 
@@ -432,4 +436,104 @@ test("tcCompany outcome theft sets the next outcome", function()
     assertTrue(TCConsole.dispatch(group, { "outcome", "theft", "maybe" }):find("^Usage: tcCompany outcome theft <recovered|lost>") ~= nil,
         "bad argument")
     assertTrue(TCConsole.dispatch(group, { "outcome" }):find("theft <recovered|lost>", 1, true) ~= nil, "lists types")
+end)
+
+-- 096: FS25_AdvancedDamageSystem's anti-theft system.
+
+local function withRoll(roll, fn)
+    local realRandom = math.random
+    math.random = function(...)
+        if select("#", ...) == 0 then
+            return roll
+        end
+        return realRandom(...)
+    end
+    local result = fn()
+    math.random = realRandom
+    return result
+end
+
+test("a vehicle without ADS, or without the system, has no anti-theft", function()
+    local world = setup()
+    assertEquals(TheContractorTheft.hasAntiTheft(world:addMachine({ name = "noADS" })), false, "no hasBreakdown")
+    assertEquals(TheContractorTheft.hasAntiTheft(world:addMachine({ name = "unfitted", antiTheft = false })), false,
+        "ADS, not fitted")
+    assertEquals(TheContractorTheft.hasAntiTheft(world:addMachine({ name = "fitted", antiTheft = true })), true, "fitted")
+    assertEquals(TheContractorTheft.isAntiTheftOffered(), false, "ADS not loaded")
+    g_modIsLoaded = { FS25_AdvancedDamageSystem = true }
+    assertEquals(TheContractorTheft.isAntiTheftOffered(), true, "ADS loaded")
+    g_modIsLoaded = nil
+end)
+
+test("a fitted vehicle is a tenth as likely to be picked and counts a tenth in the rate", function()
+    local world, tc = setup()
+    world:addMachine({ name = "tractor", category = "TRACTORSM" })
+    world:addMachine({ name = "fitted", category = "TRACTORSM", antiTheft = true })
+    local weights = {}
+    for _, candidate in ipairs(tc.Theft:getEligibleVehicles(1)) do
+        weights[candidate.vehicle.name] = candidate.weight
+    end
+    assertEquals(weights.tractor, 3, "unfitted")
+    assertNear(weights.fitted, 0.3, 1e-9, "fitted")
+
+    -- 1.1 vehicles: factor 0.5 + 1.1 / 20.
+    assertNear(tc.Theft:getRatePerPeriod(1), 0.02 * (0.5 + 1.1 / 20), 1e-9, "rate")
+end)
+
+test("a fully fitted fleet is stolen from less often", function()
+    local world, tc = setup()
+    for i = 1, 40 do
+        world:addMachine({ name = "tractor" .. i, antiTheft = true })
+    end
+    -- 4 vehicles' worth: factor 0.7, where 40 unfitted would be capped at 2.
+    assertNear(tc.Theft:getRatePerPeriod(1), 0.02 * 0.7, 1e-9, "rate")
+end)
+
+test("anti-theft is judged on the day of the theft and recovers 95% of the time", function()
+    local world, tc = setup()
+    local tractor = world:addMachine({ name = "Fendt 724", antiTheft = true })
+    local incident = tc.RandomEvents:triggerEvent(1, "theft")
+    assertEquals(incident.data.antiTheft, true, "copied into the incident")
+    assertTrue(world.messages[1].body:find("anti-theft system", 1, true) ~= nil, "stolen message mentions it")
+    tractor.states.ANTI_THEFT_SYSTEM = nil
+    assertEquals(incident.data.antiTheft, true, "still counts once it's gone")
+
+    assertEquals(withRoll(0.9, function() return tc.Theft:rollRecovered(true) end), true, "0.9: recovered with it")
+    assertEquals(withRoll(0.9, function() return tc.Theft:rollRecovered(false) end), false, "0.9: lost without")
+    assertEquals(withRoll(0.96, function() return tc.Theft:rollRecovered(true) end), false, "0.96: lost even with it")
+    tc.Theft.forcedOutcome = TheContractorTheft.OUTCOME.LOST
+    assertEquals(withRoll(0, function() return tc.Theft:rollRecovered(true) end), false, "a forced outcome still wins")
+end)
+
+test("the police report reads the flag from the incident", function()
+    local world, tc = setup()
+    world:addMachine({ name = "Fendt 724", antiTheft = true })
+    tc.RandomEvents:triggerEvent(1, "theft")
+    withRoll(0.9, function() world:runUntilClosed() end)
+    assertEquals(world.messages[2].titleKey, "tc_theft_recoveredTitle", "a 0.9 roll recovers a fitted vehicle")
+end)
+
+test("the tracker's messages: found by it, or it went dead", function()
+    local world, tc = setup()
+    world:addMachine({ name = "Fendt 724", antiTheft = true })
+    tc.Theft.forcedOutcome = TheContractorTheft.OUTCOME.RECOVERED
+    tc.RandomEvents:triggerEvent(1, "theft")
+    world:runUntilClosed()
+    assertTrue(world.messages[2].body:find("followed your Fendt 724's anti-theft tracker", 1, true) ~= nil,
+        "recovered: " .. world.messages[2].body)
+
+    world, tc = setup()
+    world:addMachine({ name = "Fendt 724", antiTheft = true })
+    tc.Theft.forcedOutcome = TheContractorTheft.OUTCOME.LOST
+    tc.RandomEvents:triggerEvent(1, "theft")
+    world:runUntilClosed()
+    assertTrue(world.messages[2].body:find("tracker went dead", 1, true) ~= nil, "lost: " .. world.messages[2].body)
+
+    world, tc = setup()
+    world:addMachine({ name = "Fendt 724" })
+    tc.Theft.forcedOutcome = TheContractorTheft.OUTCOME.LOST
+    tc.RandomEvents:triggerEvent(1, "theft")
+    world:runUntilClosed()
+    assertTrue(world.messages[1].body:find("anti-theft", 1, true) == nil, "unfitted: no mention")
+    assertTrue(world.messages[2].body:find("tracker", 1, true) == nil, "unfitted: no tracker")
 end)

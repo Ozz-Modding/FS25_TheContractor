@@ -151,6 +151,11 @@ local STATUS_CHIP_TONES = {
     sick = "bad",
     holiday = "info",
     training = "info",
+    -- 097: an idle worker's place in the day (TheContractorWorkingHours.
+    -- getDisplayStatus).
+    atHome = "neutral",
+    comingIn = "info",
+    stayingLate = "info",
 }
 
 local function getWorkerStatusTone(status)
@@ -859,6 +864,22 @@ function MenuContractor:update(dt)
         self.workerPortrait:update(dt)
     end
 
+    -- 097: who's gone home, come in or been sent home changes with the
+    -- time, not with an event, so the Staff tab checks every second.
+    self.staffHoursRefreshMs = (self.staffHoursRefreshMs or 0) + dt
+    if self.staffHoursRefreshMs >= MenuContractor.SUPPLIES_REFRESH_MS then
+        self.staffHoursRefreshMs = 0
+        if self.isFrameOpen and self.subCategoryPaging:getState() == MenuContractor.SUB_CATEGORY.STAFF and
+                self:hasCompany() then
+            local signature = self:getStaffHoursSignature(g_currentMission:getFarmId())
+            if signature ~= self.staffHoursSignature then
+                self.staffHoursSignature = signature
+                local tc = g_currentMission.TheContractor
+                self:refreshStaffState(g_currentMission:getFarmId(), tc.Staff, tc.Jobs)
+            end
+        end
+    end
+
     -- 064: stock changes as jobs draw on it, so the Supplies tab keeps
     -- itself up to date while it's the one showing.
     self.suppliesRefreshMs = (self.suppliesRefreshMs or 0) + dt
@@ -869,6 +890,18 @@ function MenuContractor:update(dt)
             self:refreshSuppliesState(g_currentMission:getFarmId())
         end
     end
+end
+
+-- 097: everyone's place in the day, the office included, in one string.
+function MenuContractor:getStaffHoursSignature(farmId)
+    local tc = g_currentMission.TheContractor
+    local now = TheContractorWorkingHours.getNow()
+    local parts = { tostring(TheContractorWorkingHours.isOfficeOpen(now)) }
+    for _, worker in ipairs(tc.Staff:getRoster(farmId)) do
+        table.insert(parts, worker.id .. "=" .. TheContractorWorkingHours.getDisplayStatus(worker, now))
+    end
+    table.sort(parts)
+    return table.concat(parts, ",")
 end
 
 -- 042: shows the highlighted worker's portrait while the Staff tab is the
@@ -1299,8 +1332,10 @@ function MenuContractor:populateStaffCell(index, cell)
     -- Roster view: column 4 is the status chip, the salary text is the
     -- candidates view's.
     cell:getAttribute("col4"):setVisible(false)
+    -- 097: an idle worker may have gone home.
+    local status = TheContractorWorkingHours.getDisplayStatus(worker)
     setChip(cell:getAttribute("statusChip"), cell:getAttribute("statusChipText"),
-        g_i18n:getText("tc_staff_status_" .. worker.status), getWorkerStatusTone(worker.status))
+        g_i18n:getText("tc_staff_status_" .. status), getWorkerStatusTone(status))
     cell:getAttribute("col5"):setText(jobLine or "")
     setADSChip(cell, worker)
 end
@@ -1327,14 +1362,21 @@ function MenuContractor:updateStaffDetails()
     setChip(self.staffDetailWorkSpeedChip, self.staffDetailWorkSpeedChipText, tostring(worker.workSpeed),
         getTierChipTone(worker.workSpeed))
     -- 058: and, for a roster worker who wants more, what they want.
+    local salaryText
     if self.staffView == "roster" and TheContractorPayReviews.wantsMore(worker) then
-        self.staffDetailSalary:setText(string.format(g_i18n:getText("tc_pay_detailSalaryWants"),
+        salaryText = string.format(g_i18n:getText("tc_pay_detailSalaryWants"),
             g_i18n:formatMoney(TheContractorStaff.scalePay(worker.salary), 0, true, true),
-            g_i18n:formatMoney(TheContractorStaff.scalePay(worker.expectedSalary), 0, true, true)))
+            g_i18n:formatMoney(TheContractorStaff.scalePay(worker.expectedSalary), 0, true, true))
     else
-        self.staffDetailSalary:setText(string.format(g_i18n:getText("tc_staff_detailSalary"),
-            g_i18n:formatMoney(TheContractorStaff.scalePay(worker.salary), 0, true, true)))
+        salaryText = string.format(g_i18n:getText("tc_staff_detailSalary"),
+            g_i18n:formatMoney(TheContractorStaff.scalePay(worker.salary), 0, true, true))
     end
+    -- 097: and the overtime they've done this month.
+    if self.staffView == "roster" and (worker.overtimeOwed or 0) >= 1 then
+        salaryText = string.format(g_i18n:getText("tc_hours_detailOvertime"), salaryText,
+            g_i18n:formatMoney(worker.overtimeOwed, 0, true, true))
+    end
+    self.staffDetailSalary:setText(salaryText)
     -- 045: a chip, same tones as the skills.
     setChip(self.staffDetailCleanlinessChip, self.staffDetailCleanlinessChipText,
         tostring(worker.cleanliness),
@@ -1369,8 +1411,9 @@ function MenuContractor:updateStaffDetails()
         TheContractorHolidays.findRequest(worker.farmId, worker.id) ~= nil))
 
     if isRoster then
+        local status = TheContractorWorkingHours.getDisplayStatus(worker)
         setChip(self.staffDetailStatusChip, self.staffDetailStatusChipText,
-            g_i18n:getText("tc_staff_status_" .. worker.status), getWorkerStatusTone(worker.status))
+            g_i18n:getText("tc_staff_status_" .. status), getWorkerStatusTone(status))
         -- 056.
         local moraleText, moraleTone = TheContractorMorale.getChip(worker.morale)
         setChip(self.staffDetailMoraleChip, self.staffDetailMoraleChipText, moraleText, moraleTone)
@@ -1743,6 +1786,10 @@ function MenuContractor:onClickManageWorker()
         { text = g_i18n:getText("tc_morale_bonusButton"), run = self.onClickGiveBonus },
         { text = g_i18n:getText("tc_pay_riseButton"), run = self.onClickPayRise },
     }
+    -- 097: kept on after hours, or sent home.
+    for _, action in ipairs(self:getDutyActions(worker)) do
+        table.insert(actions, action)
+    end
     if TheContractorTraining.getBookingProblem(worker, cert) == nil then
         table.insert(actions, { text = g_i18n:getText(TheContractorTraining.isRetake(worker, cert) and
             "tc_training_bookRetakeButton" or "tc_training_bookCourseButton"), run = self.onClickBookTraining })
@@ -1771,6 +1818,77 @@ function MenuContractor:onClickManageWorker()
         action.run(self)
     end, string.format(g_i18n:getText("tc_staff_managePrompt"), worker.name), g_i18n:getText("tc_staff_manageTitle"),
         options)
+end
+
+-- 097: Manage worker's working hours entries: Stay late (or Stay longer,
+-- if they're on already) while they're at work, Call back once they've
+-- gone home, and Send home while they're kept on. None while they're away,
+-- or when it's too near morning to offer a time.
+function MenuContractor:getDutyActions(worker)
+    local actions = {}
+    local now = TheContractorWorkingHours.getNow()
+    local ACTION = TheContractorWorkingHours.ACTION
+    local action = TheContractorWorkingHours.getDutyAction(worker, now)
+    local hasDuty = TheContractorWorkingHours.hasDuty(worker, now)
+    if action ~= nil and #TheContractorWorkingHours.getUntilOptions(worker, now) > 0 then
+        local key = "tc_hours_stayLateButton"
+        if action == ACTION.CALL then
+            key = "tc_hours_callBackButton"
+        elseif hasDuty then
+            key = "tc_hours_stayLongerButton"
+        end
+        table.insert(actions, { text = g_i18n:getText(key), run = self.onClickKeepOn })
+    end
+    if hasDuty then
+        table.insert(actions, { text = g_i18n:getText("tc_hours_sendHomeButton"), run = function(target)
+            target:sendDuty(worker, ACTION.HOME, nil)
+        end })
+    end
+    return actions
+end
+
+-- 097: pick how late (OptionDialog, each time with what it'll cost in
+-- overtime), then the server checks it again (WorkingHours:requestDuty).
+function MenuContractor:onClickKeepOn()
+    local worker = self:getSelectedRosterWorker()
+    if worker == nil then
+        return
+    end
+    local now = TheContractorWorkingHours.getNow()
+    local action = TheContractorWorkingHours.getDutyAction(worker, now)
+    local times = TheContractorWorkingHours.getUntilOptions(worker, now)
+    if action == nil or #times == 0 then
+        return
+    end
+
+    local options = {}
+    for _, at in ipairs(times) do
+        table.insert(options, string.format(g_i18n:getText("tc_hours_untilOption"),
+            TheContractorWorkingHours.formatTime(at),
+            g_i18n:formatMoney(TheContractorWorkingHours.getDutyCost(worker, now, at), 0, true, true)))
+    end
+    local isCall = action == TheContractorWorkingHours.ACTION.CALL
+    local prompt = isCall and
+        string.format(g_i18n:getText("tc_hours_callBackPrompt"), worker.name, TheContractorWorkingHours.CALL_BACK_MINUTES) or
+        string.format(g_i18n:getText("tc_hours_stayLatePrompt"), worker.name,
+            string.format("%02d:00", TheContractorWorkingHours.END_HOUR))
+
+    local workerId = worker.id
+    OptionDialog.show(function(index)
+        local at = times[index]
+        if at == nil or self.selectedRosterWorkerId ~= workerId then
+            return
+        end
+        self:sendDuty(worker, action, at)
+    end, prompt, g_i18n:getText(isCall and "tc_hours_callBackTitle" or "tc_hours_stayLateTitle"), options)
+end
+
+-- Sends the request; the change comes back on every machine (the server
+-- included) through TheContractorWorkingHours.applyDuty, which redraws the
+-- tab.
+function MenuContractor:sendDuty(worker, action, untilMinutes)
+    g_client:getServerConnection():sendEvent(TCWorkerDutyEvent.new(worker.farmId, worker.id, action, nil, nil,
+        untilMinutes))
 end
 
 -- 091: Manage worker's workshop entries: "Work in the workshop as ..." for
@@ -3188,7 +3306,8 @@ function MenuContractor:refreshAllocationState()
     self.allocationCrewText:setText(string.format(g_i18n:getText("tc_allocation_crew"), self:getJobCrewText(job)))
 
     self.allocationWorkerRows = { { workerId = nil, label = g_i18n:getText("tc_allocation_myself") } }
-    for _, worker in ipairs(staff:getIdleWorkers(farmId)) do
+    -- 097: not anyone who's gone home.
+    for _, worker in ipairs(staff:getAvailableWorkers(farmId)) do
         table.insert(self.allocationWorkerRows, { workerId = worker.id, label = worker.name })
     end
     self.allocationHighlightedWorkerIndex = 1
@@ -4465,7 +4584,9 @@ function MenuContractor:updateOverheadDetails()
     for i, amount in ipairs(definition.descriptionAmounts or {}) do
         amounts[i] = formatMoney(g_currentMission.TheContractor.Settings:scaleCost(amount))
     end
-    self.financesOverheadAbout:setText(string.format(g_i18n:getText(definition.l10nKey .. "_desc"), unpack(amounts)))
+    local descriptionKey = definition.getDescriptionKey ~= nil and definition.getDescriptionKey() or
+        definition.l10nKey .. "_desc"
+    self.financesOverheadAbout:setText(string.format(g_i18n:getText(descriptionKey), unpack(amounts)))
     self.financesOverheadRows:invalidateLayout()
 end
 
@@ -4653,7 +4774,12 @@ function MenuContractor:populateOfficeCell(row, cell)
     local status, tone = "vacant", "neutral"
     if member ~= nil then
         status = TheContractorOffice.getStatus(member)
-        tone = status == TheContractorOffice.STATUS.TRAINING and "info" or "good"
+        tone = "good"
+        if status == TheContractorOffice.STATUS.TRAINING then
+            tone = "info"
+        elseif status == TheContractorOffice.STATUS.AT_HOME then
+            tone = "neutral"
+        end
     end
     setChip(cell:getAttribute("statusChip"), cell:getAttribute("statusChipText"),
         g_i18n:getText("tc_office_status_" .. status), tone)

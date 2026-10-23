@@ -307,6 +307,19 @@ function TheContractorStaff:getIdleWorkers(farmId)
     return result
 end
 
+-- 097: idle and at work (not gone home): who can be given a job or a
+-- vehicle to drive.
+function TheContractorStaff:getAvailableWorkers(farmId)
+    local result = {}
+    local now = TheContractorWorkingHours.getNow()
+    for _, worker in ipairs(self:getRoster(farmId)) do
+        if TheContractorWorkingHours.isAvailable(worker, now) then
+            table.insert(result, worker)
+        end
+    end
+    return result
+end
+
 -- tier is "small"/"medium"/"large" (009), or nil for jobs whose equipment
 -- carries no size tier at all (every worker qualifies then).
 function TheContractorStaff:getWorkersCapableOfTier(farmId, tier)
@@ -732,12 +745,15 @@ function TheContractorStaff:paySalaries()
 
     for farmId in pairs(farmIds) do
         local salary = self:getPayroll(farmId)
-        local total = self:getWageBill(farmId)
+        -- 097: and last month's overtime.
+        local overtime = g_currentMission.TheContractor.WorkingHours:takeOvertime(farmId)
+        local pension = self:getWageBill(farmId) - salary
+        local total = salary + pension + overtime
         if total > 0 and g_farmManager:getFarmById(farmId) ~= nil then
             g_currentMission:addMoney(-total, farmId, MoneyType.TC_WAGES, true, true)
             g_currentMission.TheContractor.Finances:recordWages(farmId, total)
-            Logging.info("TheContractor: farm %d paid %.0f in staff salaries and %.0f in pension contributions",
-                farmId, salary, total - salary)
+            Logging.info("TheContractor: farm %d paid %.0f in staff salaries, %.0f in overtime and %.0f in pension contributions",
+                farmId, salary, overtime, pension)
         end
     end
 end
@@ -892,6 +908,8 @@ function TheContractorStaff:retireWorker(farmId, workerId)
     end
 
     g_currentMission.TheContractor.Notices:remove(worker.leavingNoticeId)
+    -- 097: any overtime they've done this month.
+    g_currentMission.TheContractor.WorkingHours:payLeaver(farmId, worker)
 
     Logging.info("TheContractor: farm %d worker %d (%s) %s at %d", farmId, workerId, worker.name,
         worker.isQuitting and "quit" or "retired", worker.age)
@@ -1160,6 +1178,8 @@ function TheContractorStaff:releaseWorker(farmId, workerId)
 
     -- 039: their retirement (or 056 quitting) notice goes with them.
     g_currentMission.TheContractor.Notices:remove(worker.leavingNoticeId)
+    -- 097: any overtime they've done this month.
+    g_currentMission.TheContractor.WorkingHours:payLeaver(farmId, worker)
 
     self:applyWorkerReleased(farmId, workerId)
 
@@ -1688,6 +1708,8 @@ function TheContractorStaff.writeWorker(streamId, worker)
     TheContractorPayReviews.writeState(streamId, worker)
     -- 091.
     TheContractorWorkshop.writeState(streamId, worker)
+    -- 097.
+    TheContractorWorkingHours.writeState(streamId, worker)
 end
 
 function TheContractorStaff.readWorker(streamId)
@@ -1725,6 +1747,7 @@ function TheContractorStaff.readWorker(streamId)
     local morale, hiredPeriod = TheContractorMorale.readState(streamId)
     local expectedSalary = TheContractorPayReviews.readState(streamId)
     local adsSkills, workshopRole = TheContractorWorkshop.readState(streamId)
+    local dutyFrom, dutyArrive, dutyUntil, overtimeMinutes, overtimeOwed = TheContractorWorkingHours.readState(streamId)
 
     local worker = TheContractorWorker.new(id, farmId, name, workSpeed, tierCapability, salary, age, nil, nil, nil,
         skills, cleanliness)
@@ -1740,6 +1763,8 @@ function TheContractorStaff.readWorker(streamId)
     worker.expectedSalary = expectedSalary
     worker.adsSkills = adsSkills
     worker.workshopRole = workshopRole
+    worker.dutyFrom, worker.dutyArrive, worker.dutyUntil = dutyFrom, dutyArrive, dutyUntil
+    worker.overtimeMinutes, worker.overtimeOwed = overtimeMinutes, overtimeOwed
     TheContractorHolidays.applyHolidayChanged(worker, holidayAllowance,
         holidayStartDay > 0 and holidayStartDay or nil, holidayDays)
     TheContractorTraining.applyState(worker, trainingState)
@@ -1811,6 +1836,8 @@ function TheContractorStaff.writeWorkerXML(xmlFile, key, worker)
     TheContractorPayReviews.writeXML(xmlFile, key, worker)
     -- 091.
     TheContractorWorkshop.writeXML(xmlFile, key, worker)
+    -- 097.
+    TheContractorWorkingHours.writeXML(xmlFile, key, worker)
 end
 
 -- farmId is passed in explicitly (nil for a pool candidate) rather than read
@@ -1915,6 +1942,8 @@ function TheContractorStaff.readWorkerXML(xmlFile, key, farmId)
     TheContractorMorale.readXML(xmlFile, key, worker)
     -- 058.
     TheContractorPayReviews.readXML(xmlFile, key, worker)
+    -- 097.
+    TheContractorWorkingHours.readXML(xmlFile, key, worker)
 
     return worker
 end
