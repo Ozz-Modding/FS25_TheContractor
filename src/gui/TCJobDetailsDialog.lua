@@ -65,7 +65,7 @@ function TCJobDetailsDialog:onOpen()
 
     self.refreshMs = 0
     self:refresh()
-    self.detailList:setSelectedIndex(1)
+    self.detailList:setSelectedIndex(1, true)
     FocusManager:setFocus(self.detailList)
 end
 
@@ -134,6 +134,29 @@ end
 
 function TCJobDetailsDialog:getNumberOfItemsInSection(list, section)
     return #self.rows
+end
+
+-- Section titles can't be selected: landing on one moves on to the next
+-- row the way the selection was going (or back the other way past the
+-- first or last title). Selecting the title first means scrolling up onto
+-- the top one still brings it into view.
+function TCJobDetailsDialog:onListSelectionChanged(list, section, index)
+    local row = self.rows[index]
+    if row == nil or row.section == nil then
+        return
+    end
+
+    local step = list.lastScrollDirection == -1 and -1 or 1
+    for _, direction in ipairs({ step, -step }) do
+        local i = index + direction
+        while self.rows[i] ~= nil do
+            if self.rows[i].section == nil then
+                list:setSelectedIndex(i)
+                return
+            end
+            i = i + direction
+        end
+    end
 end
 
 function TCJobDetailsDialog:populateCellForItemInSection(list, section, index, cell)
