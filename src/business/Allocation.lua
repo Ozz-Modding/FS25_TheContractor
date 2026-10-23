@@ -511,6 +511,25 @@ end
 
 -- Allocation (server-authoritative) ----------------------------------------
 
+-- 093: the nickname of the player on the other end of an event's
+-- connection, or the local player's own (single player and the host, whose
+-- requests run on a local connection that may have no user of its own).
+function TheContractorAllocation.getConnectionPlayerName(connection)
+    local userManager = g_currentMission.userManager
+    local user = userManager ~= nil and connection ~= nil and userManager:getUserByConnection(connection) or nil
+    if user ~= nil then
+        local nickname = user:getNickname()
+        if nickname ~= nil and nickname ~= "" then
+            return nickname
+        end
+    end
+    local nickname = g_currentMission.playerNickname
+    if nickname ~= nil and nickname ~= "" then
+        return nickname
+    end
+    return nil
+end
+
 local function checkVehicles(self, farmId, vehicleIds, seen)
     for _, vehicleId in ipairs(vehicleIds) do
         local vehicle = NetworkUtil.getObject(vehicleId)
@@ -532,8 +551,10 @@ end
 -- first request processed wins, same "re-check membership, no lock needed"
 -- shape as TheContractorStaff:hireWorker). fixedRoles: the player chose who
 -- operates and who hauls (workerIds in that order, see assignCrewRoles).
--- Returns true on success.
-function TheContractorAllocation:allocateJob(farmId, jobId, workerIds, equipmentIds, haulageEquipmentIds, fixedRoles)
+-- playerName (093): who asked, kept on a player-driven job so the menu can
+-- say who's doing it. Returns true on success.
+function TheContractorAllocation:allocateJob(farmId, jobId, workerIds, equipmentIds, haulageEquipmentIds, fixedRoles,
+                                             playerName)
     if not g_currentMission:getIsServer() then
         return false
     end
@@ -646,14 +667,21 @@ function TheContractorAllocation:allocateJob(farmId, jobId, workerIds, equipment
     job.haulerWorkerId = haulerId
     job.assignedEquipmentIds = equipmentIds
     job.haulageEquipmentIds = haulageEquipmentIds
+    job.allocatedPlayerName = operatorId == nil and playerName or nil
 
     -- The job has to be doable from here, whatever the field has done since
     -- it was offered - and none of its "done" state can count as our work.
     -- After the equipment's recorded: a bale wrap job lays out bales its
-    -- wrapper takes.
-    TCFieldPreparation.prepareFieldForJob(job)
+    -- wrapper takes. Not for a job that's been unallocated (094): its field
+    -- was prepared then, and the work done since is ours (its field is
+    -- protected from NPC fieldwork while the job's open, 034).
+    local isResuming = job.wasUnallocated
+    job.wasUnallocated = false
+    if not isResuming then
+        TCFieldPreparation.prepareFieldForJob(job)
+        job.completionPercentage = 0
+    end
     TCJobProgress.clearJob(job.id)
-    job.completionPercentage = 0
 
     job:transitionTo(TheContractorJob.STATE.ALLOCATED)
     TCFieldAccess.refresh()
@@ -666,7 +694,11 @@ function TheContractorAllocation:allocateJob(farmId, jobId, workerIds, equipment
     end
 
     -- Player-driven haulage: they'll be delivering the crop themselves.
-    TCHaulage.startDelivery(job)
+    if isResuming then
+        TCHaulage.resumeDelivery(job)
+    else
+        TCHaulage.startDelivery(job)
+    end
 
     Logging.info("TheContractor: farm %d job %d allocated (worker=%s, hauler=%s, equipment=%s, haulage=%s)", farmId,
         jobId, tostring(operatorId), tostring(haulerId), TheContractorJobs.encodeIdList(equipmentIds),

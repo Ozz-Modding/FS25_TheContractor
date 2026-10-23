@@ -231,7 +231,7 @@
 		<text name="tc_calendar_columnCrew" text="Crew"/>
 		<text name="tc_calendar_deliveryNote" text="Delivery: %s"/>
 		<text name="tc_calendar_deliveryProgressNote" text="Delivery: %s - %d%% delivered so far"/>
-		<text name="tc_calendar_crewPlayer" text="You"/>
+		<text name="tc_calendar_crewPlayer" text="Player"/>
 		<text name="tc_calendar_columnFarmland" text="Farmland"/>
 		<text name="tc_calendar_columnPrice" text="Price"/>
 		<text name="tc_calendar_columnAllocation" text="Allocation"/>
@@ -255,6 +255,35 @@
 		<text name="tc_calendar_jobUnallocated" text="Not yet allocated"/>
 		<text name="tc_calendar_jobMissed" text="Failed"/>
 		<text name="tc_calendar_jumpToToday" text="Jump to Today"/>
+		<text name="tc_jobDetails_button" text="Job Details"/>
+		<text name="tc_jobDetails_title" text="Job Details"/>
+		<text name="tc_jobDetails_sectionJob" text="Job"/>
+		<text name="tc_jobDetails_sectionCrew" text="Crew"/>
+		<text name="tc_jobDetails_sectionEquipment" text="Equipment"/>
+		<text name="tc_jobDetails_sectionHaulage" text="Haulage"/>
+		<text name="tc_jobDetails_job" text="Job"/>
+		<text name="tc_jobDetails_field" text="Field"/>
+		<text name="tc_jobDetails_due" text="Due"/>
+		<text name="tc_jobDetails_price" text="Price"/>
+		<text name="tc_jobDetails_status" text="Status"/>
+		<text name="tc_jobDetails_progress" text="Progress"/>
+		<text name="tc_jobDetails_delivery" text="Delivery"/>
+		<text name="tc_jobDetails_deliveryProgress" text="%s - %d%% delivered"/>
+		<text name="tc_jobDetails_player" text="Player-driven"/>
+		<text name="tc_jobDetails_worker" text="Worker"/>
+		<text name="tc_jobDetails_operator" text="Operator"/>
+		<text name="tc_jobDetails_hauler" text="Hauler"/>
+		<text name="tc_unallocate_button" text="Unallocate"/>
+		<text name="tc_unallocate_crewPair" text="%s and %s"/>
+		<text name="tc_unallocate_confirmPlayer" text="Take %s off this job? It goes back to Not yet allocated, ready for whoever you allocate next. Any work already done on the field stays done."/>
+		<text name="tc_unallocate_confirmYard" text="Take %s off this job? They haven't left the yard yet, so they're free straight away. Whoever you allocate next will have to travel out to the field."/>
+		<text name="tc_unallocate_confirmOut" text="Take %s off this job? They're already out, so their equipment has to come back to the yard, and whoever you allocate next will have to travel out to the field."/>
+		<text name="tc_unallocate_confirmWorking" text="Take %s off this job? They've made a start (%d%% done). They and their equipment will be unavailable for about %s while they come back, and whoever you allocate next will have to travel out to the field. The work done so far stays done."/>
+		<text name="tc_unallocate_dueToday" text="This job is due today: a new crew may not finish it in time."/>
+		<text name="tc_unallocate_dueTomorrow" text="This job is due tomorrow: a new crew may not finish it in time."/>
+		<text name="tc_unallocate_problemGone" text="That job no longer exists."/>
+		<text name="tc_unallocate_problemState" text="Only an allocated or in-progress job can be unallocated."/>
+		<text name="tc_logbook_earlierCrew" text="Earlier crew"/>
 		<text name="tc_job_missedNotification" text="Missed deadline: %s on Field %s went uncompleted."/>
 		<text name="tc_dispatch_noVehicleReady" text="None of the allocated equipment can be driven by the worker (is it free, and can it do this job?)."/>
 		<text name="tc_dispatch_failedNotification" text="Could not dispatch %s on Field %s: %s"/>
