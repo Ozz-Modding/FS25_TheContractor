@@ -169,9 +169,10 @@ local function getTierChipTone(rating)
     return "warn"
 end
 
--- 049: invoice status chips. Paid invoices aren't listed.
+-- 049: invoice status chips. Paid ones are only in the invoice history.
 local INVOICE_STATUS_TONES = {
     outstanding = "info",
+    paid = "good",
     overdue = "warn",
     writtenOff = "bad",
     pursuing = "info",
@@ -3734,6 +3735,10 @@ local function formatMoney(amount)
     return g_i18n:formatMoney(amount, 0, true, true)
 end
 
+-- The Finances list's views, in financesViewSelector's order.
+MenuContractor.FINANCES_VIEWS = { "invoices", "history", "overheads" }
+MenuContractor.FINANCES_VIEW_STATES = { invoices = 1, history = 2, overheads = 3 }
+
 -- Rebuilds the invoice list (keeping the highlighted invoice if it's still
 -- listed, otherwise picking the first, like refreshCompletedJobsState) and
 -- the cash-flow and year-to-date cards.
@@ -3741,8 +3746,8 @@ function MenuContractor:refreshFinancesState(farmId, finances)
     self.financesContent:setVisible(true)
 
     self.financesViewSelector:setTexts({ g_i18n:getText("tc_finances_viewInvoices"),
-        g_i18n:getText("tc_finances_viewOverheads") })
-    self.financesViewSelector:setState(self.financesView == "overheads" and 2 or 1)
+        g_i18n:getText("tc_finances_viewHistory"), g_i18n:getText("tc_finances_viewOverheads") })
+    self.financesViewSelector:setState(MenuContractor.FINANCES_VIEW_STATES[self.financesView] or 1)
 
     self:refreshCashFlowState(farmId, finances)
     self:refreshFinanceYearState(farmId, finances)
@@ -3759,7 +3764,13 @@ function MenuContractor:refreshFinancesState(farmId, finances)
     self.financesOverheadContainer:setVisible(false)
     self.financesOverheadRows:setVisible(false)
 
-    self.invoiceList = finances:getUnpaidInvoices(farmId)
+    -- The history lists paid and written-off invoices, by when they settled.
+    local isHistory = self.financesView == "history"
+    self.invoiceList = isHistory and finances:getSettledInvoices(farmId) or finances:getOpenInvoices(farmId)
+    self.financesInvoiceDateHeader:setText(g_i18n:getText(isHistory and "tc_finances_columnSettled" or
+        "tc_finances_columnDue"))
+    self.financesListEmptyText:setText(g_i18n:getText(isHistory and "tc_finances_noInvoiceHistory" or
+        "tc_finances_noInvoices"))
     self.financesInvoiceTable:reloadData()
 
     local hasInvoices = #self.invoiceList > 0
@@ -3783,7 +3794,8 @@ function MenuContractor:refreshFinancesState(farmId, finances)
 end
 
 function MenuContractor:onClickFinancesView()
-    self.financesView = self.financesViewSelector:getState() == 2 and "overheads" or "invoices"
+    self.financesView = MenuContractor.FINANCES_VIEWS[self.financesViewSelector:getState()] or "invoices"
+    self.selectedInvoiceId = nil
     self:refreshFinancesState(g_currentMission:getFarmId(), g_currentMission.TheContractor.Finances)
     self:setMenuButtonInfoDirty()
 end
@@ -3864,9 +3876,26 @@ function MenuContractor:populateInvoiceCell(index, cell)
     cell:getAttribute("job"):setText(job ~= nil and job:getDisplayTitle() or "-")
     cell:getAttribute("field"):setText(fieldText)
     cell:getAttribute("amount"):setText(formatMoney(invoice.amount))
-    cell:getAttribute("due"):setText(TCCalendar.formatDayShort(invoice.dueDay))
+    cell:getAttribute("due"):setText(TCCalendar.formatDayShort(invoice.settledDay or invoice.dueDay))
     setChip(cell:getAttribute("statusChip"), cell:getAttribute("statusChipText"),
         g_i18n:getText("tc_finances_status_" .. invoice.status), INVOICE_STATUS_TONES[invoice.status])
+end
+
+-- A paid invoice's timeliness chip: on time, or how many months late
+-- (part months round up). Nil for anything else.
+local function getInvoiceTimeliness(invoice)
+    if invoice.status ~= TheContractorFinances.STATUS.PAID or invoice.settledDay == nil then
+        return nil
+    end
+    local daysLate = invoice.settledDay - invoice.dueDay
+    if daysLate <= 0 then
+        return g_i18n:getText("tc_finances_paidOnTime"), "good"
+    end
+    local monthsLate = math.ceil(daysLate / g_currentMission.environment.daysPerPeriod)
+    if monthsLate == 1 then
+        return g_i18n:getText("tc_finances_paidMonthLate"), "warn"
+    end
+    return string.format(g_i18n:getText("tc_finances_paidMonthsLate"), monthsLate), "warn"
 end
 
 -- What the status means for this invoice: how long until it's due, how late
@@ -3881,6 +3910,8 @@ local function getInvoiceStatusNote(invoice)
         return string.format(g_i18n:getText("tc_legal_pursuingSolicitor"), since, formatMoney(invoice.pursuitFee))
     elseif invoice.status == TheContractorFinances.STATUS.OVERDUE then
         return string.format(g_i18n:getText("tc_finances_overdueDays"), today - invoice.dueDay)
+    elseif invoice.status == TheContractorFinances.STATUS.PAID then
+        return ""
     elseif invoice.status == TheContractorFinances.STATUS.WRITTEN_OFF then
         return invoice.settledDay ~= nil and
             string.format(g_i18n:getText("tc_finances_writtenOffOn"), TCCalendar.formatDay(invoice.settledDay)) or ""
@@ -3911,6 +3942,7 @@ function MenuContractor:updateInvoiceDetails()
     setChip(self.financesInvoiceStatusChip, self.financesInvoiceStatusChipText,
         g_i18n:getText("tc_finances_status_" .. invoice.status), INVOICE_STATUS_TONES[invoice.status])
     self.financesInvoiceStatusNote:setText(getInvoiceStatusNote(invoice))
+    setChip(self.financesInvoiceTimelinessChip, self.financesInvoiceTimelinessChipText, getInvoiceTimeliness(invoice))
 
     local job = g_currentMission.TheContractor.Jobs:getJob(invoice.farmId, invoice.jobId)
     self.financesInvoiceJob:setText(job ~= nil and job:getSummaryText() or "-")
