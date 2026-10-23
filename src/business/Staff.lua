@@ -1538,6 +1538,34 @@ function TheContractorStaff:editWorker(farmId, workerId, name, gender, appearanc
     return nil
 end
 
+-- At mission start (FSBaseMission.onStartMission), once every mod's loadMap
+-- has run. Wardrobe mods (FS25_WardrobeClothingAddon_BMP) add their clothes
+-- to the player models in their own loadMap, and ours runs before theirs, so
+-- a look built while the save loads can't find those items: it quietly
+-- falls back to the model's defaults, or fails and is rerolled for good.
+-- So nothing is built until now. Any style built early goes, and on the
+-- server a worker with no look (a save from before 041) or one that can't
+-- be rebuilt any more (its model or mod has gone) gets a new one.
+function TheContractorStaff:restoreLooks()
+    local isServer = g_currentMission:getIsServer()
+    local function restore(worker)
+        worker.playerStyle = nil
+        if isServer and TCWorkerAppearance.needsReroll(worker) then
+            worker.appearance = TCWorkerAppearance.roll(worker.gender)
+            worker.playerStyle = nil
+        end
+    end
+
+    for _, candidate in pairs(self.candidatePool) do
+        restore(candidate)
+    end
+    for _, farmWorkers in pairs(self.workersByFarm) do
+        for _, worker in pairs(farmWorkers) do
+            restore(worker)
+        end
+    end
+end
+
 -- Every machine. The cached PlayerStyle goes, so the next look-up builds
 -- the new one; the portrait and standing spot reload theirs. A worker in a
 -- cab keeps the old look until their next trip.
@@ -1788,14 +1816,10 @@ function TheContractorStaff.readWorkerXML(xmlFile, key, farmId)
     local worker = TheContractorWorker.new(id, farmId, name, workSpeed, tierCapability, salary, age,
         growthPotential, birthPeriod, sicknessPropensity, skills, cleanliness)
     worker.status = Utils.getNoNil(getXMLString(xmlFile, key .. "#status"), worker.status)
-    -- 041: a worker saved before 041 gets a gender from their name and a new
-    -- look, as does one whose saved look can't be rebuilt any more.
+    -- 041: a worker saved before 041 gets a gender from their name. Whether
+    -- their look still builds is left to restoreLooks, at mission start.
     worker.gender = getXMLString(xmlFile, key .. "#gender") or TheContractorStaff.guessGender(name)
     worker.appearance = TCWorkerAppearance.readXML(xmlFile, key .. ".appearance")
-    if TCWorkerAppearance.needsReroll(worker) then
-        worker.appearance = TCWorkerAppearance.roll(worker.gender)
-        worker.playerStyle = nil
-    end
     if worker.status == TheContractorWorker.STATUS.SICK then
         worker.sickDaysRemaining = math.max(1, getXMLInt(xmlFile, key .. "#sickDaysRemaining") or 1)
     end

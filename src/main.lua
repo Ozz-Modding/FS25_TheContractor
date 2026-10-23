@@ -497,6 +497,26 @@ function TheContractor.installInitialClientStateHook()
     TheContractor.initialClientStateHookInstalled = true
 end
 
+-- Appended onto FSBaseMission.onStartMission (self is the mission): runs
+-- once every mod's loadMap is done, for anything that needs another mod's
+-- additions in place (see Staff:restoreLooks).
+function TheContractor:onStartMission()
+    local tc = g_currentMission.TheContractor
+    if tc == nil then return end
+
+    tc.Staff:restoreLooks()
+end
+
+function TheContractor.installStartMissionHook()
+    if TheContractor.startMissionHookInstalled then
+        return
+    end
+
+    FSBaseMission.onStartMission = Utils.appendedFunction(FSBaseMission.onStartMission,
+        TheContractor.onStartMission)
+    TheContractor.startMissionHookInstalled = true
+end
+
 function TheContractor:deleteMap()
     Logging.info("TheContractor: deleteMap")
 
@@ -628,5 +648,6 @@ end
 
 TheContractor.installSaveHook()
 TheContractor.installInitialClientStateHook()
+TheContractor.installStartMissionHook()
 
 addModEventListener(TheContractor)
