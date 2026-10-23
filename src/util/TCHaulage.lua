@@ -318,6 +318,30 @@ function TCHaulage.startDelivery(job)
     end
 end
 
+-- Server-only (094). An unallocated job allocated again to a player: what
+-- they've delivered so far still counts. If nothing was being counted (a
+-- hired crew had it, and carted its own crop away), the player only has to
+-- deliver the share of the crop left on the field.
+function TCHaulage.resumeDelivery(job)
+    if not g_currentMission:getIsServer() or not job:needsPlayerDelivery() then
+        return
+    end
+
+    if job.requiredLiters <= 0 then
+        local required = TCHaulage.getRequiredLiters(job)
+        if required == nil then
+            return
+        end
+        local remaining = math.clamp(1 - job.completionPercentage / 100, 0, 1)
+        g_currentMission.TheContractor.Jobs:applyJobDelivery(job.farmId, job.id, 0, required * remaining)
+        dirtyJobIds[job.id] = true
+    end
+
+    if job.deliveredLiters < job.requiredLiters then
+        registerTracker(job)
+    end
+end
+
 -- Server-only. Stops counting deliveries for a job - terms met, or the job
 -- is over. Safe to call for any job.
 function TCHaulage.stopDelivery(job)

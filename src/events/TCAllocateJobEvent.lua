@@ -9,7 +9,8 @@
 -- comma-joined-string wire shape TheContractorJobs.writeJob already uses
 -- for a job's own assignedEquipmentIds. fixedRoles: the player chose who
 -- operates (workerIds[1]) and who hauls (workerIds[2]) rather than leaving
--- it to TheContractorAllocation:assignCrewRoles. See src/events/README.md
+-- it to TheContractorAllocation:assignCrewRoles. A player-driven job takes
+-- the requesting player's nickname from the connection (093). See src/events/README.md
 -- for the general event conventions.
 
 TCAllocateJobEvent = {}
@@ -55,6 +56,7 @@ end
 function TCAllocateJobEvent:run(connection)
     if g_currentMission:getIsServer() then
         g_currentMission.TheContractor.Allocation:allocateJob(self.farmId, self.jobId, self.workerIds,
-            self.equipmentIds, self.haulageEquipmentIds, self.fixedRoles)
+            self.equipmentIds, self.haulageEquipmentIds, self.fixedRoles,
+            TheContractorAllocation.getConnectionPlayerName(connection))
     end
 end

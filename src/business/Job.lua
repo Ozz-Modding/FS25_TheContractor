@@ -55,8 +55,12 @@ TheContractorJob.VALID_TRANSITIONS = {
         -- signal that it's done.
         [TheContractorJob.STATE.COMPLETED] = true,
         [TheContractorJob.STATE.MISSED] = true,
+        -- 094: unallocated (TheContractorJobs:unallocateJob), to be given
+        -- to someone else.
+        [TheContractorJob.STATE.ACCEPTED] = true,
     },
     [TheContractorJob.STATE.IN_PROGRESS] = {
+        [TheContractorJob.STATE.ACCEPTED] = true,
         [TheContractorJob.STATE.COMPLETED] = true,
         [TheContractorJob.STATE.MISSED] = true,
     },
@@ -164,6 +168,17 @@ function TheContractorJob.new(id, farmId, jobType, fieldId, requiredSkillLevel, 
     -- yard for the whole job and its cooldown, and is never rigged.
     self.haulerWorkerId = nil
     self.haulageEquipmentIds = {}
+
+    -- 093: a player-driven job's player, by nickname: whoever allocated it
+    -- (TCAllocateJobEvent's connection). In multiplayer any of the farm's
+    -- players can drive it; the logbook records who did. Saved and
+    -- streamed, nil for a hired crew and for jobs allocated before 093.
+    self.allocatedPlayerName = nil
+
+    -- 094, server-only, saved: the job's been unallocated since its field
+    -- was prepared, so the next allocation carries on from the work done
+    -- (no fresh field, no progress reset). Cleared by that allocation.
+    self.wasUnallocated = false
 
     -- Haulage jobs only: the selling point the crop has to go to, picked at
     -- generation like vanilla's HarvestMission (highest price). Stored the
@@ -358,6 +373,20 @@ end
 -- complete (see TCHaulage / TheContractorJobs:completeJob).
 function TheContractorJob:needsPlayerDelivery()
     return self.includesHaulage and self.assignedWorkerId == nil
+end
+
+-- 093: no hired crew - the farm's player(s) do it themselves.
+function TheContractorJob:isPlayerDriven()
+    return self.assignedWorkerId == nil and self.haulerWorkerId == nil
+end
+
+-- 093: the player who took a player-driven job on, or "A player" for a job
+-- allocated before that was recorded.
+function TheContractorJob:getPlayerName()
+    if self.allocatedPlayerName ~= nil and self.allocatedPlayerName ~= "" then
+        return self.allocatedPlayerName
+    end
+    return g_i18n:getText("tc_logbook_aPlayer")
 end
 
 -- Every hired worker on the job - the operator, plus the hauler on a

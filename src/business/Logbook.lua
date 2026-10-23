@@ -67,6 +67,7 @@ TheContractorLogbook.ROLE = {
 TheContractorLogbook.SOURCE = {
     AUTODRIVE = "autodrive",
     COURSEPLAY = "courseplay",
+    FOLLOWME = "followme",
     AI = "ai",
 }
 
@@ -81,7 +82,9 @@ function TheContractorLogbook.new()
 
     -- Server-only from here.
     -- pendingByJobId[jobId] = { arrivedAt, start = { [vehicleId] = snapshot },
-    -- supplies = { [fillTypeName] = liters }, playerName }, saved.
+    -- supplies = { [fillTypeName] = liters }, playerName, earlierCrew },
+    -- saved. earlierCrew (094): who had the job before it was unallocated,
+    -- as one line of names.
     self.pendingByJobId = {}
     -- Open staff-driver sessions by the bound vehicle's object id (as
     -- Drivers keys them): { farmId, workerId, start, sources }.
@@ -211,6 +214,28 @@ function TheContractorLogbook:onWorkStarted(job)
     end
 end
 
+-- From Jobs:unallocateJob (094), before the crew's taken off: their names
+-- go on the job's entry as its earlier crew. The rest of what's pending
+-- (the condition the machines set off in, supplies, the arrival) stays.
+function TheContractorLogbook:onCrewChanged(job)
+    if not g_currentMission:getIsServer() then
+        return
+    end
+    local names = {}
+    if job:isPlayerDriven() then
+        table.insert(names, job:getPlayerName())
+    else
+        local staff = g_currentMission.TheContractor.Staff
+        for _, workerId in ipairs(job:getWorkerIds()) do
+            local worker = staff:getWorker(job.farmId, workerId)
+            table.insert(names, worker ~= nil and worker.name or g_i18n:getText("tc_calendar_formerWorker"))
+        end
+    end
+    local pending = getPending(self, job)
+    local crew = table.concat(names, ", ")
+    pending.earlierCrew = pending.earlierCrew ~= nil and (pending.earlierCrew .. "; " .. crew) or crew
+end
+
 -- From Dispatch, once a hired worker's equipment is rigged on the field.
 -- First call wins, so a watchdog retry or a resume keeps the real arrival.
 function TheContractorLogbook:onArrived(job)
@@ -298,6 +323,7 @@ function TheContractorLogbook:buildJobEntry(job, outcome, reputation)
         reputation = reputation,
         qualityScore = job.qualityScore,
         stuckInterventions = job.stuckInterventions or 0,
+        earlierCrew = pending.earlierCrew,
         completionPercentage = job.completionPercentage or 0,
         fuelLiters = job.fuelUsedLiters or 0,
         fuelCost = job.fuelCost or 0,
@@ -515,6 +541,8 @@ function TheContractorLogbook:noteDriverActivity(vehicleId, vehicle)
         source = TheContractorLogbook.SOURCE.AUTODRIVE
     elseif vehicle.getJob ~= nil and TCCourseplay.isCpJob(vehicle:getJob()) then
         source = TheContractorLogbook.SOURCE.COURSEPLAY
+    elseif vehicle.getJob ~= nil and TCFollowMe.isFollowMeJob(vehicle:getJob()) then
+        source = TheContractorLogbook.SOURCE.FOLLOWME
     end
     session.sources[source] = true
 end
@@ -523,7 +551,7 @@ end
 local function joinSources(sources)
     local list = {}
     for _, source in ipairs({ TheContractorLogbook.SOURCE.AUTODRIVE, TheContractorLogbook.SOURCE.COURSEPLAY,
-        TheContractorLogbook.SOURCE.AI }) do
+        TheContractorLogbook.SOURCE.FOLLOWME, TheContractorLogbook.SOURCE.AI }) do
         if sources[source] then
             table.insert(list, source)
         end
@@ -992,6 +1020,7 @@ function TheContractorLogbook.writeJobEntry(streamId, entry)
     writeOptionalInt(streamId, entry.reputation)
     writeOptionalInt(streamId, entry.qualityScore)
     streamWriteInt32(streamId, entry.stuckInterventions or 0)
+    writeString(streamId, entry.earlierCrew)
     streamWriteFloat32(streamId, entry.completionPercentage or 0)
     streamWriteFloat32(streamId, entry.fuelLiters or 0)
     streamWriteFloat32(streamId, entry.fuelCost or 0)
@@ -1051,6 +1080,7 @@ function TheContractorLogbook.readJobEntry(streamId)
         reputation = readOptionalInt(streamId),
         qualityScore = readOptionalInt(streamId),
         stuckInterventions = streamReadInt32(streamId),
+        earlierCrew = readString(streamId),
         completionPercentage = streamReadFloat32(streamId),
         fuelLiters = streamReadFloat32(streamId),
         fuelCost = streamReadFloat32(streamId),
@@ -1234,6 +1264,9 @@ local function saveJobEntry(xmlFile, key, entry)
         setXMLInt(xmlFile, key .. "#quality", entry.qualityScore)
     end
     setXMLInt(xmlFile, key .. "#stuckInterventions", entry.stuckInterventions or 0)
+    if entry.earlierCrew ~= nil then
+        setXMLString(xmlFile, key .. "#earlierCrew", entry.earlierCrew)
+    end
     setXMLFloat(xmlFile, key .. "#completion", entry.completionPercentage or 0)
     setXMLFloat(xmlFile, key .. "#fuelLiters", entry.fuelLiters or 0)
     setXMLFloat(xmlFile, key .. "#fuelCost", entry.fuelCost or 0)
@@ -1305,6 +1338,7 @@ local function loadJobEntry(xmlFile, key)
         reputation = getXMLInt(xmlFile, key .. "#reputation"),
         qualityScore = getXMLInt(xmlFile, key .. "#quality"),
         stuckInterventions = Utils.getNoNil(getXMLInt(xmlFile, key .. "#stuckInterventions"), 0),
+        earlierCrew = getXMLString(xmlFile, key .. "#earlierCrew"),
         completionPercentage = Utils.getNoNil(getXMLFloat(xmlFile, key .. "#completion"), 0),
         fuelLiters = Utils.getNoNil(getXMLFloat(xmlFile, key .. "#fuelLiters"), 0),
         fuelCost = Utils.getNoNil(getXMLFloat(xmlFile, key .. "#fuelCost"), 0),
@@ -1485,6 +1519,7 @@ function TheContractorLogbook:loadFromXMLFile(xmlFile)
         local pending = {
             arrivedAt = getXMLFloat(xmlFile, key .. "#arrivedAt"),
             playerName = getXMLString(xmlFile, key .. "#playerName"),
+            earlierCrew = getXMLString(xmlFile, key .. "#earlierCrew"),
             start = {},
             -- By uniqueId until resolveSavedVehicles.
             savedStart = {},
@@ -1602,6 +1637,9 @@ function TheContractorLogbook:saveToXmlFile(xmlFile)
         if pending.playerName ~= nil then
             setXMLString(xmlFile, key .. "#playerName", pending.playerName)
         end
+        if pending.earlierCrew ~= nil then
+            setXMLString(xmlFile, key .. "#earlierCrew", pending.earlierCrew)
+        end
         local startIndex = 0
         for vehicleId, snapshot in pairs(pending.start) do
             local uniqueId = TCVehicleIds.getUniqueId(vehicleId)
@@ -1669,6 +1707,9 @@ function TheContractorLogbook.formatJobEntryText(entry)
             member.rating ~= nil and string.format(", rating %d", member.rating) or ""))
     end
     table.insert(lines, "  Crew: " .. (#crew > 0 and table.concat(crew, ", ") or "-"))
+    if entry.earlierCrew ~= nil then
+        table.insert(lines, "  Earlier crew (unallocated): " .. entry.earlierCrew)
+    end
 
     for _, machine in ipairs(entry.equipment) do
         local parts = {}

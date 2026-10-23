@@ -613,12 +613,8 @@ function TheContractorOffice:loadFromXMLFile(xmlFile)
 end
 
 -- A loaded member with no look, or one that can't be rebuilt, gets a new
--- one, as a worker does (041).
+-- one at mission start, as a worker does (Staff:restoreLooks).
 function TheContractorOffice:addLoadedMember(member)
-    if TCWorkerAppearance.needsReroll(member) then
-        member.appearance = TCWorkerAppearance.roll(member.gender)
-        member.playerStyle = nil
-    end
     self.membersByFarm[member.farmId] = self.membersByFarm[member.farmId] or {}
     self.membersByFarm[member.farmId][member.role] = member
 end

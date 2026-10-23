@@ -184,6 +184,33 @@ test("a worker on a standing spot reloads their model but stays put", function()
     assertEquals(TCIdleStaff.noStyle[7], nil, "new look gets a try")
 end)
 
+test("looks are rebuilt at mission start, after other mods' loadMap", function()
+    local _, staff = setup()
+    TCWorkerAppearance.roll = function(gender)
+        return look(gender .. ".xml")
+    end
+    -- Built while the save loaded, before a wardrobe mod added its clothes.
+    local worker = addWorker(staff, 1, 7)
+    local savedLook = worker.appearance
+    local broken = addWorker(staff, 1, 8)
+    broken.appearance = look("gone.xml")
+    broken.appearance.isBroken = true
+    local candidate = TheContractorWorker.new(9, nil, "Jane Smith", 3, { small = 5 }, 1725, 34, 5)
+    candidate.gender = "female"
+    staff.candidatePool[9] = candidate
+    local admin = { id = 10, gender = "female", appearance = look("gone.xml") }
+    admin.appearance.isBroken = true
+    g_currentMission.TheContractor.Office = { membersByFarm = { [1] = { administrator = admin } } }
+
+    staff:restoreLooks()
+
+    assertEquals(worker.appearance, savedLook, "a look that builds is kept")
+    assertEquals(TCWorkerAppearance.getPlayerStyle(worker).builtFrom, savedLook, "early style rebuilt")
+    assertEquals(broken.appearance.model, "male.xml", "a look that can't be rebuilt is rerolled")
+    assertEquals(candidate.appearance.model, "female.xml", "a candidate with no look gets one")
+    assertEquals(admin.appearance.model, "female.xml", "office staff are restored too")
+end)
+
 test("tcWorker rename renames and keeps the look", function()
     local world, staff = setup()
     local worker = addWorker(staff, 1, 7)

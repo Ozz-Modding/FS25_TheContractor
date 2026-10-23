@@ -1,6 +1,7 @@
--- AI Helper, AutoDrive & Courseplay staff drivers (037). While a farm has a
--- company, every vehicle driven by a vanilla AI Helper, AutoDrive (AD) or
--- Courseplay (CP) needs one of the farm's staff behind the wheel (our own
+-- AI Helper, AutoDrive, Courseplay & Follow Me staff drivers (037). While a
+-- farm has a company, every vehicle driven by a vanilla AI Helper,
+-- AutoDrive (AD), Courseplay (CP) or a Follow Me follower needs one of the
+-- farm's staff behind the wheel (our own
 -- contract jobs excepted - Dispatch already has their operator): starting
 -- any of them opens a picker
 -- (TCDriverPickerDialog) for an idle worker, and a start that skips the
@@ -19,9 +20,9 @@
 -- AD/AI per-tick wage: TCAutoDrive zeroes AD's, and the AISystem:startJob
 -- hook below gives CP's (and any AI job AD hands over to) the same
 -- getPricePerMs override Dispatch's contract jobs use. Driving time adds up
--- across the whole chain and buys one small growth roll (030) on release.
+-- across the whole chain and buys a growth roll (030) every hour.
 --
--- Everything mod-specific lives in TCAutoDrive/TCCourseplay, each
+-- Everything mod-specific lives in TCAutoDrive/TCCourseplay/TCFollowMe, each
 -- installed only if its mod is loaded; this subsystem owns the bindings,
 -- the release tick, growth, save/load and initial client state. Bindings
 -- are server-authoritative and keyed by the root vehicle's network object
@@ -37,12 +38,15 @@ TheContractorDrivers.RELEASE_GRACE_MS = 5000
 -- the game's up.
 TheContractorDrivers.LOAD_RELEASE_GRACE_MS = 60000
 
--- One growth roll per stint, on release: chance DRIVER_GROWTH_CHANCE_PER_HOUR
--- x in-game hours driven, capped at DRIVER_GROWTH_MAX_CHANCE (a contract
--- job's roll is ~0.3), against the tier of the vehicle driven. Stints under
--- DRIVER_GROWTH_MIN_MINUTES in-game minutes don't roll.
-TheContractorDrivers.DRIVER_GROWTH_CHANCE_PER_HOUR = 0.03
-TheContractorDrivers.DRIVER_GROWTH_MAX_CHANCE = 0.15
+-- One growth roll for every in-game hour driven (at
+-- DRIVER_GROWTH_CHANCE_PER_HOUR, before Staff's level curve), against the
+-- rig as it is at that moment, plus one on release for what's left of the
+-- hour, scaled down to it - unless that's under DRIVER_GROWTH_MIN_MINUTES.
+-- Tuned so a skill goes 1 -> 4 in about 8 hours of driving (when it's
+-- picked ~60% of the time, as a tractor's rating or a combine's harvesting
+-- is), with the curve slowing things down from there.
+TheContractorDrivers.DRIVER_GROWTH_CHANCE_PER_HOUR = 0.27
+TheContractorDrivers.DRIVER_GROWTH_HOUR_MS = 60 * 60 * 1000
 TheContractorDrivers.DRIVER_GROWTH_MIN_MINUTES = 5
 
 TheContractorDrivers.START = {
@@ -88,6 +92,7 @@ end
 function TheContractorDrivers.installHooks()
     TCAutoDrive.install()
     TCCourseplay.install()
+    TCFollowMe.install()
 
     if not AISystem.tcDriverHookInstalled then
         AISystem.startJob = Utils.overwrittenFunction(AISystem.startJob, function(...)
@@ -146,7 +151,7 @@ function TheContractorDrivers.onAISystemStartJob(aiSystem, superFunc, job, start
         local refusal = drivers:getServerStartRefusal(vehicle)
         if refusal ~= nil then
             Logging.info("TheContractor: refused %s start on '%s' (%s)",
-                TCCourseplay.isCpJob(job) and "Courseplay" or "AI Helper", vehicle:getFullName(), refusal)
+                TheContractorDrivers.getAIJobLabel(job), vehicle:getFullName(), refusal)
             drivers:notify(vehicle:getOwnerFarmId(), refusal, vehicle)
             return
         end
@@ -157,6 +162,16 @@ function TheContractorDrivers.onAISystemStartJob(aiSystem, superFunc, job, start
     end
 
     return superFunc(aiSystem, job, startFarmId)
+end
+
+-- For logging only.
+function TheContractorDrivers.getAIJobLabel(job)
+    if TCCourseplay.isCpJob(job) then
+        return "Courseplay"
+    elseif TCFollowMe.isFollowMeJob(job) then
+        return "Follow Me"
+    end
+    return "AI Helper"
 end
 
 function TheContractorDrivers.getAIJobVehicle(job)
@@ -382,7 +397,11 @@ function TheContractorDrivers:releaseDriver(vehicleId, vehicle)
     end
 
     if vehicle ~= nil then
-        self:rollDrivingGrowth(binding, vehicle)
+        local hourMs = TheContractorDrivers.DRIVER_GROWTH_HOUR_MS
+        local leftoverMs = binding.activeMs % hourMs
+        if leftoverMs / 60000 >= TheContractorDrivers.DRIVER_GROWTH_MIN_MINUTES then
+            self:rollDrivingGrowth(binding, vehicle, leftoverMs / hourMs)
+        end
     end
     -- 060: and the end of it.
     g_currentMission.TheContractor.Logbook:onDriverReleased(vehicleId, vehicle, binding)
@@ -460,7 +479,12 @@ function TheContractorDrivers:update(dt)
         if vehicle == nil or vehicle.isDeleted or vehicle.isDeleting then
             table.insert(toRelease, { vehicleId = vehicleId })
         elseif TheContractorDrivers.isVehicleDriven(vehicle) then
+            local hourMs = TheContractorDrivers.DRIVER_GROWTH_HOUR_MS
+            local hoursBefore = math.floor(binding.activeMs / hourMs)
             binding.activeMs = binding.activeMs + gameDt
+            for _ = hoursBefore + 1, math.floor(binding.activeMs / hourMs) do
+                self:rollDrivingGrowth(binding, vehicle, 1)
+            end
             -- 060: AutoDrive, Courseplay or a plain AI helper, for the log.
             g_currentMission.TheContractor.Logbook:noteDriverActivity(vehicleId, vehicle)
             binding.idleMs = 0
@@ -478,14 +502,9 @@ function TheContractorDrivers:update(dt)
     end
 end
 
-function TheContractorDrivers:rollDrivingGrowth(binding, vehicle)
-    local minutes = binding.activeMs / 60000
-    if minutes < TheContractorDrivers.DRIVER_GROWTH_MIN_MINUTES then
-        return
-    end
-
-    local chance = math.min(TheContractorDrivers.DRIVER_GROWTH_MAX_CHANCE,
-        TheContractorDrivers.DRIVER_GROWTH_CHANCE_PER_HOUR * minutes / 60)
+-- `hours` of driving (1, or the part-hour left on release).
+function TheContractorDrivers:rollDrivingGrowth(binding, vehicle, hours)
+    local chance = TheContractorDrivers.DRIVER_GROWTH_CHANCE_PER_HOUR * hours
     -- 056: happy staff learn a little faster.
     local worker = g_currentMission.TheContractor.Staff:getWorker(binding.farmId, binding.workerId)
     if worker ~= nil then

@@ -75,8 +75,9 @@ TheContractorFinances.RECOVERY_CHANCE_COVERED = 0.8
 TheContractorFinances.RECOVERY_CHANCE_SOLICITOR = 0.65
 
 -- Settled (paid/written off) invoices are dropped from the save once
--- they're this many periods old - nothing reads them after that.
-TheContractorFinances.KEEP_SETTLED_PERIODS = 12
+-- they're this many periods old. The Finances tab's invoice history lists
+-- the same span (two years).
+TheContractorFinances.KEEP_SETTLED_PERIODS = 24
 
 -- The forecast covers this month and the next FORECAST_PERIODS - 1.
 TheContractorFinances.FORECAST_PERIODS = 3
@@ -106,12 +107,13 @@ function TheContractorFinances:getInvoice(invoiceId)
     return self.invoicesById[invoiceId]
 end
 
--- The farm's invoices that haven't been paid (outstanding, overdue and
--- written off), oldest due first.
-function TheContractorFinances:getUnpaidInvoices(farmId)
+-- The farm's open invoices (outstanding, overdue and pursuing), oldest due
+-- first.
+function TheContractorFinances:getOpenInvoices(farmId)
     local result = {}
     for _, invoice in pairs(self.invoicesById) do
-        if invoice.farmId == farmId and invoice.status ~= TheContractorFinances.STATUS.PAID then
+        if invoice.farmId == farmId and invoice.status ~= TheContractorFinances.STATUS.PAID and
+            invoice.status ~= TheContractorFinances.STATUS.WRITTEN_OFF then
             table.insert(result, invoice)
         end
     end
@@ -120,6 +122,29 @@ function TheContractorFinances:getUnpaidInvoices(farmId)
             return a.dueDay < b.dueDay
         end
         return a.id < b.id
+    end)
+    return result
+end
+
+-- The farm's settled invoices (paid and written off) from the last
+-- KEEP_SETTLED_PERIODS, latest settled first. Older ones are only dropped
+-- at the next save, so they're left out here too.
+function TheContractorFinances:getSettledInvoices(farmId)
+    local environment = g_currentMission.environment
+    local keepAfterDay = environment.currentMonotonicDay -
+        TheContractorFinances.KEEP_SETTLED_PERIODS * environment.daysPerPeriod
+
+    local result = {}
+    for _, invoice in pairs(self.invoicesById) do
+        if invoice.farmId == farmId and invoice.settledDay ~= nil and invoice.settledDay >= keepAfterDay then
+            table.insert(result, invoice)
+        end
+    end
+    table.sort(result, function(a, b)
+        if a.settledDay ~= b.settledDay then
+            return a.settledDay > b.settledDay
+        end
+        return a.id > b.id
     end)
     return result
 end

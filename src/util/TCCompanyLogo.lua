@@ -1,8 +1,9 @@
 -- The company logo on the Overview's company card. A player's own logo.dds
--- in modSettings/FS25_TheContractor/savegame<N>/ (just this save) or else
--- modSettings/FS25_TheContractor/ (every save) is used if there is one,
--- otherwise ours. DDS only: the logo also goes on 084's sign, where a PNG (no
--- mipmaps) shimmers at a distance. It's read from this machine's
+-- (else logo.png) in modSettings/FS25_TheContractor/savegame<N>/ (just this
+-- save) or else modSettings/FS25_TheContractor/ (every save) is used if
+-- there is one, otherwise ours. A PNG works but the game logs performance
+-- warnings for it (no mipmaps, so it also shimmers at a distance on 084's
+-- signs): harmless. It's read from this machine's
 -- modSettings only, so in multiplayer every player sees their own file (or
 -- the default): an image can't sensibly be sent over the network.
 --
@@ -12,7 +13,8 @@
 TCCompanyLogo = {}
 
 TCCompanyLogo.DEFAULT_FILENAME = "images/defaultLogo.dds"
-TCCompanyLogo.CUSTOM_FILENAME = "logo.dds"
+-- In order of preference.
+TCCompanyLogo.CUSTOM_FILENAMES = { "logo.dds", "logo.png" }
 TCCompanyLogo.SAVEGAME_FOLDER_PREFIX = "savegame"
 
 -- g_currentModSettingsDirectory is only set while the mod's scripts are
@@ -33,19 +35,20 @@ it the mod uses its own placeholder logo.
 
 YOUR COMPANY LOGO
 -----------------
-Put your logo here as logo.dds to replace the placeholder.
+Put your logo here as logo.dds (or logo.png) to replace the placeholder.
 It shows on the Overview tab's company card and on the Company Sign and
 Company Wall Signs (construction menu, Contractor tab).
 
 A different logo for one save: make a folder here named after its save slot
-(savegame1, savegame2, ...) and put that save's logo.dds in it. A save with
-no logo.dds of its own uses the one in this folder.
+(savegame1, savegame2, ...) and put that save's logo in it. A save with no
+logo of its own uses the one in this folder.
 
 SIGN DESIGNS
 ------------
 Put images in the signs folder next to this file. Each one becomes a design
-you can pick for a Company Sign or Wall Sign when you place it. The file name is the design's name: "for_sale.dds" is offered
-as "For Sale". The company logo is always the first design.
+you can pick for a Company Sign or Wall Sign when you place it. The file
+name is the design's name: "for_sale.dds" is offered as "For Sale". The
+company logo is always the first design.
 
 New images show after you reload the save. A sign keeps its design by file
 name, so if you delete or rename its image it goes back to the company logo.
@@ -54,8 +57,10 @@ IMAGE SIZE AND FORMAT
 ---------------------
 - Square, with sides a multiple of 4: 512x512 or 1024x1024 are best.
   Other shapes are stretched to fit.
-- DDS only, ideally with mipmaps (GIANTS Texture Tool, or paint.net's
-  DDS export). Other formats such as PNG are ignored.
+- DDS or PNG. DDS is best, ideally with mipmaps (GIANTS Texture Tool, or
+  paint.net's DDS export). A PNG works, but you will get warnings in the
+  game's log if you don't use DDS format. If there's a DDS and a PNG of the
+  same name, the DDS is used.
 - Replacing an image the game has already shown needs a game restart.
 
 MULTIPLAYER
@@ -108,13 +113,18 @@ function TCCompanyLogo.getSavegameDir()
     return string.format("%s%s%d/", dir, TCCompanyLogo.SAVEGAME_FOLDER_PREFIX, index)
 end
 
--- The save's own logo.dds if its folder has one, else the shared one, else ours.
+-- The save's own logo if its folder has one, else the shared one, else
+-- ours. A DDS comes before a PNG in the same folder.
 function TCCompanyLogo.getFilename()
     local dirs = { TCCompanyLogo.getSavegameDir(), TCCompanyLogo.settingsDir }
     for i = 1, 2 do
         local dir = dirs[i]
-        if dir ~= nil and fileExists(dir .. TCCompanyLogo.CUSTOM_FILENAME) then
-            return dir .. TCCompanyLogo.CUSTOM_FILENAME
+        if dir ~= nil then
+            for _, name in ipairs(TCCompanyLogo.CUSTOM_FILENAMES) do
+                if fileExists(dir .. name) then
+                    return dir .. name
+                end
+            end
         end
     end
     return TCCompanyLogo.getDefaultFilename()

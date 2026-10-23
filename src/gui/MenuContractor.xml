@@ -637,13 +637,13 @@
                 <!-- 051: the left-hand list shows either invoices or overheads. -->
                 <MultiTextOption profile="tc_calendarPeriodSwitcher" id="financesViewSelector" position="40px -20px" onClick="onClickFinancesView" wrap="true" size="380px 32px"/>
 
-                <!-- Unpaid invoices: outstanding, overdue and written off. -->
+                <!-- Open invoices (outstanding, overdue, pursuing) or the history (paid, written off). -->
                 <GuiElement id="financesListContainer" position="40px -64px">
                     <GuiElement profile="tc_tableHeaderRow" position="0px 0px" size="600px 30px">
                         <Button profile="tc_tableHeader" position="14px 0px" text="$l10n_tc_finances_columnJob" handleFocus="false"/>
                         <Button profile="tc_tableHeader" position="200px 0px" text="$l10n_tc_finances_columnField" handleFocus="false"/>
                         <Button profile="tc_tableHeader" position="270px 0px" text="$l10n_tc_finances_columnAmount" handleFocus="false"/>
-                        <Button profile="tc_tableHeader" position="380px 0px" text="$l10n_tc_finances_columnDue" handleFocus="false"/>
+                        <Button profile="tc_tableHeader" id="financesInvoiceDateHeader" position="380px 0px" text="$l10n_tc_finances_columnDue" handleFocus="false"/>
                         <Button profile="tc_tableHeader" position="490px 0px" text="$l10n_tc_finances_columnStatus" handleFocus="false"/>
                         <Bitmap profile="tc_tableHeaderDivider"/>
                     </GuiElement>
@@ -750,6 +750,9 @@
                         <RoundCorner profile="tc_chip" id="financesInvoiceStatusChip" position="220px -7px" size="110px 20px"/>
                         <Text profile="tc_chipText" id="financesInvoiceStatusChipText" position="220px -7px" size="110px 20px"/>
                         <Text profile="tc_detailValue" id="financesInvoiceStatusNote" text="" position="345px 0px" size="407px 34px"/>
+                        <!-- A paid invoice: on time or how late, in place of the note. -->
+                        <RoundCorner profile="tc_chip" id="financesInvoiceTimelinessChip" position="345px -7px" size="130px 20px"/>
+                        <Text profile="tc_chipText" id="financesInvoiceTimelinessChipText" position="345px -7px" size="130px 20px"/>
                         <Bitmap profile="tc_detailRowDivider"/>
                     </GuiElement>
                     <GuiElement profile="tc_detailRowTall" size="752px 64px">
