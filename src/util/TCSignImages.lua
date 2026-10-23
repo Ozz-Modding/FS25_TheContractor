@@ -72,9 +72,14 @@ function TCSignImages.listFiles(folder)
     return files
 end
 
--- The .dds images in signs/, sorted by name: { name, saveId, filename }
--- each. DDS only, like the logo: it's what the game's textures are, and a
--- PNG has no mipmaps, so it shimmers at a distance.
+-- The image formats signs/ takes, in order of preference. A PNG works, like
+-- the logo's, but the game logs performance warnings for it (no mipmaps,
+-- so it shimmers at a distance).
+TCSignImages.EXTENSIONS = { dds = 1, png = 2 }
+
+-- The images in signs/, sorted by name: { name, saveId, filename } each.
+-- A design is saved by its name without the extension, so a DDS and a PNG
+-- of the same name are one design, the DDS.
 function TCSignImages.getImages()
     local folder = TCSignImages.getFolder()
     if folder == nil then
@@ -82,16 +87,26 @@ function TCSignImages.getImages()
     end
 
     local images = {}
+    local byKey = {}
     for _, file in ipairs(TCSignImages.listFiles(folder)) do
         local stem, extension = file:match("^(.+)%.(%a+)$")
-        if stem ~= nil and extension:lower() == "dds" then
+        local preference = extension ~= nil and TCSignImages.EXTENSIONS[extension:lower()] or nil
+        if stem ~= nil and preference ~= nil then
             local key = stem:lower()
-            table.insert(images, {
-                name = TCSignImages.getDisplayName(stem),
-                saveId = TCSignImages.SAVE_ID_PREFIX .. key,
-                filename = folder .. file,
-                sortKey = key,
-            })
+            local existing = byKey[key]
+            if existing == nil then
+                existing = {
+                    name = TCSignImages.getDisplayName(stem),
+                    saveId = TCSignImages.SAVE_ID_PREFIX .. key,
+                    sortKey = key,
+                }
+                byKey[key] = existing
+                table.insert(images, existing)
+            end
+            if existing.preference == nil or preference < existing.preference then
+                existing.filename = folder .. file
+                existing.preference = preference
+            end
         end
     end
     table.sort(images, function(a, b)

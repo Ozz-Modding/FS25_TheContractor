@@ -552,6 +552,7 @@
 		<text name="tc_finances_columnField" text="Field"/>
 		<text name="tc_finances_columnAmount" text="Amount"/>
 		<text name="tc_finances_columnDue" text="Due"/>
+		<text name="tc_finances_columnSettled" text="Settled"/>
 		<text name="tc_finances_columnStatus" text="Status"/>
 		<text name="tc_finances_status_outstanding" text="Outstanding"/>
 		<text name="tc_finances_status_overdue" text="Overdue"/>
@@ -559,6 +560,7 @@
 		<text name="tc_finances_status_paid" text="Paid"/>
 		<text name="tc_finances_status_pursuing" text="Pursuing"/>
 		<text name="tc_finances_noInvoices" text="No unpaid invoices."/>
+		<text name="tc_finances_noInvoiceHistory" text="No paid or written-off invoices in the last two years."/>
 		<text name="tc_finances_invoiceHeading" text="Invoice"/>
 		<text name="tc_finances_noInvoiceSelected" text="Completed jobs are invoiced here until the customer pays."/>
 		<text name="tc_finances_invoiceTitle" text="%s on Field %s"/>
@@ -572,6 +574,9 @@
 		<text name="tc_finances_dueToday" text="Due today"/>
 		<text name="tc_finances_overdueDays" text="%d day(s) overdue"/>
 		<text name="tc_finances_writtenOffOn" text="Written off %s"/>
+		<text name="tc_finances_paidOnTime" text="On time"/>
+		<text name="tc_finances_paidMonthLate" text="1 month late"/>
+		<text name="tc_finances_paidMonthsLate" text="%d months late"/>
 		<text name="tc_finances_cashFlowHeading" text="Cash flow"/>
 		<text name="tc_finances_balance" text="Balance"/>
 		<text name="tc_finances_outstanding" text="Outstanding"/>
@@ -588,6 +593,7 @@
 		<text name="tc_finances_overheads" text="Overheads"/>
 		<text name="tc_finances_claims" text="Claims, legal &amp; fines"/>
 		<text name="tc_finances_viewInvoices" text="Invoices"/>
+		<text name="tc_finances_viewHistory" text="Invoice history"/>
 		<text name="tc_finances_viewOverheads" text="Overheads"/>
 		<text name="tc_finances_writeOffButton" text="Write off"/>
 		<text name="tc_finances_writeOffConfirm" text="Write off the invoice for %s (%s)? It will be treated as never paid."/>

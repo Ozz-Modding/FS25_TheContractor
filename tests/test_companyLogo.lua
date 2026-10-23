@@ -1,4 +1,4 @@
--- The Overview's company logo: the player's own logo.dds from
+-- The Overview's company logo: the player's own logo.dds (or .png) from
 -- modSettings if there is one (the save's own savegame<N>/ folder first),
 -- else the mod's default.
 
@@ -21,9 +21,20 @@ test("no logo of the player's own shows the default", function()
     assertEquals("mods/FS25_TheContractor/images/defaultLogo.dds", TCCompanyLogo.getFilename())
 end)
 
-test("a logo.png in modSettings is ignored", function()
+test("a logo.png in modSettings is used", function()
     setup({ "modSettings/FS25_TheContractor/logo.png" })
-    assertEquals("mods/FS25_TheContractor/images/defaultLogo.dds", TCCompanyLogo.getFilename())
+    assertEquals("modSettings/FS25_TheContractor/logo.png", TCCompanyLogo.getFilename())
+end)
+
+test("a logo.dds comes before a logo.png in the same folder", function()
+    setup({ "modSettings/FS25_TheContractor/logo.png", "modSettings/FS25_TheContractor/logo.dds" })
+    assertEquals("modSettings/FS25_TheContractor/logo.dds", TCCompanyLogo.getFilename())
+end)
+
+test("a save's own logo.png comes before the shared logo.dds", function()
+    setup({ "modSettings/FS25_TheContractor/logo.dds", "modSettings/FS25_TheContractor/savegame1/logo.png" })
+    g_currentMission.missionInfo.savegameIndex = 1
+    assertEquals("modSettings/FS25_TheContractor/savegame1/logo.png", TCCompanyLogo.getFilename())
 end)
 
 test("a logo.dds in modSettings is used", function()
