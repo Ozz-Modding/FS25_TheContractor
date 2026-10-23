@@ -39,7 +39,7 @@ Run your farm as an agricultural contracting business in Farming Simulator 25. T
 - Spraying certificates and paid training
 - Each worker has their own look, a live 3D portrait, and can be renamed and restyled
 - Idle staff stand around the yard on placeable **standing spots**
-- AutoDrive and Courseplay vehicles get a driver from your staff
+- AutoDrive, Courseplay and Follow Me vehicles get a driver from your staff
 
 ### Running the business
 - Jobs are **invoiced**. Clients pay late, and some never pay

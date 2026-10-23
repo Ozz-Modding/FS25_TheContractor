@@ -1,6 +1,7 @@
--- AI Helper, AutoDrive & Courseplay staff drivers (037). While a farm has a
--- company, every vehicle driven by a vanilla AI Helper, AutoDrive (AD) or
--- Courseplay (CP) needs one of the farm's staff behind the wheel (our own
+-- AI Helper, AutoDrive, Courseplay & Follow Me staff drivers (037). While a
+-- farm has a company, every vehicle driven by a vanilla AI Helper,
+-- AutoDrive (AD), Courseplay (CP) or a Follow Me follower needs one of the
+-- farm's staff behind the wheel (our own
 -- contract jobs excepted - Dispatch already has their operator): starting
 -- any of them opens a picker
 -- (TCDriverPickerDialog) for an idle worker, and a start that skips the
@@ -21,7 +22,7 @@
 -- getPricePerMs override Dispatch's contract jobs use. Driving time adds up
 -- across the whole chain and buys one small growth roll (030) on release.
 --
--- Everything mod-specific lives in TCAutoDrive/TCCourseplay, each
+-- Everything mod-specific lives in TCAutoDrive/TCCourseplay/TCFollowMe, each
 -- installed only if its mod is loaded; this subsystem owns the bindings,
 -- the release tick, growth, save/load and initial client state. Bindings
 -- are server-authoritative and keyed by the root vehicle's network object
@@ -88,6 +89,7 @@ end
 function TheContractorDrivers.installHooks()
     TCAutoDrive.install()
     TCCourseplay.install()
+    TCFollowMe.install()
 
     if not AISystem.tcDriverHookInstalled then
         AISystem.startJob = Utils.overwrittenFunction(AISystem.startJob, function(...)
@@ -146,7 +148,7 @@ function TheContractorDrivers.onAISystemStartJob(aiSystem, superFunc, job, start
         local refusal = drivers:getServerStartRefusal(vehicle)
         if refusal ~= nil then
             Logging.info("TheContractor: refused %s start on '%s' (%s)",
-                TCCourseplay.isCpJob(job) and "Courseplay" or "AI Helper", vehicle:getFullName(), refusal)
+                TheContractorDrivers.getAIJobLabel(job), vehicle:getFullName(), refusal)
             drivers:notify(vehicle:getOwnerFarmId(), refusal, vehicle)
             return
         end
@@ -157,6 +159,16 @@ function TheContractorDrivers.onAISystemStartJob(aiSystem, superFunc, job, start
     end
 
     return superFunc(aiSystem, job, startFarmId)
+end
+
+-- For logging only.
+function TheContractorDrivers.getAIJobLabel(job)
+    if TCCourseplay.isCpJob(job) then
+        return "Courseplay"
+    elseif TCFollowMe.isFollowMeJob(job) then
+        return "Follow Me"
+    end
+    return "AI Helper"
 end
 
 function TheContractorDrivers.getAIJobVehicle(job)

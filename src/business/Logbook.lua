@@ -67,6 +67,7 @@ TheContractorLogbook.ROLE = {
 TheContractorLogbook.SOURCE = {
     AUTODRIVE = "autodrive",
     COURSEPLAY = "courseplay",
+    FOLLOWME = "followme",
     AI = "ai",
 }
 
@@ -540,6 +541,8 @@ function TheContractorLogbook:noteDriverActivity(vehicleId, vehicle)
         source = TheContractorLogbook.SOURCE.AUTODRIVE
     elseif vehicle.getJob ~= nil and TCCourseplay.isCpJob(vehicle:getJob()) then
         source = TheContractorLogbook.SOURCE.COURSEPLAY
+    elseif vehicle.getJob ~= nil and TCFollowMe.isFollowMeJob(vehicle:getJob()) then
+        source = TheContractorLogbook.SOURCE.FOLLOWME
     end
     session.sources[source] = true
 end
@@ -548,7 +551,7 @@ end
 local function joinSources(sources)
     local list = {}
     for _, source in ipairs({ TheContractorLogbook.SOURCE.AUTODRIVE, TheContractorLogbook.SOURCE.COURSEPLAY,
-        TheContractorLogbook.SOURCE.AI }) do
+        TheContractorLogbook.SOURCE.FOLLOWME, TheContractorLogbook.SOURCE.AI }) do
         if sources[source] then
             table.insert(list, source)
         end
