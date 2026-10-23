@@ -700,7 +700,10 @@ end
 -- exists — excluding it too (as an earlier version of this method did)
 -- meant zero eligible fields and no jobs ever generated. Picked fresh each
 -- roll against live field state, not cached, so it can't go stale between
--- rolls.
+-- rolls. A field with a live job on it (any farm's, offers included) is
+-- left out: the job freezes vanilla's NPC fieldwork there (034), so the
+-- field still qualifies for the same work and would otherwise be offered
+-- again, a month later, as a second job on top of the first.
 function TheContractorJobGeneration:getCandidateFields(farmId, jobDef)
     local candidates = {}
     if jobDef.requiresWeeds and not TheContractorJobGeneration.getHasWeeds() then
@@ -714,8 +717,10 @@ function TheContractorJobGeneration:getCandidateFields(farmId, jobDef)
         return candidates
     end
 
+    local jobs = g_currentMission.TheContractor.Jobs
     for _, field in ipairs(g_fieldManager:getFields()) do
-        if field:getOwner() ~= farmId and TheContractorJobGeneration.isFieldEligible(field, jobDef) then
+        if field:getOwner() ~= farmId and not jobs:isFieldProtected(field:getId()) and
+            TheContractorJobGeneration.isFieldEligible(field, jobDef) then
             table.insert(candidates, field)
         end
     end

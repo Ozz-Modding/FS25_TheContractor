@@ -117,6 +117,9 @@ MenuContractor.CHIP_COLORS = {
     warn = { 0.45, 0.30, 0.03, 1 },
     bad = { 0.45, 0.09, 0.06, 1 },
     neutral = { 0.17, 0.17, 0.18, 1 },
+    -- 093: a player-driven job, named for its player, so it can't be taken
+    -- for a hired crew waiting to set off.
+    player = { 0.30, 0.15, 0.42, 1 },
 }
 
 -- Shows text on a chip (a RoundCorner plus the Text over it) in the given
@@ -534,6 +537,18 @@ function MenuContractor:initialize()
     }
     self.menuButtonInfoCalendarWithAllocatableJob = { self.btnBack, self.btnNextPage, self.btnPrevPage,
         self.btnCalendarToday, self.btnAllocateJob }
+    -- 093: who's on the highlighted job and how it's going. Shares Allocate's
+    -- key: Allocate only shows for an `accepted` job, Job details for any
+    -- other on the list (allocated, in progress, missed).
+    self.btnJobDetails = {
+        inputAction = InputAction.MENU_EXTRA_1,
+        text = g_i18n:getText("tc_jobDetails_button"),
+        callback = function()
+            self:onClickJobDetails()
+        end
+    }
+    self.menuButtonInfoCalendarWithJob = { self.btnBack, self.btnNextPage, self.btnPrevPage,
+        self.btnCalendarToday, self.btnJobDetails }
     -- Same idea for allocationWorkerTable's highlighted row (035): workers
     -- are picked with a button rather than by highlighting, since a
     -- haulage job takes two of them. See onClickToggleAllocationWorker.
@@ -759,6 +774,8 @@ function MenuContractor:getMenuButtonInfo()
         local selectedJob = self:getSelectedCalendarDayJob()
         if selectedJob ~= nil and selectedJob.state == TheContractorJob.STATE.ACCEPTED then
             return self.menuButtonInfoCalendarWithAllocatableJob
+        elseif selectedJob ~= nil then
+            return self.menuButtonInfoCalendarWithJob
         end
     end
 
@@ -2521,12 +2538,13 @@ function MenuContractor:populateCompletedJobCell(index, cell)
     end
 end
 
--- Who did it: "You", or the worker(s) by name. A worker released since
--- is no longer on the roster, so they're shown as a former employee.
+-- Who did it: the player who took it on (093), or the worker(s) by name.
+-- A worker released since is no longer on the roster, so they're shown as
+-- a former employee.
 function MenuContractor:getCompletedJobCrewText(job)
     local workerIds = job:getWorkerIds()
     if #workerIds == 0 then
-        return g_i18n:getText("tc_allocation_myself")
+        return job:getPlayerName()
     end
 
     local staff = g_currentMission.TheContractor.Staff
@@ -2616,9 +2634,8 @@ function MenuContractor:populateCalendarDayJobCell(index, cell)
 
     cell:getAttribute("jobType"):setText(job:getDisplayTitle())
 
-    -- How many people the job takes: 2 for harvest & haul (035), "You" for
-    -- work only the player can do. getJobCrewText has the long form.
-    local jobDef = TheContractorJobGeneration.JOB_TYPES[job.jobType]
+    -- How many people the job takes: 2 for harvest & haul (035), "Player"
+    -- for work only a player can do. getJobCrewText has the long form.
     if TheContractorJobGeneration.isPlayerOnly(job) then
         cell:getAttribute("crew"):setText(g_i18n:getText("tc_calendar_crewPlayer"))
     else
@@ -2630,47 +2647,210 @@ function MenuContractor:populateCalendarDayJobCell(index, cell)
 
     cell:getAttribute("price"):setText(g_i18n:formatMoney(job:getPrice(), 0, true, true))
 
-    -- Allocated vs not-yet-allocated (Q25) — selecting a row here just moves
-    -- selectedCalendarDayJobId (see onListSelectionChanged); the actual
-    -- allocation flow (018) is reached via the Allocate bottom-bar button
-    -- that appears whenever the selected job is still `accepted` (see
-    -- getMenuButtonInfo/onClickOpenAllocation), not a button in this list.
-    -- Missed (024, scoped down — see TheContractorJobs:missJob) is its own
-    -- distinct "Failed" chip rather than folding into either bucket — it's
-    -- neither waiting on allocation nor successfully allocated, it's over
-    -- and done with. A hired worker's job then reads Allocated (info) ->
-    -- Travelling (info, Dispatch's transport wait) -> In progress (good)
-    -- with the same live percentage the Overview's current-jobs list shows.
-    -- On hold for supplies (032) beats every other working state: nothing
-    -- moves until the player restocks (or empties the wrong product out).
-    local chip, chipText = cell:getAttribute("statusChip"), cell:getAttribute("statusChipText")
+    local chipText, chipTone = self:getJobStatusChip(job)
+    setChip(cell:getAttribute("statusChip"), cell:getAttribute("statusChipText"), chipText, chipTone)
+end
+
+-- 093: longer names would shrink to nothing in a chip.
+local CHIP_NAME_MAX_CHARS = 22
+
+local function shortenName(name)
+    if utf8Strlen == nil or utf8Substr == nil or utf8Strlen(name) <= CHIP_NAME_MAX_CHARS then
+        return name
+    end
+    return utf8Substr(name, 0, CHIP_NAME_MAX_CHARS - 1) .. "..."
+end
+
+-- A calendar job's status chip text and tone (also 093's Job details).
+-- Allocated vs not-yet-allocated (Q25) — selecting a row in the day's job
+-- list just moves selectedCalendarDayJobId (see onListSelectionChanged);
+-- the actual allocation flow (018) is reached via the Allocate bottom-bar
+-- button that appears whenever the selected job is still `accepted` (see
+-- getMenuButtonInfo/onClickOpenAllocation), not a button in this list.
+-- Missed (024, scoped down — see TheContractorJobs:missJob) is its own
+-- distinct "Failed" chip rather than folding into either bucket — it's
+-- neither waiting on allocation nor successfully allocated, it's over
+-- and done with. A hired worker's job then reads Allocated (info) ->
+-- Travelling (info, Dispatch's transport wait) -> In progress (good)
+-- with the same live percentage the Overview's current-jobs list shows.
+-- On hold for supplies (032) beats every other working state: nothing
+-- moves until the player restocks (or empties the wrong product out).
+-- A player-driven job (never `in_progress`) shows its player's name
+-- rather than "Allocated" (093).
+function MenuContractor:getJobStatusChip(job)
+    local jobDef = TheContractorJobGeneration.JOB_TYPES[job.jobType]
     if job.state == TheContractorJob.STATE.MISSED then
-        setChip(chip, chipText, g_i18n:getText("tc_calendar_jobMissed"), "bad")
+        return g_i18n:getText("tc_calendar_jobMissed"), "bad"
     elseif job:isWaitingForSupplies() and (job.state == TheContractorJob.STATE.ALLOCATED or
             job.state == TheContractorJob.STATE.IN_PROGRESS) then
-        setChip(chip, chipText, job:getSupplyStatusText(), "warn")
+        return job:getSupplyStatusText(), "warn"
     elseif job.state == TheContractorJob.STATE.ACCEPTED then
-        setChip(chip, chipText, g_i18n:getText("tc_calendar_jobUnallocated"), "warn")
+        return g_i18n:getText("tc_calendar_jobUnallocated"), "warn"
     elseif job.state == TheContractorJob.STATE.IN_PROGRESS then
-        setChip(chip, chipText, string.format(g_i18n:getText("tc_calendar_jobInProgress"),
-            math.floor(job.completionPercentage)), "good")
+        return string.format(g_i18n:getText("tc_calendar_jobInProgress"), math.floor(job.completionPercentage)),
+            "good"
     elseif job.isTravelling then
-        setChip(chip, chipText, g_i18n:getText("tc_calendar_jobTravelling"), "info")
+        return g_i18n:getText("tc_calendar_jobTravelling"), "info"
     elseif job:needsPlayerDelivery() and job.requiredLiters > 0 and job.state == TheContractorJob.STATE.ALLOCATED then
         -- Player-driven haulage (035): cut and delivered, both - or for a
         -- straw delivery (067), just delivered.
         local delivered = math.floor(100 * job.deliveredLiters / job.requiredLiters)
         if jobDef ~= nil and jobDef.deliveryOnly then
-            setChip(chip, chipText, string.format(g_i18n:getText("tc_calendar_jobDeliveringOnly"), delivered), "good")
-        else
-            local key = jobDef ~= nil and jobDef.deliversBales and "tc_calendar_jobBalingDelivering" or
-                "tc_calendar_jobDelivering"
-            setChip(chip, chipText, string.format(g_i18n:getText(key), math.floor(job.completionPercentage),
-                delivered), "good")
+            return string.format(g_i18n:getText("tc_calendar_jobDeliveringOnly"), delivered), "good"
         end
-    else
-        setChip(chip, chipText, g_i18n:getText("tc_calendar_jobAllocated"), "info")
+        local key = jobDef ~= nil and jobDef.deliversBales and "tc_calendar_jobBalingDelivering" or
+            "tc_calendar_jobDelivering"
+        return string.format(g_i18n:getText(key), math.floor(job.completionPercentage), delivered), "good"
+    elseif job:isPlayerDriven() then
+        return shortenName(job:getPlayerName()), "player"
     end
+    return g_i18n:getText("tc_calendar_jobAllocated"), "info"
+end
+
+-- Job details (093) ------------------------------------------------------
+
+-- A hired crew's names, "Tom Smith" or "Tom Smith and Ann Jones".
+local function getCrewNames(job)
+    local staff = g_currentMission.TheContractor.Staff
+    local names = {}
+    for _, workerId in ipairs(job:getWorkerIds()) do
+        local worker = staff:getWorker(job.farmId, workerId)
+        table.insert(names, worker ~= nil and worker.name or g_i18n:getText("tc_calendar_formerWorker"))
+    end
+    if #names == 2 then
+        return string.format(g_i18n:getText("tc_unallocate_crewPair"), names[1], names[2])
+    end
+    return table.concat(names, ", ")
+end
+
+function MenuContractor:onClickJobDetails()
+    local job = self:getSelectedCalendarDayJob()
+    if job == nil or job.state == TheContractorJob.STATE.ACCEPTED then
+        return
+    end
+    TCJobDetailsDialog.show(job.farmId, job.id, {
+        getRows = function(detailJob)
+            return self:getJobDetailRows(detailJob)
+        end,
+        getUnallocateText = function(detailJob)
+            return self:getUnallocateText(detailJob)
+        end,
+        -- Same "synchronous for host/SP, catches up on the next refresh for
+        -- a remote client" caveat as sendAllocation.
+        onUnallocated = function()
+            self:refreshCalendarState(g_currentMission:getFarmId(), g_currentMission.TheContractor.Jobs)
+            self:focusCalendarDayJobs()
+        end,
+    })
+end
+
+-- 094: the Unallocate confirm, saying what taking this crew off will cost,
+-- worked out from synced state so it reads the same on a client: nothing
+-- for a player; for a hired crew, nothing if they're still in the yard, a
+-- trip back for the kit if they're on their way, a cooldown if they've
+-- made a start (the same rule as a missed job's release). A new crew
+-- always has to travel out. A deadline today or tomorrow adds a warning.
+function MenuContractor:getUnallocateText(job)
+    local text
+    if job:isPlayerDriven() then
+        text = string.format(g_i18n:getText("tc_unallocate_confirmPlayer"), job:getPlayerName())
+    else
+        local crew = getCrewNames(job)
+        if job.completionPercentage > 0 then
+            local minutes = TheContractorCooldown.getBufferDurationMs(job) / 60000
+            text = string.format(g_i18n:getText("tc_unallocate_confirmWorking"), crew,
+                math.floor(job.completionPercentage), TheContractorJob.formatMinutes(minutes))
+        elseif job.isTravelling or job.state == TheContractorJob.STATE.IN_PROGRESS then
+            text = string.format(g_i18n:getText("tc_unallocate_confirmOut"), crew)
+        else
+            text = string.format(g_i18n:getText("tc_unallocate_confirmYard"), crew)
+        end
+    end
+
+    local daysLeft = job.deadlineDay ~= nil and job.deadlineDay - g_currentMission.environment.currentMonotonicDay or nil
+    if daysLeft ~= nil and daysLeft <= 0 then
+        text = text .. " " .. g_i18n:getText("tc_unallocate_dueToday")
+    elseif daysLeft == 1 then
+        text = text .. " " .. g_i18n:getText("tc_unallocate_dueTomorrow")
+    end
+    return text
+end
+
+local function getVehicleRows(vehicleIds)
+    local rows = {}
+    for _, vehicleId in ipairs(vehicleIds) do
+        local vehicle = NetworkUtil.getObject(vehicleId)
+        if vehicle ~= nil then
+            local category = TCEquipmentClass.getCategory(vehicle)
+            table.insert(rows, {
+                label = category ~= nil and TCParkingSlotFilter.getCategoryTitle(category) or "",
+                value = vehicle:getFullName(),
+            })
+        end
+    end
+    return rows
+end
+
+-- The Job details dialog's rows for a job, worked out afresh on each of
+-- its refreshes: { section } titles and { label, value, chip?, tone? }
+-- pairs. Everything here is synced job state, so a client sees the same.
+function MenuContractor:getJobDetailRows(job)
+    local rows = {}
+    local function add(label, value, chip, tone)
+        table.insert(rows, { label = label, value = value or "", chip = chip, tone = tone })
+    end
+
+    table.insert(rows, { section = g_i18n:getText("tc_jobDetails_sectionJob") })
+    add(g_i18n:getText("tc_jobDetails_job"), job:getDisplayTitle())
+    local field = g_fieldManager:getFieldById(job.fieldId)
+    add(g_i18n:getText("tc_jobDetails_field"), field ~= nil and field:getName() or tostring(job.fieldId))
+    add(g_i18n:getText("tc_jobDetails_due"), formatTargetDate(job.targetPeriod, job.targetDayInPeriod))
+    add(g_i18n:getText("tc_jobDetails_price"), g_i18n:formatMoney(job:getPrice(), 0, true, true))
+    local chipText, chipTone = self:getJobStatusChip(job)
+    add(g_i18n:getText("tc_jobDetails_status"), "", chipText, chipTone)
+    add(g_i18n:getText("tc_jobDetails_progress"), string.format("%d%%", math.floor(job.completionPercentage)))
+    if job.includesHaulage and job.deliveryStationName ~= nil then
+        local value = job.deliveryStationName
+        if job:needsPlayerDelivery() and job.requiredLiters > 0 then
+            value = string.format(g_i18n:getText("tc_jobDetails_deliveryProgress"), job.deliveryStationName,
+                math.floor(100 * job.deliveredLiters / job.requiredLiters))
+        end
+        add(g_i18n:getText("tc_jobDetails_delivery"), value)
+    end
+
+    table.insert(rows, { section = g_i18n:getText("tc_jobDetails_sectionCrew") })
+    if job:isPlayerDriven() then
+        add(g_i18n:getText("tc_jobDetails_player"), job:getPlayerName())
+    else
+        local staff = g_currentMission.TheContractor.Staff
+        local function workerName(workerId)
+            local worker = staff:getWorker(job.farmId, workerId)
+            return worker ~= nil and worker.name or g_i18n:getText("tc_calendar_formerWorker")
+        end
+        if job.haulerWorkerId ~= nil then
+            add(g_i18n:getText("tc_jobDetails_operator"), workerName(job.assignedWorkerId))
+            add(g_i18n:getText("tc_jobDetails_hauler"), workerName(job.haulerWorkerId))
+        else
+            add(g_i18n:getText("tc_jobDetails_worker"), workerName(job.assignedWorkerId))
+        end
+    end
+
+    local equipmentRows = getVehicleRows(job.assignedEquipmentIds)
+    if #equipmentRows > 0 then
+        table.insert(rows, { section = g_i18n:getText("tc_jobDetails_sectionEquipment") })
+        for _, row in ipairs(equipmentRows) do
+            table.insert(rows, row)
+        end
+    end
+    local haulageRows = getVehicleRows(job.haulageEquipmentIds)
+    if #haulageRows > 0 then
+        table.insert(rows, { section = g_i18n:getText("tc_jobDetails_sectionHaulage") })
+        for _, row in ipairs(haulageRows) do
+            table.insert(rows, row)
+        end
+    end
+
+    return rows
 end
 
 -- Allocation flow (018) ---------------------------------------------------
@@ -4634,6 +4814,10 @@ function MenuContractor:getLogbookJobRows(entry)
         end
         row(text("tc_logbook_role_" .. (member.role or TheContractorLogbook.ROLE.OPERATOR)), getCrewName(member), chip,
             tone)
+    end
+    -- 094: whoever had it before it was unallocated.
+    if entry.earlierCrew ~= nil then
+        row(text("tc_logbook_earlierCrew"), entry.earlierCrew)
     end
 
     if #entry.equipment > 0 then
