@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8" standalone="no" ?>
+<!-- Job details dialog (093), see TCJobDetailsDialog.lua. Same dialog
+     frame as TCParkingSlotDialog.xml (anchorTopCenter profiles, so x
+     positions are each element's centre relative to the content
+     container's top-centre). The list spans -320px..320px; each row is a
+     green section title or a label/value pair like the Logbook's detail
+     list, the status row showing its chip where the value goes. It ends
+     clear of the button bar, with vanilla's list slider to its right for a
+     long equipment list. -->
+<GUI onOpen="onOpen" onClose="onClose" onCreate="onCreate">
+    <GuiElement profile="newLayer"/>
+    <Bitmap profile="dialogFullscreenBg" id="dialogBg"/>
+    <GuiElement profile="fs25_dialogBg" id="dialogElement" size="760px 620px">
+        <ThreePartBitmap profile="fs25_dialogBgMiddle"/>
+        <ThreePartBitmap profile="fs25_dialogBgTop"/>
+        <ThreePartBitmap profile="fs25_dialogBgBottom"/>
+        <GuiElement profile="fs25_dialogContentContainer">
+
+            <Text profile="fs25_dialogTitle" id="dialogTitleElement" position="0px -30px" text="$l10n_tc_jobDetails_title"/>
+            <Text profile="tc_adDialogInfoText" id="headingText" position="0px -80px" text=""/>
+
+            <SmoothList id="detailList" profile="tc_driverPickerList" position="0px -120px" size="640px 356px">
+                <ListItem profile="tc_tableListItem">
+                    <RoundCorner profile="tc_tableRowSurface" name="surface"/>
+                    <Bitmap profile="tc_tableRowAccent"/>
+                    <Text profile="tc_listRowSection" position="14px 0px" size="600px 32px" name="section"/>
+                    <Text profile="tc_listRowLabel" position="14px 0px" size="196px 32px" name="label"/>
+                    <Text profile="tc_listRowValue" position="216px 0px" size="410px 32px" name="value"/>
+                    <RoundCorner profile="tc_rowChip" position="216px 0px" size="220px 20px" name="chip"/>
+                    <Text profile="tc_rowChipText" position="216px 0px" size="220px 20px" name="chipText"/>
+                </ListItem>
+            </SmoothList>
+            <!-- Just right of the list (its right edge is at 320px). -->
+            <ThreePartBitmap profile="tc_dialogSlider_box" position="332px -120px" size="6px 356px">
+                <Slider profile="fs25_listSlider" dataElementId="detailList"/>
+            </ThreePartBitmap>
+        </GuiElement>
+
+        <BoxLayout profile="fs25_dialogButtonBox" id="buttonBox">
+            <!-- 094: only while the job can be unallocated (refresh). -->
+            <Button profile="buttonActivate" text="$l10n_tc_unallocate_button" onClick="onClickUnallocate" id="unallocateButton"/>
+            <Bitmap profile="fs25_dialogButtonBoxSeparator" id="unallocateSeparator"/>
+            <Button profile="buttonBack" text="$l10n_button_back" onClick="onClickBack" id="backButton"/>
+        </BoxLayout>
+    </GuiElement>
+</GUI>

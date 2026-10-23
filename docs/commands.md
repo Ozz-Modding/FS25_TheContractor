@@ -281,14 +281,15 @@ Forces a job into another state. Only legal transitions are allowed:
 | `offered` | `negotiating`, `accepted`, `declined` |
 | `negotiating` | `accepted`, `declined` |
 | `accepted` | `allocated`, `missed` |
-| `allocated` | `in_progress`, `completed`, `missed` |
-| `in_progress` | `completed`, `missed` |
+| `allocated` | `in_progress`, `completed`, `missed`, `accepted` |
+| `in_progress` | `completed`, `missed`, `accepted` |
 
 `completed`, `declined` and `missed` are final.
 
 `completed` and `missed` work the same as a real finish or deadline, whatever the job's progress:
 - **`completed`:** a hired worker's AI is stopped where it is, even mid-field or on the road. The job's invoiced and earns reputation. The crew and machines go through the usual trip back and parking, and the logbook records it.
 - **`missed`:** the usual missed-deadline reputation penalty (less whatever progress was made), and the crew and machines are released the same way.
+- **`accepted`** (from `allocated` or `in_progress`): unallocates the job, the same as the Unallocate button in the Calendar's Job Details. The crew and machines come back (into cooldown if any work was done), and the job keeps its progress for whoever's allocated next. No reputation is lost.
 
 Other states only change the job's state.
 

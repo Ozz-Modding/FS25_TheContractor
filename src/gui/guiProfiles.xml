@@ -305,7 +305,9 @@
 
     <!-- Staff driver picker dialog (037). anchorTopCenter for the same
          reason as the advertising dialog's profiles above. -->
-    <Profile name="tc_driverPickerList" extends="emptyPanel" with="anchorTopCenter" />
+    <Profile name="tc_driverPickerList" extends="emptyPanel" with="anchorTopCenter">
+        <listItemSpacing value="3px"/>
+    </Profile>
     <!-- Parking slot filter dialog (086): a muted two-line hint under the
          heading. -->
     <Profile name="tc_parkingSlotHint" extends="fs25_dialogText" with="anchorTopCenter">

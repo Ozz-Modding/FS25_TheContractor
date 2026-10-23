@@ -39,7 +39,7 @@ Run your farm as an agricultural contracting business in Farming Simulator 25. T
 - Spraying certificates and paid training
 - Each worker has their own look, a live 3D portrait, and can be renamed and restyled
 - Idle staff stand around the yard on placeable **standing spots**
-- AutoDrive and Courseplay vehicles get a driver from your staff
+- AutoDrive, Courseplay and Follow Me vehicles get a driver from your staff
 
 ### Running the business
 - Jobs are **invoiced**. Clients pay late, and some never pay
@@ -70,14 +70,14 @@ Run your farm as an agricultural contracting business in Farming Simulator 25. T
 
 ## Company logo and signs
 
-The Overview's company card and the signs (construction menu, Contractor tab: the freestanding **Company Sign** and the **Company Wall Sign**, 1.5 m or 3 m square, at 1 m, 3 m or 6 m) show a logo. To use your own, save it as `logo.dds` in `Documents/My Games/FarmingSimulator2025/modSettings/FS25_TheContractor/` (the mod creates the folder, its `signs` folder and a `README.txt` explaining both when a save loads; the README is rewritten on every load, so edits to it are lost). To give one save a different logo, put it in a `savegame<N>` folder in there named after the save's slot (`savegame1/logo.dds` for save 1); a save without one uses the shared `logo.dds`.
+The Overview's company card and the signs (construction menu, Contractor tab: the freestanding **Company Sign** and the **Company Wall Sign**, 1.5 m or 3 m square, at 1 m, 3 m or 6 m) show a logo. To use your own, save it as `logo.dds` (or `logo.png`) in `Documents/My Games/FarmingSimulator2025/modSettings/FS25_TheContractor/` (the mod creates the folder, its `signs` folder and a `README.txt` explaining both when a save loads; the README is rewritten on every load, so edits to it are lost). To give one save a different logo, put it in a `savegame<N>` folder in there named after the save's slot (`savegame1/logo.dds` for save 1); a save without one uses the shared `logo.dds`.
 
 - It must be square, with sides a multiple of 4 (512×512 or 1024×1024 work well). Any other shape is stretched to fit.
-- It must be a DDS, ideally with mipmaps (GIANTS Texture Tool, or paint.net's DDS export). Other formats such as PNG are ignored.
+- DDS is best, ideally with mipmaps (GIANTS Texture Tool, or paint.net's DDS export). A PNG works too, but you'll get warnings in the game's log if you don't use DDS. If there's a DDS and a PNG of the same name, the DDS is used.
 - A new logo shows the next time you open the menu, but replacing one you've already seen needs a game restart.
 - The logo is read from your own PC only: in multiplayer, your logo shows only on your own farm's signs, and other players see their own logo file, or the default.
 
-In single-player, a sign can show a design of your own instead. Put square `.dds` images in the `signs` folder; each becomes a design you pick when placing a sign, named after its file (`for_sale.dds` is "For Sale"). New images show after you reload the save, and the same size and format rules apply. In multiplayer there's no design picker and every sign shows the company logo.
+In single-player, a sign can show a design of your own instead. Put square `.dds` (or `.png`) images in the `signs` folder; each becomes a design you pick when placing a sign, named after its file (`for_sale.dds` is "For Sale"). New images show after you reload the save, and the same size and format rules apply. In multiplayer there's no design picker and every sign shows the company logo.
 
 A wall sign's height is that of its bottom edge. Place it from just in front of the wall, with its face pointing away from it; the construction menu's free mode helps get it flush against a building.
 

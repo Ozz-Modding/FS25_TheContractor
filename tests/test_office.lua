@@ -307,7 +307,7 @@ test("a save loads back with its ids, levels, courses and looks", function()
     assertEquals(loaded.Staff.nextWorkerId, 7, "counter moved past their ids")
 end)
 
-test("057's administrator saves load as a level 1 administrator with a look", function()
+test("057's administrator saves load as a level 1 administrator, given a look at mission start", function()
     local _, tc = setup()
     local xmlFile = {
         ["TheContractor.administrators.administrator(0)#farmId"] = 1,
@@ -323,6 +323,8 @@ test("057's administrator saves load as a level 1 administrator with a look", fu
     assertEquals(admin.id, 5, "new id")
     assertEquals(admin.level, 1, "level 1")
     assertEquals(admin.gender, "male", "gender from the name")
+    assertEquals(admin.appearance, nil, "no look until mission start")
+    tc.Staff:restoreLooks()
     assertEquals(admin.appearance.model, "male.xml", "look rolled")
     assertEquals(admin.hiredPeriod, 30, "service kept")
     assertEquals(admin.ageAtHire, 41, "age kept")

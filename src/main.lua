@@ -28,6 +28,7 @@ source(TheContractor.dir .. "src/util/TCVehicleIds.lua")
 source(TheContractor.dir .. "src/util/TCWorkerFieldSpeed.lua")
 source(TheContractor.dir .. "src/util/TCAutoDrive.lua")
 source(TheContractor.dir .. "src/util/TCCourseplay.lua")
+source(TheContractor.dir .. "src/util/TCFollowMe.lua")
 source(TheContractor.dir .. "src/util/TCEconomyScale.lua")
 source(TheContractor.dir .. "src/util/TCCalendar.lua")
 source(TheContractor.dir .. "src/util/TCSignImages.lua")
@@ -49,6 +50,7 @@ source(TheContractor.dir .. "src/gui/TCDriverPickerDialog.lua")
 source(TheContractor.dir .. "src/gui/TCWardrobe.lua")
 source(TheContractor.dir .. "src/gui/TCEditWorkerDialog.lua")
 source(TheContractor.dir .. "src/gui/TCParkingSlotDialog.lua")
+source(TheContractor.dir .. "src/gui/TCJobDetailsDialog.lua")
 source(TheContractor.dir .. "src/hud/TCInboxHUD.lua")
 source(TheContractor.dir .. "src/business/Settings.lua")
 source(TheContractor.dir .. "src/business/Reputation.lua")
@@ -121,6 +123,7 @@ source(TheContractor.dir .. "src/events/TCWorkerStatusChangedEvent.lua")
 source(TheContractor.dir .. "src/events/TCWorkerGrewEvent.lua")
 source(TheContractor.dir .. "src/events/TCWorkersAgedEvent.lua")
 source(TheContractor.dir .. "src/events/TCAllocateJobEvent.lua")
+source(TheContractor.dir .. "src/events/TCUnallocateJobEvent.lua")
 source(TheContractor.dir .. "src/events/TCJobAllocatedEvent.lua")
 source(TheContractor.dir .. "src/events/TCJobCompletedEvent.lua")
 source(TheContractor.dir .. "src/events/TCDispatchFailedEvent.lua")
@@ -285,6 +288,8 @@ function TheContractor:loadMap()
     TCEditWorkerDialog.register()
     -- 086: parking slot filters, set from a prompt standing in the slot.
     TCParkingSlotDialog.register()
+    -- 093: the Calendar's Job details.
+    TCJobDetailsDialog.register()
     TCParkingSlotActivatable.install()
     -- 077: a worker's look is edited in the vanilla wardrobe.
     TCWardrobe.install()
@@ -509,6 +514,26 @@ function TheContractor.installInitialClientStateHook()
     TheContractor.initialClientStateHookInstalled = true
 end
 
+-- Appended onto FSBaseMission.onStartMission (self is the mission): runs
+-- once every mod's loadMap is done, for anything that needs another mod's
+-- additions in place (see Staff:restoreLooks).
+function TheContractor:onStartMission()
+    local tc = g_currentMission.TheContractor
+    if tc == nil then return end
+
+    tc.Staff:restoreLooks()
+end
+
+function TheContractor.installStartMissionHook()
+    if TheContractor.startMissionHookInstalled then
+        return
+    end
+
+    FSBaseMission.onStartMission = Utils.appendedFunction(FSBaseMission.onStartMission,
+        TheContractor.onStartMission)
+    TheContractor.startMissionHookInstalled = true
+end
+
 function TheContractor:deleteMap()
     Logging.info("TheContractor: deleteMap")
 
@@ -640,5 +665,6 @@ end
 
 TheContractor.installSaveHook()
 TheContractor.installInitialClientStateHook()
+TheContractor.installStartMissionHook()
 
 addModEventListener(TheContractor)

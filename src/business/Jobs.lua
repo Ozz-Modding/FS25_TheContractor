@@ -328,8 +328,9 @@ end
 -- transitionJobState, but the final states go the real way - completed
 -- through completeJob (forced, so a job part-way through finishes now:
 -- the AI stops, it's invoiced, the crew and machines come back) and missed
--- through missJob (the penalty, and everything released). Returns whether
--- the job moved.
+-- through missJob (the penalty, and everything released), and accepted
+-- from allocated or in progress through unallocateJob (094). Returns
+-- whether the job moved.
 function TheContractorJobs:forceJobState(farmId, jobId, newState)
     local job = self:getJob(farmId, jobId)
     if job == nil or not job:canTransitionTo(newState) then
@@ -342,6 +343,10 @@ function TheContractorJobs:forceJobState(farmId, jobId, newState)
     elseif newState == TheContractorJob.STATE.MISSED then
         self:missJob(job)
         return true
+    elseif newState == TheContractorJob.STATE.ACCEPTED and job.state ~= TheContractorJob.STATE.OFFERED and
+        job.state ~= TheContractorJob.STATE.NEGOTIATING then
+        -- 094: back from allocated or in progress is an unallocate.
+        return self:unallocateJob(farmId, jobId)
     end
     return self:transitionJobState(farmId, jobId, newState)
 end
@@ -595,14 +600,22 @@ end
 -- the parking return queue (062); a player's own equipment, never hidden,
 -- stays where they left it (startCooldown skips a player-driven job too).
 function TheContractorJobs:releaseMissedJobResources(job)
+    self:releaseJobResources(job)
+    TCFieldPreparation.clearUpAfterJob(job)
+end
+
+-- What a miss (above) and an unallocate (094) both do with a job's crew and
+-- equipment. Leaves the field alone - an unallocated job still needs its
+-- bales, windrow or pile for whoever's next.
+function TheContractorJobs:releaseJobResources(job)
     local dispatch = g_currentMission.TheContractor.Dispatch
     local wasDispatched = job.assignedWorkerId ~= nil and dispatch:isJobActive(job)
 
     dispatch:stopJob(job.id, AIMessageSuccessStoppedByUser.new())
+    dispatch:takeRanOutOfFill(job.id)
     TCJobProgress.clearJob(job.id)
     TCHaulage.stopDelivery(job)
     TCHaulage.emptyHarvestersAfterJob(job)
-    TCFieldPreparation.clearUpAfterJob(job)
     self:setJobSupplyStatus(job, nil, nil)
 
     if job.completionPercentage > 0 then
@@ -618,6 +631,75 @@ function TheContractorJobs:releaseMissedJobResources(job)
             g_currentMission.TheContractor.Staff:setWorkerStatus(job.farmId, workerId, TheContractorWorker.STATUS.IDLE)
         end
     end
+end
+
+-- Unallocating (094) -----------------------------------------------------
+
+-- Why a job can't be unallocated right now, as an l10n key, or nil if it
+-- can. The same on every machine, from synced state: the menu hides the
+-- button with it, the server re-checks with it.
+function TheContractorJobs.getUnallocateProblem(job)
+    if job == nil then
+        return "tc_unallocate_problemGone"
+    end
+    if job.state ~= TheContractorJob.STATE.ALLOCATED and job.state ~= TheContractorJob.STATE.IN_PROGRESS then
+        return "tc_unallocate_problemState"
+    end
+    return nil
+end
+
+-- Server: takes the crew and equipment off an allocated or in-progress job
+-- and puts it back to `accepted`, for someone else to be allocated. The
+-- crew and kit go back the way a missed job's do (releaseJobResources):
+-- into cooldown if any work got done, else straight back (the kit through
+-- the parking queue if it had left the yard). The field and its progress
+-- stay as they are, and wasUnallocated tells the next allocation to carry
+-- on from them. No reputation lost: the deadline still stands. Returns
+-- whether it went through.
+function TheContractorJobs:unallocateJob(farmId, jobId)
+    if not g_currentMission:getIsServer() then
+        return false
+    end
+
+    local job = self:getJob(farmId, jobId)
+    if TheContractorJobs.getUnallocateProblem(job) ~= nil then
+        return false
+    end
+
+    -- 060: who had it, while the crew's still on the job.
+    g_currentMission.TheContractor.Logbook:onCrewChanged(job)
+
+    self:releaseJobResources(job)
+
+    -- A hired crew carts its own crop, uncounted, so a player taking over
+    -- delivers only what's left on the field (TCHaulage.resumeDelivery).
+    -- A player's own deliveries so far still count.
+    if not job:isPlayerDriven() then
+        job.requiredLiters = 0
+        job.deliveredLiters = 0
+    end
+
+    job.assignedWorkerId = nil
+    job.haulerWorkerId = nil
+    job.assignedEquipmentIds = {}
+    job.haulageEquipmentIds = {}
+    job.allocatedPlayerName = nil
+    job.isTravelling = false
+    job.transportRemainingMs = nil
+    -- 045: the next crew's kit sets off in its own condition.
+    job.startCondition = nil
+    job.wasUnallocated = true
+    job:transitionTo(TheContractorJob.STATE.ACCEPTED)
+    TCFieldAccess.refresh()
+
+    Logging.info("TheContractor: farm %d job %d unallocated (%.0f%% done)", farmId, jobId, job.completionPercentage)
+
+    -- The whole snapshot, as an allocation sends it: the crew and kit are
+    -- cleared along with the state.
+    if g_server ~= nil then
+        g_server:broadcastEvent(TCJobAllocatedEvent.new(job))
+    end
+    return true
 end
 
 -- Completion and payout (022) --------------------------------------------
@@ -1161,6 +1243,9 @@ function TheContractorJobs.writeJob(streamId, job)
 
     -- 076. -1 stands in for "no grace period".
     streamWriteFloat32(streamId, job.graceRemainingMs or -1)
+
+    -- 093. "" stands in for "no player recorded".
+    streamWriteString(streamId, job.allocatedPlayerName or "")
 end
 
 function TheContractorJobs.readJob(streamId)
@@ -1247,6 +1332,9 @@ function TheContractorJobs.readJob(streamId)
     local graceRemainingMs = streamReadFloat32(streamId)
     job.graceRemainingMs = graceRemainingMs >= 0 and graceRemainingMs or nil
 
+    local allocatedPlayerName = streamReadString(streamId)
+    job.allocatedPlayerName = allocatedPlayerName ~= "" and allocatedPlayerName or nil
+
     return job
 end
 
@@ -1325,6 +1413,7 @@ function TheContractorJobs:loadFromXMLFile(xmlFile)
                 self.hasLegacyDeadlines = true
             end
             job.assignedWorkerId = getXMLInt(xmlFile, jobKey .. "#assignedWorkerId")
+            job.allocatedPlayerName = getXMLString(xmlFile, jobKey .. "#allocatedPlayerName")
             -- Vehicles by uniqueId until resolveSavedVehicles.
             job.savedEquipmentUniqueIds = TCVehicleIds.loadList(xmlFile, jobKey .. ".equipment")
             job.paymentAmount = getXMLFloat(xmlFile, jobKey .. "#paymentAmount")
@@ -1347,6 +1436,7 @@ function TheContractorJobs:loadFromXMLFile(xmlFile)
             job.startState = getXMLInt(xmlFile, jobKey .. "#startState")
             job.keepFieldState = Utils.getNoNil(getXMLBool(xmlFile, jobKey .. "#keepFieldState"), false)
             job.followOnSow = Utils.getNoNil(getXMLBool(xmlFile, jobKey .. "#followOnSow"), false)
+            job.wasUnallocated = Utils.getNoNil(getXMLBool(xmlFile, jobKey .. "#wasUnallocated"), false)
             -- 044: nil for a job saved before it existed - getOperationSkill
             -- works it out on first use.
             job.operationSkill = getXMLString(xmlFile, jobKey .. "#operationSkill")
@@ -1451,6 +1541,9 @@ function TheContractorJobs:saveToXmlFile(xmlFile)
             if job.followOnSow then
                 setXMLBool(xmlFile, jobKey .. "#followOnSow", true)
             end
+            if job.wasUnallocated then
+                setXMLBool(xmlFile, jobKey .. "#wasUnallocated", true)
+            end
             if job.operationSkill ~= nil then
                 setXMLString(xmlFile, jobKey .. "#operationSkill", job.operationSkill)
             end
@@ -1473,6 +1566,9 @@ function TheContractorJobs:saveToXmlFile(xmlFile)
 
             if job.assignedWorkerId ~= nil then
                 setXMLInt(xmlFile, jobKey .. "#assignedWorkerId", job.assignedWorkerId)
+            end
+            if job.allocatedPlayerName ~= nil then
+                setXMLString(xmlFile, jobKey .. "#allocatedPlayerName", job.allocatedPlayerName)
             end
 
             TCVehicleIds.saveList(xmlFile, jobKey .. ".equipment", job.assignedEquipmentIds)
