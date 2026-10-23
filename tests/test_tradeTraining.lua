@@ -188,7 +188,7 @@ test("a course needs ADS, room for the trade, nothing booked and nobody leaving"
     assertEquals(options[1].level, 2, "to level 2")
 
     local amy = addWorker(tc, 2, {})
-    assertEquals(#TheContractorWorkshop.getCourseOptions(amy), 3, "any trade for someone with none")
+    assertEquals(#TheContractorWorkshop.getCourseOptions(amy), 4, "any trade for someone with none (098: storekeeper too)")
 
     amy.trainingCert = "spraying"
     assertEquals(TheContractorWorkshop.getCourseProblem(amy, "mechanic"), PROBLEM.BOOKED, "spraying booked")

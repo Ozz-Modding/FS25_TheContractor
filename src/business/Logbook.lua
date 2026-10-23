@@ -413,6 +413,9 @@ function TheContractorLogbook:buildJobEntry(job, outcome, reputation)
                         startSnapshot = startSnapshot,
                         endSnapshot = endSnapshot,
                         extraWear = extraWear,
+                        -- Kept, never shown (099): which job caused an ADS
+                        -- fault is hidden from the player. hasFoundFault is
+                        -- what they know.
                         faultCaused = report ~= nil and containsName(report.breakdowns, name) or false,
                         wash = vehicle.spec_washable ~= nil and report ~= nil and report.wash or
                             TCJobConsequences.WASH.NONE,
@@ -943,8 +946,16 @@ function TheContractorLogbook.getInvoice(entry)
     return nil
 end
 
--- One year's summary of a vehicle for a farm: { jobs, hours, faults,
--- wearCost, last (newest entry) }.
+-- 099: whether an ADS fault was found during a use (a job's machine or a
+-- vehicle entry): one known at the end that wasn't at the start. Not
+-- whether the use caused it (faultCaused): that's ADS's hidden state, and
+-- the fault may have been there, undiscovered, before.
+function TheContractorLogbook.hasFoundFault(entry)
+    return #TCVehicleCondition.getNewFaults(entry.startSnapshot, entry.endSnapshot) > 0
+end
+
+-- One year's summary of a vehicle for a farm: { jobs, hours, faults (uses
+-- a fault was found in), wearCost, last (newest entry) }.
 function TheContractorLogbook.getVehicleSummary(record, farmId)
     local summary = { jobs = 0, hours = 0, faults = 0, wearCost = 0, last = nil }
     for _, entry in ipairs(TheContractorLogbook.getVehicleEntries(record, farmId)) do
@@ -953,7 +964,7 @@ function TheContractorLogbook.getVehicleSummary(record, farmId)
             summary.jobs = summary.jobs + 1
         end
         summary.hours = summary.hours + (TCVehicleCondition.getHoursBetween(entry.startSnapshot, entry.endSnapshot) or 0)
-        if entry.faultCaused then
+        if TheContractorLogbook.hasFoundFault(entry) then
             summary.faults = summary.faults + 1
         end
         summary.wearCost = summary.wearCost + (entry.wearCost or 0)
@@ -1719,7 +1730,7 @@ function TheContractorLogbook.formatJobEntryText(entry)
         table.insert(lines, string.format("  %s (%s): %s%s%s, wear cost %s", machine.name or "?",
             machine.workerName or "-", table.concat(parts, ", "),
             machine.extraWear ~= nil and string.format(", +%d%% extra wear", machine.extraWear) or "",
-            machine.faultCaused and ", caused a fault" or "", formatMoney(machine.wearCost)))
+            TheContractorLogbook.hasFoundFault(machine) and ", fault found" or "", formatMoney(machine.wearCost)))
     end
 
     table.insert(lines, string.format("  Time: travel %s, fieldwork %s, return %s",
@@ -1796,7 +1807,7 @@ function TheContractorLogbook.registerConsoleCommands()
             local lines = {}
             for _, record in ipairs(matches) do
                 local summary = TheContractorLogbook.getVehicleSummary(record, farmId)
-                table.insert(lines, string.format("%s: %d job(s), %.1f h, %d fault(s) caused, wear cost %s",
+                table.insert(lines, string.format("%s: %d job(s), %.1f h, %d use(s) with a fault found, wear cost %s",
                     record.name or "?", summary.jobs, summary.hours, summary.faults, formatMoney(summary.wearCost)))
                 for _, entry in ipairs(TheContractorLogbook.getVehicleEntries(record, farmId)) do
                     local parts = {}

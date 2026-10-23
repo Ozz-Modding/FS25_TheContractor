@@ -563,18 +563,20 @@
                 <GuiElement id="staffWorkshopSection" position="0px 0px">
                     <Text profile="tc_sectionTitle" text="$l10n_tc_staff_workshopHeading" position="24px -604px" size="752px 24px"/>
                     <Bitmap profile="tc_divider" position="24px -632px" size="752px 1px"/>
-                    <RoundCorner profile="tc_chip" id="staffWorkshopChip1" position="24px -646px" size="150px 22px"/>
-                    <Text profile="tc_chipText" id="staffWorkshopChipText1" position="24px -646px" size="150px 22px"/>
-                    <RoundCorner profile="tc_chip" id="staffWorkshopChip2" position="184px -646px" size="150px 22px"/>
-                    <Text profile="tc_chipText" id="staffWorkshopChipText2" position="184px -646px" size="150px 22px"/>
-                    <RoundCorner profile="tc_chip" id="staffWorkshopChip3" position="344px -646px" size="150px 22px"/>
-                    <Text profile="tc_chipText" id="staffWorkshopChipText3" position="344px -646px" size="150px 22px"/>
-                    <Text profile="tc_panelNote" id="staffWorkshopNote" text="" position="510px -642px" size="266px 44px" textMaxNumLines="2"/>
+                    <RoundCorner profile="tc_chip" id="staffWorkshopChip1" position="24px -646px" size="120px 22px"/>
+                    <Text profile="tc_chipText" id="staffWorkshopChipText1" position="24px -646px" size="120px 22px"/>
+                    <RoundCorner profile="tc_chip" id="staffWorkshopChip2" position="152px -646px" size="120px 22px"/>
+                    <Text profile="tc_chipText" id="staffWorkshopChipText2" position="152px -646px" size="120px 22px"/>
+                    <RoundCorner profile="tc_chip" id="staffWorkshopChip3" position="280px -646px" size="120px 22px"/>
+                    <Text profile="tc_chipText" id="staffWorkshopChipText3" position="280px -646px" size="120px 22px"/>
+                    <RoundCorner profile="tc_chip" id="staffWorkshopChip4" position="408px -646px" size="120px 22px"/>
+                    <Text profile="tc_chipText" id="staffWorkshopChipText4" position="408px -646px" size="120px 22px"/>
+                    <Text profile="tc_panelNote" id="staffWorkshopNote" text="" position="540px -642px" size="236px 44px" textMaxNumLines="2"/>
                 </GuiElement>
 
             </GuiElement>
 
-            <!-- 090: an office row (administrator, storekeeper) in the roster: the person, or the vacancy. -->
+            <!-- 090: an office row (the administrator) in the roster: the person, or the vacancy. -->
             <GuiElement id="staffOfficeDetailsBox" position="680px -20px">
                 <RoundCorner profile="tc_panel" position="0px 0px" size="800px 610px"/>
                 <Text profile="tc_panelHeading" id="staffOfficeTitle" text="" position="24px -16px" size="752px 32px"/>

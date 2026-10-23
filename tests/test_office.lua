@@ -1,7 +1,7 @@
--- Office staff (090): the administrator and storekeeper - hiring (the
--- storekeeper only while ADS takes our staff), ids from the worker counter,
--- training and its day tick, payroll, release, save/load (and 057's old
--- administrator saves), the stream, editing, and what ADS is told.
+-- Office staff (090): the administrator - hiring, ids from the worker
+-- counter, training and its day tick, payroll, release, save/load (057's
+-- old administrator saves, and 098 dropping a storekeeper), the stream,
+-- editing, and what ADS is told.
 
 local function setup()
     local world = stubs.install()
@@ -150,7 +150,6 @@ local function setup()
 end
 
 local ADMIN = "administrator"
-local STOREKEEPER = "storekeeper"
 
 test("hiring an administrator pays the first month and takes an id from the worker counter", function()
     local world, tc = setup()
@@ -178,22 +177,11 @@ test("hiring an administrator pays the first month and takes an id from the work
     assertEquals(tc.Office:hire(1, ADMIN), nil, "only one administrator")
 end)
 
-test("the storekeeper is only offered and hired while ADS takes our staff", function()
+test("098: the storekeeper isn't an office role any more", function()
     local world, tc = setup()
-    world.adsOn = false
-    assertTrue(tc.Office:isRoleShown(1, ADMIN), "administrator always shown")
-    assertTrue(not tc.Office:isRoleShown(1, STOREKEEPER), "storekeeper hidden")
-    assertEquals(tc.Office:getHireProblem(1, STOREKEEPER), TheContractorOffice.PROBLEM.NEEDS_ADS, "needs ADS")
-    assertEquals(tc.Office:hire(1, STOREKEEPER), nil, "refused")
-
-    world.adsOn = true
-    assertTrue(tc.Office:isRoleShown(1, STOREKEEPER), "shown with ADS")
-    local member = tc.Office:hire(1, STOREKEEPER)
-    assertEquals(member.salary, 1900, "storekeeper salary")
-
-    -- ADS switched off later: they stay, and their row with them.
-    world.adsOn = false
-    assertTrue(tc.Office:isRoleShown(1, STOREKEEPER), "still shown while employed")
+    assertEquals(tc.Office:getHireProblem(1, "storekeeper"), TheContractorOffice.PROBLEM.UNKNOWN_ROLE, "unknown")
+    assertEquals(tc.Office:hire(1, "storekeeper"), nil, "refused")
+    assertEquals(#world.money, 0, "nothing charged")
 end)
 
 test("without ADS's API (or another version of it) nothing is offered", function()
@@ -202,7 +190,8 @@ test("without ADS's API (or another version of it) nothing is offered", function
     TCADSWorkshop.detect()
     assertTrue(not TCADSWorkshop.isActive(), "not active")
     assertEquals(#world.warnings, 1, "one warning")
-    assertTrue(not tc.Office:isRoleShown(1, STOREKEEPER), "no storekeeper")
+    tc.Office:hire(1, ADMIN)
+    assertEquals(tc.Office:getTrainProblem(1, ADMIN), TheContractorOffice.PROBLEM.NEEDS_ADS, "no training")
 
     world.adsEnv = nil
     TCADSWorkshop.detect()
@@ -259,17 +248,16 @@ end)
 test("office staff are on the payroll and the headcount", function()
     local world, tc = setup()
     tc.Office:hire(1, ADMIN)
-    tc.Office:hire(1, STOREKEEPER)
     tc.Staff.workersByFarm[1] = { [1] = { id = 1, salary = 2600 } }
 
-    assertEquals(tc.Office:getSalary(1), 3900, "office salaries")
-    assertEquals(tc.Staff:getPayroll(1), 6500, "payroll")
-    assertEquals(tc.Staff:getHeadcount(1), 3, "headcount")
+    assertEquals(tc.Office:getSalary(1), 2000, "office salary")
+    assertEquals(tc.Staff:getPayroll(1), 4600, "payroll")
+    assertEquals(tc.Staff:getHeadcount(1), 2, "headcount")
     assertEquals(tc.Office:getFarmIds()[1], 1, "in the salary run")
 
     -- Short months pay less, as for workers.
     g_currentMission.environment.daysPerPeriod = 1
-    assertEquals(tc.Office:getSalary(1), 3900 * 0.6, "scaled")
+    assertEquals(tc.Office:getSalary(1), 2000 * 0.6, "scaled")
 end)
 
 test("releasing pays notice and empties the role", function()
@@ -288,9 +276,8 @@ end)
 test("a save loads back with its ids, levels, courses and looks", function()
     local world, tc = setup()
     tc.Office:hire(1, ADMIN)
-    tc.Office:hire(1, STOREKEEPER)
-    tc.Office:setLevel(1, STOREKEEPER, 2)
-    tc.Office:train(1, STOREKEEPER)
+    tc.Office:setLevel(1, ADMIN, 2)
+    tc.Office:train(1, ADMIN)
 
     local xmlFile = {}
     tc.Office:saveToXmlFile(xmlFile)
@@ -298,14 +285,30 @@ test("a save loads back with its ids, levels, courses and looks", function()
     local _, loaded = setup()
     loaded.Office:loadFromXMLFile(xmlFile)
     local admin = loaded.Office:getMember(1, ADMIN)
-    local storekeeper = loaded.Office:getMember(1, STOREKEEPER)
     assertEquals(admin.id, 5, "admin id")
-    assertEquals(storekeeper.id, 6, "storekeeper id")
-    assertEquals(storekeeper.level, 2, "level")
-    assertEquals(storekeeper.salary, 2150, "salary")
-    assertEquals(storekeeper.trainingUntilDay, 13, "course")
+    assertEquals(admin.level, 2, "level")
+    assertEquals(admin.salary, 2250, "salary")
+    assertEquals(admin.trainingUntilDay, 13, "course")
     assertEquals(admin.appearance.model, "female.xml", "look")
-    assertEquals(loaded.Staff.nextWorkerId, 7, "counter moved past their ids")
+    assertEquals(loaded.Staff.nextWorkerId, 6, "counter moved past their id")
+end)
+
+test("098: a storekeeper saved as office staff is dropped on load", function()
+    local _, tc = setup()
+    local xmlFile = {
+        ["TheContractor.office.member(0)#farmId"] = 1,
+        ["TheContractor.office.member(0)#role"] = "storekeeper",
+        ["TheContractor.office.member(0)#id"] = 9,
+        ["TheContractor.office.member(0)#name"] = "Bob Stone",
+        ["TheContractor.office.member(1)#farmId"] = 1,
+        ["TheContractor.office.member(1)#role"] = ADMIN,
+        ["TheContractor.office.member(1)#id"] = 10,
+        ["TheContractor.office.member(1)#name"] = "Ann Lee",
+    }
+    tc.Office:loadFromXMLFile(xmlFile)
+    assertEquals(tc.Office:getMember(1, "storekeeper"), nil, "dropped")
+    assertEquals(tc.Office:getMember(1, ADMIN).id, 10, "the administrator still loads")
+    assertEquals(tc.Office:getHeadcount(1), 1, "headcount")
 end)
 
 test("057's administrator saves load as a level 1 administrator, given a look at mission start", function()
@@ -333,18 +336,18 @@ end)
 
 test("a member streams across intact", function()
     local world, tc = setup()
-    tc.Office:hire(1, STOREKEEPER)
-    tc.Office:train(1, STOREKEEPER)
-    local member = tc.Office:getMember(1, STOREKEEPER)
+    tc.Office:hire(1, ADMIN)
+    tc.Office:train(1, ADMIN)
+    local member = tc.Office:getMember(1, ADMIN)
 
     local stream = world:newStream()
     TheContractorOffice.writeMember(stream, member)
     TheContractorOffice.writeMember(stream, nil)
-    local copy = TheContractorOffice.readMember(stream, 1, STOREKEEPER)
+    local copy = TheContractorOffice.readMember(stream, 1, ADMIN)
     for _, key in ipairs({ "id", "name", "gender", "salary", "level", "hiredPeriod", "ageAtHire", "trainingUntilDay" }) do
         assertEquals(copy[key], member[key], key)
     end
-    assertEquals(copy.role, STOREKEEPER, "role")
+    assertEquals(copy.role, ADMIN, "role")
     assertEquals(copy.appearance.model, member.appearance.model, "look")
     assertEquals(TheContractorOffice.readMember(stream, 1, ADMIN), nil, "vacancy")
 end)
@@ -364,7 +367,7 @@ test("office staff are edited through the worker edit path", function()
     assertEquals(world.reloadedLooks, 1, "standing spot reloaded")
 end)
 
-test("ADS is told the receptionist and storekeeper, and training", function()
+test("ADS is told the receptionist, and training", function()
     local world, tc = setup()
     TCADSWorkshop.register()
     assertEquals(world.provider.id, TCADSWorkshop.PROVIDER_ID, "registered")
@@ -373,17 +376,18 @@ test("ADS is told the receptionist and storekeeper, and training", function()
     assertEquals(next(world.provider.definition.getAssignments(1)), nil, "nobody yet")
 
     local admin = tc.Office:hire(1, ADMIN)
-    tc.Office:hire(1, STOREKEEPER)
     tc.Office:setLevel(1, ADMIN, 2)
-    tc.Office:train(1, STOREKEEPER)
 
     local assignments = world.provider.definition.getAssignments(1)
     assertEquals(assignments.receptionist.id, admin.id, "receptionist")
     assertEquals(assignments.receptionist.level, 2, "receptionist level")
     assertEquals(assignments.receptionist.status, "available", "receptionist in")
-    assertEquals(assignments.storekeeper.level, 1, "storekeeper level")
-    assertEquals(assignments.storekeeper.status, "training", "storekeeper away")
+    assertEquals(assignments.storekeeper, nil, "no storekeeper from the office")
     assertEquals(assignments.mechanic, nil, "no trades yet")
+
+    tc.Office:train(1, ADMIN)
+    assignments = world.provider.definition.getAssignments(1)
+    assertEquals(assignments.receptionist.status, "training", "receptionist away")
 
     world.partsStorage = false
     assertEquals(TCADSWorkshop.hasPartsStorage(1), false, "no parts storage")
@@ -408,6 +412,6 @@ test("tcCompany office and officeLevel register and run", function()
 
     local text = office.run(1, {})
     assertTrue(text:find("administrator: #5 " .. member.name .. ", level 2", 1, true) ~= nil, "lists them")
-    assertTrue(text:find("storekeeper: none", 1, true) ~= nil, "and the vacancy")
+    assertTrue(text:find("storekeeper", 1, true) == nil, "no storekeeper")
     assertTrue(text:find("ADS workshop: taking our staff", 1, true) ~= nil, "and ADS")
 end)

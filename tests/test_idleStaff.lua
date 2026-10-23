@@ -174,17 +174,18 @@ test("office staff stand on their farm's spots unless training", function()
     local office = TheContractorOffice.new()
     office.membersByFarm[1] = {
         administrator = { id = 7, role = "administrator", farmId = 1, name = "Ann", level = 1 },
-        storekeeper = { id = 8, role = "storekeeper", farmId = 1, name = "Bob", level = 1, trainingUntilDay = 4 },
     }
     g_currentMission.TheContractor.Office = office
 
     local wanted = TCIdleStaff.getWanted()
     assertTrue(wanted[1] ~= nil, "the idle worker")
     assertEquals(wanted[7].worker.name, "Ann", "the administrator")
-    assertEquals(wanted[8], nil, "the storekeeper's on a course")
 
     g_currentMission.TheContractor.Staff.workersByFarm = {}
     assertTrue(TCIdleStaff.getWanted()[7] ~= nil, "office only")
+
+    office.membersByFarm[1].administrator.trainingUntilDay = 4
+    assertEquals(TCIdleStaff.getWanted()[7], nil, "on a course")
 end)
 
 test("a sold spot drops out", function()

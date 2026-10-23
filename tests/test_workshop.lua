@@ -322,6 +322,48 @@ test("a whole worker keeps their skills and role through the save and the stream
     assertEquals(stream.position, #stream.values, "everything read")
 end)
 
+-- 098: the storekeeper is a trade like the others, not office staff.
+test("the storekeeper is a trade: rolled, ticked, trained and handed to ADS", function()
+    local world, tc = setup()
+    assertTrue(TheContractorWorkshop.IS_ROLE.storekeeper, "a trade")
+    assertEquals(TheContractorOffice.getDefinition("storekeeper"), nil, "not an office role")
+
+    math.randomseed(98)
+    local rolled = false
+    for _ = 1, 2000 do
+        if (TheContractorWorkshop.rollSkills().storekeeper or 0) > 0 then
+            rolled = true
+            break
+        end
+    end
+    assertTrue(rolled, "candidates can have it")
+
+    local bob = addWorker(tc, 1, { storekeeper = 2 })
+    assertEquals(TheContractorWorkshop.getSalaryPremium(bob.adsSkills), 350, "market value")
+    assertEquals(TheContractorWorkshop.setRole(1, 1, "storekeeper"), nil, "ticked")
+    local assignments = TCADSWorkshop.getAssignments(1)
+    assertEquals(assignments.storekeeper.id, 1, "ADS's storekeeper")
+    assertEquals(assignments.storekeeper.level, 2, "at their level")
+    assertEquals(assignments.storekeeper.status, "available", "idle")
+    bob.status = TheContractorWorker.STATUS.ASSIGNED
+    assertEquals(TCADSWorkshop.getAssignments(1).storekeeper.status, "working", "out on a job")
+
+    local ann = addWorker(tc, 2, {})
+    assertEquals(TheContractorWorkshop.getCourseKey("storekeeper"), "workshop_storekeeper", "course key")
+    assertEquals(TheContractorWorkshop.getCourseRole("workshop_storekeeper"), "storekeeper", "course role")
+    assertEquals(TheContractorWorkshop.getCourseLevel(ann, "storekeeper"), 1, "learns it")
+    assertEquals(TheContractorWorkshop.getLevelProblem(bob, "storekeeper"), nil, "can go up")
+    assertEquals(TheContractorWorkshop.completeCourse(ann, "storekeeper"), 1, "learnt")
+    assertEquals(ann.adsSkills.storekeeper, 1, "level 1 storekeeper")
+
+    TCConsole.reset()
+    TheContractorWorkshop.registerConsoleCommands()
+    local adsSkill = TCConsole.groups.worker.subcommands.adsskill
+    ann.name = "Ann Lee"
+    assertEquals(adsSkill.run(1, { "2", "storekeeper", "3" }), "Ann Lee: storekeeper 3", "console")
+    assertEquals(TheContractorWorkshop.findRole("Storekeeper"), "storekeeper", "by name")
+end)
+
 test("every trade has a name", function()
     setup()
     for _, role in ipairs(TheContractorWorkshop.ROLES) do

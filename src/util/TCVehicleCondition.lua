@@ -4,10 +4,15 @@
 -- a save that gained ADS halfway through, still reads correctly:
 --
 --   vanilla  damage (0-1), paint wear (0-1), repair price
---   ads      condition (0-1, ADS's own level), paint wear (ADS leaves
---            vanilla's paint wear alone), and the faults active at the
---            time as { id, stage }. ADS has no live service level (only
---            the last inspection's), so there's none here.
+--   ads      what the player knows (099): the last inspection's condition
+--            (knownCondition, 0-1, nil if never inspected, with
+--            conditionExact after a complete inspection and conditionStale
+--            once the vehicle has run a while since), paint wear (ADS
+--            leaves vanilla's paint wear alone), and the faults found
+--            (isVisible) at the time, as { id }. ADS's live condition and
+--            undiscovered faults are its hidden state, revealed only by an
+--            inspection or a symptom, so they're never recorded here. Our
+--            own maths (job quality, road accidents) reads them live.
 --
 -- Both also note the vehicle's operating hours, which is how long a
 -- machine actually ran between two snapshots.
@@ -17,8 +22,10 @@
 -- vehicle's own functions, like TCJobConsequences.canBreakDown, not the mod
 -- name.
 --
--- Snapshots are taken on the server and are plain values, so they're
--- streamed and saved as they are.
+-- Snapshots are plain values, so they're streamed and saved as they are.
+-- The Logbook takes them on the server; the Logbook tab takes one of a
+-- vehicle as it is now on any machine (ADS streams its breakdowns, with
+-- isVisible, and its inspection log to clients).
 
 TCVehicleCondition = {}
 
@@ -40,7 +47,7 @@ local function sortFaults(faults)
     end)
 end
 
--- Server-only. nil for a vehicle with no wear model at all.
+-- nil for a vehicle with no wear model at all.
 function TCVehicleCondition.capture(vehicle)
     if vehicle == nil or vehicle.spec_wearable == nil then
         return nil
@@ -53,12 +60,17 @@ function TCVehicleCondition.capture(vehicle)
 
     if TCVehicleCondition.isManagedByADS(vehicle) then
         snapshot.model = TCVehicleCondition.MODEL.ADS
-        snapshot.condition = vehicle:getConditionLevel() or 1
+        if vehicle.getLastInspectedCondition ~= nil then
+            local value, isExact, isStale = vehicle:getLastInspectedCondition()
+            snapshot.knownCondition = tonumber(value)
+            snapshot.conditionExact = snapshot.knownCondition ~= nil and isExact == true
+            snapshot.conditionStale = snapshot.knownCondition ~= nil and isStale == true
+        end
         snapshot.faults = {}
         local breakdowns = vehicle.getActiveBreakdowns ~= nil and vehicle:getActiveBreakdowns() or nil
         for id, breakdown in pairs(breakdowns or {}) do
-            if type(breakdown) == "table" and breakdown.isActive ~= false then
-                table.insert(snapshot.faults, { id = tostring(id), stage = breakdown.stage or 1 })
+            if type(breakdown) == "table" and breakdown.isVisible == true then
+                table.insert(snapshot.faults, { id = tostring(id) })
             end
         end
         sortFaults(snapshot.faults)
@@ -71,27 +83,25 @@ function TCVehicleCondition.capture(vehicle)
     return snapshot
 end
 
--- A fault's stage in a snapshot, or nil if it wasn't there.
-local function getFaultStage(snapshot, id)
+local function hasFault(snapshot, id)
     for _, fault in ipairs(snapshot.faults or {}) do
         if fault.id == id then
-            return fault.stage
+            return true
         end
     end
-    return nil
+    return false
 end
 
--- Faults in `after` that are new, or have got worse, since `before`:
--- { { id, stage, previousStage (nil if new) } }.
+-- Faults found in `after` that weren't known in `before`: { { id } }. One
+-- found during a use may have been there, undiscovered, before it.
 function TCVehicleCondition.getNewFaults(before, after)
     local result = {}
     if after == nil or after.model ~= TCVehicleCondition.MODEL.ADS then
         return result
     end
     for _, fault in ipairs(after.faults or {}) do
-        local previousStage = before ~= nil and getFaultStage(before, fault.id) or nil
-        if previousStage == nil or fault.stage > previousStage then
-            table.insert(result, { id = fault.id, stage = fault.stage, previousStage = previousStage })
+        if before == nil or before.model ~= after.model or not hasFault(before, fault.id) then
+            table.insert(result, { id = fault.id })
         end
     end
     return result
@@ -103,27 +113,15 @@ end
 local adsEnv = nil
 local function getADSEnv()
     if adsEnv == nil then
-        local env = TheContractorDrivers.getModEnv(TCVehicleCondition.ADS_MOD_NAME)
-        adsEnv = env ~= nil and env.ADS_VehiclePerformance ~= nil and env.ADS_Components ~= nil and env or false
+        adsEnv = TheContractorDrivers.getModEnv(TCVehicleCondition.ADS_MOD_NAME) or false
     end
     return adsEnv or nil
 end
 
-local function getADSRepairPrice(vehicle, id, stage)
-    if vehicle.getBreakdownRepairPrice == nil then
-        return 0
-    end
-    local env = getADSEnv()
-    local partType = env ~= nil and env.AdvancedDamageSystem ~= nil and env.AdvancedDamageSystem.PART_TYPES ~= nil and
-        env.AdvancedDamageSystem.PART_TYPES.OEM or nil
-    return tonumber(vehicle:getBreakdownRepairPrice(id, stage, partType)) or 0
-end
-
 -- Server-only, with the vehicle still there: what the change from `before`
 -- to `after` costs to put right, estimated. Vanilla: the rise in repair
--- price. ADS: the repair price of each new fault (or of the step up, for
--- one that got worse). Never negative - a repair in between doesn't make
--- money. 0 when the two snapshots used different models.
+-- price. Never negative - a repair in between doesn't make money. 0 when
+-- the two snapshots used different models.
 function TCVehicleCondition.getWearCost(vehicle, before, after)
     if vehicle == nil or before == nil or after == nil or before.model ~= after.model then
         return 0
@@ -133,15 +131,10 @@ function TCVehicleCondition.getWearCost(vehicle, before, after)
         return math.max(0, (after.repairPrice or 0) - (before.repairPrice or 0))
     end
 
-    local cost = 0
-    for _, fault in ipairs(TCVehicleCondition.getNewFaults(before, after)) do
-        local price = getADSRepairPrice(vehicle, fault.id, fault.stage)
-        if fault.previousStage ~= nil then
-            price = price - getADSRepairPrice(vehicle, fault.id, fault.previousStage)
-        end
-        cost = cost + math.max(0, price)
-    end
-    return cost
+    -- TODO (099): ADS no longer has getBreakdownRepairPrice; its author
+    -- plans a repair cost function. When it comes, price only the faults
+    -- found (getNewFaults), never hidden ones, or the cost gives them away.
+    return 0
 end
 
 -- Display ---------------------------------------------------------------------
@@ -167,10 +160,12 @@ end
 -- log names it), or a tidied-up id when ADS isn't loaded on this machine.
 function TCVehicleCondition.getFaultName(id)
     local env = getADSEnv()
-    local entry = env ~= nil and env.ADS_VehiclePerformance.ConditionRegistry ~= nil and
-        env.ADS_VehiclePerformance.ConditionRegistry[id] or nil
-    local component = entry ~= nil and entry.componentId ~= nil and
-        env.ADS_Components.getComponentDefinition(entry.componentId) or nil
+    local performance = env ~= nil and env.ADS_VehiclePerformance or nil
+    local components = env ~= nil and env.ADS_Components or nil
+    local entry = performance ~= nil and performance.ConditionRegistry ~= nil and
+        performance.ConditionRegistry[id] or nil
+    local component = entry ~= nil and entry.componentId ~= nil and components ~= nil and
+        components.getComponentDefinition ~= nil and components.getComponentDefinition(entry.componentId) or nil
     local key = component ~= nil and component.name or nil
     local text = type(key) == "string" and getOtherModText(key) or nil
     if text ~= nil then
@@ -180,27 +175,45 @@ function TCVehicleCondition.getFaultName(id)
     return (string.gsub(name, "^%l", string.upper))
 end
 
--- "Hydraulics (stage 2)".
-function TCVehicleCondition.formatFault(fault)
-    return string.format(g_i18n:getText("tc_logbook_faultStage"), TCVehicleCondition.getFaultName(fault.id),
-        fault.stage)
+-- The condition the player knows, as ADS's own workshop shows it
+-- (ADS_Utils.formatCondition): a percentage after a complete inspection,
+-- else a word ("Good"), or "Unknown" if it's never been inspected, marked
+-- outdated once the vehicle has run a while since. Without ADS on this
+-- machine: the percentage after a complete inspection, else "Unknown".
+function TCVehicleCondition.formatKnownCondition(snapshot)
+    local env = getADSEnv()
+    local utils = env ~= nil and env.ADS_Utils or nil
+    local text
+    if utils ~= nil and utils.formatCondition ~= nil then
+        text = utils.formatCondition(snapshot.knownCondition, snapshot.conditionExact == true)
+    elseif snapshot.knownCondition ~= nil and snapshot.conditionExact then
+        text = percent(snapshot.knownCondition)
+    else
+        text = g_i18n:getText("tc_logbook_unknown")
+    end
+    if snapshot.knownCondition ~= nil and snapshot.conditionStale then
+        text = string.format(g_i18n:getText("tc_logbook_conditionOutdated"), text)
+    end
+    return text
 end
 
 -- The headline figure for a list chip or summary: damage for vanilla,
--- condition for ADS.
+-- the known condition for ADS.
 function TCVehicleCondition.getHeadline(snapshot)
     if snapshot == nil then
         return nil
     end
     if snapshot.model == TCVehicleCondition.MODEL.ADS then
-        return string.format(g_i18n:getText("tc_logbook_conditionShort"), percent(snapshot.condition))
+        return string.format(g_i18n:getText("tc_logbook_conditionShort"),
+            TCVehicleCondition.formatKnownCondition(snapshot))
     end
     return string.format(g_i18n:getText("tc_logbook_damageShort"), percent(snapshot.damage))
 end
 
 -- Label/value rows comparing two snapshots ("Damage 12% -> 19%"), in the
 -- model `after` (or `before`, if there's no after) was taken under. Either
--- may be nil, shown as "-".
+-- may be nil, shown as "-". ADS's known condition only changes with an
+-- inspection, so it's one value unless there was one in between.
 function TCVehicleCondition.getChangeRows(before, after)
     local reference = after or before
     if reference == nil then
@@ -215,45 +228,51 @@ function TCVehicleCondition.getChangeRows(before, after)
 
     local rows = {}
     if reference.model == TCVehicleCondition.MODEL.ADS then
-        table.insert(rows, { label = g_i18n:getText("tc_logbook_condition"), value = change("condition") })
+        local function known(snapshot)
+            return snapshot ~= nil and snapshot.model == reference.model and
+                TCVehicleCondition.formatKnownCondition(snapshot) or "-"
+        end
+        local from, to = known(before), known(after)
+        table.insert(rows, { label = g_i18n:getText("tc_logbook_condition"),
+            value = from == to and to or string.format(g_i18n:getText("tc_logbook_change"), from, to) })
     else
         table.insert(rows, { label = g_i18n:getText("tc_logbook_damage"), value = change("damage") })
     end
     table.insert(rows, { label = g_i18n:getText("tc_logbook_paint"), value = change("wear") })
 
     for _, fault in ipairs(TCVehicleCondition.getNewFaults(before, after)) do
-        table.insert(rows, { label = g_i18n:getText(fault.previousStage == nil and "tc_logbook_newFault" or
-            "tc_logbook_worseFault"), value = TCVehicleCondition.formatFault(fault), tone = "bad" })
+        table.insert(rows, { label = g_i18n:getText("tc_logbook_newFault"),
+            value = TCVehicleCondition.getFaultName(fault.id), tone = "bad" })
     end
     return rows
 end
 
 -- How much worse a vehicle got between two snapshots, as fractions:
--- damage (vanilla damage, or ADS condition lost) and paint wear. Either is
--- nil when there's nothing to compare (a missing snapshot, or the two taken
--- under different models). A repair in between can make them negative.
+-- vanilla damage and paint wear. Either is nil when there's nothing to
+-- compare (a missing snapshot, or the two taken under different models),
+-- and damage always is for ADS, whose condition the player only knows from
+-- inspections. A repair in between can make them negative.
 function TCVehicleCondition.getDeltas(before, after)
     if before == nil or after == nil or before.model ~= after.model then
         return nil, nil
     end
-    local damage
-    if after.model == TCVehicleCondition.MODEL.ADS then
-        damage = (before.condition or 1) - (after.condition or 1)
-    else
+    local damage = nil
+    if after.model == TCVehicleCondition.MODEL.VANILLA then
         damage = (after.damage or 0) - (before.damage or 0)
     end
     return damage, (after.wear or 0) - (before.wear or 0)
 end
 
 -- Label/value rows for one snapshot on its own (a vehicle as it is now),
--- with every active fault listed for ADS.
+-- with every fault found listed for ADS.
 function TCVehicleCondition.getStateRows(snapshot)
     if snapshot == nil then
         return {}
     end
     local rows = {}
     if snapshot.model == TCVehicleCondition.MODEL.ADS then
-        table.insert(rows, { label = g_i18n:getText("tc_logbook_condition"), value = percent(snapshot.condition) })
+        table.insert(rows, { label = g_i18n:getText("tc_logbook_condition"),
+            value = TCVehicleCondition.formatKnownCondition(snapshot) })
     else
         table.insert(rows, { label = g_i18n:getText("tc_logbook_damage"), value = percent(snapshot.damage) })
     end
@@ -261,7 +280,7 @@ function TCVehicleCondition.getStateRows(snapshot)
     if snapshot.model == TCVehicleCondition.MODEL.ADS then
         local faults = {}
         for _, fault in ipairs(snapshot.faults or {}) do
-            table.insert(faults, TCVehicleCondition.formatFault(fault))
+            table.insert(faults, TCVehicleCondition.getFaultName(fault.id))
         end
         table.insert(rows, { label = g_i18n:getText("tc_logbook_activeFaults"),
             value = #faults > 0 and table.concat(faults, ", ") or g_i18n:getText("tc_logbook_none"),
@@ -271,7 +290,8 @@ function TCVehicleCondition.getStateRows(snapshot)
 end
 
 -- "good"/"warn"/"bad" for a vehicle's condition chip: by damage for
--- vanilla, by condition for ADS, and bad with any ADS fault active.
+-- vanilla; for ADS, bad with any fault found, else by the known condition
+-- (neutral if it's never been inspected).
 function TCVehicleCondition.getTone(snapshot)
     if snapshot == nil then
         return "neutral"
@@ -281,7 +301,10 @@ function TCVehicleCondition.getTone(snapshot)
         if #(snapshot.faults or {}) > 0 then
             return "bad"
         end
-        health = snapshot.condition or 1
+        if snapshot.knownCondition == nil then
+            return "neutral"
+        end
+        health = snapshot.knownCondition
     else
         health = 1 - (snapshot.damage or 0)
     end
@@ -312,12 +335,16 @@ function TCVehicleCondition.writeStream(streamId, snapshot)
     streamWriteFloat32(streamId, snapshot.wear or 0)
     streamWriteFloat32(streamId, snapshot.hours or 0)
     if snapshot.model == TCVehicleCondition.MODEL.ADS then
-        streamWriteFloat32(streamId, snapshot.condition or 1)
+        streamWriteBool(streamId, snapshot.knownCondition ~= nil)
+        if snapshot.knownCondition ~= nil then
+            streamWriteFloat32(streamId, snapshot.knownCondition)
+            streamWriteBool(streamId, snapshot.conditionExact == true)
+            streamWriteBool(streamId, snapshot.conditionStale == true)
+        end
         local faults = snapshot.faults or {}
         streamWriteUInt8(streamId, math.min(#faults, 255))
         for i = 1, math.min(#faults, 255) do
             streamWriteString(streamId, faults[i].id)
-            streamWriteUInt8(streamId, math.min(faults[i].stage, 255))
         end
     else
         streamWriteFloat32(streamId, snapshot.damage or 0)
@@ -335,10 +362,14 @@ function TCVehicleCondition.readStream(streamId)
         hours = streamReadFloat32(streamId),
     }
     if snapshot.model == TCVehicleCondition.MODEL.ADS then
-        snapshot.condition = streamReadFloat32(streamId)
+        if streamReadBool(streamId) then
+            snapshot.knownCondition = streamReadFloat32(streamId)
+            snapshot.conditionExact = streamReadBool(streamId)
+            snapshot.conditionStale = streamReadBool(streamId)
+        end
         snapshot.faults = {}
         for _ = 1, streamReadUInt8(streamId) do
-            table.insert(snapshot.faults, { id = streamReadString(streamId), stage = streamReadUInt8(streamId) })
+            table.insert(snapshot.faults, { id = streamReadString(streamId) })
         end
     else
         snapshot.damage = streamReadFloat32(streamId)
@@ -349,7 +380,10 @@ end
 
 -- Save ------------------------------------------------------------------------
 
--- Faults are saved as "ID:stage;ID:stage".
+-- Faults found are saved as "ID;ID". Snapshots from before 099 held ADS's
+-- live condition (#condition) and every fault, hidden ones too (#faults,
+-- "ID:stage"). Those are ignored, so they read as never inspected with no
+-- faults found.
 function TCVehicleCondition.saveToXML(xmlFile, key, snapshot)
     if snapshot == nil then
         return
@@ -358,12 +392,16 @@ function TCVehicleCondition.saveToXML(xmlFile, key, snapshot)
     setXMLFloat(xmlFile, key .. "#wear", snapshot.wear or 0)
     setXMLFloat(xmlFile, key .. "#hours", snapshot.hours or 0)
     if snapshot.model == TCVehicleCondition.MODEL.ADS then
-        setXMLFloat(xmlFile, key .. "#condition", snapshot.condition or 1)
-        local parts = {}
-        for _, fault in ipairs(snapshot.faults or {}) do
-            table.insert(parts, string.format("%s:%d", fault.id, fault.stage))
+        if snapshot.knownCondition ~= nil then
+            setXMLFloat(xmlFile, key .. "#knownCondition", snapshot.knownCondition)
+            setXMLBool(xmlFile, key .. "#conditionExact", snapshot.conditionExact == true)
+            setXMLBool(xmlFile, key .. "#conditionStale", snapshot.conditionStale == true)
         end
-        setXMLString(xmlFile, key .. "#faults", table.concat(parts, ";"))
+        local ids = {}
+        for _, fault in ipairs(snapshot.faults or {}) do
+            table.insert(ids, fault.id)
+        end
+        setXMLString(xmlFile, key .. "#knownFaults", table.concat(ids, ";"))
     else
         setXMLFloat(xmlFile, key .. "#damage", snapshot.damage or 0)
         setXMLFloat(xmlFile, key .. "#repairPrice", snapshot.repairPrice or 0)
@@ -381,13 +419,14 @@ function TCVehicleCondition.loadFromXML(xmlFile, key)
         hours = Utils.getNoNil(getXMLFloat(xmlFile, key .. "#hours"), 0),
     }
     if model == TCVehicleCondition.MODEL.ADS then
-        snapshot.condition = Utils.getNoNil(getXMLFloat(xmlFile, key .. "#condition"), 1)
+        snapshot.knownCondition = getXMLFloat(xmlFile, key .. "#knownCondition")
+        snapshot.conditionExact = snapshot.knownCondition ~= nil and
+            Utils.getNoNil(getXMLBool(xmlFile, key .. "#conditionExact"), false)
+        snapshot.conditionStale = snapshot.knownCondition ~= nil and
+            Utils.getNoNil(getXMLBool(xmlFile, key .. "#conditionStale"), false)
         snapshot.faults = {}
-        for part in string.gmatch(getXMLString(xmlFile, key .. "#faults") or "", "([^;]+)") do
-            local id, stage = string.match(part, "^(.+):(%d+)$")
-            if id ~= nil then
-                table.insert(snapshot.faults, { id = id, stage = tonumber(stage) })
-            end
+        for id in string.gmatch(getXMLString(xmlFile, key .. "#knownFaults") or "", "([^;]+)") do
+            table.insert(snapshot.faults, { id = id })
         end
         sortFaults(snapshot.faults)
     else

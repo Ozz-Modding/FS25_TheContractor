@@ -224,7 +224,7 @@ function TheContractor:loadMap()
     self.Morale:register(self.Inbox)
     self.PayReviews = TheContractorPayReviews.new()
     self.PayReviews:register(self.Inbox)
-    -- 090: the office administrator (057) and storekeeper.
+    -- 090: the office administrator (057).
     self.Office = TheContractorOffice.new()
     -- 097: working hours and overtime.
     self.WorkingHours = TheContractorWorkingHours.new()

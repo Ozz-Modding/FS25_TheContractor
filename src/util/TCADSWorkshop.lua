@@ -8,9 +8,10 @@
 -- registration, every second per farm, and whenever we call refresh. It
 -- syncs the result to clients itself and never saves it. Each role holds
 -- one person, and each person at most one role; only "available" counts as
--- present. Office staff (TheContractorOffice) fill receptionist and
--- storekeeper, and workers ticked into the workshop (091,
--- TheContractorWorkshop) the trades: mechanic, diagnostician, bodyworker.
+-- present. The office administrator (TheContractorOffice) is the
+-- receptionist, and workers ticked into the workshop (091,
+-- TheContractorWorkshop) fill the trades: mechanic, diagnostician,
+-- bodyworker and storekeeper (098).
 --
 -- The entry points are looked up once per loadMap (detect), the
 -- TCADSStock way: anything missing or a different API version leaves us
@@ -23,7 +24,7 @@ TCADSWorkshop.MOD_NAME = "FS25_AdvancedDamageSystem"
 TCADSWorkshop.PROVIDER_ID = "theContractor"
 TCADSWorkshop.API_VERSION = 1
 
--- ADS's equipment the storekeeper needs (its REQUIRES_EQUIPMENT).
+-- ADS's equipment a storekeeper needs (its REQUIRES_EQUIPMENT).
 TCADSWorkshop.PARTS_STORAGE = "partsStorage"
 
 -- ADS_OwnWorkshop, while it has everything we need; nil otherwise.
@@ -175,7 +176,7 @@ function TCADSWorkshop.openStaffMenu(farmId, adsRole, workerId)
     return true
 end
 
--- Whether the farm's ADS workshop has the parts storage the storekeeper
+-- Whether the farm's ADS workshop has the parts storage a storekeeper
 -- needs, or nil if ADS can't tell us.
 function TCADSWorkshop.hasPartsStorage(farmId)
     if api == nil or type(api.getRecord) ~= "function" or type(api.hasEquipment) ~= "function" then
