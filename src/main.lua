@@ -98,6 +98,7 @@ source(TheContractor.dir .. "src/business/SprayDrift.lua")
 source(TheContractor.dir .. "src/business/Poaching.lua")
 source(TheContractor.dir .. "src/business/CourtesyVehicle.lua")
 source(TheContractor.dir .. "src/business/RepairContracts.lua")
+source(TheContractor.dir .. "src/business/FieldBreakdowns.lua")
 source(TheContractor.dir .. "src/events/TCInitialClientStateEvent.lua")
 source(TheContractor.dir .. "src/events/TCSettingsEvent.lua")
 source(TheContractor.dir .. "src/events/TCCreateCompanyEvent.lua")
@@ -267,6 +268,9 @@ function TheContractor:loadMap()
     -- 100: customers' machines in repair zones (ADS).
     self.RepairContracts = TheContractorRepairContracts.new()
     self.RepairContracts:register(self.Inbox)
+    -- 101: customers' machines broken down in the field (ADS), through 100.
+    self.FieldBreakdowns = TheContractorFieldBreakdowns.new()
+    self.FieldBreakdowns:register(self.RandomEvents)
     self.InboxHUD = TCInboxHUD.new()
 
     -- Module-level caches outlive a savegame; start each load clean.

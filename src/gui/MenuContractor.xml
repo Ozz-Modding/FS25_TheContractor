@@ -35,6 +35,11 @@
             <Button profile="fs25_subCategorySelectorTabbedTab" id="subCategoryTabs[7]" text="$l10n_tc_header_supplies" onClick="onClickSupplies">
                 <ThreePartBitmap profile="fs25_subCategorySelectorTabbedTabBg" name="background"/>
             </Button>
+            <!-- 100: last, so hiding it without ADS leaves the other tabs'
+                 indices alone (MenuContractor:onFrameOpen). -->
+            <Button profile="fs25_subCategorySelectorTabbedTab" id="subCategoryTabs[8]" text="$l10n_tc_header_workshop" onClick="onClickWorkshop">
+                <ThreePartBitmap profile="fs25_subCategorySelectorTabbedTabBg" name="background"/>
+            </Button>
         </BoxLayout>
         <ThreePartBitmap profile="fs25_lineSeparatorTopHighlighted" position="0px -57px"/>
         <MultiTextOption profile="fs25_subCategorySelectorTabbed" id="subCategoryPaging" position="0px -10px" onClick="updateSubCategoryPages"/>
@@ -997,6 +1002,64 @@
                     </SmoothList>
                     <ThreePartBitmap profile="tc_slider_box" position="770px -66px" size="6px 530px">
                         <Slider profile="fs25_listSlider" dataElementId="suppliesDetailTable"/>
+                    </ThreePartBitmap>
+                </GuiElement>
+            </GuiElement>
+        </GuiElement>
+
+        <!-- Workshop (100) ================================================= -->
+        <GuiElement profile="fs25_subCategorySelectorTabbedContainer" id="subCategoryPages[8]">
+            <Text profile="tc_emptyStateText" id="placeholderWorkshop" text="$l10n_tc_placeholder_locked" position="40px -250px" size="1440px 60px" textMaxNumLines="2"/>
+
+            <GuiElement id="workshopContent" position="0px 0px">
+                <!-- The customers' machines being worked on: accepted
+                     repairs, services and field breakdowns. -->
+                <GuiElement id="workshopListContainer" position="40px -20px">
+                    <GuiElement profile="tc_tableHeaderRow" position="0px 0px" size="600px 30px">
+                        <Button profile="tc_tableHeader" position="14px 0px" text="$l10n_tc_workshop_columnMachine" handleFocus="false"/>
+                        <Button profile="tc_tableHeader" position="250px 0px" text="$l10n_tc_workshop_columnDue" handleFocus="false"/>
+                        <Button profile="tc_tableHeader" position="370px 0px" text="$l10n_tc_workshop_columnProgress" handleFocus="false"/>
+                        <Bitmap profile="tc_tableHeaderDivider"/>
+                    </GuiElement>
+                    <SmoothList id="workshopTable" profile="tc_table" position="0px -36px" size="600px 574px">
+                        <ListItem profile="tc_tableListItem">
+                            <RoundCorner profile="tc_tableRowSurface"/>
+                            <Bitmap profile="tc_tableRowAccent"/>
+                            <Text profile="tc_listRowValue" position="14px 0px" size="230px 32px" name="machine"/>
+                            <Text profile="tc_listRowCellLeft" position="250px 0px" size="114px 32px" name="due"/>
+                            <RoundCorner profile="tc_rowChip" position="370px 0px" size="210px 20px" name="chip"/>
+                            <Text profile="tc_rowChipText" position="370px 0px" size="210px 20px" name="chipText"/>
+                        </ListItem>
+                    </SmoothList>
+                    <ThreePartBitmap profile="tc_slider_box" position="610px -36px" size="6px 574px">
+                        <Slider profile="fs25_listSlider" dataElementId="workshopTable"/>
+                    </ThreePartBitmap>
+                </GuiElement>
+
+                <Text profile="tc_emptyStateText" id="workshopEmptyText" text="$l10n_tc_workshop_empty" position="40px -250px" size="600px 60px" textMaxNumLines="3"/>
+
+                <!-- The highlighted job: what counts as done, then its rows
+                     (the job, the work and the checklist, live from ADS). -->
+                <GuiElement id="workshopDetailsBox" position="680px -20px">
+                    <RoundCorner profile="tc_panel" position="0px 0px" size="800px 610px"/>
+                    <Text profile="tc_panelHeading" id="workshopDetailTitle" text="" position="24px -16px" size="560px 32px"/>
+                    <RoundCorner profile="tc_chip" id="workshopDetailChip" position="596px -22px" size="180px 20px"/>
+                    <Text profile="tc_chipText" id="workshopDetailChipText" position="596px -22px" size="180px 20px"/>
+                    <Bitmap profile="tc_divider" position="24px -56px" size="752px 1px"/>
+                    <Text profile="tc_panelNote" id="workshopDoneWhen" text="" position="24px -66px" size="752px 84px" textMaxNumLines="4"/>
+                    <SmoothList id="workshopDetailTable" profile="tc_table" position="24px -160px" size="740px 436px">
+                        <ListItem profile="tc_tableListItem">
+                            <RoundCorner profile="tc_tableRowSurface" name="surface"/>
+                            <Bitmap profile="tc_tableRowAccent"/>
+                            <Text profile="tc_listRowSection" position="14px 0px" size="700px 32px" name="section"/>
+                            <Text profile="tc_listRowLabel" position="14px 0px" size="250px 32px" name="label"/>
+                            <Text profile="tc_listRowValue" position="270px 0px" size="340px 32px" name="value"/>
+                            <RoundCorner profile="tc_rowChip" position="616px 0px" size="114px 20px" name="chip"/>
+                            <Text profile="tc_rowChipText" position="616px 0px" size="114px 20px" name="chipText"/>
+                        </ListItem>
+                    </SmoothList>
+                    <ThreePartBitmap profile="tc_slider_box" position="770px -160px" size="6px 436px">
+                        <Slider profile="fs25_listSlider" dataElementId="workshopDetailTable"/>
                     </ThreePartBitmap>
                 </GuiElement>
             </GuiElement>

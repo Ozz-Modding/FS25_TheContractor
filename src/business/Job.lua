@@ -282,8 +282,10 @@ function TheContractorJob.new(id, farmId, jobType, fieldId, requiredSkillLevel, 
     -- other job (TheContractorRepairContracts; fieldId is 0). Sent to
     -- clients: vehicleId, vehicleName, kind, severity, offerExpiresDay,
     -- quotePrice (ADS's dealer quote at the price level of the day it was
-    -- made), requiredTools, serviceLevel, operatingHours, bayIndex. Saved
-    -- too, and server-only: vehicleUniqueId, zoneUniqueId.
+    -- made), requiredTools, serviceLevel, operatingHours, bayIndex, and
+    -- 101's fieldId (a breakdown's field, nil otherwise; its serviceLevel is
+    -- ADS's field service, "player" or "mobile"). Saved too, and
+    -- server-only: vehicleUniqueId, zoneUniqueId.
     self.workshop = nil
 
     return self
@@ -296,9 +298,14 @@ function TheContractorJob:isWorkshop()
 end
 
 -- Where the job is, for lines that would name its field: the field's name,
--- or a workshop job's machine.
+-- or a workshop job's machine (and a breakdown's field, 101).
 function TheContractorJob:getLocationText()
     if self.workshop ~= nil then
+        if self.workshop.fieldId ~= nil then
+            local field = g_fieldManager:getFieldById(self.workshop.fieldId)
+            return string.format(g_i18n:getText("tc_breakdown_location"), self.workshop.vehicleName or "?",
+                field ~= nil and field:getName() or tostring(self.workshop.fieldId))
+        end
         return self.workshop.vehicleName or "?"
     end
     local field = g_fieldManager:getFieldById(self.fieldId)

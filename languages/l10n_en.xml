@@ -12,7 +12,9 @@
 		<text name="tc_setting_randomEvents_rare" text="Rare"/>
 		<text name="tc_setting_randomEvents_normal" text="Normal"/>
 		<text name="tc_setting_nameStyle" text="Staff name style"/>
+		<text name="tc_setting_adsMargin" text="Repair contract margin"/>
 		<text name="tc_toolTip_nameStyle" text="Where the names of new job candidates and office administrators come from. European mix and Mixed pick a different style for each person. Staff you already have keep their names."/>
+		<text name="tc_toolTip_adsMargin" text="The average margin over a workshop's going rate on Advanced Damage System repair, service and breakdown offers. Each offer is within 10% either side of it. Offers already made keep their price."/>
 		<text name="tc_setting_showParkingSlots" text="Show parking slots"/>
 		<text name="tc_toolTip_showParkingSlots" text="Show your parking slots' markings outside the construction menu too. Just for you: other players choose their own. Right Ctrl+P switches it by default."/>
 		<text name="tc_nameStyle_british" text="British"/>
@@ -35,6 +37,7 @@
 		<text name="tc_header_finances" text="Finances"/>
 		<text name="tc_header_logbook" text="Logbook"/>
 		<text name="tc_header_supplies" text="Supplies"/>
+		<text name="tc_header_workshop" text="Workshop"/>
 		<text name="tc_overview_companyHeading" text="Company"/>
 		<text name="tc_overview_businessHeading" text="Business"/>
 		<text name="tc_inbox_negotiationHeading" text="Negotiation"/>
@@ -128,8 +131,9 @@
 		<text name="tc_summary_line" text="%s on Field %s, %s, fuel %s (%.0f l), quality %d%%"/>
 		<text name="tc_summary_duration" text="%dh %02dm"/>
 		<text name="tc_overview_currentJobsHeading" text="Current Jobs"/>
-		<text name="tc_overview_currentJobsEmpty" text="No jobs currently allocated or in progress."/>
+		<text name="tc_overview_currentJobsEmpty" text="No jobs allocated, in progress or in the workshop."/>
 		<text name="tc_overview_currentJobLine" text="Field %s: %s - %d%%"/>
+		<text name="tc_repair_overviewLine" text="%s: %s - %s, due %s"/>
 		<text name="tc_overview_deliveredSuffix" text=" (%d%% delivered to %s)"/>
 		<text name="tc_overview_supplySuffix" text=" - %s"/>
 		<text name="tc_overview_courtesyDueSuffix" text=" - courtesy %s goes back to the insurer after this job"/>
@@ -437,6 +441,7 @@
 		<text name="tc_repairZone_takesAny_harvester" text="Any harvester"/>
 		<text name="tc_jobType_adsRepair" text="Workshop Repair"/>
 		<text name="tc_jobType_adsMaintenance" text="Workshop Service"/>
+		<text name="tc_jobType_adsBreakdown" text="Field Breakdown"/>
 		<text name="tc_inbox_chipRepair" text="Workshop"/>
 		<text name="tc_jobDetails_machine" text="Machine"/>
 		<text name="tc_repair_problemGone" text="The customer's machine isn't there any more."/>
@@ -444,18 +449,42 @@
 		<text name="tc_repair_requires" text="You haven't the equipment for this job yet. Requires: %s."/>
 		<text name="tc_repair_summaryLine" text="%s on the %s"/>
 		<text name="tc_repair_missedNotification" text="Missed deadline: the %s in your repair zone went unfinished, and the customer has taken the machine back."/>
-		<text name="tc_repair_acceptedInfo" text="Job accepted: %s for %s. It's in your repair zone. Inspect it to find what's wrong."/>
+		<text name="tc_repair_acceptedInfo" text="Job accepted: %s for %s. It's in your repair zone. Inspect it to find what's wrong, then fix it in the workshop. The Workshop tab has a checklist of what's left."/>
+		<text name="tc_repair_acceptedInfo_maintenance" text="Job accepted: %s for %s. It's in your repair zone. Service it in the workshop: the Workshop tab has a checklist of what's left."/>
 		<text name="tc_repair_rejectedInfo" text="Negotiation failed: the customer has taken the %s elsewhere."/>
 		<text name="tc_repair_detailMachine" text="Machine"/>
 		<text name="tc_repair_detailWork" text="Work"/>
-		<text name="tc_repair_detailQuote" text="Dealer quote"/>
 		<text name="tc_repair_detailTools" text="Equipment"/>
 		<text name="tc_repair_detailTampered" text="Condition"/>
 		<text name="tc_repair_machineHours" text="%s, %d h"/>
 		<text name="tc_repair_work_repair" text="Repair: it's not right, inspect it to find out why"/>
 		<text name="tc_repair_work_maintenance" text="Service: oils, filters and grease"/>
-		<text name="tc_repair_quoteValue" text="They've been quoted %s. Can you beat it?"/>
+		<text name="tc_repair_work_breakdown" text="Broken down in the field: fix it where it stands, today"/>
 		<text name="tc_repair_handToolsOnly" text="Hand tools only"/>
+		<text name="tc_repair_doneWhen_repair" text="Every fault it came in with is fixed: the list below, once you've inspected it. Repairing a part counts as much as replacing it. A quick fix doesn't count, and nothing that goes wrong after it came in needs fixing. It's paid as soon as the last one's done."/>
+		<text name="tc_repair_doneWhen_breakdown" text="Every fault that stopped it is fixed where it stands, before the day's out: the list below, once you've inspected it. A quick fix doesn't count. It's paid as soon as the last one's done."/>
+		<text name="tc_repair_doneWhen_maintenance" text="Everything on the list below is done: fluids over 85% full and fresh, grease points over 85% full, filters and the battery as good as new. Doing more than the list doesn't hurt. It's paid as soon as the last one's done."/>
+		<text name="tc_repair_progressFixed" text="%d of %d fixed"/>
+		<text name="tc_repair_progressServiced" text="%d of %d serviced"/>
+		<text name="tc_repair_progressMore" text="%d fixed, but something's still wrong. Inspect it again."/>
+		<text name="tc_repair_progressNotFound" text="Nothing found yet. Inspect it to find what's wrong."/>
+		<text name="tc_workshop_columnMachine" text="Machine"/>
+		<text name="tc_workshop_columnDue" text="Due"/>
+		<text name="tc_workshop_columnProgress" text="Progress"/>
+		<text name="tc_workshop_empty" text="No customers' machines in for work. Repair, service and breakdown offers come in to the Inbox."/>
+		<text name="tc_workshop_sectionChecklist" text="Checklist"/>
+		<text name="tc_repair_progressSoFar" text="%d fixed so far"/>
+		<text name="tc_repair_progressNotInspected" text="Not inspected"/>
+		<text name="tc_repair_todo_repair" text="Repair it"/>
+		<text name="tc_repair_todo_replacement" text="Replace it"/>
+		<text name="tc_repair_todo_change" text="Drain and refill"/>
+		<text name="tc_repair_todo_topUp" text="Top it up"/>
+		<text name="tc_repair_todo_grease" text="Grease it"/>
+		<text name="tc_repair_todo_replace" text="Replace it"/>
+		<text name="tc_repair_todo_service" text="Service it"/>
+		<text name="tc_repair_chipFixed" text="Fixed"/>
+		<text name="tc_repair_chipServiced" text="Serviced"/>
+		<text name="tc_repair_chipToDo" text="To do"/>
 		<text name="tc_repair_chipInWorkshop" text="In the workshop"/>
 		<text name="tc_repair_chipTampered" text="Worse than it came"/>
 		<text name="tc_repair_tamperedValue" text="%d thing(s) missing or worse than when it came in"/>
@@ -466,6 +495,13 @@
 		<text name="tc_repair_claimBody" text="The owner of the %s has claimed for the parts that went missing while it was with you. Public liability doesn't cover deliberate damage, so the whole %s has been charged."/>
 		<text name="tc_repair_claimBodyLegal" text="The owner of the %s has claimed for the parts that went missing while it was with you. Your legal cover got it reduced, but public liability doesn't cover deliberate damage, so %s has been charged."/>
 		<text name="tc_repair_claimNotice" text="Compensation claim for the %s: %s paid, uninsured."/>
+		<text name="tc_breakdown_eventName" text="Field breakdown"/>
+		<text name="tc_breakdown_location" text="%s, Field %s"/>
+		<text name="tc_breakdown_kit_toolBox" text="Tool box or mobile workshop"/>
+		<text name="tc_breakdown_kit_mobile" text="Mobile workshop"/>
+		<text name="tc_breakdown_chipBrokenDown" text="Broken down"/>
+		<text name="tc_breakdown_acceptedInfo" text="Job accepted: %s for %s. It's at %s, marked on the map. Fix it there before the day's out: the Workshop tab has a checklist."/>
+		<text name="tc_breakdown_missedNotification" text="Missed deadline: a customer's machine broken down in the field went unfixed, and they've had it recovered."/>
 		<text name="tc_claims_cause_tampering" text="parts taken or swapped while it was in for repair"/>
 		<text name="tc_drivers_customerVehicle" text="%s is a customer's machine in for repair, so AI helpers, AutoDrive, Courseplay and Follow Me can't drive it."/>
 		<text name="tc_drivers_customerVehicleDialog" text="This is a customer's machine in for repair, so AI helpers, AutoDrive, Courseplay and Follow Me can't drive it."/>

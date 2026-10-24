@@ -78,7 +78,23 @@ do
     }
 end
 
-TheContractorSettings.ITEMS = { "jobPayRate", "lateInvoices", "randomEvents", "nameStyle" }
+-- 100: the average margin over ADS's own quote on a repair contract's
+-- offer (TheContractorRepairContracts.getMargin rolls it within
+-- MARGIN_SPREAD). isShown keeps it off the menu without ADS; it's still
+-- saved and synced like the rest.
+do
+    local values, strings, defaultIndex = percentOptions(0, 100, 5, 25)
+    TheContractorSettings.DEFINITIONS.adsMargin = {
+        values = values,
+        strings = strings,
+        default = defaultIndex,
+        isShown = function()
+            return TCADSRepairContracts.isActive()
+        end
+    }
+end
+
+TheContractorSettings.ITEMS = { "jobPayRate", "lateInvoices", "randomEvents", "nameStyle", "adsMargin" }
 
 -- 086: whether parking slots show outside the construction menu too. A
 -- display preference, so it's a local item (below). onChanged runs on this
@@ -247,6 +263,11 @@ end
 -- The nameStyle setting's style or mix key, for TCNames.generate.
 function TheContractorSettings:getNameStyle()
     return TheContractorSettings.NAME_STYLES[self.values.nameStyle] or TheContractorSettings.NAME_STYLES[1]
+end
+
+-- 100: the adsMargin setting as a fraction (0.25 for 25%).
+function TheContractorSettings:getADSMargin()
+    return self.values.adsMargin / 100
 end
 
 -- 048: the multiplier on a new job's price. FS25_EconomyScale's factor

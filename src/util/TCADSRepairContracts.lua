@@ -29,8 +29,20 @@ TCADSRepairContracts.STATE = {
     INVALID = "invalid",
 }
 
+TCADSRepairContracts.FIELD_SERVICE = {
+    PLAYER = "player",
+    MOBILE = "mobile",
+}
+
+-- getFarmTools' places (101 reads the two that can work in a field).
+TCADSRepairContracts.PLACE = {
+    PLAYER = "player",
+    OWN_MOBILE = "ownMobile",
+    OWN_WORKSHOP = "ownWorkshop",
+}
+
 TCADSRepairContracts.REQUIRED_FUNCTIONS = { "getInfo", "prepareVehicle", "getQuote", "getStatus", "checkTampering",
-    "checkFarmTools", "registerListener", "unregisterListener", "release" }
+    "checkFarmTools", "getFarmTools", "registerListener", "unregisterListener", "release" }
 
 -- ADS_RepairContracts, while it has everything we need; nil otherwise.
 local api = nil
@@ -119,6 +131,72 @@ function TCADSRepairContracts.getStatus(vehicle)
     return api.getStatus(vehicle)
 end
 
+-- What the player can know of a contract's progress (any machine), or nil:
+-- { kind, total, fixed, allKnown, items = { { kind, nameKey, operation,
+-- price, done } } }. A fault counts as known once it's been found
+-- (isVisible) or fixed, so nothing hidden is named or counted (099): items
+-- lists the known ones, and total is only the real count while every fault
+-- is known. Consumables are never hidden. operation is what to do: for a
+-- fault, how the dealer's quote priced it ("repair" or "replacement"; any
+-- way that clears it counts), for a consumable the service it needs
+-- ("change", "topUp", "grease" or "replace"), else "service".
+TCADSRepairContracts.OPERATIONS = {
+    repairComponent = "repair",
+    replaceComponent = "replacement",
+    replaceFluid = "change",
+    topUpFluid = "topUp",
+    lubricate = "grease",
+    replaceConsumable = "replace",
+}
+
+function TCADSRepairContracts.getProgress(vehicle)
+    local quote = TCADSRepairContracts.getQuote(vehicle)
+    local status = TCADSRepairContracts.getStatus(vehicle)
+    if quote == nil or status == nil then
+        return nil
+    end
+    local doneById = {}
+    for _, item in ipairs(status.items or {}) do
+        doneById[tostring(item.id)] = item.done == true
+    end
+    local breakdowns = vehicle.getActiveBreakdowns ~= nil and vehicle:getActiveBreakdowns() or {}
+    local progress = { kind = quote.kind, total = 0, fixed = 0, allKnown = true, items = {} }
+    for _, item in ipairs(quote.items or {}) do
+        if item.kind == "fault" or item.kind == "consumable" then
+            local done = doneById[tostring(item.id)] == true
+            local known = item.kind == "consumable" or done
+            if not known then
+                local breakdown = breakdowns[item.id]
+                known = type(breakdown) == "table" and breakdown.isVisible == true
+            end
+            progress.total = progress.total + 1
+            if known then
+                if done then
+                    progress.fixed = progress.fixed + 1
+                end
+                local operation = TCADSRepairContracts.OPERATIONS[item.procedure] or "service"
+                table.insert(progress.items, { kind = item.kind, nameKey = item.nameKey, operation = operation,
+                    price = tonumber(item.price) or 0, done = done })
+            else
+                progress.allKnown = false
+            end
+        end
+    end
+    if not progress.allKnown then
+        progress.total = nil
+    end
+    return progress
+end
+
+-- An ADS l10n key in ADS's own words, or the key itself.
+function TCADSRepairContracts.getText(key)
+    local modName = TCADSRepairContracts.MOD_NAME
+    if key ~= nil and g_i18n.hasText ~= nil and g_i18n:hasText(key, modName) then
+        return g_i18n:getText(key, modName)
+    end
+    return tostring(key)
+end
+
 -- tampered, findings (any machine).
 function TCADSRepairContracts.checkTampering(vehicle)
     if api == nil or vehicle == nil then
@@ -134,6 +212,23 @@ function TCADSRepairContracts.checkFarmTools(vehicle, farmId)
         return nil
     end
     return api.checkFarmTools(vehicle, farmId)
+end
+
+-- 101: placeId -> true for every place the farm can work from (an ADS tool
+-- box, its own mobile workshop, its own workshop), any machine. Empty
+-- without ADS.
+function TCADSRepairContracts.getFarmPlaces(farmId)
+    local places = {}
+    if api == nil then
+        return places
+    end
+    local farmTools = api.getFarmTools(farmId)
+    for _, place in ipairs(type(farmTools) == "table" and farmTools.places or {}) do
+        if place.id ~= nil then
+            places[place.id] = true
+        end
+    end
+    return places
 end
 
 -- Server: fn(vehicle, status) on a status change.

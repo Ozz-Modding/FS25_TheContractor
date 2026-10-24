@@ -157,6 +157,9 @@ TheContractorJobGeneration.JOB_TYPES = {
     -- rewarded by severity, done when ADS says so.
     adsRepair = { workshopJob = true, playerOnly = true, noEquipment = true },
     adsMaintenance = { workshopJob = true, playerOnly = true, noEquipment = true },
+    -- 101: a customer's machine broken down on a field, fixed on the spot
+    -- (TheContractorFieldBreakdowns), otherwise as 100's.
+    adsBreakdown = { workshopJob = true, playerOnly = true, noEquipment = true },
 }
 TheContractorJobGeneration.JOB_TYPE_KEYS = { "harvest", "cultivate", "sow", "plow", "mow", "tedder", "bale",
     "baleWrap", "strawDelivery", "fertilize", "herbicide", "weed", "hoe", "stonePick" }

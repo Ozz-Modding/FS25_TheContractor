@@ -366,7 +366,7 @@ Queued data/vehicles/fendt/vario900/vario900.xml (repair, severity 3) for bay 2.
 
 ### `tcJob repairStatus`
 
-Lists your repair zones: their type, bays, filter and how many models they can get, which bays are taken, and how many machines are on their way, waiting to be collected and claims still to come. Also says whether ADS's repair contracts API is there. Takes no arguments.
+Lists your repair zones: their type, bays, filter and how many models they can get, which bays are taken, and how many machines are on their way (field breakdowns, 101, included), waiting to be collected and claims still to come. Also says whether ADS's repair contracts API is there. Takes no arguments.
 
 ```
 tcJob repairStatus
@@ -496,12 +496,13 @@ Seeds:
 
 ### `tcCompany event <type> [details]`
 
-Makes a random event happen to your farm now, ignoring the odds, the Random events setting, the event type's cooldown, its months (poaching only comes March to May) and its time of day (diesel theft normally comes to light between 07:00 and 09:00). It still needs something to act on (a theft needs a vehicle that can be stolen, joyriders a grass field outside winter, fly-tipping an NPC's field with no job on it, diesel theft some diesel in a storage of yours or in a parked machine, poaching a worker who isn't leaving), and says so if there isn't anything. It starts the event's cooldown like a real one. `<type>` is the event type's key, case-insensitive. With no type, or an unknown one, it lists the ones there are.
+Makes a random event happen to your farm now, ignoring the odds, the Random events setting, the event type's cooldown, its months (poaching only comes March to May) and its time of day (diesel theft normally comes to light between 07:00 and 09:00). It still needs something to act on (a theft needs a vehicle that can be stolen, joyriders a grass field outside winter, fly-tipping an NPC's field with no job on it, diesel theft some diesel in a storage of yours or in a parked machine, poaching a worker who isn't leaving, a field breakdown needs FS25_AdvancedDamageSystem, an NPC's field with no job on it and no other breakdown of yours on the go), and says so if there isn't anything. It starts the event's cooldown like a real one. `<type>` is the event type's key, case-insensitive. With no type, or an unknown one, it lists the ones there are.
 
 `[details]` picks what the event acts on, for the types that take one (any other type refuses them):
 
 - `goodNews [story]`: that story, or a random one other than the last you had, even before your first completed job. The story's reward is applied and its inbox message posted. `[story]` is case-insensitive; an unknown one lists them: `photoPosted`, `parishNews`, `parishCouncil`, `youngFarmers` (reputation, scaled to your tier), `supplierRefund`, `loyaltyRebate`, `ratesRefund` (cash, scaled by the job pay setting).
 - `poaching [worker]`: the rival goes after that worker (a `<worker>` as for `tcWorker`: an id or the start of a name), however long they've been with you. Without one it picks as the real event does: someone with at least 3 months' service, nearly always one of your most valuable. Not someone who's leaving or already has an offer.
+- `fieldBreakdown [player|mobile]`: a customer's machine breaks down on an NPC's field, fixable on the spot with ADS's tool box (`player`) or only with a mobile workshop (`mobile`). Without one it picks as the real event does: even odds, or mostly `player` if you've a tool box and no mobile workshop. The machine is placed like a repair zone arrival (out of sight in single player, or after about 2 minutes anyway) and the offer, due today, goes up in your Inbox.
 
 The events that happen as a job ends (`kettle`, `paidEarly`, `stepsUp`, `roadAccident`, `sprayDrift`) use your latest completed job they can act on, whatever its quality score: one with hired workers for `kettle`, one whose invoice isn't due yet for `paidEarly` (so none with the late invoices setting off), one with a worker rated 5 or under for their part of it for `stepsUp`, and one a hired worker drove whose machines are still yours for `roadAccident` (its machines are damaged wherever they are now), and a hired worker's herbicide job with no botch claim on its way for `sprayDrift` (judged on the wind right now, not on the day). Use `tcCompany outcome` first to decide how an event comes out.
 
@@ -519,6 +520,8 @@ tcCompany event roadAccident
 tcCompany event sprayDrift
 tcCompany event poaching
 tcCompany event poaching amy
+tcCompany event fieldBreakdown
+tcCompany event fieldBreakdown mobile
 ```
 
 ### `tcCompany events`
