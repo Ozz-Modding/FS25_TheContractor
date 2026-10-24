@@ -72,7 +72,10 @@ local function setup(def)
     TCParkingSlotFilter = { getCategoryTitle = function(name) return name end, SUMMARY_MAX_NAMES = 2 }
 
     local tc = g_currentMission.TheContractor
-    tc.Settings = { scaleCost = function(_, amount) return amount end }
+    tc.Settings = {
+        scaleCost = function(_, amount) return amount end,
+        getADSMargin = function() return world.adsMargin or 0.25 end,
+    }
     tc.Reputation = {
         getStanding = function() return world.standing or 0 end,
         addReputation = function(_, farmId, delta) table.insert(world.calls.reputation, delta) end,
@@ -128,6 +131,13 @@ local function setup(def)
             end,
             checkFarmTools = function(vehicle, farmId)
                 return world.farmTools[vehicle.id] or { canDo = true, missing = {} }
+            end,
+            getFarmTools = function(farmId)
+                local places = {}
+                for _, id in ipairs(world.farmPlaces or {}) do
+                    table.insert(places, { id = id, tools = {} })
+                end
+                return { farmId = farmId, places = places, tools = {} }
             end,
             registerListener = function(id, fn) world.listener = fn return true end,
             unregisterListener = function() world.listener = nil end,
@@ -439,7 +449,7 @@ test("a model ADS turns down is swapped, and the offer goes up for one it takes"
     assertEquals(job.workshop.offerExpiresDay, world.today + TheContractorRepairContracts.OFFER_DAYS)
     assertEquals(job.deadlineDay, world.today + TheContractorRepairContracts.OFFER_DAYS +
         TheContractorRepairContracts.DUE_DAYS)
-    assertTrue(job:getPrice() >= 1149 and job:getPrice() <= 1250, "quote plus 15-25%, floored")
+    assertTrue(job:getPrice() >= 1149 and job:getPrice() <= 1350, "quote plus the 25% setting, give or take 10%, floored")
     assertEquals(job:getLocationText(), "fendt942.xml")
     assertTrue(TheContractorRepairContracts.isContractVehicle(second))
     assertTrue(repairContracts:isBayTaken("zone1", 1))
@@ -452,9 +462,56 @@ test("the price is stored without EconomyScale's factor and follows it", functio
     world.quotePrice = 2000
     local job = makeOffer(world, tc)
     local margin = job.basePrice / 1000 - 1
-    assertTrue(margin >= 0.149 and margin <= 0.25, "base is the quote / factor plus the margin (floored)")
+    assertTrue(margin >= 0.149 and margin <= 0.35, "base is the quote / factor plus the margin (floored)")
     g_currentMission.EconomyScale.factor = 3
     assertNear(job:getPrice(), job.basePrice * 3, 0.001)
+end)
+
+test("a small quote still pays MIN_PRICE, before EconomyScale's factor", function()
+    local world, tc = setup()
+    g_currentMission.EconomyScale = { factor = 2 }
+    world.quotePrice = 200
+    local job = makeOffer(world, tc)
+    assertEquals(job.basePrice, TheContractorRepairContracts.MIN_PRICE)
+    assertNear(job:getPrice(), TheContractorRepairContracts.MIN_PRICE * 2, 0.001)
+end)
+
+test("the margin is the adsMargin setting, give or take MARGIN_SPREAD, never below nothing", function()
+    local world = setup()
+    local realRandom = math.random
+    world.adsMargin = 0.5
+    math.random = function() return 0 end
+    assertNear(TheContractorRepairContracts.rollMargin(), 0.4, 0.0001, "the bottom of the spread")
+    math.random = function() return 1 end
+    assertNear(TheContractorRepairContracts.rollMargin(), 0.6, 0.0001, "the top of the spread")
+    world.adsMargin = 0.05
+    math.random = function() return 0 end
+    assertEquals(TheContractorRepairContracts.rollMargin(), 0, "never under the quote")
+    math.random = realRandom
+end)
+
+test("the price is fixed: no counter offers, even with the tools", function()
+    local world, tc = setup()
+    local job = makeOffer(world, tc)
+    local price = job:getPrice()
+    assertEquals(TheContractorJobs.getAcceptProblem(job), nil)
+    assertEquals(tc.Jobs:proposeCounterOffer(1, job.id, price * 2), nil)
+    assertEquals(job.state, TheContractorJob.STATE.OFFERED)
+    assertEquals(job:getPrice(), price)
+end)
+
+test("the adsMargin setting: 25% by default, on the menu only with ADS", function()
+    local world = setup()
+    world.texts.ui_on, world.texts.ui_off = "On", "Off"
+    world:load("src/business/Settings.lua")
+    local definition = TheContractorSettings.DEFINITIONS.adsMargin
+    assertEquals(TheContractorSettings.getDefaultValue("adsMargin"), 25)
+    assertNear(TheContractorSettings.new():getADSMargin(), 0.25, 0.0001)
+    assertTrue(definition.isShown(), "ADS is loaded in these tests")
+    local realIsActive = TCADSRepairContracts.isActive
+    TCADSRepairContracts.isActive = function() return false end
+    assertTrue(not definition.isShown())
+    TCADSRepairContracts.isActive = realIsActive
 end)
 
 test("the daily roll only fills free bays", function()
@@ -673,4 +730,132 @@ test("a customer's machine is kept out of the farm's own lists", function()
     local vehicles = TheContractorJobGeneration.getFarmVehicles(1)
     assertEquals(#vehicles, 1)
     assertEquals(vehicles[1], own)
+end)
+
+test("vanilla's workshop lists a customer's machine standing in it, while its job's open", function()
+    local world, tc = setup()
+    local job, vehicle = makeOffer(world, tc)
+    local own = world:addVehicle({ name = "Our tractor" })
+    function table.hasElement(list, value)
+        for _, element in ipairs(list) do
+            if element == value then
+                return true
+            end
+        end
+        return false
+    end
+    entityExists = function() return true end
+    vehicle.rootNode, own.rootNode = 2, 1
+    for _, v in ipairs({ vehicle, own }) do
+        v.rootVehicle = v
+        function v:getChildVehicles() return { self } end
+    end
+    g_currentMission.nodeToObject = { [11] = vehicle, [12] = own }
+    local sellingPoint = { vehicleShapesInRange = { [11] = true, [12] = true } }
+    -- Vanilla's own list: the farm's own machine only (MISSION isn't shown).
+    local function vanilla() return { own } end
+
+    local listed = TheContractorRepairContracts.determineCurrentVehicles(sellingPoint, vanilla)
+    assertEquals(#listed, 2)
+    assertEquals(listed[1], own, "sorted by root node, as vanilla does")
+    assertEquals(listed[2], vehicle)
+
+    tc.Jobs:transitionJobState(1, job.id, TheContractorJob.STATE.DECLINED)
+    TheContractorRepairContracts.clearCache()
+    listed = TheContractorRepairContracts.determineCurrentVehicles(sellingPoint, vanilla)
+    assertEquals(#listed, 1, "not once the customer's taking it back")
+end)
+
+-- Progress shown in Job details -------------------------------------------------
+
+local function setContract(world, vehicle, kind, items, doneIds, visibleIds)
+    vehicle.quote.kind = kind
+    vehicle.quote.items = items
+    world.adsEnv.ADS_RepairContracts.getStatus = function()
+        local statusItems = {}
+        for _, item in ipairs(items) do
+            if item.kind ~= "service" then
+                table.insert(statusItems, { id = item.id, kind = item.kind, done = doneIds[item.id] == true })
+            end
+        end
+        return { state = "open", items = statusItems }
+    end
+    vehicle.getActiveBreakdowns = function()
+        local active = {}
+        for _, item in ipairs(items) do
+            if item.kind == "fault" and not doneIds[item.id] then
+                active[item.id] = { isVisible = visibleIds[item.id] == true }
+            end
+        end
+        return active
+    end
+end
+
+local REPAIR_ITEMS = {
+    { id = "inspection", kind = "service", nameKey = "ads_spec_inspection_visual", procedure = "inspection", price = 100 },
+    { id = "TURBO", kind = "fault", nameKey = "ads_component_turbocharger", procedure = "repairComponent", price = 600 },
+    { id = "PUMP", kind = "fault", nameKey = "ads_component_engine_oil_pump", procedure = "replaceComponent",
+        price = 800 },
+}
+
+test("progress names and counts no fault until it's found", function()
+    local world, tc = setup()
+    local _, vehicle = makeOffer(world, tc)
+    setContract(world, vehicle, "repair", REPAIR_ITEMS, {}, {})
+    local progress = TCADSRepairContracts.getProgress(vehicle)
+    assertEquals(progress.total, nil, "no count before the inspection")
+    assertEquals(progress.fixed, 0)
+    assertEquals(#progress.items, 0, "the inspection isn't listed, and no fault is")
+end)
+
+test("progress counts every fault once they're all known, fixed ones included", function()
+    local world, tc = setup()
+    local _, vehicle = makeOffer(world, tc)
+    setContract(world, vehicle, "repair", REPAIR_ITEMS, { TURBO = true }, { PUMP = true })
+    local progress = TCADSRepairContracts.getProgress(vehicle)
+    assertEquals(progress.total, 2)
+    assertEquals(progress.fixed, 1)
+    assertEquals(progress.items[1].operation, "repair")
+    assertTrue(progress.items[1].done)
+    assertEquals(progress.items[2].operation, "replacement", "how the dealer priced it")
+    assertEquals(progress.items[2].price, 800)
+    assertTrue(not progress.items[2].done)
+end)
+
+test("a fixed fault with another still hidden gives no total", function()
+    local world, tc = setup()
+    local _, vehicle = makeOffer(world, tc)
+    setContract(world, vehicle, "repair", REPAIR_ITEMS, { TURBO = true }, {})
+    local progress = TCADSRepairContracts.getProgress(vehicle)
+    assertEquals(progress.total, nil)
+    assertEquals(progress.fixed, 1)
+    assertEquals(#progress.items, 1)
+end)
+
+test("a service's consumables are always listed and counted", function()
+    local world, tc = setup()
+    local _, vehicle = makeOffer(world, tc)
+    setContract(world, vehicle, "maintenance", {
+        { id = "c1", kind = "consumable", nameKey = "ads_ws_consumable_motor_oil", procedure = "replaceFluid", price = 90 },
+        { id = "c2", kind = "consumable", nameKey = "ads_ws_consumable_oil_filter", procedure = "replaceConsumable",
+            price = 40 },
+    }, { c2 = true }, {})
+    local progress = TCADSRepairContracts.getProgress(vehicle)
+    assertEquals(progress.total, 2)
+    assertEquals(progress.fixed, 1)
+    assertEquals(progress.items[1].operation, "change", "what it needs, for the checklist")
+    assertEquals(progress.items[2].operation, "replace")
+end)
+
+test("every operation the checklist can show has its text", function()
+    setup()
+    local operations = { service = true }
+    for _, operation in pairs(TCADSRepairContracts.OPERATIONS) do
+        operations[operation] = true
+    end
+    for operation in pairs(operations) do
+        assertTrue(g_i18n:getText("tc_repair_todo_" .. operation) ~= nil, operation)
+    end
+    assertEquals(TCADSRepairContracts.OPERATIONS.topUpFluid, "topUp")
+    assertEquals(TCADSRepairContracts.OPERATIONS.lubricate, "grease")
 end)

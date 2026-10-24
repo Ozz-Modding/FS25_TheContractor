@@ -55,6 +55,12 @@ function TCJobMissedEvent.showNotification(farmId, jobType, fieldId)
 
     -- 100: a workshop job has no field (fieldId 0).
     if fieldId == 0 then
+        -- 101: a breakdown was out in a field, not in the repair zone.
+        if jobType == TheContractorRepairContracts.JOB_TYPES.breakdown then
+            g_currentMission:addIngameNotification(FSBaseMission.INGAME_NOTIFICATION_CRITICAL,
+                g_i18n:getText("tc_breakdown_missedNotification"))
+            return
+        end
         g_currentMission:addIngameNotification(FSBaseMission.INGAME_NOTIFICATION_CRITICAL,
             string.format(g_i18n:getText("tc_repair_missedNotification"), g_i18n:getText("tc_jobType_" .. jobType)))
         return

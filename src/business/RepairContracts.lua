@@ -13,7 +13,8 @@
 -- prepares it, and the offer goes up with a price of ADS's quote plus a
 -- margin. Nothing runs while the queue is empty.
 --
--- The job (Jobs, job.workshop): fieldId 0, no crew, offered -> accepted ->
+-- The job (Jobs, job.workshop): fieldId 0 (a breakdown's field is
+-- workshop.fieldId), no crew, offered -> accepted ->
 -- completed or missed. It can't be accepted while the farm lacks the tools
 -- (getAcceptProblem). It completes when ADS says done (its listener, plus a
 -- pass after load and every day, since ADS's listener never fires for a
@@ -27,6 +28,11 @@
 -- compensation claim a few days later, never insured (public liability
 -- doesn't cover deliberate acts), cut by legal cover (053).
 --
+-- Field breakdowns (101, TheContractorFieldBreakdowns) use the same queue
+-- with a spot on a field instead of a bay (entry.fieldId), ADS's breakdown
+-- kind, and an offer due the same day. Their accept check is the kit that
+-- can work in a field (getBreakdownProblem), not the workshop's tools.
+--
 -- State (server, saved in TheContractor.xml): the arrivals queue, the
 -- machines waiting to be collected, and pending tamper claims. Clients only
 -- ever see the jobs.
@@ -38,6 +44,7 @@ TheContractorRepairContracts_mt = Class(TheContractorRepairContracts)
 TheContractorRepairContracts.JOB_TYPES = {
     repair = "adsRepair",
     maintenance = "adsMaintenance",
+    breakdown = "adsBreakdown",
 }
 
 -- The chance an empty bay gets a customer each day, and what they want.
@@ -48,9 +55,13 @@ TheContractorRepairContracts.KIND_WEIGHTS = { repair = 60, maintenance = 40 }
 TheContractorRepairContracts.OFFER_DAYS = 2
 TheContractorRepairContracts.DUE_DAYS = 7
 
--- The price: ADS's quote plus a margin, rolled per offer.
-TheContractorRepairContracts.MARGIN_MIN = 0.15
-TheContractorRepairContracts.MARGIN_MAX = 0.25
+-- The price: ADS's quote plus a margin, rolled per offer within
+-- MARGIN_SPREAD either side of the adsMargin setting (never below nothing).
+-- Not negotiable, and the quote itself is never shown.
+TheContractorRepairContracts.MARGIN_SPREAD = 0.10
+-- The least a job pays (base, before FS25_EconomyScale's factor): an
+-- inspection alone takes a couple of hours, however small the quote.
+TheContractorRepairContracts.MIN_PRICE = 750
 
 -- Base reputation for a finished job, by severity (1-3), before quality.
 TheContractorRepairContracts.REPUTATION_BY_SEVERITY = { 4, 7, 10 }
@@ -119,6 +130,48 @@ function TheContractorRepairContracts.isWorkshopJob(job)
     return job ~= nil and job.workshop ~= nil
 end
 
+-- 101: a customer's machine broken down on a field.
+function TheContractorRepairContracts.isBreakdownJob(job)
+    return job ~= nil and job.workshop ~= nil and job.workshop.kind == TCADSRepairContracts.KIND.BREAKDOWN
+end
+
+-- 101: the farm's places that can fix a breakdown on the spot: the tool box
+-- or the farm's own mobile workshop for a "player" one, only the van for a
+-- "mobile" one (ADS's field service level).
+function TheContractorRepairContracts.getBreakdownPlaces(fieldService)
+    local place = TCADSRepairContracts.PLACE
+    if fieldService == TCADSRepairContracts.FIELD_SERVICE.MOBILE then
+        return { place.OWN_MOBILE }
+    end
+    return { place.PLAYER, place.OWN_MOBILE }
+end
+
+function TheContractorRepairContracts.hasBreakdownKit(farmId, fieldService)
+    local places = TCADSRepairContracts.getFarmPlaces(farmId)
+    for _, placeId in ipairs(TheContractorRepairContracts.getBreakdownPlaces(fieldService)) do
+        if places[placeId] then
+            return true
+        end
+    end
+    return false
+end
+
+-- The l10n suffix for what a breakdown needs: "toolBox" (a tool box or a
+-- van) or "mobile" (a van).
+function TheContractorRepairContracts.getBreakdownKitKey(fieldService)
+    return fieldService == TCADSRepairContracts.FIELD_SERVICE.MOBILE and "mobile" or "toolBox"
+end
+
+-- "Requires: an ADS tool box or a mobile workshop.", or nil.
+function TheContractorRepairContracts.getBreakdownProblem(job)
+    local fieldService = job.workshop.serviceLevel
+    if TheContractorRepairContracts.hasBreakdownKit(job.farmId, fieldService) then
+        return nil
+    end
+    return string.format(g_i18n:getText("tc_repair_requires"),
+        g_i18n:getText("tc_breakdown_kit_" .. TheContractorRepairContracts.getBreakdownKitKey(fieldService)))
+end
+
 -- vehicleId -> job for every workshop job's machine. A finished job keeps
 -- its machine's id until the customer's taken it away; by then the object's
 -- gone, so the id matches nothing.
@@ -167,6 +220,50 @@ function TheContractorRepairContracts.isContractVehicle(vehicle)
     return vehicleId ~= nil and TheContractorRepairContracts.getContractVehicleIds()[vehicleId] ~= nil
 end
 
+-- Vanilla's workshop (VehicleSellingPoint:determineCurrentVehicles, which
+-- ADS's workshop window reads too) only lists vehicles that show in the
+-- vehicles overview, and that's OWNED or LEASED, never MISSION. So a
+-- customer's machine standing in the workshop is added back, for the farm
+-- it's with: every machine in range that's ours to work on.
+function TheContractorRepairContracts.determineCurrentVehicles(sellingPoint, superFunc)
+    local vehicles = superFunc(sellingPoint)
+    local farmId = g_currentMission:getFarmId()
+    if farmId == FarmManager.SPECTATOR_FARM_ID or sellingPoint.vehicleShapesInRange == nil then
+        return vehicles
+    end
+    local contractJobs = TheContractorRepairContracts.getContractVehicleIds()
+    if next(contractJobs) == nil then
+        return vehicles
+    end
+    local added = false
+    for shapeId, inRange in pairs(sellingPoint.vehicleShapesInRange) do
+        local object = inRange and entityExists(shapeId) and g_currentMission.nodeToObject[shapeId] or nil
+        if object ~= nil and object.rootVehicle ~= nil then
+            for _, vehicle in ipairs(object.rootVehicle:getChildVehicles()) do
+                local job = contractJobs[NetworkUtil.getObjectId(vehicle)]
+                if job ~= nil and not job:isTerminal() and vehicle:getOwnerFarmId() == farmId and
+                        not table.hasElement(vehicles, vehicle) then
+                    table.insert(vehicles, vehicle)
+                    added = true
+                end
+            end
+        end
+    end
+    if added then
+        table.sort(vehicles, function(a, b)
+            return a.rootNode < b.rootNode
+        end)
+    end
+    return vehicles
+end
+
+if VehicleSellingPoint ~= nil and not VehicleSellingPoint.tcRepairContractsHookInstalled and
+        VehicleSellingPoint.determineCurrentVehicles ~= nil then
+    VehicleSellingPoint.determineCurrentVehicles = Utils.overwrittenFunction(
+        VehicleSellingPoint.determineCurrentVehicles, TheContractorRepairContracts.determineCurrentVehicles)
+    VehicleSellingPoint.tcRepairContractsHookInstalled = true
+end
+
 function TheContractorRepairContracts.getVehicle(job)
     local vehicleId = job.workshop ~= nil and job.workshop.vehicleId or nil
     local vehicle = vehicleId ~= nil and vehicleId ~= 0 and NetworkUtil.getObject(vehicleId) or nil
@@ -186,6 +283,12 @@ function TheContractorRepairContracts.getAcceptProblem(job)
     local vehicle = TheContractorRepairContracts.getVehicle(job)
     if vehicle == nil then
         return g_i18n:getText("tc_repair_problemGone")
+    end
+    if TheContractorRepairContracts.isBreakdownJob(job) then
+        if not TCADSRepairContracts.isActive() then
+            return g_i18n:getText("tc_repair_problemNoADS")
+        end
+        return TheContractorRepairContracts.getBreakdownProblem(job)
     end
     local check = TCADSRepairContracts.checkFarmTools(vehicle, job.farmId)
     if check == nil then
@@ -328,6 +431,18 @@ function TheContractorRepairContracts:getEligibleModels(zoneType)
     return models
 end
 
+-- 101: a model of either zone type, by its xml (a field arrival's).
+function TheContractorRepairContracts:findModelByXml(xmlFilename)
+    for _, zoneType in pairs(PlaceableTCRepairZone.ZONE_TYPE) do
+        for _, model in ipairs(self:getEligibleModels(zoneType)) do
+            if model.xmlFilename == xmlFilename then
+                return model
+            end
+        end
+    end
+    return nil
+end
+
 function TheContractorRepairContracts.fitsBay(model, bayArea)
     local clearance = TheContractorRepairContracts.CLEARANCE
     return bayArea ~= nil and model.width + clearance <= bayArea.width and model.length + clearance <= bayArea.length
@@ -446,6 +561,33 @@ function TheContractorRepairContracts:queueArrival(farmId, zone, bayIndex, kind,
     return entry
 end
 
+-- 101: a customer's machine to break down on a field, at a spot
+-- TheContractorFieldBreakdowns picked for its model: placed out of sight like
+-- any arrival, prepared as ADS's breakdown kind, offered due today.
+function TheContractorRepairContracts:queueFieldArrival(farmId, fieldId, model, x, z, rotY, fieldService, severity)
+    local entry = {
+        farmId = farmId,
+        fieldId = fieldId,
+        x = x,
+        z = z,
+        rotY = rotY,
+        xmlFilename = model.xmlFilename,
+        kind = TCADSRepairContracts.KIND.BREAKDOWN,
+        fieldService = fieldService,
+        severity = severity,
+        seed = TheContractorRepairContracts.rollSeed(math.random),
+        queuedDay = g_currentMission.environment.currentMonotonicDay,
+        attempts = 0,
+        blockedDays = 0,
+        waitMs = 0,
+        isLoading = false,
+    }
+    table.insert(self.arrivals, entry)
+    Logging.info("TheContractor: farm %d field %d: %s (breakdown, %s, severity %d) on its way", farmId, fieldId,
+        model.name, tostring(fieldService), severity)
+    return entry
+end
+
 -- The first free bay of the farm's zones, or nil: zone, bayIndex.
 function TheContractorRepairContracts:findFreeBay(farmId)
     for _, zone in ipairs(TheContractorRepairContracts.getZones(farmId)) do
@@ -482,7 +624,11 @@ function TheContractorRepairContracts:onDayChanged()
         if entry.blockedDays ~= nil and entry.blockedDays > 0 then
             entry.blockedDays = entry.blockedDays + 1
         end
-        if entry.isLoading or (entry.blockedDays or 0) <= TheContractorRepairContracts.ARRIVAL_GIVE_UP_DAYS then
+        if entry.fieldId ~= nil and not entry.isLoading and entry.queuedDay < today then
+            -- 101: a breakdown not placed by midnight would be due yesterday.
+            Logging.info("TheContractor: farm %d breakdown on field %d never placed, dropped", entry.farmId,
+                entry.fieldId)
+        elseif entry.isLoading or (entry.blockedDays or 0) <= TheContractorRepairContracts.ARRIVAL_GIVE_UP_DAYS then
             table.insert(kept, entry)
         else
             Logging.info("TheContractor: farm %d repair zone bay %d had no room for days, arrival dropped",
@@ -604,10 +750,43 @@ function TheContractorRepairContracts.getSpawnPose(model, bayArea)
     return originX, originZ, centreX, centreZ, rotY
 end
 
-function TheContractorRepairContracts:tryPlaceArrival(entry, elapsed)
+-- 101: the rectangle a model takes at a field arrival's spot (its centre
+-- and heading), in a bay's shape, clearance included.
+function TheContractorRepairContracts.getSpotArea(entry, model)
+    local clearance = TheContractorRepairContracts.CLEARANCE
+    local width, length = model.width + clearance, model.length + clearance
+    local vX, vZ = math.sin(entry.rotY or 0), math.cos(entry.rotY or 0)
+    local uX, uZ = vZ, -vX
+    return {
+        x = entry.x - (uX * width + vX * length) * 0.5,
+        z = entry.z - (uZ * width + vZ * length) * 0.5,
+        uX = uX,
+        uZ = uZ,
+        vX = vX,
+        vZ = vZ,
+        width = width,
+        length = length,
+    }
+end
+
+-- Where a queued arrival goes and what it is: area, model (nil if its
+-- zone's been sold or shrunk, or the model's gone).
+function TheContractorRepairContracts:getArrivalPlace(entry)
+    if entry.fieldId ~= nil then
+        local model = self:findModelByXml(entry.xmlFilename)
+        if model == nil or entry.x == nil or entry.z == nil then
+            return nil, nil
+        end
+        return TheContractorRepairContracts.getSpotArea(entry, model), model
+    end
     local zone = TheContractorRepairContracts.getZoneByUniqueId(entry.zoneUniqueId)
     local bayArea = zone ~= nil and PlaceableTCRepairZone.getBayArea(zone, entry.bayIndex) or nil
     local model = zone ~= nil and self:findModel(entry, zone) or nil
+    return bayArea, model
+end
+
+function TheContractorRepairContracts:tryPlaceArrival(entry, elapsed)
+    local bayArea, model = self:getArrivalPlace(entry)
     local storeItem = model ~= nil and g_storeManager:getItemByXMLFilename(model.xmlFilename) or nil
     if bayArea == nil or storeItem == nil or not TCADSRepairContracts.isActive() then
         -- The zone's been sold or shrunk, or the model's gone.
@@ -622,6 +801,11 @@ function TheContractorRepairContracts:tryPlaceArrival(entry, elapsed)
     local clearance = TheContractorRepairContracts.CLEARANCE
     if not TCParking.isAreaClear(centreX, centreZ, rotY, model.width + clearance, model.length + clearance,
             model.height) then
+        if entry.fieldId ~= nil then
+            -- 101: something's on that spot: another spot on the field.
+            self:retryFieldSpot(entry, model)
+            return
+        end
         -- Something's in the bay: try again tomorrow, then give up.
         entry.blockedDays = math.max(1, entry.blockedDays or 0)
         entry.waitMs = 0
@@ -640,9 +824,45 @@ function TheContractorRepairContracts:tryPlaceArrival(entry, elapsed)
     loadingData:load(self.onArrivalLoaded, self, { entry = entry })
 end
 
+-- 101: a field arrival's spot was taken: another spot for the same model,
+-- up to PREPARE_RETRIES.
+function TheContractorRepairContracts:retryFieldSpot(entry, model)
+    entry.attempts = (entry.attempts or 0) + 1
+    local x, z, rotY = nil, nil, nil
+    if entry.attempts <= TheContractorRepairContracts.PREPARE_RETRIES then
+        x, z, rotY = TheContractorFieldBreakdowns.pickSpot(entry.fieldId, model, math.random)
+    end
+    if x == nil then
+        Logging.info("TheContractor: farm %d breakdown on field %d: no room, dropped", entry.farmId, entry.fieldId)
+        removeFrom(self.arrivals, entry)
+        return
+    end
+    entry.x, entry.z, entry.rotY = x, z, rotY
+end
+
 -- A model ADS turned down: another one, another seed, up to PREPARE_RETRIES.
 function TheContractorRepairContracts:retryArrival(entry, zone, reason)
     entry.attempts = (entry.attempts or 0) + 1
+    if entry.fieldId ~= nil then
+        -- 101: another model for the field, somewhere on it that it fits.
+        local model = entry.attempts <= TheContractorRepairContracts.PREPARE_RETRIES and
+            TheContractorFieldBreakdowns.pickModel(self, math.random) or nil
+        local x, z, rotY = nil, nil, nil
+        if model ~= nil then
+            x, z, rotY = TheContractorFieldBreakdowns.pickSpot(entry.fieldId, model, math.random)
+        end
+        if x == nil then
+            Logging.info("TheContractor: farm %d breakdown on field %d: arrival dropped (%s)", entry.farmId,
+                entry.fieldId, tostring(reason))
+            removeFrom(self.arrivals, entry)
+            return
+        end
+        entry.xmlFilename = model.xmlFilename
+        entry.x, entry.z, entry.rotY = x, z, rotY
+        entry.seed = TheContractorRepairContracts.rollSeed(math.random)
+        entry.waitMs = TheContractorRepairContracts.PLACE_FALLBACK_MS
+        return
+    end
     if entry.attempts > TheContractorRepairContracts.PREPARE_RETRIES or zone == nil then
         Logging.info("TheContractor: farm %d repair zone bay %d: arrival dropped (%s)", entry.farmId, entry.bayIndex,
             tostring(reason))
@@ -671,7 +891,7 @@ function TheContractorRepairContracts:onArrivalLoaded(vehicles, loadingState, ar
         isQueued = isQueued or queued == entry
     end
     local zone = TheContractorRepairContracts.getZoneByUniqueId(entry.zoneUniqueId)
-    if not isQueued or zone == nil then
+    if not isQueued or (zone == nil and entry.fieldId == nil) then
         if vehicle ~= nil then
             vehicle:delete()
         end
@@ -686,8 +906,10 @@ function TheContractorRepairContracts:onArrivalLoaded(vehicles, loadingState, ar
     local ok, result = TCADSRepairContracts.prepareVehicle(vehicle, {
         kind = entry.kind,
         severity = entry.severity,
+        -- 101: a breakdown's field service level (nil for the rest).
+        fieldService = entry.fieldService,
         seed = entry.seed,
-        ref = string.format("TheContractor:%d:%d", entry.farmId, entry.seed),
+        ref =string.format("TheContractor:%d:%d", entry.farmId, entry.seed),
     })
     local quote = ok and TCADSRepairContracts.getQuote(vehicle) or nil
     if not ok or quote == nil or (tonumber(quote.price) or 0) <= 0 then
@@ -705,17 +927,31 @@ end
 
 -- The job's base price (without FS25_EconomyScale's factor, as every job
 -- stores it): ADS's quote is at the price level of the day it was made, so
--- it's divided back out, then the margin goes on.
+-- it's divided back out, then the margin goes on, never under MIN_PRICE.
 function TheContractorRepairContracts.getBasePrice(quotePrice, margin)
-    return quotePrice / TCEconomyScale.getFactor() * (1 + margin)
+    return math.max(quotePrice / TCEconomyScale.getFactor() * (1 + margin), TheContractorRepairContracts.MIN_PRICE)
+end
+
+-- A new offer's margin over the quote.
+function TheContractorRepairContracts.rollMargin()
+    local spread = TheContractorRepairContracts.MARGIN_SPREAD
+    local margin = g_currentMission.TheContractor.Settings:getADSMargin() + (math.random() * 2 - 1) * spread
+    return math.max(margin, 0)
 end
 
 function TheContractorRepairContracts:createOffer(entry, vehicle, quote)
     local today = g_currentMission.environment.currentMonotonicDay
-    local margin = TheContractorRepairContracts.MARGIN_MIN +
-        math.random() * (TheContractorRepairContracts.MARGIN_MAX - TheContractorRepairContracts.MARGIN_MIN)
+    local margin = TheContractorRepairContracts.rollMargin()
     local price = math.floor(TheContractorRepairContracts.getBasePrice(quote.price, margin))
     local deadlineDay = today + TheContractorRepairContracts.OFFER_DAYS + TheContractorRepairContracts.DUE_DAYS
+    local offerExpiresDay = today + TheContractorRepairContracts.OFFER_DAYS
+    -- 101: a breakdown is today's or nobody's, and its level is ADS's field
+    -- service (who can fix it on the spot), not the workshop's.
+    local serviceLevel = quote.serviceLevel
+    if entry.fieldId ~= nil then
+        deadlineDay, offerExpiresDay = today, today
+        serviceLevel = quote.fieldService or entry.fieldService
+    end
     local workshop = {
         vehicleId = NetworkUtil.getObjectId(vehicle),
         vehicleUniqueId = vehicle.getUniqueId ~= nil and vehicle:getUniqueId() or nil,
@@ -724,11 +960,12 @@ function TheContractorRepairContracts:createOffer(entry, vehicle, quote)
         bayIndex = entry.bayIndex,
         kind = entry.kind,
         severity = entry.severity,
-        offerExpiresDay = today + TheContractorRepairContracts.OFFER_DAYS,
+        offerExpiresDay = offerExpiresDay,
         quotePrice = quote.price,
         requiredTools = quote.minTools or {},
-        serviceLevel = quote.serviceLevel,
+        serviceLevel = serviceLevel,
         operatingHours = quote.operatingHours,
+        fieldId = entry.fieldId,
     }
 
     local environment = g_currentMission.environment
@@ -740,8 +977,8 @@ function TheContractorRepairContracts:createOffer(entry, vehicle, quote)
         vehicle:delete()
         return
     end
-    Logging.info("TheContractor: farm %d job %d: %s in for %s, quoted %.0f, offered %.0f", entry.farmId, job.id,
-        workshop.vehicleName, entry.kind, quote.price, job:getPrice())
+    Logging.info("TheContractor: farm %d job %d: %s in for %s, quoted %.0f, offered %.0f (%.0f%% margin)", entry.farmId,
+        job.id, workshop.vehicleName, entry.kind, quote.price, job:getPrice(), margin * 100)
 end
 
 -- Server: the customer comes for their machine (an offer turned down or
@@ -966,6 +1203,12 @@ function TheContractorRepairContracts:loadFromXMLFile(xmlFile)
             queuedDay = Utils.getNoNil(getXMLInt(xmlFile, key .. "#queuedDay"), 0),
             attempts = Utils.getNoNil(getXMLInt(xmlFile, key .. "#attempts"), 0),
             blockedDays = Utils.getNoNil(getXMLInt(xmlFile, key .. "#blockedDays"), 0),
+            -- 101: a field arrival's spot.
+            fieldId = getXMLInt(xmlFile, key .. "#fieldId"),
+            x = getXMLFloat(xmlFile, key .. "#x"),
+            z = getXMLFloat(xmlFile, key .. "#z"),
+            rotY = getXMLFloat(xmlFile, key .. "#rotY"),
+            fieldService = getXMLString(xmlFile, key .. "#fieldService"),
             waitMs = 0,
             isLoading = false,
         })
@@ -1013,11 +1256,21 @@ function TheContractorRepairContracts:saveToXmlFile(xmlFile)
 
     local index = 0
     for _, entry in ipairs(self.arrivals) do
-        if entry.zoneUniqueId ~= nil and entry.xmlFilename ~= nil then
+        if (entry.zoneUniqueId ~= nil or entry.fieldId ~= nil) and entry.xmlFilename ~= nil then
             local key = string.format("%s.arrival(%d)", rootKey, index)
             setXMLInt(xmlFile, key .. "#farmId", entry.farmId)
-            setXMLString(xmlFile, key .. "#zoneUniqueId", entry.zoneUniqueId)
-            setXMLInt(xmlFile, key .. "#bayIndex", entry.bayIndex)
+            if entry.fieldId ~= nil then
+                setXMLInt(xmlFile, key .. "#fieldId", entry.fieldId)
+                setXMLFloat(xmlFile, key .. "#x", entry.x)
+                setXMLFloat(xmlFile, key .. "#z", entry.z)
+                setXMLFloat(xmlFile, key .. "#rotY", entry.rotY or 0)
+                if entry.fieldService ~= nil then
+                    setXMLString(xmlFile, key .. "#fieldService", entry.fieldService)
+                end
+            else
+                setXMLString(xmlFile, key .. "#zoneUniqueId", entry.zoneUniqueId)
+                setXMLInt(xmlFile, key .. "#bayIndex", entry.bayIndex)
+            end
             setXMLString(xmlFile, key .. "#xmlFilename", entry.xmlFilename)
             setXMLString(xmlFile, key .. "#kind", entry.kind)
             setXMLInt(xmlFile, key .. "#severity", entry.severity)

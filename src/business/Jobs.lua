@@ -266,9 +266,9 @@ function TheContractorJobs:proposeCounterOffer(farmId, jobId, counterPrice)
         return nil
     end
 
-    -- 100: a workshop job the farm hasn't the tools for can't be taken on,
-    -- so nor can a price for it be agreed.
-    if TheContractorJobs.getAcceptProblem(job) ~= nil then
+    -- 100: a workshop job's price is fixed (ADS's quote plus the adsMargin
+    -- roll), and one the farm hasn't the tools for can't be taken on anyway.
+    if TheContractorRepairContracts.isWorkshopJob(job) or TheContractorJobs.getAcceptProblem(job) ~= nil then
         return nil
     end
 
@@ -1373,6 +1373,8 @@ function TheContractorJobs.writeWorkshop(streamId, workshop)
     streamWriteString(streamId, workshop.serviceLevel or "")
     streamWriteFloat32(streamId, workshop.operatingHours or -1)
     streamWriteInt32(streamId, workshop.bayIndex or 0)
+    -- 101: a breakdown's field.
+    streamWriteInt32(streamId, workshop.fieldId or 0)
 end
 
 local function splitList(text)
@@ -1401,6 +1403,8 @@ function TheContractorJobs.readWorkshop(streamId)
     local operatingHours = streamReadFloat32(streamId)
     workshop.operatingHours = operatingHours >= 0 and operatingHours or nil
     workshop.bayIndex = streamReadInt32(streamId)
+    local fieldId = streamReadInt32(streamId)
+    workshop.fieldId = fieldId ~= 0 and fieldId or nil
     return workshop
 end
 
@@ -1657,6 +1661,7 @@ function TheContractorJobs.loadWorkshop(xmlFile, key)
         requiredTools = splitList(getXMLString(xmlFile, key .. "#requiredTools")),
         serviceLevel = getXMLString(xmlFile, key .. "#serviceLevel"),
         operatingHours = getXMLFloat(xmlFile, key .. "#operatingHours"),
+        fieldId = getXMLInt(xmlFile, key .. "#fieldId"),
     }
 end
 
@@ -1685,6 +1690,9 @@ function TheContractorJobs.saveWorkshop(xmlFile, key, workshop)
     end
     if workshop.operatingHours ~= nil then
         setXMLFloat(xmlFile, key .. "#operatingHours", workshop.operatingHours)
+    end
+    if workshop.fieldId ~= nil then
+        setXMLInt(xmlFile, key .. "#fieldId", workshop.fieldId)
     end
 end
 
