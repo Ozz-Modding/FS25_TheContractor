@@ -423,6 +423,52 @@
 		<text name="tc_parkingSlotHarvester_name" text="Harvester Parking Slot"/>
 		<text name="tc_parkingSlotVehicle_function" text="Marks a parking space for vehicles (tractors, loaders, self-propelled machines) coming back from contract jobs, facing the arrow. Implements go in implement parking slots and harvesters in harvester parking slots. Stand in a placed slot to choose what it takes. Only visible in the construction menu, unless you turn on Show parking slots (Right Ctrl+P)."/>
 		<text name="tc_parkingSlotHarvester_function" text="Marks a parking space for a self-propelled harvester (combine, forage or beet harvester) coming back from contract jobs, facing the arrow. Its header goes in an implement parking slot. Stand in a placed slot to choose what it takes. Only visible in the construction menu, unless you turn on Show parking slots (Right Ctrl+P)."/>
+		<text name="tc_repairZone_name" text="Repair Zone"/>
+		<text name="tc_repairZoneMedium_name" text="Repair Zone (3 bays)"/>
+		<text name="tc_repairZoneLarge_name" text="Repair Zone (6 bays)"/>
+		<text name="tc_repairZoneHarvester_name" text="Harvester Repair Zone"/>
+		<text name="tc_repairZoneVehicle_function" text="Needs Advanced Damage System. Customers bring their tractors here for a repair or a service, one in each 4 m bay, facing the arrow, with a job offer in your Inbox. Stand in a placed zone to choose which kinds of tractor it takes. Only visible in the construction menu, unless you turn on Show parking slots (Right Ctrl+P)."/>
+		<text name="tc_repairZoneHarvester_function" text="Needs Advanced Damage System. Customers bring their self-propelled harvesters (combines, forage and beet harvesters) here for a repair or a service, facing the arrow, with a job offer in your Inbox. Stand in a placed zone to choose which kinds it takes. Only visible in the construction menu, unless you turn on Show parking slots (Right Ctrl+P)."/>
+		<text name="tc_repairZone_activate" text="Set repair zone filter"/>
+		<text name="tc_repairZone_dialogTitle" text="Repair zone"/>
+		<text name="tc_repairZone_dialogHint_vehicle" text="Customers only bring the kinds of tractor you tick. Nothing ticked takes any that fit."/>
+		<text name="tc_repairZone_dialogHint_harvester" text="Customers only bring the kinds of harvester you tick. Nothing ticked takes any that fit."/>
+		<text name="tc_repairZone_takesAny_vehicle" text="Any tractor"/>
+		<text name="tc_repairZone_takesAny_harvester" text="Any harvester"/>
+		<text name="tc_jobType_adsRepair" text="Workshop Repair"/>
+		<text name="tc_jobType_adsMaintenance" text="Workshop Service"/>
+		<text name="tc_inbox_chipRepair" text="Workshop"/>
+		<text name="tc_jobDetails_machine" text="Machine"/>
+		<text name="tc_repair_problemGone" text="The customer's machine isn't there any more."/>
+		<text name="tc_repair_problemNoADS" text="Advanced Damage System isn't loaded, so this job can't be taken on."/>
+		<text name="tc_repair_requires" text="You haven't the equipment for this job yet. Requires: %s."/>
+		<text name="tc_repair_summaryLine" text="%s on the %s"/>
+		<text name="tc_repair_missedNotification" text="Missed deadline: the %s in your repair zone went unfinished, and the customer has taken the machine back."/>
+		<text name="tc_repair_acceptedInfo" text="Job accepted: %s for %s. It's in your repair zone. Inspect it to find what's wrong."/>
+		<text name="tc_repair_rejectedInfo" text="Negotiation failed: the customer has taken the %s elsewhere."/>
+		<text name="tc_repair_detailMachine" text="Machine"/>
+		<text name="tc_repair_detailWork" text="Work"/>
+		<text name="tc_repair_detailQuote" text="Dealer quote"/>
+		<text name="tc_repair_detailTools" text="Equipment"/>
+		<text name="tc_repair_detailTampered" text="Condition"/>
+		<text name="tc_repair_machineHours" text="%s, %d h"/>
+		<text name="tc_repair_work_repair" text="Repair: it's not right, inspect it to find out why"/>
+		<text name="tc_repair_work_maintenance" text="Service: oils, filters and grease"/>
+		<text name="tc_repair_quoteValue" text="They've been quoted %s. Can you beat it?"/>
+		<text name="tc_repair_handToolsOnly" text="Hand tools only"/>
+		<text name="tc_repair_chipInWorkshop" text="In the workshop"/>
+		<text name="tc_repair_chipTampered" text="Worse than it came"/>
+		<text name="tc_repair_tamperedValue" text="%d thing(s) missing or worse than when it came in"/>
+		<text name="tc_repair_tamperedTitle" text="Customer complaint: %s"/>
+		<text name="tc_repair_tamperedBody" text="The owner of the %s has taken it back worse than they left it: parts missing or swapped for worn ones. They won't pay, and they're telling everyone (-%s reputation)."/>
+		<text name="tc_repair_tamperedBodyClaim" text="The owner of the %s has taken it back worse than they left it: parts missing or swapped for worn ones. They won't pay, they're telling everyone (-%s reputation), and they're going to their solicitor about the damage."/>
+		<text name="tc_repair_claimTitle" text="Compensation claim: %s"/>
+		<text name="tc_repair_claimBody" text="The owner of the %s has claimed for the parts that went missing while it was with you. Public liability doesn't cover deliberate damage, so the whole %s has been charged."/>
+		<text name="tc_repair_claimBodyLegal" text="The owner of the %s has claimed for the parts that went missing while it was with you. Your legal cover got it reduced, but public liability doesn't cover deliberate damage, so %s has been charged."/>
+		<text name="tc_repair_claimNotice" text="Compensation claim for the %s: %s paid, uninsured."/>
+		<text name="tc_claims_cause_tampering" text="parts taken or swapped while it was in for repair"/>
+		<text name="tc_drivers_customerVehicle" text="%s is a customer's machine in for repair, so AI helpers, AutoDrive, Courseplay and Follow Me can't drive it."/>
+		<text name="tc_drivers_customerVehicleDialog" text="This is a customer's machine in for repair, so AI helpers, AutoDrive, Courseplay and Follow Me can't drive it."/>
 		<text name="tc_parkingSlotImplement_function" text="Marks a parking space for implements and trailers coming back from contract jobs, facing the arrow. Vehicles go in vehicle parking slots. Stand in a placed slot to choose what it takes. Only visible in the construction menu, unless you turn on Show parking slots (Right Ctrl+P)."/>
 		<text name="tc_parking_slotsShown" text="Parking slots shown"/>
 		<text name="tc_parking_slotsHidden" text="Parking slots hidden"/>
@@ -1084,6 +1130,7 @@
 		<text name="tc_logbook_insured" text="Insured"/>
 		<text name="tc_logbook_uninsured" text="Uninsured"/>
 		<text name="tc_logbook_margin" text="Margin"/>
+		<text name="tc_logbook_marginNoAdsWear" text="Margin (excl. ADS wear)"/>
 		<text name="tc_logbook_reputation" text="Reputation"/>
 		<text name="tc_logbook_claimReputation" text="Reputation (claim)"/>
 		<text name="tc_logbook_status" text="Status"/>

@@ -5,6 +5,10 @@
 -- button bar acts on the highlighted row. Toggle ticks it, Clear unticks
 -- everything, Save sends TCParkingSlotFilterEvent, Back throws the changes
 -- away. Same MessageDialog shape as TCDriverPickerDialog.
+--
+-- 100: repair zones use it too, through an adapter (show's second
+-- argument): where the filter lives, what's on offer, the summary, the
+-- texts and the event. SLOT_ADAPTER is the parking slot's own.
 
 TCParkingSlotDialog = {}
 local TCParkingSlotDialog_mt = Class(TCParkingSlotDialog, MessageDialog)
@@ -23,12 +27,41 @@ function TCParkingSlotDialog.register()
     TCParkingSlotDialog.INSTANCE = dialog
 end
 
-function TCParkingSlotDialog.show(slot)
+TCParkingSlotDialog.SLOT_ADAPTER = {
+    getTitle = function()
+        return g_i18n:getText("tc_parkingSlot_dialogTitle")
+    end,
+    getHint = function(slot)
+        return g_i18n:getText("tc_parkingSlot_dialogHint_" .. PlaceableTCParkingSlot.getSlotType(slot))
+    end,
+    getFilter = function(slot)
+        return PlaceableTCParkingSlot.getFilter(slot)
+    end,
+    getCategoryChoices = function(slot, farmId, filter)
+        return TCParkingSlotFilter.getCategoryChoices(slot, farmId, filter)
+    end,
+    getEligibleVehicles = function(slot, farmId)
+        return TCParkingSlotFilter.getEligibleVehicles(slot, farmId)
+    end,
+    getArea = function(slot)
+        return PlaceableTCParkingSlot.getArea(slot)
+    end,
+    getSummary = function(slot, filter)
+        return TCParkingSlotFilter.getSummary(slot, filter)
+    end,
+    send = function(slot, farmId, filter)
+        g_client:getServerConnection():sendEvent(TCParkingSlotFilterEvent.new(NetworkUtil.getObjectId(slot), farmId,
+            filter))
+    end,
+}
+
+function TCParkingSlotDialog.show(slot, adapter)
     local dialog = TCParkingSlotDialog.INSTANCE
     if dialog == nil then
         return
     end
     dialog.slot = slot
+    dialog.adapter = adapter or TCParkingSlotDialog.SLOT_ADAPTER
     dialog.farmId = slot:getOwnerFarmId()
     g_gui:showDialog("TCParkingSlotDialog")
 end
@@ -37,6 +70,7 @@ function TCParkingSlotDialog.new(target, customMt)
     local self = MessageDialog.new(target, customMt or TCParkingSlotDialog_mt)
 
     self.slot = nil
+    self.adapter = TCParkingSlotDialog.SLOT_ADAPTER
     self.farmId = nil
     -- { kind = "category"|"vehicle", key (name or object id), title,
     --   isHere }
@@ -53,6 +87,7 @@ end
 function TCParkingSlotDialog:onGuiSetupFinished()
     TCParkingSlotDialog:superClass().onGuiSetupFinished(self)
 
+    self.titleText = self:getDescendantById("dialogTitleElement")
     self.headingText = self:getDescendantById("headingText")
     self.hintText = self:getDescendantById("hintText")
     self.emptyText = self:getDescendantById("emptyText")
@@ -67,7 +102,7 @@ end
 function TCParkingSlotDialog:onOpen()
     TCParkingSlotDialog:superClass().onOpen(self)
 
-    local filter = PlaceableTCParkingSlot.getFilter(self.slot)
+    local filter = self.adapter.getFilter(self.slot)
     self.categories = {}
     for _, name in ipairs(filter.categories) do
         self.categories[name] = true
@@ -79,7 +114,10 @@ function TCParkingSlotDialog:onOpen()
     self.isChanged = false
     self:buildRows(filter)
 
-    self.hintText:setText(g_i18n:getText("tc_parkingSlot_dialogHint_" .. PlaceableTCParkingSlot.getSlotType(self.slot)))
+    if self.titleText ~= nil then
+        self.titleText:setText(self.adapter.getTitle())
+    end
+    self.hintText:setText(self.adapter.getHint(self.slot))
     self.emptyText:setVisible(#self.rows == 0)
 
     self.selectedIndex = 1
@@ -101,13 +139,13 @@ end
 -- then by name.
 function TCParkingSlotDialog:buildRows(filter)
     local rows = {}
-    for _, name in ipairs(TCParkingSlotFilter.getCategoryChoices(self.slot, self.farmId, filter)) do
+    for _, name in ipairs(self.adapter.getCategoryChoices(self.slot, self.farmId, filter)) do
         table.insert(rows, { kind = "category", key = name, title = TCParkingSlotFilter.getCategoryTitle(name) })
     end
 
-    local area = PlaceableTCParkingSlot.getArea(self.slot)
+    local area = self.adapter.getArea(self.slot)
     local vehicleRows = {}
-    for _, vehicle in ipairs(TCParkingSlotFilter.getEligibleVehicles(self.slot, self.farmId)) do
+    for _, vehicle in ipairs(self.adapter.getEligibleVehicles(self.slot, self.farmId)) do
         local vehicleId = NetworkUtil.getObjectId(vehicle)
         if vehicleId ~= nil then
             local isHere = false
@@ -151,7 +189,7 @@ end
 
 function TCParkingSlotDialog:refresh()
     self.headingText:setText(string.format(g_i18n:getText("tc_parkingSlot_dialogHeading"),
-        TCParkingSlotFilter.getSummary(self.slot, self:getDraftFilter())))
+        self.adapter.getSummary(self.slot, self:getDraftFilter())))
 
     local row = self.rows[self.selectedIndex]
     self.toggleButton:setDisabled(row == nil)
@@ -222,8 +260,7 @@ end
 
 function TCParkingSlotDialog:onClickSave()
     if self.isChanged and self.slot ~= nil then
-        g_client:getServerConnection():sendEvent(TCParkingSlotFilterEvent.new(NetworkUtil.getObjectId(self.slot),
-            self.farmId, self:getDraftFilter()))
+        self.adapter.send(self.slot, self.farmId, self:getDraftFilter())
     end
     self:close()
 end

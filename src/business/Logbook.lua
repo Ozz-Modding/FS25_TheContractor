@@ -314,6 +314,8 @@ function TheContractorLogbook:buildJobEntry(job, outcome, reputation)
         jobType = job.jobType,
         title = job:getDisplayTitle(),
         fieldId = job.fieldId,
+        -- 100: a workshop job's machine, shown in place of a field.
+        location = job.workshop ~= nil and job:getLocationText() or nil,
         requiredSkillLevel = job.requiredSkillLevel,
         day = getToday(),
         completedAt = now,
@@ -670,8 +672,10 @@ function TheContractorLogbook:updatePlayerSessions(dt)
     local seen = {}
 
     for _, vehicle in ipairs(g_currentMission.vehicleSystem.vehicles) do
+        -- 100: a customer's machine has no logbook of ours.
         if vehicle.getIsControlled ~= nil and vehicle:getIsControlled() and vehicle.getOwnerFarmId ~= nil and
-                vehicle:getOwnerFarmId() ~= FarmManager.SPECTATOR_FARM_ID then
+                vehicle:getOwnerFarmId() ~= FarmManager.SPECTATOR_FARM_ID and
+                not (TheContractorRepairContracts ~= nil and TheContractorRepairContracts.isContractVehicle(vehicle)) then
             local who = getControllerName(vehicle)
             local job = activeJobVehicles[NetworkUtil.getObjectId(vehicle)]
             if job ~= nil then
@@ -916,7 +920,22 @@ function TheContractorLogbook.getClaimPaid(entry)
     return entry.claim ~= nil and entry.claim.paid or 0
 end
 
--- Price earned less fuel, labour, wear and any claim paid.
+-- How many of a job's machines have a wear cost and how many don't (ADS
+-- ones, TCVehicleCondition.hasWearCost): priced, unpriced.
+function TheContractorLogbook.countWearCosts(entry)
+    local priced, unpriced = 0, 0
+    for _, machine in ipairs(entry.equipment or {}) do
+        if TCVehicleCondition.hasWearCost(machine.startSnapshot, machine.endSnapshot) then
+            priced = priced + 1
+        else
+            unpriced = unpriced + 1
+        end
+    end
+    return priced, unpriced
+end
+
+-- Price earned less fuel, labour, wear and any claim paid. ADS machines'
+-- wear has no cost, so it isn't in here (countWearCosts).
 function TheContractorLogbook.getMargin(entry)
     return (entry.price or 0) - (entry.fuelCost or 0) - (entry.labourCost or 0) - (entry.wearCost or 0) -
         TheContractorLogbook.getClaimPaid(entry)
@@ -1072,6 +1091,9 @@ function TheContractorLogbook.writeJobEntry(streamId, entry)
     if entry.claim ~= nil then
         TheContractorLogbook.writeClaim(streamId, entry.claim)
     end
+
+    -- 100.
+    writeString(streamId, entry.location)
 end
 
 function TheContractorLogbook.readJobEntry(streamId)
@@ -1136,6 +1158,8 @@ function TheContractorLogbook.readJobEntry(streamId)
     if streamReadBool(streamId) then
         entry.claim = TheContractorLogbook.readClaim(streamId)
     end
+
+    entry.location = readString(streamId)
     return entry
 end
 
@@ -1260,6 +1284,9 @@ local function saveJobEntry(xmlFile, key, entry)
     setXMLString(xmlFile, key .. "#jobType", entry.jobType or "")
     setXMLString(xmlFile, key .. "#title", entry.title or "")
     setXMLInt(xmlFile, key .. "#fieldId", entry.fieldId)
+    if entry.location ~= nil then
+        setXMLString(xmlFile, key .. "#location", entry.location)
+    end
     if entry.requiredSkillLevel ~= nil then
         setXMLInt(xmlFile, key .. "#requiredSkill", entry.requiredSkillLevel)
     end
@@ -1340,6 +1367,7 @@ local function loadJobEntry(xmlFile, key)
         jobType = getXMLString(xmlFile, key .. "#jobType"),
         title = getXMLString(xmlFile, key .. "#title"),
         fieldId = Utils.getNoNil(getXMLInt(xmlFile, key .. "#fieldId"), 0),
+        location = getXMLString(xmlFile, key .. "#location"),
         requiredSkillLevel = getXMLInt(xmlFile, key .. "#requiredSkill"),
         day = Utils.getNoNil(getXMLInt(xmlFile, key .. "#day"), 0),
         completedAt = getXMLFloat(xmlFile, key .. "#completedAt"),
@@ -1709,8 +1737,8 @@ end
 function TheContractorLogbook.formatJobEntryText(entry)
     local lines = {}
     local margin = TheContractorLogbook.getMargin(entry)
-    table.insert(lines, string.format("Job %d: %s, field %d, %s on %s", entry.jobId, entry.title or "?",
-        entry.fieldId, entry.outcome, TCCalendar.formatDay(entry.day)))
+    table.insert(lines, string.format("Job %d: %s, %s, %s on %s", entry.jobId, entry.title or "?",
+        entry.location or ("field " .. tostring(entry.fieldId)), entry.outcome, TCCalendar.formatDay(entry.day)))
 
     local crew = {}
     for _, member in ipairs(entry.crew) do

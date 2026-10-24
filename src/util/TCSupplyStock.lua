@@ -65,7 +65,9 @@ end
 local function getFarmMachines(farmId)
     local result = {}
     for _, vehicle in ipairs(g_currentMission.vehicleSystem.vehicles) do
-        if not vehicle.isPallet and isOwnedBy(vehicle, farmId) then
+        -- 100: not a customer's machine in a repair zone.
+        if not vehicle.isPallet and isOwnedBy(vehicle, farmId) and
+                not (TheContractorRepairContracts ~= nil and TheContractorRepairContracts.isContractVehicle(vehicle)) then
             table.insert(result, vehicle)
         end
     end

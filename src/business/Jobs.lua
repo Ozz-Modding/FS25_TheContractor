@@ -171,10 +171,12 @@ end
 -- (an unloading station object) are optional: harvest & haul (035), bale
 -- & deliver and straw delivery (067).
 -- startState is the field state the job starts from, for job types that
--- record one (032, JOB_TYPES' startState).
+-- record one (032, JOB_TYPES' startState). workshop (100) is a workshop
+-- job's customer machine and contract (TheContractorRepairContracts), whose
+-- fieldId is 0.
 function TheContractorJobs:createJob(farmId, jobType, fieldId, requiredSkillLevel, targetPeriod, targetDayInPeriod,
                                       price, equipmentAvailable, fruitTypeName, deadlineDay, includesHaulage,
-                                      deliveryStation, startState)
+                                      deliveryStation, startState, workshop)
     if not g_currentMission:getIsServer() then
         return nil
     end
@@ -197,6 +199,7 @@ function TheContractorJobs:createJob(farmId, jobType, fieldId, requiredSkillLeve
         job.includesHaulage = true
         TCHaulage.setDeliveryStation(job, deliveryStation)
     end
+    job.workshop = workshop
     self:registerJob(job)
 
     if g_server ~= nil then
@@ -223,6 +226,11 @@ function TheContractorJobs:registerJob(job, isNewArrival)
     -- 076: a client's copy is replaced by each snapshot, so this keeps the
     -- countdown on the latest one.
     self.graceJobs[job.id] = job.graceRemainingMs ~= nil and job or nil
+
+    -- 100: a customer's machine joins the ones kept out of our lists.
+    if job.workshop ~= nil then
+        TheContractorRepairContracts.clearCache()
+    end
 
     Logging.info("TheContractor: farm %d created job %d (%s)", job.farmId, job.id, job.jobType)
 
@@ -258,6 +266,12 @@ function TheContractorJobs:proposeCounterOffer(farmId, jobId, counterPrice)
         return nil
     end
 
+    -- 100: a workshop job the farm hasn't the tools for can't be taken on,
+    -- so nor can a price for it be agreed.
+    if TheContractorJobs.getAcceptProblem(job) ~= nil then
+        return nil
+    end
+
     if job.state == TheContractorJob.STATE.OFFERED then
         job:transitionTo(TheContractorJob.STATE.NEGOTIATING)
     end
@@ -273,6 +287,7 @@ function TheContractorJobs:proposeCounterOffer(farmId, jobId, counterPrice)
     if outcome == TheContractorNegotiation.OUTCOME.ACCEPTED then
         job:setPrice(resultPrice)
         job:transitionTo(TheContractorJob.STATE.ACCEPTED)
+        self:onJobAccepted(job)
     elseif outcome == TheContractorNegotiation.OUTCOME.REJECTED or roundCapHit or eagernessBottomedOut then
         outcome = TheContractorNegotiation.OUTCOME.REJECTED
         job:transitionTo(TheContractorJob.STATE.DECLINED)
@@ -303,6 +318,9 @@ function TheContractorJobs:transitionJobState(farmId, jobId, newState)
     if job == nil or not job:canTransitionTo(newState) then
         return false
     end
+    if newState == TheContractorJob.STATE.ACCEPTED and TheContractorJobs.getAcceptProblem(job) ~= nil then
+        return false
+    end
 
     self:applyJobStateChanged(farmId, jobId, newState)
 
@@ -312,9 +330,29 @@ function TheContractorJobs:transitionJobState(farmId, jobId, newState)
 
     if newState == TheContractorJob.STATE.DECLINED then
         self:onJobDeclined(job)
+    elseif newState == TheContractorJob.STATE.ACCEPTED then
+        self:onJobAccepted(job)
     end
 
     return true
+end
+
+-- Why an offer can't be accepted (or a price agreed) now, as text, or nil.
+-- Only a workshop job (100) can be refused: the farm hasn't the tools for
+-- it. The same on every machine: the Inbox shows it, the server re-checks.
+function TheContractorJobs.getAcceptProblem(job)
+    if job == nil or job.workshop == nil then
+        return nil
+    end
+    return TheContractorRepairContracts.getAcceptProblem(job)
+end
+
+-- Server: an offer's just been accepted. 100: a customer's machine that's
+-- already been put right counts at once (ADS only says when it changes).
+function TheContractorJobs:onJobAccepted(job)
+    if job.workshop ~= nil then
+        g_currentMission.TheContractor.RepairContracts:checkJob(job)
+    end
 end
 
 -- Server: an offer turned down, run out or walked away from in negotiation.
@@ -323,6 +361,10 @@ end
 function TheContractorJobs:onJobDeclined(job)
     TCFieldPreparation.clearUpAfterJob(job)
     g_currentMission.TheContractor.Inbox:removeMessagesForJob(job.farmId, job.id)
+    -- 100: the customer takes their machine elsewhere.
+    if job.workshop ~= nil then
+        g_currentMission.TheContractor.RepairContracts:queueCollection(job)
+    end
 end
 
 -- Server-only, for the tcJob state console command: like
@@ -521,7 +563,12 @@ function TheContractorJobs:onDayChanged()
 
     for farmId, farmJobs in pairs(self.jobsByFarm) do
         for _, job in pairs(farmJobs) do
-            if job.deadlineDay ~= nil and today > job.deadlineDay then
+            local isOffer = job.state == TheContractorJob.STATE.OFFERED or job.state == TheContractorJob.STATE.NEGOTIATING
+            if isOffer and job.workshop ~= nil and job.workshop.offerExpiresDay ~= nil and
+                    today > job.workshop.offerExpiresDay then
+                -- 100: a workshop offer lapses before its job would be due.
+                self:transitionJobState(farmId, job.id, TheContractorJob.STATE.DECLINED)
+            elseif job.deadlineDay ~= nil and today > job.deadlineDay then
                 if isMissableState(job.state) then
                     self:missJob(job)
                 elseif job.state == TheContractorJob.STATE.OFFERED or job.state == TheContractorJob.STATE.NEGOTIATING then
@@ -551,13 +598,22 @@ end
 -- synchronously (AISystem:stopJobInternal) hits an already-terminal job in
 -- Dispatch:onAIJobStopped -> completeJob and no-ops there, rather than
 -- racing a payout.
-function TheContractorJobs:missJob(job)
+-- noPenalty (100): a workshop job whose machine ADS stopped managing ends
+-- with nothing lost.
+function TheContractorJobs:missJob(job, noPenalty)
     -- Reputation.lua's score is otherwise always an integer (tier thresholds,
     -- %d display formatting) — floor this rather than let a partial-progress
     -- job leave a fractional score behind.
     local fullPenalty = math.max(TheContractorJobs.MIN_MISSED_JOB_REPUTATION_PENALTY,
         TheContractorJobs.getBaseReputationReward(job) * TheContractorJobs.MISSED_JOB_PENALTY_MULTIPLIER)
     local penalty = math.floor(fullPenalty * (1 - job.completionPercentage / 100))
+    if noPenalty then
+        penalty = 0
+    elseif job.workshop ~= nil then
+        -- 100: judged as the customer comes for it - worse than it arrived
+        -- costs more, and maybe a claim.
+        penalty = g_currentMission.TheContractor.RepairContracts:judgeTampering(job, penalty)
+    end
     g_currentMission.TheContractor.Reputation:addReputation(job.farmId, -penalty)
 
     local wasAllocated = job.state ~= TheContractorJob.STATE.ACCEPTED
@@ -575,6 +631,10 @@ function TheContractorJobs:missJob(job)
         self:releaseMissedJobResources(job)
     end
     g_currentMission.TheContractor.Inbox:removeMessagesForJob(job.farmId, job.id)
+    -- 100: the customer takes their machine back as it is.
+    if job.workshop ~= nil then
+        g_currentMission.TheContractor.RepairContracts:queueCollection(job)
+    end
 
     TCJobMissedEvent.showNotification(job.farmId, job.jobType, job.fieldId)
 
@@ -922,6 +982,10 @@ end
 -- (035) - not a straw delivery (067), where hauling is the whole job and
 -- its reputationPerHa already says so.
 function TheContractorJobs.getBaseReputationReward(job)
+    -- 100: a workshop job earns by how big a job it was.
+    if job.workshop ~= nil then
+        return TheContractorRepairContracts.getBaseReputation(job)
+    end
     local jobDef = TheContractorJobGeneration.JOB_TYPES[job.jobType]
     -- 075: a job paid per piece earns per piece too.
     if jobDef ~= nil and jobDef.reputationPerItem ~= nil then
@@ -1078,6 +1142,12 @@ function TheContractorJobs:completeJob(job, isForced)
         return
     end
 
+    -- 100: no field, crew or machines of ours.
+    if job.workshop ~= nil then
+        self:completeWorkshopJob(job)
+        return
+    end
+
     if not isForced and job.completionPercentage < TheContractorJobs.COMPLETION_THRESHOLD_PERCENTAGE then
         return
     end
@@ -1176,6 +1246,38 @@ function TheContractorJobs:completeJob(job, isForced)
     g_currentMission.TheContractor.RandomEvents:onJobCompleted(job)
 end
 
+-- 100: a workshop job is done when ADS says the customer's machine is (or
+-- tcJob state forces it): invoiced, reputation by severity (quality 100, no
+-- crew), logged, and the customer comes for the machine.
+function TheContractorJobs:completeWorkshopJob(job)
+    if not job:canTransitionTo(TheContractorJob.STATE.COMPLETED) then
+        return
+    end
+
+    job.paymentAmount = job:getPrice()
+    g_currentMission.TheContractor.Finances:invoiceJob(job)
+    job.completedAt = TheContractorJobs.getGameMinutes()
+    job.qualityScore = 100
+    job.completionPercentage = 100
+
+    local reputationReward = self:calculateReputationReward(job)
+    g_currentMission.TheContractor.Reputation:addReputation(job.farmId, reputationReward)
+
+    job:transitionTo(TheContractorJob.STATE.COMPLETED)
+    g_currentMission.TheContractor.Logbook:recordJobCompleted(job, reputationReward)
+    g_currentMission.TheContractor.Inbox:removeMessagesForJob(job.farmId, job.id)
+
+    Logging.info("TheContractor: farm %d job %d completed (%s, %s) - billed %.0f, %+d reputation", job.farmId,
+        job.id, job.jobType, job.workshop.vehicleName or "?", job.paymentAmount, reputationReward)
+
+    TCJobCompletedEvent.showNotification(job)
+    if g_server ~= nil then
+        g_server:broadcastEvent(TCJobCompletedEvent.new(job))
+    end
+
+    g_currentMission.TheContractor.RepairContracts:queueCollection(job)
+end
+
 -- Wire serialization, shared by TCJobCreatedEvent and initial client state.
 -- Self-contained (carries its own farmId) so callers don't need to track it
 -- separately.
@@ -1249,6 +1351,57 @@ function TheContractorJobs.writeJob(streamId, job)
 
     -- 093. "" stands in for "no player recorded".
     streamWriteString(streamId, job.allocatedPlayerName or "")
+
+    -- 100.
+    TheContractorJobs.writeWorkshop(streamId, job.workshop)
+end
+
+-- 100: what a client needs of a workshop job (the uniqueIds stay on the
+-- server).
+function TheContractorJobs.writeWorkshop(streamId, workshop)
+    streamWriteBool(streamId, workshop ~= nil)
+    if workshop == nil then
+        return
+    end
+    streamWriteInt32(streamId, workshop.vehicleId or 0)
+    streamWriteString(streamId, workshop.vehicleName or "")
+    streamWriteString(streamId, workshop.kind or "")
+    streamWriteInt32(streamId, workshop.severity or 1)
+    streamWriteInt32(streamId, workshop.offerExpiresDay or -1)
+    streamWriteFloat32(streamId, workshop.quotePrice or 0)
+    streamWriteString(streamId, table.concat(workshop.requiredTools or {}, ","))
+    streamWriteString(streamId, workshop.serviceLevel or "")
+    streamWriteFloat32(streamId, workshop.operatingHours or -1)
+    streamWriteInt32(streamId, workshop.bayIndex or 0)
+end
+
+local function splitList(text)
+    local list = {}
+    for item in string.gmatch(text or "", "[^,]+") do
+        table.insert(list, item)
+    end
+    return list
+end
+
+function TheContractorJobs.readWorkshop(streamId)
+    if not streamReadBool(streamId) then
+        return nil
+    end
+    local workshop = {}
+    workshop.vehicleId = streamReadInt32(streamId)
+    workshop.vehicleName = streamReadString(streamId)
+    workshop.kind = streamReadString(streamId)
+    workshop.severity = streamReadInt32(streamId)
+    local offerExpiresDay = streamReadInt32(streamId)
+    workshop.offerExpiresDay = offerExpiresDay >= 0 and offerExpiresDay or nil
+    workshop.quotePrice = streamReadFloat32(streamId)
+    workshop.requiredTools = splitList(streamReadString(streamId))
+    local serviceLevel = streamReadString(streamId)
+    workshop.serviceLevel = serviceLevel ~= "" and serviceLevel or nil
+    local operatingHours = streamReadFloat32(streamId)
+    workshop.operatingHours = operatingHours >= 0 and operatingHours or nil
+    workshop.bayIndex = streamReadInt32(streamId)
+    return workshop
 end
 
 function TheContractorJobs.readJob(streamId)
@@ -1337,6 +1490,8 @@ function TheContractorJobs.readJob(streamId)
 
     local allocatedPlayerName = streamReadString(streamId)
     job.allocatedPlayerName = allocatedPlayerName ~= "" and allocatedPlayerName or nil
+
+    job.workshop = TheContractorJobs.readWorkshop(streamId)
 
     return job
 end
@@ -1465,6 +1620,7 @@ function TheContractorJobs:loadFromXMLFile(xmlFile)
             end
             job.debrisDisposed = Utils.getNoNil(getXMLInt(xmlFile, jobKey .. "#debrisDisposed"), 0)
             job.graceRemainingMs = getXMLFloat(xmlFile, jobKey .. "#graceRemainingMs")
+            job.workshop = TheContractorJobs.loadWorkshop(xmlFile, jobKey .. ".workshop")
 
             self.jobsByFarm[farmId] = self.jobsByFarm[farmId] or {}
             self.jobsByFarm[farmId][id] = job
@@ -1483,6 +1639,55 @@ function TheContractorJobs:loadFromXMLFile(xmlFile)
     end
 end
 
+-- 100: a workshop job's machine by uniqueId until resolveSavedVehicles.
+function TheContractorJobs.loadWorkshop(xmlFile, key)
+    if not hasXMLProperty(xmlFile, key) then
+        return nil
+    end
+    return {
+        vehicleId = nil,
+        vehicleUniqueId = getXMLString(xmlFile, key .. "#vehicleUniqueId"),
+        vehicleName = Utils.getNoNil(getXMLString(xmlFile, key .. "#vehicleName"), ""),
+        zoneUniqueId = getXMLString(xmlFile, key .. "#zoneUniqueId"),
+        bayIndex = Utils.getNoNil(getXMLInt(xmlFile, key .. "#bayIndex"), 0),
+        kind = Utils.getNoNil(getXMLString(xmlFile, key .. "#kind"), "repair"),
+        severity = Utils.getNoNil(getXMLInt(xmlFile, key .. "#severity"), 1),
+        offerExpiresDay = getXMLInt(xmlFile, key .. "#offerExpiresDay"),
+        quotePrice = Utils.getNoNil(getXMLFloat(xmlFile, key .. "#quotePrice"), 0),
+        requiredTools = splitList(getXMLString(xmlFile, key .. "#requiredTools")),
+        serviceLevel = getXMLString(xmlFile, key .. "#serviceLevel"),
+        operatingHours = getXMLFloat(xmlFile, key .. "#operatingHours"),
+    }
+end
+
+function TheContractorJobs.saveWorkshop(xmlFile, key, workshop)
+    local uniqueId = workshop.vehicleUniqueId
+    if workshop.vehicleId ~= nil and workshop.vehicleId ~= 0 then
+        uniqueId = TCVehicleIds.getUniqueId(workshop.vehicleId) or uniqueId
+    end
+    if uniqueId ~= nil then
+        setXMLString(xmlFile, key .. "#vehicleUniqueId", uniqueId)
+    end
+    setXMLString(xmlFile, key .. "#vehicleName", workshop.vehicleName or "")
+    if workshop.zoneUniqueId ~= nil then
+        setXMLString(xmlFile, key .. "#zoneUniqueId", workshop.zoneUniqueId)
+    end
+    setXMLInt(xmlFile, key .. "#bayIndex", workshop.bayIndex or 0)
+    setXMLString(xmlFile, key .. "#kind", workshop.kind or "repair")
+    setXMLInt(xmlFile, key .. "#severity", workshop.severity or 1)
+    if workshop.offerExpiresDay ~= nil then
+        setXMLInt(xmlFile, key .. "#offerExpiresDay", workshop.offerExpiresDay)
+    end
+    setXMLFloat(xmlFile, key .. "#quotePrice", workshop.quotePrice or 0)
+    setXMLString(xmlFile, key .. "#requiredTools", table.concat(workshop.requiredTools or {}, ","))
+    if workshop.serviceLevel ~= nil then
+        setXMLString(xmlFile, key .. "#serviceLevel", workshop.serviceLevel)
+    end
+    if workshop.operatingHours ~= nil then
+        setXMLFloat(xmlFile, key .. "#operatingHours", workshop.operatingHours)
+    end
+end
+
 -- Server, once vehicles exist (TheContractor:resolveSavedVehicles): the
 -- saved uniqueIds back to object ids, for every job and the equipment
 -- data hanging off it.
@@ -1498,6 +1703,11 @@ function TheContractorJobs:resolveSavedVehicles()
                 job.savedHaulageUniqueIds = nil
             end
             TCJobConsequences.resolveSavedVehicles(job)
+            -- 100: a workshop job's machine (gone once collected).
+            if job.workshop ~= nil and job.workshop.vehicleId == nil then
+                job.workshop.vehicleId = job.workshop.vehicleUniqueId ~= nil and
+                    TCVehicleIds.getObjectId(job.workshop.vehicleUniqueId) or 0
+            end
         end
     end
 end
@@ -1565,6 +1775,9 @@ function TheContractorJobs:saveToXmlFile(xmlFile)
             end
             if job.graceRemainingMs ~= nil then
                 setXMLFloat(xmlFile, jobKey .. "#graceRemainingMs", job.graceRemainingMs)
+            end
+            if job.workshop ~= nil then
+                TheContractorJobs.saveWorkshop(xmlFile, jobKey .. ".workshop", job.workshop)
             end
 
             if job.assignedWorkerId ~= nil then
@@ -1702,9 +1915,8 @@ function TheContractorJobs.registerConsoleCommands()
                     end
                     table.insert(details, #crew > 0 and ("crew " .. table.concat(crew, ", ")) or "you")
                 end
-                local field = g_fieldManager:getFieldById(job.fieldId)
-                table.insert(lines, string.format("#%d %s, field %s - %s, %s%s", job.id, job:getDisplayTitle(),
-                    field ~= nil and field:getName() or tostring(job.fieldId), job.state,
+                table.insert(lines, string.format("#%d %s, %s - %s, %s%s", job.id, job:getDisplayTitle(),
+                    job:isWorkshop() and "workshop" or ("field " .. job:getLocationText()), job.state,
                     g_i18n:formatMoney(job:getPrice(), 0, true, true),
                     #details > 0 and (", " .. table.concat(details, ", ")) or ""))
             end

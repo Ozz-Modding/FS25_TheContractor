@@ -53,6 +53,13 @@ function TCJobMissedEvent.showNotification(farmId, jobType, fieldId)
         return
     end
 
+    -- 100: a workshop job has no field (fieldId 0).
+    if fieldId == 0 then
+        g_currentMission:addIngameNotification(FSBaseMission.INGAME_NOTIFICATION_CRITICAL,
+            string.format(g_i18n:getText("tc_repair_missedNotification"), g_i18n:getText("tc_jobType_" .. jobType)))
+        return
+    end
+
     local field = g_fieldManager:getFieldById(fieldId)
     local fieldLabel = field ~= nil and field:getName() or tostring(fieldId)
 

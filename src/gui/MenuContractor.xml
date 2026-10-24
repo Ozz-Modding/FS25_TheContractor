@@ -149,7 +149,7 @@
 
                 <BoxLayout profile="tc_detailRows" id="inboxDetailRows" position="24px -60px" size="752px 545px">
                     <GuiElement profile="tc_detailRow" size="752px 34px">
-                        <Text profile="tc_detailLabel" text="$l10n_tc_detail_field" position="0px 0px"/>
+                        <Text profile="tc_detailLabel" id="inboxLabelField" text="$l10n_tc_detail_field" position="0px 0px"/>
                         <Text profile="tc_detailValue" id="inboxDetailField" text="" position="220px 0px" size="532px 34px"/>
                         <Bitmap profile="tc_detailRowDivider"/>
                     </GuiElement>
@@ -164,11 +164,11 @@
                         <Bitmap profile="tc_detailRowDivider"/>
                     </GuiElement>
                     <GuiElement profile="tc_detailRow" size="752px 34px">
-                        <Text profile="tc_detailLabel" text="$l10n_tc_detail_crew" position="0px 0px"/>
+                        <Text profile="tc_detailLabel" id="inboxLabelCrew" text="$l10n_tc_detail_crew" position="0px 0px"/>
                         <Text profile="tc_detailValue" id="inboxDetailCrew" text="" position="220px 0px" size="532px 34px"/>
                         <Bitmap profile="tc_detailRowDivider"/>
                     </GuiElement>
-                    <GuiElement profile="tc_detailRow" size="752px 34px">
+                    <GuiElement profile="tc_detailRow" id="inboxRowSkill" size="752px 34px">
                         <Text profile="tc_detailLabel" text="$l10n_tc_detail_skill" position="0px 0px"/>
                         <RoundCorner profile="tc_chip" id="inboxDetailSkillChip" position="220px -7px" size="140px 20px"/>
                         <Text profile="tc_chipText" id="inboxDetailSkillChipText" position="220px -7px" size="140px 20px"/>
@@ -178,7 +178,7 @@
                         <Bitmap profile="tc_detailRowDivider"/>
                     </GuiElement>
                     <GuiElement profile="tc_detailRow" id="inboxRowDelivery" size="752px 34px">
-                        <Text profile="tc_detailLabel" text="$l10n_tc_detail_deliverTo" position="0px 0px"/>
+                        <Text profile="tc_detailLabel" id="inboxLabelDelivery" text="$l10n_tc_detail_deliverTo" position="0px 0px"/>
                         <Text profile="tc_detailValue" id="inboxDetailDelivery" text="" position="220px 0px" size="532px 34px"/>
                         <Bitmap profile="tc_detailRowDivider"/>
                     </GuiElement>

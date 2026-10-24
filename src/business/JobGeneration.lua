@@ -151,6 +151,12 @@ TheContractorJobGeneration.JOB_TYPES = {
     -- a plow job (REPUTATION_PER_REWARD).
     flyTipping = { serverMeasured = true, playerOnly = true, noEquipment = true, rewardPerItem = 300,
         reputationPerItem = 1 },
+    -- 100: a customer's machine in a repair zone, for a repair or a
+    -- service with FS25_AdvancedDamageSystem (TheContractorRepairContracts).
+    -- No field (fieldId 0), crew or kit of ours: priced from ADS's quote,
+    -- rewarded by severity, done when ADS says so.
+    adsRepair = { workshopJob = true, playerOnly = true, noEquipment = true },
+    adsMaintenance = { workshopJob = true, playerOnly = true, noEquipment = true },
 }
 TheContractorJobGeneration.JOB_TYPE_KEYS = { "harvest", "cultivate", "sow", "plow", "mow", "tedder", "bale",
     "baleWrap", "strawDelivery", "fertilize", "herbicide", "weed", "hoe", "stonePick" }
@@ -990,7 +996,9 @@ end
 function TheContractorJobGeneration.getFarmVehicles(farmId)
     local result = {}
     for _, vehicle in ipairs(g_currentMission.vehicleSystem.vehicles) do
-        if vehicle.getOwnerFarmId ~= nil and vehicle:getOwnerFarmId() == farmId then
+        -- 100: not a customer's machine in a repair zone.
+        if vehicle.getOwnerFarmId ~= nil and vehicle:getOwnerFarmId() == farmId and
+                not (TheContractorRepairContracts ~= nil and TheContractorRepairContracts.isContractVehicle(vehicle)) then
             table.insert(result, vehicle)
         end
     end
