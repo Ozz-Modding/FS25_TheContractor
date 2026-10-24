@@ -2745,9 +2745,9 @@ function MenuContractor:populateCellForItemInSection(list, section, index, cell)
         return
     end
 
-    cell:getAttribute("jobType"):setText(job:getDisplayTitle())
+    cell:getAttribute("jobType"):setText(job:getListTitle())
 
-    cell:getAttribute("field"):setText(job:getLocationText())
+    cell:getAttribute("field"):setText(job:getListFieldText())
 
     cell:getAttribute("targetDate"):setText(formatTargetDate(job.targetPeriod, job.targetDayInPeriod))
     cell:getAttribute("price"):setText(g_i18n:formatMoney(job:getPrice(), 0, true, true))
@@ -3092,9 +3092,9 @@ function MenuContractor:populateCompletedJobCell(index, cell)
         return
     end
 
-    cell:getAttribute("jobType"):setText(job:getDisplayTitle())
+    cell:getAttribute("jobType"):setText(job:getListTitle())
 
-    cell:getAttribute("field"):setText(job:getLocationText())
+    cell:getAttribute("field"):setText(job:getListFieldText())
 
     cell:getAttribute("completed"):setText(formatCompletedAt(job.completedAt))
 
@@ -3200,7 +3200,7 @@ function MenuContractor:populateCalendarDayJobCell(index, cell)
         return
     end
 
-    cell:getAttribute("jobType"):setText(job:getDisplayTitle())
+    cell:getAttribute("jobType"):setText(job:getListTitle())
 
     -- How many people the job takes: 2 for harvest & haul (035), "Player"
     -- for work only a player can do. getJobCrewText has the long form.
@@ -3210,7 +3210,7 @@ function MenuContractor:populateCalendarDayJobCell(index, cell)
         cell:getAttribute("crew"):setText(tostring(TheContractorAllocation.getRequiredWorkerCount(job)))
     end
 
-    cell:getAttribute("field"):setText(job:getLocationText())
+    cell:getAttribute("field"):setText(job:getListFieldText())
 
     cell:getAttribute("price"):setText(g_i18n:formatMoney(job:getPrice(), 0, true, true))
 
@@ -5602,6 +5602,12 @@ local function getFieldName(fieldId)
     return field ~= nil and field:getName() or tostring(fieldId)
 end
 
+-- 100: a workshop job's entry - no field, crew or travel to speak of.
+local function isWorkshopEntry(entry)
+    local jobDef = TheContractorJobGeneration.JOB_TYPES[entry.jobType or ""]
+    return jobDef ~= nil and jobDef.workshopJob == true
+end
+
 local function formatHours(hours)
     return string.format(g_i18n:getText("tc_logbook_hours"), hours or 0)
 end
@@ -5849,8 +5855,16 @@ function MenuContractor:populateLogbookJobCell(index, cell)
         return
     end
     cell:getAttribute("date"):setText(TCCalendar.formatDayShort(entry.day))
-    cell:getAttribute("title"):setText(entry.title or "-")
-    cell:getAttribute("field"):setText(entry.location or getFieldName(entry.fieldId))
+    -- 100: a workshop job's row, like a live job's (getListTitle,
+    -- getListFieldText): just its type, and a breakdown's field or "-".
+    if isWorkshopEntry(entry) then
+        cell:getAttribute("title"):setText(g_i18n:getText("tc_jobType_" .. entry.jobType))
+        cell:getAttribute("field"):setText(entry.workshopFieldId ~= nil and getFieldName(entry.workshopFieldId) or
+            "-")
+    else
+        cell:getAttribute("title"):setText(entry.title or "-")
+        cell:getAttribute("field"):setText(entry.location or getFieldName(entry.fieldId))
+    end
     cell:getAttribute("crew"):setText(getCrewText(entry))
     local chipText, tone = getMarginChip(entry)
     setChip(cell:getAttribute("marginChip"), cell:getAttribute("marginChipText"), chipText, tone)
@@ -5963,6 +5977,7 @@ function MenuContractor:getLogbookJobRows(entry)
     end
 
     local isMissed = entry.outcome == TheContractorLogbook.OUTCOME.MISSED
+    local isWorkshop = isWorkshopEntry(entry)
 
     section("tc_logbook_sectionJob")
     row(text(isMissed and "tc_logbook_missedOn" or "tc_logbook_completedOn"), TCCalendar.formatDay(entry.day),
@@ -5979,22 +5994,25 @@ function MenuContractor:getLogbookJobRows(entry)
         row(text("tc_logbook_interventions"), tostring(entry.stuckInterventions), nil, nil)
     end
 
-    section("tc_logbook_sectionCrew")
-    if #entry.crew == 0 then
-        row("-", text("tc_logbook_notAllocated"))
-    end
-    for _, member in ipairs(entry.crew) do
-        local chip, tone = nil, nil
-        if member.rating ~= nil and entry.requiredSkillLevel ~= nil then
-            chip = string.format(text("tc_logbook_ratingChip"), member.rating, entry.requiredSkillLevel)
-            tone = member.rating >= entry.requiredSkillLevel and "good" or "warn"
+    -- 100: the player works a workshop job, with no crew and no trip.
+    if not isWorkshop then
+        section("tc_logbook_sectionCrew")
+        if #entry.crew == 0 then
+            row("-", text("tc_logbook_notAllocated"))
         end
-        row(text("tc_logbook_role_" .. (member.role or TheContractorLogbook.ROLE.OPERATOR)), getCrewName(member), chip,
-            tone)
-    end
-    -- 094: whoever had it before it was unallocated.
-    if entry.earlierCrew ~= nil then
-        row(text("tc_logbook_earlierCrew"), entry.earlierCrew)
+        for _, member in ipairs(entry.crew) do
+            local chip, tone = nil, nil
+            if member.rating ~= nil and entry.requiredSkillLevel ~= nil then
+                chip = string.format(text("tc_logbook_ratingChip"), member.rating, entry.requiredSkillLevel)
+                tone = member.rating >= entry.requiredSkillLevel and "good" or "warn"
+            end
+            row(text("tc_logbook_role_" .. (member.role or TheContractorLogbook.ROLE.OPERATOR)), getCrewName(member),
+                chip, tone)
+        end
+        -- 094: whoever had it before it was unallocated.
+        if entry.earlierCrew ~= nil then
+            row(text("tc_logbook_earlierCrew"), entry.earlierCrew)
+        end
     end
 
     if #entry.equipment > 0 then
@@ -6030,16 +6048,18 @@ function MenuContractor:getLogbookJobRows(entry)
         end
     end
 
-    section("tc_logbook_sectionTime")
-    local function minutes(value)
-        return value ~= nil and TheContractorJob.formatMinutes(value) or text("tc_logbook_notRecorded")
-    end
-    row(text("tc_logbook_travelOut"), minutes(entry.travelMinutes))
-    row(text("tc_logbook_fieldwork"), minutes(entry.fieldMinutes))
-    row(text("tc_logbook_returnWash"), minutes(entry.returnMinutes))
-    if entry.travelMinutes ~= nil or entry.fieldMinutes ~= nil or entry.returnMinutes ~= nil then
-        row(text("tc_logbook_total"), TheContractorJob.formatMinutes((entry.travelMinutes or 0) +
-            (entry.fieldMinutes or 0) + (entry.returnMinutes or 0)))
+    if not isWorkshop then
+        section("tc_logbook_sectionTime")
+        local function minutes(value)
+            return value ~= nil and TheContractorJob.formatMinutes(value) or text("tc_logbook_notRecorded")
+        end
+        row(text("tc_logbook_travelOut"), minutes(entry.travelMinutes))
+        row(text("tc_logbook_fieldwork"), minutes(entry.fieldMinutes))
+        row(text("tc_logbook_returnWash"), minutes(entry.returnMinutes))
+        if entry.travelMinutes ~= nil or entry.fieldMinutes ~= nil or entry.returnMinutes ~= nil then
+            row(text("tc_logbook_total"), TheContractorJob.formatMinutes((entry.travelMinutes or 0) +
+                (entry.fieldMinutes or 0) + (entry.returnMinutes or 0)))
+        end
     end
 
     if #entry.supplies > 0 then

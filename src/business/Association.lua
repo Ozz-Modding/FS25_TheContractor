@@ -7,8 +7,12 @@
 --     CERTIFICATION_DISCOUNT off certification courses (054 - non-members
 --     can still take them, at full price) and cheaper legal cover.
 --   - Legal expenses insurance, LEGAL_COVER_COST a year (LEGAL_COVER_MEMBER_COST
---     for members). Like any policy it's priced once per term, so joining the
---     association mid-term only lowers it from the next renewal.
+--     for members). The member price comes and goes with the membership:
+--     joining or leaving mid-term reprices the rest of the cover's term
+--     (Overheads:repriceMidTerm), refunding or charging the difference on an
+--     annual policy. Leaving happens at a period change, before the cover's
+--     own bill, so a monthly policy pays that month at the full price while
+--     an annual one is charged from the month after.
 --
 -- Legal cover pays for pursuing an overdue invoice (Finances:requestPursuit).
 -- Without it the player instructs a solicitor: SOLICITOR_FEE plus
@@ -42,6 +46,7 @@ TheContractorAssociation.SOLICITOR_FEE = 500
 TheContractorAssociation.SOLICITOR_FEE_RATE = 0.05
 
 TheContractorAssociation.MESSAGE_KIND = "legal"
+TheContractorAssociation.REPRICE_NOTICE_MONTHS = 1
 
 table.insert(FinanceStats.statNames, "tcLegal")
 FinanceStats.statNameToIndex["tcLegal"] = #FinanceStats.statNames
@@ -66,6 +71,9 @@ function TheContractorAssociation:register(overheads, inbox)
             return TheContractorAssociation.MEMBERSHIP_COST
         end,
         descriptionAmounts = { TheContractorAssociation.MEMBERSHIP_COST },
+        onActiveChanged = function(farmId, isActive)
+            self:onMembershipChanged(farmId, isActive)
+        end,
     })
 
     overheads:registerOverhead({
@@ -84,6 +92,34 @@ function TheContractorAssociation:register(overheads, inbox)
         chipKey = "tc_inbox_chipLegal",
         chipTone = "info",
     })
+end
+
+-- Server: joining or leaving reprices legal cover for the rest of its term,
+-- with a notice saying what that came to.
+function TheContractorAssociation:onMembershipChanged(farmId, isMember)
+    local tc = g_currentMission.TheContractor
+    if not self:hasLegalCover(farmId) then
+        return
+    end
+
+    local adjustment = tc.Overheads:repriceMidTerm(farmId, TheContractorAssociation.LEGAL_COVER_KEY)
+    local state = tc.Overheads:getState(farmId, TheContractorAssociation.LEGAL_COVER_KEY)
+    local textKey, amount
+    if state.billing == TheContractorOverheads.BILLING.MONTHLY then
+        if state.cancelled then
+            return
+        end
+        textKey = isMember and "tc_legal_repricedJoinedMonthly" or "tc_legal_repricedLeftMonthly"
+        amount = TheContractorOverheads.getChargeAmount(state.termCost, state.billing)
+    elseif adjustment ~= 0 then
+        textKey = adjustment > 0 and "tc_legal_repricedJoinedRefund" or "tc_legal_repricedLeftCharge"
+        amount = math.abs(adjustment)
+    else
+        return
+    end
+
+    tc.Notices:publish(farmId, string.format(g_i18n:getText(textKey), g_i18n:formatMoney(amount, 0, true, true)),
+        TheContractorAssociation.REPRICE_NOTICE_MONTHS)
 end
 
 -- Query API ---------------------------------------------------------------------
