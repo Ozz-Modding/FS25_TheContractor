@@ -765,7 +765,9 @@ function MenuContractor:initialize()
 
     -- Workshop (100): the farm's accepted ADS repair contracts, with the
     -- highlighted one's checklist. ADS's progress is live, so the tab
-    -- refreshes itself while it's showing (see update).
+    -- refreshes itself while it's showing (see update). workshopView
+    -- (workshopViewSelector) swaps in the last completed ones instead.
+    self.workshopView = "current"
     self.workshopJobs = {}
     self.selectedWorkshopJobId = nil
     self.workshopDetailRows = {}
@@ -3544,11 +3546,36 @@ end
 
 -- Workshop (100) -----------------------------------------------------------
 
+-- The Workshop list's views, in workshopViewSelector's order.
+MenuContractor.WORKSHOP_VIEWS = { "current", "completed" }
+MenuContractor.WORKSHOP_VIEW_TEXTS = {
+    current = { view = "tc_workshop_viewCurrent", date = "tc_workshop_columnDue",
+        status = "tc_workshop_columnProgress", empty = "tc_workshop_empty" },
+    completed = { view = "tc_workshop_viewCompleted", date = "tc_workshop_columnCompleted",
+        status = "tc_workshop_columnProfit", empty = "tc_workshop_emptyCompleted" },
+}
 -- The farm's ADS repair contracts being worked on (accepted), soonest due
--- first.
+-- first; or, in the Completed view, the newest finished ones (completed or
+-- missed), as many as the save keeps (TheContractorJobs.KEEP_FINISHED_JOBS).
 function MenuContractor:buildWorkshopJobs(farmId)
     local workshopJobs = {}
-    for _, job in ipairs(g_currentMission.TheContractor.Jobs:getJobsByState(farmId, TheContractorJob.STATE.ACCEPTED)) do
+    local jobs = g_currentMission.TheContractor.Jobs
+    if self.workshopView == "completed" then
+        for _, state in ipairs({ TheContractorJob.STATE.COMPLETED, TheContractorJob.STATE.MISSED }) do
+            for _, job in ipairs(jobs:getJobsByState(farmId, state)) do
+                if job:isWorkshop() then
+                    table.insert(workshopJobs, job)
+                end
+            end
+        end
+        TheContractorJobs.sortNewestFinished(workshopJobs)
+        for i = #workshopJobs, TheContractorJobs.KEEP_FINISHED_JOBS + 1, -1 do
+            workshopJobs[i] = nil
+        end
+        return workshopJobs
+    end
+
+    for _, job in ipairs(jobs:getJobsByState(farmId, TheContractorJob.STATE.ACCEPTED)) do
         if job:isWorkshop() then
             table.insert(workshopJobs, job)
         end
@@ -3564,6 +3591,23 @@ end
 
 function MenuContractor:refreshWorkshopState(farmId)
     self.workshopContent:setVisible(true)
+
+    local viewIndex = 1
+    local viewTexts = {}
+    for i, view in ipairs(MenuContractor.WORKSHOP_VIEWS) do
+        if view == self.workshopView then
+            viewIndex = i
+        end
+        table.insert(viewTexts, g_i18n:getText(MenuContractor.WORKSHOP_VIEW_TEXTS[view].view))
+    end
+    self.workshopView = MenuContractor.WORKSHOP_VIEWS[viewIndex]
+    self.workshopViewSelector:setTexts(viewTexts)
+    self.workshopViewSelector:setState(viewIndex)
+
+    local texts = MenuContractor.WORKSHOP_VIEW_TEXTS[self.workshopView]
+    self.workshopColumnDate:setText(g_i18n:getText(texts.date))
+    self.workshopColumnStatus:setText(g_i18n:getText(texts.status))
+    self.workshopEmptyText:setText(g_i18n:getText(texts.empty))
 
     -- reloadData re-raises the selection callback with the old index, so
     -- the wanted job is held on to first (as the Supplies tab does).
@@ -3593,8 +3637,15 @@ function MenuContractor:refreshWorkshopState(farmId)
     self:updateWorkshopJobDetails()
 end
 
+function MenuContractor:onClickWorkshopView()
+    self.workshopView = MenuContractor.WORKSHOP_VIEWS[self.workshopViewSelector:getState()] or "current"
+    self.selectedWorkshopJobId = nil
+    self:refreshWorkshopState(g_currentMission:getFarmId())
+end
+
 -- From the Calendar's Job details: the Workshop tab with the job picked.
 function MenuContractor:showWorkshopJob(jobId)
+    self.workshopView = "current"
     self.selectedWorkshopJobId = jobId
     self.subCategoryPaging:setState(MenuContractor.SUB_CATEGORY.WORKSHOP, true)
     self:setMenuButtonInfoDirty()
@@ -3615,23 +3666,105 @@ function MenuContractor:populateWorkshopCell(index, cell)
         return
     end
     cell:getAttribute("machine"):setText(job.workshop.vehicleName or job:getLocationText())
+    local isCompleted = job.state == TheContractorJob.STATE.COMPLETED
+    local profitCell = cell:getAttribute("profit")
+    profitCell:setVisible(isCompleted)
+    if isCompleted then
+        cell:getAttribute("due"):setText(formatCompletedAt(job.completedAt))
+        local _, _, profit = MenuContractor.getWorkshopEarnings(job)
+        profitCell:setText(profit ~= nil and g_i18n:formatMoney(profit, 0, true, true) or "-")
+        setChip(cell:getAttribute("chip"), cell:getAttribute("chipText"), nil)
+        return
+    elseif job.state == TheContractorJob.STATE.MISSED then
+        -- The day it was due, and a Missed chip where the profit would be.
+        cell:getAttribute("due"):setText(formatTargetDate(job.targetPeriod, job.targetDayInPeriod))
+        setChip(cell:getAttribute("chip"), cell:getAttribute("chipText"), g_i18n:getText("tc_calendar_jobMissed"),
+            "bad")
+        return
+    end
     cell:getAttribute("due"):setText(formatTargetDate(job.targetPeriod, job.targetDayInPeriod))
     local chipText, chipTone = self:getJobStatusChip(job)
     setChip(cell:getAttribute("chip"), cell:getAttribute("chipText"), chipText, chipTone)
 end
 
+-- A completed workshop job's money: ADS's quote (the estimated cost), what
+-- the customer was billed (the quote plus our margin) and the difference.
+-- Both at the price level of their day, as they were taken. The quote is
+-- nil (and so the profit) if there isn't one, as on a save from before it
+-- was kept.
+function MenuContractor.getWorkshopEarnings(job)
+    local billed = job.paymentAmount or job:getPrice()
+    local quote = job.workshop ~= nil and job.workshop.quotePrice or nil
+    if quote == nil or quote <= 0 then
+        return nil, billed, nil
+    end
+    return quote, billed, billed - quote
+end
+
+-- The Completed view's rows: the job, then its money. A missed job earned
+-- nothing, so it shows what the work would have cost and nothing billed.
+function MenuContractor:getCompletedWorkshopRows(job)
+    local rows = {}
+    local function add(label, value)
+        table.insert(rows, { label = label, value = value or "" })
+    end
+    local function money(amount)
+        return amount ~= nil and g_i18n:formatMoney(amount, 0, true, true) or "-"
+    end
+
+    table.insert(rows, { section = g_i18n:getText("tc_jobDetails_sectionJob") })
+    add(g_i18n:getText("tc_jobDetails_job"), job:getDisplayTitle())
+    add(g_i18n:getText("tc_jobDetails_machine"), job:getLocationText())
+    add(g_i18n:getText("tc_repair_detailWork"), g_i18n:getText("tc_repair_work_" .. (job.workshop.kind or "repair")))
+    if job.state == TheContractorJob.STATE.MISSED then
+        add(g_i18n:getText("tc_jobDetails_due"), formatTargetDate(job.targetPeriod, job.targetDayInPeriod))
+        table.insert(rows, { section = g_i18n:getText("tc_workshop_sectionEarnings") })
+        add(g_i18n:getText("tc_workshop_estimatedCost"), money(MenuContractor.getWorkshopEarnings(job)))
+        add(g_i18n:getText("tc_workshop_billedAmount"), g_i18n:getText("tc_workshop_billedNothing"))
+        return rows
+    end
+    add(g_i18n:getText("tc_workshop_columnCompleted"), formatCompletedAt(job.completedAt))
+
+    local quote, billed, profit = MenuContractor.getWorkshopEarnings(job)
+    table.insert(rows, { section = g_i18n:getText("tc_workshop_sectionEarnings") })
+    add(g_i18n:getText("tc_workshop_estimatedCost"), money(quote))
+    add(g_i18n:getText("tc_workshop_billedAmount"), money(billed))
+    local profitText = money(profit)
+    if profit ~= nil and quote > 0 then
+        profitText = string.format("%s (%+.0f%%)", profitText, profit / quote * 100)
+    end
+    add(g_i18n:getText("tc_workshop_profit"), profitText)
+    return rows
+end
+
 function MenuContractor:updateWorkshopJobDetails()
     local job = self:getSelectedWorkshopJob()
     self.workshopDetailsBox:setVisible(job ~= nil)
-    self.workshopDetailRows = job ~= nil and self:getJobDetailRows(job) or {}
+    local isCompleted = job ~= nil and job.state == TheContractorJob.STATE.COMPLETED
+    local isMissed = job ~= nil and job.state == TheContractorJob.STATE.MISSED
+    if job == nil then
+        self.workshopDetailRows = {}
+    elseif isCompleted or isMissed then
+        self.workshopDetailRows = self:getCompletedWorkshopRows(job)
+    else
+        self.workshopDetailRows = self:getJobDetailRows(job)
+    end
     self.workshopDetailTable:reloadData()
     if job == nil then
         return
     end
 
     self.workshopDetailTitle:setText(job:getDisplayTitle())
-    setChip(self.workshopDetailChip, self.workshopDetailChipText, self:getJobStatusChip(job))
-    self.workshopDoneWhen:setText(MenuContractor.getWorkshopDoneWhenText(job))
+    if isCompleted then
+        setChip(self.workshopDetailChip, self.workshopDetailChipText, g_i18n:getText("tc_logbook_completed"), "good")
+        self.workshopDoneWhen:setText(g_i18n:getText("tc_workshop_earningsNote"))
+    elseif isMissed then
+        setChip(self.workshopDetailChip, self.workshopDetailChipText, g_i18n:getText("tc_calendar_jobMissed"), "bad")
+        self.workshopDoneWhen:setText(g_i18n:getText("tc_workshop_missedNote"))
+    else
+        setChip(self.workshopDetailChip, self.workshopDetailChipText, self:getJobStatusChip(job))
+        self.workshopDoneWhen:setText(MenuContractor.getWorkshopDoneWhenText(job))
+    end
 end
 
 -- Section titles and label/value rows, a chip at the end of the row.
@@ -6493,7 +6626,8 @@ function MenuContractor:getSupplyDetailRows(supply)
     if #supply.pallets > 0 then
         add.section("tc_supplies_sectionPallets")
         for _, group in ipairs(supply.pallets) do
-            add.row(string.format(text("tc_supplies_palletGroup"), group.name, group.count),
+            local labelKey = group.isStored and "tc_supplies_storedPalletGroup" or "tc_supplies_palletGroup"
+            add.row(string.format(text(labelKey), group.name, group.count),
                 TCJobSupplies.formatQuantity(fillTypeIndex, group.amount))
         end
     end

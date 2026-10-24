@@ -204,3 +204,23 @@ test("jobs held for a supply are listed against it", function()
     assertEquals(supply.heldJobs[1], held, "the held one")
     assertEquals(#findSupply(TCSupplyStock.getSupplies(1), FillType.SEEDS).heldJobs, 0, "seed")
 end)
+
+test("pallets in an object storage get a row named after it", function()
+    local world = setup()
+    world:addVehicle({ name = "IBC", isPallet = true,
+        fillUnits = { { capacity = 1000, level = 200, fillType = FillType.DIESEL } } })
+    world:addObjectStorage({ name = "Storage Rack", pallets = {
+        { fillType = FillType.DIESEL, fillLevel = 1000 },
+        { fillType = FillType.DIESEL, fillLevel = 600 },
+    } })
+
+    local supply = findSupply(TCSupplyStock.getSupplies(1), FillType.DIESEL)
+    assertEquals(supply.amount, TCJobSupplies.getFarmStock(1, FillType.DIESEL), "same as getFarmStock")
+    assertEquals(supply.amount, 1800, "amount")
+    assertEquals(#supply.pallets, 2, "loose group and the rack")
+    assertEquals(supply.pallets[2].name, "Storage Rack", "named after the storage")
+    assertEquals(supply.pallets[2].count, 2, "count")
+    assertEquals(supply.pallets[2].amount, 1600, "amount")
+    assertTrue(supply.pallets[2].isStored and not supply.pallets[1].isStored, "stored flag")
+    assertEquals(supply.capacity, nil, "a pallet storage adds no capacity")
+end)

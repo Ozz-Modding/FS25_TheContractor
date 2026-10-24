@@ -288,7 +288,7 @@
 		<text name="tc_unallocate_problemGone" text="That job no longer exists."/>
 		<text name="tc_unallocate_problemState" text="Only an allocated or in-progress job can be unallocated."/>
 		<text name="tc_logbook_earlierCrew" text="Earlier crew"/>
-		<text name="tc_job_missedNotification" text="Missed deadline: %s on Field %s went uncompleted."/>
+		<text name="tc_job_missedNotification" text="Job failed: %s on Field %s wasn't done by its deadline."/>
 		<text name="tc_dispatch_noVehicleReady" text="None of the allocated equipment can be driven by the worker (is it free, and can it do this job?)."/>
 		<text name="tc_dispatch_failedNotification" text="Could not dispatch %s on Field %s: %s"/>
 		<text name="tc_watchdog_retriedNotification" text="Your worker got stuck on a %s job on Field %s - reset and dispatched again."/>
@@ -448,7 +448,7 @@
 		<text name="tc_repair_problemNoADS" text="Advanced Damage System isn't loaded, so this job can't be taken on."/>
 		<text name="tc_repair_requires" text="You haven't the equipment for this job yet. Requires: %s."/>
 		<text name="tc_repair_summaryLine" text="%s on the %s"/>
-		<text name="tc_repair_missedNotification" text="Missed deadline: the %s in your repair zone went unfinished, and the customer has taken the machine back."/>
+		<text name="tc_repair_missedNotification" text="Job failed: the %s in your repair zone wasn't finished by its deadline, and the customer has taken the machine back."/>
 		<text name="tc_repair_acceptedInfo" text="Job accepted: %s for %s. It's in your repair zone. Inspect it to find what's wrong, then fix it in the workshop. The Workshop tab has a checklist of what's left."/>
 		<text name="tc_repair_acceptedInfo_maintenance" text="Job accepted: %s for %s. It's in your repair zone. Service it in the workshop: the Workshop tab has a checklist of what's left."/>
 		<text name="tc_repair_rejectedInfo" text="Negotiation failed: the customer has taken the %s elsewhere."/>
@@ -473,6 +473,18 @@
 		<text name="tc_workshop_columnProgress" text="Progress"/>
 		<text name="tc_workshop_empty" text="No customers' machines in for work. Repair, service and breakdown offers come in to the Inbox."/>
 		<text name="tc_workshop_sectionChecklist" text="Checklist"/>
+		<text name="tc_workshop_viewCurrent" text="Current work"/>
+		<text name="tc_workshop_viewCompleted" text="Completed &amp; failed"/>
+		<text name="tc_workshop_columnCompleted" text="Finished"/>
+		<text name="tc_workshop_columnProfit" text="Profit"/>
+		<text name="tc_workshop_emptyCompleted" text="No finished workshop jobs yet."/>
+		<text name="tc_workshop_sectionEarnings" text="Earnings"/>
+		<text name="tc_workshop_estimatedCost" text="Estimated cost"/>
+		<text name="tc_workshop_billedAmount" text="Billed amount"/>
+		<text name="tc_workshop_profit" text="Profit"/>
+		<text name="tc_workshop_earningsNote" text="The estimated cost is ADS's quote for the work. The customer was billed that plus your margin, and the difference is the profit."/>
+		<text name="tc_workshop_missedNote" text="This job failed: it wasn't done by the day it was due, so the customer paid nothing and collected their machine."/>
+		<text name="tc_workshop_billedNothing" text="Nothing"/>
 		<text name="tc_repair_progressSoFar" text="%d fixed so far"/>
 		<text name="tc_repair_progressNotInspected" text="Not inspected"/>
 		<text name="tc_repair_todo_repair" text="Repair it"/>
@@ -501,7 +513,7 @@
 		<text name="tc_breakdown_kit_mobile" text="Mobile workshop"/>
 		<text name="tc_breakdown_chipBrokenDown" text="Broken down"/>
 		<text name="tc_breakdown_acceptedInfo" text="Job accepted: %s for %s. It's at %s, marked on the map. Fix it there before the day's out: the Workshop tab has a checklist."/>
-		<text name="tc_breakdown_missedNotification" text="Missed deadline: a customer's machine broken down in the field went unfixed, and they've had it recovered."/>
+		<text name="tc_breakdown_missedNotification" text="Job failed: a customer's machine broken down in the field wasn't fixed in time, and they've had it recovered."/>
 		<text name="tc_claims_cause_tampering" text="parts taken or swapped while it was in for repair"/>
 		<text name="tc_drivers_customerVehicle" text="%s is a customer's machine in for repair, so AI helpers, AutoDrive, Courseplay and Follow Me can't drive it."/>
 		<text name="tc_drivers_customerVehicleDialog" text="This is a customer's machine in for repair, so AI helpers, AutoDrive, Courseplay and Follow Me can't drive it."/>
@@ -1083,7 +1095,7 @@
 		<text name="tc_logbook_columnLastUsedBy" text="Last used by"/>
 		<text name="tc_logbook_columnLastUsed" text="Last used"/>
 		<text name="tc_logbook_columnCondition" text="Condition"/>
-		<text name="tc_logbook_noJobs" text="No finished jobs yet. Completed and missed jobs are recorded here."/>
+		<text name="tc_logbook_noJobs" text="No finished jobs yet. Completed and failed jobs are recorded here."/>
 		<text name="tc_logbook_noMatches" text="No jobs match this filter"/>
 		<text name="tc_logbook_noVehicles" text="The farm has no vehicles"/>
 		<text name="tc_logbook_showing" text="Showing: %s"/>
@@ -1092,7 +1104,7 @@
 		<text name="tc_logbook_sortButton" text="Sort: %s"/>
 		<text name="tc_logbook_filterAll" text="All jobs"/>
 		<text name="tc_logbook_filterCompleted" text="Completed"/>
-		<text name="tc_logbook_filterMissed" text="Missed"/>
+		<text name="tc_logbook_filterMissed" text="Failed"/>
 		<text name="tc_logbook_sort_lastUsed" text="Last used"/>
 		<text name="tc_logbook_sort_hours" text="Most hours"/>
 		<text name="tc_logbook_sort_faults" text="Most faults"/>
@@ -1109,11 +1121,11 @@
 		<text name="tc_logbook_sectionYear" text="Last 12 months"/>
 		<text name="tc_logbook_sectionHistory" text="History"/>
 		<text name="tc_logbook_completed" text="Completed"/>
-		<text name="tc_logbook_missed" text="Missed"/>
+		<text name="tc_logbook_missed" text="Failed"/>
 		<text name="tc_logbook_completedOn" text="Completed"/>
-		<text name="tc_logbook_missedOn" text="Missed"/>
+		<text name="tc_logbook_missedOn" text="Failed"/>
 		<text name="tc_logbook_field" text="Field"/>
-		<text name="tc_logbook_progress" text="Done when missed"/>
+		<text name="tc_logbook_progress" text="Done when it failed"/>
 		<text name="tc_logbook_quality" text="Quality"/>
 		<text name="tc_logbook_interventions" text="Got stuck"/>
 		<text name="tc_logbook_notAllocated" text="Never allocated"/>
@@ -1207,6 +1219,7 @@
 		<text name="tc_supplies_partTier" text="%s (%s)"/>
 		<text name="tc_supplies_storedOf" text="%s / %s"/>
 		<text name="tc_supplies_palletGroup" text="%s (%d)"/>
+		<text name="tc_supplies_storedPalletGroup" text="%s (%d stored)"/>
 		<text name="tc_supplies_sectionStock" text="Stock"/>
 		<text name="tc_supplies_sectionStorage" text="Storage"/>
 		<text name="tc_supplies_sectionPallets" text="Pallets"/>

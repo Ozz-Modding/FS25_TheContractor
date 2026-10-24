@@ -697,6 +697,88 @@ test("a workshop job streams, saves and loads its machine and contract", functio
     assertEquals(loaded.workshop.vehicleId, vehicle.id)
 end)
 
+test("the save drops declined jobs and keeps the newest finished of each kind, and any still named", function()
+    local world, tc = setup()
+    local keep = TheContractorJobs.KEEP_FINISHED_JOBS
+    tc.Finances.invoicesById = {}
+    tc.Claims.pendingClaims = {}
+    tc.Cooldown = { entriesByFarm = { [1] = {} } }
+    tc.RandomEvents = { incidents = {} }
+    tc.Inbox.messagesById = {}
+
+    local function finished(i, jobType, workshop, state)
+        local job = tc.Jobs:createJob(1, jobType, workshop ~= nil and 0 or 5, 1, 1, 1, 1000, true, nil, i, false,
+            nil, nil, workshop)
+        job.state = state or TheContractorJob.STATE.COMPLETED
+        if job.state == TheContractorJob.STATE.COMPLETED then
+            job.completedAt = i * 24 * 60
+        end
+        return job
+    end
+
+    -- Workshop jobs: keep + 6 finished, the first the oldest (a missed one,
+    -- finishing at the end of its deadline day).
+    local workshop = {}
+    for i = 1, keep + 6 do
+        local state = i == 1 and TheContractorJob.STATE.MISSED or nil
+        table.insert(workshop, finished(i, "adsRepair", { vehicleName = "Machine " .. i, kind = "repair",
+            quotePrice = 800 }, state))
+    end
+    -- Field jobs: keep + 2, the oldest two finished first.
+    local field = {}
+    for i = 1, keep + 2 do
+        table.insert(field, finished(i, "plow"))
+    end
+    local declined = finished(500, "plow", nil, TheContractorJob.STATE.DECLINED)
+    local offered = tc.Jobs:createJob(1, "plow", 5, 1, 1, 1, 1000, true, nil, 1)
+    local accepted = tc.Jobs:createJob(1, "adsRepair", 0, 1, 1, 1, 1000, true, nil, 1, false, nil, nil,
+        { vehicleName = "Open", kind = "repair", quotePrice = 800 })
+    accepted.state = TheContractorJob.STATE.ACCEPTED
+
+    -- Old ones something still names.
+    tc.Finances.invoicesById[1] = { id = 1, jobId = workshop[2].id }
+    tc.Claims.pendingClaims[1] = { jobId = workshop[3].id }
+    tc.RepairContracts.pendingClaims = { { jobId = workshop[4].id } }
+    tc.Cooldown.entriesByFarm[1][1] = { id = 1, jobId = workshop[5].id }
+    tc.RandomEvents.incidents[1] = { id = 1, data = { jobId = workshop[6].id } }
+    tc.Inbox.messagesById[1] = { id = 1, payload = { jobId = field[1].id } }
+    field[2].graceRemainingMs = 1000
+
+    local xmlFile = {}
+    tc.Jobs:saveToXmlFile(xmlFile)
+    local jobs = TheContractorJobs.new()
+    jobs:loadFromXMLFile(xmlFile)
+    local function isSaved(job) return jobs:getJob(1, job.id) ~= nil end
+
+    assertTrue(not isSaved(workshop[1]), "the oldest workshop job goes")
+    assertTrue(isSaved(workshop[2]), "an invoice names it")
+    assertTrue(isSaved(workshop[3]), "a claim is pending on it")
+    assertTrue(isSaved(workshop[4]), "a tampering claim is pending on it")
+    assertTrue(isSaved(workshop[5]), "its cooldown is running")
+    assertTrue(isSaved(workshop[6]), "an incident names it")
+    assertTrue(isSaved(workshop[7]) and isSaved(workshop[keep + 6]), "the newest " .. keep .. " stay")
+    assertTrue(isSaved(field[1]), "an inbox message names it")
+    assertTrue(isSaved(field[2]), "its grace period is running")
+    assertTrue(isSaved(field[3]) and isSaved(field[keep + 2]), "field jobs keep their own " .. keep)
+    assertTrue(not isSaved(declined), "declined jobs are never saved")
+    assertTrue(isSaved(offered) and isSaved(accepted), "unfinished jobs always stay")
+    assertEquals(jobs.nextJobId, tc.Jobs.nextJobId, "ids carry on from where they were")
+
+    -- With nothing naming them, the old ones go.
+    tc.Finances.invoicesById, tc.Claims.pendingClaims, tc.RepairContracts.pendingClaims = {}, {}, {}
+    tc.Cooldown.entriesByFarm[1], tc.RandomEvents.incidents, tc.Inbox.messagesById = {}, {}, {}
+    field[2].graceRemainingMs = nil
+    xmlFile = {}
+    tc.Jobs:saveToXmlFile(xmlFile)
+    jobs = TheContractorJobs.new()
+    jobs:loadFromXMLFile(xmlFile)
+    for i = 1, 6 do
+        assertTrue(not isSaved(workshop[i]), "workshop job " .. i)
+    end
+    assertTrue(not isSaved(field[1]) and not isSaved(field[2]))
+    assertEquals(#jobs:getAllJobs(1), 2 * keep + 2)
+end)
+
 test("the queue, collections and claims survive a save", function()
     local world, tc = setup()
     local zone = world:addZone()
