@@ -35,6 +35,9 @@ source(TheContractor.dir .. "src/util/TCEconomyScale.lua")
 source(TheContractor.dir .. "src/util/TCCalendar.lua")
 source(TheContractor.dir .. "src/util/TCSignImages.lua")
 source(TheContractor.dir .. "src/util/TCCompanyLogo.lua")
+-- Now, not in loadMap: the signs' store items list signs/ before the map
+-- loads, so the examples have to be there already.
+TCCompanyLogo.createSettingsFolder()
 source(TheContractor.dir .. "src/util/TCConsole.lua")
 source(TheContractor.dir .. "src/util/TCWorkerAppearance.lua")
 source(TheContractor.dir .. "src/util/TCNames.lua")
@@ -193,8 +196,6 @@ end
 function TheContractor:loadMap()
     g_currentMission.TheContractor = self
     self.hasResolvedSavedVehicles = false
-
-    TCCompanyLogo.createSettingsFolder()
 
     self.Settings = TheContractorSettings.new()
     -- 086: this machine's own display settings.
