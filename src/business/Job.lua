@@ -499,6 +499,29 @@ function TheContractorJob:getDisplayTitle()
     return string.format("%s (%s)", typeText, cropTitle)
 end
 
+-- A table row's Type cell: the display title, but a workshop job's is just
+-- its type, since a machine name doesn't fit the column (the details
+-- panel names the machine).
+function TheContractorJob:getListTitle()
+    if self.workshop ~= nil then
+        return self:getTypeText()
+    end
+    return self:getDisplayTitle()
+end
+
+-- A table row's Field cell: the field's name, a breakdown's field, or "-"
+-- for a machine in one of our repair zones.
+function TheContractorJob:getListFieldText()
+    if self.workshop ~= nil then
+        if self.workshop.fieldId ~= nil then
+            local field = g_fieldManager:getFieldById(self.workshop.fieldId)
+            return field ~= nil and field:getName() or tostring(self.workshop.fieldId)
+        end
+        return "-"
+    end
+    return self:getLocationText()
+end
+
 function TheContractorJob:canTransitionTo(newState)
     local allowed = TheContractorJob.VALID_TRANSITIONS[self.state]
     return allowed ~= nil and allowed[newState] == true

@@ -316,6 +316,8 @@ function TheContractorLogbook:buildJobEntry(job, outcome, reputation)
         fieldId = job.fieldId,
         -- 100: a workshop job's machine, shown in place of a field.
         location = job.workshop ~= nil and job:getLocationText() or nil,
+        -- 101: a breakdown's field, for the list's Field column.
+        workshopFieldId = job.workshop ~= nil and job.workshop.fieldId or nil,
         requiredSkillLevel = job.requiredSkillLevel,
         day = getToday(),
         completedAt = now,
@@ -1094,6 +1096,7 @@ function TheContractorLogbook.writeJobEntry(streamId, entry)
 
     -- 100.
     writeString(streamId, entry.location)
+    streamWriteInt32(streamId, entry.workshopFieldId or 0)
 end
 
 function TheContractorLogbook.readJobEntry(streamId)
@@ -1160,6 +1163,8 @@ function TheContractorLogbook.readJobEntry(streamId)
     end
 
     entry.location = readString(streamId)
+    local workshopFieldId = streamReadInt32(streamId)
+    entry.workshopFieldId = workshopFieldId ~= 0 and workshopFieldId or nil
     return entry
 end
 
@@ -1287,6 +1292,9 @@ local function saveJobEntry(xmlFile, key, entry)
     if entry.location ~= nil then
         setXMLString(xmlFile, key .. "#location", entry.location)
     end
+    if entry.workshopFieldId ~= nil then
+        setXMLInt(xmlFile, key .. "#workshopFieldId", entry.workshopFieldId)
+    end
     if entry.requiredSkillLevel ~= nil then
         setXMLInt(xmlFile, key .. "#requiredSkill", entry.requiredSkillLevel)
     end
@@ -1368,6 +1376,7 @@ local function loadJobEntry(xmlFile, key)
         title = getXMLString(xmlFile, key .. "#title"),
         fieldId = Utils.getNoNil(getXMLInt(xmlFile, key .. "#fieldId"), 0),
         location = getXMLString(xmlFile, key .. "#location"),
+        workshopFieldId = getXMLInt(xmlFile, key .. "#workshopFieldId"),
         requiredSkillLevel = getXMLInt(xmlFile, key .. "#requiredSkill"),
         day = Utils.getNoNil(getXMLInt(xmlFile, key .. "#day"), 0),
         completedAt = getXMLFloat(xmlFile, key .. "#completedAt"),

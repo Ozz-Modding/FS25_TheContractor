@@ -942,7 +942,11 @@
 		<text name="tc_overhead_tradeAssociation" text="Agricultural Contractors' Association"/>
 		<text name="tc_overhead_tradeAssociation_desc" text="Trade association membership, %s a year. Members earn 5%% more reputation per job, get 25%% off certification courses and cheaper legal cover."/>
 		<text name="tc_overhead_legalExpenses" text="Legal expenses insurance"/>
-		<text name="tc_overhead_legalExpenses_desc" text="Pursue overdue invoices free, with better odds of recovery. %s a year, or %s for association members (from the next renewal)."/>
+		<text name="tc_overhead_legalExpenses_desc" text="Pursue overdue invoices free, with better odds of recovery. %s a year, or %s for association members (joining or leaving reprices the rest of the year)."/>
+		<text name="tc_legal_repricedJoinedRefund" text="Legal expenses insurance repriced for association members: %s refunded for the rest of the year."/>
+		<text name="tc_legal_repricedJoinedMonthly" text="Legal expenses insurance repriced for association members: %s a month from now on."/>
+		<text name="tc_legal_repricedLeftCharge" text="Legal expenses insurance back at the full price now you've left the association: %s charged for the rest of the year."/>
+		<text name="tc_legal_repricedLeftMonthly" text="Legal expenses insurance back at the full price now you've left the association: %s a month from now on."/>
 		<text name="tc_legal_pursueButton" text="Pursue"/>
 		<text name="tc_legal_pursueConfirmCovered" text="Pursue the invoice for %s (%s)? Your legal cover handles it at no cost. Expect an outcome in 1-2 months."/>
 		<text name="tc_legal_pursueConfirmSolicitor" text="Instruct a solicitor to recover the invoice for %s (%s)? Their fee and the court fee come to %s, paid now and not refunded if it fails. Expect an outcome in 1-2 months."/>

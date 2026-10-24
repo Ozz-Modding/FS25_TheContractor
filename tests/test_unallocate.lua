@@ -305,6 +305,18 @@ test("the earlier crew goes on the job's logbook entry", function()
     assertEquals(TheContractorLogbook.readJobEntry(stream).earlierCrew, "Farmhand")
 end)
 
+test("a breakdown entry's field streams, and a workshop entry's lack of one", function()
+    local world = setup()
+    local stream = world:newStream()
+    TheContractorLogbook.writeJobEntry(stream, { jobId = 1, farmId = 1, outcome = "completed", fieldId = 0, day = 1,
+        jobType = "adsBreakdown", location = "Tractor, Field 12", workshopFieldId = 12, crew = {}, equipment = {},
+        supplies = {} })
+    TheContractorLogbook.writeJobEntry(stream, { jobId = 2, farmId = 1, outcome = "completed", fieldId = 0, day = 1,
+        jobType = "adsRepair", location = "Tractor", crew = {}, equipment = {}, supplies = {} })
+    assertEquals(TheContractorLogbook.readJobEntry(stream).workshopFieldId, 12)
+    assertEquals(TheContractorLogbook.readJobEntry(stream).workshopFieldId, nil)
+end)
+
 test("the carry-on flag survives a save", function()
     local world, tc = setup()
     local job = addJob(world, tc, { done = 40 })

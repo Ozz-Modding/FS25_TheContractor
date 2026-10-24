@@ -465,7 +465,7 @@ test("a vehicle without ADS, or without the system, has no anti-theft", function
     g_modIsLoaded = nil
 end)
 
-test("a fitted vehicle is a tenth as likely to be picked and counts a tenth in the rate", function()
+test("a fitted vehicle is a tenth as likely to be picked but counts in full in the rate", function()
     local world, tc = setup()
     world:addMachine({ name = "tractor", category = "TRACTORSM" })
     world:addMachine({ name = "fitted", category = "TRACTORSM", antiTheft = true })
@@ -476,20 +476,20 @@ test("a fitted vehicle is a tenth as likely to be picked and counts a tenth in t
     assertEquals(weights.tractor, 3, "unfitted")
     assertNear(weights.fitted, 0.3, 1e-9, "fitted")
 
-    -- 1.1 vehicles: factor 0.5 + 1.1 / 20.
-    assertNear(tc.Theft:getRatePerPeriod(1), 0.02 * (0.5 + 1.1 / 20), 1e-9, "rate")
+    -- 2 vehicles: factor 0.5 + 2 / 20.
+    assertNear(tc.Theft:getRatePerPeriod(1), 0.02 * (0.5 + 2 / 20), 1e-9, "rate")
 end)
 
-test("a fully fitted fleet is stolen from less often", function()
+test("a fully fitted fleet is stolen from as often as an unfitted one", function()
     local world, tc = setup()
-    for i = 1, 40 do
+    for i = 1, 4 do
         world:addMachine({ name = "tractor" .. i, antiTheft = true })
     end
-    -- 4 vehicles' worth: factor 0.7, where 40 unfitted would be capped at 2.
+    -- Factor 0.5 + 4 / 20.
     assertNear(tc.Theft:getRatePerPeriod(1), 0.02 * 0.7, 1e-9, "rate")
 end)
 
-test("anti-theft is judged on the day of the theft and recovers 95% of the time", function()
+test("anti-theft is judged on the day of the theft and recovers 70% of the time", function()
     local world, tc = setup()
     local tractor = world:addMachine({ name = "Fendt 724", antiTheft = true })
     local incident = tc.RandomEvents:triggerEvent(1, "theft")
@@ -498,9 +498,9 @@ test("anti-theft is judged on the day of the theft and recovers 95% of the time"
     tractor.states.ANTI_THEFT_SYSTEM = nil
     assertEquals(incident.data.antiTheft, true, "still counts once it's gone")
 
-    assertEquals(withRoll(0.9, function() return tc.Theft:rollRecovered(true) end), true, "0.9: recovered with it")
-    assertEquals(withRoll(0.9, function() return tc.Theft:rollRecovered(false) end), false, "0.9: lost without")
-    assertEquals(withRoll(0.96, function() return tc.Theft:rollRecovered(true) end), false, "0.96: lost even with it")
+    assertEquals(withRoll(0.6, function() return tc.Theft:rollRecovered(true) end), true, "0.6: recovered with it")
+    assertEquals(withRoll(0.6, function() return tc.Theft:rollRecovered(false) end), false, "0.6: lost without")
+    assertEquals(withRoll(0.75, function() return tc.Theft:rollRecovered(true) end), false, "0.75: lost even with it")
     tc.Theft.forcedOutcome = TheContractorTheft.OUTCOME.LOST
     assertEquals(withRoll(0, function() return tc.Theft:rollRecovered(true) end), false, "a forced outcome still wins")
 end)
@@ -509,8 +509,8 @@ test("the police report reads the flag from the incident", function()
     local world, tc = setup()
     world:addMachine({ name = "Fendt 724", antiTheft = true })
     tc.RandomEvents:triggerEvent(1, "theft")
-    withRoll(0.9, function() world:runUntilClosed() end)
-    assertEquals(world.messages[2].titleKey, "tc_theft_recoveredTitle", "a 0.9 roll recovers a fitted vehicle")
+    withRoll(0.6, function() world:runUntilClosed() end)
+    assertEquals(world.messages[2].titleKey, "tc_theft_recoveredTitle", "a 0.6 roll recovers a fitted vehicle")
 end)
 
 test("the tracker's messages: found by it, or it went dead", function()

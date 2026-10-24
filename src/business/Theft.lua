@@ -20,8 +20,10 @@
 -- really gets stolen (CATEGORY_WEIGHTS).
 --
 -- 096: a vehicle with FS25_AdvancedDamageSystem's anti-theft system fitted
--- (hasAntiTheft) counts ANTI_THEFT_WEIGHT of its weight, and of a vehicle
--- in the fleet factor, and is recovered at ANTI_THEFT_RECOVERY_CHANCE.
+-- (hasAntiTheft) counts ANTI_THEFT_WEIGHT of its weight and is recovered at
+-- ANTI_THEFT_RECOVERY_CHANCE. It still counts as a whole vehicle in the
+-- fleet factor: thieves don't know it's fitted until they've taken it, and
+-- it keeps enough risk that insuring a fitted fleet still makes sense.
 -- Whether it had one is judged on the day of the theft (data.antiTheft).
 --
 -- The rate is per month (068): BASE_RATE_PER_PERIOD times a fleet factor
@@ -61,7 +63,7 @@ TheContractorTheft.RECOVERY_CHANCE = 0.35
 TheContractorTheft.ANTI_THEFT_MOD = "FS25_AdvancedDamageSystem"
 TheContractorTheft.ANTI_THEFT_STATE = "ANTI_THEFT_SYSTEM"
 TheContractorTheft.ANTI_THEFT_WEIGHT = 0.1
-TheContractorTheft.ANTI_THEFT_RECOVERY_CHANCE = 0.95
+TheContractorTheft.ANTI_THEFT_RECOVERY_CHANCE = 0.7
 
 -- A recovered vehicle comes back with this much more damage (0-1, on top of
 -- what it had), and filthy.
@@ -323,8 +325,7 @@ function TheContractorTheft.isInUse(vehicle)
 end
 
 -- The farm's vehicles that could be stolen right now, each with its weight
--- and its share of a vehicle in the fleet factor (096: less with an
--- anti-theft system).
+-- (096: less with an anti-theft system).
 function TheContractorTheft:getEligibleVehicles(farmId)
     local result = {}
     local jobVehicleIds = TheContractorTheft.getJobVehicleIds()
@@ -337,14 +338,13 @@ function TheContractorTheft:getEligibleVehicles(farmId)
             local categoryName = TCEquipmentClass.getCategory(vehicle)
             local weight = categoryName ~= nil and TheContractorTheft.CATEGORY_WEIGHTS[categoryName] or nil
             local share = TheContractorTheft.hasAntiTheft(vehicle) and TheContractorTheft.ANTI_THEFT_WEIGHT or 1
-            table.insert(result, { vehicle = vehicle, weight = (weight or TheContractorTheft.DEFAULT_WEIGHT) * share,
-                share = share })
+            table.insert(result, { vehicle = vehicle, weight = (weight or TheContractorTheft.DEFAULT_WEIGHT) * share })
         end
     end
     return result
 end
 
--- eligibleCount: vehicles, each counting its share (096).
+-- eligibleCount: vehicles that could be stolen.
 function TheContractorTheft.getFleetFactor(eligibleCount)
     return math.min(TheContractorTheft.FLEET_FACTOR_MAX,
         TheContractorTheft.FLEET_FACTOR_BASE + eligibleCount / TheContractorTheft.FLEET_FACTOR_DIVISOR)
@@ -356,11 +356,7 @@ function TheContractorTheft:getRatePerPeriod(farmId)
     if #eligible == 0 then
         return 0
     end
-    local count = 0
-    for _, candidate in ipairs(eligible) do
-        count = count + candidate.share
-    end
-    return TheContractorTheft.BASE_RATE_PER_PERIOD * TheContractorTheft.getFleetFactor(count)
+    return TheContractorTheft.BASE_RATE_PER_PERIOD * TheContractorTheft.getFleetFactor(#eligible)
 end
 
 -- roll (0-1) picks by weight.
