@@ -52,7 +52,8 @@ function TCJobHotspots.getMarkedFieldIds(farmId)
 
     local lastDayOfMonth = TCJobHotspots.getLastDayOfMonth()
     for _, job in ipairs(tc.Jobs:getAllJobs(farmId)) do
-        if job.fieldId ~= nil and TCJobHotspots.isMarked(job, lastDayOfMonth) then
+        -- 100: a workshop job (field 0) has no field to mark.
+        if job.fieldId ~= nil and job.fieldId ~= 0 and TCJobHotspots.isMarked(job, lastDayOfMonth) then
             fieldIds[job.fieldId] = true
         end
     end

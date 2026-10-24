@@ -53,6 +53,8 @@ TheContractorDrivers.START = {
     ALLOWED = "allowed",
     NEEDS_DRIVER = "needsDriver",
     CONTRACTOR_EQUIPMENT = "contractorEquipment",
+    -- 100: a customer's machine in a repair zone.
+    CUSTOMER_VEHICLE = "customerVehicle",
 }
 
 function TheContractorDrivers.new()
@@ -233,6 +235,20 @@ function TheContractorDrivers.isContractorEquipment(vehicle)
     return false
 end
 
+-- 100: a customer's machine, anywhere in the chain - worked on, not used,
+-- so no AI helper, AutoDrive, Courseplay or Follow Me.
+function TheContractorDrivers.isCustomerVehicle(vehicle)
+    if TheContractorRepairContracts == nil then
+        return false
+    end
+    for _, chainVehicle in pairs(getVehicleChain(vehicle)) do
+        if TheContractorRepairContracts.isContractVehicle(chainVehicle) then
+            return true
+        end
+    end
+    return false
+end
+
 -- The farm owning the vehicle runs a company, so AD/CP on it needs a
 -- driver.
 function TheContractorDrivers.isDriverRequired(vehicle)
@@ -288,6 +304,9 @@ function TheContractorDrivers:getStartCheck(vehicle)
     if TheContractorDrivers.isContractorEquipment(vehicle) then
         return TheContractorDrivers.START.CONTRACTOR_EQUIPMENT
     end
+    if TheContractorDrivers.isCustomerVehicle(vehicle) then
+        return TheContractorDrivers.START.CUSTOMER_VEHICLE
+    end
     if TheContractorDrivers.isDriverRequired(vehicle) and not self:hasDriver(vehicle) then
         return TheContractorDrivers.START.NEEDS_DRIVER
     end
@@ -300,6 +319,8 @@ function TheContractorDrivers:getServerStartRefusal(vehicle)
     local check = self:getStartCheck(vehicle)
     if check == TheContractorDrivers.START.CONTRACTOR_EQUIPMENT then
         return "tc_drivers_contractorEquipment"
+    elseif check == TheContractorDrivers.START.CUSTOMER_VEHICLE then
+        return "tc_drivers_customerVehicle"
     elseif check == TheContractorDrivers.START.NEEDS_DRIVER then
         return "tc_drivers_stoppedNoDriver"
     end
@@ -319,6 +340,9 @@ function TheContractorDrivers:gateClientStart(vehicle, startFunc)
     if check == TheContractorDrivers.START.CONTRACTOR_EQUIPMENT then
         InfoDialog.show(g_i18n:getText("tc_drivers_contractorEquipmentDialog"))
         return true
+    elseif check == TheContractorDrivers.START.CUSTOMER_VEHICLE then
+        InfoDialog.show(g_i18n:getText("tc_drivers_customerVehicleDialog"))
+        return true
     end
 
     TCDriverPickerDialog.show(getRootVehicle(vehicle), startFunc)
@@ -337,6 +361,10 @@ function TheContractorDrivers:getAssignError(farmId, workerId, vehicle)
     end
     if TheContractorDrivers.isContractorEquipment(vehicle) then
         return "tc_drivers_contractorEquipment"
+    end
+    -- 100: a customer's machine is worked on, not used.
+    if TheContractorDrivers.isCustomerVehicle(vehicle) then
+        return "tc_drivers_customerVehicle"
     end
     if self:hasDriver(vehicle) then
         return "tc_drivers_alreadyHasDriver"

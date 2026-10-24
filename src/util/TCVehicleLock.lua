@@ -168,6 +168,10 @@ function TCVehicleLock.isBusyForSale(vehicle)
         if vehicleId ~= nil and lockedIds[vehicleId] then
             return true
         end
+        -- 100: a customer's machine isn't ours to sell.
+        if TheContractorRepairContracts ~= nil and TheContractorRepairContracts.isContractVehicle(vehicle) then
+            return true
+        end
         vehicle = vehicle.getAttacherVehicle ~= nil and vehicle:getAttacherVehicle() or nil
     end
     return false

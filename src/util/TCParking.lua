@@ -59,6 +59,12 @@ TCParking.SHOP_WIDTH_OFFSET = 1
 
 -- Slots -------------------------------------------------------------------
 
+-- 100: a repair zone, built like a slot. Nil-safe for the tests that load
+-- this without the zone placeable.
+function TCParking.isRepairZone(object)
+    return PlaceableTCRepairZone ~= nil and PlaceableTCRepairZone.isZone(object)
+end
+
 -- The farm's placed parking slots, in placement order. slotType (a
 -- PlaceableTCParkingSlot.SLOT_TYPE) keeps only that kind; nil gives all.
 function TCParking.getSlots(farmId, slotType)
@@ -84,7 +90,7 @@ local overlapHit = false
 function TCParking:onOverlap(nodeId)
     local mission = g_currentMission
     local object = mission.nodeToObject[nodeId] or mission.players[nodeId] or mission:getNodeObject(nodeId)
-    if object == nil or PlaceableTCParkingSlot.isSlot(object) then
+    if object == nil or PlaceableTCParkingSlot.isSlot(object) or TCParking.isRepairZone(object) then
         return true
     end
     overlapHit = true
@@ -100,6 +106,12 @@ local function isClear(x, z, rotY, width, length, height)
     overlapBox(x, terrainY + TCParking.GROUND_GAP + halfHeight, z, 0, rotY, 0, width * 0.5, halfHeight, length * 0.5,
         "onOverlap", TCParking, TCParking.COLLISION_MASK, true, true, true, true)
     return not overlapHit
+end
+
+-- 100: the same test for a repair zone's bay, before a customer's machine
+-- is spawned in it.
+function TCParking.isAreaClear(x, z, rotY, width, length, height)
+    return isClear(x, z, rotY, width, length, height or TCParking.DEFAULT_HEIGHT)
 end
 
 -- Positions along a span for something `size` long: the middle if there's
@@ -317,6 +329,9 @@ function TCParking.updateVisuals()
             PlaceableTCParkingSlot.setVisualsVisible(placeable, showSlots)
         elseif PlaceableTCStandingSpot.isSpot(placeable) then
             PlaceableTCStandingSpot.setVisualsVisible(placeable, TCParking.isConstructionScreenOpen)
+        elseif TCParking.isRepairZone(placeable) then
+            -- 100: repair zones show with the slots.
+            PlaceableTCRepairZone.setVisualsVisible(placeable, showSlots)
         end
     end
 end
@@ -368,8 +383,8 @@ function TCParking.installConstructionScreenHook()
     end
 end
 
--- The slot or standing spot (065) (any farm's) whose rectangle holds x, z,
--- or nil.
+-- The slot, standing spot (065) or repair zone (100) (any farm's) whose
+-- rectangle holds x, z, or nil.
 function TCParking.getSlotAt(x, z)
     local placeableSystem = g_currentMission ~= nil and g_currentMission.placeableSystem or nil
     if placeableSystem == nil then
@@ -382,6 +397,8 @@ function TCParking.getSlotAt(x, z)
                 area = PlaceableTCParkingSlot.getArea(placeable)
             elseif PlaceableTCStandingSpot.isSpot(placeable) then
                 area = PlaceableTCStandingSpot.getArea(placeable)
+            elseif TCParking.isRepairZone(placeable) then
+                area = PlaceableTCRepairZone.getArea(placeable)
             end
             if area ~= nil and PlaceableTCParkingSlot.isInArea(area, x, z) then
                 return placeable

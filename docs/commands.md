@@ -300,7 +300,7 @@ Forces a job into another state. Only legal transitions are allowed:
 |---|---|
 | `offered` | `negotiating`, `accepted`, `declined` |
 | `negotiating` | `accepted`, `declined` |
-| `accepted` | `allocated`, `missed` |
+| `accepted` | `allocated`, `missed`, `completed` (a workshop job only) |
 | `allocated` | `in_progress`, `completed`, `missed`, `accepted` |
 | `in_progress` | `completed`, `missed`, `accepted` |
 
@@ -309,6 +309,7 @@ Forces a job into another state. Only legal transitions are allowed:
 `completed` and `missed` work the same as a real finish or deadline, whatever the job's progress:
 - **`completed`:** a hired worker's AI is stopped where it is, even mid-field or on the road. The job's invoiced and earns reputation. The crew and machines go through the usual trip back and parking, and the logbook records it.
 - **`missed`:** the usual missed-deadline reputation penalty (less whatever progress was made), and the crew and machines are released the same way.
+- A workshop job (a customer's machine in a repair zone, needs FS25_AdvancedDamageSystem) goes straight from `accepted` to `completed`: invoiced and rewarded as if ADS said the work was done. `missed` judges it as the deadline would: a machine that's worse than it came in costs double the reputation and may bring a claim. Either way the customer comes for the machine.
 - **`accepted`** (from `allocated` or `in_progress`): unallocates the job, the same as the Unallocate button in the Calendar's Job Details. The crew and machines come back (into cooldown if any work was done), and the job keeps its progress for whoever's allocated next. No reputation is lost.
 
 Other states only change the job's state.
@@ -343,6 +344,41 @@ Parks the vehicle you're sitting in, for testing parking slots. You're put out o
 
 ```
 tcJob park
+```
+
+### `tcJob repairArrival [repair|maintenance] [severity]`
+
+Sends a customer's machine to your first free repair zone bay now, for testing repair contracts (needs FS25_AdvancedDamageSystem). It's queued like a normal arrival: in single player it's placed while you can't see the bay, or after about 2 minutes anyway (in multiplayer straight away), then ADS prepares it and the job offer goes up in your Inbox. The model is picked at random from those the zone takes (its type, its filter, what fits a bay).
+
+| Argument | Meaning |
+|---|---|
+| `repair\|maintenance` | Optional. A repair (hidden faults) or a service (worn oils, filters and grease). Random (60/40) if left out. |
+| `severity` | Optional, 1-3. How big a job: more or later faults, or more worn consumables. Follows your reputation if left out. |
+
+```
+tcJob repairArrival
+tcJob repairArrival repair 3
+```
+
+```
+Queued data/vehicles/fendt/vario900/vario900.xml (repair, severity 3) for bay 2.
+```
+
+### `tcJob repairStatus`
+
+Lists your repair zones: their type, bays, filter and how many models they can get, which bays are taken, and how many machines are on their way, waiting to be collected and claims still to come. Also says whether ADS's repair contracts API is there. Takes no arguments.
+
+```
+tcJob repairStatus
+```
+
+```
+ADS repair contracts: API version 1
+Zone 1 (vehicle, 3 bay(s), any category, 42 model(s)):
+  bay 1: taken
+  bay 2: free
+  bay 3: free
+1 on the way, 0 waiting to be collected, 0 claim(s) to come
 ```
 
 ## Finances — `tcFinance`

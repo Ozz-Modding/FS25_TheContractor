@@ -18,12 +18,13 @@
         <sourceFile filename="src/main.lua"/>
     </extraSourceFiles>
 
-    <!-- 062: parking slots. 065: standing spots. -->
+    <!-- 062: parking slots. 065: standing spots. 100: repair zones. -->
     <placeableSpecializations>
         <specialization name="tcParkingSlot" className="PlaceableTCParkingSlot" filename="src/placeables/PlaceableTCParkingSlot.lua" />
         <specialization name="tcStandingSpot" className="PlaceableTCStandingSpot" filename="src/placeables/PlaceableTCStandingSpot.lua" />
         <specialization name="tcDisposalSkip" className="PlaceableTCDisposalSkip" filename="src/placeables/PlaceableTCDisposalSkip.lua" />
         <specialization name="tcLogoSign" className="PlaceableTCLogoSign" filename="src/placeables/PlaceableTCLogoSign.lua" />
+        <specialization name="tcRepairZone" className="PlaceableTCRepairZone" filename="src/placeables/PlaceableTCRepairZone.lua" />
     </placeableSpecializations>
     <placeableTypes>
         <type name="tcParkingSlot" parent="placeable" className="Placeable" filename="$dataS/scripts/placeables/Placeable.lua">
@@ -41,6 +42,10 @@
         <type name="tcLogoSign" parent="placeable" className="Placeable" filename="$dataS/scripts/placeables/Placeable.lua">
             <specialization name="placement" />
             <specialization name="tcLogoSign" />
+        </type>
+        <type name="tcRepairZone" parent="placeable" className="Placeable" filename="$dataS/scripts/placeables/Placeable.lua">
+            <specialization name="placement" />
+            <specialization name="tcRepairZone" />
         </type>
     </placeableTypes>
     <storeItems>
@@ -60,6 +65,10 @@
         <storeItem xmlFilename="xml/wallSignLarge1m.xml" />
         <storeItem xmlFilename="xml/wallSignLarge3m.xml" />
         <storeItem xmlFilename="xml/wallSignLarge6m.xml" />
+        <storeItem xmlFilename="xml/repairZone.xml" />
+        <storeItem xmlFilename="xml/repairZoneMedium.xml" />
+        <storeItem xmlFilename="xml/repairZoneLarge.xml" />
+        <storeItem xmlFilename="xml/repairZoneHarvester.xml" />
     </storeItems>
 
     <constructionCategories>

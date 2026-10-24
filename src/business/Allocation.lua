@@ -36,8 +36,11 @@ end
 
 -- Eligibility queries -----------------------------------------------------
 
+-- 100: a customer's machine in a repair zone is the farm's for ADS's sake,
+-- but never job equipment.
 local function isOwnedByFarm(vehicle, farmId)
-    return vehicle.getOwnerFarmId ~= nil and vehicle:getOwnerFarmId() == farmId
+    return vehicle.getOwnerFarmId ~= nil and vehicle:getOwnerFarmId() == farmId and
+        not (TheContractorRepairContracts ~= nil and TheContractorRepairContracts.isContractVehicle(vehicle))
 end
 
 -- A vehicle counts as free if it isn't sitting in another of this farm's
@@ -561,7 +564,8 @@ function TheContractorAllocation:allocateJob(farmId, jobId, workerIds, equipment
 
     local jobs = g_currentMission.TheContractor.Jobs
     local job = jobs:getJob(farmId, jobId)
-    if job == nil or job.state ~= TheContractorJob.STATE.ACCEPTED then
+    -- 100: a workshop job has no crew or kit to allocate.
+    if job == nil or job.state ~= TheContractorJob.STATE.ACCEPTED or job.workshop ~= nil then
         return false
     end
 

@@ -156,13 +156,49 @@ test("known faults are listed by name, hidden ones left out; none for vanilla", 
     assertEquals(TCVehicleCondition.getKnownFaultNames({ model = MODEL().VANILLA, damage = 0 }), nil)
 end)
 
-test("wear cost is 0 for ADS until it has a repair cost function", function()
+-- G4 (docs/ads-repair-contracts.md): the player can't know what an ADS
+-- vehicle's wear costs, so it has none and the Logbook shows none.
+test("an ADS vehicle's wear has no cost and isn't shown", function()
     setup()
     local vehicle = adsVehicle({ known = 0.8 })
-    vehicle.getBreakdownRepairPrice = function() return 5000 end
+    vehicle.getADSRepairEstimate = function() return { totalPrice = 5000 } end
     local before = { model = MODEL().ADS, wear = 0, faults = {} }
     local after = { model = MODEL().ADS, wear = 0, faults = { { id = "HYDRAULIC_LEAK" } } }
     assertEquals(TCVehicleCondition.getWearCost(vehicle, before, after), 0)
+    assertEquals(TCVehicleCondition.hasWearCost(before, after), false)
+    assertEquals(TCVehicleCondition.hasWearCost(after), false, "the vehicle page's one snapshot")
+    assertEquals(TCVehicleCondition.hasWearCost({ model = MODEL().VANILLA }, after), false,
+        "a vehicle that gained ADS during the job")
+
+    local vanilla = { model = MODEL().VANILLA, damage = 0, wear = 0, repairPrice = 100 }
+    assertEquals(TCVehicleCondition.hasWearCost(vanilla, vanilla), true)
+    assertEquals(TCVehicleCondition.hasWearCost(vanilla), true)
+    assertEquals(TCVehicleCondition.hasWearCost(nil, nil), true, "no snapshot is shown as before")
+end)
+
+test("a job counts which machines have a wear cost", function()
+    setup()
+    TheContractorLogbook = nil
+    dofile("src/business/Logbook.lua")
+    local ads = { model = MODEL().ADS, wear = 0, faults = {} }
+    local vanilla = { model = MODEL().VANILLA, damage = 0, wear = 0, repairPrice = 0 }
+    local function job(...)
+        return { price = 1000, fuelCost = 100, wearCost = 50, equipment = { ... } }
+    end
+    local adsMachine = { startSnapshot = ads, endSnapshot = ads }
+    local vanillaMachine = { startSnapshot = vanilla, endSnapshot = vanilla, wearCost = 50 }
+
+    local priced, unpriced = TheContractorLogbook.countWearCosts(job(adsMachine, adsMachine))
+    assertEquals(priced, 0)
+    assertEquals(unpriced, 2)
+    priced, unpriced = TheContractorLogbook.countWearCosts(job(adsMachine, vanillaMachine))
+    assertEquals(priced, 1)
+    assertEquals(unpriced, 1)
+    priced, unpriced = TheContractorLogbook.countWearCosts(job())
+    assertEquals(priced, 0)
+    assertEquals(unpriced, 0)
+    assertEquals(TheContractorLogbook.getMargin(job(adsMachine, vanillaMachine)), 850,
+        "the margin takes off only the wear that has a cost")
 end)
 
 test("stream and save carry the known values, and nothing more", function()
