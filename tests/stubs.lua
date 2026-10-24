@@ -422,6 +422,47 @@ function stubs.install()
         return placeable
     end
 
+    -- Vanilla's object storage (pallet sheds, StorageRack) holding pallets
+    -- as abstract objects: def { name, farmId, pallets = { { fillType,
+    -- fillLevel }... } }. storedObjects is the server's list; objectInfos
+    -- groups identical pallets as vanilla does, and as a client sees them.
+    -- spec.infosDirty counts setObjectStorageObjectInfosDirty calls.
+    function world:addObjectStorage(def)
+        local spec = { storedObjects = {}, objectInfos = {}, numStoredObjects = 0,
+            objectSpawn = { isActive = false }, infosDirty = 0 }
+        local placeable = self:addPlaceable({ name = def.name or "Pallet storage", farmId = def.farmId,
+            specs = { spec_objectStorage = spec } })
+        function placeable:updateObjectStorageObjectInfos()
+            spec.objectInfos = {}
+            for _, object in ipairs(spec.storedObjects) do
+                local found = false
+                for _, info in ipairs(spec.objectInfos) do
+                    local sample = info.objects[1].palletAttributes
+                    if sample.fillType == object.palletAttributes.fillType and
+                        sample.fillLevel == object.palletAttributes.fillLevel then
+                        table.insert(info.objects, object)
+                        info.numObjects = #info.objects
+                        found = true
+                        break
+                    end
+                end
+                if not found then
+                    table.insert(spec.objectInfos, { objects = { object }, numObjects = 1 })
+                end
+            end
+        end
+        function placeable:setObjectStorageObjectInfosDirty()
+            spec.infosDirty = spec.infosDirty + 1
+        end
+        for _, pallet in ipairs(def.pallets or {}) do
+            table.insert(spec.storedObjects, { palletAttributes = { fillType = pallet.fillType,
+                fillLevel = pallet.fillLevel, ownerFarmId = def.farmId or 1 } })
+        end
+        spec.numStoredObjects = #spec.storedObjects
+        placeable:updateObjectStorageObjectInfos()
+        return placeable
+    end
+
     -- A mod-registered fill type (e.g. ADS's oils), after the built-in ones.
     function world:addFillType(name, title, unitShort)
         table.insert(fillTypeByIndex, { name = name, title = title, unitShort = unitShort })

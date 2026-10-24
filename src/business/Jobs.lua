@@ -881,10 +881,11 @@ function TheContractorJobs:markWorkStarted(job)
     g_currentMission.TheContractor.Logbook:onWorkStarted(job)
 end
 
--- Job history (029): completed jobs stay in jobsByFarm (and the save) for
--- good, so a worker's history is just the completed jobs they worked on -
--- as operator or as hauler. Per-worker aggregation for a staff-history
--- view builds on these two.
+-- Job history (029): a worker's history is the completed jobs they worked
+-- on - as operator or as hauler. Only the farm's newest KEEP_FINISHED_JOBS
+-- survive a save (getJobsToSave), so it's recent history, not a career
+-- total: keep a running count on the worker if a staff-history view ever
+-- needs one.
 function TheContractorJobs:getCompletedJobsForWorker(farmId, workerId)
     local result = {}
     for _, job in ipairs(self:getJobsByState(farmId, TheContractorJob.STATE.COMPLETED)) do
@@ -1720,6 +1721,105 @@ function TheContractorJobs:resolveSavedVehicles()
     end
 end
 
+-- What the save keeps of finished jobs, so it doesn't grow for good. A
+-- declined job (an offer turned down or left to lapse) is never saved:
+-- nothing shows it, and the only things naming one, its offer's inbox
+-- messages, already go once it's over or gone. Completed and missed jobs
+-- are the farm's history (the Calendar's Completed list, the Workshop tab's
+-- Completed view), so each farm keeps its newest KEEP_FINISHED_JOBS of each
+-- kind, workshop jobs (100) and the rest, newest by when they finished
+-- (getFinishedAt). An older one is kept anyway while something still names
+-- it (getHeldJobIds). Dropped jobs only go at the next save, as Finances
+-- drops settled invoices.
+TheContractorJobs.KEEP_FINISHED_JOBS = 100
+
+-- When a completed or missed job finished, in game minutes: its completion,
+-- or for a missed job the end of its deadline day.
+function TheContractorJobs.getFinishedAt(job)
+    if job.completedAt ~= nil then
+        return job.completedAt
+    end
+    return ((job.deadlineDay or 0) + 1) * 24 * 60
+end
+
+-- Newest finished first, as the menus list them.
+function TheContractorJobs.sortNewestFinished(jobs)
+    table.sort(jobs, function(a, b)
+        local aAt, bAt = TheContractorJobs.getFinishedAt(a), TheContractorJobs.getFinishedAt(b)
+        if aAt ~= bAt then
+            return aAt > bAt
+        end
+        return a.id > b.id
+    end)
+end
+
+-- Server: the ids of jobs something else still names, so they stay in the
+-- save however old: an invoice not yet dropped from the save, a pending
+-- claim (052's, or a workshop job's tampering claim), a cooldown (it washes
+-- the job's kit when it ends), a random event's incident (074's job events)
+-- or an inbox message.
+function TheContractorJobs.getHeldJobIds()
+    local tc = g_currentMission.TheContractor
+    local held = {}
+    local function hold(jobId)
+        if jobId ~= nil then
+            held[jobId] = true
+        end
+    end
+    for _, invoice in pairs(tc.Finances.invoicesById or {}) do
+        hold(invoice.jobId)
+    end
+    for _, claim in ipairs(tc.Claims.pendingClaims or {}) do
+        hold(claim.jobId)
+    end
+    for _, claim in ipairs(tc.RepairContracts.pendingClaims or {}) do
+        hold(claim.jobId)
+    end
+    for _, farmEntries in pairs(tc.Cooldown.entriesByFarm or {}) do
+        for _, entry in pairs(farmEntries) do
+            hold(entry.jobId)
+        end
+    end
+    for _, incident in pairs(tc.RandomEvents.incidents or {}) do
+        hold(incident.data ~= nil and incident.data.jobId or nil)
+    end
+    for _, message in pairs(tc.Inbox.messagesById or {}) do
+        hold(message.payload ~= nil and message.payload.jobId or nil)
+    end
+    return held
+end
+
+-- Server: the farm's jobs that go in the save, in id order.
+function TheContractorJobs:getJobsToSave(farmId, farmJobs)
+    local jobs = {}
+    local finishedByKind = { workshop = {}, field = {} }
+    for _, job in pairs(farmJobs) do
+        if job.state == TheContractorJob.STATE.COMPLETED or job.state == TheContractorJob.STATE.MISSED then
+            table.insert(finishedByKind[job:isWorkshop() and "workshop" or "field"], job)
+        elseif job.state ~= TheContractorJob.STATE.DECLINED then
+            table.insert(jobs, job)
+        end
+    end
+
+    local held = nil
+    for _, finished in pairs(finishedByKind) do
+        TheContractorJobs.sortNewestFinished(finished)
+        for i, job in ipairs(finished) do
+            local isKept = i <= TheContractorJobs.KEEP_FINISHED_JOBS or job.graceRemainingMs ~= nil
+            if not isKept then
+                held = held or TheContractorJobs.getHeldJobIds()
+                isKept = held[job.id] == true
+            end
+            if isKept then
+                table.insert(jobs, job)
+            end
+        end
+    end
+
+    table.sort(jobs, function(a, b) return a.id < b.id end)
+    return jobs
+end
+
 function TheContractorJobs:saveToXmlFile(xmlFile)
     if not g_currentMission:getIsServer() then return end
 
@@ -1732,7 +1832,7 @@ function TheContractorJobs:saveToXmlFile(xmlFile)
         setXMLInt(xmlFile, farmKey .. "#farmId", farmId)
 
         local jobIndex = 0
-        for _, job in pairs(farmJobs) do
+        for _, job in ipairs(self:getJobsToSave(farmId, farmJobs)) do
             local jobKey = string.format("%s.job(%d)", farmKey, jobIndex)
             setXMLInt(xmlFile, jobKey .. "#id", job.id)
             setXMLString(xmlFile, jobKey .. "#jobType", job.jobType)
