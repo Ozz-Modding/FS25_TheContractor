@@ -353,7 +353,7 @@ Sends a customer's machine to your first free repair zone bay now, for testing r
 | Argument | Meaning |
 |---|---|
 | `repair\|maintenance` | Optional. A repair (hidden faults) or a service (worn oils, filters and grease). Random (60/40) if left out. |
-| `severity` | Optional, 1-3. How big a job: more or later faults, or more worn consumables. Follows your reputation if left out. |
+| `severity` | Optional, 1-3. How big a job: more or later faults, or more worn consumables. Rolled if left out (20% 1, 30% 2, 50% 3). |
 
 ```
 tcJob repairArrival

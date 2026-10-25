@@ -50,10 +50,15 @@ TheContractorRepairContracts.JOB_TYPES = {
 -- The chance an empty bay gets a customer each day, and what they want.
 TheContractorRepairContracts.ARRIVAL_CHANCE = 0.5
 TheContractorRepairContracts.KIND_WEIGHTS = { repair = 60, maintenance = 40 }
+-- How likely each severity (1-3) is, whatever the farm's reputation.
+TheContractorRepairContracts.SEVERITY_WEIGHTS = { 20, 30, 50 }
 
--- Days an offer stays open, then days to do the work.
-TheContractorRepairContracts.OFFER_DAYS = 2
-TheContractorRepairContracts.DUE_DAYS = 7
+-- Days after today the work is due by (the end of): MIN_DUE_DAYS at 1-2
+-- days per period, rising to MAX_DUE_DAYS at FULL_DUE_DAYS_PER_PERIOD or
+-- more. The offer stays open until the day before.
+TheContractorRepairContracts.MIN_DUE_DAYS = 1
+TheContractorRepairContracts.MAX_DUE_DAYS = 3
+TheContractorRepairContracts.FULL_DUE_DAYS_PER_PERIOD = 5
 
 -- The price: ADS's quote plus a margin, rolled per offer within
 -- MARGIN_SPREAD either side of the adsMargin setting (never below nothing).
@@ -523,11 +528,21 @@ function TheContractorRepairContracts.pickKind(random)
         TCADSRepairContracts.KIND.MAINTENANCE
 end
 
--- 1-3, rising with the farm's standing (0-1): a new company mostly gets
--- severity 1, a top one mostly 3.
-function TheContractorRepairContracts.pickSeverity(standing, random)
-    local severity = math.floor(1 + standing * 2 + (random() - 0.5) + 0.5)
-    return math.max(1, math.min(3, severity))
+-- 1-3, weighted by SEVERITY_WEIGHTS.
+function TheContractorRepairContracts.pickSeverity(random)
+    local weights = TheContractorRepairContracts.SEVERITY_WEIGHTS
+    local total = 0
+    for _, weight in ipairs(weights) do
+        total = total + weight
+    end
+    local roll = random() * total
+    for severity, weight in ipairs(weights) do
+        if roll < weight then
+            return severity
+        end
+        roll = roll - weight
+    end
+    return #weights
 end
 
 function TheContractorRepairContracts.rollSeed(random)
@@ -540,14 +555,13 @@ function TheContractorRepairContracts:queueArrival(farmId, zone, bayIndex, kind,
         return nil
     end
     local model = models[math.random(1, #models)]
-    local standing = g_currentMission.TheContractor.Reputation:getStanding(farmId)
     local entry = {
         farmId = farmId,
         zoneUniqueId = TheContractorRepairContracts.getZoneUniqueId(zone),
         bayIndex = bayIndex,
         xmlFilename = model.xmlFilename,
         kind = kind or TheContractorRepairContracts.pickKind(math.random),
-        severity = severity or TheContractorRepairContracts.pickSeverity(standing, math.random),
+        severity = severity or TheContractorRepairContracts.pickSeverity(math.random),
         seed = TheContractorRepairContracts.rollSeed(math.random),
         queuedDay = g_currentMission.environment.currentMonotonicDay,
         attempts = 0,
@@ -939,12 +953,22 @@ function TheContractorRepairContracts.rollMargin()
     return math.max(margin, 0)
 end
 
+-- 1 day at 1-2 days per period, 2 at 3-4, 3 at 5 or more.
+function TheContractorRepairContracts.getDueDays(daysPerPeriod)
+    local minDays = TheContractorRepairContracts.MIN_DUE_DAYS
+    local maxDays = TheContractorRepairContracts.MAX_DUE_DAYS
+    local full = TheContractorRepairContracts.FULL_DUE_DAYS_PER_PERIOD
+    local days = minDays + math.floor(((daysPerPeriod or 1) - 1) * (maxDays - minDays) / (full - 1))
+    return math.max(minDays, math.min(maxDays, days))
+end
+
 function TheContractorRepairContracts:createOffer(entry, vehicle, quote)
     local today = g_currentMission.environment.currentMonotonicDay
     local margin = TheContractorRepairContracts.rollMargin()
     local price = math.floor(TheContractorRepairContracts.getBasePrice(quote.price, margin))
-    local deadlineDay = today + TheContractorRepairContracts.OFFER_DAYS + TheContractorRepairContracts.DUE_DAYS
-    local offerExpiresDay = today + TheContractorRepairContracts.OFFER_DAYS
+    local dueDays = TheContractorRepairContracts.getDueDays(g_currentMission.environment.daysPerPeriod)
+    local deadlineDay = today + dueDays
+    local offerExpiresDay = deadlineDay - 1
     -- 101: a breakdown is today's or nobody's, and its level is ADS's field
     -- service (who can fix it on the spot), not the workshop's.
     local serviceLevel = quote.serviceLevel

@@ -218,6 +218,17 @@ do
     TheContractorJobGeneration.HOUR_WEIGHT_SCALE = 24 / total
 end
 
+-- Daily floor: the hourly rolls average under one offer a day for a new
+-- company on longer months (~0.6 a day on 3-day months), and some days
+-- they all miss. So if a farm has had no offer from the roll by
+-- FLOOR_HOURS' first hour, one may be forced then (FLOOR_FIRST_HOUR_CHANCE,
+-- so they don't all land on the hour), and is forced at its last hour if
+-- there's still none. It still goes through tryGenerateJob, so a day with
+-- no work to offer stays a day with no offer.
+TheContractorJobGeneration.FLOOR_FIRST_HOUR = 8
+TheContractorJobGeneration.FLOOR_LAST_HOUR = 9
+TheContractorJobGeneration.FLOOR_FIRST_HOUR_CHANCE = 0.5
+
 -- Deadlines (see getDeadlineDay). An offer arriving with fewer than
 -- MIN_HOURS_LEFT_TODAY hours of the day left can't be due today — it's due
 -- tomorrow at the earliest. On top of that earliest day, up to
@@ -286,6 +297,9 @@ TheContractorJobGeneration.REQUIRED_SKILL_SPREAD = 4
 function TheContractorJobGeneration.new()
     local self = {}
     setmetatable(self, TheContractorJobGeneration_mt)
+    -- Server-only, not saved: the monotonic day each farm last had an offer
+    -- from the hourly roll, for the daily floor.
+    self.lastOfferDayByFarm = {}
     return self
 end
 
@@ -317,8 +331,32 @@ end
 function TheContractorJobGeneration:rollForFarm(farmId, hour)
     local hourWeight = (TheContractorJobGeneration.HOUR_WEIGHTS[hour] or 1) * TheContractorJobGeneration.HOUR_WEIGHT_SCALE
     if math.random() <= self:getHourlyChance(farmId) * hourWeight then
-        self:tryGenerateJob(farmId)
+        self:generateForFarm(farmId)
     end
+
+    if self:isFloorDue(farmId, hour) then
+        self:generateForFarm(farmId)
+    end
+end
+
+function TheContractorJobGeneration:generateForFarm(farmId)
+    local job = self:tryGenerateJob(farmId)
+    if job ~= nil then
+        self.lastOfferDayByFarm[farmId] = g_currentMission.environment.currentMonotonicDay
+    end
+    return job
+end
+
+-- See FLOOR_FIRST_HOUR.
+function TheContractorJobGeneration:isFloorDue(farmId, hour)
+    if self.lastOfferDayByFarm[farmId] == g_currentMission.environment.currentMonotonicDay then
+        return false
+    end
+    if hour == TheContractorJobGeneration.FLOOR_LAST_HOUR then
+        return true
+    end
+    return hour == TheContractorJobGeneration.FLOOR_FIRST_HOUR and
+        math.random() < TheContractorJobGeneration.FLOOR_FIRST_HOUR_CHANCE
 end
 
 function TheContractorJobGeneration:getHourlyChance(farmId)
