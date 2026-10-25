@@ -447,6 +447,7 @@
 		<text name="tc_inbox_chipRepair" text="Workshop"/>
 		<text name="tc_jobDetails_machine" text="Machine"/>
 		<text name="tc_repair_problemGone" text="The customer's machine isn't there any more."/>
+		<text name="tc_repair_engineLocked" text="Accept the customer's job before starting their machine."/>
 		<text name="tc_repair_problemNoADS" text="Advanced Damage System isn't loaded, so this job can't be taken on."/>
 		<text name="tc_repair_requires" text="You haven't the equipment for this job yet. Requires: %s."/>
 		<text name="tc_repair_summaryLine" text="%s on the %s"/>

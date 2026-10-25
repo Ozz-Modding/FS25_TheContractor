@@ -241,6 +241,25 @@ function TheContractorRepairContracts.isContractVehicle(vehicle)
     return vehicleId ~= nil and TheContractorRepairContracts.getContractVehicleIds()[vehicleId] ~= nil
 end
 
+-- Job states whose machine won't start (TCVehicleLock): an offer not yet
+-- taken, or one turned down or lapsed. Once accepted it's the player's to
+-- drive in, and stays so after the job ends until it's collected.
+TheContractorRepairContracts.ENGINE_LOCKED_STATES = {
+    offered = true,
+    negotiating = true,
+    declined = true,
+}
+
+-- Every machine, read live.
+function TheContractorRepairContracts.isEngineLocked(vehicle)
+    if vehicle == nil then
+        return false
+    end
+    local vehicleId = NetworkUtil.getObjectId(vehicle)
+    local job = vehicleId ~= nil and TheContractorRepairContracts.getContractVehicleIds()[vehicleId] or nil
+    return job ~= nil and TheContractorRepairContracts.ENGINE_LOCKED_STATES[job.state] == true
+end
+
 -- Whether a machine is a customer's the farm can work on now: its job still
 -- open, and the machine with that farm. Workshops (vanilla's and service
 -- vehicle mods') only list vehicles that show in the vehicles overview, and
