@@ -1043,14 +1043,16 @@ end
 -- Pricing (102) ---------------------------------------------------------------------
 
 -- The cheapest fix's cost as base amounts (without FS25_EconomyScale's
--- factor, as every job stores its price): ADS's parts cost is at the price
--- level of the day it was quoted, so it's divided back out, and the labour
--- is its hours at LABOUR_RATE (scaleCost, which applies the factor, so
--- that's divided out too). Returns parts, labour.
+-- factor, as every job stores its price): ADS's parts cost carries the
+-- factor of the day it was quoted only if EconomyScale scales ADS
+-- (TCEconomyScale.getADSFactor), so that's what's divided back out; the
+-- labour is its hours at LABOUR_RATE (scaleCost, which always applies the
+-- factor, so getFactor is divided out of that). Returns parts, labour.
 function TheContractorRepairContracts.getBaseCost(partsCost, laborHours)
     local factor = TCEconomyScale.getFactor()
     local rate = g_currentMission.TheContractor.Settings:scaleCost(TheContractorRepairContracts.LABOUR_RATE)
-    return math.max(tonumber(partsCost) or 0, 0) / factor, math.max(tonumber(laborHours) or 0, 0) * rate / factor
+    return math.max(tonumber(partsCost) or 0, 0) / TCEconomyScale.getADSFactor(),
+        math.max(tonumber(laborHours) or 0, 0) * rate / factor
 end
 
 -- A job's cost (base): its parts and labour. One offered before 102 kept
@@ -1510,7 +1512,9 @@ end
 
 -- What a tampered machine lost: each worse component's lost resource at
 -- ADS's OEM part price, and TAMPER_PART_VALUE for a weakened battery, a
--- removed part, or a component ADS can't price.
+-- removed part, or a component ADS can't price. ADS's list price is vanilla
+-- whatever EconomyScale does (it scales ADS's quotes and parts shop, never
+-- this one), so it's put on today's price level here, like the threshold.
 function TheContractorRepairContracts.getTamperValue(vehicle, findings)
     local settings = g_currentMission.TheContractor.Settings
     local partValue = settings:scaleCost(TheContractorRepairContracts.TAMPER_PART_VALUE)
@@ -1518,6 +1522,9 @@ function TheContractorRepairContracts.getTamperValue(vehicle, findings)
     for _, finding in ipairs(findings or {}) do
         if finding.kind == "component" then
             local price = TCADSRepairContracts.getPartPrice(vehicle, finding.id)
+            if price ~= nil then
+                price = price * TCEconomyScale.getFactor()
+            end
             local lost = math.max(0, (tonumber(finding.accepted) or 0) - (tonumber(finding.current) or 0))
             total = total + (price ~= nil and price * lost or partValue)
         else

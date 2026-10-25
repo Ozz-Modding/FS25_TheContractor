@@ -14,6 +14,9 @@
 -- through here as well: insurance (fleet value), stolen vehicle values,
 -- job diesel and repair prices.
 --
+-- ADS's prices are EconomyScale's business too, but only from the version
+-- that scales them, so they go through getADSFactor (above), not getFactor.
+--
 -- EconomyScale's loadMap sets g_currentMission.EconomyScale, and its
 -- factor is synced to every client, so reading it live gives every machine
 -- the same answer. Without the mod the factor is 1.
@@ -27,6 +30,19 @@ function TCEconomyScale.getFactor()
         return 1
     end
     return factor
+end
+
+-- The factor ADS's workshop quotes carry. EconomyScale scales ADS itself
+-- (its Layer E) from the version that publishes adsHooksInstalled, and only
+-- while ADS is loaded; an older EconomyScale leaves ADS's prices vanilla. So
+-- an ADS quote is divided by this, never by getFactor, to get its base: right
+-- with any EconomyScale version, and with none.
+function TCEconomyScale.getADSFactor()
+    local economyScale = g_currentMission ~= nil and g_currentMission.EconomyScale or nil
+    if economyScale == nil or economyScale.adsHooksInstalled ~= true then
+        return 1
+    end
+    return TCEconomyScale.getFactor()
 end
 
 -- A fixed amount at EconomyScale's price level, to the nearest whole unit.

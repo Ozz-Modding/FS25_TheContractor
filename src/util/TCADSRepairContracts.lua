@@ -477,9 +477,10 @@ function TCADSRepairContracts.unregisterListener()
     end
 end
 
--- ADS's list price of a new OEM part for one of the vehicle's components
--- (its parts shop's price), or nil if ADS can't say. Values what a
--- tampered vehicle lost.
+-- ADS's list price of a new OEM part for one of the vehicle's components,
+-- or nil if ADS can't say. Values what a tampered vehicle lost. Vanilla:
+-- FS25_EconomyScale scales the parts shop's price on top of this, never this
+-- function, so the caller applies the factor.
 function TCADSRepairContracts.getPartPrice(vehicle, componentId)
     local env = TCADSRepairContracts.getEnv()
     local maintenance = env ~= nil and env.ADS_Maintenance or nil
