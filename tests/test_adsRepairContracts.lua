@@ -583,10 +583,65 @@ test("ADS saying done completes an accepted job: invoiced, reputation, logged, c
     assertEquals(job.state, TheContractorJob.STATE.COMPLETED)
     assertEquals(job.qualityScore, 100)
     assertEquals(world.calls.invoices[1], job.id)
-    assertEquals(world.calls.reputation[1], TheContractorRepairContracts.REPUTATION_BY_SEVERITY[2])
+    local base = TheContractorRepairContracts.REPUTATION_BY_KIND.repair[2]
+    assertEquals(world.calls.reputation[1], math.floor(base * 1.5), "done at once: the full speed bonus")
     assertEquals(world.calls.logged[1][1], "completed")
     assertEquals(#tc.RepairContracts.removals, 1)
     assertEquals(job:getSummaryText(), "Workshop Repair on the fendt942.xml")
+end)
+
+test("reputation by kind: a service least, a repair more, a field breakdown most", function()
+    setup()
+    local function base(kind, severity)
+        return TheContractorRepairContracts.getBaseReputation({ workshop = { kind = kind, severity = severity } })
+    end
+    for severity = 1, 3 do
+        assertTrue(base("maintenance", severity) < base("repair", severity))
+        assertTrue(base("repair", severity) < base("breakdown", severity))
+    end
+    assertTrue(base("repair", 1) < base("repair", 3), "bigger jobs earn more")
+end)
+
+test("speed: the full bonus in the first quarter of the time, none past three quarters", function()
+    setup()
+    -- Accepted at midnight of day 10, due by the end of day 11: 48 hours.
+    local function factor(kind, hours)
+        local start = 10 * 24 * 60
+        return TheContractorRepairContracts.getSpeedFactor({ deadlineDay = 11, completedAt = start + hours * 60,
+            workshop = { kind = kind, acceptedAt = start } })
+    end
+    assertNear(factor("repair", 2), 1.5, 0.0001)
+    assertNear(factor("repair", 12), 1.5, 0.0001, "a quarter of the time")
+    assertNear(factor("repair", 24), 1.25, 0.0001, "half way")
+    assertNear(factor("repair", 36), 1, 0.0001, "three quarters")
+    assertNear(factor("repair", 47), 1, 0.0001)
+    assertNear(factor("breakdown", 2), 1.5, 0.0001)
+    assertNear(factor("maintenance", 2), 1, 0.0001, "nobody's waiting on a service")
+    assertEquals(TheContractorRepairContracts.getSpeedFactor({ deadlineDay = 11, completedAt = 100,
+        workshop = { kind = "repair" } }), 1, "accepted before it was kept")
+end)
+
+test("a slow repair earns the plain reward; the turnaround counts from acceptance", function()
+    local world, tc = setup()
+    local job, vehicle = makeOffer(world, tc)
+    tc.Jobs:transitionJobState(1, job.id, TheContractorJob.STATE.ACCEPTED)
+    assertEquals(job.workshop.acceptedAt, TheContractorJobs.getGameMinutes())
+    local stream = world:newStream()
+    TheContractorJobs.writeJob(stream, job)
+    assertEquals(TheContractorJobs.readJob(stream).workshop.acceptedAt, job.workshop.acceptedAt)
+    local xmlFile = {}
+    tc.Jobs:saveToXmlFile(xmlFile)
+    local jobs = TheContractorJobs.new()
+    jobs:loadFromXMLFile(xmlFile)
+    assertEquals(jobs:getJob(1, job.id).workshop.acceptedAt, job.workshop.acceptedAt)
+    tc.RepairContracts:resolveSavedVehicles()
+    g_currentMission.environment.currentMonotonicDay = job.deadlineDay
+    g_currentMission.environment.dayTime = 23 * 60 * 60 * 1000
+    world.status[vehicle.id] = "done"
+    world.listener(vehicle, { state = "done" })
+    assertEquals(job.state, TheContractorJob.STATE.COMPLETED)
+    assertEquals(world.calls.reputation[1], TheContractorRepairContracts.REPUTATION_BY_KIND.repair[2])
+    assertTrue(TheContractorRepairContracts.getTurnaroundMinutes(job) > 0)
 end)
 
 test("work done before the offer's accepted counts as soon as it is", function()
@@ -633,7 +688,7 @@ test("an honest miss costs the usual reputation and nothing else", function()
     local world, tc = setup()
     local job = missAccepted(world, tc, nil)
     assertEquals(job.state, TheContractorJob.STATE.MISSED)
-    local base = TheContractorRepairContracts.REPUTATION_BY_SEVERITY[2]
+    local base = TheContractorRepairContracts.REPUTATION_BY_KIND.repair[2]
     assertEquals(world.calls.reputation[1], -math.floor(math.max(10, base * 1.5)))
     assertEquals(#tc.RepairContracts.pendingClaims, 0)
     assertEquals(#world.calls.messages, 0)
@@ -644,7 +699,7 @@ test("tampered at the deadline: no pay, double the loss, and a claim over the th
     world.partPrice = 4000
     local job = missAccepted(world, tc, { { kind = "component", id = "engine", accepted = 0.8, current = 0.3 } })
     assertEquals(#world.calls.invoices, 0, "not paid")
-    local base = math.floor(math.max(10, TheContractorRepairContracts.REPUTATION_BY_SEVERITY[2] * 1.5))
+    local base = math.floor(math.max(10, TheContractorRepairContracts.REPUTATION_BY_KIND.repair[2] * 1.5))
     assertEquals(world.calls.reputation[1], -math.floor(base * TheContractorRepairContracts.TAMPER_REPUTATION_MULTIPLIER))
     assertEquals(world.calls.messages[1].bodyKey, "tc_repair_tamperedBodyClaim")
 
@@ -699,6 +754,7 @@ test("a workshop job streams, saves and loads its machine and contract", functio
     assertEquals(table.concat(copy.workshop.requiredTools, ","), "lift")
     assertEquals(copy.workshop.operatingHours, 2450)
     assertEquals(copy.workshop.partsCost, 1000)
+    assertEquals(copy.workshop.acceptedAt, nil, "not accepted yet")
     assertEquals(copy.workshop.zoneUniqueId, nil, "server-only")
 
     local xmlFile = {}

@@ -283,7 +283,8 @@ function TheContractorJob.new(id, farmId, jobType, fieldId, requiredSkillLevel, 
     -- clients: vehicleId, vehicleName, kind, severity, offerExpiresDay,
     -- quotePrice (ADS's quote at the price level of the day it was made),
     -- partsCost (the parts and materials in it, which the price is worked
-    -- out from; nil on a job from before it was kept), requiredTools, serviceLevel, operatingHours, bayIndex, and
+    -- out from; nil on a job from before it was kept), acceptedAt (game
+    -- minutes, for the speed reputation; nil until accepted), requiredTools, serviceLevel, operatingHours, bayIndex, and
     -- 101's fieldId (a breakdown's field, nil otherwise; its serviceLevel is
     -- ADS's field service, "player" or "mobile"). Saved too, and
     -- server-only: vehicleUniqueId, zoneUniqueId.

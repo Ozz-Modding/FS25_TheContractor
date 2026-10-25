@@ -69,8 +69,24 @@ TheContractorRepairContracts.MARGIN_SPREAD = 0.10
 -- inspection alone takes a couple of hours, however few the parts.
 TheContractorRepairContracts.MIN_PRICE = 750
 
--- Base reputation for a finished job, by severity (1-3), before quality.
-TheContractorRepairContracts.REPUTATION_BY_SEVERITY = { 4, 7, 10 }
+-- Base reputation for a finished job, by kind and severity (1-3), before
+-- quality and speed: a service is routine, a repair more, and a field
+-- breakdown (101) most, a customer stuck mid-job. A missed job's penalty
+-- is worked out from this too (never with the speed factor).
+TheContractorRepairContracts.REPUTATION_BY_KIND = {
+    maintenance = { 1, 2, 3 },
+    repair = { 3, 5, 7 },
+    breakdown = { 5, 8, 12 },
+}
+-- Speed: a repair or breakdown finished within SPEED_FAST_SHARE of the time
+-- it had (from acceptance to the end of its due day) earns its kind's
+-- SPEED_MAX_FACTOR times the reputation, one using SPEED_SLOW_SHARE or more
+-- earns the plain amount, and in between is on a straight line. A share of
+-- the time, not hours, so it follows the due days (and so days per period).
+-- A service has no entry: nobody's waiting on it.
+TheContractorRepairContracts.SPEED_MAX_FACTOR = { repair = 1.5, breakdown = 1.5 }
+TheContractorRepairContracts.SPEED_FAST_SHARE = 0.25
+TheContractorRepairContracts.SPEED_SLOW_SHARE = 0.75
 
 -- Placing and collecting: how often the queue is looked at.
 TheContractorRepairContracts.PLACE_CHECK_MS = 2000
@@ -1080,11 +1096,42 @@ function TheContractorRepairContracts:checkAllStatuses()
     end
 end
 
--- The base reputation reward for a finished workshop job, before quality.
+-- The base reputation reward for a finished workshop job, before quality
+-- and speed.
 function TheContractorRepairContracts.getBaseReputation(job)
-    local bySeverity = TheContractorRepairContracts.REPUTATION_BY_SEVERITY
-    local severity = job.workshop ~= nil and job.workshop.severity or 1
+    local workshop = job.workshop or {}
+    local bySeverity = TheContractorRepairContracts.REPUTATION_BY_KIND[workshop.kind]
+        or TheContractorRepairContracts.REPUTATION_BY_KIND.repair
+    local severity = workshop.severity or 1
     return bySeverity[math.max(1, math.min(#bySeverity, severity))]
+end
+
+-- Game minutes from acceptance to completion, or nil (not finished, or
+-- accepted before acceptedAt was kept).
+function TheContractorRepairContracts.getTurnaroundMinutes(job)
+    local acceptedAt = job.workshop ~= nil and job.workshop.acceptedAt or nil
+    if acceptedAt == nil or job.completedAt == nil then
+        return nil
+    end
+    return math.max(job.completedAt - acceptedAt, 0)
+end
+
+-- The reputation multiplier for how quickly a finished job was done (see
+-- SPEED_MAX_FACTOR): 1 for a service, or without a turnaround or deadline.
+function TheContractorRepairContracts.getSpeedFactor(job)
+    local maxFactor = job.workshop ~= nil and TheContractorRepairContracts.SPEED_MAX_FACTOR[job.workshop.kind] or nil
+    local turnaround = TheContractorRepairContracts.getTurnaroundMinutes(job)
+    if maxFactor == nil or turnaround == nil or job.deadlineDay == nil then
+        return 1
+    end
+    local available = (job.deadlineDay + 1) * 24 * 60 - job.workshop.acceptedAt
+    if available <= 0 then
+        return 1
+    end
+    local fast = TheContractorRepairContracts.SPEED_FAST_SHARE
+    local slow = TheContractorRepairContracts.SPEED_SLOW_SHARE
+    local t = math.max(0, math.min(1, (turnaround / available - fast) / (slow - fast)))
+    return maxFactor + (1 - maxFactor) * t
 end
 
 -- Tampering (server) ------------------------------------------------------------------

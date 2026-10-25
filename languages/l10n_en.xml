@@ -485,6 +485,8 @@
 		<text name="tc_workshop_billedAmount" text="Billed amount"/>
 		<text name="tc_workshop_profit" text="Profit"/>
 		<text name="tc_workshop_partsCost" text="Parts cost"/>
+		<text name="tc_workshop_turnaround" text="Turnaround"/>
+		<text name="tc_workshop_turnaroundBonus" text="%s (+%.0f%% reputation for speed)"/>
 		<text name="tc_workshop_earningsNote" text="The parts cost is ADS's estimate of the parts and materials the job needed. The customer was billed that plus your margin for the work, and the difference is the profit, before your staff's wages."/>
 		<text name="tc_workshop_earningsNoteQuote" text="The estimated cost is ADS's quote for the work. The customer was billed that plus your margin, and the difference is the profit."/>
 		<text name="tc_workshop_missedNote" text="This job failed: it wasn't done by the day it was due, so the customer paid nothing and collected their machine."/>
