@@ -126,6 +126,9 @@ local function setup(def)
             end,
             getQuote = function(vehicle) return vehicle.quote end,
             getStatus = function(vehicle)
+                if world.status[vehicle.id] == "noContract" then
+                    return nil, "noContract"
+                end
                 return world.status[vehicle.id] ~= nil and { state = world.status[vehicle.id] } or { state = "open" }
             end,
             checkTampering = function(vehicle)
@@ -659,6 +662,57 @@ test("a status reached before the save is picked up after loading", function()
     world.status[vehicle.id] = "done"
     tc.RepairContracts:resolveSavedVehicles()
     assertEquals(job.state, TheContractorJob.STATE.COMPLETED)
+end)
+
+test("after loading, a job whose machine is gone ends with no penalty", function()
+    local world, tc = setup()
+    local job = makeOffer(world, tc)
+    tc.Jobs:transitionJobState(1, job.id, TheContractorJob.STATE.ACCEPTED)
+    job.workshop.vehicleId = 0
+    tc.RepairContracts:resolveSavedVehicles()
+    assertEquals(job.state, TheContractorJob.STATE.MISSED)
+    assertEquals(world.calls.reputation[1], 0)
+end)
+
+test("after loading without ADS, an accepted job ends with no penalty and an offer is left to lapse", function()
+    local world, tc = setup()
+    local job, _, zone = makeOffer(world, tc)
+    tc.Jobs:transitionJobState(1, job.id, TheContractorJob.STATE.ACCEPTED)
+    tc.RepairContracts:queueArrival(1, zone, 2, ADS_KIND.REPAIR, 2)
+    tc.RepairContracts:update(TheContractorRepairContracts.PLACE_CHECK_MS)
+    world:finishLoad()
+    local offer = nil
+    for _, other in ipairs(tc.Jobs:getAllJobs(1)) do
+        if other ~= job then
+            offer = other
+        end
+    end
+    assertEquals(offer.state, TheContractorJob.STATE.OFFERED)
+    TCADSRepairContracts.getEnv = function() return nil end
+    TCADSRepairContracts.detect()
+    tc.RepairContracts:resolveSavedVehicles()
+    assertEquals(job.state, TheContractorJob.STATE.MISSED)
+    assertEquals(world.calls.reputation[1], 0)
+    assertEquals(offer.state, TheContractorJob.STATE.OFFERED)
+end)
+
+test("after loading, a job whose machine lost its ADS contract ends with no penalty", function()
+    local world, tc = setup()
+    local job, vehicle = makeOffer(world, tc)
+    tc.Jobs:transitionJobState(1, job.id, TheContractorJob.STATE.ACCEPTED)
+    world.status[vehicle.id] = "noContract"
+    tc.RepairContracts:resolveSavedVehicles()
+    assertEquals(job.state, TheContractorJob.STATE.MISSED)
+    assertEquals(world.calls.reputation[1], 0)
+end)
+
+test("after loading, a workable job is left open", function()
+    local world, tc = setup()
+    local job = makeOffer(world, tc)
+    tc.Jobs:transitionJobState(1, job.id, TheContractorJob.STATE.ACCEPTED)
+    tc.RepairContracts:resolveSavedVehicles()
+    assertEquals(job.state, TheContractorJob.STATE.ACCEPTED)
+    assertEquals(#world.calls.reputation, 0)
 end)
 
 test("a machine ADS stops managing ends the job with no penalty", function()
