@@ -86,7 +86,7 @@
 		<text name="tc_equipment_need_implement_mow" text="Mower"/>
 		<text name="tc_equipment_need_implement_tedder" text="Tedder"/>
 		<text name="tc_equipment_need_implement_bale" text="Baler"/>
-		<text name="tc_equipment_need_implement_baleWrap" text="Bale wrapper"/>
+		<text name="tc_equipment_need_implement_baleWrap" text="Bale wrapper (round or square)"/>
 		<text name="tc_equipment_need_implement_fertilize" text="Fertilizer spreader, sprayer or manure spreader"/>
 		<text name="tc_equipment_need_implement_herbicide" text="Sprayer that takes herbicide"/>
 		<text name="tc_equipment_need_implement_weed" text="Weeder"/>
@@ -604,7 +604,7 @@
 		<text name="tc_equipment_missing_implement_mow" text="a mower"/>
 		<text name="tc_equipment_missing_implement_tedder" text="a tedder"/>
 		<text name="tc_equipment_missing_implement_bale" text="a baler"/>
-		<text name="tc_equipment_missing_implement_baleWrap" text="a bale wrapper"/>
+		<text name="tc_equipment_missing_implement_baleWrap" text="a bale wrapper (round or square)"/>
 		<text name="tc_equipment_missing_implement_fertilize" text="a fertilizer spreader, sprayer or manure spreader"/>
 		<text name="tc_equipment_missing_implement_herbicide" text="a sprayer that takes herbicide"/>
 		<text name="tc_equipment_missing_implement_weed" text="a weeder"/>
@@ -903,8 +903,8 @@
 		<text name="tc_overheads_levelDetail_annual" text="%s cover: %s a year."/>
 		<text name="tc_overheads_levelDetail_monthly" text="%s cover: %s a month."/>
 		<text name="tc_overhead_machineryInsurance" text="Machinery insurance"/>
-		<text name="tc_overhead_machineryInsurance_desc" text="Covers your machinery against theft. Basic pays 80%% of a lost vehicle's value less a %s excess, Standard pays 90%% of it less %s, Comprehensive its full value less %s and lends you a similar tractor while the claim settles. Priced at 1%%, 1.4%% or 1.8%% of your fleet's value a year, +35%% per claim in the last 3 years."/>
-		<text name="tc_overhead_machineryInsurance_desc_antiTheft" text="Covers your machinery against theft. Basic pays 80%% of a lost vehicle's value less a %s excess, Standard pays 90%% of it less %s, Comprehensive its full value less %s and lends you a similar tractor while the claim settles. Priced at 1%%, 1.4%% or 1.8%% of your fleet's value a year, +35%% per claim in the last 3 years. A vehicle with an anti-theft system fitted in the workshop costs 15%% less to cover."/>
+		<text name="tc_overhead_machineryInsurance_desc" text="Covers machinery theft. Basic pays 80%% of a lost vehicle's value less a %s excess, Standard 90%% less %s, Comprehensive 100%% less %s plus a loan tractor until the claim settles. Costs 1%%, 1.4%% or 1.8%% of your fleet's value a year, +35%% per claim in the last 3 years."/>
+		<text name="tc_overhead_machineryInsurance_desc_antiTheft" text="Covers machinery theft. Basic pays 80%% of a lost vehicle's value less a %s excess, Standard 90%% less %s, Comprehensive 100%% less %s plus a loan tractor until the claim settles. Costs 1%%, 1.4%% or 1.8%% of fleet value a year, +35%% per claim in 3 years. Anti-theft fitted: 15%% less."/>
 		<text name="tc_insurance_level_basic" text="Basic"/>
 		<text name="tc_insurance_level_standard" text="Standard"/>
 		<text name="tc_insurance_level_comprehensive" text="Comprehensive"/>

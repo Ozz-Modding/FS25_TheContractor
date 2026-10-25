@@ -41,10 +41,12 @@ TheContractorFieldBreakdowns.TOOL_BOX_PLAYER_SHARE = 0.75
 -- The share that are harvesters (when there are any, and not in winter).
 TheContractorFieldBreakdowns.HARVESTER_SHARE = 0.2
 
--- How far in from the field's edge the machine stands, beyond half its
--- own size (metres), and how many random points are tried for it.
-TheContractorFieldBreakdowns.EDGE_MARGIN = 6
-TheContractorFieldBreakdowns.SPOT_TRIES = 40
+-- Where the machine stands: on the headland, its centre at most
+-- MAX_EDGE_DEPTH metres in from the field's edge, and at least EDGE_GAP
+-- beyond half its own size from every edge (so a big one goes as far in
+-- as it must). It faces in, as it drove.
+TheContractorFieldBreakdowns.EDGE_GAP = 1
+TheContractorFieldBreakdowns.MAX_EDGE_DEPTH = 10
 
 function TheContractorFieldBreakdowns.new()
     local self = {}
@@ -201,29 +203,33 @@ function TheContractorFieldBreakdowns.pickModel(repairContracts, random)
     return list[math.floor(random() * #list) + 1] or list[#list]
 end
 
--- A spot inside the field, far enough in from its edge for the model, and
--- a random heading: x, z, rotY, or nil.
+-- How far in from the edge the model's centre can be: { min, max }.
+function TheContractorFieldBreakdowns.getEdgeDepth(model)
+    local minDepth = math.max(model.width, model.length) * 0.5 + TheContractorFieldBreakdowns.EDGE_GAP
+    return { minDepth, math.max(minDepth, TheContractorFieldBreakdowns.MAX_EDGE_DEPTH) }
+end
+
+-- A spot on a random stretch of the field's headland (fly-tipping's site
+-- plan, 075, at the model's depth), facing in: x, z, rotY, or nil.
 function TheContractorFieldBreakdowns.pickSpot(fieldId, model, random)
     local field = g_fieldManager:getFieldById(fieldId)
     local boundary = field ~= nil and TCJoyriderRuts.getFieldBoundary(field) or {}
-    if #boundary < 3 then
+    local site = TCJoyriderRuts.planDumpSite(boundary, nil, nil, random,
+        TheContractorFieldBreakdowns.getEdgeDepth(model))
+    if site == nil then
         return nil
     end
-    local minX, maxX, minZ, maxZ = math.huge, -math.huge, math.huge, -math.huge
-    for _, point in ipairs(boundary) do
-        minX, maxX = math.min(minX, point[1]), math.max(maxX, point[1])
-        minZ, maxZ = math.min(minZ, point[2]), math.max(maxZ, point[2])
+    return site.x, site.z, site.heading
+end
+
+-- Server, once the machine's there: its ruts in from the edge and the crop
+-- round it cleared, so it isn't standing in the middle of the maize.
+function TheContractorFieldBreakdowns.clearSpot(entry, model)
+    local field = g_fieldManager:getFieldById(entry.fieldId)
+    if field == nil or model == nil or entry.x == nil then
+        return
     end
-    local margin = TheContractorFieldBreakdowns.EDGE_MARGIN + math.max(model.width, model.length) * 0.5
-    for _ = 1, TheContractorFieldBreakdowns.SPOT_TRIES do
-        local x = minX + random() * (maxX - minX)
-        local z = minZ + random() * (maxZ - minZ)
-        if TCJoyriderRuts.isPointInside(x, z, boundary) and
-                TCJoyriderRuts.getDistanceToBoundary(x, z, boundary) >= margin then
-            return x, z, random() * 2 * math.pi
-        end
-    end
-    return nil
+    TCJoyriderRuts.paintMachineSite(field, entry.x, entry.z, entry.rotY or 0, model.width, model.length)
 end
 
 -- Stages (server) ---------------------------------------------------------------------
