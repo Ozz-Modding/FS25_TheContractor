@@ -1090,21 +1090,28 @@ function TheContractorJobGeneration.registerConsoleCommands()
     -- scripting a storyline. Jobs broadcasts the new job itself. Fails only
     -- when no field qualifies for the type right now, or none that does has
     -- a workable deadline.
+    -- `repair` and `maintenance` (100) go to RepairContracts instead: a
+    -- customer's machine sent to a repair zone bay, with an optional severity.
     TCConsole.register("job", "offer", {
-        args = "<jobType>",
-        description = "Offer your farm a real job of that type now (no type lists the types)",
+        args = "<jobType> [severity]",
+        description = "Offer your farm a real job of that type now (no type lists the types; repair/maintenance take a severity 1-3)",
         run = function(farmId, args)
             local tc = g_currentMission.TheContractor
             local typeList = table.concat(TheContractorJobGeneration.JOB_TYPE_KEYS, ", ")
+                .. ", " .. table.concat(TheContractorRepairContracts.CONSOLE_OFFER_KINDS, ", ") .. " (ADS)"
             if args[1] == nil then
-                return "Usage: tcJob offer <jobType>\nJob types: " .. typeList
+                return "Usage: tcJob offer <jobType> [severity]\nJob types: " .. typeList
             end
+            local repairKind = TheContractorRepairContracts.findConsoleOfferKind(args[1])
             local jobType = TheContractorJobGeneration.findJobType(args[1])
-            if jobType == nil then
+            if jobType == nil and repairKind == nil then
                 return string.format("Unknown job type '%s'. Job types: %s", args[1], typeList)
             end
             if not tc.Company:hasCompany(farmId) then
                 return string.format("Error: farm %d has no company yet", farmId)
+            end
+            if repairKind ~= nil then
+                return TheContractorRepairContracts.consoleOffer(farmId, repairKind, args[2])
             end
 
             local job = tc.JobGeneration:tryGenerateJob(farmId, jobType)

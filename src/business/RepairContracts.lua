@@ -1365,36 +1365,46 @@ end
 
 -- Console (tcJob) ------------------------------------------------------------------------
 
-function TheContractorRepairContracts.registerConsoleCommands()
-    TCConsole.register("job", "repairArrival", {
-        args = "[repair|maintenance] [severity 1-3]",
-        description = "Send a customer's machine to your first free repair zone bay now (placed within a couple of seconds)",
-        run = function(farmId, args)
-            local kind = args[1] ~= nil and string.lower(args[1]) or nil
-            if kind ~= nil and TheContractorRepairContracts.JOB_TYPES[kind] == nil then
-                return false
-            end
-            local severity = tonumber(args[2])
-            if args[2] ~= nil and (severity == nil or severity < 1 or severity > 3) then
-                return false
-            end
-            if not TCADSRepairContracts.isActive() then
-                return TCADSRepairContracts.describe()
-            end
-            local repairContracts = g_currentMission.TheContractor.RepairContracts
-            local zone, bayIndex = repairContracts:findFreeBay(farmId)
-            if zone == nil then
-                return string.format("Farm %d has no free repair zone bay.", farmId)
-            end
-            local entry = repairContracts:queueArrival(farmId, zone, bayIndex, kind, severity and math.floor(severity))
-            if entry == nil then
-                return "No model fits that zone (check its filter)."
-            end
-            return string.format("Queued %s (%s, severity %d) for bay %d.", entry.xmlFilename, entry.kind,
-                entry.severity, bayIndex)
-        end,
-    })
+-- The bay kinds `tcJob offer` takes (JobGeneration's command hands them to
+-- consoleOffer): field breakdowns come from `tcCompany event` instead.
+TheContractorRepairContracts.CONSOLE_OFFER_KINDS = { "repair", "maintenance" }
 
+function TheContractorRepairContracts.findConsoleOfferKind(name)
+    if name == nil then
+        return nil
+    end
+    for _, kind in ipairs(TheContractorRepairContracts.CONSOLE_OFFER_KINDS) do
+        if kind == string.lower(name) then
+            return kind
+        end
+    end
+    return nil
+end
+
+-- `tcJob offer repair|maintenance [severity]`: a customer's machine sent to
+-- the farm's first free repair zone bay, queued like a normal arrival.
+function TheContractorRepairContracts.consoleOffer(farmId, kind, severityArg)
+    local severity = tonumber(severityArg)
+    if severityArg ~= nil and (severity == nil or severity < 1 or severity > 3) then
+        return string.format("Usage: tcJob offer %s [severity 1-3]", kind)
+    end
+    if not TCADSRepairContracts.isActive() then
+        return TCADSRepairContracts.describe()
+    end
+    local repairContracts = g_currentMission.TheContractor.RepairContracts
+    local zone, bayIndex = repairContracts:findFreeBay(farmId)
+    if zone == nil then
+        return string.format("Farm %d has no free repair zone bay.", farmId)
+    end
+    local entry = repairContracts:queueArrival(farmId, zone, bayIndex, kind, severity and math.floor(severity))
+    if entry == nil then
+        return "No model fits that zone (check its filter)."
+    end
+    return string.format("Queued %s (%s, severity %d) for bay %d.", entry.xmlFilename, entry.kind,
+        entry.severity, bayIndex)
+end
+
+function TheContractorRepairContracts.registerConsoleCommands()
     TCConsole.register("job", "repairStatus", {
         args = "",
         description = "Your repair zones, their bays, and machines on the way or waiting to be collected",
