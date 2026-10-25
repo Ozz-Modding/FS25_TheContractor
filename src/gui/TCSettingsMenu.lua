@@ -112,7 +112,7 @@ end
 
 function TCSettingsMenu.addOption(settingsPage, id)
     local definition = TheContractorSettings.DEFINITIONS[id]
-    -- A setting that only means something with another mod (adsMargin).
+    -- A setting that only means something with another mod (the ADS margins).
     if definition.isShown ~= nil and not definition.isShown() then
         return
     end

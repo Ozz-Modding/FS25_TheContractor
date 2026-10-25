@@ -8,7 +8,7 @@
 --
 -- Everything after the roll is 100's (TheContractorRepairContracts): the
 -- machine goes on its arrivals queue with a spot on the field instead of a
--- bay, is spawned out of sight (or after the usual wait), prepared, and
+-- bay, is spawned, prepared, and
 -- offered as an adsBreakdown job due today, priced from ADS's quote (a hired
 -- mobile workshop, call-out fee included) plus the margin. Accepting needs
 -- the kit for its level (getBreakdownProblem): a tool box or the farm's own

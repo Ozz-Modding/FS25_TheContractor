@@ -26,7 +26,6 @@ local function setup(def)
         end
         return node.x or node[1] or 0, 0, node.z or node[2] or 0
     end
-    g_cameraManager = def.hasCamera and { getActiveCamera = function() return 5 end } or nil
     VehiclePropertyState = { OWNED = 1, MISSION = 4 }
     VehicleLoadingState = { OK = 1 }
     Environment = { PERIODS_IN_YEAR = 12 }
@@ -41,7 +40,7 @@ local function setup(def)
         getPeriodFromDay = function(_, day) return (day - 1) % 12 + 1 end,
         getDayInPeriodFromDay = function() return 1 end,
     }
-    g_currentMission.getIsClient = function() return def.hasCamera == true end
+    g_currentMission.getIsClient = function() return false end
     g_currentMission.placeableSystem = { placeables = {} }
 
     TheContractorNegotiation = { rollInitialEagerness = function() return 1 end, MAX_ROUNDS = 3 }
@@ -60,7 +59,6 @@ local function setup(def)
     }
     TCJobCompletedEvent = { showNotification = function() end }
     TCJobMissedEvent = { showNotification = function() end }
-    TCIdleStaff = { isSeen = function() return world.cameraSees == true end }
     TCParking = {
         PLACE_HEIGHT_OFFSET = 0.3,
         DEFAULT_HEIGHT = 4,
@@ -73,7 +71,12 @@ local function setup(def)
     local tc = g_currentMission.TheContractor
     tc.Settings = {
         scaleCost = function(_, amount) return amount end,
-        getADSMargin = function() return world.adsMargin or 0.25 end,
+        getADSMargin = function(_, isField)
+            if isField then
+                return world.adsFieldMargin or 0.5
+            end
+            return world.adsMargin or 0.4
+        end,
     }
     tc.Reputation = {
         getStanding = function() return world.standing or 0 end,
@@ -107,7 +110,7 @@ local function setup(def)
                     return false, "noApplicableFaults"
                 end
                 world.prepared = request
-                vehicle.quote = { price = 800, minTools = { "jack" }, serviceLevel = request.fieldService,
+                vehicle.quote = { price = 1200, partsCost = 800, minTools = { "jack" }, serviceLevel = request.fieldService,
                     fieldService = request.fieldService, operatingHours = 3100 }
                 return true, "rc1"
             end,
@@ -381,20 +384,17 @@ test("a breakdown is placed on its spot, prepared as ADS's breakdown and offered
     assertEquals(job.workshop.kind, "breakdown")
     assertEquals(job.workshop.serviceLevel, "mobile")
     assertEquals(job.workshop.zoneUniqueId, nil)
-    assertTrue(job:getPrice() >= 919 and job:getPrice() <= 1000, "the call-out quote plus 15-25%, floored")
+    assertTrue(job:getPrice() >= 1119 and job:getPrice() <= 1280, "the parts plus the field's 40-60%, floored")
     assertEquals(job:getLocationText(), "fendt942.xml, Field 3")
     assertTrue(TheContractorRepairContracts.isBreakdownJob(job))
     assertTrue(TheContractorRepairContracts.isContractVehicle(vehicle))
 end)
 
-test("it waits while the player's looking at the spot, then comes anyway", function()
-    local world, tc = setup({ hasCamera = true })
+test("it's placed on the next look at the queue", function()
+    local world, tc = setup()
     world:addField({ id = 3 })
     world:trigger()
-    world.cameraSees = true
     tc.RepairContracts:update(TheContractorRepairContracts.PLACE_CHECK_MS)
-    assertEquals(#world.calls.spawned, 0)
-    tc.RepairContracts:update(TheContractorRepairContracts.PLACE_FALLBACK_MS)
     assertEquals(#world.calls.spawned, 1)
 end)
 

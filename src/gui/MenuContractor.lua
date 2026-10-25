@@ -3687,18 +3687,23 @@ function MenuContractor:populateWorkshopCell(index, cell)
     setChip(cell:getAttribute("chip"), cell:getAttribute("chipText"), chipText, chipTone)
 end
 
--- A completed workshop job's money: ADS's quote (the estimated cost), what
--- the customer was billed (the quote plus our margin) and the difference.
--- Both at the price level of their day, as they were taken. The quote is
--- nil (and so the profit) if there isn't one, as on a save from before it
--- was kept.
+-- A completed workshop job's money: the parts in ADS's quote (the cost),
+-- what the customer was billed (the parts plus our margin) and the
+-- difference, plus the cost's label key. Both at the price level of their
+-- day, as they were taken. A job from before the parts were kept (its
+-- price was the whole quote plus the margin) uses the quote instead, and
+-- one with neither has no cost (and so no profit).
 function MenuContractor.getWorkshopEarnings(job)
     local billed = job.paymentAmount or job:getPrice()
-    local quote = job.workshop ~= nil and job.workshop.quotePrice or nil
-    if quote == nil or quote <= 0 then
-        return nil, billed, nil
+    local workshop = job.workshop or {}
+    if workshop.partsCost ~= nil then
+        return workshop.partsCost, billed, billed - workshop.partsCost, "tc_workshop_partsCost"
     end
-    return quote, billed, billed - quote
+    local quote = workshop.quotePrice
+    if quote == nil or quote <= 0 then
+        return nil, billed, nil, "tc_workshop_estimatedCost"
+    end
+    return quote, billed, billed - quote, "tc_workshop_estimatedCost"
 end
 
 -- The Completed view's rows: the job, then its money. A missed job earned
@@ -3719,19 +3724,20 @@ function MenuContractor:getCompletedWorkshopRows(job)
     if job.state == TheContractorJob.STATE.MISSED then
         add(g_i18n:getText("tc_jobDetails_due"), formatTargetDate(job.targetPeriod, job.targetDayInPeriod))
         table.insert(rows, { section = g_i18n:getText("tc_workshop_sectionEarnings") })
-        add(g_i18n:getText("tc_workshop_estimatedCost"), money(MenuContractor.getWorkshopEarnings(job)))
+        local cost, _, _, costKey = MenuContractor.getWorkshopEarnings(job)
+        add(g_i18n:getText(costKey), money(cost))
         add(g_i18n:getText("tc_workshop_billedAmount"), g_i18n:getText("tc_workshop_billedNothing"))
         return rows
     end
     add(g_i18n:getText("tc_workshop_columnCompleted"), formatCompletedAt(job.completedAt))
 
-    local quote, billed, profit = MenuContractor.getWorkshopEarnings(job)
+    local cost, billed, profit, costKey = MenuContractor.getWorkshopEarnings(job)
     table.insert(rows, { section = g_i18n:getText("tc_workshop_sectionEarnings") })
-    add(g_i18n:getText("tc_workshop_estimatedCost"), money(quote))
+    add(g_i18n:getText(costKey), money(cost))
     add(g_i18n:getText("tc_workshop_billedAmount"), money(billed))
     local profitText = money(profit)
-    if profit ~= nil and quote > 0 then
-        profitText = string.format("%s (%+.0f%%)", profitText, profit / quote * 100)
+    if profit ~= nil and cost > 0 then
+        profitText = string.format("%s (%+.0f%%)", profitText, profit / cost * 100)
     end
     add(g_i18n:getText("tc_workshop_profit"), profitText)
     return rows
@@ -3757,7 +3763,8 @@ function MenuContractor:updateWorkshopJobDetails()
     self.workshopDetailTitle:setText(job:getDisplayTitle())
     if isCompleted then
         setChip(self.workshopDetailChip, self.workshopDetailChipText, g_i18n:getText("tc_logbook_completed"), "good")
-        self.workshopDoneWhen:setText(g_i18n:getText("tc_workshop_earningsNote"))
+        local noteKey = job.workshop.partsCost ~= nil and "tc_workshop_earningsNote" or "tc_workshop_earningsNoteQuote"
+        self.workshopDoneWhen:setText(g_i18n:getText(noteKey))
     elseif isMissed then
         setChip(self.workshopDetailChip, self.workshopDetailChipText, g_i18n:getText("tc_calendar_jobMissed"), "bad")
         self.workshopDoneWhen:setText(g_i18n:getText("tc_workshop_missedNote"))

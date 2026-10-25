@@ -281,8 +281,9 @@ function TheContractorJob.new(id, farmId, jobType, fieldId, requiredSkillLevel, 
     -- 100: a workshop job's customer machine and contract, nil for every
     -- other job (TheContractorRepairContracts; fieldId is 0). Sent to
     -- clients: vehicleId, vehicleName, kind, severity, offerExpiresDay,
-    -- quotePrice (ADS's dealer quote at the price level of the day it was
-    -- made), requiredTools, serviceLevel, operatingHours, bayIndex, and
+    -- quotePrice (ADS's quote at the price level of the day it was made),
+    -- partsCost (the parts and materials in it, which the price is worked
+    -- out from; nil on a job from before it was kept), requiredTools, serviceLevel, operatingHours, bayIndex, and
     -- 101's fieldId (a breakdown's field, nil otherwise; its serviceLevel is
     -- ADS's field service, "player" or "mobile"). Saved too, and
     -- server-only: vehicleUniqueId, zoneUniqueId.

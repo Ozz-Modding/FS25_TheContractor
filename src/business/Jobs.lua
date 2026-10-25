@@ -266,7 +266,7 @@ function TheContractorJobs:proposeCounterOffer(farmId, jobId, counterPrice)
         return nil
     end
 
-    -- 100: a workshop job's price is fixed (ADS's quote plus the adsMargin
+    -- 100: a workshop job's price is fixed (ADS's parts cost plus the margin
     -- roll), and one the farm hasn't the tools for can't be taken on anyway.
     if TheContractorRepairContracts.isWorkshopJob(job) or TheContractorJobs.getAcceptProblem(job) ~= nil then
         return nil
@@ -1376,6 +1376,7 @@ function TheContractorJobs.writeWorkshop(streamId, workshop)
     streamWriteInt32(streamId, workshop.bayIndex or 0)
     -- 101: a breakdown's field.
     streamWriteInt32(streamId, workshop.fieldId or 0)
+    streamWriteFloat32(streamId, workshop.partsCost or -1)
 end
 
 local function splitList(text)
@@ -1406,6 +1407,8 @@ function TheContractorJobs.readWorkshop(streamId)
     workshop.bayIndex = streamReadInt32(streamId)
     local fieldId = streamReadInt32(streamId)
     workshop.fieldId = fieldId ~= 0 and fieldId or nil
+    local partsCost = streamReadFloat32(streamId)
+    workshop.partsCost = partsCost >= 0 and partsCost or nil
     return workshop
 end
 
@@ -1659,6 +1662,7 @@ function TheContractorJobs.loadWorkshop(xmlFile, key)
         severity = Utils.getNoNil(getXMLInt(xmlFile, key .. "#severity"), 1),
         offerExpiresDay = getXMLInt(xmlFile, key .. "#offerExpiresDay"),
         quotePrice = Utils.getNoNil(getXMLFloat(xmlFile, key .. "#quotePrice"), 0),
+        partsCost = getXMLFloat(xmlFile, key .. "#partsCost"),
         requiredTools = splitList(getXMLString(xmlFile, key .. "#requiredTools")),
         serviceLevel = getXMLString(xmlFile, key .. "#serviceLevel"),
         operatingHours = getXMLFloat(xmlFile, key .. "#operatingHours"),
@@ -1685,6 +1689,9 @@ function TheContractorJobs.saveWorkshop(xmlFile, key, workshop)
         setXMLInt(xmlFile, key .. "#offerExpiresDay", workshop.offerExpiresDay)
     end
     setXMLFloat(xmlFile, key .. "#quotePrice", workshop.quotePrice or 0)
+    if workshop.partsCost ~= nil then
+        setXMLFloat(xmlFile, key .. "#partsCost", workshop.partsCost)
+    end
     setXMLString(xmlFile, key .. "#requiredTools", table.concat(workshop.requiredTools or {}, ","))
     if workshop.serviceLevel ~= nil then
         setXMLString(xmlFile, key .. "#serviceLevel", workshop.serviceLevel)

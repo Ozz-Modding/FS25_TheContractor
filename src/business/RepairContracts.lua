@@ -7,10 +7,8 @@
 --
 -- Arrivals (server): every day each empty bay of a farm's zones may get a
 -- customer (ARRIVAL_CHANCE), queued with its model, kind, severity and seed.
--- A queued arrival is spawned while the player can't see its bay (single
--- player only; multiplayer skips the check), or anyway after
--- PLACE_FALLBACK_MS of waiting. Then ADS
--- prepares it, and the offer goes up with a price of ADS's quote plus a
+-- A queued arrival is spawned on the next look at the queue
+-- (PLACE_CHECK_MS), seen or not. Then ADS prepares it, and the offer goes up with a price of ADS's quote plus a
 -- margin. Nothing runs while the queue is empty.
 --
 -- The job (Jobs, job.workshop): fieldId 0 (a breakdown's field is
@@ -19,8 +17,8 @@
 -- (getAcceptProblem). It completes when ADS says done (its listener, plus a
 -- pass after load and every day, since ADS's listener never fires for a
 -- status reached before the save). When it ends the customer takes the
--- machine back: the contract is released and the machine is deleted once
--- its bay is out of view (the same check and fallback as arrivals).
+-- machine back: the contract is released and the machine is deleted on the
+-- next look at the queue (unless someone's driving it).
 --
 -- Tampering is judged once, at the deadline (Jobs:missJob): a machine
 -- that's still worse than it arrived means no pay, TAMPER_REPUTATION_MULTIPLIER
@@ -49,7 +47,7 @@ TheContractorRepairContracts.JOB_TYPES = {
 
 -- The chance an empty bay gets a customer each day, and what they want.
 TheContractorRepairContracts.ARRIVAL_CHANCE = 0.5
-TheContractorRepairContracts.KIND_WEIGHTS = { repair = 60, maintenance = 40 }
+TheContractorRepairContracts.KIND_WEIGHTS = { repair = 70, maintenance = 30 }
 -- How likely each severity (1-3) is, whatever the farm's reputation.
 TheContractorRepairContracts.SEVERITY_WEIGHTS = { 20, 30, 50 }
 
@@ -60,22 +58,22 @@ TheContractorRepairContracts.MIN_DUE_DAYS = 1
 TheContractorRepairContracts.MAX_DUE_DAYS = 3
 TheContractorRepairContracts.FULL_DUE_DAYS_PER_PERIOD = 5
 
--- The price: ADS's quote plus a margin, rolled per offer within
--- MARGIN_SPREAD either side of the adsMargin setting (never below nothing).
--- Not negotiable, and the quote itself is never shown.
+-- The price: the parts and materials in ADS's quote plus a margin, which
+-- pays for the work (the quote's labour, call-out and supplies are what a
+-- workshop would charge, and the player or their staff do that work
+-- themselves). The margin is rolled per offer within MARGIN_SPREAD either
+-- side of the adsWorkshopMargin or adsFieldMargin setting (never below
+-- nothing). Not negotiable, and the quote itself is never shown.
 TheContractorRepairContracts.MARGIN_SPREAD = 0.10
 -- The least a job pays (base, before FS25_EconomyScale's factor): an
--- inspection alone takes a couple of hours, however small the quote.
+-- inspection alone takes a couple of hours, however few the parts.
 TheContractorRepairContracts.MIN_PRICE = 750
 
 -- Base reputation for a finished job, by severity (1-3), before quality.
 TheContractorRepairContracts.REPUTATION_BY_SEVERITY = { 4, 7, 10 }
 
--- Placing and collecting: how often the queue is looked at, and how long
--- (real time) one waits for its bay to be out of sight before it's done in
--- sight anyway.
+-- Placing and collecting: how often the queue is looked at.
 TheContractorRepairContracts.PLACE_CHECK_MS = 2000
-TheContractorRepairContracts.PLACE_FALLBACK_MS = 120000
 -- An arrival whose bay has no room for this many days is dropped.
 TheContractorRepairContracts.ARRIVAL_GIVE_UP_DAYS = 3
 -- A model ADS turns down is swapped for another this many times.
@@ -105,10 +103,10 @@ function TheContractorRepairContracts.new()
     setmetatable(self, TheContractorRepairContracts_mt)
 
     -- Server, saved: { farmId, zoneUniqueId, bayIndex, xmlFilename, kind,
-    -- severity, seed, queuedDay, attempts, blockedDays, waitMs, isLoading }.
+    -- severity, seed, queuedDay, attempts, blockedDays, isLoading }.
     self.arrivals = {}
     -- Server, saved: machines waiting to be collected: { farmId, vehicleId,
-    -- uniqueId, zoneUniqueId, bayIndex, waitMs }.
+    -- uniqueId, zoneUniqueId, bayIndex }.
     self.removals = {}
     -- Server, saved: { farmId, jobId, vehicleName, amount, notifyDay }.
     self.pendingClaims = {}
@@ -225,28 +223,32 @@ function TheContractorRepairContracts.isContractVehicle(vehicle)
     return vehicleId ~= nil and TheContractorRepairContracts.getContractVehicleIds()[vehicleId] ~= nil
 end
 
--- Vanilla's workshop (VehicleSellingPoint:determineCurrentVehicles, which
--- ADS's workshop window reads too) only lists vehicles that show in the
--- vehicles overview, and that's OWNED or LEASED, never MISSION. So a
--- customer's machine standing in the workshop is added back, for the farm
--- it's with: every machine in range that's ours to work on.
-function TheContractorRepairContracts.determineCurrentVehicles(sellingPoint, superFunc)
-    local vehicles = superFunc(sellingPoint)
-    local farmId = g_currentMission:getFarmId()
-    if farmId == FarmManager.SPECTATOR_FARM_ID or sellingPoint.vehicleShapesInRange == nil then
-        return vehicles
+-- Whether a machine is a customer's the farm can work on now: its job still
+-- open, and the machine with that farm. Workshops (vanilla's and service
+-- vehicle mods') only list vehicles that show in the vehicles overview, and
+-- that's OWNED or LEASED, never MISSION, so each is told about these.
+function TheContractorRepairContracts.isWorkableVehicle(vehicle, farmId)
+    if vehicle == nil or farmId == nil or farmId == FarmManager.SPECTATOR_FARM_ID then
+        return false
     end
-    local contractJobs = TheContractorRepairContracts.getContractVehicleIds()
-    if next(contractJobs) == nil then
-        return vehicles
+    local job = TheContractorRepairContracts.getContractVehicleIds()[NetworkUtil.getObjectId(vehicle)]
+    return job ~= nil and not job:isTerminal() and vehicle:getOwnerFarmId() == farmId
+end
+
+-- Adds the workable customer's machines among a workshop trigger's shapes
+-- (shapeId -> true) to its list, sorted by root node as vanilla does.
+-- Returns whether any were added.
+function TheContractorRepairContracts.addWorkableVehiclesInRange(vehicles, shapesInRange, farmId)
+    if shapesInRange == nil or farmId == FarmManager.SPECTATOR_FARM_ID or
+            next(TheContractorRepairContracts.getContractVehicleIds()) == nil then
+        return false
     end
     local added = false
-    for shapeId, inRange in pairs(sellingPoint.vehicleShapesInRange) do
+    for shapeId, inRange in pairs(shapesInRange) do
         local object = inRange and entityExists(shapeId) and g_currentMission.nodeToObject[shapeId] or nil
         if object ~= nil and object.rootVehicle ~= nil then
             for _, vehicle in ipairs(object.rootVehicle:getChildVehicles()) do
-                local job = contractJobs[NetworkUtil.getObjectId(vehicle)]
-                if job ~= nil and not job:isTerminal() and vehicle:getOwnerFarmId() == farmId and
+                if TheContractorRepairContracts.isWorkableVehicle(vehicle, farmId) and
                         not table.hasElement(vehicles, vehicle) then
                     table.insert(vehicles, vehicle)
                     added = true
@@ -259,6 +261,16 @@ function TheContractorRepairContracts.determineCurrentVehicles(sellingPoint, sup
             return a.rootNode < b.rootNode
         end)
     end
+    return added
+end
+
+-- Vanilla's workshop (VehicleSellingPoint:determineCurrentVehicles, which
+-- ADS's workshop window reads too): a customer's machine standing in it is
+-- added back. Service vehicle mods' workshops are TCServiceVehicleMods'.
+function TheContractorRepairContracts.determineCurrentVehicles(sellingPoint, superFunc)
+    local vehicles = superFunc(sellingPoint)
+    TheContractorRepairContracts.addWorkableVehiclesInRange(vehicles, sellingPoint.vehicleShapesInRange,
+        g_currentMission:getFarmId())
     return vehicles
 end
 
@@ -566,7 +578,6 @@ function TheContractorRepairContracts:queueArrival(farmId, zone, bayIndex, kind,
         queuedDay = g_currentMission.environment.currentMonotonicDay,
         attempts = 0,
         blockedDays = 0,
-        waitMs = 0,
         isLoading = false,
     }
     table.insert(self.arrivals, entry)
@@ -576,8 +587,8 @@ function TheContractorRepairContracts:queueArrival(farmId, zone, bayIndex, kind,
 end
 
 -- 101: a customer's machine to break down on a field, at a spot
--- TheContractorFieldBreakdowns picked for its model: placed out of sight like
--- any arrival, prepared as ADS's breakdown kind, offered due today.
+-- TheContractorFieldBreakdowns picked for its model: placed like any
+-- arrival, prepared as ADS's breakdown kind, offered due today.
 function TheContractorRepairContracts:queueFieldArrival(farmId, fieldId, model, x, z, rotY, fieldService, severity)
     local entry = {
         farmId = farmId,
@@ -593,7 +604,6 @@ function TheContractorRepairContracts:queueFieldArrival(farmId, fieldId, model, 
         queuedDay = g_currentMission.environment.currentMonotonicDay,
         attempts = 0,
         blockedDays = 0,
-        waitMs = 0,
         isLoading = false,
     }
     table.insert(self.arrivals, entry)
@@ -674,29 +684,6 @@ end
 
 -- Placing and collecting (server) ---------------------------------------------------------
 
--- Whether the player can see a bay, in single player: their camera, within
--- TCIdleStaff's range (a dot product and a projection, no raycasts). In
--- multiplayer there's no check at all (the user's call, to keep it
--- simple): machines arrive and leave whether anyone's looking or not.
-function TheContractorRepairContracts.isBaySeen(bayArea)
-    local mission = g_currentMission
-    local dynamicInfo = mission.missionDynamicInfo
-    if dynamicInfo ~= nil and dynamicInfo.isMultiplayer == true then
-        return false
-    end
-    if not mission:getIsClient() or g_cameraManager == nil then
-        return false
-    end
-    local camera = g_cameraManager:getActiveCamera()
-    if camera == nil or camera == 0 then
-        return false
-    end
-    local x, z = PlaceableTCRepairZone.getAreaCentre(bayArea)
-    local y = getTerrainHeightAtWorldPos(g_terrainNode, x, 0, z)
-    local cx, cy, cz = getWorldTranslation(camera)
-    return TCIdleStaff.isSeen({ x = x, y = y, z = z }, camera, cx, cy, cz)
-end
-
 function TheContractorRepairContracts:update(dt)
     if not g_currentMission:getIsServer() or (#self.arrivals == 0 and #self.removals == 0) then
         return
@@ -705,16 +692,15 @@ function TheContractorRepairContracts:update(dt)
     if self.checkMs < TheContractorRepairContracts.PLACE_CHECK_MS then
         return
     end
-    local elapsed = self.checkMs
     self.checkMs = 0
 
     for _, entry in ipairs(self:copyList(self.arrivals)) do
         if not entry.isLoading then
-            self:tryPlaceArrival(entry, elapsed)
+            self:tryPlaceArrival(entry)
         end
     end
     for _, entry in ipairs(self:copyList(self.removals)) do
-        self:tryCollect(entry, elapsed)
+        self:tryCollect(entry)
     end
 end
 
@@ -734,14 +720,6 @@ local function removeFrom(list, entry)
         end
     end
     return false
-end
-
--- Whether a queued arrival or a collection may go ahead now: its bay unseen,
--- or it's waited long enough.
-local function isReady(entry, bayArea, elapsed)
-    entry.waitMs = (entry.waitMs or 0) + elapsed
-    return entry.waitMs >= TheContractorRepairContracts.PLACE_FALLBACK_MS or
-        not TheContractorRepairContracts.isBaySeen(bayArea)
 end
 
 function TheContractorRepairContracts:findModel(entry, zone)
@@ -799,15 +777,12 @@ function TheContractorRepairContracts:getArrivalPlace(entry)
     return bayArea, model
 end
 
-function TheContractorRepairContracts:tryPlaceArrival(entry, elapsed)
+function TheContractorRepairContracts:tryPlaceArrival(entry)
     local bayArea, model = self:getArrivalPlace(entry)
     local storeItem = model ~= nil and g_storeManager:getItemByXMLFilename(model.xmlFilename) or nil
     if bayArea == nil or storeItem == nil or not TCADSRepairContracts.isActive() then
         -- The zone's been sold or shrunk, or the model's gone.
         removeFrom(self.arrivals, entry)
-        return
-    end
-    if not isReady(entry, bayArea, elapsed) then
         return
     end
 
@@ -822,7 +797,6 @@ function TheContractorRepairContracts:tryPlaceArrival(entry, elapsed)
         end
         -- Something's in the bay: try again tomorrow, then give up.
         entry.blockedDays = math.max(1, entry.blockedDays or 0)
-        entry.waitMs = 0
         return
     end
     entry.blockedDays = 0
@@ -874,7 +848,6 @@ function TheContractorRepairContracts:retryArrival(entry, zone, reason)
         entry.xmlFilename = model.xmlFilename
         entry.x, entry.z, entry.rotY = x, z, rotY
         entry.seed = TheContractorRepairContracts.rollSeed(math.random)
-        entry.waitMs = TheContractorRepairContracts.PLACE_FALLBACK_MS
         return
     end
     if entry.attempts > TheContractorRepairContracts.PREPARE_RETRIES or zone == nil then
@@ -890,8 +863,6 @@ function TheContractorRepairContracts:retryArrival(entry, zone, reason)
     end
     entry.xmlFilename = models[math.random(1, #models)].xmlFilename
     entry.seed = TheContractorRepairContracts.rollSeed(math.random)
-    -- Straight away next time: the bay was already out of sight.
-    entry.waitMs = TheContractorRepairContracts.PLACE_FALLBACK_MS
 end
 
 -- VehicleLoadingData's callback.
@@ -940,16 +911,19 @@ function TheContractorRepairContracts:onArrivalLoaded(vehicles, loadingState, ar
 end
 
 -- The job's base price (without FS25_EconomyScale's factor, as every job
--- stores it): ADS's quote is at the price level of the day it was made, so
--- it's divided back out, then the margin goes on, never under MIN_PRICE.
-function TheContractorRepairContracts.getBasePrice(quotePrice, margin)
-    return math.max(quotePrice / TCEconomyScale.getFactor() * (1 + margin), TheContractorRepairContracts.MIN_PRICE)
+-- stores it): ADS's parts cost is at the price level of the day it was
+-- quoted, so it's divided back out, then the margin goes on, never under
+-- MIN_PRICE.
+function TheContractorRepairContracts.getBasePrice(partsCost, margin)
+    return math.max(partsCost / TCEconomyScale.getFactor() * (1 + margin), TheContractorRepairContracts.MIN_PRICE)
 end
 
--- A new offer's margin over the quote.
-function TheContractorRepairContracts.rollMargin()
+-- A new offer's margin over the parts: a field breakdown's (101) or a
+-- repair zone job's.
+function TheContractorRepairContracts.rollMargin(isFieldBreakdown)
     local spread = TheContractorRepairContracts.MARGIN_SPREAD
-    local margin = g_currentMission.TheContractor.Settings:getADSMargin() + (math.random() * 2 - 1) * spread
+    local margin = g_currentMission.TheContractor.Settings:getADSMargin(isFieldBreakdown)
+        + (math.random() * 2 - 1) * spread
     return math.max(margin, 0)
 end
 
@@ -964,8 +938,9 @@ end
 
 function TheContractorRepairContracts:createOffer(entry, vehicle, quote)
     local today = g_currentMission.environment.currentMonotonicDay
-    local margin = TheContractorRepairContracts.rollMargin()
-    local price = math.floor(TheContractorRepairContracts.getBasePrice(quote.price, margin))
+    local partsCost = math.max(tonumber(quote.partsCost) or 0, 0)
+    local margin = TheContractorRepairContracts.rollMargin(entry.fieldId ~= nil)
+    local price = math.floor(TheContractorRepairContracts.getBasePrice(partsCost, margin))
     local dueDays = TheContractorRepairContracts.getDueDays(g_currentMission.environment.daysPerPeriod)
     local deadlineDay = today + dueDays
     local offerExpiresDay = deadlineDay - 1
@@ -986,6 +961,7 @@ function TheContractorRepairContracts:createOffer(entry, vehicle, quote)
         severity = entry.severity,
         offerExpiresDay = offerExpiresDay,
         quotePrice = quote.price,
+        partsCost = partsCost,
         requiredTools = quote.minTools or {},
         serviceLevel = serviceLevel,
         operatingHours = quote.operatingHours,
@@ -1001,13 +977,13 @@ function TheContractorRepairContracts:createOffer(entry, vehicle, quote)
         vehicle:delete()
         return
     end
-    Logging.info("TheContractor: farm %d job %d: %s in for %s, quoted %.0f, offered %.0f (%.0f%% margin)", entry.farmId,
-        job.id, workshop.vehicleName, entry.kind, quote.price, job:getPrice(), margin * 100)
+    Logging.info("TheContractor: farm %d job %d: %s in for %s, quoted %.0f (parts %.0f), offered %.0f (%.0f%% margin)",
+        entry.farmId, job.id, workshop.vehicleName, entry.kind, quote.price, partsCost, job:getPrice(), margin * 100)
 end
 
 -- Server: the customer comes for their machine (an offer turned down or
 -- lapsed, or a job finished or missed). The contract comes off now; the
--- machine goes once its bay's out of sight.
+-- machine goes on the next look at the queue.
 function TheContractorRepairContracts:queueCollection(job)
     local workshop = job.workshop
     if workshop == nil then
@@ -1028,11 +1004,10 @@ function TheContractorRepairContracts:queueCollection(job)
         uniqueId = workshop.vehicleUniqueId,
         zoneUniqueId = workshop.zoneUniqueId,
         bayIndex = workshop.bayIndex,
-        waitMs = 0,
     })
 end
 
-function TheContractorRepairContracts:tryCollect(entry, elapsed)
+function TheContractorRepairContracts:tryCollect(entry)
     local vehicle = entry.vehicleId ~= nil and entry.vehicleId ~= 0 and NetworkUtil.getObject(entry.vehicleId) or nil
     if vehicle == nil or vehicle.isDeleted then
         removeFrom(self.removals, entry)
@@ -1040,17 +1015,6 @@ function TheContractorRepairContracts:tryCollect(entry, elapsed)
     end
     -- Not from under someone driving it.
     if vehicle.getIsControlled ~= nil and vehicle:getIsControlled() then
-        entry.waitMs = 0
-        return
-    end
-    local zone = TheContractorRepairContracts.getZoneByUniqueId(entry.zoneUniqueId)
-    local bayArea = zone ~= nil and PlaceableTCRepairZone.getBayArea(zone, entry.bayIndex) or nil
-    if bayArea == nil then
-        -- Its zone's gone: judge the machine where it stands.
-        local x, _, z = getWorldTranslation(vehicle.rootNode)
-        bayArea = { x = x, z = z, uX = 1, uZ = 0, vX = 0, vZ = 1, width = 0, length = 0 }
-    end
-    if not isReady(entry, bayArea, elapsed) then
         return
     end
     removeFrom(self.removals, entry)
@@ -1233,7 +1197,6 @@ function TheContractorRepairContracts:loadFromXMLFile(xmlFile)
             z = getXMLFloat(xmlFile, key .. "#z"),
             rotY = getXMLFloat(xmlFile, key .. "#rotY"),
             fieldService = getXMLString(xmlFile, key .. "#fieldService"),
-            waitMs = 0,
             isLoading = false,
         })
         index = index + 1
@@ -1250,7 +1213,6 @@ function TheContractorRepairContracts:loadFromXMLFile(xmlFile)
             uniqueId = getXMLString(xmlFile, key .. "#uniqueId"),
             zoneUniqueId = getXMLString(xmlFile, key .. "#zoneUniqueId"),
             bayIndex = getXMLInt(xmlFile, key .. "#bayIndex"),
-            waitMs = 0,
         })
         index = index + 1
     end
@@ -1355,7 +1317,7 @@ end
 function TheContractorRepairContracts.registerConsoleCommands()
     TCConsole.register("job", "repairArrival", {
         args = "[repair|maintenance] [severity 1-3]",
-        description = "Send a customer's machine to your first free repair zone bay now (placed out of sight, or after the usual wait)",
+        description = "Send a customer's machine to your first free repair zone bay now (placed within a couple of seconds)",
         run = function(farmId, args)
             local kind = args[1] ~= nil and string.lower(args[1]) or nil
             if kind ~= nil and TheContractorRepairContracts.JOB_TYPES[kind] == nil then
