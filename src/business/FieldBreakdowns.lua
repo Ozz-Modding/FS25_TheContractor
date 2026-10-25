@@ -154,11 +154,10 @@ function TheContractorFieldBreakdowns:pickBreakdown(farmId)
     if #fields == 0 then
         return nil
     end
-    local standing = g_currentMission.TheContractor.Reputation:getStanding(farmId)
     return {
         fieldId = fields[math.random(1, #fields)]:getId(),
         fieldService = self.forcedFieldService or TheContractorFieldBreakdowns.pickFieldService(farmId, math.random),
-        severity = TheContractorRepairContracts.pickSeverity(standing, math.random),
+        severity = TheContractorRepairContracts.pickSeverity(math.random),
     }
 end
 
