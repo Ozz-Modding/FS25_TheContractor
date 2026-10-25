@@ -67,6 +67,16 @@ local function setup(def)
     }
     TCParkingSlotFilter = { getCategoryTitle = function(name) return name end, SUMMARY_MAX_NAMES = 2 }
     TheContractorRandomEvents = { DONE = "done", WAIT = "wait" }
+    -- The ground painted under a placed breakdown (TCJoyriderRuts).
+    world.painted = {}
+    FSDensityMapUtil = {
+        convertToDensityMapAngle = function() return 0 end,
+        updateCultivatorArea = function(sx, sz, wx, wz, hx, hz)
+            table.insert(world.painted, { sx = sx, sz = sz, wx = wx, wz = wz, hx = hx, hz = hz })
+        end,
+        clearDecoArea = function() end,
+    }
+    g_currentMission.fieldGroundSystem = { getGroundAngleMaxValue = function() return 7 end }
 
     local tc = g_currentMission.TheContractor
     tc.Settings = {
@@ -347,19 +357,68 @@ test("the console forces the field service, and refuses anything else", function
     assertEquals(console.prepareTrigger(1, {}), nil)
 end)
 
-test("a spot well inside the field, or none on a field too small", function()
+-- How far (x, z) is from the 100 m square field's nearest edge.
+local function edgeDistance(x, z)
+    return math.min(x, z, 100 - x, 100 - z)
+end
+
+test("a spot on the headland, within 10 m of the edge, facing in; none on a field too small", function()
     local world = setup()
     world:addField({ id = 3 })
     world:addField({ id = 4, small = true })
     local model = { width = 3, length = 6 }
-    local margin = TheContractorFieldBreakdowns.EDGE_MARGIN + 3
+    local gap = TheContractorFieldBreakdowns.EDGE_GAP
     for seed = 1, 20 do
         math.randomseed(seed)
         local x, z, rotY = TheContractorFieldBreakdowns.pickSpot(3, model, math.random)
-        assertTrue(x >= margin and x <= 100 - margin and z >= margin and z <= 100 - margin, "in from the edge")
-        assertTrue(rotY >= 0 and rotY < 2 * math.pi)
+        local distance = edgeDistance(x, z)
+        assertTrue(distance >= 3 + gap - 0.01, "clear of every edge, got " .. distance)
+        assertTrue(distance <= TheContractorFieldBreakdowns.MAX_EDGE_DEPTH + 0.01, "near the edge, got " .. distance)
+        -- It came in over the edge behind it, and the field's ahead.
+        local function onField(distance)
+            local px, pz = x + math.sin(rotY) * distance, z + math.cos(rotY) * distance
+            return px > 0 and px < 100 and pz > 0 and pz < 100
+        end
+        assertTrue(not onField(-12) and onField(6), "facing in")
     end
-    assertEquals(TheContractorFieldBreakdowns.pickSpot(4, model, math.random), nil)
+    assertTrue(TheContractorFieldBreakdowns.pickSpot(4, model, math.random) ~= nil, "a tractor fits a 10 m field")
+    assertEquals(TheContractorFieldBreakdowns.pickSpot(4, { width = 4, length = 10 }, math.random), nil)
+
+    -- A machine too big for 10 m goes as far in as it must.
+    local depth = TheContractorFieldBreakdowns.getEdgeDepth({ width = 6, length = 20 })
+    assertNear(depth[1], 10 + gap, 0.001)
+    assertNear(depth[2], 10 + gap, 0.001)
+end)
+
+test("once it's placed, its ruts in from the edge and the crop round it are cleared, on the field only", function()
+    local world, tc = setup()
+    local job, vehicle = makeOffer(world, tc, "player")
+    assertTrue(job ~= nil)
+    assertTrue(#world.painted >= 3, "two ruts and the patch")
+    for _, call in ipairs(world.painted) do
+        local mx, mz = (call.wx + call.hx) / 2, (call.wz + call.hz) / 2
+        assertTrue(mx > 0 and mx < 100 and mz > 0 and mz < 100, "painted on the field")
+    end
+    -- The patch is last, on the machine, 2 m bigger than it all round.
+    local patch = world.painted[#world.painted]
+    local data = world.calls.spawned[1]
+    assertNear((patch.wx + patch.hx) / 2, data.x, 0.001)
+    assertNear((patch.wz + patch.hz) / 2, data.z, 0.001)
+    local margin = TCJoyriderRuts.MACHINE_PATCH_MARGIN * 2
+    assertNear(math.sqrt((patch.wx - patch.sx) ^ 2 + (patch.wz - patch.sz) ^ 2), 3 + margin, 0.001)
+    assertNear(math.sqrt((patch.hx - patch.sx) ^ 2 + (patch.hz - patch.sz) ^ 2), 6 + margin, 0.001)
+end)
+
+test("a spot that's retried leaves nothing painted until the machine's there", function()
+    local world, tc = setup()
+    world:addField({ id = 3 })
+    world:trigger()
+    world.spotBlocked = { true }
+    tc.RepairContracts:update(TheContractorRepairContracts.PLACE_CHECK_MS)
+    world.prepareResults = { false }
+    tc.RepairContracts:update(TheContractorRepairContracts.PLACE_CHECK_MS)
+    world:finishLoad()
+    assertEquals(#world.painted, 0)
 end)
 
 -- The offer -----------------------------------------------------------------------------

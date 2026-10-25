@@ -923,6 +923,10 @@ function TheContractorRepairContracts:onArrivalLoaded(vehicles, loadingState, ar
     end
 
     removeFrom(self.arrivals, entry)
+    if entry.fieldId ~= nil then
+        -- 101: only now the spot's final, so a retry leaves no ruts behind.
+        TheContractorFieldBreakdowns.clearSpot(entry, self:findModelByXml(entry.xmlFilename))
+    end
     self:createOffer(entry, vehicle, quote)
 end
 
