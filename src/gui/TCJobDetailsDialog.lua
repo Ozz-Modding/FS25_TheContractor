@@ -171,6 +171,8 @@ function TCJobDetailsDialog:populateCellForItemInSection(list, section, index, c
     cell:getAttribute("section"):setText(row.section or "")
     cell:getAttribute("label"):setVisible(not isSection)
     cell:getAttribute("label"):setText(row.label or "")
+    -- No setter for it: TextElement reads the field as it draws.
+    cell:getAttribute("label").textBold = row.isHeading == true
     cell:getAttribute("value"):setVisible(not isSection)
     cell:getAttribute("value"):setText(row.value or "")
 

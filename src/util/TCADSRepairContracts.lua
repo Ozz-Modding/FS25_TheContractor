@@ -8,7 +8,9 @@
 -- The entry points are looked up once per loadMap (detect), the TCADSStock
 -- way: anything missing, or an older API version, leaves the feature off
 -- with one warning. Nothing else in the mod calls ADS_RepairContracts. Checked
--- against FS25_AdvancedDamageSystem 0.10.0.8 (commit a0285ed).
+-- against FS25_AdvancedDamageSystem 0.10.0.8 (commit a0285ed), and 102's
+-- stage gate and per-option costs at fffc957 (still API version 1, so they're
+-- detected by their functions).
 
 TCADSRepairContracts = {}
 
@@ -41,8 +43,16 @@ TCADSRepairContracts.PLACE = {
     OWN_WORKSHOP = "ownWorkshop",
 }
 
+-- 102: a contract allows inspections only until we authorize it (the
+-- customer's agreed a price).
+TCADSRepairContracts.STAGE = {
+    INSPECTION = "inspection",
+    AUTHORIZED = "authorized",
+}
+
 TCADSRepairContracts.REQUIRED_FUNCTIONS = { "getInfo", "prepareVehicle", "getQuote", "getStatus", "checkTampering",
-    "checkFarmTools", "getFarmTools", "registerListener", "unregisterListener", "release" }
+    "checkFarmTools", "getFarmTools", "registerListener", "unregisterListener", "release", "authorize", "getStage",
+    "isWorkLocked" }
 
 -- ADS_RepairContracts, while it has everything we need; nil otherwise.
 local api = nil
@@ -107,6 +117,22 @@ function TCADSRepairContracts.prepareVehicle(vehicle, request)
     return api.prepareVehicle(vehicle, request)
 end
 
+-- 102, server: the customer's agreed a price, so ADS lets the work start.
+function TCADSRepairContracts.authorize(vehicle)
+    if api == nil or vehicle == nil then
+        return false
+    end
+    return api.authorize(vehicle)
+end
+
+-- "inspection" or "authorized", or nil (any machine).
+function TCADSRepairContracts.getStage(vehicle)
+    if api == nil or vehicle == nil then
+        return nil
+    end
+    return api.getStage(vehicle)
+end
+
 -- Server: the contract comes off the vehicle (before it's deleted).
 function TCADSRepairContracts.release(vehicle)
     if api == nil or vehicle == nil then
@@ -136,7 +162,8 @@ end
 -- price, done } } }. A fault counts as known once it's been found
 -- (isVisible) or fixed, so nothing hidden is named or counted (099): items
 -- lists the known ones, and total is only the real count while every fault
--- is known. Consumables are never hidden. operation is what to do: for a
+-- is known. A service's consumables are known once the machine's been
+-- inspected (102, isServiceInspected). operation is what to do: for a
 -- fault, how the dealer's quote priced it ("repair" or "replacement"; any
 -- way that clears it counts), for a consumable the service it needs
 -- ("change", "topUp", "grease" or "replace"), else "service".
@@ -149,33 +176,96 @@ TCADSRepairContracts.OPERATIONS = {
     replaceConsumable = "replace",
 }
 
-function TCADSRepairContracts.getProgress(vehicle)
-    local quote = TCADSRepairContracts.getQuote(vehicle)
+-- 102: a service's consumables are only known once the machine's been
+-- inspected: ADS makes a contract vehicle's history unknown to the farm
+-- (setBaselineUnknown), so it shows nothing about them before. The
+-- inspection date is nil until the first inspection after preparation (and
+-- 0 for an empty log). Without ADS_Maintenance.getLastInspectionDate the
+-- consumables count as known, as they did before ADS hid them.
+function TCADSRepairContracts.isServiceInspected(vehicle)
+    local env = TCADSRepairContracts.getEnv()
+    local maintenance = env ~= nil and env.ADS_Maintenance or nil
+    if maintenance == nil or type(maintenance.getLastInspectionDate) ~= "function" then
+        warnOnce("inspectionDate", "%s has no ADS_Maintenance.getLastInspectionDate - services count as inspected",
+            TCADSRepairContracts.MOD_NAME)
+        return true
+    end
+    local date = maintenance.getLastInspectionDate(vehicle)
+    return date ~= nil and date ~= 0
+end
+
+-- Whether each of the contract's faults (or, for a service, the machine)
+-- is known: a fault once it's been found (isVisible) or fixed. doneById is
+-- the status's items by id; breakdowns the vehicle's active breakdowns.
+local function isItemKnown(item, done, breakdowns, serviceInspected)
+    if done then
+        return true
+    end
+    if item.kind == "consumable" then
+        return serviceInspected
+    end
+    local breakdown = breakdowns[item.id]
+    return type(breakdown) == "table" and breakdown.isVisible == true
+end
+
+local function getDoneById(vehicle)
     local status = TCADSRepairContracts.getStatus(vehicle)
-    if quote == nil or status == nil then
+    if status == nil then
         return nil
     end
     local doneById = {}
     for _, item in ipairs(status.items or {}) do
         doneById[tostring(item.id)] = item.done == true
     end
-    local breakdowns = vehicle.getActiveBreakdowns ~= nil and vehicle:getActiveBreakdowns() or {}
+    return doneById
+end
+
+local function getBreakdowns(vehicle)
+    return vehicle.getActiveBreakdowns ~= nil and vehicle:getActiveBreakdowns() or {}
+end
+
+-- 102: whether the whole contract is known, so it can be priced: every
+-- fault found or fixed, or a service's machine inspected. Any machine.
+function TCADSRepairContracts.isInspected(vehicle)
+    local quote = TCADSRepairContracts.getQuote(vehicle)
+    local doneById = quote ~= nil and getDoneById(vehicle) or nil
+    if doneById == nil then
+        return false
+    end
+    if quote.kind == TCADSRepairContracts.KIND.MAINTENANCE then
+        return TCADSRepairContracts.isServiceInspected(vehicle)
+    end
+    local breakdowns = getBreakdowns(vehicle)
+    for _, item in ipairs(quote.items or {}) do
+        if item.kind == "fault" and not isItemKnown(item, doneById[tostring(item.id)] == true, breakdowns, false) then
+            return false
+        end
+    end
+    return true
+end
+
+function TCADSRepairContracts.getProgress(vehicle)
+    local quote = TCADSRepairContracts.getQuote(vehicle)
+    local doneById = quote ~= nil and getDoneById(vehicle) or nil
+    if doneById == nil then
+        return nil
+    end
+    local breakdowns = getBreakdowns(vehicle)
+    local serviceInspected = quote.kind ~= TCADSRepairContracts.KIND.MAINTENANCE or
+        TCADSRepairContracts.isServiceInspected(vehicle)
     local progress = { kind = quote.kind, total = 0, fixed = 0, allKnown = true, items = {} }
     for _, item in ipairs(quote.items or {}) do
         if item.kind == "fault" or item.kind == "consumable" then
             local done = doneById[tostring(item.id)] == true
-            local known = item.kind == "consumable" or done
-            if not known then
-                local breakdown = breakdowns[item.id]
-                known = type(breakdown) == "table" and breakdown.isVisible == true
-            end
+            local known = isItemKnown(item, done, breakdowns, serviceInspected)
             progress.total = progress.total + 1
             if known then
                 if done then
                     progress.fixed = progress.fixed + 1
                 end
                 local operation = TCADSRepairContracts.OPERATIONS[item.procedure] or "service"
-                table.insert(progress.items, { kind = item.kind, nameKey = item.nameKey, operation = operation,
+                table.insert(progress.items, { id = tostring(item.id), kind = item.kind, nameKey = item.nameKey,
+                    operation = operation,
                     price = tonumber(item.price) or 0, done = done })
             else
                 progress.allKnown = false
@@ -212,6 +302,146 @@ function TCADSRepairContracts.checkFarmTools(vehicle, farmId)
         return nil
     end
     return api.checkFarmTools(vehicle, farmId)
+end
+
+-- 102: what the farm can do about the contract, as far as it's known (any
+-- machine), or nil:
+--   { inspected,
+--     faults = { { nameKey, done, subcontractPrice,
+--                  options = { { operation, tools, canDo, place, missing, partsCost, laborHours } } } },
+--     plan = { canDo, partsCost, laborHours, subcontractCost } or nil,
+--     missing = { toolId, ... } or nil }
+-- faults lists only those found or fixed (099). The plan and missing cover
+-- every fault ADS knows of, found or not, so they're only given once
+-- isInspected: before then a total would give the hidden faults away.
+-- Costs are ADS's, at the price level of the day the contract was prepared.
+function TCADSRepairContracts.getFarmPlan(vehicle, farmId)
+    local quote = TCADSRepairContracts.getQuote(vehicle)
+    local check = quote ~= nil and TCADSRepairContracts.checkFarmTools(vehicle, farmId) or nil
+    local doneById = check ~= nil and getDoneById(vehicle) or nil
+    if doneById == nil then
+        return nil
+    end
+    local checkById = {}
+    for _, item in ipairs(check.items or {}) do
+        checkById[tostring(item.id)] = item
+    end
+    local breakdowns = getBreakdowns(vehicle)
+    local result = { inspected = TCADSRepairContracts.isInspected(vehicle), faults = {} }
+    for _, item in ipairs(quote.items or {}) do
+        local done = doneById[tostring(item.id)] == true
+        if item.kind == "fault" and isItemKnown(item, done, breakdowns, false) then
+            local checked = checkById[tostring(item.id)] or {}
+            table.insert(result.faults, {
+                id = tostring(item.id),
+                nameKey = item.nameKey,
+                done = done,
+                subcontractPrice = tonumber(checked.subcontractPrice or item.price) or 0,
+                options = checked.options or {},
+            })
+        end
+    end
+    if result.inspected and type(check.plan) == "table" then
+        result.plan = {
+            canDo = check.plan.canDo ~= false,
+            partsCost = tonumber(check.plan.partsCost) or 0,
+            laborHours = tonumber(check.plan.laborHours) or 0,
+            subcontractCost = tonumber(check.plan.subcontractCost) or 0,
+        }
+        result.missing = check.missing or {}
+        -- What a full repair (no replacing where a repair's allowed) still
+        -- needs: every unfixed fault's repair option the farm can't do.
+        local needs, seen = {}, {}
+        for _, fault in ipairs(result.faults) do
+            if not fault.done then
+                for _, option in ipairs(fault.options) do
+                    if option.operation == "repair" and not option.canDo then
+                        for _, toolId in ipairs(option.missing or {}) do
+                            if not seen[toolId] then
+                                seen[toolId] = true
+                                table.insert(needs, toolId)
+                            end
+                        end
+                    end
+                end
+            end
+        end
+        result.repairNeeds = needs
+    end
+    return result
+end
+
+-- 102: one found fault as a checklist, a row per way to fix it, always
+-- repair then replace: { operation, status, tools, missing, partsCost,
+-- laborHours }. status is "available" (the farm can do it at one of its
+-- places), "missing" (it lacks the kit: missing) or "notPossible" (ADS
+-- doesn't allow it on this fault: too far gone, or a part that can't be
+-- repaired).
+TCADSRepairContracts.FIX_OPERATIONS = { "repair", "replacement" }
+
+function TCADSRepairContracts.getFaultChecklist(fault)
+    local byOperation = {}
+    for _, option in ipairs(fault.options or {}) do
+        byOperation[option.operation] = option
+    end
+    local rows = {}
+    for _, operation in ipairs(TCADSRepairContracts.FIX_OPERATIONS) do
+        local option = byOperation[operation]
+        if option == nil then
+            table.insert(rows, { operation = operation, status = "notPossible", tools = {}, missing = {} })
+        else
+            table.insert(rows, {
+                operation = operation,
+                status = option.canDo and "available" or "missing",
+                tools = option.tools or {},
+                missing = option.canDo and {} or (option.missing or {}),
+                place = option.place,
+                partsCost = tonumber(option.partsCost) or 0,
+                laborHours = tonumber(option.laborHours) or 0,
+            })
+        end
+    end
+    return rows
+end
+
+-- 102: tool ids as the own workshop upgrades that bring them ("Machine
+-- tools, Overhead crane"), from ADS's own workshop config, in ADS's words;
+-- a tool no upgrade brings (the jack: the tool box has it) by its own name.
+-- One name per upgrade, however many of its tools are asked for.
+function TCADSRepairContracts.getUpgradeNames(toolIds)
+    return table.concat(TCADSRepairContracts.getUpgradeNameList(toolIds), ", ")
+end
+
+-- The same names as a list, one per upgrade (a chip each).
+function TCADSRepairContracts.getUpgradeNameList(toolIds)
+    local env = TCADSRepairContracts.getEnv()
+    local ownWorkshop = env ~= nil and env.ADS_OwnWorkshop or nil
+    local upgradeByTool = {}
+    if ownWorkshop ~= nil and type(ownWorkshop.getEquipmentIds) == "function" and
+            type(ownWorkshop.getEquipmentConfig) == "function" then
+        for _, equipmentId in ipairs(ownWorkshop.getEquipmentIds() or {}) do
+            local config = ownWorkshop.getEquipmentConfig(equipmentId) or {}
+            for _, toolId in ipairs(config.TOOLS or {}) do
+                upgradeByTool[toolId] = upgradeByTool[toolId] or equipmentId
+            end
+        end
+    end
+    local names, seen = {}, {}
+    local modName = TCADSRepairContracts.MOD_NAME
+    for _, toolId in ipairs(toolIds or {}) do
+        local equipmentId = upgradeByTool[toolId]
+        local key = equipmentId ~= nil and "ads_own_equipment_" .. equipmentId or "ads_ws_tool_" .. tostring(toolId)
+        if not seen[key] then
+            seen[key] = true
+            local name = tostring(equipmentId or toolId)
+            if g_i18n.hasText ~= nil and g_i18n:hasText(key, modName) then
+                name = g_i18n:getText(key, modName)
+            end
+            -- ADS writes them in lower case, for the middle of its sentences.
+            table.insert(names, (name:gsub("^%l", string.upper)))
+        end
+    end
+    return names
 end
 
 -- 101: placeId -> true for every place the farm can work from (an ADS tool

@@ -78,10 +78,11 @@ do
     }
 end
 
--- 100: the average margin over the parts in ADS's quote on a repair
--- contract's offer, which is what pays for the work: one for jobs in a
--- repair zone, one for 101's field breakdowns (rollMargin rolls it within
--- MARGIN_SPREAD). isShown keeps them off the menu without ADS; they're still
+-- 100/102: the benchmark margin over a repair contract's cost (the cheapest
+-- fix's parts and labour): one for jobs in a repair zone, one for 101's
+-- field breakdowns. The Negotiate dialog starts there, and reputation is
+-- judged against it (TheContractorRepairContracts.getMarginFactor).
+-- isShown keeps them off the menu without ADS; they're still
 -- saved and synced like the rest. They replaced 100's adsMargin (a margin
 -- over the whole quote, labour included), so an old save's value is ignored.
 local function adsMarginDefinition(defaultValue)
@@ -270,8 +271,8 @@ function TheContractorSettings:getNameStyle()
     return TheContractorSettings.NAME_STYLES[self.values.nameStyle] or TheContractorSettings.NAME_STYLES[1]
 end
 
--- 100: the repair contract margin over the parts as a fraction (0.4 for
--- 40%): a field breakdown's (101) or a repair zone job's.
+-- 100/102: the benchmark repair contract margin over the cost as a fraction
+-- (0.4 for 40%): a field breakdown's (101) or a repair zone job's.
 function TheContractorSettings:getADSMargin(isFieldBreakdown)
     local id = isFieldBreakdown and "adsFieldMargin" or "adsWorkshopMargin"
     return self.values[id] / 100

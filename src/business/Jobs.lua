@@ -266,8 +266,8 @@ function TheContractorJobs:proposeCounterOffer(farmId, jobId, counterPrice)
         return nil
     end
 
-    -- 100: a workshop job's price is fixed (ADS's parts cost plus the margin
-    -- roll), and one the farm hasn't the tools for can't be taken on anyway.
+    -- 102: a workshop job's price is agreed through its own quote
+    -- (RepairContracts:proposeQuote), not 014's rounds.
     if TheContractorRepairContracts.isWorkshopJob(job) or TheContractorJobs.getAcceptProblem(job) ~= nil then
         return nil
     end
@@ -338,8 +338,9 @@ function TheContractorJobs:transitionJobState(farmId, jobId, newState)
 end
 
 -- Why an offer can't be accepted (or a price agreed) now, as text, or nil.
--- Only a workshop job (100) can be refused: the farm hasn't the tools for
--- it. The same on every machine: the Inbox shows it, the server re-checks.
+-- Only a workshop job (100) can be refused: its machine's gone, or ADS is
+-- (102: missing tools only warn). The same on every machine: the Inbox
+-- shows it, the server re-checks.
 function TheContractorJobs.getAcceptProblem(job)
     if job == nil or job.workshop == nil then
         return nil
@@ -349,8 +350,14 @@ end
 
 -- Server: an offer's just been accepted. 100: a customer's machine that's
 -- already been put right counts at once (ADS only says when it changes).
+-- 102: ADS lets the work start (proposeQuote has already; this covers
+-- tcJob state, and costs nothing twice).
 function TheContractorJobs:onJobAccepted(job)
     if job.workshop ~= nil then
+        local vehicle = TheContractorRepairContracts.getVehicle(job)
+        if vehicle ~= nil then
+            TCADSRepairContracts.authorize(vehicle)
+        end
         g_currentMission.TheContractor.RepairContracts:checkJob(job)
     end
 end
@@ -1012,12 +1019,20 @@ end
 -- REPUTATION_ZERO_QUALITY) loses reputation instead, with no minimum or
 -- bonus. The player driving personally always scores 100, so earns in full.
 -- A workshop job (100) also earns more for being done quickly
--- (TheContractorRepairContracts.getSpeedFactor).
+-- (TheContractorRepairContracts.getSpeedFactor), and by the margin it was
+-- priced at (102, getMarginFactor): a factor at or below 0 makes it a loss
+-- of that share of the base, whatever the quality and speed.
 function TheContractorJobs:calculateReputationReward(job)
     local factor = TheContractorJobs.getQualityReputationFactor(job.qualityScore or 100)
     local reward = TheContractorJobs.getBaseReputationReward(job) * factor
     if factor > 0 and job.workshop ~= nil then
-        reward = reward * TheContractorRepairContracts.getSpeedFactor(job)
+        local marginFactor = TheContractorRepairContracts.getMarginFactor(job)
+        if marginFactor <= 0 then
+            factor = marginFactor
+            reward = TheContractorJobs.getBaseReputationReward(job) * marginFactor
+        else
+            reward = reward * TheContractorRepairContracts.getSpeedFactor(job) * marginFactor
+        end
     end
     if factor <= 0 then
         -- Rounded toward zero: a hair under the line costs nothing.
@@ -1273,9 +1288,13 @@ function TheContractorJobs:completeWorkshopJob(job)
 
     local reputationReward = self:calculateReputationReward(job)
     g_currentMission.TheContractor.Reputation:addReputation(job.farmId, reputationReward)
+    -- 102: kept for the Workshop tab's completed view (streamed with the job).
+    job.workshop.reputationReward = reputationReward
 
     job:transitionTo(TheContractorJob.STATE.COMPLETED)
     g_currentMission.TheContractor.Logbook:recordJobCompleted(job, reputationReward)
+    -- 102: far over the benchmark, word gets round.
+    g_currentMission.TheContractor.RepairContracts:onJobCompleted(job)
     g_currentMission.TheContractor.Inbox:removeMessagesForJob(job.farmId, job.id)
 
     Logging.info("TheContractor: farm %d job %d completed (%s, %s) - billed %.0f, %+d reputation", job.farmId,
@@ -1388,6 +1407,23 @@ function TheContractorJobs.writeWorkshop(streamId, workshop)
     streamWriteInt32(streamId, workshop.fieldId or 0)
     streamWriteFloat32(streamId, workshop.partsCost or -1)
     streamWriteFloat32(streamId, workshop.acceptedAt or -1)
+    -- 102: the cost and margins for the Negotiate dialog and the completed
+    -- view. The customer's ceiling (refusalMargin) stays on the server.
+    streamWriteFloat32(streamId, workshop.baseParts or -1)
+    streamWriteFloat32(streamId, workshop.baseLabour or -1)
+    streamWriteFloat32(streamId, workshop.laborHours or -1)
+    streamWriteFloat32(streamId, workshop.benchmarkMargin or -1)
+    streamWriteFloat32(streamId, workshop.margin or -1)
+    streamWriteBool(streamId, workshop.reputationReward ~= nil)
+    if workshop.reputationReward ~= nil then
+        streamWriteInt32(streamId, workshop.reputationReward)
+    end
+end
+
+-- A float that -1 stands in for nil.
+local function readOptionalFloat(streamId)
+    local value = streamReadFloat32(streamId)
+    return value >= 0 and value or nil
 end
 
 local function splitList(text)
@@ -1422,6 +1458,14 @@ function TheContractorJobs.readWorkshop(streamId)
     workshop.partsCost = partsCost >= 0 and partsCost or nil
     local acceptedAt = streamReadFloat32(streamId)
     workshop.acceptedAt = acceptedAt >= 0 and acceptedAt or nil
+    workshop.baseParts = readOptionalFloat(streamId)
+    workshop.baseLabour = readOptionalFloat(streamId)
+    workshop.laborHours = readOptionalFloat(streamId)
+    workshop.benchmarkMargin = readOptionalFloat(streamId)
+    workshop.margin = readOptionalFloat(streamId)
+    if streamReadBool(streamId) then
+        workshop.reputationReward = streamReadInt32(streamId)
+    end
     return workshop
 end
 
@@ -1681,6 +1725,14 @@ function TheContractorJobs.loadWorkshop(xmlFile, key)
         serviceLevel = getXMLString(xmlFile, key .. "#serviceLevel"),
         operatingHours = getXMLFloat(xmlFile, key .. "#operatingHours"),
         fieldId = getXMLInt(xmlFile, key .. "#fieldId"),
+        -- 102.
+        baseParts = getXMLFloat(xmlFile, key .. "#baseParts"),
+        baseLabour = getXMLFloat(xmlFile, key .. "#baseLabour"),
+        laborHours = getXMLFloat(xmlFile, key .. "#laborHours"),
+        benchmarkMargin = getXMLFloat(xmlFile, key .. "#benchmarkMargin"),
+        refusalMargin = getXMLFloat(xmlFile, key .. "#refusalMargin"),
+        margin = getXMLFloat(xmlFile, key .. "#margin"),
+        reputationReward = getXMLInt(xmlFile, key .. "#reputationReward"),
     }
 end
 
@@ -1718,6 +1770,15 @@ function TheContractorJobs.saveWorkshop(xmlFile, key, workshop)
     end
     if workshop.fieldId ~= nil then
         setXMLInt(xmlFile, key .. "#fieldId", workshop.fieldId)
+    end
+    -- 102.
+    for _, name in ipairs({ "baseParts", "baseLabour", "laborHours", "benchmarkMargin", "refusalMargin", "margin" }) do
+        if workshop[name] ~= nil then
+            setXMLFloat(xmlFile, key .. "#" .. name, workshop[name])
+        end
+    end
+    if workshop.reputationReward ~= nil then
+        setXMLInt(xmlFile, key .. "#reputationReward", workshop.reputationReward)
     end
 end
 

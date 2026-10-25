@@ -140,6 +140,10 @@ local function setup(def)
             registerListener = function(id, fn) world.listener = fn return true end,
             unregisterListener = function() world.listener = nil end,
             release = function(vehicle) table.insert(world.calls.released, vehicle.id) return true end,
+            -- 102: the stage gate.
+            authorize = function(vehicle) vehicle.stage = "authorized" return true end,
+            getStage = function(vehicle) return vehicle.stage or "inspection" end,
+            isWorkLocked = function(vehicle) return vehicle.stage ~= "authorized" end,
         },
     }
     if def.noADS then
@@ -490,26 +494,38 @@ end)
 
 -- Accepting ------------------------------------------------------------------------------
 
-test("accepting needs a tool box or a van for a tool box job, and a van for a mobile one", function()
+test("without a tool box or a van for a tool box job, or a van for a mobile one, it warns but can be taken on", function()
     local world, tc = setup()
     local job = makeOffer(world, tc, "player")
-    assertEquals(TheContractorJobs.getAcceptProblem(job),
-        "You haven't the equipment for this job yet. Requires: Tool box or mobile workshop.")
-    assertEquals(tc.Jobs:transitionJobState(1, job.id, TheContractorJob.STATE.ACCEPTED), false)
-    assertEquals(tc.Jobs:proposeCounterOffer(1, job.id, 900), nil)
+    assertEquals(TheContractorJobs.getAcceptProblem(job), nil, "a hired mobile workshop can always go out")
+    assertEquals(TheContractorRepairContracts.getToolsWarning(job),
+        "Missing kit: Tool box or mobile workshop. A hired mobile workshop would have to fix it, at their price.")
+    assertEquals(table.concat(TheContractorRepairContracts.getMissingKit(job).names, "|"), "Tool box|Mobile workshop")
+    assertEquals(tc.Jobs:proposeCounterOffer(1, job.id, 900), nil, "priced through a quote instead")
     world.farmPlaces = { "ownWorkshop" }
-    assertTrue(TheContractorJobs.getAcceptProblem(job) ~= nil, "the workshop can't go out to it")
+    assertTrue(TheContractorRepairContracts.getToolsWarning(job) ~= nil, "the workshop can't go out to it")
     world.farmPlaces = { "player" }
-    assertEquals(TheContractorJobs.getAcceptProblem(job), nil)
+    assertEquals(TheContractorRepairContracts.getToolsWarning(job), nil)
 
     world, tc = setup()
     job = makeOffer(world, tc, "mobile")
     world.farmPlaces = { "player" }
-    assertEquals(TheContractorJobs.getAcceptProblem(job),
-        "You haven't the equipment for this job yet. Requires: Mobile workshop.")
+    assertEquals(TheContractorRepairContracts.getToolsWarning(job),
+        "Missing kit: Mobile workshop. A hired mobile workshop would have to fix it, at their price.")
+    assertEquals(table.concat(TheContractorRepairContracts.getMissingKit(job).names, "|"), "Mobile workshop")
     world.farmPlaces = { "ownMobile" }
-    assertEquals(TheContractorJobs.getAcceptProblem(job), nil)
-    assertEquals(tc.Jobs:transitionJobState(1, job.id, TheContractorJob.STATE.ACCEPTED), true)
+    assertEquals(TheContractorRepairContracts.getToolsWarning(job), nil)
+    assertEquals(TheContractorRepairContracts.getMissingKit(job), nil)
+    assertEquals(tc.RepairContracts:proposeQuote(1, job.id, 0.5), "accepted", "priced against the field benchmark")
+    assertNear(job.workshop.benchmarkMargin, 0.5, 0.0001)
+end)
+
+test("fewer breakdowns while the farm's known for overcharging", function()
+    local world, tc = setup({ farmPlaces = { "player" } })
+    local rate = TheContractorFieldBreakdowns.getRate(1)
+    tc.RepairContracts.overcharged[1] = { untilDay = world.today + 3 }
+    assertNear(TheContractorFieldBreakdowns.getRate(1), rate * TheContractorRepairContracts.OVERCHARGE_ARRIVAL_FACTOR,
+        0.0001)
 end)
 
 -- Ending --------------------------------------------------------------------------------

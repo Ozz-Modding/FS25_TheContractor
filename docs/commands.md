@@ -364,7 +364,7 @@ tcJob park
 
 ### `tcJob repairStatus`
 
-Lists your repair zones: their type, bays, filter and how many models they can get, which bays are taken, and how many machines are on their way (field breakdowns, 101, included), waiting to be collected and claims still to come. Also says whether ADS's repair contracts API is there. Takes no arguments.
+Lists your repair zones: their type, bays, filter and how many models they can get, which bays are taken, and how many machines are on their way (field breakdowns, 101, included), waiting to be collected and claims still to come. Also says whether ADS's repair contracts API is there. Then (102) each open workshop job: its state, ADS's stage (`inspection` until a price is agreed, then `authorized`), whether it's been inspected and the margin agreed. Last, whether the farm is known for overcharging and any answer forced with `tcJob quoteOutcome`. Takes no arguments.
 
 ```
 tcJob repairStatus
@@ -377,6 +377,20 @@ Zone 1 (vehicle, 3 bay(s), any category, 42 model(s)):
   bay 2: free
   bay 3: free
 1 on the way, 0 waiting to be collected, 0 claim(s) to come
+Job 12 (Fendt 724 Vario, offered): inspection, inspected, no price agreed
+Known for overcharging until day 143
+```
+
+### `tcJob quoteOutcome <accepted|refused|clear>`
+
+Forces the customer's answer to the next repair quote (102's Negotiate dialog), whatever the margin: `accepted` or `refused`. It's used once, then quotes are judged as usual again. `clear` takes back a forced answer that hasn't been used yet. It doesn't skip the inspection: the quote still has to be for an inspected offer.
+
+```
+tcJob quoteOutcome refused
+```
+
+```
+The next repair quote will be refused, whatever the margin.
 ```
 
 ## Finances — `tcFinance`
