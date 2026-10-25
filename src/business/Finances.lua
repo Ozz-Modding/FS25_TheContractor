@@ -25,7 +25,7 @@
 -- fields: pursuitStartDay, pursuitFee (0 under legal cover); the day it
 -- resolves, pursuitResolveDay, stays on the server like paymentDay.
 --
--- 057: an office administrator (TheContractorAdministrator) swaps in
+-- 057: an office administrator (TheContractorOffice, 090) swaps in
 -- shorter delays and lower bad-debt and late-payer chances for the
 -- invoices issued while they're employed.
 --
@@ -259,7 +259,7 @@ function TheContractorFinances:invoiceJob(job)
     local today = environment.currentMonotonicDay
     local daysPerPeriod = environment.daysPerPeriod
     -- 057: credit control, if they employ an office administrator.
-    local administrator = g_currentMission.TheContractor.Administrator
+    local administrator = g_currentMission.TheContractor.Office
 
     -- At least a day, so even a prompt payer pays on a later day tick.
     local delayDays = math.max(1, rollDelayPeriods(administrator:getDelayWeights(job.farmId)) * daysPerPeriod +
@@ -352,9 +352,11 @@ function TheContractorFinances:getInvoiceTitle(invoice)
     if job == nil then
         return string.format(g_i18n:getText("tc_finances_unknownJob"), invoice.jobId)
     end
-    local field = g_fieldManager:getFieldById(job.fieldId)
-    return string.format(g_i18n:getText("tc_finances_invoiceTitle"), job:getDisplayTitle(),
-        field ~= nil and field:getName() or tostring(job.fieldId))
+    -- 100: a workshop job's title already names the machine.
+    if job:isWorkshop() then
+        return job:getDisplayTitle()
+    end
+    return string.format(g_i18n:getText("tc_finances_invoiceTitle"), job:getDisplayTitle(), job:getLocationText())
 end
 
 function TheContractorFinances:payInvoice(invoice)
@@ -449,7 +451,7 @@ function TheContractorFinances:getPursuitMessageArgs(invoice)
     local job = g_currentMission.TheContractor.Jobs:getJob(invoice.farmId, invoice.jobId)
     return {
         job ~= nil and ("$l10n_tc_jobType_" .. job.jobType) or "$l10n_tc_legal_unknownJob",
-        job ~= nil and tostring(job.fieldId) or "?",
+        job ~= nil and job:getLocationText() or "?",
         "$money_" .. invoice.amount,
         "$money_" .. (invoice.pursuitFee or 0),
     }

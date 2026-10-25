@@ -45,6 +45,9 @@ TheContractorJob.VALID_TRANSITIONS = {
     [TheContractorJob.STATE.ACCEPTED] = {
         [TheContractorJob.STATE.ALLOCATED] = true,
         [TheContractorJob.STATE.MISSED] = true,
+        -- 100: a workshop job (job.workshop) has no crew to allocate; it's
+        -- done when ADS says the customer's machine is.
+        [TheContractorJob.STATE.COMPLETED] = true,
     },
     [TheContractorJob.STATE.ALLOCATED] = {
         [TheContractorJob.STATE.IN_PROGRESS] = true,
@@ -275,7 +278,40 @@ function TheContractorJob.new(id, farmId, jobType, fieldId, requiredSkillLevel, 
     self.washVehicleIds = nil
     self.washMinutes = nil
 
+    -- 100: a workshop job's customer machine and contract, nil for every
+    -- other job (TheContractorRepairContracts; fieldId is 0). Sent to
+    -- clients: vehicleId, vehicleName, kind, severity, offerExpiresDay,
+    -- quotePrice (ADS's quote at the price level of the day it was made),
+    -- partsCost (the parts and materials in it, which the price is worked
+    -- out from; nil on a job from before it was kept), acceptedAt (game
+    -- minutes, for the speed reputation; nil until accepted), requiredTools, serviceLevel, operatingHours, bayIndex, and
+    -- 101's fieldId (a breakdown's field, nil otherwise; its serviceLevel is
+    -- ADS's field service, "player" or "mobile"). Saved too, and
+    -- server-only: vehicleUniqueId, zoneUniqueId.
+    self.workshop = nil
+
     return self
+end
+
+-- 100: a workshop job (a customer's machine in a repair zone), not field
+-- work.
+function TheContractorJob:isWorkshop()
+    return self.workshop ~= nil
+end
+
+-- Where the job is, for lines that would name its field: the field's name,
+-- or a workshop job's machine (and a breakdown's field, 101).
+function TheContractorJob:getLocationText()
+    if self.workshop ~= nil then
+        if self.workshop.fieldId ~= nil then
+            local field = g_fieldManager:getFieldById(self.workshop.fieldId)
+            return string.format(g_i18n:getText("tc_breakdown_location"), self.workshop.vehicleName or "?",
+                field ~= nil and field:getName() or tostring(self.workshop.fieldId))
+        end
+        return self.workshop.vehicleName or "?"
+    end
+    local field = g_fieldManager:getFieldById(self.fieldId)
+    return field ~= nil and field:getName() or tostring(self.fieldId)
 end
 
 -- 044: operationSkill, worked out on first use for a job from before it
@@ -336,6 +372,11 @@ end
 -- €340 (120 l), quality 86%". Shared by the completion notification and
 -- the Overview tab's last-job line.
 function TheContractorJob:getSummaryText()
+    -- 100: no field, fuel or crew time to speak of.
+    if self.workshop ~= nil then
+        return string.format(g_i18n:getText("tc_repair_summaryLine"), self:getTypeText(),
+            self.workshop.vehicleName or "?")
+    end
     local field = g_fieldManager:getFieldById(self.fieldId)
     return string.format(g_i18n:getText("tc_summary_line"), self:getDisplayTitle(),
         field ~= nil and field:getName() or tostring(self.fieldId),
@@ -449,11 +490,38 @@ end
 -- "Harvest & Haul (Spinach)" for a haulage job.
 function TheContractorJob:getDisplayTitle()
     local typeText = self:getTypeText()
+    -- 100: "Workshop repair (Fendt 942 Vario)".
+    if self.workshop ~= nil then
+        return string.format("%s (%s)", typeText, self.workshop.vehicleName or "?")
+    end
     local cropTitle = self:getCropTitle()
     if cropTitle == nil then
         return typeText
     end
     return string.format("%s (%s)", typeText, cropTitle)
+end
+
+-- A table row's Type cell: the display title, but a workshop job's is just
+-- its type, since a machine name doesn't fit the column (the details
+-- panel names the machine).
+function TheContractorJob:getListTitle()
+    if self.workshop ~= nil then
+        return self:getTypeText()
+    end
+    return self:getDisplayTitle()
+end
+
+-- A table row's Field cell: the field's name, a breakdown's field, or "-"
+-- for a machine in one of our repair zones.
+function TheContractorJob:getListFieldText()
+    if self.workshop ~= nil then
+        if self.workshop.fieldId ~= nil then
+            local field = g_fieldManager:getFieldById(self.workshop.fieldId)
+            return field ~= nil and field:getName() or tostring(self.workshop.fieldId)
+        end
+        return "-"
+    end
+    return self:getLocationText()
 end
 
 function TheContractorJob:canTransitionTo(newState)

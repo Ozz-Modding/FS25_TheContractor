@@ -279,6 +279,100 @@ function TCJobSupplies.getPalletSources(farmId, fillTypeIndex)
     return sources
 end
 
+-- The farm's object storages (vanilla's pallet sheds, mods like
+-- StorageRack). A pallet put in one is deleted and kept as an abstract
+-- object with its fill in `palletAttributes`, so it's no longer a vehicle.
+local function getObjectStorages(farmId)
+    local result = {}
+    local placeableSystem = g_currentMission.placeableSystem
+    if placeableSystem == nil or placeableSystem.placeables == nil then
+        return result
+    end
+    for _, placeable in ipairs(placeableSystem.placeables) do
+        if placeable.spec_objectStorage ~= nil and isOwnedBy(placeable, farmId) then
+            table.insert(result, placeable)
+        end
+    end
+    return result
+end
+
+local function holdsFill(attributes, fillTypeIndex)
+    return attributes ~= nil and attributes.fillType == fillTypeIndex and (attributes.fillLevel or 0) > 0
+end
+
+-- Pallets of this fill type put away in the farm's object storages:
+-- { placeable, count, level }..., one per storage. The server reads the
+-- stored objects themselves; a client only gets vanilla's groups of
+-- identical pallets (one sample and a count, no owner), so it reads those.
+function TCJobSupplies.getStoredPalletSources(farmId, fillTypeIndex)
+    local sources = {}
+    local isServer = g_currentMission:getIsServer()
+    for _, placeable in ipairs(getObjectStorages(farmId)) do
+        local spec = placeable.spec_objectStorage
+        local count, level = 0, 0
+        if isServer then
+            for _, object in ipairs(spec.storedObjects or {}) do
+                if holdsFill(object.palletAttributes, fillTypeIndex) then
+                    count = count + 1
+                    level = level + object.palletAttributes.fillLevel
+                end
+            end
+        else
+            for _, info in ipairs(spec.objectInfos or {}) do
+                local sample = info.objects ~= nil and info.objects[1] or nil
+                if sample ~= nil and holdsFill(sample.palletAttributes, fillTypeIndex) then
+                    count = count + info.numObjects
+                    level = level + sample.palletAttributes.fillLevel * info.numObjects
+                end
+            end
+        end
+        if level > 0 then
+            table.insert(sources, { placeable = placeable, count = count, level = level })
+        end
+    end
+    return sources
+end
+
+-- Server-only. Takes up to `amount` out of the pallets in one object
+-- storage, emptying them one at a time, and returns how much it got. An
+-- emptied pallet goes, as a loose one would. Skipped while the storage is
+-- handing pallets out, since that works through its object list.
+local function drawFromObjectStorage(placeable, fillTypeIndex, amount)
+    local spec = placeable.spec_objectStorage
+    if spec.storedObjects == nil or (spec.objectSpawn ~= nil and spec.objectSpawn.isActive) then
+        return 0
+    end
+
+    local taken, removed = 0, 0
+    for i = #spec.storedObjects, 1, -1 do
+        if taken >= amount then
+            break
+        end
+        local attributes = spec.storedObjects[i].palletAttributes
+        if holdsFill(attributes, fillTypeIndex) then
+            local take = math.min(attributes.fillLevel, amount - taken)
+            attributes.fillLevel = attributes.fillLevel - take
+            taken = taken + take
+            if attributes.fillLevel <= 0 then
+                table.remove(spec.storedObjects, i)
+                removed = removed + 1
+            end
+        end
+    end
+
+    if taken > 0 then
+        spec.numStoredObjects = #spec.storedObjects
+        if removed > 0 then
+            g_farmManager:updateFarmStats(placeable:getOwnerFarmId(), "storedPallets", -removed)
+        end
+        -- Regroups the pallets, redraws the shelves and syncs clients.
+        if placeable.setObjectStorageObjectInfosDirty ~= nil then
+            placeable:setObjectStorageObjectInfosDirty()
+        end
+    end
+    return taken
+end
+
 -- How much of a fill type the farm has in stock, all sources together.
 function TCJobSupplies.getFarmStock(farmId, fillTypeIndex)
     local total = 0
@@ -288,11 +382,15 @@ function TCJobSupplies.getFarmStock(farmId, fillTypeIndex)
     for _, source in ipairs(TCJobSupplies.getPalletSources(farmId, fillTypeIndex)) do
         total = total + source.level
     end
+    for _, source in ipairs(TCJobSupplies.getStoredPalletSources(farmId, fillTypeIndex)) do
+        total = total + source.level
+    end
     return total
 end
 
 -- Server-only. Takes up to `amount` out of the farm's stock - storages
--- first, then pallets - and returns how much it got.
+-- first, then loose pallets, then pallets put away in object storages
+-- (the most bother to get back out) - and returns how much it got.
 function TCJobSupplies.drawFromStock(farmId, fillTypeIndex, amount)
     local taken = 0
 
@@ -313,6 +411,13 @@ function TCJobSupplies.drawFromStock(farmId, fillTypeIndex, amount)
         local applied = source.pallet:addFillUnitFillLevel(farmId, source.fillUnitIndex, -take, fillTypeIndex,
             ToolType.UNDEFINED, nil)
         taken = taken + math.abs(applied or 0)
+    end
+
+    for _, placeable in ipairs(getObjectStorages(farmId)) do
+        if taken >= amount then
+            break
+        end
+        taken = taken + drawFromObjectStorage(placeable, fillTypeIndex, amount - taken)
     end
 
     return taken

@@ -74,10 +74,12 @@ end
 
 -- A stream is a plain table used as a queue: every streamWrite* appends,
 -- every streamRead* takes the oldest value. world:newStream() makes one.
--- Float32 values aren't rounded to 32 bits.
+-- Float32 values aren't rounded to 32 bits. A write returns the value
+-- written, as the engine's do (`if streamWriteBool(id, x ~= nil) then`).
 local function installStreams()
     local function write(streamId, value)
         table.insert(streamId.values, value)
+        return value
     end
     local function read(streamId)
         streamId.position = streamId.position + 1
@@ -417,6 +419,47 @@ function stubs.install()
         function placeable:getOwnerFarmId() return self.farmId end
         g_currentMission.placeableSystem = g_currentMission.placeableSystem or { placeables = {} }
         table.insert(g_currentMission.placeableSystem.placeables, placeable)
+        return placeable
+    end
+
+    -- Vanilla's object storage (pallet sheds, StorageRack) holding pallets
+    -- as abstract objects: def { name, farmId, pallets = { { fillType,
+    -- fillLevel }... } }. storedObjects is the server's list; objectInfos
+    -- groups identical pallets as vanilla does, and as a client sees them.
+    -- spec.infosDirty counts setObjectStorageObjectInfosDirty calls.
+    function world:addObjectStorage(def)
+        local spec = { storedObjects = {}, objectInfos = {}, numStoredObjects = 0,
+            objectSpawn = { isActive = false }, infosDirty = 0 }
+        local placeable = self:addPlaceable({ name = def.name or "Pallet storage", farmId = def.farmId,
+            specs = { spec_objectStorage = spec } })
+        function placeable:updateObjectStorageObjectInfos()
+            spec.objectInfos = {}
+            for _, object in ipairs(spec.storedObjects) do
+                local found = false
+                for _, info in ipairs(spec.objectInfos) do
+                    local sample = info.objects[1].palletAttributes
+                    if sample.fillType == object.palletAttributes.fillType and
+                        sample.fillLevel == object.palletAttributes.fillLevel then
+                        table.insert(info.objects, object)
+                        info.numObjects = #info.objects
+                        found = true
+                        break
+                    end
+                end
+                if not found then
+                    table.insert(spec.objectInfos, { objects = { object }, numObjects = 1 })
+                end
+            end
+        end
+        function placeable:setObjectStorageObjectInfosDirty()
+            spec.infosDirty = spec.infosDirty + 1
+        end
+        for _, pallet in ipairs(def.pallets or {}) do
+            table.insert(spec.storedObjects, { palletAttributes = { fillType = pallet.fillType,
+                fillLevel = pallet.fillLevel, ownerFarmId = def.farmId or 1 } })
+        end
+        spec.numStoredObjects = #spec.storedObjects
+        placeable:updateObjectStorageObjectInfos()
         return placeable
     end
 

@@ -18,13 +18,21 @@
 -- rather than hooking each one this re-reads the jobs every
 -- CHECK_INTERVAL_MS and adds or removes markers to match. One marker per
 -- field, however many jobs are due on it.
+--
+-- 101: a field breakdown (a customer's machine to fix on the spot) gets the
+-- same circle, smaller, on the machine itself while it's on offer or taken
+-- on, following it if it's moved. One per job.
 
 TCJobHotspots = {}
 
 TCJobHotspots.CHECK_INTERVAL_MS = 1000
 
 TCJobHotspots.hotspotsByFieldId = {}
+TCJobHotspots.machineHotspotsByJobId = {}
 TCJobHotspots.accumulatedMs = 0
+
+-- 101: a breakdown's circle (metres), tighter than a field's.
+TCJobHotspots.MACHINE_RADIUS = 25
 
 local function isTakenOn(state)
     return state == TheContractorJob.STATE.ACCEPTED or state == TheContractorJob.STATE.ALLOCATED or
@@ -52,7 +60,8 @@ function TCJobHotspots.getMarkedFieldIds(farmId)
 
     local lastDayOfMonth = TCJobHotspots.getLastDayOfMonth()
     for _, job in ipairs(tc.Jobs:getAllJobs(farmId)) do
-        if job.fieldId ~= nil and TCJobHotspots.isMarked(job, lastDayOfMonth) then
+        -- 100: a workshop job (field 0) has no field to mark.
+        if job.fieldId ~= nil and job.fieldId ~= 0 and TCJobHotspots.isMarked(job, lastDayOfMonth) then
             fieldIds[job.fieldId] = true
         end
     end
@@ -68,11 +77,67 @@ function TCJobHotspots.update(dt)
     TCJobHotspots.refresh()
 end
 
+-- 101: jobId -> machine for each of the farm's breakdowns that's on offer
+-- or taken on and whose machine is there.
+function TCJobHotspots.getBreakdownMachines(farmId)
+    local machines = {}
+    local tc = g_currentMission.TheContractor
+    if TheContractorRepairContracts == nil or farmId == nil or farmId == FarmManager.SPECTATOR_FARM_ID or
+            tc == nil or tc.Jobs == nil then
+        return machines
+    end
+    for _, job in ipairs(tc.Jobs:getAllJobs(farmId)) do
+        local state = job.state
+        if TheContractorRepairContracts.isBreakdownJob(job) and (state == TheContractorJob.STATE.OFFERED or
+                state == TheContractorJob.STATE.NEGOTIATING or state == TheContractorJob.STATE.ACCEPTED) then
+            local vehicle = TheContractorRepairContracts.getVehicle(job)
+            if vehicle ~= nil and vehicle.rootNode ~= nil then
+                machines[job.id] = vehicle
+            end
+        end
+    end
+    return machines
+end
+
+function TCJobHotspots.refreshMachines()
+    local wanted = TCJobHotspots.getBreakdownMachines(g_currentMission:getFarmId())
+    for jobId in pairs(TCJobHotspots.machineHotspotsByJobId) do
+        if wanted[jobId] == nil then
+            TCJobHotspots.removeMachineHotspot(jobId)
+        end
+    end
+    for jobId, vehicle in pairs(wanted) do
+        local hotspot = TCJobHotspots.machineHotspotsByJobId[jobId]
+        if hotspot == nil then
+            hotspot = AbstractFieldMissionHotspot.new()
+            hotspot:setWorldRadius(TCJobHotspots.MACHINE_RADIUS)
+            g_currentMission:addMapHotspot(hotspot)
+            TCJobHotspots.machineHotspotsByJobId[jobId] = hotspot
+        end
+        local x, _, z = getWorldTranslation(vehicle.rootNode)
+        hotspot:setWorldPosition(x, z)
+    end
+end
+
+function TCJobHotspots.removeMachineHotspot(jobId)
+    local hotspot = TCJobHotspots.machineHotspotsByJobId[jobId]
+    if hotspot == nil then
+        return
+    end
+    TCJobHotspots.machineHotspotsByJobId[jobId] = nil
+    if g_currentMission ~= nil and g_currentMission.removeMapHotspot ~= nil and g_currentMission.hud ~= nil then
+        g_currentMission:removeMapHotspot(hotspot)
+    end
+    hotspot:delete()
+end
+
 -- Adds and removes markers to match the local farm's jobs now.
 function TCJobHotspots.refresh()
     if AbstractFieldMissionHotspot == nil or g_currentMission.addMapHotspot == nil then
         return
     end
+
+    TCJobHotspots.refreshMachines()
 
     local wanted = TCJobHotspots.getMarkedFieldIds(g_currentMission:getFarmId())
 
@@ -113,5 +178,9 @@ function TCJobHotspots.reset()
         TCJobHotspots.removeHotspot(fieldId)
     end
     TCJobHotspots.hotspotsByFieldId = {}
+    for jobId in pairs(TCJobHotspots.machineHotspotsByJobId) do
+        TCJobHotspots.removeMachineHotspot(jobId)
+    end
+    TCJobHotspots.machineHotspotsByJobId = {}
     TCJobHotspots.accumulatedMs = 0
 end

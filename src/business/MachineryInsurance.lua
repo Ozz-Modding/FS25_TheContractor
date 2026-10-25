@@ -55,6 +55,11 @@ TheContractorMachineryInsurance.PERILS = {
 }
 
 TheContractorMachineryInsurance.CLAIMS_LOADING = 0.35
+
+-- 096: a vehicle with ADS's anti-theft system fitted (TheContractorTheft.
+-- hasAntiTheft) counts this much less of its value in the premium. The
+-- "_antiTheft" description says 15% in words: change both together.
+TheContractorMachineryInsurance.ANTI_THEFT_DISCOUNT = 0.15
 TheContractorMachineryInsurance.CLAIMS_WINDOW_PERIODS = 36
 
 -- Months from the claim going in to the money arriving.
@@ -137,6 +142,11 @@ function TheContractorMachineryInsurance:register(overheads, inbox, randomEvents
             return count, math.floor(count * TheContractorMachineryInsurance.CLAIMS_LOADING * 100 + 0.5)
         end,
         descriptionAmounts = excesses,
+        -- 096: the anti-theft discount, only where it can be fitted.
+        getDescriptionKey = function()
+            return TheContractorTheft.isAntiTheftOffered() and "tc_overhead_machineryInsurance_desc_antiTheft" or
+                "tc_overhead_machineryInsurance_desc"
+        end,
     })
 
     inbox:registerMessageKind(TheContractorMachineryInsurance.MESSAGE_KIND, {
@@ -170,19 +180,28 @@ end
 -- Premium and history (every machine) ------------------------------------------
 
 -- What the farm's insured machinery is worth: the sell price of every owned
--- vehicle it still has (a stolen one's gone).
+-- vehicle it still has (a stolen one's gone). Then what the premium is
+-- worked out on: the same, with each vehicle that has an anti-theft system
+-- (096) at ANTI_THEFT_DISCOUNT less. And how many have one.
 function TheContractorMachineryInsurance:getFleetValue(farmId)
     local theft = g_currentMission.TheContractor.Theft
-    local total = 0
+    local total, insured, fitted = 0, 0, 0
     for _, vehicle in ipairs(g_currentMission.vehicleSystem.vehicles) do
         if not vehicle.isDeleted and not vehicle.isPallet and vehicle.getOwnerFarmId ~= nil and
             vehicle:getOwnerFarmId() == farmId and vehicle.propertyState == VehiclePropertyState.OWNED and
             vehicle.getSellPrice ~= nil and
             (theft == nil or not theft:isStolen(NetworkUtil.getObjectId(vehicle))) then
-            total = total + math.max(0, vehicle:getSellPrice())
+            local value = math.max(0, vehicle:getSellPrice())
+            total = total + value
+            if TheContractorTheft.hasAntiTheft(vehicle) then
+                insured = insured + value * (1 - TheContractorMachineryInsurance.ANTI_THEFT_DISCOUNT)
+                fitted = fitted + 1
+            else
+                insured = insured + value
+            end
         end
     end
-    return total
+    return total, insured, fitted
 end
 
 -- Settled claims in the last CLAIMS_WINDOW_PERIODS, this period included.
@@ -200,7 +219,8 @@ end
 -- A year's premium at this level right now (a game price, not scaled).
 function TheContractorMachineryInsurance:getPremium(farmId, levelKey)
     local level = TheContractorMachineryInsurance.getLevel(levelKey) or TheContractorMachineryInsurance.LEVELS[1]
-    return self:getFleetValue(farmId) * level.premiumRate *
+    local _, insuredValue = self:getFleetValue(farmId)
+    return insuredValue * level.premiumRate *
         (1 + TheContractorMachineryInsurance.CLAIMS_LOADING * self:getRecentClaimCount(farmId))
 end
 
@@ -269,7 +289,7 @@ function TheContractorMachineryInsurance:onClaim(incident)
     local data = incident.data
     local args = { data.name, "$l10n_" .. TheContractorMachineryInsurance.getLevelTextKey(data.coverLevel) }
 
-    if tc.Administrator:isEmployed(incident.farmId) then
+    if tc.Office:hasAdministrator(incident.farmId) then
         data.claimSubmittedDay = getToday()
         self:publishClaimNotice(incident)
         tc.Inbox:postMessage(incident.farmId, TheContractorMachineryInsurance.MESSAGE_KIND,
@@ -448,8 +468,13 @@ function TheContractorMachineryInsurance.registerConsoleCommands()
                     state.pendingLevel ~= nil and string.format(" (%s from renewal)", state.pendingLevel) or "")
             end
 
+            local fleetValue, insuredValue, fitted = insurance:getFleetValue(farmId)
             local lines = { string.format("Farm %d: %s. Fleet value %.0f, %d claim(s) in the last 3 years", farmId,
-                cover, insurance:getFleetValue(farmId), insurance:getRecentClaimCount(farmId)) }
+                cover, fleetValue, insurance:getRecentClaimCount(farmId)) }
+            if fitted > 0 then
+                table.insert(lines, string.format("  %d vehicle(s) with an anti-theft system: priced on %.0f (%d%% off theirs)",
+                    fitted, insuredValue, math.floor(TheContractorMachineryInsurance.ANTI_THEFT_DISCOUNT * 100 + 0.5)))
+            end
             for _, level in ipairs(TheContractorMachineryInsurance.LEVELS) do
                 local excess = g_currentMission.TheContractor.Settings:scaleCost(level.excess)
                 table.insert(lines, string.format("  %s: %.0f a year, pays %d%% less %.0f excess", level.key,

@@ -78,7 +78,28 @@ do
     }
 end
 
-TheContractorSettings.ITEMS = { "jobPayRate", "lateInvoices", "randomEvents", "nameStyle" }
+-- 100: the average margin over the parts in ADS's quote on a repair
+-- contract's offer, which is what pays for the work: one for jobs in a
+-- repair zone, one for 101's field breakdowns (rollMargin rolls it within
+-- MARGIN_SPREAD). isShown keeps them off the menu without ADS; they're still
+-- saved and synced like the rest. They replaced 100's adsMargin (a margin
+-- over the whole quote, labour included), so an old save's value is ignored.
+local function adsMarginDefinition(defaultValue)
+    local values, strings, defaultIndex = percentOptions(0, 150, 5, defaultValue)
+    return {
+        values = values,
+        strings = strings,
+        default = defaultIndex,
+        isShown = function()
+            return TCADSRepairContracts.isActive()
+        end
+    }
+end
+TheContractorSettings.DEFINITIONS.adsWorkshopMargin = adsMarginDefinition(40)
+TheContractorSettings.DEFINITIONS.adsFieldMargin = adsMarginDefinition(50)
+
+TheContractorSettings.ITEMS = { "jobPayRate", "lateInvoices", "randomEvents", "nameStyle", "adsWorkshopMargin",
+    "adsFieldMargin" }
 
 -- 086: whether parking slots show outside the construction menu too. A
 -- display preference, so it's a local item (below). onChanged runs on this
@@ -247,6 +268,13 @@ end
 -- The nameStyle setting's style or mix key, for TCNames.generate.
 function TheContractorSettings:getNameStyle()
     return TheContractorSettings.NAME_STYLES[self.values.nameStyle] or TheContractorSettings.NAME_STYLES[1]
+end
+
+-- 100: the repair contract margin over the parts as a fraction (0.4 for
+-- 40%): a field breakdown's (101) or a repair zone job's.
+function TheContractorSettings:getADSMargin(isFieldBreakdown)
+    local id = isFieldBreakdown and "adsFieldMargin" or "adsWorkshopMargin"
+    return self.values[id] / 100
 end
 
 -- 048: the multiplier on a new job's price. FS25_EconomyScale's factor

@@ -112,6 +112,10 @@ end
 
 function TCSettingsMenu.addOption(settingsPage, id)
     local definition = TheContractorSettings.DEFINITIONS[id]
+    -- A setting that only means something with another mod (the ADS margins).
+    if definition.isShown ~= nil and not definition.isShown() then
+        return
+    end
     local isBinary = #definition.values == 2
     local originalBox = isBinary and settingsPage.checkWoodHarvesterAutoCutBox or settingsPage.multiVolumeVoiceBox
 

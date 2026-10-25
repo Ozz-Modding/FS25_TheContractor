@@ -102,6 +102,7 @@ local function setup()
     world:load("src/business/RandomEvents.lua")
     world:load("src/business/Job.lua")
     world:load("src/business/Jobs.lua")
+    world:load("src/business/Inbox.lua")
     world:load("src/business/JobGeneration.lua")
     world:load("src/util/TCFieldPreparation.lua")
     world:load("src/util/TCJobProgress.lua")
@@ -170,19 +171,17 @@ local function setup()
     end
     tc.JobGeneration = TheContractorJobGeneration.new()
 
+    -- The real inbox; world.messages records each post's text.
     world.messages = {}
-    tc.Inbox = {
-        registerMessageKind = function(_, kind, definition)
-            world.kinds = world.kinds or {}
-            world.kinds[kind] = definition
-        end,
-        postMessage = function(_, farmId, kind, titleKey, bodyKey, args, actions, payload)
-            local title = string.format(g_i18n:getText(titleKey), unpack(args))
-            local body = string.format(g_i18n:getText(bodyKey), unpack(args))
-            table.insert(world.messages, { farmId = farmId, kind = kind, title = title, body = body,
-                payload = payload })
-        end,
-    }
+    tc.Inbox = TheContractorInbox.new()
+    local postMessage = tc.Inbox.postMessage
+    tc.Inbox.postMessage = function(self, farmId, kind, titleKey, bodyKey, args, actions, payload, expiresInDays)
+        local title = string.format(g_i18n:getText(titleKey), unpack(args))
+        local body = string.format(g_i18n:getText(bodyKey), unpack(args))
+        table.insert(world.messages, { farmId = farmId, kind = kind, title = title, body = body,
+            payload = payload })
+        return postMessage(self, farmId, kind, titleKey, bodyKey, args, actions, payload, expiresInDays)
+    end
 
     tc.RandomEvents = TheContractorRandomEvents.new()
     tc.Joyriders = TheContractorJoyriders.new()
@@ -219,7 +218,7 @@ test("registered as a random event with its own inbox kind", function()
     assertEquals(definition.cooldownPeriods, 4)
     assertNear(definition.ratePerPeriod(1), 0.04, 1e-9)
     assertEquals(g_i18n:getText(definition.l10nKey), "Fly-tipping")
-    assertTrue(world.kinds.flyTipping ~= nil)
+    assertTrue(tc.Inbox:getKind("flyTipping") ~= nil)
 end)
 
 test("only NPC fields with no live job, never the farm's own or another player's", function()
@@ -425,6 +424,47 @@ test("turning the offer down, or letting it run out, takes the pile away", funct
     for _, debris in ipairs(world.spawned) do
         assertTrue(debris.isDeleted)
     end
+end)
+
+test("the offer message expires with the job, and goes once the job's over", function()
+    local world, tc = setup()
+    local _, job = dump(world, tc)
+    local message = tc.Inbox:getMessages(1)[1]
+    assertEquals(message.expiresDay, job.deadlineDay + 1, "the day the offer lapses")
+
+    -- Turned down: gone straight away.
+    tc.Jobs:transitionJobState(1, job.id, TheContractorJob.STATE.DECLINED)
+    assertEquals(#tc.Inbox:getMessages(1), 0)
+
+    -- Completed or missed: gone too.
+    world.fields = {}
+    dump(world, tc)
+    local second = tc.Jobs:getJob(1, tc.Inbox:getMessages(1)[1].payload.jobId)
+    tc.Jobs:transitionJobState(1, second.id, TheContractorJob.STATE.ACCEPTED)
+    assertEquals(#tc.Inbox:getMessages(1), 1, "an accepted job keeps it")
+    tc.Inbox:removeMessagesForJob(1, second.id)
+    assertEquals(#tc.Inbox:getMessages(1), 0)
+    second.state = TheContractorJob.STATE.COMPLETED
+
+    -- An older save's, from before: no expiry, its job long over. The
+    -- daily tick catches it.
+    world.fields = {}
+    dump(world, tc)
+    local old = tc.Inbox:getMessages(1)[1]
+    local third = tc.Jobs:getJob(1, old.payload.jobId)
+    old.expiresDay = nil
+    third.state = TheContractorJob.STATE.DECLINED
+    tc.Inbox:onDayChanged()
+    assertEquals(#tc.Inbox:getMessages(1), 0)
+
+    -- Other kinds' messages naming a job (052's claims) stay.
+    tc.Inbox:registerMessageKind("claim", {})
+    tc.Inbox:postMessage(1, "claim", "tc_flyTipping_offerTitle", "tc_flyTipping_offerTitle", { 1 }, nil,
+        { jobId = third.id })
+    tc.Inbox:onDayChanged()
+    tc.Inbox:removeMessagesForJob(1, third.id)
+    assertEquals(#tc.Inbox:getMessages(1), 1)
+    assertEquals(tc.Inbox:getMessages(1)[1].expiresDay, nil)
 end)
 
 test("completing or missing the job clears what's left", function()

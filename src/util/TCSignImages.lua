@@ -22,9 +22,24 @@ TCSignImages.FOLDER = "signs/"
 TCSignImages.MAX_IMAGES = 127
 TCSignImages.SAVE_ID_PREFIX = "sign_"
 
+-- Example designs shipped in the mod, copied into signs/ on every load
+-- (TCCompanyLogo.createSettingsFolder) to show players how it's laid out.
+TCSignImages.EXAMPLES_DIR = "images/signs/"
+TCSignImages.EXAMPLES = { "Contractors_At_Work.dds", "No_Entry.dds" }
+
 -- g_currentModSettingsDirectory is only set while the mod's scripts are
 -- being sourced, so it's captured here rather than read later.
 TCSignImages.settingsDir = g_currentModSettingsDirectory
+
+-- Copies the examples into signsDir, over any of the same name.
+function TCSignImages.seedExamples(signsDir)
+    if copyFile == nil then
+        return
+    end
+    for _, name in ipairs(TCSignImages.EXAMPLES) do
+        copyFile(Utils.getFilename(TCSignImages.EXAMPLES_DIR .. name, TheContractor.dir), signsDir .. name, true)
+    end
+end
 
 -- Same answer as FS25_EconomyScale's: a listen server, a dedicated server
 -- or a client. The flag is set when the mission is made, before the store

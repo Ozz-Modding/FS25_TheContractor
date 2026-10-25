@@ -12,7 +12,11 @@
 		<text name="tc_setting_randomEvents_rare" text="Rare"/>
 		<text name="tc_setting_randomEvents_normal" text="Normal"/>
 		<text name="tc_setting_nameStyle" text="Staff name style"/>
+		<text name="tc_setting_adsWorkshopMargin" text="Repair zone margin"/>
+		<text name="tc_setting_adsFieldMargin" text="Field breakdown margin"/>
 		<text name="tc_toolTip_nameStyle" text="Where the names of new job candidates and office administrators come from. European mix and Mixed pick a different style for each person. Staff you already have keep their names."/>
+		<text name="tc_toolTip_adsWorkshopMargin" text="What you charge for the work on Advanced Damage System repair and service offers in your repair zones, as a share on top of the parts the job needs. Each offer is within 10% either side of it. Offers already made keep their price."/>
+		<text name="tc_toolTip_adsFieldMargin" text="What you charge for the work on Advanced Damage System breakdowns out in the field, as a share on top of the parts the job needs. Each offer is within 10% either side of it. Offers already made keep their price."/>
 		<text name="tc_setting_showParkingSlots" text="Show parking slots"/>
 		<text name="tc_toolTip_showParkingSlots" text="Show your parking slots' markings outside the construction menu too. Just for you: other players choose their own. Right Ctrl+P switches it by default."/>
 		<text name="tc_nameStyle_british" text="British"/>
@@ -35,6 +39,7 @@
 		<text name="tc_header_finances" text="Finances"/>
 		<text name="tc_header_logbook" text="Logbook"/>
 		<text name="tc_header_supplies" text="Supplies"/>
+		<text name="tc_header_workshop" text="Workshop"/>
 		<text name="tc_overview_companyHeading" text="Company"/>
 		<text name="tc_overview_businessHeading" text="Business"/>
 		<text name="tc_inbox_negotiationHeading" text="Negotiation"/>
@@ -128,8 +133,9 @@
 		<text name="tc_summary_line" text="%s on Field %s, %s, fuel %s (%.0f l), quality %d%%"/>
 		<text name="tc_summary_duration" text="%dh %02dm"/>
 		<text name="tc_overview_currentJobsHeading" text="Current Jobs"/>
-		<text name="tc_overview_currentJobsEmpty" text="No jobs currently allocated or in progress."/>
+		<text name="tc_overview_currentJobsEmpty" text="No jobs allocated, in progress or in the workshop."/>
 		<text name="tc_overview_currentJobLine" text="Field %s: %s - %d%%"/>
+		<text name="tc_repair_overviewLine" text="%s: %s - %s, due %s"/>
 		<text name="tc_overview_deliveredSuffix" text=" (%d%% delivered to %s)"/>
 		<text name="tc_overview_supplySuffix" text=" - %s"/>
 		<text name="tc_overview_courtesyDueSuffix" text=" - courtesy %s goes back to the insurer after this job"/>
@@ -170,7 +176,7 @@
 		<text name="tc_advertising_dialog_locked" text="Needs %s reputation."/>
 		<text name="tc_advertising_dialog_cannotAfford" text="You can't afford this."/>
 		<text name="tc_advertising_dialog_runsFor" text="Runs for %d days."/>
-		<text name="tc_advertising_dialog_extends" text="Extends your current campaign from %d to %d days left."/>
+		<text name="tc_advertising_dialog_alreadyRunning" text="This campaign is already running (%d days left). You can buy it again once it ends."/>
 		<text name="tc_advertising_dialog_replaces" text="Replaces your %s campaign (%d days left). Runs for %d days."/>
 		<text name="tc_moneyType_advertising" text="Advertising"/>
 		<text name="finance_tcAdvertising" text="Advertising"/>
@@ -284,7 +290,7 @@
 		<text name="tc_unallocate_problemGone" text="That job no longer exists."/>
 		<text name="tc_unallocate_problemState" text="Only an allocated or in-progress job can be unallocated."/>
 		<text name="tc_logbook_earlierCrew" text="Earlier crew"/>
-		<text name="tc_job_missedNotification" text="Missed deadline: %s on Field %s went uncompleted."/>
+		<text name="tc_job_missedNotification" text="Job failed: %s on Field %s wasn't done by its deadline."/>
 		<text name="tc_dispatch_noVehicleReady" text="None of the allocated equipment can be driven by the worker (is it free, and can it do this job?)."/>
 		<text name="tc_dispatch_failedNotification" text="Could not dispatch %s on Field %s: %s"/>
 		<text name="tc_watchdog_retriedNotification" text="Your worker got stuck on a %s job on Field %s - reset and dispatched again."/>
@@ -318,6 +324,25 @@
 		<text name="tc_staff_columnBestSkills" text="Best skill"/>
 		<text name="tc_staff_columnStatus" text="Status"/>
 		<text name="tc_staff_columnJob" text="Job"/>
+		<text name="tc_staff_columnADS" text="ADS"/>
+		<text name="tc_staff_adsYes" text="Yes"/>
+		<text name="tc_staff_workshopHeading" text="Workshop"/>
+		<text name="tc_staff_workshopAssigned" text="Assigned"/>
+		<text name="tc_staff_workshopNotAssigned" text="Not assigned"/>
+		<text name="tc_staff_workshopButton" text="Work in the workshop as %s"/>
+		<text name="tc_staff_workshopReplaceButton" text="Work in the workshop as %s (instead of %s)"/>
+		<text name="tc_staff_workshopStopButton" text="Stop working in the workshop"/>
+		<text name="tc_workshop_courseName" text="level %d %s"/>
+		<text name="tc_workshop_trainingButton" text="Workshop training"/>
+		<text name="tc_workshop_courseTitle" text="Workshop training"/>
+		<text name="tc_workshop_coursePrompt" text="Which course should %s take?"/>
+		<text name="tc_workshop_courseOptionLearn" text="Learn %s: %s, %d days"/>
+		<text name="tc_workshop_courseOptionRaise" text="%s to level %d: %s, %d days"/>
+		<text name="tc_workshop_courseConfirm" text="Book %s on a %s course for %s? Training is on %s. They can't take jobs on those days. If they're out on a job when it's due, it moves back."/>
+		<text name="tc_workshop_courseConfirmTicked" text="While they're on it, the workshop's %s work waits for them."/>
+		<text name="tc_workshop_courseBooked" text="%s is booked on a %s course: %s"/>
+		<text name="tc_workshop_courseDone" text="%s finished their course and is now a level %d %s"/>
+		<text name="tc_allocation_workshopNote" text="%s works in your workshop as %s: the workshop's %s work waits until they're back."/>
 		<text name="tc_staff_columnSalary" text="Salary"/>
 		<text name="tc_staff_rosterEmpty" text="No workers hired yet — switch to the Candidates view to hire your first worker."/>
 		<text name="tc_staff_candidatesEmpty" text="No candidates currently available to hire — check back later."/>
@@ -344,7 +369,6 @@
 		<text name="tc_growth_stat_cropCare" text="crop care"/>
 		<text name="tc_growth_stat_haulage" text="haulage"/>
 		<text name="tc_consequences_extraWear" text="Extra wear from %s's skill gaps: %s"/>
-		<text name="tc_consequences_breakdown" text="%s caused a fault on: %s"/>
 		<text name="tc_consequences_unknownWorker" text="A former worker"/>
 		<text name="tc_sickness_offSick" text="%s has called in sick and can't take jobs for a few days"/>
 		<text name="tc_sickness_recovered" text="%s is back at work after being off sick"/>
@@ -405,6 +429,100 @@
 		<text name="tc_parkingSlotHarvester_name" text="Harvester Parking Slot"/>
 		<text name="tc_parkingSlotVehicle_function" text="Marks a parking space for vehicles (tractors, loaders, self-propelled machines) coming back from contract jobs, facing the arrow. Implements go in implement parking slots and harvesters in harvester parking slots. Stand in a placed slot to choose what it takes. Only visible in the construction menu, unless you turn on Show parking slots (Right Ctrl+P)."/>
 		<text name="tc_parkingSlotHarvester_function" text="Marks a parking space for a self-propelled harvester (combine, forage or beet harvester) coming back from contract jobs, facing the arrow. Its header goes in an implement parking slot. Stand in a placed slot to choose what it takes. Only visible in the construction menu, unless you turn on Show parking slots (Right Ctrl+P)."/>
+		<text name="tc_repairZone_name" text="Repair Zone"/>
+		<text name="tc_repairZoneMedium_name" text="Repair Zone (3 bays)"/>
+		<text name="tc_repairZoneLarge_name" text="Repair Zone (6 bays)"/>
+		<text name="tc_repairZoneHarvester_name" text="Harvester Repair Zone"/>
+		<text name="tc_repairZoneVehicle_function" text="Needs Advanced Damage System. Customers bring their tractors here for a repair or a service, one in each 4 m bay, facing the arrow, with a job offer in your Inbox. Stand in a placed zone to choose which kinds of tractor it takes. Only visible in the construction menu, unless you turn on Show parking slots (Right Ctrl+P)."/>
+		<text name="tc_repairZoneHarvester_function" text="Needs Advanced Damage System. Customers bring their self-propelled harvesters (combines, forage and beet harvesters) here for a repair or a service, facing the arrow, with a job offer in your Inbox. Stand in a placed zone to choose which kinds it takes. Only visible in the construction menu, unless you turn on Show parking slots (Right Ctrl+P)."/>
+		<text name="tc_repairZone_activate" text="Set repair zone filter"/>
+		<text name="tc_repairZone_dialogTitle" text="Repair zone"/>
+		<text name="tc_repairZone_dialogHint_vehicle" text="Customers only bring the kinds of tractor you tick. Nothing ticked takes any that fit."/>
+		<text name="tc_repairZone_dialogHint_harvester" text="Customers only bring the kinds of harvester you tick. Nothing ticked takes any that fit."/>
+		<text name="tc_repairZone_takesAny_vehicle" text="Any tractor"/>
+		<text name="tc_repairZone_takesAny_harvester" text="Any harvester"/>
+		<text name="tc_jobType_adsRepair" text="Workshop Repair"/>
+		<text name="tc_jobType_adsMaintenance" text="Workshop Service"/>
+		<text name="tc_jobType_adsBreakdown" text="Field Breakdown"/>
+		<text name="tc_inbox_chipRepair" text="Workshop"/>
+		<text name="tc_jobDetails_machine" text="Machine"/>
+		<text name="tc_repair_problemGone" text="The customer's machine isn't there any more."/>
+		<text name="tc_repair_problemNoADS" text="Advanced Damage System isn't loaded, so this job can't be taken on."/>
+		<text name="tc_repair_requires" text="You haven't the equipment for this job yet. Requires: %s."/>
+		<text name="tc_repair_summaryLine" text="%s on the %s"/>
+		<text name="tc_repair_missedNotification" text="Job failed: the %s in your repair zone wasn't finished by its deadline, and the customer has taken the machine back."/>
+		<text name="tc_repair_acceptedInfo" text="Job accepted: %s for %s. It's in your repair zone. Inspect it to find what's wrong, then fix it in the workshop. The Workshop tab has a checklist of what's left."/>
+		<text name="tc_repair_acceptedInfo_maintenance" text="Job accepted: %s for %s. It's in your repair zone. Service it in the workshop: the Workshop tab has a checklist of what's left."/>
+		<text name="tc_repair_rejectedInfo" text="Negotiation failed: the customer has taken the %s elsewhere."/>
+		<text name="tc_repair_detailMachine" text="Machine"/>
+		<text name="tc_repair_detailWork" text="Work"/>
+		<text name="tc_repair_detailTools" text="Equipment"/>
+		<text name="tc_repair_detailTampered" text="Condition"/>
+		<text name="tc_repair_machineHours" text="%s, %d h"/>
+		<text name="tc_repair_work_repair" text="Repair: it's not right, inspect it to find out why"/>
+		<text name="tc_repair_work_maintenance" text="Service: oils, filters and grease"/>
+		<text name="tc_repair_work_breakdown" text="Broken down in the field: fix it where it stands, today"/>
+		<text name="tc_repair_handToolsOnly" text="Hand tools only"/>
+		<text name="tc_repair_doneWhen_repair" text="Every fault it came in with is fixed: the list below, once you've inspected it. Repairing a part counts as much as replacing it. A quick fix doesn't count, and nothing that goes wrong after it came in needs fixing. It's paid as soon as the last one's done."/>
+		<text name="tc_repair_doneWhen_breakdown" text="Every fault that stopped it is fixed where it stands, before the day's out: the list below, once you've inspected it. A quick fix doesn't count. It's paid as soon as the last one's done."/>
+		<text name="tc_repair_doneWhen_maintenance" text="Everything on the list below is done: fluids over 85% full and fresh, grease points over 85% full, filters and the battery as good as new. Doing more than the list doesn't hurt. It's paid as soon as the last one's done."/>
+		<text name="tc_repair_progressFixed" text="%d of %d fixed"/>
+		<text name="tc_repair_progressServiced" text="%d of %d serviced"/>
+		<text name="tc_repair_progressMore" text="%d fixed, but something's still wrong. Inspect it again."/>
+		<text name="tc_repair_progressNotFound" text="Nothing found yet. Inspect it to find what's wrong."/>
+		<text name="tc_workshop_columnMachine" text="Machine"/>
+		<text name="tc_workshop_columnDue" text="Due"/>
+		<text name="tc_workshop_columnProgress" text="Progress"/>
+		<text name="tc_workshop_empty" text="No customers' machines in for work. Repair, service and breakdown offers come in to the Inbox."/>
+		<text name="tc_workshop_sectionChecklist" text="Checklist"/>
+		<text name="tc_workshop_viewCurrent" text="Current work"/>
+		<text name="tc_workshop_viewCompleted" text="Completed &amp; failed"/>
+		<text name="tc_workshop_columnCompleted" text="Finished"/>
+		<text name="tc_workshop_columnProfit" text="Profit"/>
+		<text name="tc_workshop_emptyCompleted" text="No finished workshop jobs yet."/>
+		<text name="tc_workshop_sectionEarnings" text="Earnings"/>
+		<text name="tc_workshop_estimatedCost" text="Estimated cost"/>
+		<text name="tc_workshop_billedAmount" text="Billed amount"/>
+		<text name="tc_workshop_profit" text="Profit"/>
+		<text name="tc_workshop_partsCost" text="Parts cost"/>
+		<text name="tc_workshop_turnaround" text="Turnaround"/>
+		<text name="tc_workshop_turnaroundBonus" text="%s (+%.0f%% reputation for speed)"/>
+		<text name="tc_workshop_earningsNote" text="The parts cost is ADS's estimate of the parts and materials the job needed. The customer was billed that plus your margin for the work, and the difference is the profit, before your staff's wages."/>
+		<text name="tc_workshop_earningsNoteQuote" text="The estimated cost is ADS's quote for the work. The customer was billed that plus your margin, and the difference is the profit."/>
+		<text name="tc_workshop_missedNote" text="This job failed: it wasn't done by the day it was due, so the customer paid nothing and collected their machine."/>
+		<text name="tc_workshop_billedNothing" text="Nothing"/>
+		<text name="tc_repair_progressSoFar" text="%d fixed so far"/>
+		<text name="tc_repair_progressNotInspected" text="Not inspected"/>
+		<text name="tc_repair_todo_repair" text="Repair it"/>
+		<text name="tc_repair_todo_replacement" text="Replace it"/>
+		<text name="tc_repair_todo_change" text="Drain and refill"/>
+		<text name="tc_repair_todo_topUp" text="Top it up"/>
+		<text name="tc_repair_todo_grease" text="Grease it"/>
+		<text name="tc_repair_todo_replace" text="Replace it"/>
+		<text name="tc_repair_todo_service" text="Service it"/>
+		<text name="tc_repair_chipFixed" text="Fixed"/>
+		<text name="tc_repair_chipServiced" text="Serviced"/>
+		<text name="tc_repair_chipToDo" text="To do"/>
+		<text name="tc_repair_chipInWorkshop" text="In the workshop"/>
+		<text name="tc_repair_chipTampered" text="Worse than it came"/>
+		<text name="tc_repair_tamperedValue" text="%d thing(s) missing or worse than when it came in"/>
+		<text name="tc_repair_tamperedTitle" text="Customer complaint: %s"/>
+		<text name="tc_repair_tamperedBody" text="The owner of the %s has taken it back worse than they left it: parts missing or swapped for worn ones. They won't pay, and they're telling everyone (-%s reputation)."/>
+		<text name="tc_repair_tamperedBodyClaim" text="The owner of the %s has taken it back worse than they left it: parts missing or swapped for worn ones. They won't pay, they're telling everyone (-%s reputation), and they're going to their solicitor about the damage."/>
+		<text name="tc_repair_claimTitle" text="Compensation claim: %s"/>
+		<text name="tc_repair_claimBody" text="The owner of the %s has claimed for the parts that went missing while it was with you. Public liability doesn't cover deliberate damage, so the whole %s has been charged."/>
+		<text name="tc_repair_claimBodyLegal" text="The owner of the %s has claimed for the parts that went missing while it was with you. Your legal cover got it reduced, but public liability doesn't cover deliberate damage, so %s has been charged."/>
+		<text name="tc_repair_claimNotice" text="Compensation claim for the %s: %s paid, uninsured."/>
+		<text name="tc_breakdown_eventName" text="Field breakdown"/>
+		<text name="tc_breakdown_location" text="%s, Field %s"/>
+		<text name="tc_breakdown_kit_toolBox" text="Tool box or mobile workshop"/>
+		<text name="tc_breakdown_kit_mobile" text="Mobile workshop"/>
+		<text name="tc_breakdown_chipBrokenDown" text="Broken down"/>
+		<text name="tc_breakdown_acceptedInfo" text="Job accepted: %s for %s. It's at %s, marked on the map. Fix it there before the day's out: the Workshop tab has a checklist."/>
+		<text name="tc_breakdown_missedNotification" text="Job failed: a customer's machine broken down in the field wasn't fixed in time, and they've had it recovered."/>
+		<text name="tc_claims_cause_tampering" text="parts taken or swapped while it was in for repair"/>
+		<text name="tc_drivers_customerVehicle" text="%s is a customer's machine in for repair, so AI helpers, AutoDrive, Courseplay and Follow Me can't drive it."/>
+		<text name="tc_drivers_customerVehicleDialog" text="This is a customer's machine in for repair, so AI helpers, AutoDrive, Courseplay and Follow Me can't drive it."/>
 		<text name="tc_parkingSlotImplement_function" text="Marks a parking space for implements and trailers coming back from contract jobs, facing the arrow. Vehicles go in vehicle parking slots. Stand in a placed slot to choose what it takes. Only visible in the construction menu, unless you turn on Show parking slots (Right Ctrl+P)."/>
 		<text name="tc_parking_slotsShown" text="Parking slots shown"/>
 		<text name="tc_parking_slotsHidden" text="Parking slots hidden"/>
@@ -520,6 +638,20 @@
 		<text name="tc_staff_detailRetiringDue" text="As soon as they're back"/>
 		<text name="tc_staff_status_holiday" text="Holiday"/>
 		<text name="tc_staff_status_training" text="Training"/>
+		<text name="tc_staff_status_atHome" text="At home"/>
+		<text name="tc_staff_status_comingIn" text="On the way in"/>
+		<text name="tc_staff_status_stayingLate" text="Staying late"/>
+		<text name="tc_hours_driversAllHome" text="Everyone free has gone home for the day. Ask someone to stay late, or call them back in, from Manage on the Staff tab."/>
+		<text name="tc_hours_detailOvertime" text="%s (+%s overtime this month)"/>
+		<text name="tc_hours_stayLateButton" text="Stay late"/>
+		<text name="tc_hours_stayLongerButton" text="Stay longer"/>
+		<text name="tc_hours_callBackButton" text="Call back in"/>
+		<text name="tc_hours_sendHomeButton" text="Send home"/>
+		<text name="tc_hours_stayLateTitle" text="Stay late"/>
+		<text name="tc_hours_callBackTitle" text="Call back in"/>
+		<text name="tc_hours_untilOption" text="Until %s (about %s overtime)"/>
+		<text name="tc_hours_stayLatePrompt" text="Ask %s to stay on after %s? They're paid overtime for every hour they stay, whether you give them work or not. If they're on a job when the time comes, they finish it."/>
+		<text name="tc_hours_callBackPrompt" text="Call %s back in? They'll be in %d minutes after you call, and are paid overtime from the call until they finish."/>
 		<text name="tc_staff_detailHolidayLeft" text="%d day(s) this year"/>
 		<text name="tc_staff_detailHolidayBooked" text="Booked: %s"/>
 		<text name="tc_staff_detailHolidayNow" text="On holiday now: %s"/>
@@ -661,6 +793,10 @@
 		<text name="tc_theft_lostBody" text="The police have closed their enquiries into the theft of your %s (crime reference %s) without finding it. It's gone for good and has been taken off your fleet."/>
 		<text name="tc_theft_lostNotice" text="%s not found: written off"/>
 		<text name="tc_theft_lostBodyInsured" text="The police have closed their enquiries into the theft of your %s (crime reference %s) without finding it. It's gone for good, but it was insured on the day it was taken, so you can claim for it."/>
+		<text name="tc_theft_stolenBodyTracker" text="Your %s has been stolen. It's been reported to the police under crime reference %s. Its anti-theft system is sending them its position, so there's a good chance they'll find it. You'll hear back once they've finished their enquiries."/>
+		<text name="tc_theft_recoveredBodyTracker" text="Good news: the police followed your %s's anti-theft tracker and found it (crime reference %s). It's been knocked about and needs a wash, and it'll be back in your yard as soon as there's a free parking slot."/>
+		<text name="tc_theft_lostBodyTracker" text="The police have closed their enquiries into the theft of your %s (crime reference %s) without finding it. Its anti-theft tracker went dead soon after it was taken. It's gone for good and has been taken off your fleet."/>
+		<text name="tc_theft_lostBodyInsuredTracker" text="The police have closed their enquiries into the theft of your %s (crime reference %s) without finding it. Its anti-theft tracker went dead soon after it was taken. It's gone for good, but it was insured on the day it was taken, so you can claim for it."/>
 		<text name="tc_joyriders_eventName" text="Joyriders"/>
 		<text name="tc_joyriders_ownTitle" text="Joyriders on Field %s"/>
 		<text name="tc_joyriders_ownBody" text="Joyriders have been driving round your grass on Field %s and torn it up. It'll need plowing and sowing again."/>
@@ -768,6 +904,7 @@
 		<text name="tc_overheads_levelDetail_monthly" text="%s cover: %s a month."/>
 		<text name="tc_overhead_machineryInsurance" text="Machinery insurance"/>
 		<text name="tc_overhead_machineryInsurance_desc" text="Covers your machinery against theft. Basic pays 80%% of a lost vehicle's value less a %s excess, Standard pays 90%% of it less %s, Comprehensive its full value less %s and lends you a similar tractor while the claim settles. Priced at 1%%, 1.4%% or 1.8%% of your fleet's value a year, +35%% per claim in the last 3 years."/>
+		<text name="tc_overhead_machineryInsurance_desc_antiTheft" text="Covers your machinery against theft. Basic pays 80%% of a lost vehicle's value less a %s excess, Standard pays 90%% of it less %s, Comprehensive its full value less %s and lends you a similar tractor while the claim settles. Priced at 1%%, 1.4%% or 1.8%% of your fleet's value a year, +35%% per claim in the last 3 years. A vehicle with an anti-theft system fitted in the workshop costs 15%% less to cover."/>
 		<text name="tc_insurance_level_basic" text="Basic"/>
 		<text name="tc_insurance_level_standard" text="Standard"/>
 		<text name="tc_insurance_level_comprehensive" text="Comprehensive"/>
@@ -811,7 +948,11 @@
 		<text name="tc_overhead_tradeAssociation" text="Agricultural Contractors' Association"/>
 		<text name="tc_overhead_tradeAssociation_desc" text="Trade association membership, %s a year. Members earn 5%% more reputation per job, get 25%% off certification courses and cheaper legal cover."/>
 		<text name="tc_overhead_legalExpenses" text="Legal expenses insurance"/>
-		<text name="tc_overhead_legalExpenses_desc" text="Pursue overdue invoices free, with better odds of recovery. %s a year, or %s for association members (from the next renewal)."/>
+		<text name="tc_overhead_legalExpenses_desc" text="Pursue overdue invoices free, with better odds of recovery. %s a year, or %s for association members (joining or leaving reprices the rest of the year)."/>
+		<text name="tc_legal_repricedJoinedRefund" text="Legal expenses insurance repriced for association members: %s refunded for the rest of the year."/>
+		<text name="tc_legal_repricedJoinedMonthly" text="Legal expenses insurance repriced for association members: %s a month from now on."/>
+		<text name="tc_legal_repricedLeftCharge" text="Legal expenses insurance back at the full price now you've left the association: %s charged for the rest of the year."/>
+		<text name="tc_legal_repricedLeftMonthly" text="Legal expenses insurance back at the full price now you've left the association: %s a month from now on."/>
 		<text name="tc_legal_pursueButton" text="Pursue"/>
 		<text name="tc_legal_pursueConfirmCovered" text="Pursue the invoice for %s (%s)? Your legal cover handles it at no cost. Expect an outcome in 1-2 months."/>
 		<text name="tc_legal_pursueConfirmSolicitor" text="Instruct a solicitor to recover the invoice for %s (%s)? Their fee and the court fee come to %s, paid now and not refunded if it fails. Expect an outcome in 1-2 months."/>
@@ -827,21 +968,44 @@
 		<text name="tc_legal_failedNotice" text="Pursuit failed: the invoice for %s (%s) has been written off."/>
 		<text name="tc_overhead_healthSafety" text="Health &amp; safety programme"/>
 		<text name="tc_overhead_healthSafety_desc" text="PPE, first aid, training and risk assessments: %s per worker a year. Staff get sick less and recover sooner. Without it, sickness risks an inspection and a fine."/>
-		<text name="tc_admin_title" text="Office administrator"/>
-		<text name="tc_admin_status_employed" text="Employed"/>
-		<text name="tc_admin_status_vacant" text="None"/>
-		<text name="tc_admin_noteEmployed" text="%s, since %s"/>
-		<text name="tc_admin_billing" text="Monthly salary, paid with the salary run"/>
-		<text name="tc_admin_price" text="%s a month"/>
-		<text name="tc_admin_desc" text="Handles invoicing and credit control: customers pay sooner, and fewer pay late or not at all. Only invoices issued while employed."/>
-		<text name="tc_admin_hireButton" text="Hire administrator"/>
-		<text name="tc_admin_releaseButton" text="Release administrator"/>
-		<text name="tc_admin_hireConfirm" text="Hire an office administrator for %s a month? The first month is paid now. Customers will pay sooner, and fewer will pay late or not at all."/>
-		<text name="tc_admin_cannotAfford" text="You can't afford an office administrator right now: the first month's salary is %s."/>
-		<text name="tc_admin_releaseConfirmNotice" text="Release %s, your office administrator? After %d full year(s) of service, you'll pay them %s in lieu of %s week(s)' notice. This cannot be undone."/>
-		<text name="tc_admin_releaseConfirmRedundancy" text="Release %s, your office administrator? After %d full years of service, you'll pay them %s: %s in lieu of %s weeks' notice and %s redundancy pay. This cannot be undone."/>
-		<text name="tc_admin_hiredNotification" text="%s has started as your office administrator"/>
-		<text name="tc_admin_releasedNotification" text="%s, your office administrator, has left"/>
+		<text name="tc_office_role_administrator" text="Office administrator"/>
+		<text name="tc_office_roleNoun_administrator" text="office administrator"/>
+		<text name="tc_office_vacant" text="Vacant"/>
+		<text name="tc_office_vacancyTitle" text="%s: vacant"/>
+		<text name="tc_office_status_vacant" text="Vacant"/>
+		<text name="tc_office_status_available" text="In the office"/>
+		<text name="tc_office_status_training" text="Training"/>
+		<text name="tc_office_status_atHome" text="At home"/>
+		<text name="tc_office_detailRole" text="Role"/>
+		<text name="tc_office_detailLevel" text="Level"/>
+		<text name="tc_office_detailSince" text="Employed since"/>
+		<text name="tc_office_detailWorkshop" text="Workshop"/>
+		<text name="tc_office_aboutHeading" text="The role"/>
+		<text name="tc_office_level" text="Level %d"/>
+		<text name="tc_office_salary" text="%s a month"/>
+		<text name="tc_office_about_administrator" text="Handles invoicing and credit control: customers pay sooner, and fewer pay late or not at all (only invoices issued while employed). With Advanced Damage System, also your own workshop's advisor: more vehicles worked on at once, and faster work, the higher their level."/>
+		<text name="tc_office_adsRole_receptionist" text="Advisor"/>
+		<text name="tc_office_adsRole_storekeeper" text="Storekeeper"/>
+		<text name="tc_office_adsRole_mechanic" text="Mechanic"/>
+		<text name="tc_office_adsRole_diagnostician" text="Electrician"/>
+		<text name="tc_office_adsRole_bodyworker" text="Bodyworker"/>
+		<text name="tc_office_workshopNone" text="Not in use"/>
+		<text name="tc_office_workshopRole" text="%s, level %d"/>
+		<text name="tc_office_noteVacant" text="The first month's salary is paid when you hire."/>
+		<text name="tc_office_noteTraining" text="On a course to level %d, back on %s. The workshop goes without their help until then."/>
+		<text name="tc_office_noteFullyTrained" text="Fully trained."/>
+		<text name="tc_office_noteCanTrain" text="Can train to level %d: %s, away for %d day(s)."/>
+		<text name="tc_office_hireButton" text="Hire"/>
+		<text name="tc_office_hireConfirm_administrator" text="Hire an office administrator for %s a month? The first month is paid now. Customers will pay sooner, and fewer will pay late or not at all."/>
+		<text name="tc_office_cannotAfford" text="You can't afford a %s right now: the first month's salary is %s."/>
+		<text name="tc_office_releaseConfirmNotice" text="Release %s, your %s? After %d full year(s) of service, you'll pay them %s in lieu of %s week(s)' notice. This cannot be undone."/>
+		<text name="tc_office_releaseConfirmRedundancy" text="Release %s, your %s? After %d full years of service, you'll pay them %s: %s in lieu of %s weeks' notice and %s redundancy pay. This cannot be undone."/>
+		<text name="tc_office_trainButton" text="Train to level %d"/>
+		<text name="tc_office_trainConfirm" text="Send %s on a course to level %d? It costs %s, paid now, and they're away for %d day(s), so the workshop goes without their help until they're back."/>
+		<text name="tc_office_trainCannotAfford" text="You can't afford the course right now: it costs %s."/>
+		<text name="tc_office_hiredNotification" text="%s has started as your %s"/>
+		<text name="tc_office_releasedNotification" text="%s, your %s, has left"/>
+		<text name="tc_office_trainedNotification" text="%s has finished their course: now level %d"/>
 		<text name="tc_healthSafety_chipActive" text="H&amp;S programme"/>
 		<text name="tc_healthSafety_chipInactive" text="No H&amp;S programme"/>
 		<text name="tc_healthSafety_inspectionNotice" text="Workplace inspection after %s fell sick: no health and safety programme in place. Fined %s, and your reputation has taken a knock."/>
@@ -859,6 +1023,7 @@
 		<text name="tc_training_bookItButton" text="Book it"/>
 		<text name="tc_training_notNowButton" text="Not now"/>
 		<text name="tc_training_confirmCourse" text="Book %s on a %s course for %s? Training is on %s, with the assessment %d-%d days after. They can't take jobs on those days. If they're out on a job when it's due, it moves back."/>
+		<text name="tc_training_confirmCourseFixedGap" text="Book %s on a %s course for %s? Training is on %s, with the assessment %d day(s) after. They can't take jobs on those days. If they're out on a job when it's due, it moves back."/>
 		<text name="tc_training_confirmRetake" text="Book %s a retake of the %s assessment for %s? The assessment is on %s. They can't take jobs that day. If they're out on a job when it's due, it moves back."/>
 		<text name="tc_training_cannotAfford" text="You can't afford %s's %s course right now: it costs %s."/>
 		<text name="tc_training_cannotAffordNotice" text="Couldn't book %s's %s course: you can't afford %s."/>
@@ -940,7 +1105,7 @@
 		<text name="tc_logbook_columnLastUsedBy" text="Last used by"/>
 		<text name="tc_logbook_columnLastUsed" text="Last used"/>
 		<text name="tc_logbook_columnCondition" text="Condition"/>
-		<text name="tc_logbook_noJobs" text="No finished jobs yet. Completed and missed jobs are recorded here."/>
+		<text name="tc_logbook_noJobs" text="No finished jobs yet. Completed and failed jobs are recorded here."/>
 		<text name="tc_logbook_noMatches" text="No jobs match this filter"/>
 		<text name="tc_logbook_noVehicles" text="The farm has no vehicles"/>
 		<text name="tc_logbook_showing" text="Showing: %s"/>
@@ -949,7 +1114,7 @@
 		<text name="tc_logbook_sortButton" text="Sort: %s"/>
 		<text name="tc_logbook_filterAll" text="All jobs"/>
 		<text name="tc_logbook_filterCompleted" text="Completed"/>
-		<text name="tc_logbook_filterMissed" text="Missed"/>
+		<text name="tc_logbook_filterMissed" text="Failed"/>
 		<text name="tc_logbook_sort_lastUsed" text="Last used"/>
 		<text name="tc_logbook_sort_hours" text="Most hours"/>
 		<text name="tc_logbook_sort_faults" text="Most faults"/>
@@ -966,11 +1131,11 @@
 		<text name="tc_logbook_sectionYear" text="Last 12 months"/>
 		<text name="tc_logbook_sectionHistory" text="History"/>
 		<text name="tc_logbook_completed" text="Completed"/>
-		<text name="tc_logbook_missed" text="Missed"/>
+		<text name="tc_logbook_missed" text="Failed"/>
 		<text name="tc_logbook_completedOn" text="Completed"/>
-		<text name="tc_logbook_missedOn" text="Missed"/>
+		<text name="tc_logbook_missedOn" text="Failed"/>
 		<text name="tc_logbook_field" text="Field"/>
-		<text name="tc_logbook_progress" text="Done when missed"/>
+		<text name="tc_logbook_progress" text="Done when it failed"/>
 		<text name="tc_logbook_quality" text="Quality"/>
 		<text name="tc_logbook_interventions" text="Got stuck"/>
 		<text name="tc_logbook_notAllocated" text="Never allocated"/>
@@ -987,11 +1152,10 @@
 		<text name="tc_logbook_damage" text="Damage"/>
 		<text name="tc_logbook_paint" text="Paint wear"/>
 		<text name="tc_logbook_change" text="%s to %s"/>
-		<text name="tc_logbook_newFault" text="New fault"/>
-		<text name="tc_logbook_worseFault" text="Fault worse"/>
-		<text name="tc_logbook_faultStage" text="%s (stage %d)"/>
-		<text name="tc_logbook_activeFaults" text="Active faults"/>
-		<text name="tc_logbook_conditionShort" text="Cond. %s"/>
+		<text name="tc_logbook_newFault" text="Fault found"/>
+		<text name="tc_logbook_conditionOutdated" text="%s (outdated)"/>
+		<text name="tc_logbook_unknown" text="Unknown"/>
+		<text name="tc_logbook_activeFaults" text="Known faults"/>
 		<text name="tc_logbook_damageShort" text="Damage %s"/>
 		<text name="tc_logbook_faultChip" text="Fault"/>
 		<text name="tc_logbook_faultShort" text="Fault"/>
@@ -1024,6 +1188,7 @@
 		<text name="tc_logbook_insured" text="Insured"/>
 		<text name="tc_logbook_uninsured" text="Uninsured"/>
 		<text name="tc_logbook_margin" text="Margin"/>
+		<text name="tc_logbook_marginNoAdsWear" text="Margin (excl. ADS wear)"/>
 		<text name="tc_logbook_reputation" text="Reputation"/>
 		<text name="tc_logbook_claimReputation" text="Reputation (claim)"/>
 		<text name="tc_logbook_status" text="Status"/>
@@ -1034,7 +1199,7 @@
 		<text name="tc_logbook_columnDamage" text="Damage"/>
 		<text name="tc_logbook_columnWear" text="Wear"/>
 		<text name="tc_logbook_jobs" text="Jobs"/>
-		<text name="tc_logbook_faultsCaused" text="Faults caused"/>
+		<text name="tc_logbook_faultsFound" text="Faults found"/>
 		<text name="tc_logbook_neverUsed" text="Never used"/>
 		<text name="tc_logbook_noHistory" text="No use logged in the last year"/>
 		<text name="tc_supplies_viewSupplies" text="Supplies"/>
@@ -1064,6 +1229,7 @@
 		<text name="tc_supplies_partTier" text="%s (%s)"/>
 		<text name="tc_supplies_storedOf" text="%s / %s"/>
 		<text name="tc_supplies_palletGroup" text="%s (%d)"/>
+		<text name="tc_supplies_storedPalletGroup" text="%s (%d stored)"/>
 		<text name="tc_supplies_sectionStock" text="Stock"/>
 		<text name="tc_supplies_sectionStorage" text="Storage"/>
 		<text name="tc_supplies_sectionPallets" text="Pallets"/>

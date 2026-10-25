@@ -15,11 +15,12 @@ test("vanilla: damage and paint wear rises", function()
     assertNear(wear, 0.01, 1e-9)
 end)
 
-test("ADS: condition lost counts as damage", function()
+test("ADS: no damage figure (099: only inspections reveal condition), paint wear still", function()
     local MODEL = setup()
-    local damage = TCVehicleCondition.getDeltas({ model = MODEL.ADS, condition = 0.9, wear = 0 },
-        { model = MODEL.ADS, condition = 0.85, wear = 0 })
-    assertNear(damage, 0.05, 1e-9)
+    local damage, wear = TCVehicleCondition.getDeltas({ model = MODEL.ADS, knownCondition = 0.9, wear = 0.1 },
+        { model = MODEL.ADS, knownCondition = 0.85, wear = 0.12 })
+    assertEquals(damage, nil)
+    assertNear(wear, 0.02, 1e-9)
 end)
 
 test("nothing to compare: a missing snapshot or a change of model", function()

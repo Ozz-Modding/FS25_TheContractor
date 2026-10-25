@@ -378,13 +378,13 @@ end)
 test("a worker gone takes their messages, and training goes after a request", function()
     local world, tc = setup()
     local amy = world:addWorker(1, "Amy Hall")
-    tc.Holidays:postRequest(amy, 105, 4)
+    tc.Holidays:postRequest(amy, 100, 4)
 
-    assertEquals(TheContractorTraining.getFirstBookableDay(amy), 109, "after the days asked for")
+    assertEquals(TheContractorTraining.getFirstBookableDay(amy), 104, "after the days asked for")
 
     tc.Holidays:removeMessagesFor(1, 1)
     assertEquals(#world:messages(), 0)
-    assertEquals(TheContractorTraining.getFirstBookableDay(amy), 102, "the usual lead time")
+    assertEquals(TheContractorTraining.getFirstBookableDay(amy), 101, "tomorrow")
 end)
 
 test("tcWorker holidayRequest asks now, most-refused first, then books whatever", function()

@@ -107,7 +107,7 @@ end
 -- Query API (every machine) ---------------------------------------------------
 
 function TheContractorPayReviews.getMarketValue(worker)
-    return TheContractorStaff.getSalary(worker.workSpeed, worker.tierCapability, worker.skills)
+    return TheContractorStaff.getSalary(worker.workSpeed, worker.tierCapability, worker.skills, worker.adsSkills)
 end
 
 function TheContractorPayReviews.getLoyaltyFactor(worker)
