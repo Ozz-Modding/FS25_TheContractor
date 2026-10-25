@@ -507,7 +507,7 @@ end)
 
 test("the price is stored without EconomyScale's factor and follows it", function()
     local world, tc = setup()
-    g_currentMission.EconomyScale = { factor = 2 }
+    g_currentMission.EconomyScale = { factor = 2, adsHooksInstalled = true }
     world.partsCost = 2000
     local job = makeOffer(world, tc)
     assertEquals(job.workshop.baseParts, 1000, "the parts / factor")
@@ -518,7 +518,7 @@ end)
 
 test("a job with few parts still pays MIN_PRICE, before EconomyScale's factor", function()
     local world, tc = setup()
-    g_currentMission.EconomyScale = { factor = 2 }
+    g_currentMission.EconomyScale = { factor = 2, adsHooksInstalled = true }
     world.quotePrice = 5000
     world.partsCost = 200
     local job = makeOffer(world, tc)
@@ -528,7 +528,7 @@ end)
 
 test("the cost is the parts plus the labour hours at LABOUR_RATE, divided out of EconomyScale's factor", function()
     local world, tc = setup()
-    g_currentMission.EconomyScale = { factor = 2 }
+    g_currentMission.EconomyScale = { factor = 2, adsHooksInstalled = true }
     -- scaleCost (faked as 1x) would apply the factor, so its labour is divided by it too.
     tc.Settings.scaleCost = function(_, amount) return amount * 5 * 2 end
     world.partsCost, world.laborHours = 2000, 3
@@ -539,6 +539,23 @@ test("the cost is the parts plus the labour hours at LABOUR_RATE, divided out of
     local cost = TheContractorRepairContracts.getJobBaseCost(job)
     assertNear(TheContractorRepairContracts.getPriceForMargin(job, 0.5), cost * 1.5 * 2, 0.001,
         "the price at a margin, scaled now")
+end)
+
+test("an EconomyScale that doesn't scale ADS leaves the parts as ADS quoted them", function()
+    local world, tc = setup()
+    -- An older EconomyScale: it scales our labour (scaleCost) but not ADS.
+    g_currentMission.EconomyScale = { factor = 2 }
+    tc.Settings.scaleCost = function(_, amount) return amount * 5 * 2 end
+    world.partsCost, world.laborHours = 2000, 3
+    local job = makeOffer(world, tc)
+    assertEquals(job.workshop.baseParts, 2000, "ADS's vanilla parts are already a base amount")
+    assertNear(job.workshop.baseLabour, 3 * TheContractorRepairContracts.LABOUR_RATE * 5, 0.001,
+        "labour still has the factor divided out")
+    assertEquals(TCEconomyScale.getADSFactor(), 1)
+    g_currentMission.EconomyScale.adsHooksInstalled = true
+    assertEquals(TCEconomyScale.getADSFactor(), 2, "the factor once EconomyScale scales ADS")
+    g_currentMission.EconomyScale = nil
+    assertEquals(TCEconomyScale.getADSFactor(), 1, "and 1 without EconomyScale")
 end)
 
 test("the margin factor: 1.25 for nothing, 1 at the benchmark, 0 at twice, a loss of half at three times", function()
@@ -904,6 +921,15 @@ test("tampered at the deadline: no pay, double the loss, and a claim over the th
     assertEquals(world.calls.charged[1].insured, false, "public liability doesn't cover it")
     assertEquals(world.calls.claimLogs[1].cause, "tampering")
     assertEquals(#tc.RepairContracts.pendingClaims, 0)
+end)
+
+test("a tampering claim values the part at today's price level", function()
+    local world, tc = setup()
+    -- ADS's list price stays vanilla whatever EconomyScale does.
+    g_currentMission.EconomyScale = { factor = 2, adsHooksInstalled = true }
+    world.partPrice = 4000
+    missAccepted(world, tc, { { kind = "component", id = "engine", accepted = 0.8, current = 0.3 } })
+    assertEquals(tc.RepairContracts.pendingClaims[1].amount, 4000, "half the engine at twice its vanilla price")
 end)
 
 test("legal cover halves the claim; a small loss brings none", function()
