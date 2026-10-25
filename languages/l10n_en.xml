@@ -176,7 +176,7 @@
 		<text name="tc_advertising_dialog_locked" text="Needs %s reputation."/>
 		<text name="tc_advertising_dialog_cannotAfford" text="You can't afford this."/>
 		<text name="tc_advertising_dialog_runsFor" text="Runs for %d days."/>
-		<text name="tc_advertising_dialog_extends" text="Extends your current campaign from %d to %d days left."/>
+		<text name="tc_advertising_dialog_alreadyRunning" text="This campaign is already running (%d days left). You can buy it again once it ends."/>
 		<text name="tc_advertising_dialog_replaces" text="Replaces your %s campaign (%d days left). Runs for %d days."/>
 		<text name="tc_moneyType_advertising" text="Advertising"/>
 		<text name="finance_tcAdvertising" text="Advertising"/>

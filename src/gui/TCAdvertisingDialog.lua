@@ -1,8 +1,8 @@
 -- Advertising purchase dialog (027): one modal replacing 012's three
 -- per-level bottom-bar buttons. Two MultiTextOptions (ad level, duration in
 -- periods) plus live cost / effectiveness / status lines, and a Buy button
--- that's disabled while the chosen combination can't be bought (tier
--- locked or not affordable). Shape follows FS25_RealisticLivestock's
+-- that's disabled while the chosen combination can't be bought (already
+-- running, tier locked or not affordable). Shape follows FS25_RealisticLivestock's
 -- RLFilterConditionDialog: a MessageDialog subclass loaded once via
 -- g_gui:loadGui, opened through a static show(), elements resolved by id in
 -- onGuiSetupFinished. Opened from MenuContractor's Overview tab via the
@@ -61,23 +61,19 @@ function TCAdvertisingDialog:onOpen()
 
     local advertising = g_currentMission.TheContractor.Advertising
 
-    -- Default to the running campaign's level (the likely "extend it"
-    -- case), otherwise the biggest one the farm has unlocked.
-    local activeLevel = advertising:getActiveLevel(self.farmId)
+    -- Default to the biggest level the farm has unlocked that isn't
+    -- already running (that one can't be bought again until it lapses).
     self.levelIndex = 1
     local levelTexts = {}
     for i, levelDef in ipairs(TheContractorAdvertising.LEVELS) do
         local name = g_i18n:getText("tc_advertising_" .. levelDef.key)
         if advertising:isUnlocked(self.farmId, levelDef.key) then
             table.insert(levelTexts, name)
-            if activeLevel == nil then
+            if not advertising:isRunning(self.farmId, levelDef.key) then
                 self.levelIndex = i
             end
         else
             table.insert(levelTexts, string.format(g_i18n:getText("tc_advertising_dialog_levelLocked"), name))
-        end
-        if levelDef.key == activeLevel then
-            self.levelIndex = i
         end
     end
     self.levelOption:setTexts(levelTexts)
@@ -135,17 +131,17 @@ function TCAdvertisingDialog:refresh()
 
     local activeLevel = advertising:getActiveLevel(farmId)
     local daysRemaining = advertising:getDaysRemaining(farmId)
-    local newDaysRemaining = advertising:getExpiryAfterPurchase(farmId, levelDef.key, durationPeriods)
+    local newDaysRemaining = TheContractorAdvertising.getExpiryAfterPurchase(durationPeriods)
         - g_currentMission.environment.currentDay
 
     local status
-    if not advertising:isUnlocked(farmId, levelDef.key) then
+    if advertising:isRunning(farmId, levelDef.key) then
+        status = string.format(g_i18n:getText("tc_advertising_dialog_alreadyRunning"), daysRemaining)
+    elseif not advertising:isUnlocked(farmId, levelDef.key) then
         status = string.format(g_i18n:getText("tc_advertising_dialog_locked"),
             g_i18n:getText("tc_reputationTier_" .. levelDef.requiredTier))
     elseif not advertising:canAfford(farmId, levelDef.key, durationPeriods) then
         status = g_i18n:getText("tc_advertising_dialog_cannotAfford")
-    elseif activeLevel == levelDef.key then
-        status = string.format(g_i18n:getText("tc_advertising_dialog_extends"), daysRemaining, newDaysRemaining)
     elseif activeLevel ~= nil then
         status = string.format(g_i18n:getText("tc_advertising_dialog_replaces"),
             g_i18n:getText("tc_advertising_" .. activeLevel), daysRemaining, newDaysRemaining)
