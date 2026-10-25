@@ -16,7 +16,9 @@
 -- completed or missed. It can't be accepted while the farm lacks the tools
 -- (getAcceptProblem). It completes when ADS says done (its listener, plus a
 -- pass after load and every day, since ADS's listener never fires for a
--- status reached before the save). When it ends the customer takes the
+-- status reached before the save). An accepted job that can't be worked
+-- after a load (machine gone, no ADS, no contract) ends then with no
+-- penalty (endUnworkableJobs). When it ends the customer takes the
 -- machine back: the contract is released and the machine is deleted on the
 -- next look at the queue (unless someone's driving it).
 --
@@ -1361,6 +1363,34 @@ function TheContractorRepairContracts:resolveSavedVehicles()
     end
     self:startListening()
     self:checkAllStatuses()
+    self:endUnworkableJobs()
+end
+
+-- Server, after a load: an accepted job that can never complete (its machine
+-- didn't load, ADS is gone or its contract is) ends now with nothing lost,
+-- as an excluded machine's does, rather than costing reputation at its
+-- deadline for something the player couldn't help. Offers lapse anyway.
+function TheContractorRepairContracts:endUnworkableJobs()
+    local jobs = g_currentMission.TheContractor.Jobs
+    local unworkable = {}
+    for _, farmJobs in pairs(jobs.jobsByFarm) do
+        for _, job in pairs(farmJobs) do
+            if job.workshop ~= nil and job.state == TheContractorJob.STATE.ACCEPTED then
+                local vehicle = TheContractorRepairContracts.getVehicle(job)
+                local status = vehicle ~= nil and TCADSRepairContracts.getStatus(vehicle) or nil
+                if status == nil then
+                    table.insert(unworkable, job)
+                end
+            end
+        end
+    end
+    for _, job in ipairs(unworkable) do
+        Logging.info("TheContractor: farm %d job %d: %s can't be worked after loading (%s), ended without penalty",
+            job.farmId, job.id, job.workshop.vehicleName or "?",
+            not TCADSRepairContracts.isActive() and "no ADS" or
+            TheContractorRepairContracts.getVehicle(job) == nil and "machine gone" or "no contract")
+        jobs:missJob(job, true)
+    end
 end
 
 -- Console (tcJob) ------------------------------------------------------------------------
