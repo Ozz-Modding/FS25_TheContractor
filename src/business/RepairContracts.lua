@@ -8,13 +8,29 @@
 -- Arrivals (server): every day each empty bay of a farm's zones may get a
 -- customer (ARRIVAL_CHANCE), queued with its model, kind, severity and seed.
 -- A queued arrival is spawned on the next look at the queue
--- (PLACE_CHECK_MS), seen or not. Then ADS prepares it, and the offer goes up with a price of ADS's quote plus a
--- margin. Nothing runs while the queue is empty.
+-- (PLACE_CHECK_MS), seen or not. Then ADS prepares it and the offer goes
+-- up. Nothing runs while the queue is empty.
+--
+-- 102: inspect, negotiate, then accept. ADS keeps the machine in its
+-- inspection stage (inspections only) until we authorize it. Once it's
+-- been inspected (TCADSRepairContracts.isInspected) the player picks a
+-- margin in the Negotiate dialog: the price is the cheapest fix's cost
+-- (ADS's parts plus its labour hours at LABOUR_RATE, getBaseCost) plus the
+-- margin, never under MIN_PRICE (every margin that comes to MIN_PRICE is
+-- one "minimum charge" option, which the customer always accepts and which
+-- never costs reputation or counts as overcharging). The customer answers
+-- once (proposeQuote): at or under their ceiling (rolled per offer) the
+-- job's accepted at that price and ADS authorizes the work; over it they
+-- take the machine away.
+-- The margin against the setting (the benchmark) scales the completion
+-- reputation (getMarginFactor), and finishing one far over it marks the
+-- farm as overcharging for OVERCHARGE_MONTHS, which slows its workshop
+-- arrivals. Missing tools never block anything: the dealer can always do
+-- the work, at a price.
 --
 -- The job (Jobs, job.workshop): fieldId 0 (a breakdown's field is
--- workshop.fieldId), no crew, offered -> accepted ->
--- completed or missed. It can't be accepted while the farm lacks the tools
--- (getAcceptProblem). It completes when ADS says done (its listener, plus a
+-- workshop.fieldId), no crew, offered -> accepted (through proposeQuote
+-- only) -> completed or missed. It completes when ADS says done (its listener, plus a
 -- pass after load and every day, since ADS's listener never fires for a
 -- status reached before the save). An accepted job that can't be worked
 -- after a load (machine gone, no ADS, no contract) ends then with no
@@ -30,12 +46,13 @@
 --
 -- Field breakdowns (101, TheContractorFieldBreakdowns) use the same queue
 -- with a spot on a field instead of a bay (entry.fieldId), ADS's breakdown
--- kind, and an offer due the same day. Their accept check is the kit that
--- can work in a field (getBreakdownProblem), not the workshop's tools.
+-- kind, and an offer due the same day. What they need is the kit that can
+-- work in a field (getBreakdownProblem, a warning), not the workshop's tools.
 --
 -- State (server, saved in TheContractor.xml): the arrivals queue, the
--- machines waiting to be collected, and pending tamper claims. Clients only
--- ever see the jobs.
+-- machines waiting to be collected, pending tamper claims and which farms
+-- are known for overcharging. Clients only ever see the jobs (and the
+-- overcharging notice).
 
 TheContractorRepairContracts = {}
 TheContractorRepairContracts_mt = Class(TheContractorRepairContracts)
@@ -49,27 +66,50 @@ TheContractorRepairContracts.JOB_TYPES = {
 
 -- The chance an empty bay gets a customer each day, and what they want.
 TheContractorRepairContracts.ARRIVAL_CHANCE = 0.5
-TheContractorRepairContracts.KIND_WEIGHTS = { repair = 70, maintenance = 30 }
+TheContractorRepairContracts.KIND_WEIGHTS = { repair = 65, maintenance = 35 }
 -- How likely each severity (1-3) is, whatever the farm's reputation.
 TheContractorRepairContracts.SEVERITY_WEIGHTS = { 20, 30, 50 }
 
 -- Days after today the work is due by (the end of): MIN_DUE_DAYS at 1-2
 -- days per period, rising to MAX_DUE_DAYS at FULL_DUE_DAYS_PER_PERIOD or
 -- more. The offer stays open until the day before.
-TheContractorRepairContracts.MIN_DUE_DAYS = 1
-TheContractorRepairContracts.MAX_DUE_DAYS = 3
+TheContractorRepairContracts.MIN_DUE_DAYS = 2
+TheContractorRepairContracts.MAX_DUE_DAYS = 4
 TheContractorRepairContracts.FULL_DUE_DAYS_PER_PERIOD = 5
 
--- The price: the parts and materials in ADS's quote plus a margin, which
--- pays for the work (the quote's labour, call-out and supplies are what a
--- workshop would charge, and the player or their staff do that work
--- themselves). The margin is rolled per offer within MARGIN_SPREAD either
--- side of the adsWorkshopMargin or adsFieldMargin setting (never below
--- nothing). Not negotiable, and the quote itself is never shown.
-TheContractorRepairContracts.MARGIN_SPREAD = 0.10
+-- 102: the price. The cost is the cheapest fix's, the one ADS's quote
+-- prices (a repair wherever one's allowed): its parts and materials, plus
+-- its labour hours at LABOUR_RATE (1x UK, scaleCost), since a repair in ADS
+-- is labour only. The player adds a margin from 0 to MARGIN_MAX in
+-- MARGIN_STEP steps, starting at the adsWorkshopMargin setting or
+-- adsFieldMargin for a field breakdown (the benchmark). The quote itself
+-- (the dealer's whole bill) is never shown.
+TheContractorRepairContracts.LABOUR_RATE = 60
+TheContractorRepairContracts.MARGIN_MAX = 2.0
+TheContractorRepairContracts.MARGIN_STEP = 0.05
 -- The least a job pays (base, before FS25_EconomyScale's factor): an
 -- inspection alone takes a couple of hours, however few the parts.
 TheContractorRepairContracts.MIN_PRICE = 750
+-- The customer's ceiling, rolled per offer and never shown: this range
+-- times the benchmark margin (80-120% at a 40% benchmark).
+TheContractorRepairContracts.REFUSAL_FACTOR = { 2.0, 3.0 }
+-- Reputation by margin (getMarginFactor): { margin as a multiple of the
+-- benchmark, reputation factor }, straight lines between, flat past the
+-- last. Below 0 the job costs that share of its base reputation.
+TheContractorRepairContracts.MARGIN_FACTOR_POINTS = { { 0, 1.25 }, { 1, 1.0 }, { 2, 0 }, { 3, -0.5 } }
+-- The least the benchmark counts as, so a 0% setting still has a curve.
+TheContractorRepairContracts.MIN_BENCHMARK = 0.05
+-- What the Negotiate dialog calls a margin: fair up to the benchmark,
+-- steep up to OVERCHARGE_MARGIN_FACTOR times it, a rip-off beyond.
+-- Overcharging: a job finished at or over OVERCHARGE_MARGIN_FACTOR times
+-- the benchmark marks the farm for OVERCHARGE_MONTHS (restarted by each
+-- one), and while it lasts the farm's workshop arrivals (repair zones and
+-- 101's breakdowns) come OVERCHARGE_ARRIVAL_FACTOR as often.
+TheContractorRepairContracts.OVERCHARGE_MARGIN_FACTOR = 1.75
+TheContractorRepairContracts.OVERCHARGE_MONTHS = 3
+TheContractorRepairContracts.OVERCHARGE_ARRIVAL_FACTOR = 0.5
+-- tcJob quoteOutcome's forced answers.
+TheContractorRepairContracts.QUOTE_OUTCOME = { ACCEPTED = "accepted", REFUSED = "refused" }
 
 -- Base reputation for a finished job, by kind and severity (1-3), before
 -- quality and speed: a service is routine, a repair more, and a field
@@ -128,6 +168,11 @@ function TheContractorRepairContracts.new()
     self.removals = {}
     -- Server, saved: { farmId, jobId, vehicleName, amount, notifyDay }.
     self.pendingClaims = {}
+    -- 102, server, saved: farmId -> { untilDay, noticeId } while the farm's
+    -- known for overcharging.
+    self.overcharged = {}
+    -- 102, server: tcJob quoteOutcome's answer for the next quote, or nil.
+    self.forcedQuoteOutcome = nil
 
     -- zoneType -> { model, ... }, built on first use per session.
     self.modelCache = {}
@@ -183,13 +228,14 @@ function TheContractorRepairContracts.getBreakdownKitKey(fieldService)
     return fieldService == TCADSRepairContracts.FIELD_SERVICE.MOBILE and "mobile" or "toolBox"
 end
 
--- "Requires: an ADS tool box or a mobile workshop.", or nil.
+-- "Without an ADS tool box or a mobile workshop of your own, ...", or nil.
+-- 102: a warning, not a block: a hired mobile workshop can always go out.
 function TheContractorRepairContracts.getBreakdownProblem(job)
     local fieldService = job.workshop.serviceLevel
     if TheContractorRepairContracts.hasBreakdownKit(job.farmId, fieldService) then
         return nil
     end
-    return string.format(g_i18n:getText("tc_repair_requires"),
+    return string.format(g_i18n:getText("tc_breakdown_noKitWarning"),
         g_i18n:getText("tc_breakdown_kit_" .. TheContractorRepairContracts.getBreakdownKitKey(fieldService)))
 end
 
@@ -239,25 +285,6 @@ function TheContractorRepairContracts.isContractVehicle(vehicle)
     end
     local vehicleId = NetworkUtil.getObjectId(vehicle)
     return vehicleId ~= nil and TheContractorRepairContracts.getContractVehicleIds()[vehicleId] ~= nil
-end
-
--- Job states whose machine won't start (TCVehicleLock): an offer not yet
--- taken, or one turned down or lapsed. Once accepted it's the player's to
--- drive in, and stays so after the job ends until it's collected.
-TheContractorRepairContracts.ENGINE_LOCKED_STATES = {
-    offered = true,
-    negotiating = true,
-    declined = true,
-}
-
--- Every machine, read live.
-function TheContractorRepairContracts.isEngineLocked(vehicle)
-    if vehicle == nil then
-        return false
-    end
-    local vehicleId = NetworkUtil.getObjectId(vehicle)
-    local job = vehicleId ~= nil and TheContractorRepairContracts.getContractVehicleIds()[vehicleId] or nil
-    return job ~= nil and TheContractorRepairContracts.ENGINE_LOCKED_STATES[job.state] == true
 end
 
 -- Whether a machine is a customer's the farm can work on now: its job still
@@ -327,9 +354,10 @@ function TheContractorRepairContracts.getVehicle(job)
     return vehicle
 end
 
--- Why the farm can't take the job on, as text, or nil if it can: the tools
--- ADS says it's missing ("Requires: Lift, Machining"). Read live on every
--- machine, so buying the equipment clears it at once.
+-- Why the job can't be taken on at all, as text, or nil: the machine's
+-- gone, or ADS is. 102: missing tools are only a warning
+-- (getToolsWarning), since the dealer can always do the work. Read live on
+-- every machine.
 function TheContractorRepairContracts.getAcceptProblem(job)
     if not TheContractorRepairContracts.isWorkshopJob(job) then
         return nil
@@ -338,20 +366,79 @@ function TheContractorRepairContracts.getAcceptProblem(job)
     if vehicle == nil then
         return g_i18n:getText("tc_repair_problemGone")
     end
-    if TheContractorRepairContracts.isBreakdownJob(job) then
-        if not TCADSRepairContracts.isActive() then
-            return g_i18n:getText("tc_repair_problemNoADS")
-        end
-        return TheContractorRepairContracts.getBreakdownProblem(job)
-    end
-    local check = TCADSRepairContracts.checkFarmTools(vehicle, job.farmId)
-    if check == nil then
+    if TCADSRepairContracts.getStatus(vehicle) == nil then
         return g_i18n:getText("tc_repair_problemNoADS")
     end
-    if check.canDo then
+    return nil
+end
+
+-- 102: what the farm hasn't the kit for, as text, or nil: a breakdown's
+-- field kit (101); for a workshop job, once it's been inspected (before
+-- then it would give the hidden faults away), the upgrades without which
+-- some of it can't be done at all, or else those without which some of it
+-- can only be replaced, not repaired. Upgrades by name (ADS's own workshop
+-- equipment). Read live on every machine.
+function TheContractorRepairContracts.getToolsWarning(job)
+    if TheContractorRepairContracts.isBreakdownJob(job) then
+        return TheContractorRepairContracts.getBreakdownProblem(job)
+    end
+    local vehicle = TheContractorRepairContracts.getVehicle(job)
+    local plan = vehicle ~= nil and TCADSRepairContracts.getFarmPlan(vehicle, job.farmId) or nil
+    if plan == nil or plan.plan == nil then
         return nil
     end
-    return string.format(g_i18n:getText("tc_repair_requires"), TCADSRepairContracts.getToolNames(check.missing))
+    if not plan.plan.canDo then
+        return string.format(g_i18n:getText("tc_repair_subcontractWarning"),
+            TCADSRepairContracts.getUpgradeNames(plan.missing))
+    end
+    if #(plan.repairNeeds or {}) > 0 then
+        return string.format(g_i18n:getText("tc_repair_replaceOnlyWarning"),
+            TCADSRepairContracts.getUpgradeNames(plan.repairNeeds))
+    end
+    return nil
+end
+
+-- 102: getToolsWarning's facts for the quote dialog's Missing kit row, or
+-- nil when nothing's missing: { names (one per upgrade, a chip each),
+-- noteKey (what going without means) }.
+function TheContractorRepairContracts.getMissingKit(job)
+    if TheContractorRepairContracts.isBreakdownJob(job) then
+        local fieldService = job.workshop.serviceLevel
+        if TheContractorRepairContracts.hasBreakdownKit(job.farmId, fieldService) then
+            return nil
+        end
+        local key = TheContractorRepairContracts.getBreakdownKitKey(fieldService)
+        local names = { g_i18n:getText("tc_breakdown_kit_mobile") }
+        if key == "toolBox" then
+            table.insert(names, 1, g_i18n:getText("tc_breakdown_kitName_toolBox"))
+        end
+        return { names = names, noteKey = "tc_repairQuote_kitNote_breakdown_" .. key }
+    end
+    local vehicle = TheContractorRepairContracts.getVehicle(job)
+    local plan = vehicle ~= nil and TCADSRepairContracts.getFarmPlan(vehicle, job.farmId) or nil
+    if plan == nil or plan.plan == nil then
+        return nil
+    end
+    if not plan.plan.canDo then
+        return { names = TCADSRepairContracts.getUpgradeNameList(plan.missing),
+            noteKey = "tc_repairQuote_kitNote_subcontract" }
+    end
+    if #(plan.repairNeeds or {}) > 0 then
+        return { names = TCADSRepairContracts.getUpgradeNameList(plan.repairNeeds),
+            noteKey = "tc_repairQuote_kitNote_replaceOnly" }
+    end
+    return nil
+end
+
+-- 102: whether the job's ready to be priced: an offer whose machine's been
+-- inspected. Any machine.
+function TheContractorRepairContracts.isReadyToQuote(job)
+    if not TheContractorRepairContracts.isWorkshopJob(job) or (job.state ~= TheContractorJob.STATE.OFFERED and
+            job.state ~= TheContractorJob.STATE.NEGOTIATING) then
+        return false
+    end
+    local vehicle = TheContractorRepairContracts.getVehicle(job)
+    return vehicle ~= nil and TCADSRepairContracts.isInspected(vehicle)
 end
 
 -- Zones ---------------------------------------------------------------------------------
@@ -663,12 +750,12 @@ function TheContractorRepairContracts:findFreeBay(farmId)
 end
 
 function TheContractorRepairContracts:rollArrivals(farmId)
+    local chance = TheContractorRepairContracts.ARRIVAL_CHANCE * self:getArrivalFactor(farmId)
     for _, zone in ipairs(TheContractorRepairContracts.getZones(farmId)) do
         local zoneUniqueId = TheContractorRepairContracts.getZoneUniqueId(zone)
         if zoneUniqueId ~= nil then
             for bayIndex = 1, PlaceableTCRepairZone.getBayCount(zone) do
-                if not self:isBayTaken(zoneUniqueId, bayIndex) and
-                        math.random() < TheContractorRepairContracts.ARRIVAL_CHANCE then
+                if not self:isBayTaken(zoneUniqueId, bayIndex) and math.random() < chance then
                     self:queueArrival(farmId, zone, bayIndex)
                 end
             end
@@ -697,6 +784,8 @@ function TheContractorRepairContracts:onDayChanged()
         end
     end
     self.arrivals = kept
+
+    self:expireOvercharging(today)
 
     if TCADSRepairContracts.isActive() then
         local tc = g_currentMission.TheContractor
@@ -951,24 +1040,165 @@ function TheContractorRepairContracts:onArrivalLoaded(vehicles, loadingState, ar
     self:createOffer(entry, vehicle, quote)
 end
 
--- The job's base price (without FS25_EconomyScale's factor, as every job
--- stores it): ADS's parts cost is at the price level of the day it was
--- quoted, so it's divided back out, then the margin goes on, never under
+-- Pricing (102) ---------------------------------------------------------------------
+
+-- The cheapest fix's cost as base amounts (without FS25_EconomyScale's
+-- factor, as every job stores its price): ADS's parts cost is at the price
+-- level of the day it was quoted, so it's divided back out, and the labour
+-- is its hours at LABOUR_RATE (scaleCost, which applies the factor, so
+-- that's divided out too). Returns parts, labour.
+function TheContractorRepairContracts.getBaseCost(partsCost, laborHours)
+    local factor = TCEconomyScale.getFactor()
+    local rate = g_currentMission.TheContractor.Settings:scaleCost(TheContractorRepairContracts.LABOUR_RATE)
+    return math.max(tonumber(partsCost) or 0, 0) / factor, math.max(tonumber(laborHours) or 0, 0) * rate / factor
+end
+
+-- A job's cost (base): its parts and labour. One offered before 102 kept
+-- only the parts, at the price level of its day.
+function TheContractorRepairContracts.getJobBaseCost(job)
+    local workshop = job.workshop or {}
+    return (workshop.baseParts or workshop.partsCost or 0) + (workshop.baseLabour or 0)
+end
+
+-- The job's base price at a margin: the cost plus the margin, never under
 -- MIN_PRICE.
-function TheContractorRepairContracts.getBasePrice(partsCost, margin)
-    return math.max(partsCost / TCEconomyScale.getFactor() * (1 + margin), TheContractorRepairContracts.MIN_PRICE)
+function TheContractorRepairContracts.getBasePrice(baseCost, margin)
+    return math.max(baseCost * (1 + margin), TheContractorRepairContracts.MIN_PRICE)
 end
 
--- A new offer's margin over the parts: a field breakdown's (101) or a
--- repair zone job's.
-function TheContractorRepairContracts.rollMargin(isFieldBreakdown)
-    local spread = TheContractorRepairContracts.MARGIN_SPREAD
-    local margin = g_currentMission.TheContractor.Settings:getADSMargin(isFieldBreakdown)
-        + (math.random() * 2 - 1) * spread
-    return math.max(margin, 0)
+-- The price at a margin as it's shown and charged now (the factor applied).
+function TheContractorRepairContracts.getPriceForMargin(job, margin)
+    return TCEconomyScale.scale(TheContractorRepairContracts.getBasePrice(
+        TheContractorRepairContracts.getJobBaseCost(job), margin))
 end
 
--- 1 day at 1-2 days per period, 2 at 3-4, 3 at 5 or more.
+-- The benchmark margin for a new offer: the repair zone setting, or a field
+-- breakdown's (101).
+function TheContractorRepairContracts.getBenchmarkMargin(isFieldBreakdown)
+    return g_currentMission.TheContractor.Settings:getADSMargin(isFieldBreakdown)
+end
+
+function TheContractorRepairContracts.getJobBenchmark(job)
+    local benchmark = job.workshop ~= nil and job.workshop.benchmarkMargin or nil
+    if benchmark == nil then
+        benchmark = TheContractorRepairContracts.getBenchmarkMargin(TheContractorRepairContracts.isBreakdownJob(job))
+    end
+    return math.max(benchmark, TheContractorRepairContracts.MIN_BENCHMARK)
+end
+
+-- The customer's ceiling for a new offer, as a margin.
+function TheContractorRepairContracts.rollRefusalMargin(benchmark, random)
+    local range = TheContractorRepairContracts.REFUSAL_FACTOR
+    local factor = range[1] + (random or math.random)() * (range[2] - range[1])
+    return math.max(benchmark, TheContractorRepairContracts.MIN_BENCHMARK) * factor
+end
+
+-- The stepper's margins: 0, MARGIN_STEP, ... MARGIN_MAX.
+function TheContractorRepairContracts.getMarginSteps()
+    local steps = {}
+    local count = math.floor(TheContractorRepairContracts.MARGIN_MAX / TheContractorRepairContracts.MARGIN_STEP + 0.5)
+    for i = 0, count do
+        table.insert(steps, i * TheContractorRepairContracts.MARGIN_STEP)
+    end
+    return steps
+end
+
+-- Whether a margin on this cost (base) comes to MIN_PRICE anyway: the
+-- minimum charge, which the customer always takes and never holds against
+-- the farm, however steep a margin it works out at.
+function TheContractorRepairContracts.isMinimumCharge(baseCost, margin)
+    return baseCost * (1 + margin) <= TheContractorRepairContracts.MIN_PRICE + 0.01
+end
+
+-- The same for a job, at a margin or its agreed one (false without either).
+function TheContractorRepairContracts.isJobMinimumCharge(job, margin)
+    margin = margin or (job.workshop ~= nil and job.workshop.margin or nil)
+    if margin == nil then
+        return false
+    end
+    return TheContractorRepairContracts.isMinimumCharge(TheContractorRepairContracts.getJobBaseCost(job), margin)
+end
+
+-- The Negotiate dialog's options for a cost (base): every step that comes
+-- to MIN_PRICE folded into one minimum charge (at the highest of them),
+-- then each step over it. { margin, isMinimum } each.
+function TheContractorRepairContracts.getQuoteOptions(baseCost)
+    local options = {}
+    for _, margin in ipairs(TheContractorRepairContracts.getMarginSteps()) do
+        if TheContractorRepairContracts.isMinimumCharge(baseCost, margin) then
+            if options[1] == nil then
+                options[1] = { margin = margin, isMinimum = true }
+            else
+                options[1].margin = margin
+            end
+        else
+            table.insert(options, { margin = margin, isMinimum = false })
+        end
+    end
+    return options
+end
+
+-- The reputation factor for a margin against a benchmark
+-- (MARGIN_FACTOR_POINTS).
+function TheContractorRepairContracts.getMarginFactorFor(margin, benchmark)
+    local ratio = margin / math.max(benchmark, TheContractorRepairContracts.MIN_BENCHMARK)
+    local points = TheContractorRepairContracts.MARGIN_FACTOR_POINTS
+    if ratio <= points[1][1] then
+        return points[1][2]
+    end
+    for i = 2, #points do
+        local low, high = points[i - 1], points[i]
+        if ratio <= high[1] then
+            return low[2] + (high[2] - low[2]) * (ratio - low[1]) / (high[1] - low[1])
+        end
+    end
+    return points[#points][2]
+end
+
+-- A workshop job's reputation factor for its agreed margin: 1 without one
+-- (agreed before 102, or forced through the console). A minimum charge is
+-- never less than 1.
+function TheContractorRepairContracts.getMarginFactor(job)
+    local margin = job.workshop ~= nil and job.workshop.margin or nil
+    if margin == nil then
+        return 1
+    end
+    local factor = TheContractorRepairContracts.getMarginFactorFor(margin, TheContractorRepairContracts.getJobBenchmark(job))
+    if TheContractorRepairContracts.isJobMinimumCharge(job, margin) then
+        return math.max(factor, 1)
+    end
+    return factor
+end
+
+-- How a customer will see a margin: "fair" up to the benchmark, "steep" up
+-- to OVERCHARGE_MARGIN_FACTOR times it, "ripOff" past that. Never from the
+-- customer's hidden ceiling.
+function TheContractorRepairContracts.getReaction(margin, benchmark)
+    local ratio = margin / math.max(benchmark, TheContractorRepairContracts.MIN_BENCHMARK)
+    if ratio <= 1 + 1e-6 then
+        return "fair"
+    elseif ratio < TheContractorRepairContracts.OVERCHARGE_MARGIN_FACTOR - 1e-6 then
+        return "steep"
+    end
+    return "ripOff"
+end
+
+function TheContractorRepairContracts.isOverchargeMargin(margin, benchmark)
+    return TheContractorRepairContracts.getReaction(margin, benchmark) == "ripOff"
+end
+
+-- A job's reaction at a margin (or its agreed one): "minimum" for a
+-- minimum charge, else getReaction's.
+function TheContractorRepairContracts.getJobReaction(job, margin)
+    margin = margin or job.workshop.margin
+    if TheContractorRepairContracts.isJobMinimumCharge(job, margin) then
+        return "minimum"
+    end
+    return TheContractorRepairContracts.getReaction(margin, TheContractorRepairContracts.getJobBenchmark(job))
+end
+
+-- MIN_DUE_DAYS at 1 day per period, rising evenly to MAX_DUE_DAYS at
+-- FULL_DUE_DAYS_PER_PERIOD or more.
 function TheContractorRepairContracts.getDueDays(daysPerPeriod)
     local minDays = TheContractorRepairContracts.MIN_DUE_DAYS
     local maxDays = TheContractorRepairContracts.MAX_DUE_DAYS
@@ -980,8 +1210,11 @@ end
 function TheContractorRepairContracts:createOffer(entry, vehicle, quote)
     local today = g_currentMission.environment.currentMonotonicDay
     local partsCost = math.max(tonumber(quote.partsCost) or 0, 0)
-    local margin = TheContractorRepairContracts.rollMargin(entry.fieldId ~= nil)
-    local price = math.floor(TheContractorRepairContracts.getBasePrice(partsCost, margin))
+    -- 102: the price isn't agreed yet. The job holds the benchmark price
+    -- until the player's quote is accepted; it's never shown before then.
+    local baseParts, baseLabour = TheContractorRepairContracts.getBaseCost(partsCost, quote.laborHours)
+    local benchmark = TheContractorRepairContracts.getBenchmarkMargin(entry.fieldId ~= nil)
+    local price = math.floor(TheContractorRepairContracts.getBasePrice(baseParts + baseLabour, benchmark))
     local dueDays = TheContractorRepairContracts.getDueDays(g_currentMission.environment.daysPerPeriod)
     local deadlineDay = today + dueDays
     local offerExpiresDay = deadlineDay - 1
@@ -1007,6 +1240,13 @@ function TheContractorRepairContracts:createOffer(entry, vehicle, quote)
         serviceLevel = serviceLevel,
         operatingHours = quote.operatingHours,
         fieldId = entry.fieldId,
+        -- 102: the cheapest fix's cost (base), the benchmark margin, and the
+        -- customer's ceiling (server only, never streamed).
+        baseParts = baseParts,
+        baseLabour = baseLabour,
+        laborHours = tonumber(quote.laborHours) or 0,
+        benchmarkMargin = benchmark,
+        refusalMargin = TheContractorRepairContracts.rollRefusalMargin(benchmark),
     }
 
     local environment = g_currentMission.environment
@@ -1018,8 +1258,115 @@ function TheContractorRepairContracts:createOffer(entry, vehicle, quote)
         vehicle:delete()
         return
     end
-    Logging.info("TheContractor: farm %d job %d: %s in for %s, quoted %.0f (parts %.0f), offered %.0f (%.0f%% margin)",
-        entry.farmId, job.id, workshop.vehicleName, entry.kind, quote.price, partsCost, job:getPrice(), margin * 100)
+    Logging.info("TheContractor: farm %d job %d: %s in for %s, quoted %.0f (parts %.0f, %.1f h), %.0f at the %.0f%% benchmark, ceiling %.0f%%",
+        entry.farmId, job.id, workshop.vehicleName, entry.kind, quote.price, partsCost, workshop.laborHours,
+        job:getPrice(), benchmark * 100, workshop.refusalMargin * 100)
+end
+
+-- 102, server: the player's quote on an inspected offer, at a margin over
+-- the cheapest fix's cost. The customer answers once: at or under their
+-- ceiling the job's accepted at that price and ADS lets the work start;
+-- over it they take the machine elsewhere. Returns the outcome
+-- (QUOTE_OUTCOME), or nil if the quote was refused out of hand (not an
+-- inspected offer of the farm's, or a margin out of range).
+function TheContractorRepairContracts:proposeQuote(farmId, jobId, margin)
+    if not g_currentMission:getIsServer() then
+        return nil
+    end
+    local jobs = g_currentMission.TheContractor.Jobs
+    local job = jobs:getJob(farmId, jobId)
+    margin = tonumber(margin)
+    if job == nil or job.farmId ~= farmId or margin == nil or margin < -1e-6 or
+            margin > TheContractorRepairContracts.MARGIN_MAX + 1e-6 or
+            not TheContractorRepairContracts.isReadyToQuote(job) or TheContractorJobs.getAcceptProblem(job) ~= nil then
+        return nil
+    end
+    margin = math.max(0, margin)
+
+    local workshop = job.workshop
+    local benchmark = TheContractorRepairContracts.getJobBenchmark(job)
+    local ceiling = workshop.refusalMargin
+    if ceiling == nil then
+        ceiling = TheContractorRepairContracts.rollRefusalMargin(benchmark)
+        workshop.refusalMargin = ceiling
+    end
+    local isAcceptable = margin <= ceiling + 1e-6 or TheContractorRepairContracts.isJobMinimumCharge(job, margin)
+    local outcome = isAcceptable and TheContractorRepairContracts.QUOTE_OUTCOME.ACCEPTED or
+        TheContractorRepairContracts.QUOTE_OUTCOME.REFUSED
+    if self.forcedQuoteOutcome ~= nil then
+        outcome = self.forcedQuoteOutcome
+        self.forcedQuoteOutcome = nil
+    end
+
+    local vehicle = TheContractorRepairContracts.getVehicle(job)
+    if outcome == TheContractorRepairContracts.QUOTE_OUTCOME.ACCEPTED then
+        workshop.margin = margin
+        job:setPrice(TheContractorRepairContracts.getPriceForMargin(job, margin))
+        if g_server ~= nil then
+            g_server:broadcastEvent(TCJobNegotiationUpdatedEvent.new(job))
+        end
+        TCADSRepairContracts.authorize(vehicle)
+        jobs:transitionJobState(farmId, jobId, TheContractorJob.STATE.ACCEPTED)
+    else
+        jobs:transitionJobState(farmId, jobId, TheContractorJob.STATE.DECLINED)
+    end
+    Logging.info("TheContractor: farm %d job %d: quoted at a %.0f%% margin (benchmark %.0f%%, ceiling %.0f%%) - %s",
+        farmId, jobId, margin * 100, benchmark * 100, ceiling * 100, outcome)
+    return outcome
+end
+
+-- Overcharging (102, server) -------------------------------------------------------------
+
+function TheContractorRepairContracts:isOvercharging(farmId)
+    return self.overcharged[farmId] ~= nil
+end
+
+-- How often the farm's workshop customers come, against normal.
+function TheContractorRepairContracts:getArrivalFactor(farmId)
+    if self:isOvercharging(farmId) then
+        return TheContractorRepairContracts.OVERCHARGE_ARRIVAL_FACTOR
+    end
+    return 1
+end
+
+-- Jobs:completeWorkshopJob: a job finished far over the benchmark marks the
+-- farm (again) for OVERCHARGE_MONTHS, with an Overview notice until then.
+function TheContractorRepairContracts:onJobCompleted(job)
+    local margin = job.workshop ~= nil and job.workshop.margin or nil
+    if margin == nil or TheContractorRepairContracts.getJobReaction(job, margin) ~= "ripOff" then
+        return
+    end
+    local environment = g_currentMission.environment
+    local untilDay = environment.currentMonotonicDay +
+        TheContractorRepairContracts.OVERCHARGE_MONTHS * math.max(environment.daysPerPeriod or 1, 1)
+    local notices = g_currentMission.TheContractor.Notices
+    local previous = self.overcharged[job.farmId]
+    if previous ~= nil and previous.noticeId ~= nil then
+        notices:remove(previous.noticeId)
+    end
+    local noticeId = notices:publish(job.farmId, string.format(g_i18n:getText("tc_repair_overchargingNotice"),
+        TheContractorRepairContracts.OVERCHARGE_MONTHS))
+    self.overcharged[job.farmId] = { untilDay = untilDay, noticeId = noticeId }
+    Logging.info("TheContractor: farm %d job %d finished at a %.0f%% margin: known for overcharging until day %d",
+        job.farmId, job.id, margin * 100, untilDay)
+end
+
+-- Daily: overcharging that's run its course ends, and its notice goes.
+function TheContractorRepairContracts:expireOvercharging(today)
+    local ended = {}
+    for farmId, entry in pairs(self.overcharged) do
+        if today >= entry.untilDay then
+            table.insert(ended, farmId)
+        end
+    end
+    for _, farmId in ipairs(ended) do
+        local entry = self.overcharged[farmId]
+        if entry.noticeId ~= nil then
+            g_currentMission.TheContractor.Notices:remove(entry.noticeId)
+        end
+        self.overcharged[farmId] = nil
+        Logging.info("TheContractor: farm %d no longer known for overcharging", farmId)
+    end
 end
 
 -- Server: the customer comes for their machine (an offer turned down or
@@ -1243,7 +1590,7 @@ function TheContractorRepairContracts:loadFromXMLFile(xmlFile)
     if not g_currentMission:getIsServer() then
         return
     end
-    self.arrivals, self.removals, self.pendingClaims = {}, {}, {}
+    self.arrivals, self.removals, self.pendingClaims, self.overcharged = {}, {}, {}, {}
     local rootKey = TheContractor.SaveKey .. ".repairContracts"
 
     local index = 0
@@ -1302,6 +1649,21 @@ function TheContractorRepairContracts:loadFromXMLFile(xmlFile)
             amount = Utils.getNoNil(getXMLFloat(xmlFile, key .. "#amount"), 0),
             notifyDay = Utils.getNoNil(getXMLInt(xmlFile, key .. "#notifyDay"), 0),
         })
+        index = index + 1
+    end
+
+    -- 102.
+    index = 0
+    while true do
+        local key = string.format("%s.overcharging(%d)", rootKey, index)
+        if not hasXMLProperty(xmlFile, key) then
+            break
+        end
+        local farmId = getXMLInt(xmlFile, key .. "#farmId")
+        local untilDay = getXMLInt(xmlFile, key .. "#untilDay")
+        if farmId ~= nil and untilDay ~= nil then
+            self.overcharged[farmId] = { untilDay = untilDay, noticeId = getXMLInt(xmlFile, key .. "#noticeId") }
+        end
         index = index + 1
     end
 end
@@ -1367,6 +1729,22 @@ function TheContractorRepairContracts:saveToXmlFile(xmlFile)
         setXMLString(xmlFile, key .. "#vehicleName", claim.vehicleName)
         setXMLFloat(xmlFile, key .. "#amount", claim.amount)
         setXMLInt(xmlFile, key .. "#notifyDay", claim.notifyDay)
+    end
+
+    -- 102: in farm order, so the save doesn't shuffle.
+    local farmIds = {}
+    for farmId in pairs(self.overcharged) do
+        table.insert(farmIds, farmId)
+    end
+    table.sort(farmIds)
+    for i, farmId in ipairs(farmIds) do
+        local entry = self.overcharged[farmId]
+        local key = string.format("%s.overcharging(%d)", rootKey, i - 1)
+        setXMLInt(xmlFile, key .. "#farmId", farmId)
+        setXMLInt(xmlFile, key .. "#untilDay", entry.untilDay)
+        if entry.noticeId ~= nil then
+            setXMLInt(xmlFile, key .. "#noticeId", entry.noticeId)
+        end
     end
 end
 
@@ -1474,7 +1852,46 @@ function TheContractorRepairContracts.registerConsoleCommands()
             end
             table.insert(lines, string.format("%d on the way, %d waiting to be collected, %d claim(s) to come",
                 #repairContracts.arrivals, #repairContracts.removals, #repairContracts.pendingClaims))
+            -- 102: each open job's ADS stage and whether it's been inspected.
+            for _, job in ipairs(g_currentMission.TheContractor.Jobs:getAllJobs(farmId)) do
+                if job.workshop ~= nil and not job:isTerminal() then
+                    local vehicle = TheContractorRepairContracts.getVehicle(job)
+                    table.insert(lines, string.format("Job %d (%s, %s): %s, %s, %s", job.id,
+                        job.workshop.vehicleName or "?", job.state,
+                        vehicle ~= nil and tostring(TCADSRepairContracts.getStage(vehicle)) or "no machine",
+                        vehicle ~= nil and TCADSRepairContracts.isInspected(vehicle) and "inspected" or "not inspected",
+                        job.workshop.margin ~= nil and string.format("agreed at a %.0f%% margin",
+                            job.workshop.margin * 100) or "no price agreed"))
+                end
+            end
+            local overcharged = repairContracts.overcharged[farmId]
+            if overcharged ~= nil then
+                table.insert(lines, string.format("Known for overcharging until day %d", overcharged.untilDay))
+            end
+            if repairContracts.forcedQuoteOutcome ~= nil then
+                table.insert(lines, "The next quote will be " .. repairContracts.forcedQuoteOutcome)
+            end
             return table.concat(lines, "\n")
+        end,
+    })
+
+    TCConsole.register("job", "quoteOutcome", {
+        args = "<accepted|refused|clear>",
+        description = "Force the customer's answer to the next repair quote (Negotiate), or clear it",
+        run = function(farmId, args)
+            local repairContracts = g_currentMission.TheContractor.RepairContracts
+            local name = args[1] ~= nil and string.lower(args[1]) or nil
+            if name == "clear" then
+                repairContracts.forcedQuoteOutcome = nil
+                return "The next quote will be judged as usual."
+            end
+            for _, outcome in pairs(TheContractorRepairContracts.QUOTE_OUTCOME) do
+                if outcome == name then
+                    repairContracts.forcedQuoteOutcome = outcome
+                    return string.format("The next repair quote will be %s, whatever the margin.", outcome)
+                end
+            end
+            return false
         end,
     })
 end

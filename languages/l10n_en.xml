@@ -15,8 +15,8 @@
 		<text name="tc_setting_adsWorkshopMargin" text="Repair zone margin"/>
 		<text name="tc_setting_adsFieldMargin" text="Field breakdown margin"/>
 		<text name="tc_toolTip_nameStyle" text="Where the names of new job candidates and office administrators come from. European mix and Mixed pick a different style for each person. Staff you already have keep their names."/>
-		<text name="tc_toolTip_adsWorkshopMargin" text="What you charge for the work on Advanced Damage System repair and service offers in your repair zones, as a share on top of the parts the job needs. Each offer is within 10% either side of it. Offers already made keep their price."/>
-		<text name="tc_toolTip_adsFieldMargin" text="What you charge for the work on Advanced Damage System breakdowns out in the field, as a share on top of the parts the job needs. Each offer is within 10% either side of it. Offers already made keep their price."/>
+		<text name="tc_toolTip_adsWorkshopMargin" text="Your usual margin on Advanced Damage System repairs and services in your repair zones, on top of what the cheapest fix costs (parts and labour). The Negotiate dialog starts here, and customers judge your price against it: less earns more reputation, well over it costs reputation."/>
+		<text name="tc_toolTip_adsFieldMargin" text="Your usual margin on Advanced Damage System breakdowns out in the field, on top of what the cheapest fix costs (parts and labour). The Negotiate dialog starts here, and customers judge your price against it: less earns more reputation, well over it costs reputation."/>
 		<text name="tc_setting_showParkingSlots" text="Show parking slots"/>
 		<text name="tc_toolTip_showParkingSlots" text="Show your parking slots' markings outside the construction menu too. Just for you: other players choose their own. Right Ctrl+P switches it by default."/>
 		<text name="tc_nameStyle_british" text="British"/>
@@ -447,14 +447,105 @@
 		<text name="tc_inbox_chipRepair" text="Workshop"/>
 		<text name="tc_jobDetails_machine" text="Machine"/>
 		<text name="tc_repair_problemGone" text="The customer's machine isn't there any more."/>
-		<text name="tc_repair_engineLocked" text="Accept the customer's job before starting their machine."/>
 		<text name="tc_repair_problemNoADS" text="Advanced Damage System isn't loaded, so this job can't be taken on."/>
-		<text name="tc_repair_requires" text="You haven't the equipment for this job yet. Requires: %s."/>
 		<text name="tc_repair_summaryLine" text="%s on the %s"/>
 		<text name="tc_repair_missedNotification" text="Job failed: the %s in your repair zone wasn't finished by its deadline, and the customer has taken the machine back."/>
-		<text name="tc_repair_acceptedInfo" text="Job accepted: %s for %s. It's in your repair zone. Inspect it to find what's wrong, then fix it in the workshop. The Workshop tab has a checklist of what's left."/>
-		<text name="tc_repair_acceptedInfo_maintenance" text="Job accepted: %s for %s. It's in your repair zone. Service it in the workshop: the Workshop tab has a checklist of what's left."/>
-		<text name="tc_repair_rejectedInfo" text="Negotiation failed: the customer has taken the %s elsewhere."/>
+		<text name="tc_repair_acceptedInfo" text="The customer's agreed: %s for %s. Fix it in the workshop: the Workshop tab has a checklist of what's left."/>
+		<text name="tc_repair_acceptedInfo_maintenance" text="The customer's agreed: %s for %s. Service it in the workshop: the Workshop tab has a checklist of what's left."/>
+		<text name="tc_repair_rejectedInfo" text="The customer turned your quote down and has taken the %s elsewhere."/>
+		<text name="tc_repair_negotiateButton" text="Negotiate"/>
+		<text name="tc_repair_priceToAgree" text="To agree"/>
+		<text name="tc_repair_inspectionHeading" text="Inspection"/>
+		<text name="tc_repair_kitHeading" text="Kit"/>
+		<text name="tc_repair_inspectionRow" text="Inspection"/>
+		<text name="tc_repair_chipInspected" text="Done"/>
+		<text name="tc_repair_chipNeedsInspection" text="Needed"/>
+		<text name="tc_repair_chipNotInspected" text="Not inspected"/>
+		<text name="tc_repair_chipReadyToQuote" text="Ready to price"/>
+		<text name="tc_repair_chipInspect" text="Inspect"/>
+		<text name="tc_repair_chipPartial" text="Part"/>
+		<text name="tc_repair_chipAvailable" text="Available"/>
+		<text name="tc_repair_chipMissing" text="Missing"/>
+		<text name="tc_repair_chipNotPossible" text="Not possible"/>
+		<text name="tc_repair_chipUnknown" text="Not known"/>
+		<text name="tc_repair_chipSubcontract" text="Subcontract"/>
+		<text name="tc_repair_kitRow" text="%s: %s"/>
+		<text name="tc_repair_kitRowKit" text="%s, %s"/>
+		<text name="tc_repair_kitRowService" text="Service: %s"/>
+		<text name="tc_repair_kitRowUnknown" text="Faults: found by inspection"/>
+		<text name="tc_repair_fixNeeds" text="needs %s"/>
+		<text name="tc_repair_repairNeeds" text="Repair needs %s"/>
+		<text name="tc_repair_kindChip_repair" text="Repair"/>
+		<text name="tc_repair_kindChip_maintenance" text="Service"/>
+		<text name="tc_repair_kindChip_breakdown" text="Breakdown"/>
+		<text name="tc_repair_methodChip_repairOrReplace" text="Repair or replace"/>
+		<text name="tc_repair_methodChip_repair" text="Repair"/>
+		<text name="tc_repair_methodChip_replacement" text="Replace"/>
+		<text name="tc_repair_methodChip_change" text="Drain and refill"/>
+		<text name="tc_repair_methodChip_topUp" text="Top up"/>
+		<text name="tc_repair_methodChip_grease" text="Grease"/>
+		<text name="tc_repair_methodChip_replace" text="Replace"/>
+		<text name="tc_repair_methodChip_service" text="Service"/>
+		<text name="tc_repair_chipInspectAgain" text="Inspect again"/>
+		<text name="tc_repair_chipPossible" text="Possible"/>
+		<text name="tc_repair_chipReplacing" text="Replacing"/>
+		<text name="tc_repair_chipProfit" text="Profit"/>
+		<text name="tc_repair_chipLoss" text="Loss"/>
+		<text name="tc_repair_subcontractWarning" text="Missing kit: %s. The faults it's needed for would go to a dealer, at their price."/>
+		<text name="tc_repair_replaceOnlyWarning" text="Replace only without %s: those faults can't be repaired with your kit, so their parts cost more than the cheapest fix."/>
+		<text name="tc_breakdown_noKitWarning" text="Missing kit: %s. A hired mobile workshop would have to fix it, at their price."/>
+		<text name="tc_repair_pendingInspect" text="Inspect the machine to find what's wrong: a tool box will do, or bring it into your workshop. Nothing else can be done to it until the customer's agreed a price. Then choose Negotiate on the offer in the Inbox."/>
+		<text name="tc_repair_pendingInspect_breakdown" text="Go out and inspect it where it stands to find what's wrong. Nothing else can be done to it until the customer's agreed a price. Then choose Negotiate on the offer in the Inbox, before the day's out."/>
+		<text name="tc_repair_pendingInspected" text="Inspected. Below: each fault, every way to fix it and whether your kit covers it, then your cheapest plan. To quote the customer, choose Negotiate on the offer in the Inbox."/>
+		<text name="tc_repair_hours" text="%.1f h"/>
+		<text name="tc_repair_handTools" text="Hand tools"/>
+		<text name="tc_repair_optionPart" text="part %s"/>
+		<text name="tc_repair_option_repair" text="Repair"/>
+		<text name="tc_repair_option_replacement" text="Replace"/>
+		<text name="tc_repair_planFullRepair" text="Full repair"/>
+		<text name="tc_repair_planPartsCheapest" text="Parts, cheapest fix"/>
+		<text name="tc_repair_planParts" text="Parts, your plan"/>
+		<text name="tc_repair_planHours" text="Work"/>
+		<text name="tc_repair_planSubcontract" text="Subcontracted"/>
+		<text name="tc_repair_planMissing" text="To do it all in-house"/>
+		<text name="tc_repair_planCost" text="Parts &amp; Wages"/>
+		<text name="tc_repair_planBenchmarkPrice" text="Price at your usual %d%%"/>
+		<text name="tc_repair_planBenchmarkProfit" text="Profit at your usual %d%%"/>
+		<text name="tc_repair_planAgreedPrice" text="Agreed price"/>
+		<text name="tc_repair_planAgreedProfit" text="Profit at the agreed price"/>
+		<text name="tc_repair_reactionShort_fair" text="fair"/>
+		<text name="tc_repair_reactionShort_steep" text="steep"/>
+		<text name="tc_repair_reactionShort_ripOff" text="a rip-off"/>
+		<text name="tc_repair_overchargingNotice" text="Word's got round that you overcharge for repairs. Fewer customers will bring their machines to you for the next %d months."/>
+		<text name="tc_repairQuote_titleDefault" text="Quote"/>
+		<text name="tc_repairQuote_title" text="Quote: %s"/>
+		<text name="tc_repairQuote_marginLabel" text="Margin"/>
+		<text name="tc_repairQuote_sectionWork" text="The work"/>
+		<text name="tc_repairQuote_wagesLabel" text="Wages"/>
+		<text name="tc_repairQuote_wagesValue" text="%s (%.1f h at %s/h)"/>
+		<text name="tc_repairQuote_sectionQuote" text="Your quote"/>
+		<text name="tc_repairQuote_minimumCharge" text="Minimum charge"/>
+		<text name="tc_repairQuote_priceLabel" text="Price"/>
+		<text name="tc_repairQuote_planLabel" text="Your plan"/>
+		<text name="tc_repairQuote_planValue" text="Parts %s"/>
+		<text name="tc_repairQuote_missingKitLabel" text="Missing kit"/>
+		<text name="tc_repairQuote_kitNone" text="None"/>
+		<text name="tc_repairQuote_kitNote_subcontract" text="The faults it's needed for would go to a dealer, at their price."/>
+		<text name="tc_repairQuote_kitNote_replaceOnly" text="Without it some faults can only be replaced, so their parts cost more."/>
+		<text name="tc_repairQuote_kitNote_breakdown_toolBox" text="Either would do. Without, a hired mobile workshop would fix it, at their price."/>
+		<text name="tc_repairQuote_kitNote_breakdown_mobile" text="Without, a hired mobile workshop would fix it, at their price."/>
+		<text name="tc_breakdown_kitName_toolBox" text="Tool box"/>
+		<text name="tc_repairQuote_planSubcontract" text="+ %s subcontracted"/>
+		<text name="tc_repairQuote_planUnknown" text="Not known yet"/>
+		<text name="tc_repairQuote_profitLabel" text="Est. profit"/>
+		<text name="tc_repairQuote_profitValue" text="%s (before wages)"/>
+		<text name="tc_repairQuote_customerLabel" text="Customer"/>
+		<text name="tc_repairQuote_reactionValue" text="Your usual margin is %d%%"/>
+		<text name="tc_repairQuote_reaction_minimum" text="Fair"/>
+		<text name="tc_repairQuote_reaction_fair" text="Fair"/>
+		<text name="tc_repairQuote_reaction_steep" text="Steep"/>
+		<text name="tc_repairQuote_reaction_ripOff" text="Rip-off"/>
+		<text name="tc_repairQuote_send" text="Issue quote"/>
 		<text name="tc_repair_detailMachine" text="Machine"/>
 		<text name="tc_repair_detailWork" text="Work"/>
 		<text name="tc_repair_detailTools" text="Equipment"/>
@@ -463,18 +554,24 @@
 		<text name="tc_repair_work_repair" text="Repair: it's not right, inspect it to find out why"/>
 		<text name="tc_repair_work_maintenance" text="Service: oils, filters and grease"/>
 		<text name="tc_repair_work_breakdown" text="Broken down in the field: fix it where it stands, today"/>
-		<text name="tc_repair_handToolsOnly" text="Hand tools only"/>
 		<text name="tc_repair_doneWhen_repair" text="Every fault it came in with is fixed: the list below, once you've inspected it. Repairing a part counts as much as replacing it. A quick fix doesn't count, and nothing that goes wrong after it came in needs fixing. It's paid as soon as the last one's done."/>
 		<text name="tc_repair_doneWhen_breakdown" text="Every fault that stopped it is fixed where it stands, before the day's out: the list below, once you've inspected it. A quick fix doesn't count. It's paid as soon as the last one's done."/>
 		<text name="tc_repair_doneWhen_maintenance" text="Everything on the list below is done: fluids over 85% full and fresh, grease points over 85% full, filters and the battery as good as new. Doing more than the list doesn't hurt. It's paid as soon as the last one's done."/>
 		<text name="tc_repair_progressFixed" text="%d of %d fixed"/>
 		<text name="tc_repair_progressServiced" text="%d of %d serviced"/>
-		<text name="tc_repair_progressMore" text="%d fixed, but something's still wrong. Inspect it again."/>
-		<text name="tc_repair_progressNotFound" text="Nothing found yet. Inspect it to find what's wrong."/>
 		<text name="tc_workshop_columnMachine" text="Machine"/>
 		<text name="tc_workshop_columnDue" text="Due"/>
 		<text name="tc_workshop_columnProgress" text="Progress"/>
-		<text name="tc_workshop_empty" text="No customers' machines in for work. Repair, service and breakdown offers come in to the Inbox."/>
+		<text name="tc_workshop_empty" text="No customers' machines being worked on. New ones come in to the Inbox and the Pending offers list, to be inspected and priced."/>
+		<text name="tc_workshop_viewPending" text="Pending offers"/>
+		<text name="tc_workshop_columnInspection" text="Status"/>
+		<text name="tc_workshop_emptyPending" text="No offers waiting. Customers bring their machines to your repair zones, and breakdowns come in from the fields."/>
+		<text name="tc_workshop_sectionOptions" text="Ways to fix it"/>
+		<text name="tc_workshop_sectionPlan" text="Your cheapest plan"/>
+		<text name="tc_workshop_margin" text="Margin"/>
+		<text name="tc_workshop_marginValue" text="%d%% (usual %d%%): %s"/>
+		<text name="tc_workshop_priceReputation" text="Reputation for the price"/>
+		<text name="tc_workshop_reputation" text="Reputation"/>
 		<text name="tc_workshop_sectionChecklist" text="Checklist"/>
 		<text name="tc_workshop_viewCurrent" text="Current work"/>
 		<text name="tc_workshop_viewCompleted" text="Completed &amp; failed"/>
@@ -488,19 +585,12 @@
 		<text name="tc_workshop_partsCost" text="Parts cost"/>
 		<text name="tc_workshop_turnaround" text="Turnaround"/>
 		<text name="tc_workshop_turnaroundBonus" text="%s (+%.0f%% reputation for speed)"/>
-		<text name="tc_workshop_earningsNote" text="The parts cost is ADS's estimate of the parts and materials the job needed. The customer was billed that plus your margin for the work, and the difference is the profit, before your staff's wages."/>
+		<text name="tc_workshop_earningsNote" text="The parts cost is ADS's estimate of the parts and materials for the cheapest fix. The customer was billed the price you agreed, and the difference is the profit, before your staff's wages. It's an estimate: what you really spent depends on how you fixed it."/>
 		<text name="tc_workshop_earningsNoteQuote" text="The estimated cost is ADS's quote for the work. The customer was billed that plus your margin, and the difference is the profit."/>
 		<text name="tc_workshop_missedNote" text="This job failed: it wasn't done by the day it was due, so the customer paid nothing and collected their machine."/>
 		<text name="tc_workshop_billedNothing" text="Nothing"/>
 		<text name="tc_repair_progressSoFar" text="%d fixed so far"/>
 		<text name="tc_repair_progressNotInspected" text="Not inspected"/>
-		<text name="tc_repair_todo_repair" text="Repair it"/>
-		<text name="tc_repair_todo_replacement" text="Replace it"/>
-		<text name="tc_repair_todo_change" text="Drain and refill"/>
-		<text name="tc_repair_todo_topUp" text="Top it up"/>
-		<text name="tc_repair_todo_grease" text="Grease it"/>
-		<text name="tc_repair_todo_replace" text="Replace it"/>
-		<text name="tc_repair_todo_service" text="Service it"/>
 		<text name="tc_repair_chipFixed" text="Fixed"/>
 		<text name="tc_repair_chipServiced" text="Serviced"/>
 		<text name="tc_repair_chipToDo" text="To do"/>
@@ -519,7 +609,7 @@
 		<text name="tc_breakdown_kit_toolBox" text="Tool box or mobile workshop"/>
 		<text name="tc_breakdown_kit_mobile" text="Mobile workshop"/>
 		<text name="tc_breakdown_chipBrokenDown" text="Broken down"/>
-		<text name="tc_breakdown_acceptedInfo" text="Job accepted: %s for %s. It's at %s, marked on the map. Fix it there before the day's out: the Workshop tab has a checklist."/>
+		<text name="tc_breakdown_acceptedInfo" text="The customer's agreed: %s for %s. It's at %s, marked on the map. Fix it there before the day's out: the Workshop tab has a checklist."/>
 		<text name="tc_breakdown_missedNotification" text="Job failed: a customer's machine broken down in the field wasn't fixed in time, and they've had it recovered."/>
 		<text name="tc_claims_cause_tampering" text="parts taken or swapped while it was in for repair"/>
 		<text name="tc_drivers_customerVehicle" text="%s is a customer's machine in for repair, so AI helpers, AutoDrive, Courseplay and Follow Me can't drive it."/>

@@ -194,8 +194,19 @@
                         <Text profile="tc_detailValue" id="inboxDetailSupplies" text="" position="345px 0px" size="407px 34px"/>
                     </GuiElement>
 
+                    <!-- 102: a workshop offer's inspection, its own section above the kit checklist. -->
+                    <GuiElement profile="tc_detailRow" id="inboxInspectionHeadingRow" size="752px 46px">
+                        <Text profile="tc_sectionTitle" text="$l10n_tc_repair_inspectionHeading" position="0px -14px" size="752px 24px"/>
+                        <Bitmap profile="tc_divider" position="0px -42px" size="752px 1px"/>
+                    </GuiElement>
+                    <GuiElement profile="tc_detailRow" id="inboxInspectionRow" size="752px 32px">
+                        <Text profile="tc_detailValue" id="inboxInspectionName" text="" position="0px 0px" size="600px 32px"/>
+                        <RoundCorner profile="tc_chip" id="inboxInspectionChip" position="632px -6px"/>
+                        <Text profile="tc_chipText" id="inboxInspectionChipText" position="632px -6px"/>
+                    </GuiElement>
+
                     <GuiElement profile="tc_detailRow" size="752px 46px">
-                        <Text profile="tc_sectionTitle" text="$l10n_tc_inbox_equipmentHeading" position="0px -14px" size="752px 24px"/>
+                        <Text profile="tc_sectionTitle" id="inboxEquipHeading" text="$l10n_tc_inbox_equipmentHeading" position="0px -14px" size="752px 24px"/>
                         <Bitmap profile="tc_divider" position="0px -42px" size="752px 1px"/>
                     </GuiElement>
                     <GuiElement profile="tc_detailRow" id="inboxEquipRow1" size="752px 32px">
@@ -1058,9 +1069,12 @@
                             <Bitmap profile="tc_tableRowAccent"/>
                             <Text profile="tc_listRowSection" position="14px 0px" size="700px 32px" name="section"/>
                             <Text profile="tc_listRowLabel" position="14px 0px" size="250px 32px" name="label"/>
-                            <Text profile="tc_listRowValue" position="270px 0px" size="340px 32px" name="value"/>
-                            <RoundCorner profile="tc_rowChip" position="616px 0px" size="114px 20px" name="chip"/>
-                            <Text profile="tc_rowChipText" position="616px 0px" size="114px 20px" name="chipText"/>
+                            <!-- 102: a row's chip leads its value (value), with the text after it
+                                 (valueAfterChip); a row with no chip uses the whole column (value). -->
+                            <Text profile="tc_listRowValue" position="270px 0px" size="460px 32px" name="value"/>
+                            <RoundCorner profile="tc_rowChip" position="270px 0px" size="134px 20px" name="chip"/>
+                            <Text profile="tc_rowChipText" position="270px 0px" size="134px 20px" name="chipText"/>
+                            <Text profile="tc_listRowValue" position="416px 0px" size="314px 32px" name="valueAfterChip"/>
                         </ListItem>
                     </SmoothList>
                     <ThreePartBitmap profile="tc_slider_box" position="770px -160px" size="6px 436px">

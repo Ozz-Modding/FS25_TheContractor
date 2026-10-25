@@ -57,6 +57,7 @@ source(TheContractor.dir .. "src/gui/TCWardrobe.lua")
 source(TheContractor.dir .. "src/gui/TCEditWorkerDialog.lua")
 source(TheContractor.dir .. "src/gui/TCParkingSlotDialog.lua")
 source(TheContractor.dir .. "src/gui/TCJobDetailsDialog.lua")
+source(TheContractor.dir .. "src/gui/TCRepairQuoteDialog.lua")
 source(TheContractor.dir .. "src/hud/TCInboxHUD.lua")
 source(TheContractor.dir .. "src/business/Settings.lua")
 source(TheContractor.dir .. "src/business/Reputation.lua")
@@ -181,6 +182,7 @@ source(TheContractor.dir .. "src/events/TCParkingRemovedEvent.lua")
 source(TheContractor.dir .. "src/events/TCParkingNoticeEvent.lua")
 source(TheContractor.dir .. "src/events/TCParkingSlotFilterEvent.lua")
 source(TheContractor.dir .. "src/events/TCRepairZoneFilterEvent.lua")
+source(TheContractor.dir .. "src/events/TCRepairQuoteEvent.lua")
 source(TheContractor.dir .. "src/events/TCRandomEventIncidentEvent.lua")
 
 -- The top-level Contractor page itself stays always-visible (see Company.lua
@@ -313,6 +315,8 @@ function TheContractor:loadMap()
     TCParkingSlotDialog.register()
     -- 093: the Calendar's Job details.
     TCJobDetailsDialog.register()
+    -- 102: pricing an inspected ADS repair contract.
+    TCRepairQuoteDialog.register()
     TCParkingSlotActivatable.install()
     -- 100: repair zone filters, the same way.
     TCRepairZoneActivatable.install()

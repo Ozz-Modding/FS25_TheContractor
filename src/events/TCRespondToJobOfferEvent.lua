@@ -50,6 +50,12 @@ function TCRespondToJobOfferEvent:run(connection)
         return
     end
 
+    -- 102: a workshop job is only taken on at a price the customer's
+    -- agreed (TCRepairQuoteEvent); it can still be turned down here.
+    if self.accept and TheContractorRepairContracts.isWorkshopJob(job) then
+        return
+    end
+
     local newState = self.accept and TheContractorJob.STATE.ACCEPTED or TheContractorJob.STATE.DECLINED
     jobs:transitionJobState(self.farmId, self.jobId, newState)
 end

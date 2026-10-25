@@ -9,17 +9,21 @@
 -- Everything after the roll is 100's (TheContractorRepairContracts): the
 -- machine goes on its arrivals queue with a spot on the field instead of a
 -- bay, is spawned, prepared, and
--- offered as an adsBreakdown job due today, priced from ADS's quote (a hired
--- mobile workshop, call-out fee included) plus the margin. Accepting needs
--- the kit for its level (getBreakdownProblem): a tool box or the farm's own
--- van for "player", the van for "mobile". It's done when ADS says so; a
--- lapsed offer or a missed job and the customer's own recovery takes the
--- machine away (100's collection, judged where the machine stands).
+-- offered as an adsBreakdown job due today. 102: it's inspected on the spot,
+-- then priced from the Inbox like a repair zone job, against the
+-- adsFieldMargin benchmark. Without the kit for its level
+-- (getBreakdownProblem: a tool box or the farm's own van for "player", the
+-- van for "mobile") it can still be taken on, with a warning: a hired mobile
+-- workshop can do it, at a price. It's done when ADS says so; a lapsed
+-- offer or a missed job and the customer's own recovery takes the machine
+-- away (100's collection, judged where the machine stands).
 --
 -- The odds: RATE_PER_PERIOD a month while the farm has a tool box or a van,
 -- NO_KIT_RATE_FACTOR of that until it has either, so a new company isn't
--- shown offers it can never take. A farm with a tool box but no van mostly
--- gets jobs a tool box can do. One at a time per farm, in working hours.
+-- shown offers it can't do itself, and OVERCHARGE_ARRIVAL_FACTOR of it while
+-- the farm's known for overcharging (102). A farm with a tool box but no
+-- van mostly gets jobs a tool box can do. One at a time per farm, in
+-- working hours.
 --
 -- State: none of its own. The incident's data is { fieldId, fieldService,
 -- severity }; the model and the spot are picked as it happens.
@@ -97,6 +101,11 @@ function TheContractorFieldBreakdowns.getRate(farmId)
     local rate = TheContractorFieldBreakdowns.RATE_PER_PERIOD
     if not TheContractorRepairContracts.hasBreakdownKit(farmId, TCADSRepairContracts.FIELD_SERVICE.PLAYER) then
         rate = rate * TheContractorFieldBreakdowns.NO_KIT_RATE_FACTOR
+    end
+    -- 102: fewer call-outs while the farm's known for overcharging.
+    local repairContracts = g_currentMission.TheContractor.RepairContracts
+    if repairContracts ~= nil then
+        rate = rate * repairContracts:getArrivalFactor(farmId)
     end
     return rate
 end

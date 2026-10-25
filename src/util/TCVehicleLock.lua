@@ -20,12 +20,6 @@
 --
 -- Selling one is refused too (SellVehicleEvent hook below): the shop's
 -- garage list still offers equipment that's hidden away on a job.
---
--- 100: a customer's machine can be got into but won't start until its job's
--- accepted (TheContractorRepairContracts.isEngineLocked). Its own
--- getCanMotorRun is wrapped, which vanilla's start key, automatic start and
--- Drivable (stopping a running engine) all go through, and
--- getMotorNotAllowedWarning says why.
 
 TCVehicleLock = {}
 
@@ -35,7 +29,6 @@ TCVehicleLock.REFRESH_INTERVAL_MS = 1000
 local lockedVehicleIds = {}
 local controlFunctionRegistered = setmetatable({}, { __mode = "k" })
 local tabbableWrapped = setmetatable({}, { __mode = "k" })
-local motorWrapped = setmetatable({}, { __mode = "k" })
 local accumulatedMs = 0
 
 function TCVehicleLock.reset()
@@ -76,39 +69,6 @@ local function applyLock(vehicleId)
         end
         tabbableWrapped[vehicle] = true
     end
-end
-
-local function isEngineLocked(vehicle)
-    return TheContractorRepairContracts ~= nil and TheContractorRepairContracts.isEngineLocked(vehicle)
-end
-
--- 100: once per customer's machine; the check is live, so it never needs
--- removing.
-local function applyEngineLock(vehicleId)
-    local vehicle = NetworkUtil.getObject(vehicleId)
-    if vehicle == nil or vehicle.getCanMotorRun == nil or motorWrapped[vehicle] then
-        return
-    end
-
-    local getCanMotorRun = vehicle.getCanMotorRun
-    vehicle.getCanMotorRun = function(self, ...)
-        if isEngineLocked(self) then
-            return false
-        end
-        return getCanMotorRun(self, ...)
-    end
-
-    local getMotorNotAllowedWarning = vehicle.getMotorNotAllowedWarning
-    vehicle.getMotorNotAllowedWarning = function(self, ...)
-        if isEngineLocked(self) then
-            return g_i18n:getText("tc_repair_engineLocked")
-        end
-        if getMotorNotAllowedWarning ~= nil then
-            return getMotorNotAllowedWarning(self, ...)
-        end
-        return nil
-    end
-    motorWrapped[vehicle] = true
 end
 
 -- Older versions locked through setIsTabbable(false), which vanilla saved
@@ -181,12 +141,6 @@ function TCVehicleLock.refresh()
     end
 
     lockedVehicleIds = shouldLock
-
-    if TheContractorRepairContracts ~= nil then
-        for vehicleId in pairs(TheContractorRepairContracts.getContractVehicleIds()) do
-            applyEngineLock(vehicleId)
-        end
-    end
 end
 
 function TCVehicleLock.update(dt)

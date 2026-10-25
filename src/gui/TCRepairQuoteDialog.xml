@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="utf-8" standalone="no" ?>
+<!-- Repair quote dialog (102), see TCRepairQuoteDialog.lua. The dialog
+     frame of TCAdvertisingDialog.xml around two panel-kit cards (043): the
+     work (the cheapest fix's parts and wages), then the quote (the margin
+     picker and the price, plan, profit and customer rows that follow it,
+     each with a chip), ending with the missing kit as chips. Positions inside the
+     canvas are offsets from its top-left. -->
+<GUI onOpen="onOpen" onClose="onClose" onCreate="onCreate">
+    <GuiElement profile="newLayer"/>
+    <Bitmap profile="dialogFullscreenBg" id="dialogBg"/>
+    <GuiElement profile="fs25_dialogBg" id="dialogElement" size="760px 660px">
+        <ThreePartBitmap profile="fs25_dialogBgMiddle"/>
+        <ThreePartBitmap profile="fs25_dialogBgTop"/>
+        <ThreePartBitmap profile="fs25_dialogBgBottom"/>
+        <GuiElement profile="fs25_dialogContentContainer">
+
+            <Text profile="fs25_dialogTitle" id="dialogTitleElement" position="0px -30px" text="$l10n_tc_repairQuote_titleDefault"/>
+
+            <GuiElement profile="tc_repairQuoteCanvas" position="0px -76px">
+
+                <!-- The work: what the price is built on. -->
+                <RoundCorner profile="tc_panel" position="0px 0px" size="700px 160px"/>
+                <Text profile="tc_sectionTitle" text="$l10n_tc_repairQuote_sectionWork" position="24px -14px" size="652px 24px"/>
+                <Bitmap profile="tc_divider" position="24px -42px" size="652px 1px"/>
+
+                <GuiElement profile="tc_repairQuoteRow" position="24px -48px" size="652px 34px">
+                    <Text profile="tc_detailLabel" text="$l10n_tc_repair_planPartsCheapest" position="0px 0px" size="200px 34px"/>
+                    <Text profile="tc_detailValue" id="partsText" text="" position="210px 0px" size="300px 34px"/>
+                    <Bitmap profile="tc_detailRowDivider"/>
+                </GuiElement>
+                <GuiElement profile="tc_repairQuoteRow" position="24px -82px" size="652px 34px">
+                    <Text profile="tc_detailLabel" text="$l10n_tc_repairQuote_wagesLabel" position="0px 0px" size="200px 34px"/>
+                    <Text profile="tc_detailValue" id="wagesText" text="" position="210px 0px" size="440px 34px"/>
+                    <Bitmap profile="tc_detailRowDivider"/>
+                </GuiElement>
+                <GuiElement profile="tc_repairQuoteRow" position="24px -116px" size="652px 34px">
+                    <Text profile="tc_detailLabel" text="$l10n_tc_repair_planCost" position="0px 0px" size="200px 34px"/>
+                    <Text profile="tc_detailValue" id="costText" text="" position="210px 0px" size="300px 34px" textBold="true"/>
+                </GuiElement>
+
+                <!-- The quote: the margin, and what it comes to. -->
+                <RoundCorner profile="tc_panel" position="0px -176px" size="700px 300px"/>
+                <Text profile="tc_sectionTitle" text="$l10n_tc_repairQuote_sectionQuote" position="24px -190px" size="652px 24px"/>
+                <Bitmap profile="tc_divider" position="24px -218px" size="652px 1px"/>
+
+                <GuiElement profile="tc_repairQuoteRow" position="24px -224px" size="652px 44px">
+                    <Text profile="tc_detailLabel" text="$l10n_tc_repairQuote_marginLabel" position="0px 0px" size="200px 44px"/>
+                    <MultiTextOption profile="tc_repairQuotePicker" id="marginOption" position="210px -4px" onClick="onClickMargin" focusInit="onOpen">
+                        <Text profile="fs25_multiTextOptionText" width="300px" name="text"/>
+                    </MultiTextOption>
+                    <Bitmap profile="tc_detailRowDivider"/>
+                </GuiElement>
+                <GuiElement profile="tc_repairQuoteRow" position="24px -268px" size="652px 34px">
+                    <Text profile="tc_detailLabel" text="$l10n_tc_repairQuote_priceLabel" position="0px 0px" size="200px 34px"/>
+                    <Text profile="tc_detailValue" id="priceText" text="" position="210px 0px" size="300px 34px" textBold="true"/>
+                    <RoundCorner profile="tc_chip" id="priceChip" position="520px -7px" size="132px 20px"/>
+                    <Text profile="tc_chipText" id="priceChipText" position="520px -7px" size="132px 20px"/>
+                    <Bitmap profile="tc_detailRowDivider"/>
+                </GuiElement>
+                <GuiElement profile="tc_repairQuoteRow" position="24px -302px" size="652px 34px">
+                    <Text profile="tc_detailLabel" text="$l10n_tc_repairQuote_planLabel" position="0px 0px" size="200px 34px"/>
+                    <Text profile="tc_detailValue" id="planText" text="" position="210px 0px" size="300px 34px"/>
+                    <RoundCorner profile="tc_chip" id="planChip" position="520px -7px" size="132px 20px"/>
+                    <Text profile="tc_chipText" id="planChipText" position="520px -7px" size="132px 20px"/>
+                    <Bitmap profile="tc_detailRowDivider"/>
+                </GuiElement>
+                <GuiElement profile="tc_repairQuoteRow" position="24px -336px" size="652px 34px">
+                    <Text profile="tc_detailLabel" text="$l10n_tc_repairQuote_profitLabel" position="0px 0px" size="200px 34px"/>
+                    <Text profile="tc_detailValue" id="profitText" text="" position="210px 0px" size="300px 34px"/>
+                    <RoundCorner profile="tc_chip" id="profitChip" position="520px -7px" size="132px 20px"/>
+                    <Text profile="tc_chipText" id="profitChipText" position="520px -7px" size="132px 20px"/>
+                    <Bitmap profile="tc_detailRowDivider"/>
+                </GuiElement>
+                <GuiElement profile="tc_repairQuoteRow" position="24px -370px" size="652px 34px">
+                    <Text profile="tc_detailLabel" text="$l10n_tc_repairQuote_customerLabel" position="0px 0px" size="200px 34px"/>
+                    <Text profile="tc_detailValue" id="reactionText" text="" position="210px 0px" size="300px 34px"/>
+                    <RoundCorner profile="tc_chip" id="reactionChip" position="520px -7px" size="132px 20px"/>
+                    <Text profile="tc_chipText" id="reactionChipText" position="520px -7px" size="132px 20px"/>
+                    <Bitmap profile="tc_detailRowDivider"/>
+                </GuiElement>
+                <!-- What the farm lacks: a chip per upgrade ("None" when it
+                     has it all), and what going without means under them. -->
+                <GuiElement profile="tc_repairQuoteRow" position="24px -404px" size="652px 58px">
+                    <Text profile="tc_detailLabel" text="$l10n_tc_repairQuote_missingKitLabel" position="0px 0px" size="200px 34px"/>
+                    <RoundCorner profile="tc_chip" id="kitChip1" position="210px -7px" size="104px 20px"/>
+                    <Text profile="tc_chipText" id="kitChipText1" position="210px -7px" size="104px 20px"/>
+                    <RoundCorner profile="tc_chip" id="kitChip2" position="320px -7px" size="104px 20px"/>
+                    <Text profile="tc_chipText" id="kitChipText2" position="320px -7px" size="104px 20px"/>
+                    <RoundCorner profile="tc_chip" id="kitChip3" position="430px -7px" size="104px 20px"/>
+                    <Text profile="tc_chipText" id="kitChipText3" position="430px -7px" size="104px 20px"/>
+                    <RoundCorner profile="tc_chip" id="kitChip4" position="540px -7px" size="104px 20px"/>
+                    <Text profile="tc_chipText" id="kitChipText4" position="540px -7px" size="104px 20px"/>
+                    <Text profile="tc_repairQuoteKitNote" id="kitNoteText" text="" position="0px -34px"/>
+                </GuiElement>
+            </GuiElement>
+        </GuiElement>
+
+        <BoxLayout profile="fs25_dialogButtonBox">
+            <Button profile="buttonOK" text="$l10n_tc_repairQuote_send" onClick="onClickOk" id="sendButton"/>
+            <Bitmap profile="fs25_dialogButtonBoxSeparator"/>
+            <Button profile="buttonBack" text="$l10n_button_back" onClick="onClickBack" id="backButton"/>
+        </BoxLayout>
+    </GuiElement>
+</GUI>

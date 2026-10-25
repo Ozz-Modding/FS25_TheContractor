@@ -303,6 +303,26 @@
         <textAlignment value="center" />
     </Profile>
 
+    <!-- Repair quote dialog (102): the panel kit inside a dialog. The canvas
+         is centred in the content container; everything in it is
+         anchorTopLeft (the panel kit's own profiles), so positions are
+         offsets from the canvas's top-left. -->
+    <Profile name="tc_repairQuoteCanvas" extends="emptyPanel" with="anchorTopCenter">
+        <size value="700px 480px" />
+    </Profile>
+    <!-- tc_detailRow is unanchored (it's for BoxLayouts); these rows are
+         placed by hand, so their offsets need a top-left anchor. -->
+    <Profile name="tc_repairQuoteRow" extends="tc_detailRow" with="anchorTopLeft"/>
+    <Profile name="tc_repairQuotePicker"extends="fs25_multiTextOption" with="anchorTopLeft">
+        <size value="340px 36px" />
+    </Profile>
+    <!-- What going without the missing kit means, under its chips. -->
+    <Profile name="tc_repairQuoteKitNote" extends="tc_panelNote">
+        <size value="652px 20px" />
+        <textSize value="13px" />
+        <textMaxNumLines value="1" />
+    </Profile>
+
     <!-- Staff driver picker dialog (037). anchorTopCenter for the same
          reason as the advertising dialog's profiles above. -->
     <Profile name="tc_driverPickerList" extends="emptyPanel" with="anchorTopCenter">
