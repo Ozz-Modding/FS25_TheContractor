@@ -1,5 +1,6 @@
 -- Client asks to book one of its farm's workers on a certification course,
--- or a retake after a failed assessment, from the Staff tab (054). The
+-- or a retake after a failed assessment, from the Staff tab (054), or on
+-- a trade course (092, cert = TheContractorWorkshop.getCourseKey). The
 -- server re-checks the worker, their readiness and the price
 -- (TheContractorTraining:requestBooking); the result goes out as a
 -- TCWorkerTrainingChangedEvent. See src/events/README.md for the general

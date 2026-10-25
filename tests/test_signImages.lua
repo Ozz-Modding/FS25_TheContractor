@@ -213,13 +213,17 @@ local function setupFiles(readmeExists)
     setup({})
     local written = {}
     local folders = {}
+    local copies = {}
     createFolder = function(path) table.insert(folders, path) end
+    copyFile = function(from, to, overwrite)
+        table.insert(copies, { from = from, to = to, overwrite = overwrite })
+    end
     FileAccess = { WRITE = 1 }
     createFile = function(path) written.path = path return 7 end
     fileWrite = function(file, text) written.text = (written.text or "") .. text end
     delete = function(file) written.closed = file end
     fileExists = function(path) return readmeExists and path == SETTINGS .. "README.txt" end
-    return written, folders
+    return written, folders, copies
 end
 
 test("the settings folder gets a signs folder and a README covering the logo and signs", function()
@@ -239,4 +243,22 @@ test("a README that's already there is rewritten", function()
     TCCompanyLogo.createSettingsFolder()
     assertEquals(SETTINGS .. "README.txt", written.path)
     assertTrue(written.text:find("savegame1", 1, true) ~= nil)
+end)
+
+test("the signs folder gets the example designs, over any of the same name", function()
+    local _, _, copies = setupFiles(false)
+    TCCompanyLogo.createSettingsFolder()
+    assertEquals(2, #copies)
+    assertEquals("mods/FS25_TheContractor/images/signs/Contractors_At_Work.dds", copies[1].from)
+    assertEquals(SIGNS .. "Contractors_At_Work.dds", copies[1].to)
+    assertEquals(SIGNS .. "No_Entry.dds", copies[2].to)
+    assertEquals(true, copies[1].overwrite)
+end)
+
+test("the example designs are in the mod", function()
+    for _, name in ipairs(TCSignImages.EXAMPLES) do
+        local file = io.open(TCSignImages.EXAMPLES_DIR .. name, "rb")
+        assertTrue(file ~= nil)
+        file:close()
+    end
 end)

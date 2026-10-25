@@ -65,7 +65,9 @@ end
 local function getFarmMachines(farmId)
     local result = {}
     for _, vehicle in ipairs(g_currentMission.vehicleSystem.vehicles) do
-        if not vehicle.isPallet and isOwnedBy(vehicle, farmId) then
+        -- 100: not a customer's machine in a repair zone.
+        if not vehicle.isPallet and isOwnedBy(vehicle, farmId) and
+                not (TheContractorRepairContracts ~= nil and TheContractorRepairContracts.isContractVehicle(vehicle)) then
             table.insert(result, vehicle)
         end
     end
@@ -225,13 +227,15 @@ end
 
 -- One supply: {
 --   fillTypeIndex, fillTypeName, title,
---   amount        everything in stock (storages + pallets)
+--   amount        everything in stock (storages + pallets, stored ones too)
 --   storedAmount  the part of it in storages
 --   capacity      storedAmount + room left, nil with no storage for it
 --   ratio         storedAmount / capacity, nil with no capacity
 --   storages      { { name, amount, capacity }... }, every storage that
 --                 takes it, empty ones too
---   pallets       { { name, count, amount }... }, grouped by name
+--   pallets       { { name, count, amount, isStored }... }, loose ones
+--                 grouped by name, then one per object storage (named
+--                 after it, isStored)
 --   heldJobs      jobs on hold for it (noStock)
 --   isLow         amount under getLowAmount, or none at all
 -- }
@@ -268,6 +272,10 @@ local function buildSupply(farmId, fillTypeIndex, placeableByStorage, storageEnt
         end
         group.count = group.count + 1
         group.amount = group.amount + source.level
+    end
+    for _, source in ipairs(TCJobSupplies.getStoredPalletSources(farmId, fillTypeIndex)) do
+        table.insert(supply.pallets, { name = source.placeable:getName(), count = source.count,
+            amount = source.level, isStored = true })
     end
 
     supply.amount = supply.storedAmount

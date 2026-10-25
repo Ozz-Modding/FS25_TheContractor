@@ -341,9 +341,11 @@ function TCJobConsequences.washEquipment(job)
 end
 
 -- Player-facing lines for the completion notifications, per worker:
--- "Extra wear from skill gaps: Fendt 942 Vario +60%, ..." and (059) the
--- machines they left with an ADS fault. Washing is left to the logbook.
--- Every machine builds them from workerReports itself.
+-- "Extra wear from skill gaps: Fendt 942 Vario +60%, ...". Washing is left
+-- to the logbook. The ADS faults they caused (report.breakdowns) aren't
+-- told (099): ADS adds them undiscovered, for an inspection or a symptom
+-- to reveal, and the player never learns which job caused one. Every
+-- machine builds them from workerReports itself.
 function TCJobConsequences.getReportLines(job)
     local lines = {}
     if job.workerReports == nil then
@@ -362,11 +364,6 @@ function TCJobConsequences.getReportLines(job)
             end
             table.insert(lines, string.format(g_i18n:getText("tc_consequences_extraWear"), name,
                 table.concat(parts, ", ")))
-        end
-
-        if #report.breakdowns > 0 then
-            table.insert(lines, string.format(g_i18n:getText("tc_consequences_breakdown"), name,
-                table.concat(report.breakdowns, ", ")))
         end
     end
     return lines

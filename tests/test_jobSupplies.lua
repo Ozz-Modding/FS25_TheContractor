@@ -169,3 +169,97 @@ test("a haulage job with no diesel for the haul tractor is held", function()
     assertEquals(status, TCJobSupplies.STATUS.NO_STOCK, "status")
     assertEquals(fillTypeName, "DIESEL", "fill type")
 end)
+
+-- Object storages (vanilla's pallet sheds, StorageRack) --------------------
+
+local function storedLevels(placeable)
+    local levels = {}
+    for _, object in ipairs(placeable.spec_objectStorage.storedObjects) do
+        table.insert(levels, object.palletAttributes ~= nil and object.palletAttributes.fillLevel or "bale")
+    end
+    return table.concat(levels, ",")
+end
+
+test("pallets put away in an object storage count as stock, the farm's own only", function()
+    local world = setup()
+    local rack = world:addObjectStorage({ name = "Storage Rack", pallets = {
+        { fillType = FillType.DIESEL, fillLevel = 1000 },
+        { fillType = FillType.DIESEL, fillLevel = 1000 },
+        { fillType = FillType.SEEDS, fillLevel = 500 },
+        { fillType = FillType.DIESEL, fillLevel = 0 },
+    } })
+    -- A bale in a shed is no pallet.
+    table.insert(rack.spec_objectStorage.storedObjects, { baleAttributes = { fillType = FillType.DIESEL, fillLevel = 4000 } })
+    world:addObjectStorage({ farmId = 2, pallets = { { fillType = FillType.DIESEL, fillLevel = 1000 } } })
+    world:addStorage({ levels = { [FillType.DIESEL] = 50 } })
+
+    local sources = TCJobSupplies.getStoredPalletSources(1, FillType.DIESEL)
+    assertEquals(#sources, 1, "one storage")
+    assertEquals(sources[1].placeable, rack, "the farm's rack")
+    assertEquals(sources[1].count, 2, "pallets with diesel in")
+    assertEquals(sources[1].level, 2000, "their diesel")
+    assertEquals(TCJobSupplies.getFarmStock(1, FillType.DIESEL), 2050, "farm stock")
+end)
+
+test("a client reads vanilla's groups of identical pallets", function()
+    local world = setup()
+    local rack = world:addObjectStorage({ pallets = {
+        { fillType = FillType.DIESEL, fillLevel = 1000 },
+        { fillType = FillType.DIESEL, fillLevel = 1000 },
+        { fillType = FillType.DIESEL, fillLevel = 1000 },
+        { fillType = FillType.DIESEL, fillLevel = 400 },
+    } })
+    -- What a client is sent: one sample per group, no owner.
+    local spec = rack.spec_objectStorage
+    for _, info in ipairs(spec.objectInfos) do
+        info.objects = { { palletAttributes = { fillType = info.objects[1].palletAttributes.fillType,
+            fillLevel = info.objects[1].palletAttributes.fillLevel } } }
+    end
+    spec.storedObjects = {}
+    g_currentMission.getIsServer = function() return false end
+
+    local sources = TCJobSupplies.getStoredPalletSources(1, FillType.DIESEL)
+    assertEquals(sources[1].count, 4, "count")
+    assertEquals(sources[1].level, 3400, "level")
+end)
+
+test("stored pallets are drawn last, emptied one at a time, and an empty one goes", function()
+    local world = setup()
+    world:addStorage({ levels = { [FillType.DIESEL] = 100 } })
+    local ibc = world:addVehicle({ name = "IBC", isPallet = true,
+        fillUnits = { { capacity = 1000, level = 100, fillType = FillType.DIESEL } } })
+    local rack = world:addObjectStorage({ pallets = {
+        { fillType = FillType.SEEDS, fillLevel = 500 },
+        { fillType = FillType.DIESEL, fillLevel = 1000 },
+        { fillType = FillType.DIESEL, fillLevel = 1000 },
+    } })
+
+    -- 100 from storage, 100 from the IBC, 1,000 empties one stored pallet
+    -- and 300 comes out of the next.
+    assertEquals(TCJobSupplies.drawFromStock(1, FillType.DIESEL, 1500), 1500, "taken")
+    assertEquals(ibc:getFillUnitFillLevel(1), 0, "loose pallet first")
+    assertEquals(storedLevels(rack), "500,700", "seed untouched, one emptied and gone, one drawn on")
+    assertEquals(rack.spec_objectStorage.numStoredObjects, 2, "count kept up")
+    assertEquals(rack.spec_objectStorage.infosDirty, 1, "groups rebuilt and synced")
+    local stat = world.farmStats[#world.farmStats]
+    assertEquals(stat.statName, "storedPallets", "stat")
+    assertEquals(stat.delta, -1, "one pallet gone")
+    assertEquals(TCJobSupplies.getFarmStock(1, FillType.DIESEL), 700, "stock after")
+end)
+
+test("more asked for than there is takes what's there", function()
+    local world = setup()
+    local rack = world:addObjectStorage({ pallets = { { fillType = FillType.DIESEL, fillLevel = 300 } } })
+    assertEquals(TCJobSupplies.drawFromStock(1, FillType.DIESEL, 1000), 300, "taken")
+    assertEquals(#rack.spec_objectStorage.storedObjects, 0, "empty pallet gone")
+end)
+
+test("a storage handing pallets out isn't drawn on", function()
+    local world = setup()
+    local rack = world:addObjectStorage({ pallets = { { fillType = FillType.DIESEL, fillLevel = 1000 } } })
+    rack.spec_objectStorage.objectSpawn.isActive = true
+
+    assertEquals(TCJobSupplies.drawFromStock(1, FillType.DIESEL, 200), 0, "taken")
+    assertEquals(storedLevels(rack), "1000", "untouched")
+    assertEquals(rack.spec_objectStorage.infosDirty, 0, "not marked")
+end)

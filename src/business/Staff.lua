@@ -223,6 +223,21 @@ function TheContractorStaff:getWorker(farmId, workerId)
     return farmWorkers[workerId]
 end
 
+-- 090: a fresh id from the worker counter. Office staff take theirs from
+-- it too, so no id is ever both a worker's and an office member's.
+function TheContractorStaff:takeWorkerId()
+    local id = self.nextWorkerId
+    self.nextWorkerId = self.nextWorkerId + 1
+    return id
+end
+
+-- A loaded id that's already in use: the counter moves past it.
+function TheContractorStaff:reserveWorkerId(id)
+    if id >= self.nextWorkerId then
+        self.nextWorkerId = id + 1
+    end
+end
+
 function TheContractorStaff:getRoster(farmId)
     local result = {}
     local farmWorkers = self.workersByFarm[farmId]
@@ -260,20 +275,16 @@ function TheContractorStaff:getTotalSalary(farmId)
     return TheContractorStaff.scalePay(total)
 end
 
--- Everyone paid in the salary run: the roster plus the office
--- administrator (057), who isn't on it.
+-- Everyone paid in the salary run: the roster plus the office staff (057,
+-- 090), who aren't on it.
 function TheContractorStaff:getPayroll(farmId)
-    return self:getTotalSalary(farmId) + g_currentMission.TheContractor.Administrator:getSalary(farmId)
+    return self:getTotalSalary(farmId) + g_currentMission.TheContractor.Office:getSalary(farmId)
 end
 
 -- Employees, for employer's liability (051): the roster plus the office
--- administrator (057).
+-- staff (057, 090).
 function TheContractorStaff:getHeadcount(farmId)
-    local headcount = #self:getRoster(farmId)
-    if g_currentMission.TheContractor.Administrator:isEmployed(farmId) then
-        headcount = headcount + 1
-    end
-    return headcount
+    return #self:getRoster(farmId) + g_currentMission.TheContractor.Office:getHeadcount(farmId)
 end
 
 -- The employer's pension contribution on the payroll (051).
@@ -290,6 +301,19 @@ function TheContractorStaff:getIdleWorkers(farmId)
     local result = {}
     for _, worker in ipairs(self:getRoster(farmId)) do
         if worker:isIdle() then
+            table.insert(result, worker)
+        end
+    end
+    return result
+end
+
+-- 097: idle and at work (not gone home): who can be given a job or a
+-- vehicle to drive.
+function TheContractorStaff:getAvailableWorkers(farmId)
+    local result = {}
+    local now = TheContractorWorkingHours.getNow()
+    for _, worker in ipairs(self:getRoster(farmId)) do
+        if TheContractorWorkingHours.isAvailable(worker, now) then
             table.insert(result, worker)
         end
     end
@@ -416,7 +440,7 @@ end
 -- for. 058: a hired worker's pay starts here and stays put when they grow -
 -- growth raises their market value (TheContractorPayReviews.getMarketValue)
 -- instead.
-function TheContractorStaff.getSalary(workSpeed, tierCapability, skills)
+function TheContractorStaff.getSalary(workSpeed, tierCapability, skills, adsSkills)
     local exponent = TheContractorStaff.SALARY_RATING_EXPONENT
     local salary = TheContractorStaff.BASE_SALARY + workSpeed ^ exponent * TheContractorStaff.SALARY_PER_WORK_SPEED
 
@@ -435,6 +459,12 @@ function TheContractorStaff.getSalary(workSpeed, tierCapability, skills)
     table.sort(ratings, function(a, b) return a > b end)
     for i = 1, math.min(TheContractorStaff.SALARIED_SKILL_COUNT, #ratings) do
         salary = salary + ratings[i] ^ exponent * TheContractorStaff.SALARY_PER_SKILL_POINT
+    end
+
+    -- 091: ADS workshop skills. A skilled worker is worth more whether or
+    -- not the workshop is using them right now.
+    if adsSkills ~= nil then
+        salary = salary + TheContractorWorkshop.getSalaryPremium(adsSkills)
     end
 
     return math.floor(salary + 0.5)
@@ -492,13 +522,14 @@ function TheContractorStaff:addCandidateToPool()
         return nil
     end
 
-    local id = self.nextWorkerId
-    self.nextWorkerId = self.nextWorkerId + 1
+    local id = self:takeWorkerId()
 
     local workSpeed = TheContractorStaff.rollWorkSpeed()
     local tierCapability = TheContractorStaff.rollTierCapability()
     local skills = TheContractorStaff.rollSkills()
-    local salary = TheContractorStaff.getSalary(workSpeed, tierCapability, skills)
+    -- 091: only while ADS takes our staff, where they're worth something.
+    local adsSkills = TCADSWorkshop.isActive() and TheContractorWorkshop.rollSkills() or {}
+    local salary = TheContractorStaff.getSalary(workSpeed, tierCapability, skills, adsSkills)
     local gender = TCWorkerAppearance.rollGender()
     local name = TheContractorStaff.generateName(gender)
     local age = TheContractorStaff.rollAge()
@@ -511,6 +542,7 @@ function TheContractorStaff:addCandidateToPool()
         growthPotential, birthPeriod, sicknessPropensity, skills, cleanliness)
     candidate.gender = gender
     candidate.appearance = TCWorkerAppearance.roll(gender)
+    candidate.adsSkills = adsSkills
     -- 054: some arrive already certified.
     TheContractorTraining.rollCandidateCertifications(candidate)
     self:applyCandidateAdded(candidate)
@@ -603,6 +635,8 @@ function TheContractorStaff:onDayChanged()
     -- 054: training last, so anyone off sick or on holiday today is
     -- already marked as such, and misses their training day.
     g_currentMission.TheContractor.Training:onDayChanged()
+    -- 090: office staff's courses.
+    g_currentMission.TheContractor.Office:onDayChanged()
 
     -- 056: then today counts toward the month's workload, with every
     -- status settled.
@@ -696,7 +730,7 @@ function TheContractorStaff:onPeriodChanged()
 end
 
 -- Salaries (036, server-only, from the period tick): one charge per farm for
--- its whole roster and office administrator (057), plus the workplace
+-- its whole roster and office staff (057, 090), plus the workplace
 -- pension on top (051). Charged even if the farm can't afford it - it just
 -- goes negative, like any vanilla expense. Money syncs through vanilla, so
 -- no event of our own.
@@ -705,18 +739,21 @@ function TheContractorStaff:paySalaries()
     for farmId in pairs(self.workersByFarm) do
         farmIds[farmId] = true
     end
-    for _, farmId in ipairs(g_currentMission.TheContractor.Administrator:getFarmIds()) do
+    for _, farmId in ipairs(g_currentMission.TheContractor.Office:getFarmIds()) do
         farmIds[farmId] = true
     end
 
     for farmId in pairs(farmIds) do
         local salary = self:getPayroll(farmId)
-        local total = self:getWageBill(farmId)
+        -- 097: and last month's overtime.
+        local overtime = g_currentMission.TheContractor.WorkingHours:takeOvertime(farmId)
+        local pension = self:getWageBill(farmId) - salary
+        local total = salary + pension + overtime
         if total > 0 and g_farmManager:getFarmById(farmId) ~= nil then
             g_currentMission:addMoney(-total, farmId, MoneyType.TC_WAGES, true, true)
             g_currentMission.TheContractor.Finances:recordWages(farmId, total)
-            Logging.info("TheContractor: farm %d paid %.0f in staff salaries and %.0f in pension contributions",
-                farmId, salary, total - salary)
+            Logging.info("TheContractor: farm %d paid %.0f in staff salaries, %.0f in overtime and %.0f in pension contributions",
+                farmId, salary, overtime, pension)
         end
     end
 end
@@ -871,6 +908,8 @@ function TheContractorStaff:retireWorker(farmId, workerId)
     end
 
     g_currentMission.TheContractor.Notices:remove(worker.leavingNoticeId)
+    -- 097: any overtime they've done this month.
+    g_currentMission.TheContractor.WorkingHours:payLeaver(farmId, worker)
 
     Logging.info("TheContractor: farm %d worker %d (%s) %s at %d", farmId, workerId, worker.name,
         worker.isQuitting and "quit" or "retired", worker.age)
@@ -1139,6 +1178,8 @@ function TheContractorStaff:releaseWorker(farmId, workerId)
 
     -- 039: their retirement (or 056 quitting) notice goes with them.
     g_currentMission.TheContractor.Notices:remove(worker.leavingNoticeId)
+    -- 097: any overtime they've done this month.
+    g_currentMission.TheContractor.WorkingHours:payLeaver(farmId, worker)
 
     self:applyWorkerReleased(farmId, workerId)
 
@@ -1515,9 +1556,26 @@ function TheContractorStaff.getEditProblem(name, gender, appearance)
     return nil
 end
 
+-- 090: a hired worker, or one of the farm's office staff (they're edited
+-- the same way, through the same events), or nil.
+function TheContractorStaff:getEditablePerson(farmId, workerId)
+    local worker = self:getWorker(farmId, workerId)
+    if worker ~= nil then
+        return worker, false
+    end
+    local office = g_currentMission.TheContractor.Office
+    if office ~= nil then
+        local member = office:getMemberById(farmId, workerId)
+        if member ~= nil then
+            return member, true
+        end
+    end
+    return nil, false
+end
+
 -- Server. Returns nil once applied, or why it wasn't.
 function TheContractorStaff:editWorker(farmId, workerId, name, gender, appearance)
-    local worker = self:getWorker(farmId, workerId)
+    local worker = self:getEditablePerson(farmId, workerId)
     if worker == nil then
         return string.format("farm %d has no worker %d", farmId, workerId)
     end
@@ -1564,21 +1622,34 @@ function TheContractorStaff:restoreLooks()
             restore(worker)
         end
     end
+    -- 090: office staff have looks too.
+    local office = g_currentMission.TheContractor ~= nil and g_currentMission.TheContractor.Office or nil
+    if office ~= nil then
+        for _, members in pairs(office.membersByFarm) do
+            for _, member in pairs(members) do
+                restore(member)
+            end
+        end
+    end
 end
 
 -- Every machine. The cached PlayerStyle goes, so the next look-up builds
 -- the new one; the portrait and standing spot reload theirs. A worker in a
 -- cab keeps the old look until their next trip.
 function TheContractorStaff:applyWorkerEdited(farmId, workerId, name, gender, appearance)
-    local worker = self:getWorker(farmId, workerId)
+    local worker, isOffice = self:getEditablePerson(farmId, workerId)
     if worker == nil then
         return
     end
 
-    worker.name = name
-    worker.gender = gender
-    worker.appearance = appearance
-    worker.playerStyle = nil
+    if isOffice then
+        g_currentMission.TheContractor.Office:applyEdited(worker, name, gender, appearance)
+    else
+        worker.name = name
+        worker.gender = gender
+        worker.appearance = appearance
+        worker.playerStyle = nil
+    end
 
     TCIdleStaff.reloadLook(worker)
     local menu = g_currentMission.TheContractor.MenuContractor
@@ -1635,6 +1706,10 @@ function TheContractorStaff.writeWorker(streamId, worker)
     TheContractorMorale.writeState(streamId, worker)
     -- 058.
     TheContractorPayReviews.writeState(streamId, worker)
+    -- 091.
+    TheContractorWorkshop.writeState(streamId, worker)
+    -- 097.
+    TheContractorWorkingHours.writeState(streamId, worker)
 end
 
 function TheContractorStaff.readWorker(streamId)
@@ -1671,6 +1746,8 @@ function TheContractorStaff.readWorker(streamId)
     local trainingState = TheContractorTraining.readState(streamId)
     local morale, hiredPeriod = TheContractorMorale.readState(streamId)
     local expectedSalary = TheContractorPayReviews.readState(streamId)
+    local adsSkills, workshopRole = TheContractorWorkshop.readState(streamId)
+    local dutyFrom, dutyArrive, dutyUntil, overtimeMinutes, overtimeOwed = TheContractorWorkingHours.readState(streamId)
 
     local worker = TheContractorWorker.new(id, farmId, name, workSpeed, tierCapability, salary, age, nil, nil, nil,
         skills, cleanliness)
@@ -1684,6 +1761,10 @@ function TheContractorStaff.readWorker(streamId)
     worker.morale = morale
     worker.hiredPeriod = hiredPeriod
     worker.expectedSalary = expectedSalary
+    worker.adsSkills = adsSkills
+    worker.workshopRole = workshopRole
+    worker.dutyFrom, worker.dutyArrive, worker.dutyUntil = dutyFrom, dutyArrive, dutyUntil
+    worker.overtimeMinutes, worker.overtimeOwed = overtimeMinutes, overtimeOwed
     TheContractorHolidays.applyHolidayChanged(worker, holidayAllowance,
         holidayStartDay > 0 and holidayStartDay or nil, holidayDays)
     TheContractorTraining.applyState(worker, trainingState)
@@ -1753,6 +1834,10 @@ function TheContractorStaff.writeWorkerXML(xmlFile, key, worker)
     TheContractorMorale.writeXML(xmlFile, key, worker)
     -- 058.
     TheContractorPayReviews.writeXML(xmlFile, key, worker)
+    -- 091.
+    TheContractorWorkshop.writeXML(xmlFile, key, worker)
+    -- 097.
+    TheContractorWorkingHours.writeXML(xmlFile, key, worker)
 end
 
 -- farmId is passed in explicitly (nil for a pool candidate) rather than read
@@ -1795,7 +1880,9 @@ function TheContractorStaff.readWorkerXML(xmlFile, key, farmId)
     -- applies to the pool too. 058: a hired worker's is their saved pay (a
     -- pre-036 save's #hireCost is simply ignored). Saves from before 058
     -- are migrated in loadFromXMLFile.
-    local salary = TheContractorStaff.getSalary(workSpeed, tierCapability, skills)
+    -- 091: before the salary, which counts them.
+    local adsSkills = TheContractorWorkshop.readSkillsXML(xmlFile, key)
+    local salary = TheContractorStaff.getSalary(workSpeed, tierCapability, skills, adsSkills)
     if farmId ~= nil then
         salary = getXMLFloat(xmlFile, key .. "#salary") or salary
     end
@@ -1816,6 +1903,10 @@ function TheContractorStaff.readWorkerXML(xmlFile, key, farmId)
     local worker = TheContractorWorker.new(id, farmId, name, workSpeed, tierCapability, salary, age,
         growthPotential, birthPeriod, sicknessPropensity, skills, cleanliness)
     worker.status = Utils.getNoNil(getXMLString(xmlFile, key .. "#status"), worker.status)
+    worker.adsSkills = adsSkills
+    if farmId ~= nil then
+        worker.workshopRole = TheContractorWorkshop.readRoleXML(xmlFile, key, adsSkills)
+    end
     -- 041: a worker saved before 041 gets a gender from their name. Whether
     -- their look still builds is left to restoreLooks, at mission start.
     worker.gender = getXMLString(xmlFile, key .. "#gender") or TheContractorStaff.guessGender(name)
@@ -1851,6 +1942,8 @@ function TheContractorStaff.readWorkerXML(xmlFile, key, farmId)
     TheContractorMorale.readXML(xmlFile, key, worker)
     -- 058.
     TheContractorPayReviews.readXML(xmlFile, key, worker)
+    -- 097.
+    TheContractorWorkingHours.readXML(xmlFile, key, worker)
 
     return worker
 end

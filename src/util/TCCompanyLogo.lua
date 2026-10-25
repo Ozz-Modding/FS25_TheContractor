@@ -48,7 +48,8 @@ SIGN DESIGNS
 Put images in the signs folder next to this file. Each one becomes a design
 you can pick for a Company Sign or Wall Sign when you place it. The file
 name is the design's name: "for_sale.dds" is offered as "For Sale". The
-company logo is always the first design.
+company logo is always the first design. The mod puts two examples there
+on every load, over any file of the same name.
 
 New images show after you reload the save. A sign keeps its design by file
 name, so if you delete or rename its image it goes back to the company logo.
@@ -75,7 +76,8 @@ players, so:
 ]]
 
 -- Makes the folder so players can find where to put their logo, its signs
--- folder (085), and the README explaining both.
+-- folder (085) with our example designs in it, and the README explaining
+-- both.
 function TCCompanyLogo.createSettingsFolder()
     local dir = TCCompanyLogo.settingsDir
     if dir == nil or createFolder == nil then
@@ -83,7 +85,9 @@ function TCCompanyLogo.createSettingsFolder()
     end
     createFolder(dir)
     if TCSignImages ~= nil then
-        createFolder(dir .. TCSignImages.FOLDER)
+        local signsDir = dir .. TCSignImages.FOLDER
+        createFolder(signsDir)
+        TCSignImages.seedExamples(signsDir)
     end
     TCCompanyLogo.writeReadme(dir .. TCCompanyLogo.README_FILENAME)
 end

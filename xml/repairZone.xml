@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8" standalone="no" ?>
+<!--
+    100 repair zone (4 m x 9 m, one bay): where customers' machines turn up for repair
+    or a service with FS25_AdvancedDamageSystem
+    (src/placeables/PlaceableTCRepairZone.lua). A marker only, built like a
+    parking slot and sharing parkingSlot.i3d (and its node order) for now. Its
+    stripes are terrain decals, shown in the construction menu and while
+    parking slots are shown.
+-->
+<placeable type="FS25_TheContractor.tcRepairZone">
+    <storeData>
+        <name>$l10n_tc_repairZone_name</name>
+        <functions>
+            <function>$l10n_tc_repairZoneVehicle_function</function>
+        </functions>
+        <image>images/store/repairZone.dds</image>
+        <price>0</price>
+        <dailyUpkeep>0</dailyUpkeep>
+        <lifetime>1000</lifetime>
+        <rotation>0</rotation>
+        <brand>NONE</brand>
+        <species>PLACEABLE</species>
+        <category>misc</category>
+        <canBeSold>true</canBeSold>
+        <showInStore>true</showInStore>
+
+        <brush>
+            <type>placeable</type>
+            <category>buildings</category>
+            <tab>contractor</tab>
+        </brush>
+    </storeData>
+
+    <base>
+        <filename>i3d/parkingSlot.i3d</filename>
+        <canBeRenamed>false</canBeRenamed>
+        <boughtWithFarmland>false</boughtWithFarmland>
+    </base>
+
+    <placement useRandomYRotation="false" useManualYRotation="true">
+        <testAreas>
+            <testArea startNode="testAreaStart" endNode="testAreaEnd" />
+        </testAreas>
+        <sounds>
+            <place template="smallImp" />
+        </sounds>
+    </placement>
+
+    <repairZone startNode="areaStart" widthNode="areaWidth" heightNode="areaHeight" visualsNode="visuals" zoneType="vehicle" bays="1" />
+
+    <i3dMappings>
+        <i3dMapping id="repairZone" node="0>" />
+        <i3dMapping id="areaStart" node="0>0" />
+        <i3dMapping id="areaWidth" node="0>1" />
+        <i3dMapping id="areaHeight" node="0>2" />
+        <i3dMapping id="testAreaStart" node="0>3|0" />
+        <i3dMapping id="testAreaEnd" node="0>3|0|0" />
+        <i3dMapping id="pickCollision" node="0>4" />
+        <i3dMapping id="visuals" node="0>5" />
+    </i3dMappings>
+</placeable>

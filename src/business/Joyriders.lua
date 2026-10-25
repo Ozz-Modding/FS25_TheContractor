@@ -60,6 +60,7 @@ function TheContractorJoyriders:register(randomEvents, inbox)
 
     inbox:registerMessageKind(TheContractorJoyriders.MESSAGE_KIND, {
         chipKey = "tc_inbox_chipJoyriders",
+        endsWithJob = true,
         chipTone = "bad",
     })
 end

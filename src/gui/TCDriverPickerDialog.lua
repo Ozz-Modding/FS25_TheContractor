@@ -24,9 +24,12 @@ function TCDriverPickerDialog.show(vehicle, onPicked)
     end
 
     local farmId = vehicle:getOwnerFarmId()
-    local workers = g_currentMission.TheContractor.Staff:getIdleWorkers(farmId)
+    -- 097: not anyone who's gone home.
+    local staff = g_currentMission.TheContractor.Staff
+    local workers = staff:getAvailableWorkers(farmId)
     if #workers == 0 then
-        InfoDialog.show(g_i18n:getText("tc_drivers_noIdleStaff"))
+        InfoDialog.show(g_i18n:getText(#staff:getIdleWorkers(farmId) > 0 and "tc_hours_driversAllHome" or
+            "tc_drivers_noIdleStaff"))
         return
     end
     table.sort(workers, function(a, b)

@@ -14,6 +14,10 @@
 --                                                  -- claimCount, loadingPercent for the renewal notice (052)
 --       descriptionAmounts = { 800, 60 },          -- optional: 1x UK money for the description's %s,
 --                                                  -- in order, scaled and formatted in the player's currency
+--       onActiveChanged = function(farmId, isActive) ... end, -- optional, server: the farm's policy
+--                                                  -- started or ended (053 reprices legal cover)
+--       getDescriptionKey = function() ... end,    -- optional (096): the description's l10n key,
+--                                                  -- instead of "<l10nKey>_desc"
 --       unscaled = true,                           -- optional: annualCost is already a game price
 --                                                  -- (a share of vehicle values, say), not 1x UK
 --       levels = {                                 -- optional (070): levels of cover, each with its
@@ -27,7 +31,9 @@
 --
 -- A policy runs in yearly terms from the period it was taken out, priced
 -- once per term (at the renewal notice, else at renewal), so hiring
--- mid-term doesn't change the price until renewal. It's paid either:
+-- mid-term doesn't change the price until renewal (repriceMidTerm is the
+-- exception, for a discount that comes and goes with another policy). It's
+-- paid either:
 --   - annually: the term's cost less ANNUAL_DISCOUNT, up front, or
 --   - monthly: a twelfth of the term's cost each PERIOD_CHANGED.
 -- Switching billing takes effect at the next renewal. Cancelling never
@@ -284,11 +290,18 @@ end
 -- Billing and state changes (server-only) ------------------------------------------
 
 -- Applies locally, then sends the policy's whole state to the clients.
+-- A policy starting or ending tells its definition's onActiveChanged.
 function TheContractorOverheads:commitState(farmId, key, state)
+    local wasActive = self:isActive(farmId, key)
     self:applyState(farmId, key, state)
 
     if g_server ~= nil then
         g_server:broadcastEvent(TCOverheadStateEvent.new(farmId, key, state))
+    end
+
+    local definition = self.definitionsByKey[key]
+    if definition ~= nil and definition.onActiveChanged ~= nil and wasActive ~= (state.enabled == true) then
+        definition.onActiveChanged(farmId, state.enabled == true)
     end
 end
 
@@ -336,6 +349,70 @@ function TheContractorOverheads:startPolicy(farmId, definition, billing, levelKe
 
     Logging.info("TheContractor: farm %d took out overhead %s (%s%s, %.0f a year, renews period %d)", farmId,
         definition.key, billing, levelKey ~= nil and (", " .. levelKey) or "", termCost, renewalPeriod)
+end
+
+-- Reprices a running policy for the rest of its term, when something it's
+-- priced on changes mid-term (053: joining or leaving the association, for
+-- legal cover). Monthly: the remaining bills go at the new price. Annual:
+-- the difference for the months after this one is refunded or charged. A
+-- renewal already quoted is quoted again, its notice reposted. Returns the
+-- amount refunded (negative: charged), 0 for a monthly policy or no change.
+function TheContractorOverheads:repriceMidTerm(farmId, key)
+    local definition = self.definitionsByKey[key]
+    local state = self:getState(farmId, key)
+    if not g_currentMission:getIsServer() or definition == nil or state == nil or not state.enabled then
+        return 0
+    end
+
+    local newCost = self:getAnnualCost(farmId, definition, state.level)
+    local difference = state.termCost - newCost
+    if math.abs(difference) < 0.01 then
+        return 0
+    end
+
+    local adjustment = 0
+    if state.billing == TheContractorOverheads.BILLING.ANNUAL then
+        local monthsLeft = math.max(0, state.renewalPeriod - TCCalendar.getPeriodIndex() - 1)
+        adjustment = TheContractorOverheads.getChargeAmount(difference, state.billing) * monthsLeft /
+            TheContractorOverheads.TERM_PERIODS
+    end
+    state.termCost = newCost
+
+    local wasQuoted = state.quotedCost ~= nil
+    if wasQuoted then
+        state.quotedCost = self:getAnnualCost(farmId, definition, TheContractorOverheads.getNextLevel(state))
+    end
+
+    if adjustment > 0 then
+        g_currentMission:addMoney(adjustment, farmId, MoneyType.TC_OVERHEADS, true, true)
+        g_currentMission.TheContractor.Finances:recordOverheads(farmId, -adjustment)
+    elseif adjustment < 0 then
+        self:charge(farmId, definition, -adjustment)
+    end
+    self:commitState(farmId, key, state)
+
+    if wasQuoted then
+        self:repostRenewalNotice(farmId, definition, state)
+    end
+
+    Logging.info("TheContractor: farm %d overhead %s repriced mid-term (%.0f a year, %.2f back)", farmId, key,
+        newCost, adjustment)
+    return adjustment
+end
+
+-- Takes down a policy's renewal notice and posts it again at the price
+-- quoted now.
+function TheContractorOverheads:repostRenewalNotice(farmId, definition, state)
+    local inbox = g_currentMission.TheContractor.Inbox
+    for _, message in ipairs(inbox:getMessages(farmId)) do
+        if message.kind == TheContractorOverheads.RENEWAL_MESSAGE_KIND and message.payload ~= nil and
+            message.payload.overheadKey == definition.key and
+            message.payload.renewalPeriod == state.renewalPeriod then
+            inbox:removeMessage(message.id)
+        end
+    end
+    state.noticePeriod = nil
+    self:postRenewalNotice(farmId, definition, state)
 end
 
 -- Starts any mandatory overhead the farm now needs and doesn't have.

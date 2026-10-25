@@ -17,9 +17,12 @@
 -- done (retakeCerts), so the next booking is just another assessment day
 -- at the cheaper retake price.
 --
--- Dates are monotonic days, booked BOOKING_LEAD_DAYS ahead and after any
--- holiday they've already booked (and holidays aren't booked while
--- training is). A worker due in who's still out on a job, driving, off sick
+-- Dates are monotonic days, starting tomorrow at the earliest (or after a
+-- holiday they've booked or asked for, if the course would run into it;
+-- holidays aren't booked while training is). A course is never longer than
+-- a month (scaleDays: courseDays capped at days per period) and the
+-- assessment's wait fits the month too (getAssessmentGap), so at 1 day per
+-- period a course booked in August is attended in September. A worker due in who's still out on a job, driving, off sick
 -- or on holiday misses the day: they go as soon as they're set idle that
 -- day (Staff:setWorkerStatus), otherwise the rest of the schedule slides
 -- back a day at a time until they're free - training never pulls anyone off
@@ -29,6 +32,11 @@
 -- nothing booked has REQUEST_CHANCE of asking for it, as an inbox message
 -- (050) that expires after a period. Turning it down or letting it expire
 -- adds to their declinedRequests and knocks their morale (056).
+--
+-- 092: a booking can also be an ADS trade course (TheContractorWorkshop's
+-- COURSES, trainingCert = "workshop_<role>"): booked by the player only,
+-- never requested, with course days and no assessment (assessmentDay nil).
+-- The trade goes up a level when the last course day is done.
 --
 -- Everything lives on the workers and is saved and streamed with them
 -- (Staff.lua), so this subsystem's own save/sync methods are stubs.
@@ -51,11 +59,13 @@ TheContractorTraining.CERTIFICATIONS = {
 -- Display order.
 TheContractorTraining.CERTIFICATION_KEYS = { "spraying" }
 
--- Days between the course's last day and the assessment.
+-- Days between the course's last day and the assessment, at full-length
+-- months (getAssessmentGap shortens it for short ones).
 TheContractorTraining.ASSESSMENT_GAP_MIN = 2
 TheContractorTraining.ASSESSMENT_GAP_MAX = 5
--- The first day booked is at least this many days from today.
-TheContractorTraining.BOOKING_LEAD_DAYS = 2
+-- A booking starts this many days from today at the earliest: never the
+-- day it's made.
+TheContractorTraining.BOOKING_LEAD_DAYS = 1
 
 -- Pass chance: PASS_CHANCE_MIN at readySkill, PASS_CHANCE_MAX at the top skill.
 TheContractorTraining.PASS_CHANCE_MIN = 0.7
@@ -88,6 +98,8 @@ TheContractorTraining.NOTIFY = {
     PASSED = 2,
     FAILED = 3,
     CANNOT_AFFORD = 4,
+    -- 092: a trade course done (amount is the new level).
+    COMPLETED = 5,
 }
 
 -- Why a worker can't be booked (tc_training_problem_<value>).
@@ -185,18 +197,67 @@ function TheContractorTraining.getPassChance(worker, cert)
         t * (TheContractorTraining.PASS_CHANCE_MAX - TheContractorTraining.PASS_CHANCE_MIN)
 end
 
--- The first day a booking made today would start: BOOKING_LEAD_DAYS from
--- now, or the day after a holiday they've booked or asked for (089) if
--- that's later. Every machine works it out the same way, so the confirm
--- dialog can show it.
-function TheContractorTraining.getFirstBookableDay(worker)
-    local firstDay = g_currentMission.environment.currentMonotonicDay + TheContractorTraining.BOOKING_LEAD_DAYS
+-- A course's length in days for the current calendar: never more than a
+-- month, never less than a day. Every course (054's, 090's office Train,
+-- 092's trades) goes through this.
+function TheContractorTraining.scaleDays(days)
+    return math.max(1, math.min(days, g_currentMission.environment.daysPerPeriod))
+end
+
+function TheContractorTraining.getCourseDays(cert)
+    return TheContractorTraining.scaleDays(TheContractorTraining.getDefinition(cert).courseDays)
+end
+
+-- The assessment's wait after the course, min and max days: GAP_MIN-MAX
+-- at 30-day months, in proportion below that, at least a day.
+function TheContractorTraining.getAssessmentGap()
+    local daysPerPeriod = g_currentMission.environment.daysPerPeriod
+    local gapMax = math.max(1, math.min(TheContractorTraining.ASSESSMENT_GAP_MAX, math.floor(daysPerPeriod / 6)))
+    return math.min(TheContractorTraining.ASSESSMENT_GAP_MIN, gapMax), gapMax
+end
+
+-- How many days a booking for `cert` spans from its first day: a trade
+-- course's days (092), a retake's one assessment day, or the course and
+-- the longest wait for its assessment.
+function TheContractorTraining.getBookingSpan(worker, cert)
+    local role = TheContractorWorkshop.getCourseRole(cert)
+    if role ~= nil then
+        return TheContractorWorkshop.getCourseDays(worker, role)
+    end
+    if TheContractorTraining.isRetake(worker, cert) then
+        return 1
+    end
+    local _, gapMax = TheContractorTraining.getAssessmentGap()
+    return TheContractorTraining.getCourseDays(cert) + gapMax
+end
+
+-- The first day a booking for `cert` made today would start: tomorrow
+-- (BOOKING_LEAD_DAYS; if they're out then, their first free day after),
+-- unless that would run into a holiday they've booked or asked for (089), in which
+-- case the day after it. A holiday that comes after the booking is done
+-- doesn't hold it up. Every machine works it out the same way, so the
+-- confirm dialog can show it.
+function TheContractorTraining.getFirstBookableDay(worker, cert)
+    local span = cert ~= nil and TheContractorTraining.getBookingSpan(worker, cert) or 1
+    local holidays = {}
     if worker:hasHolidayBooked() then
-        firstDay = math.max(firstDay, worker:getHolidayEndDay() + 1)
+        table.insert(holidays, { worker.holidayStartDay, worker:getHolidayEndDay() })
     end
     local request = TheContractorHolidays.findRequest(worker.farmId, worker.id)
     if request ~= nil then
-        firstDay = math.max(firstDay, TheContractorHolidays.getRequestEndDay(request) + 1)
+        table.insert(holidays, { request.payload.startDay, TheContractorHolidays.getRequestEndDay(request) })
+    end
+
+    local firstDay = g_currentMission.environment.currentMonotonicDay + TheContractorTraining.BOOKING_LEAD_DAYS
+    -- Each pass can only move it later, past one holiday or the other.
+    for _ = 1, #holidays + 1 do
+        local lastDay = firstDay + span - 1
+        for _, holiday in ipairs(holidays) do
+            if firstDay <= holiday[2] and lastDay >= holiday[1] then
+                firstDay = holiday[2] + 1
+                lastDay = firstDay + span - 1
+            end
+        end
     end
     return firstDay
 end
@@ -212,6 +273,21 @@ end
 
 function TheContractorTraining.getCertName(cert)
     return g_i18n:getText("tc_cert_" .. cert)
+end
+
+-- 092: a certificate or a trade course.
+function TheContractorTraining.isKnownCourse(key)
+    return TheContractorTraining.getDefinition(key) ~= nil or TheContractorWorkshop.getCourseRole(key) ~= nil
+end
+
+-- What a booking is for, in text: the certificate's name, or for a trade
+-- course "level 2 mechanic" (the level it leads to, so only while booked).
+function TheContractorTraining.getCourseName(worker, key)
+    local role = TheContractorWorkshop.getCourseRole(key)
+    if role ~= nil then
+        return TheContractorWorkshop.getCourseName(worker, role)
+    end
+    return TheContractorTraining.getCertName(key)
 end
 
 -- Certificates at creation (server) ---------------------------------------------
@@ -261,16 +337,29 @@ function TheContractorTraining:requestBooking(farmId, workerId, cert)
     end
 
     local worker = g_currentMission.TheContractor.Staff:getWorker(farmId, workerId)
-    if worker == nil or TheContractorTraining.getDefinition(cert) == nil then
+    if worker == nil or not TheContractorTraining.isKnownCourse(cert) then
         return false, nil
     end
 
-    local problem = TheContractorTraining.getBookingProblem(worker, cert)
+    -- 092: a trade course has its own checks and price.
+    local role = TheContractorWorkshop.getCourseRole(cert)
+    local problem
+    if role ~= nil then
+        problem = TheContractorWorkshop.getCourseProblem(worker, role)
+    else
+        problem = TheContractorTraining.getBookingProblem(worker, cert)
+    end
     if problem ~= nil then
+        Logging.info("TheContractor: farm %d worker %d can't be booked on %s: %s", farmId, workerId, cert, problem)
         return false, problem
     end
 
-    local price = TheContractorTraining.getPrice(farmId, worker, cert)
+    local price
+    if role ~= nil then
+        price = TheContractorWorkshop.getCoursePrice(farmId, worker, role)
+    else
+        price = TheContractorTraining.getPrice(farmId, worker, cert)
+    end
     if not TheContractorTraining.canAfford(farmId, price) then
         self:sendTrainingChanged(worker, TheContractorTraining.NOTIFY.CANNOT_AFFORD, cert, price)
         return false, TheContractorTraining.PROBLEM.CANNOT_AFFORD
@@ -279,7 +368,7 @@ function TheContractorTraining:requestBooking(farmId, workerId, cert)
     g_currentMission:addMoney(-price, farmId, MoneyType.TC_TRAINING, true, true)
     g_currentMission.TheContractor.Finances:recordTraining(farmId, price)
 
-    self:bookTraining(worker, cert, TheContractorTraining.getFirstBookableDay(worker))
+    self:bookTraining(worker, cert, TheContractorTraining.getFirstBookableDay(worker, cert))
     return true
 end
 
@@ -289,22 +378,28 @@ end
 -- command's way in.
 function TheContractorTraining:bookTraining(worker, cert, firstDay)
     local definition = TheContractorTraining.getDefinition(cert)
+    local role = TheContractorWorkshop.getCourseRole(cert)
 
     worker.trainingCert = cert
-    if TheContractorTraining.isRetake(worker, cert) then
+    if role ~= nil then
+        -- 092: course days only, no assessment.
+        worker.courseDaysLeft = TheContractorWorkshop.getCourseDays(worker, role)
+        worker.trainingDay = firstDay
+        worker.assessmentDay = nil
+    elseif TheContractorTraining.isRetake(worker, cert) then
         worker.courseDaysLeft = 0
         worker.trainingDay = nil
         worker.assessmentDay = firstDay
     else
-        worker.courseDaysLeft = definition.courseDays
+        local courseDays = TheContractorTraining.getCourseDays(cert)
+        worker.courseDaysLeft = courseDays
         worker.trainingDay = firstDay
-        worker.assessmentDay = firstDay + definition.courseDays - 1 +
-            math.random(TheContractorTraining.ASSESSMENT_GAP_MIN, TheContractorTraining.ASSESSMENT_GAP_MAX)
+        worker.assessmentDay = firstDay + courseDays - 1 + math.random(TheContractorTraining.getAssessmentGap())
     end
 
-    Logging.info("TheContractor: farm %d worker %d (%s) booked for %s training: %d course day(s) from day %s, assessment day %d",
+    Logging.info("TheContractor: farm %d worker %d (%s) booked for %s training: %d course day(s) from day %s, assessment day %s",
         worker.farmId, worker.id, worker.name, cert, worker.courseDaysLeft, tostring(worker.trainingDay),
-        worker.assessmentDay)
+        tostring(worker.assessmentDay))
 
     -- Any request still waiting in the inbox has been answered.
     self:removeMessagesFor(worker.farmId, worker.id)
@@ -355,6 +450,11 @@ function TheContractorTraining:updateWorker(worker, today)
             worker.courseDaysLeft = worker.courseDaysLeft - 1
             worker.trainingDay = worker.courseDaysLeft > 0 and today or nil
             changed = true
+            -- 092: a trade course ends with its last day (and broadcasts).
+            if worker.courseDaysLeft == 0 and TheContractorWorkshop.getCourseRole(worker.trainingCert) ~= nil then
+                self:completeTradeCourse(worker)
+                changed = false
+            end
         else
             self:resolveAssessment(worker)
         end
@@ -368,7 +468,9 @@ function TheContractorTraining:updateWorker(worker, today)
             if worker.courseDaysLeft > 0 then
                 worker.trainingDay = worker.trainingDay + shift
             end
-            worker.assessmentDay = worker.assessmentDay + shift
+            if worker.assessmentDay ~= nil then
+                worker.assessmentDay = worker.assessmentDay + shift
+            end
             changed = true
             Logging.info("TheContractor: farm %d worker %d (%s) missed a training day (%s), moved back %d day(s)",
                 worker.farmId, worker.id, worker.name, worker.status, shift)
@@ -394,6 +496,24 @@ end
 function TheContractorTraining.isDueToday(worker)
     return worker:hasTrainingBooked() and
         worker:getTrainingDueDay() == g_currentMission.environment.currentMonotonicDay
+end
+
+-- 092: a trade course's last day was yesterday: the booking's done and the
+-- trade goes up a level.
+function TheContractorTraining:completeTradeCourse(worker)
+    local cert = worker.trainingCert
+    local role = TheContractorWorkshop.getCourseRole(cert)
+
+    worker.trainingCert = nil
+    worker.courseDaysLeft = 0
+    worker.trainingDay = nil
+    worker.assessmentDay = nil
+
+    local level = TheContractorWorkshop.completeCourse(worker, role)
+    Logging.info("TheContractor: farm %d worker %d (%s) finished the %s course: level %s", worker.farmId, worker.id,
+        worker.name, role, tostring(level))
+    self:sendTrainingChanged(worker, level ~= nil and TheContractorTraining.NOTIFY.COMPLETED or
+        TheContractorTraining.NOTIFY.NONE, cert, level or 0)
 end
 
 -- They sat the assessment yesterday: pass or fail, and the booking's done.
@@ -464,7 +584,6 @@ end
 
 -- Also the tcWorker askTraining console command's way in.
 function TheContractorTraining:postRequest(farmId, worker, cert)
-    local definition = TheContractorTraining.getDefinition(cert)
     local price = TheContractorTraining.getPrice(farmId, worker, cert)
     local isRetake = TheContractorTraining.isRetake(worker, cert)
 
@@ -472,7 +591,7 @@ function TheContractorTraining:postRequest(farmId, worker, cert)
 
     g_currentMission.TheContractor.Inbox:postMessage(farmId, TheContractorTraining.MESSAGE_KIND,
         "tc_training_requestTitle", isRetake and "tc_training_requestBodyRetake" or "tc_training_requestBody",
-        { worker.name, "$l10n_tc_cert_" .. cert, "$money_" .. price, definition.courseDays },
+        { worker.name, "$l10n_tc_cert_" .. cert, "$money_" .. price, TheContractorTraining.getCourseDays(cert) },
         {
             { key = TheContractorTraining.ACTION.BOOK, textKey = "tc_training_bookItButton" },
             { key = TheContractorTraining.ACTION.NOT_NOW, textKey = "tc_training_notNowButton" },
@@ -653,7 +772,9 @@ function TheContractorTraining.writeXML(xmlFile, key, worker)
         if worker.trainingDay ~= nil then
             setXMLInt(xmlFile, key .. "#trainingDay", worker.trainingDay)
         end
-        setXMLInt(xmlFile, key .. "#assessmentDay", worker.assessmentDay)
+        if worker.assessmentDay ~= nil then
+            setXMLInt(xmlFile, key .. "#assessmentDay", worker.assessmentDay)
+        end
     end
     if worker.declinedRequests > 0 then
         setXMLInt(xmlFile, key .. "#declinedRequests", worker.declinedRequests)
@@ -675,6 +796,11 @@ function TheContractorTraining.readXML(xmlFile, key, worker)
         worker.courseDaysLeft = courseDaysLeft
         worker.trainingDay = courseDaysLeft > 0 and trainingDay or nil
         worker.assessmentDay = assessmentDay
+    elseif TheContractorWorkshop.getCourseRole(cert) ~= nil and courseDaysLeft > 0 and trainingDay ~= nil then
+        -- 092: a trade course, which has no assessment.
+        worker.trainingCert = cert
+        worker.courseDaysLeft = courseDaysLeft
+        worker.trainingDay = trainingDay
     end
 end
 
@@ -697,8 +823,8 @@ end
 
 function TheContractorTraining.registerConsoleCommands()
     TCConsole.register("worker", "train", {
-        args = "<worker> [daysFromNow=0] [pass|fail]",
-        description = "Book spraying training for free, skipping the readiness check",
+        args = "<worker> [daysFromNow=0] [pass|fail|mechanic|electrician|bodyworker]",
+        description = "Book spraying training (or a 092 trade course) for free, skipping the readiness checks",
         run = function(farmId, args)
             local worker, problem = TCConsole.findWorker(farmId, args[1])
             if worker == nil then
@@ -706,8 +832,26 @@ function TheContractorTraining.registerConsoleCommands()
             end
             local daysFromNow = TCConsole.toCount(args[2], 0)
             local result = args[3] ~= nil and string.lower(args[3]) or nil
-            if daysFromNow == nil or (result ~= nil and result ~= "pass" and result ~= "fail") then
+            local role = TheContractorWorkshop.findRole(result)
+            if daysFromNow == nil or (result ~= nil and role == nil and result ~= "pass" and result ~= "fail") then
                 return false
+            end
+
+            -- 092: a trade course, the next level up.
+            if role ~= nil then
+                if worker:hasTrainingBooked() then
+                    return string.format("%s already has training booked", worker.name)
+                end
+                local levelProblem = TheContractorWorkshop.getLevelProblem(worker, role)
+                if levelProblem ~= nil then
+                    return string.format("%s can't take a %s course: %s", worker.name,
+                        string.lower(TheContractorWorkshop.getRoleName(role)), levelProblem)
+                end
+                local courseName = TheContractorWorkshop.getCourseName(worker, role)
+                g_currentMission.TheContractor.Training:bookTraining(worker, TheContractorWorkshop.getCourseKey(role),
+                    g_currentMission.environment.currentMonotonicDay + daysFromNow)
+                return string.format("%s booked on a %s course: %s", worker.name, courseName,
+                    TheContractorTraining.formatCourseDates(worker))
             end
 
             local cert = "spraying"

@@ -76,6 +76,7 @@ function TheContractorFlyTipping:register(randomEvents, inbox)
 
     inbox:registerMessageKind(TheContractorFlyTipping.MESSAGE_KIND, {
         chipKey = "tc_inbox_chipFlyTipping",
+        endsWithJob = true,
         chipTone = "bad",
     })
 end

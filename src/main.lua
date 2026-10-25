@@ -21,6 +21,10 @@ source(TheContractor.dir .. "src/util/TCHaulage.lua")
 source(TheContractor.dir .. "src/util/TCJobSupplies.lua")
 source(TheContractor.dir .. "src/util/TCSupplyStock.lua")
 source(TheContractor.dir .. "src/util/TCADSStock.lua")
+source(TheContractor.dir .. "src/util/TCADSWorkshop.lua")
+source(TheContractor.dir .. "src/util/TCADSRepairContracts.lua")
+source(TheContractor.dir .. "src/util/TCServiceVehicleMods.lua")
+source(TheContractor.dir .. "src/util/TCRepairZoneActivatable.lua")
 source(TheContractor.dir .. "src/util/TCJobConsequences.lua")
 source(TheContractor.dir .. "src/util/TCVehicleCondition.lua")
 source(TheContractor.dir .. "src/util/TCVehicleIds.lua")
@@ -32,6 +36,9 @@ source(TheContractor.dir .. "src/util/TCEconomyScale.lua")
 source(TheContractor.dir .. "src/util/TCCalendar.lua")
 source(TheContractor.dir .. "src/util/TCSignImages.lua")
 source(TheContractor.dir .. "src/util/TCCompanyLogo.lua")
+-- Now, not in loadMap: the signs' store items list signs/ before the map
+-- loads, so the examples have to be there already.
+TCCompanyLogo.createSettingsFolder()
 source(TheContractor.dir .. "src/util/TCConsole.lua")
 source(TheContractor.dir .. "src/util/TCWorkerAppearance.lua")
 source(TheContractor.dir .. "src/util/TCNames.lua")
@@ -77,7 +84,9 @@ source(TheContractor.dir .. "src/business/HealthSafety.lua")
 source(TheContractor.dir .. "src/business/Training.lua")
 source(TheContractor.dir .. "src/business/Morale.lua")
 source(TheContractor.dir .. "src/business/PayReviews.lua")
-source(TheContractor.dir .. "src/business/Administrator.lua")
+source(TheContractor.dir .. "src/business/Office.lua")
+source(TheContractor.dir .. "src/business/Workshop.lua")
+source(TheContractor.dir .. "src/business/WorkingHours.lua")
 source(TheContractor.dir .. "src/business/Logbook.lua")
 source(TheContractor.dir .. "src/business/Parking.lua")
 source(TheContractor.dir .. "src/business/RandomEvents.lua")
@@ -92,6 +101,8 @@ source(TheContractor.dir .. "src/business/RoadAccident.lua")
 source(TheContractor.dir .. "src/business/SprayDrift.lua")
 source(TheContractor.dir .. "src/business/Poaching.lua")
 source(TheContractor.dir .. "src/business/CourtesyVehicle.lua")
+source(TheContractor.dir .. "src/business/RepairContracts.lua")
+source(TheContractor.dir .. "src/business/FieldBreakdowns.lua")
 source(TheContractor.dir .. "src/events/TCInitialClientStateEvent.lua")
 source(TheContractor.dir .. "src/events/TCSettingsEvent.lua")
 source(TheContractor.dir .. "src/events/TCCreateCompanyEvent.lua")
@@ -157,8 +168,11 @@ source(TheContractor.dir .. "src/events/TCWorkerPayChangedEvent.lua")
 source(TheContractor.dir .. "src/events/TCPayRiseEvent.lua")
 source(TheContractor.dir .. "src/events/TCEditWorkerEvent.lua")
 source(TheContractor.dir .. "src/events/TCWorkerEditedEvent.lua")
-source(TheContractor.dir .. "src/events/TCAdministratorRequestEvent.lua")
-source(TheContractor.dir .. "src/events/TCAdministratorChangedEvent.lua")
+source(TheContractor.dir .. "src/events/TCOfficeRequestEvent.lua")
+source(TheContractor.dir .. "src/events/TCOfficeChangedEvent.lua")
+source(TheContractor.dir .. "src/events/TCWorkerWorkshopEvent.lua")
+source(TheContractor.dir .. "src/events/TCWorkerDutyEvent.lua")
+source(TheContractor.dir .. "src/events/TCWorkerOvertimeEvent.lua")
 source(TheContractor.dir .. "src/events/TCLogJobRecordedEvent.lua")
 source(TheContractor.dir .. "src/events/TCLogVehicleEntryEvent.lua")
 source(TheContractor.dir .. "src/events/TCLogClaimEvent.lua")
@@ -166,6 +180,7 @@ source(TheContractor.dir .. "src/events/TCParkingQueuedEvent.lua")
 source(TheContractor.dir .. "src/events/TCParkingRemovedEvent.lua")
 source(TheContractor.dir .. "src/events/TCParkingNoticeEvent.lua")
 source(TheContractor.dir .. "src/events/TCParkingSlotFilterEvent.lua")
+source(TheContractor.dir .. "src/events/TCRepairZoneFilterEvent.lua")
 source(TheContractor.dir .. "src/events/TCRandomEventIncidentEvent.lua")
 
 -- The top-level Contractor page itself stays always-visible (see Company.lua
@@ -182,8 +197,6 @@ end
 function TheContractor:loadMap()
     g_currentMission.TheContractor = self
     self.hasResolvedSavedVehicles = false
-
-    TCCompanyLogo.createSettingsFolder()
 
     self.Settings = TheContractorSettings.new()
     -- 086: this machine's own display settings.
@@ -218,7 +231,10 @@ function TheContractor:loadMap()
     self.Morale:register(self.Inbox)
     self.PayReviews = TheContractorPayReviews.new()
     self.PayReviews:register(self.Inbox)
-    self.Administrator = TheContractorAdministrator.new()
+    -- 090: the office administrator (057).
+    self.Office = TheContractorOffice.new()
+    -- 097: working hours and overtime.
+    self.WorkingHours = TheContractorWorkingHours.new()
     self.Logbook = TheContractorLogbook.new()
     self.Parking = TheContractorParking.new()
     self.Parking:register(self.Inbox)
@@ -251,6 +267,12 @@ function TheContractor:loadMap()
     self.SprayDrift:register(self.RandomEvents, self.Inbox)
     self.Poaching = TheContractorPoaching.new()
     self.Poaching:register(self.RandomEvents, self.Inbox)
+    -- 100: customers' machines in repair zones (ADS).
+    self.RepairContracts = TheContractorRepairContracts.new()
+    self.RepairContracts:register(self.Inbox)
+    -- 101: customers' machines broken down in the field (ADS), through 100.
+    self.FieldBreakdowns = TheContractorFieldBreakdowns.new()
+    self.FieldBreakdowns:register(self.RandomEvents)
     self.InboxHUD = TCInboxHUD.new()
 
     -- Module-level caches outlive a savegame; start each load clean.
@@ -262,10 +284,17 @@ function TheContractor:loadMap()
     TCJobSupplies.reset()
     TCIdleStaff.reset()
     TCJobHotspots.reset()
+    TheContractorRepairContracts.clearCache()
 
     -- 064: which parts of FS25_AdvancedDamageSystem's stock the Supplies
     -- tab can show (none without the mod).
     TCADSStock.detect()
+    -- 090: whether ADS's own workshop can take our office staff.
+    TCADSWorkshop.detect()
+    -- 100: whether ADS can prepare customers' machines for repair zones.
+    TCADSRepairContracts.detect()
+    -- 100/101: service vehicle mods' workshops list customers' machines.
+    TCServiceVehicleMods.install()
 
     TheContractorDisableVanillaContracts.hideContractsTab()
 
@@ -285,6 +314,8 @@ function TheContractor:loadMap()
     -- 093: the Calendar's Job details.
     TCJobDetailsDialog.register()
     TCParkingSlotActivatable.install()
+    -- 100: repair zone filters, the same way.
+    TCRepairZoneActivatable.install()
     -- 077: a worker's look is edited in the vanilla wardrobe.
     TCWardrobe.install()
 
@@ -298,6 +329,9 @@ function TheContractor:loadMap()
     self.MenuContractor = menuContractor
 
     self:loadFromXMLFile()
+
+    -- 090: after loading, so ADS's first read of our staff has them.
+    TCADSWorkshop.register()
 
     -- 048: after loading, so the controls start on the saved values.
     TCSettingsMenu.inject()
@@ -320,6 +354,7 @@ function TheContractor:loadMap()
     -- 060: every machine prunes its own copy.
     self.Logbook:startDailyTick()
     self.RandomEvents:startDailyTick()
+    self.RepairContracts:startDailyTick()
 
     -- Console commands: each subsystem registers its own (see TCConsole).
     TCConsole.reset()
@@ -328,6 +363,9 @@ function TheContractor:loadMap()
     TheContractorTraining.registerConsoleCommands()
     TheContractorMorale.registerConsoleCommands()
     TheContractorPayReviews.registerConsoleCommands()
+    TheContractorOffice.registerConsoleCommands()
+    TheContractorWorkshop.registerConsoleCommands()
+    TheContractorWorkingHours.registerConsoleCommands()
     TheContractorJobGeneration.registerConsoleCommands()
     TheContractorJobs.registerConsoleCommands()
     TheContractorFinances.registerConsoleCommands()
@@ -341,6 +379,7 @@ function TheContractor:loadMap()
     TCSupplyStock.registerConsoleCommands()
     TCIdleStaff.registerConsoleCommands()
     TCDebris.registerConsoleCommands()
+    TheContractorRepairContracts.registerConsoleCommands()
     TCConsole.install()
 
     Logging.info("TheContractor: loadMap")
@@ -387,12 +426,14 @@ function TheContractor:loadFromXMLFile()
     self.Training:loadFromXMLFile(xmlFile)
     self.Morale:loadFromXMLFile(xmlFile)
     self.PayReviews:loadFromXMLFile(xmlFile)
-    self.Administrator:loadFromXMLFile(xmlFile)
+    -- 090: after Staff, whose worker id counter it takes ids from.
+    self.Office:loadFromXMLFile(xmlFile)
     self.Logbook:loadFromXMLFile(xmlFile)
     self.Parking:loadFromXMLFile(xmlFile)
     self.RandomEvents:loadFromXMLFile(xmlFile)
     self.MachineryInsurance:loadFromXMLFile(xmlFile)
     self.GoodNews:loadFromXMLFile(xmlFile)
+    self.RepairContracts:loadFromXMLFile(xmlFile)
 
     delete(xmlFile)
 end
@@ -416,6 +457,8 @@ function TheContractor:resolveSavedVehicles()
     self.Theft:resolveSavedVehicles()
     self.CourtesyVehicle:resolveSavedVehicles()
     self.RoadAccident:resolveSavedVehicles()
+    -- 100: after Jobs, whose workshop jobs it checks against ADS.
+    self.RepairContracts:resolveSavedVehicles()
     TCVehicleLock.repairSavedTabbable()
 end
 
@@ -454,12 +497,13 @@ function TheContractor:saveToXmlFile()
     tc.Training:saveToXmlFile(xmlFile)
     tc.Morale:saveToXmlFile(xmlFile)
     tc.PayReviews:saveToXmlFile(xmlFile)
-    tc.Administrator:saveToXmlFile(xmlFile)
+    tc.Office:saveToXmlFile(xmlFile)
     tc.Logbook:saveToXmlFile(xmlFile)
     tc.Parking:saveToXmlFile(xmlFile)
     tc.RandomEvents:saveToXmlFile(xmlFile)
     tc.MachineryInsurance:saveToXmlFile(xmlFile)
     tc.GoodNews:saveToXmlFile(xmlFile)
+    tc.RepairContracts:saveToXmlFile(xmlFile)
 
     saveXMLFile(xmlFile)
     delete(xmlFile)
@@ -527,6 +571,7 @@ function TheContractor:deleteMap()
 
     TCWardrobe.endSession()
     TCParkingSlotActivatable.uninstall()
+    TCRepairZoneActivatable.uninstall()
 
     if self.JobGeneration ~= nil then
         self.JobGeneration:stopHourlyTick()
@@ -574,6 +619,11 @@ function TheContractor:deleteMap()
 
     if self.RandomEvents ~= nil then
         self.RandomEvents:stopDailyTick()
+    end
+
+    if self.RepairContracts ~= nil then
+        self.RepairContracts:stopDailyTick()
+        self.RepairContracts:stopListening()
     end
 
     if self.InboxHUD ~= nil then
@@ -628,8 +678,18 @@ function TheContractor:update(dt)
         self.Parking:update(dt)
     end
 
+    -- 100: customers' machines arriving and being collected (server).
+    if self.RepairContracts ~= nil then
+        self.RepairContracts:update(dt)
+    end
+
     if self.Drivers ~= nil then
         self.Drivers:update(dt)
+    end
+
+    -- 097: overtime (server).
+    if self.WorkingHours ~= nil then
+        self.WorkingHours:update(dt)
     end
 
     -- After Drivers: its first update relinks saved bindings, which the

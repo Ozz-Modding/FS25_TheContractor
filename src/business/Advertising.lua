@@ -11,9 +11,9 @@
 -- company than for a well-known one.
 --
 -- One active level per farm at a time, with the player choosing how many
--- periods to run it for (027). Buying the level that's already running
--- extends it; buying a different one replaces it (the purchase dialog
--- warns about the lost days). Expiry is tracked as an absolute
+-- periods to run it for (027). The level that's already running can't be
+-- bought again until it lapses; buying a different one replaces it (the
+-- purchase dialog warns about the lost days). Expiry is tracked as an absolute
 -- environment.currentDay value rather than a countdown so it's immune to
 -- save/load timing.
 
@@ -178,23 +178,23 @@ function TheContractorAdvertising:canAfford(farmId, levelKey, durationPeriods)
     return farm:getBalance() >= TheContractorAdvertising.getCost(levelKey, durationPeriods)
 end
 
+-- The running campaign can't be bought again (or extended) until it lapses.
+function TheContractorAdvertising:isRunning(farmId, levelKey)
+    return self.activeLevel[farmId] == levelKey
+end
+
 function TheContractorAdvertising:canPurchase(farmId, levelKey, durationPeriods)
     return TheContractorAdvertising.isValidDuration(durationPeriods)
+        and not self:isRunning(farmId, levelKey)
         and self:isUnlocked(farmId, levelKey)
         and self:canAfford(farmId, levelKey, durationPeriods)
 end
 
--- The expiry day a purchase would result in: buying the level that's
--- already running extends it from its current expiry, anything else starts
--- from today (replacing whatever was running).
-function TheContractorAdvertising:getExpiryAfterPurchase(farmId, levelKey, durationPeriods)
+-- The expiry day a purchase would result in: it starts from today,
+-- replacing whatever was running.
+function TheContractorAdvertising.getExpiryAfterPurchase(durationPeriods)
     local environment = g_currentMission.environment
-    local startDay = environment.currentDay
-    if self.activeLevel[farmId] == levelKey and self.expiresOnDay[farmId] ~= nil then
-        startDay = math.max(startDay, self.expiresOnDay[farmId])
-    end
-
-    return startDay + durationPeriods * environment.daysPerPeriod
+    return environment.currentDay + durationPeriods * environment.daysPerPeriod
 end
 
 -- Mutation API (server-authoritative) ------------------------------------
@@ -214,7 +214,7 @@ function TheContractorAdvertising:purchaseAdvertising(farmId, levelKey, duration
     local cost = TheContractorAdvertising.getCost(levelKey, durationPeriods)
     g_currentMission:addMoney(-cost, farmId, MoneyType.TC_ADVERTISING, true, true)
 
-    local expiresOnDay = self:getExpiryAfterPurchase(farmId, levelKey, durationPeriods)
+    local expiresOnDay = TheContractorAdvertising.getExpiryAfterPurchase(durationPeriods)
     self:applyAdvertisingState(farmId, levelKey, expiresOnDay)
 
     if g_server ~= nil then

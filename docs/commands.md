@@ -13,7 +13,7 @@ You type these into the developer console. You don't need cheats on. There are f
 Type a group on its own (or with `help`) to list its subcommands and their arguments. Subcommand names aren't case-sensitive. If you get the arguments wrong, the command prints that subcommand's usage.
 
 - **Your farm:** every command acts on your current farm. Most need that farm to have created a company first.
-- **Server only:** commands that change something only work on the server, which means single player or the host of a multiplayer game. The read-only lists `tcWorker list`, `tcWorker pool`, `tcJob list`, `tcJob log`, `tcCompany storages`, `tcCompany notices`, `tcCompany vehicleLog`, `tcCompany events` and `tcWorker standing` also work on a joined client.
+- **Server only:** commands that change something only work on the server, which means single player or the host of a multiplayer game. The read-only lists `tcWorker list`, `tcWorker pool`, `tcJob list`, `tcJob log`, `tcCompany storages`, `tcCompany notices`, `tcCompany vehicleLog`, `tcCompany events`, `tcWorker standing` and `tcWorker hours` also work on a joined client.
 - **`<worker>`:** a hired worker's id, or the start of their first or last name. `amy`, `Hall` and `3` could all mean Amy Hall (#3). If a name matches more than one worker, the command lists them and asks for the id. `tcWorker list` shows ids and names.
 
 ## Workers — `tcWorker`
@@ -152,18 +152,20 @@ Has one of your hired workers ask for a holiday now, as the daily roll would, bu
 tcWorker holidayRequest
 ```
 
-### `tcWorker train <worker> [daysFromNow] [pass|fail]`
+### `tcWorker train <worker> [daysFromNow] [pass|fail|mechanic|electrician|bodyworker]`
 
-Books one of your hired workers on spraying training for free, skipping the readiness check.
-- **What gets booked:** a worker who failed their assessment gets the retake (an assessment day only). Anyone else gets the 2-day course, with the assessment 2-5 days after it.
+Books one of your hired workers on spraying training, or on an Advanced Damage System workshop trade course (092), for free, skipping the readiness check.
+- **What gets booked:** a worker who failed their assessment gets the retake (an assessment day only). Anyone else gets the 2-day course, with the assessment 2-5 days after it (at short months the course is capped at a month and the wait shrinks with it: at 1 day a month, a 1-day course and the assessment the next day).
 - **`daysFromNow`:** defaults to 0, so an idle worker starts today.
 - **`pass` or `fail`:** fixes the assessment's result. Without it, the result is rolled from their crop care skill.
+- **`mechanic`, `electrician` or `bodyworker`:** books a trade course instead (`diagnostician`, ADS's own id for the electrician, works too): the next level of that trade (level 1 if they don't have it), with no assessment. The trade goes up a level when the last course day is done. It works without ADS, but not past level 3 or for a third trade.
 
-It fails if the worker is already certified or already has training booked.
+It fails if the worker is already certified (for spraying) or already has training booked.
 
 ```
 tcWorker train 2
 tcWorker train amy 0 fail
+tcWorker train amy 0 mechanic
 ```
 
 ### `tcWorker askTraining <worker>`
@@ -185,7 +187,7 @@ tcWorker certify 2 off
 
 ### `tcWorker standing`
 
-Shows, for each of your hired workers, whether they're standing on one of your farm's standing spots, and if not, why. Only workers who are idle or in a cooldown stand, and only between 07:00 and 19:00 game time. Outside those hours a line under the heading says so and every idle worker shows `gone home` (or `gone home once you look away`, if they're still on a spot you can see). Otherwise each line gives the spot they're assigned today (its position in decimetres) and how far it is from the camera, then one of:
+Shows, for each of your hired workers, whether they're standing on one of your farm's standing spots, and if not, why. Only workers who are idle or in a cooldown stand. Idle workers only stand during working hours (08:00 to 18:00 game time) or while they're kept on after them (Stay late, or Call back once they're in); anyone in a cooldown stands whatever the time. Outside working hours a line under the heading says so, and every idle worker who isn't kept on shows `gone home` (or `gone home once you look away`, if they're still on a spot you can see). Otherwise each line gives the spot they're assigned today (its position in decimetres) and how far it is from the camera, then one of:
 - waiting until you look away (nobody appears on a spot you can see)
 - waiting for another worker to leave the spot
 - standing, model not loaded (models load within 150 m)
@@ -199,6 +201,35 @@ This only shows what your own machine is displaying, so it also works on a joine
 Farm 1: 2 standing spot(s), day 104
 #3 Amy Hall - wants spot 1203:-455, 12 m away, standing, shown
 #7 John Smith - not standing (assigned)
+```
+
+### `tcWorker hours`
+
+Shows the game time and whether it's working hours (08:00 to 18:00), then each of your hired workers: their status (an idle worker shows `atHome`, `comingIn` or `stayingLate` instead of `idle` when that's where they are), the time they're on duty until if they've been kept on (and when they'll be in, if they've been called back and aren't there yet), their overtime so far this month in minutes and money, and what an hour of overtime costs them now. Read-only, so it also works on a joined client.
+
+```
+Farm 1, 19:10: working hours 08:00-18:00, outside them
+#3 Amy Hall - stayingLate, on duty until 22:00, overtime 70 min this month (12 owed), 10.71 an hour
+#7 John Smith - atHome, overtime 0 min this month (0 owed), 10.71 an hour
+```
+
+### `tcWorker duty <worker> <hour|home>`
+
+Keeps a worker on until `hour` (0-24, the next time the clock reads it): Stay late if they're at work, or Call back if they've gone home (they're in 25 game minutes later). `home` sends a worker who's been kept on home now. The same checks as the Staff tab's Manage options apply: not while they're sick, on holiday or training, after 18:00 (or after they'd turn up), and no later than the next 08:00. They're paid overtime for every minute of it outside working hours. Prints their line as `tcWorker hours` does, or why it couldn't.
+
+```
+tcWorker duty Amy 22
+tcWorker duty 7 home
+```
+
+### `tcWorker adsSkill <worker> <mechanic|electrician|bodyworker|storekeeper> <0-3>`
+
+Sets one of a hired worker's Advanced Damage System workshop skills (091, and the storekeeper since 098) to a level, or removes it with `0`. The trades are named as ADS shows them; `diagnostician`, its own id for the electrician, works too. A worker can have at most two: set one to `0` before adding a third. Removing the skill a worker is working in the workshop as takes them out of the workshop. `<worker>` is their id or name. It prints the worker's skills afterwards. It works without ADS too, but the skills only show and count toward pay while ADS's own workshop is taking your staff.
+
+```
+tcWorker adsSkill 7 mechanic 2
+tcWorker adsSkill Sam Hill bodyworker 0
+tcWorker adsSkill 7 storekeeper 1
 ```
 
 ## Jobs — `tcJob`
@@ -269,7 +300,7 @@ Forces a job into another state. Only legal transitions are allowed:
 |---|---|
 | `offered` | `negotiating`, `accepted`, `declined` |
 | `negotiating` | `accepted`, `declined` |
-| `accepted` | `allocated`, `missed` |
+| `accepted` | `allocated`, `missed`, `completed` (a workshop job only) |
 | `allocated` | `in_progress`, `completed`, `missed`, `accepted` |
 | `in_progress` | `completed`, `missed`, `accepted` |
 
@@ -278,6 +309,7 @@ Forces a job into another state. Only legal transitions are allowed:
 `completed` and `missed` work the same as a real finish or deadline, whatever the job's progress:
 - **`completed`:** a hired worker's AI is stopped where it is, even mid-field or on the road. The job's invoiced and earns reputation. The crew and machines go through the usual trip back and parking, and the logbook records it.
 - **`missed`:** the usual missed-deadline reputation penalty (less whatever progress was made), and the crew and machines are released the same way.
+- A workshop job (a customer's machine in a repair zone, needs FS25_AdvancedDamageSystem) goes straight from `accepted` to `completed`: invoiced and rewarded as if ADS said the work was done. `missed` judges it as the deadline would: a machine that's worse than it came in costs double the reputation and may bring a claim. Either way the customer comes for the machine.
 - **`accepted`** (from `allocated` or `in_progress`): unallocates the job, the same as the Unallocate button in the Calendar's Job Details. The crew and machines come back (into cooldown if any work was done), and the job keeps its progress for whoever's allocated next. No reputation is lost.
 
 Other states only change the job's state.
@@ -295,7 +327,7 @@ Job 7 is accepted. It can go to: allocated, missed
 
 ### `tcJob log [jobId]`
 
-Shows a job's entry in the Logbook. That's the crew, each machine's condition going out and coming back, the time split, supplies, costs, margin, reputation and any claim. With no job id it lists the farm's last 10 logged jobs, newest first, with their ids and margins. Read-only, so it also works on a joined client.
+Shows a job's entry in the Logbook. That's the crew, each machine's condition going out and coming back (for an FS25_AdvancedDamageSystem machine, what its last inspection showed and any fault found during the job), the time split, supplies, costs, margin, reputation and any claim. With no job id it lists the farm's last 10 logged jobs, newest first, with their ids and margins. Read-only, so it also works on a joined client.
 
 | Argument | Meaning |
 |---|---|
@@ -312,6 +344,41 @@ Parks the vehicle you're sitting in, for testing parking slots. You're put out o
 
 ```
 tcJob park
+```
+
+### `tcJob repairArrival [repair|maintenance] [severity]`
+
+Sends a customer's machine to your first free repair zone bay now, for testing repair contracts (needs FS25_AdvancedDamageSystem). It's queued like a normal arrival and placed within a couple of seconds, then ADS prepares it and the job offer goes up in your Inbox. The model is picked at random from those the zone takes (its type, its filter, what fits a bay).
+
+| Argument | Meaning |
+|---|---|
+| `repair\|maintenance` | Optional. A repair (hidden faults) or a service (worn oils, filters and grease). Random (60/40) if left out. |
+| `severity` | Optional, 1-3. How big a job: more or later faults, or more worn consumables. Rolled if left out (20% 1, 30% 2, 50% 3). |
+
+```
+tcJob repairArrival
+tcJob repairArrival repair 3
+```
+
+```
+Queued data/vehicles/fendt/vario900/vario900.xml (repair, severity 3) for bay 2.
+```
+
+### `tcJob repairStatus`
+
+Lists your repair zones: their type, bays, filter and how many models they can get, which bays are taken, and how many machines are on their way (field breakdowns, 101, included), waiting to be collected and claims still to come. Also says whether ADS's repair contracts API is there. Takes no arguments.
+
+```
+tcJob repairStatus
+```
+
+```
+ADS repair contracts: API version 1
+Zone 1 (vehicle, 3 bay(s), any category, 42 model(s)):
+  bay 1: taken
+  bay 2: free
+  bay 3: free
+1 on the way, 0 waiting to be collected, 0 claim(s) to come
 ```
 
 ## Finances — `tcFinance`
@@ -360,13 +427,14 @@ tcFinance botch 0
 
 ### `tcFinance insurance`
 
-Shows your farm's machinery insurance: whether you're insured and at what level of cover (and any change from renewal), what your fleet is worth, and how many claims you've had in the last 3 years. Then each level's premium today (after the claims loading) and what it pays out, and your open claims: the stolen vehicle, its value and level of cover, whether the claim is waiting to be submitted or the day it settles, and the courtesy vehicle you've been lent for it on comprehensive cover (with its vehicle id). A settled claim whose courtesy vehicle is still busy is listed too, until the insurer collects it. Read-only, so it also works on a joined client.
+Shows your farm's machinery insurance: whether you're insured and at what level of cover (and any change from renewal), what your fleet is worth, and how many claims you've had in the last 3 years. If any of your vehicles have FS25_AdvancedDamageSystem's anti-theft system fitted, a second line says how many and the value the premium is worked out on (theirs counted at 15% less). Then each level's premium today (after the claims loading) and what it pays out, and your open claims: the stolen vehicle, its value and level of cover, whether the claim is waiting to be submitted or the day it settles, and the courtesy vehicle you've been lent for it on comprehensive cover (with its vehicle id). A settled claim whose courtesy vehicle is still busy is listed too, until the insurer collects it. Read-only, so it also works on a joined client.
 
 ```
 Farm 1: insured, standard cover. Fleet value 412000, 0 claim(s) in the last 3 years
-  basic: 4120 a year, pays 80% less 5000 excess
-  standard: 5768 a year, pays 90% less 2500 excess
-  comprehensive: 7416 a year, pays 100% less 1250 excess
+  2 vehicle(s) with an anti-theft system: priced on 389500 (15% off theirs)
+  basic: 3895 a year, pays 80% less 5000 excess
+  standard: 5453 a year, pays 90% less 2500 excess
+  comprehensive: 7011 a year, pays 100% less 1250 excess
 Open claims: 1
   #3 Fendt 724 Vario (98000, comprehensive): settles day 112, courtesy John Deere 6R 250 (412)
 ```
@@ -405,7 +473,7 @@ tcCompany removeNotice 4
 
 ### `tcCompany vehicleLog <vehicle>`
 
-Shows a vehicle's Logbook history for the last year. You get a summary line (jobs, hours worked, faults caused by your staff, wear cost), then every logged use: jobs, staff drivers and players, with who, how long and its condition before and after. `<vehicle>` is any part of its name, case-insensitive. Words after the first are included, so names with spaces work. Every logged vehicle that matches is shown. Only vehicles with history on your farm are searched. Read-only, so it also works on a joined client.
+Shows a vehicle's Logbook history for the last year. You get a summary line (jobs, hours worked, how many uses a fault was found in, wear cost), then every logged use: jobs, staff drivers and players, with who, how long and its condition before and after. `<vehicle>` is any part of its name, case-insensitive. Words after the first are included, so names with spaces work. Every logged vehicle that matches is shown. Only vehicles with history on your farm are searched. Read-only, so it also works on a joined client.
 
 ```
 tcCompany vehicleLog fendt
@@ -428,12 +496,13 @@ Seeds:
 
 ### `tcCompany event <type> [details]`
 
-Makes a random event happen to your farm now, ignoring the odds, the Random events setting, the event type's cooldown, its months (poaching only comes March to May) and its time of day (diesel theft normally comes to light between 07:00 and 09:00). It still needs something to act on (a theft needs a vehicle that can be stolen, joyriders a grass field outside winter, fly-tipping an NPC's field with no job on it, diesel theft some diesel in a storage of yours or in a parked machine, poaching a worker who isn't leaving), and says so if there isn't anything. It starts the event's cooldown like a real one. `<type>` is the event type's key, case-insensitive. With no type, or an unknown one, it lists the ones there are.
+Makes a random event happen to your farm now, ignoring the odds, the Random events setting, the event type's cooldown, its months (poaching only comes March to May) and its time of day (diesel theft normally comes to light between 07:00 and 09:00). It still needs something to act on (a theft needs a vehicle that can be stolen, joyriders a grass field outside winter, fly-tipping an NPC's field with no job on it, diesel theft some diesel in a storage of yours or in a parked machine, poaching a worker who isn't leaving, a field breakdown needs FS25_AdvancedDamageSystem, an NPC's field with no job on it and no other breakdown of yours on the go), and says so if there isn't anything. It starts the event's cooldown like a real one. `<type>` is the event type's key, case-insensitive. With no type, or an unknown one, it lists the ones there are.
 
 `[details]` picks what the event acts on, for the types that take one (any other type refuses them):
 
 - `goodNews [story]`: that story, or a random one other than the last you had, even before your first completed job. The story's reward is applied and its inbox message posted. `[story]` is case-insensitive; an unknown one lists them: `photoPosted`, `parishNews`, `parishCouncil`, `youngFarmers` (reputation, scaled to your tier), `supplierRefund`, `loyaltyRebate`, `ratesRefund` (cash, scaled by the job pay setting).
 - `poaching [worker]`: the rival goes after that worker (a `<worker>` as for `tcWorker`: an id or the start of a name), however long they've been with you. Without one it picks as the real event does: someone with at least 3 months' service, nearly always one of your most valuable. Not someone who's leaving or already has an offer.
+- `fieldBreakdown [player|mobile]`: a customer's machine breaks down on an NPC's field, fixable on the spot with ADS's tool box (`player`) or only with a mobile workshop (`mobile`). Without one it picks as the real event does: even odds, or mostly `player` if you've a tool box and no mobile workshop. The machine is placed like a repair zone arrival (within a couple of seconds) and the offer, due today, goes up in your Inbox.
 
 The events that happen as a job ends (`kettle`, `paidEarly`, `stepsUp`, `roadAccident`, `sprayDrift`) use your latest completed job they can act on, whatever its quality score: one with hired workers for `kettle`, one whose invoice isn't due yet for `paidEarly` (so none with the late invoices setting off), one with a worker rated 5 or under for their part of it for `stepsUp`, and one a hired worker drove whose machines are still yours for `roadAccident` (its machines are damaged wherever they are now), and a hired worker's herbicide job with no botch claim on its way for `sprayDrift` (judged on the wind right now, not on the day). Use `tcCompany outcome` first to decide how an event comes out.
 
@@ -451,6 +520,8 @@ tcCompany event roadAccident
 tcCompany event sprayDrift
 tcCompany event poaching
 tcCompany event poaching amy
+tcCompany event fieldBreakdown
+tcCompany event fieldBreakdown mobile
 ```
 
 ### `tcCompany events`
@@ -463,7 +534,7 @@ Decides how the next event of that type comes out, instead of the usual roll. It
 
 | Type | Outcomes | What it decides |
 |---|---|---|
-| `theft` | `recovered`, `lost` | The next police report on a stolen vehicle: `recovered` brings it back (damaged, through the parking queue), `lost` writes it off and removes it (or, if the farm had machinery insurance on the day of the theft, starts the insurance claim, and the vehicle goes when it settles). Normally a 35% chance of recovery. |
+| `theft` | `recovered`, `lost` | The next police report on a stolen vehicle: `recovered` brings it back (damaged, through the parking queue), `lost` writes it off and removes it (or, if the farm had machinery insurance on the day of the theft, starts the insurance claim, and the vehicle goes when it settles). Normally a 35% chance of recovery, 95% for a vehicle with FS25_AdvancedDamageSystem's anti-theft system fitted. |
 | `roadAccident` | `ours`, `theirs` | Who's to blame for the next road accident: `ours` (a claim through public liability, a reputation hit and a morale knock for the driver), `theirs` (the other driver's insurer pays an estimated repair cost a month or two later). Normally rolled from the driver's tractor rating and the state of the machines. |
 | `sprayDrift` | `upheld`, `cleared` | The findings on the next spray drift complaint: `upheld` (the complainant's claim through public liability, a reputation hit and a morale knock for the operator), `cleared` (nothing else happens). Normally rolled from the operator's crop care and the wind. |
 | `poaching` | `stays`, `leaves` | What the next poached worker you do nothing about decides (matching the offer always keeps them): `stays` on the same pay, or `leaves`, handing in a month's notice. Normally they stay with a 5-25% chance, from their morale and their pay against what they expect. |
@@ -477,6 +548,22 @@ tcCompany event roadAccident
 
 tcCompany outcome poaching leaves
 tcCompany event poaching amy
+```
+
+### `tcCompany office`
+
+Lists your farm's office staff (090): for the administrator, who's employed, their id, level, whether they're in the office or training (and until which day), and their monthly salary. The last line says whether Advanced Damage System's own workshop is taking your staff, and what state its staff provider is in. Read-only, so it also works on a joined client.
+
+```
+tcCompany office
+```
+
+### `tcCompany officeLevel <administrator> <1-3>`
+
+Sets an office role's level straight away, with that level's salary, and ends any course they're on, for testing Advanced Damage System's workshop at each level. The role has to be filled. The administrator is the only office role (098 made the storekeeper a workshop trade: set it with `tcWorker adsSkill`).
+
+```
+tcCompany officeLevel administrator 3
 ```
 
 ### `tcCompany debris [count] [prop]`
