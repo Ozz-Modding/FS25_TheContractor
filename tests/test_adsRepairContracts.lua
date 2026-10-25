@@ -26,7 +26,6 @@ local function setup(def)
         end
         return node.x or 0, 0, node.z or 0
     end
-    g_cameraManager = def.hasCamera and { getActiveCamera = function() return 5 end } or nil
     VehiclePropertyState = { OWNED = 1, MISSION = 4 }
     VehicleLoadingState = { OK = 1 }
     Environment = { PERIODS_IN_YEAR = 12 }
@@ -39,7 +38,7 @@ local function setup(def)
         getPeriodFromDay = function(_, day) return (day - 1) % 12 + 1 end,
         getDayInPeriodFromDay = function() return 1 end,
     }
-    g_currentMission.getIsClient = function() return def.hasCamera == true end
+    g_currentMission.getIsClient = function() return false end
     g_currentMission.placeableSystem = { placeables = {} }
     g_currentMission.playerSystem = { players = {} }
     function g_currentMission.playerSystem:getPlayerCount() return #self.players end
@@ -62,7 +61,6 @@ local function setup(def)
     }
     TCJobCompletedEvent = { showNotification = function() end }
     TCJobMissedEvent = { showNotification = function() end }
-    TCIdleStaff = { isSeen = function() return world.cameraSees == true end }
     TCParking = {
         PLACE_HEIGHT_OFFSET = 0.3,
         DEFAULT_HEIGHT = 4,
@@ -74,7 +72,12 @@ local function setup(def)
     local tc = g_currentMission.TheContractor
     tc.Settings = {
         scaleCost = function(_, amount) return amount end,
-        getADSMargin = function() return world.adsMargin or 0.25 end,
+        getADSMargin = function(_, isField)
+            if isField then
+                return world.adsFieldMargin or 0.5
+            end
+            return world.adsMargin or 0.4
+        end,
     }
     tc.Reputation = {
         getStanding = function() return world.standing or 0 end,
@@ -117,7 +120,7 @@ local function setup(def)
                     return false, "noApplicableFaults"
                 end
                 world.prepared = request
-                vehicle.quote = { price = world.quotePrice or 1000, minTools = { "lift" }, serviceLevel = "workshop",
+                vehicle.quote = { price = world.quotePrice or 1500, partsCost = world.partsCost or 1000, minTools = { "lift" }, serviceLevel = "workshop",
                     operatingHours = 2450 }
                 return true, "rc1"
             end,
@@ -368,27 +371,20 @@ end)
 test("nothing runs while the queue is empty", function()
     local world, tc = setup()
     world:addZone()
-    local looked = false
-    TheContractorRepairContracts.isBaySeen = function()
-        looked = true
-        return false
-    end
     tc.RepairContracts:update(60000)
-    assertEquals(looked, false)
     assertEquals(#world.calls.spawned, 0)
 end)
 
-test("an arrival waits while its bay's seen, then comes anyway after the fallback", function()
-    local world, tc = setup({ hasCamera = true })
+test("an arrival is placed on the next look at the queue", function()
+    local world, tc = setup()
     local zone = world:addZone()
     tc.RepairContracts:queueArrival(1, zone, 1, ADS_KIND.REPAIR, 1)
-    world.cameraSees = true
 
-    tc.RepairContracts:update(TheContractorRepairContracts.PLACE_CHECK_MS)
-    assertEquals(#world.calls.spawned, 0, "the player's looking at it")
+    tc.RepairContracts:update(TheContractorRepairContracts.PLACE_CHECK_MS - 1)
+    assertEquals(#world.calls.spawned, 0, "not looked at yet")
 
-    tc.RepairContracts:update(TheContractorRepairContracts.PLACE_FALLBACK_MS)
-    assertEquals(#world.calls.spawned, 1, "placed anyway once it's waited long enough")
+    tc.RepairContracts:update(1)
+    assertEquals(#world.calls.spawned, 1)
     local data = world.calls.spawned[1]
     assertEquals(data.propertyState, VehiclePropertyState.MISSION)
     assertEquals(data.farmId, 1)
@@ -396,24 +392,10 @@ test("an arrival waits while its bay's seen, then comes anyway after the fallbac
     assertNear(data.z, 4.5, 0.001)
 end)
 
-test("in multiplayer there's no seen check at all", function()
-    local world, tc = setup({ hasCamera = true })
-    g_currentMission.missionDynamicInfo = { isMultiplayer = true }
-    local zone = world:addZone()
-    tc.RepairContracts:queueArrival(1, zone, 1, ADS_KIND.REPAIR, 1)
-    world.cameraSees = true
-    tc.RepairContracts:update(TheContractorRepairContracts.PLACE_CHECK_MS)
-    assertEquals(#world.calls.spawned, 1)
-end)
-
-test("an arrival comes straight away when no one can see the bay", function()
-    local world, tc = setup({ hasCamera = true })
+test("an arrival goes in its own bay", function()
+    local world, tc = setup()
     local zone = world:addZone()
     tc.RepairContracts:queueArrival(1, zone, 2, ADS_KIND.REPAIR, 1)
-    world.cameraSees = true
-    tc.RepairContracts:update(TheContractorRepairContracts.PLACE_CHECK_MS)
-    assertEquals(#world.calls.spawned, 0, "the host's camera sees it")
-    world.cameraSees = false
     tc.RepairContracts:update(TheContractorRepairContracts.PLACE_CHECK_MS)
     assertEquals(#world.calls.spawned, 1)
     assertNear(world.calls.spawned[1].x, 6, 0.001, "bay 2's centre")
@@ -460,7 +442,9 @@ test("a model ADS turns down is swapped, and the offer goes up for one it takes"
     assertEquals(job.workshop.bayIndex, 1)
     assertEquals(job.deadlineDay, world.today + 1, "1 day per period: due by the end of tomorrow")
     assertEquals(job.workshop.offerExpiresDay, world.today)
-    assertTrue(job:getPrice() >= 1149 and job:getPrice() <= 1350, "quote plus the 25% setting, give or take 10%, floored")
+    assertTrue(job:getPrice() >= 1299 and job:getPrice() <= 1500, "parts plus the 40% setting, give or take 10%, floored")
+    assertEquals(job.workshop.quotePrice, 1500)
+    assertEquals(job.workshop.partsCost, 1000)
     assertEquals(job:getLocationText(), "fendt942.xml")
     assertTrue(TheContractorRepairContracts.isContractVehicle(second))
     assertTrue(repairContracts:isBayTaken("zone1", 1))
@@ -470,34 +454,36 @@ end)
 test("the price is stored without EconomyScale's factor and follows it", function()
     local world, tc = setup()
     g_currentMission.EconomyScale = { factor = 2 }
-    world.quotePrice = 2000
+    world.partsCost = 2000
     local job = makeOffer(world, tc)
     local margin = job.basePrice / 1000 - 1
-    assertTrue(margin >= 0.149 and margin <= 0.35, "base is the quote / factor plus the margin (floored)")
+    assertTrue(margin >= 0.299 and margin <= 0.5, "base is the parts / factor plus the margin (floored)")
     g_currentMission.EconomyScale.factor = 3
     assertNear(job:getPrice(), job.basePrice * 3, 0.001)
 end)
 
-test("a small quote still pays MIN_PRICE, before EconomyScale's factor", function()
+test("a job with few parts still pays MIN_PRICE, before EconomyScale's factor", function()
     local world, tc = setup()
     g_currentMission.EconomyScale = { factor = 2 }
-    world.quotePrice = 200
+    world.quotePrice = 5000
+    world.partsCost = 200
     local job = makeOffer(world, tc)
     assertEquals(job.basePrice, TheContractorRepairContracts.MIN_PRICE)
     assertNear(job:getPrice(), TheContractorRepairContracts.MIN_PRICE * 2, 0.001)
 end)
 
-test("the margin is the adsMargin setting, give or take MARGIN_SPREAD, never below nothing", function()
+test("the margin is the zone or field setting, give or take MARGIN_SPREAD, never below nothing", function()
     local world = setup()
     local realRandom = math.random
-    world.adsMargin = 0.5
+    world.adsMargin, world.adsFieldMargin = 0.5, 0.8
     math.random = function() return 0 end
     assertNear(TheContractorRepairContracts.rollMargin(), 0.4, 0.0001, "the bottom of the spread")
+    assertNear(TheContractorRepairContracts.rollMargin(true), 0.7, 0.0001, "a field breakdown's setting")
     math.random = function() return 1 end
     assertNear(TheContractorRepairContracts.rollMargin(), 0.6, 0.0001, "the top of the spread")
     world.adsMargin = 0.05
     math.random = function() return 0 end
-    assertEquals(TheContractorRepairContracts.rollMargin(), 0, "never under the quote")
+    assertEquals(TheContractorRepairContracts.rollMargin(), 0, "never under the parts")
     math.random = realRandom
 end)
 
@@ -511,18 +497,23 @@ test("the price is fixed: no counter offers, even with the tools", function()
     assertEquals(job:getPrice(), price)
 end)
 
-test("the adsMargin setting: 25% by default, on the menu only with ADS", function()
+test("the margin settings: 40% in zones, 50% in the field, on the menu only with ADS", function()
     local world = setup()
     world.texts.ui_on, world.texts.ui_off = "On", "Off"
     world:load("src/business/Settings.lua")
-    local definition = TheContractorSettings.DEFINITIONS.adsMargin
-    assertEquals(TheContractorSettings.getDefaultValue("adsMargin"), 25)
-    assertNear(TheContractorSettings.new():getADSMargin(), 0.25, 0.0001)
-    assertTrue(definition.isShown(), "ADS is loaded in these tests")
+    assertEquals(TheContractorSettings.getDefaultValue("adsWorkshopMargin"), 40)
+    assertEquals(TheContractorSettings.getDefaultValue("adsFieldMargin"), 50)
+    local settings = TheContractorSettings.new()
+    assertNear(settings:getADSMargin(), 0.4, 0.0001)
+    assertNear(settings:getADSMargin(true), 0.5, 0.0001)
     local realIsActive = TCADSRepairContracts.isActive
-    TCADSRepairContracts.isActive = function() return false end
-    assertTrue(not definition.isShown())
-    TCADSRepairContracts.isActive = realIsActive
+    for _, id in ipairs({ "adsWorkshopMargin", "adsFieldMargin" }) do
+        local definition = TheContractorSettings.DEFINITIONS[id]
+        assertTrue(definition.isShown(), "ADS is loaded in these tests")
+        TCADSRepairContracts.isActive = function() return false end
+        assertTrue(not definition.isShown())
+        TCADSRepairContracts.isActive = realIsActive
+    end
 end)
 
 test("the daily roll only fills free bays", function()
@@ -563,7 +554,7 @@ test("an offer lapses after its days and the customer takes the machine", functi
     assertEquals(#tc.RepairContracts.removals, 1)
 
     tc.RepairContracts:update(TheContractorRepairContracts.PLACE_CHECK_MS)
-    assertTrue(vehicle.isDeleted, "collected once out of sight")
+    assertTrue(vehicle.isDeleted, "collected on the next look")
     assertEquals(#tc.RepairContracts.removals, 0)
 end)
 
@@ -572,7 +563,7 @@ test("a machine isn't taken from under someone driving it", function()
     local job, vehicle = makeOffer(world, tc)
     function vehicle:getIsControlled() return true end
     tc.Jobs:transitionJobState(1, job.id, TheContractorJob.STATE.DECLINED)
-    tc.RepairContracts:update(TheContractorRepairContracts.PLACE_FALLBACK_MS)
+    tc.RepairContracts:update(TheContractorRepairContracts.PLACE_CHECK_MS)
     assertTrue(not vehicle.isDeleted)
     function vehicle:getIsControlled() return false end
     tc.RepairContracts:update(TheContractorRepairContracts.PLACE_CHECK_MS)
@@ -682,6 +673,20 @@ end)
 
 -- The rest ------------------------------------------------------------------------------
 
+test("a job from before the parts were kept has none, streamed or saved", function()
+    local world, tc = setup()
+    local job = makeOffer(world, tc)
+    job.workshop.partsCost = nil
+    local stream = world:newStream()
+    TheContractorJobs.writeJob(stream, job)
+    assertEquals(TheContractorJobs.readJob(stream).workshop.partsCost, nil)
+    local xmlFile = {}
+    tc.Jobs:saveToXmlFile(xmlFile)
+    local jobs = TheContractorJobs.new()
+    jobs:loadFromXMLFile(xmlFile)
+    assertEquals(jobs:getJob(1, job.id).workshop.partsCost, nil)
+end)
+
 test("a workshop job streams, saves and loads its machine and contract", function()
     local world, tc = setup()
     local job, vehicle = makeOffer(world, tc)
@@ -693,6 +698,7 @@ test("a workshop job streams, saves and loads its machine and contract", functio
     assertEquals(copy.workshop.kind, "repair")
     assertEquals(table.concat(copy.workshop.requiredTools, ","), "lift")
     assertEquals(copy.workshop.operatingHours, 2450)
+    assertEquals(copy.workshop.partsCost, 1000)
     assertEquals(copy.workshop.zoneUniqueId, nil, "server-only")
 
     local xmlFile = {}
@@ -703,6 +709,7 @@ test("a workshop job streams, saves and loads its machine and contract", functio
     assertEquals(loaded.workshop.vehicleUniqueId, "vehicle" .. vehicle.id)
     assertEquals(loaded.workshop.zoneUniqueId, "zone1")
     assertEquals(loaded.workshop.offerExpiresDay, job.workshop.offerExpiresDay)
+    assertEquals(loaded.workshop.partsCost, 1000)
     TCVehicleIds.getObjectId = function(uniqueId) return uniqueId == "vehicle" .. vehicle.id and vehicle.id or nil end
     jobs:resolveSavedVehicles()
     assertEquals(loaded.workshop.vehicleId, vehicle.id)
@@ -857,6 +864,83 @@ test("vanilla's workshop lists a customer's machine standing in it, while its jo
     TheContractorRepairContracts.clearCache()
     listed = TheContractorRepairContracts.determineCurrentVehicles(sellingPoint, vanilla)
     assertEquals(#listed, 1, "not once the customer's taking it back")
+end)
+
+test("service vehicle mods' workshops list a customer's machine too", function()
+    local world, tc = setup()
+    local job, vehicle = makeOffer(world, tc)
+    local own = world:addVehicle({ name = "Our tractor" })
+    function table.hasElement(list, value)
+        for _, element in ipairs(list) do
+            if element == value then
+                return true
+            end
+        end
+        return false
+    end
+    entityExists = function() return true end
+    local shown = {}
+    setVisibility = function(node, visible) shown[node] = visible end
+    vehicle.rootNode, own.rootNode = 2, 1
+    for _, v in ipairs({ vehicle, own }) do
+        v.rootVehicle = v
+        function v:getChildVehicles() return { self } end
+    end
+    g_currentMission.nodeToObject = { [11] = vehicle, [12] = own }
+    world:load("src/util/TCServiceVehicleMods.lua")
+
+    -- Shaped like GtX's ServiceVehicleWorkshop (FS25_FST99Service) and
+    -- Rockstar's MobileWorkshop: both only take a vehicle that shows in the
+    -- vehicles overview, which MISSION never does.
+    local markers = {}
+    local ServiceVehicleWorkshop = {}
+    function ServiceVehicleWorkshop:determineCurrentVehicles()
+        local vehicles = {}
+        for shapeId in pairs(self.vehicleShapesInRange) do
+            if g_currentMission.nodeToObject[shapeId] == own then
+                table.insert(vehicles, own)
+            end
+        end
+        self.currentVehicles = vehicles
+        setVisibility(self.infoTextsNode, #vehicles > 0)
+        self:updateTriggerMarkers(#vehicles > 0)
+        return vehicles
+    end
+    function ServiceVehicleWorkshop:updateTriggerMarkers(hasVehicles) table.insert(markers, hasVehicles) end
+    local MobileWorkshop = {}
+    function MobileWorkshop:getIsValidVehicle(v, farmId)
+        return v == own and v:getOwnerFarmId() == farmId
+    end
+    g_modIsLoaded = { FS25_FST99Service = true, FS25_mobileWorkshop = true, FS25_Other = true }
+    FS25_FST99Service = { ServiceVehicleWorkshop = ServiceVehicleWorkshop }
+    FS25_mobileWorkshop = { MobileWorkshop = MobileWorkshop }
+    FS25_Other = {}
+    TCServiceVehicleMods.install()
+    TCServiceVehicleMods.install()
+
+    -- The customer's machine alone in the service truck's trigger.
+    local workshop = setmetatable({ vehicleShapesInRange = { [11] = true }, infoTextsNode = 99 },
+        { __index = ServiceVehicleWorkshop })
+    local listed = workshop:determineCurrentVehicles()
+    assertEquals(#listed, 1)
+    assertEquals(listed[1], vehicle)
+    assertEquals(workshop.currentVehicles, listed)
+    assertEquals(shown[99], true, "info board back on")
+    assertEquals(markers[#markers], true, "markers back on")
+    -- With the farm's own machine as well.
+    workshop.vehicleShapesInRange[12] = true
+    listed = workshop:determineCurrentVehicles()
+    assertEquals(#listed, 2, "hooked once, however many loads")
+    assertEquals(listed[1], own)
+
+    assertTrue(MobileWorkshop:getIsValidVehicle(vehicle, 1))
+    assertTrue(MobileWorkshop:getIsValidVehicle(own, 1))
+    assertTrue(not MobileWorkshop:getIsValidVehicle(vehicle, 2), "not another farm's")
+
+    tc.Jobs:transitionJobState(1, job.id, TheContractorJob.STATE.DECLINED)
+    TheContractorRepairContracts.clearCache()
+    assertEquals(#workshop:determineCurrentVehicles(), 1, "not once the customer's taking it back")
+    assertTrue(not MobileWorkshop:getIsValidVehicle(vehicle, 1))
 end)
 
 -- Progress shown in Job details -------------------------------------------------

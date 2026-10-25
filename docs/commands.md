@@ -348,7 +348,7 @@ tcJob park
 
 ### `tcJob repairArrival [repair|maintenance] [severity]`
 
-Sends a customer's machine to your first free repair zone bay now, for testing repair contracts (needs FS25_AdvancedDamageSystem). It's queued like a normal arrival: in single player it's placed while you can't see the bay, or after about 2 minutes anyway (in multiplayer straight away), then ADS prepares it and the job offer goes up in your Inbox. The model is picked at random from those the zone takes (its type, its filter, what fits a bay).
+Sends a customer's machine to your first free repair zone bay now, for testing repair contracts (needs FS25_AdvancedDamageSystem). It's queued like a normal arrival and placed within a couple of seconds, then ADS prepares it and the job offer goes up in your Inbox. The model is picked at random from those the zone takes (its type, its filter, what fits a bay).
 
 | Argument | Meaning |
 |---|---|
@@ -502,7 +502,7 @@ Makes a random event happen to your farm now, ignoring the odds, the Random even
 
 - `goodNews [story]`: that story, or a random one other than the last you had, even before your first completed job. The story's reward is applied and its inbox message posted. `[story]` is case-insensitive; an unknown one lists them: `photoPosted`, `parishNews`, `parishCouncil`, `youngFarmers` (reputation, scaled to your tier), `supplierRefund`, `loyaltyRebate`, `ratesRefund` (cash, scaled by the job pay setting).
 - `poaching [worker]`: the rival goes after that worker (a `<worker>` as for `tcWorker`: an id or the start of a name), however long they've been with you. Without one it picks as the real event does: someone with at least 3 months' service, nearly always one of your most valuable. Not someone who's leaving or already has an offer.
-- `fieldBreakdown [player|mobile]`: a customer's machine breaks down on an NPC's field, fixable on the spot with ADS's tool box (`player`) or only with a mobile workshop (`mobile`). Without one it picks as the real event does: even odds, or mostly `player` if you've a tool box and no mobile workshop. The machine is placed like a repair zone arrival (out of sight in single player, or after about 2 minutes anyway) and the offer, due today, goes up in your Inbox.
+- `fieldBreakdown [player|mobile]`: a customer's machine breaks down on an NPC's field, fixable on the spot with ADS's tool box (`player`) or only with a mobile workshop (`mobile`). Without one it picks as the real event does: even odds, or mostly `player` if you've a tool box and no mobile workshop. The machine is placed like a repair zone arrival (within a couple of seconds) and the offer, due today, goes up in your Inbox.
 
 The events that happen as a job ends (`kettle`, `paidEarly`, `stepsUp`, `roadAccident`, `sprayDrift`) use your latest completed job they can act on, whatever its quality score: one with hired workers for `kettle`, one whose invoice isn't due yet for `paidEarly` (so none with the late invoices setting off), one with a worker rated 5 or under for their part of it for `stepsUp`, and one a hired worker drove whose machines are still yours for `roadAccident` (its machines are damaged wherever they are now), and a hired worker's herbicide job with no botch claim on its way for `sprayDrift` (judged on the wind right now, not on the day). Use `tcCompany outcome` first to decide how an event comes out.
 

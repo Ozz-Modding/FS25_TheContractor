@@ -78,13 +78,15 @@ do
     }
 end
 
--- 100: the average margin over ADS's own quote on a repair contract's
--- offer (TheContractorRepairContracts.getMargin rolls it within
--- MARGIN_SPREAD). isShown keeps it off the menu without ADS; it's still
--- saved and synced like the rest.
-do
-    local values, strings, defaultIndex = percentOptions(0, 100, 5, 25)
-    TheContractorSettings.DEFINITIONS.adsMargin = {
+-- 100: the average margin over the parts in ADS's quote on a repair
+-- contract's offer, which is what pays for the work: one for jobs in a
+-- repair zone, one for 101's field breakdowns (rollMargin rolls it within
+-- MARGIN_SPREAD). isShown keeps them off the menu without ADS; they're still
+-- saved and synced like the rest. They replaced 100's adsMargin (a margin
+-- over the whole quote, labour included), so an old save's value is ignored.
+local function adsMarginDefinition(defaultValue)
+    local values, strings, defaultIndex = percentOptions(0, 150, 5, defaultValue)
+    return {
         values = values,
         strings = strings,
         default = defaultIndex,
@@ -93,8 +95,11 @@ do
         end
     }
 end
+TheContractorSettings.DEFINITIONS.adsWorkshopMargin = adsMarginDefinition(40)
+TheContractorSettings.DEFINITIONS.adsFieldMargin = adsMarginDefinition(50)
 
-TheContractorSettings.ITEMS = { "jobPayRate", "lateInvoices", "randomEvents", "nameStyle", "adsMargin" }
+TheContractorSettings.ITEMS = { "jobPayRate", "lateInvoices", "randomEvents", "nameStyle", "adsWorkshopMargin",
+    "adsFieldMargin" }
 
 -- 086: whether parking slots show outside the construction menu too. A
 -- display preference, so it's a local item (below). onChanged runs on this
@@ -265,9 +270,11 @@ function TheContractorSettings:getNameStyle()
     return TheContractorSettings.NAME_STYLES[self.values.nameStyle] or TheContractorSettings.NAME_STYLES[1]
 end
 
--- 100: the adsMargin setting as a fraction (0.25 for 25%).
-function TheContractorSettings:getADSMargin()
-    return self.values.adsMargin / 100
+-- 100: the repair contract margin over the parts as a fraction (0.4 for
+-- 40%): a field breakdown's (101) or a repair zone job's.
+function TheContractorSettings:getADSMargin(isFieldBreakdown)
+    local id = isFieldBreakdown and "adsFieldMargin" or "adsWorkshopMargin"
+    return self.values[id] / 100
 end
 
 -- 048: the multiplier on a new job's price. FS25_EconomyScale's factor

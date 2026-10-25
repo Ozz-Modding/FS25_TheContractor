@@ -12,9 +12,11 @@
 		<text name="tc_setting_randomEvents_rare" text="Rare"/>
 		<text name="tc_setting_randomEvents_normal" text="Normal"/>
 		<text name="tc_setting_nameStyle" text="Staff name style"/>
-		<text name="tc_setting_adsMargin" text="Repair contract margin"/>
+		<text name="tc_setting_adsWorkshopMargin" text="Repair zone margin"/>
+		<text name="tc_setting_adsFieldMargin" text="Field breakdown margin"/>
 		<text name="tc_toolTip_nameStyle" text="Where the names of new job candidates and office administrators come from. European mix and Mixed pick a different style for each person. Staff you already have keep their names."/>
-		<text name="tc_toolTip_adsMargin" text="The average margin over a workshop's going rate on Advanced Damage System repair, service and breakdown offers. Each offer is within 10% either side of it. Offers already made keep their price."/>
+		<text name="tc_toolTip_adsWorkshopMargin" text="What you charge for the work on Advanced Damage System repair and service offers in your repair zones, as a share on top of the parts the job needs. Each offer is within 10% either side of it. Offers already made keep their price."/>
+		<text name="tc_toolTip_adsFieldMargin" text="What you charge for the work on Advanced Damage System breakdowns out in the field, as a share on top of the parts the job needs. Each offer is within 10% either side of it. Offers already made keep their price."/>
 		<text name="tc_setting_showParkingSlots" text="Show parking slots"/>
 		<text name="tc_toolTip_showParkingSlots" text="Show your parking slots' markings outside the construction menu too. Just for you: other players choose their own. Right Ctrl+P switches it by default."/>
 		<text name="tc_nameStyle_british" text="British"/>
@@ -482,7 +484,9 @@
 		<text name="tc_workshop_estimatedCost" text="Estimated cost"/>
 		<text name="tc_workshop_billedAmount" text="Billed amount"/>
 		<text name="tc_workshop_profit" text="Profit"/>
-		<text name="tc_workshop_earningsNote" text="The estimated cost is ADS's quote for the work. The customer was billed that plus your margin, and the difference is the profit."/>
+		<text name="tc_workshop_partsCost" text="Parts cost"/>
+		<text name="tc_workshop_earningsNote" text="The parts cost is ADS's estimate of the parts and materials the job needed. The customer was billed that plus your margin for the work, and the difference is the profit, before your staff's wages."/>
+		<text name="tc_workshop_earningsNoteQuote" text="The estimated cost is ADS's quote for the work. The customer was billed that plus your margin, and the difference is the profit."/>
 		<text name="tc_workshop_missedNote" text="This job failed: it wasn't done by the day it was due, so the customer paid nothing and collected their machine."/>
 		<text name="tc_workshop_billedNothing" text="Nothing"/>
 		<text name="tc_repair_progressSoFar" text="%d fixed so far"/>

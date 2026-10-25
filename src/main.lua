@@ -23,6 +23,7 @@ source(TheContractor.dir .. "src/util/TCSupplyStock.lua")
 source(TheContractor.dir .. "src/util/TCADSStock.lua")
 source(TheContractor.dir .. "src/util/TCADSWorkshop.lua")
 source(TheContractor.dir .. "src/util/TCADSRepairContracts.lua")
+source(TheContractor.dir .. "src/util/TCServiceVehicleMods.lua")
 source(TheContractor.dir .. "src/util/TCRepairZoneActivatable.lua")
 source(TheContractor.dir .. "src/util/TCJobConsequences.lua")
 source(TheContractor.dir .. "src/util/TCVehicleCondition.lua")
@@ -292,6 +293,8 @@ function TheContractor:loadMap()
     TCADSWorkshop.detect()
     -- 100: whether ADS can prepare customers' machines for repair zones.
     TCADSRepairContracts.detect()
+    -- 100/101: service vehicle mods' workshops list customers' machines.
+    TCServiceVehicleMods.install()
 
     TheContractorDisableVanillaContracts.hideContractsTab()
 
