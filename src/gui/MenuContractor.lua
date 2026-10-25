@@ -3730,6 +3730,15 @@ function MenuContractor:getCompletedWorkshopRows(job)
         return rows
     end
     add(g_i18n:getText("tc_workshop_columnCompleted"), formatCompletedAt(job.completedAt))
+    local turnaround = TheContractorRepairContracts.getTurnaroundMinutes(job)
+    if turnaround ~= nil then
+        local text = string.format(g_i18n:getText("tc_logbook_hours"), turnaround / 60)
+        local speedFactor = TheContractorRepairContracts.getSpeedFactor(job)
+        if speedFactor > 1.005 then
+            text = string.format(g_i18n:getText("tc_workshop_turnaroundBonus"), text, (speedFactor - 1) * 100)
+        end
+        add(g_i18n:getText("tc_workshop_turnaround"), text)
+    end
 
     local cost, billed, profit, costKey = MenuContractor.getWorkshopEarnings(job)
     table.insert(rows, { section = g_i18n:getText("tc_workshop_sectionEarnings") })

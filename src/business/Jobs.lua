@@ -404,6 +404,11 @@ function TheContractorJobs:applyJobStateChanged(farmId, jobId, newState)
 
     if job:transitionTo(newState) then
         Logging.info("TheContractor: farm %d job %d is now %s", farmId, jobId, newState)
+        -- 100: a workshop job's turnaround counts from here (its speed
+        -- reputation). Stamped on every machine as the change arrives.
+        if newState == TheContractorJob.STATE.ACCEPTED and job.workshop ~= nil then
+            job.workshop.acceptedAt = TheContractorJobs.getGameMinutes()
+        end
     end
 end
 
@@ -1006,9 +1011,14 @@ end
 -- (053) get a little extra on top. A poor job (below
 -- REPUTATION_ZERO_QUALITY) loses reputation instead, with no minimum or
 -- bonus. The player driving personally always scores 100, so earns in full.
+-- A workshop job (100) also earns more for being done quickly
+-- (TheContractorRepairContracts.getSpeedFactor).
 function TheContractorJobs:calculateReputationReward(job)
     local factor = TheContractorJobs.getQualityReputationFactor(job.qualityScore or 100)
     local reward = TheContractorJobs.getBaseReputationReward(job) * factor
+    if factor > 0 and job.workshop ~= nil then
+        reward = reward * TheContractorRepairContracts.getSpeedFactor(job)
+    end
     if factor <= 0 then
         -- Rounded toward zero: a hair under the line costs nothing.
         return -math.floor(-reward)
@@ -1248,8 +1258,8 @@ function TheContractorJobs:completeJob(job, isForced)
 end
 
 -- 100: a workshop job is done when ADS says the customer's machine is (or
--- tcJob state forces it): invoiced, reputation by severity (quality 100, no
--- crew), logged, and the customer comes for the machine.
+-- tcJob state forces it): invoiced, reputation by kind, severity and speed
+-- (quality 100, no crew), logged, and the customer comes for the machine.
 function TheContractorJobs:completeWorkshopJob(job)
     if not job:canTransitionTo(TheContractorJob.STATE.COMPLETED) then
         return
@@ -1377,6 +1387,7 @@ function TheContractorJobs.writeWorkshop(streamId, workshop)
     -- 101: a breakdown's field.
     streamWriteInt32(streamId, workshop.fieldId or 0)
     streamWriteFloat32(streamId, workshop.partsCost or -1)
+    streamWriteFloat32(streamId, workshop.acceptedAt or -1)
 end
 
 local function splitList(text)
@@ -1409,6 +1420,8 @@ function TheContractorJobs.readWorkshop(streamId)
     workshop.fieldId = fieldId ~= 0 and fieldId or nil
     local partsCost = streamReadFloat32(streamId)
     workshop.partsCost = partsCost >= 0 and partsCost or nil
+    local acceptedAt = streamReadFloat32(streamId)
+    workshop.acceptedAt = acceptedAt >= 0 and acceptedAt or nil
     return workshop
 end
 
@@ -1663,6 +1676,7 @@ function TheContractorJobs.loadWorkshop(xmlFile, key)
         offerExpiresDay = getXMLInt(xmlFile, key .. "#offerExpiresDay"),
         quotePrice = Utils.getNoNil(getXMLFloat(xmlFile, key .. "#quotePrice"), 0),
         partsCost = getXMLFloat(xmlFile, key .. "#partsCost"),
+        acceptedAt = getXMLFloat(xmlFile, key .. "#acceptedAt"),
         requiredTools = splitList(getXMLString(xmlFile, key .. "#requiredTools")),
         serviceLevel = getXMLString(xmlFile, key .. "#serviceLevel"),
         operatingHours = getXMLFloat(xmlFile, key .. "#operatingHours"),
@@ -1691,6 +1705,9 @@ function TheContractorJobs.saveWorkshop(xmlFile, key, workshop)
     setXMLFloat(xmlFile, key .. "#quotePrice", workshop.quotePrice or 0)
     if workshop.partsCost ~= nil then
         setXMLFloat(xmlFile, key .. "#partsCost", workshop.partsCost)
+    end
+    if workshop.acceptedAt ~= nil then
+        setXMLFloat(xmlFile, key .. "#acceptedAt", workshop.acceptedAt)
     end
     setXMLString(xmlFile, key .. "#requiredTools", table.concat(workshop.requiredTools or {}, ","))
     if workshop.serviceLevel ~= nil then
