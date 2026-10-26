@@ -46,8 +46,9 @@ end
 -- A vehicle counts as free if it isn't sitting in another of this farm's
 -- allocated/in_progress jobs' equipment (008 - field and haulage equipment
 -- alike), and isn't currently sitting in 023's post-completion buffer
--- (still physically hidden) or stolen (069). Waiting to be parked (062)
--- doesn't stop it.
+-- (still physically hidden), stolen (069) or at a tipped trailer's scene
+-- (105: the trailer on its side, or the tractor left with it).
+-- Waiting to be parked (062) doesn't stop it.
 function TheContractorAllocation:isVehicleFree(farmId, vehicle)
     local vehicleId = NetworkUtil.getObjectId(vehicle)
     if vehicleId == nil then
@@ -60,6 +61,12 @@ function TheContractorAllocation:isVehicleFree(farmId, vehicle)
 
     -- 069: stolen, waiting on the police.
     if g_currentMission.TheContractor.Theft:isStolen(vehicleId) then
+        return false
+    end
+
+    -- 105: a tipped trailer and its tractor, until it's righted or recovered.
+    local tippedTrailer = g_currentMission.TheContractor.TippedTrailer
+    if tippedTrailer ~= nil and tippedTrailer:isAtScene(vehicleId) then
         return false
     end
 

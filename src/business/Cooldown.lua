@@ -242,6 +242,54 @@ function TheContractorCooldown:applyCooldownEnded(farmId, cooldownId)
     return entry
 end
 
+-- 105: takes some vehicles out of whatever cooldown they're in, leaving the
+-- rest of it running (a tipped trailer stays on the road while its tractor
+-- comes home). They stay as they are: hidden until the caller reveals them.
+-- Server-authoritative, applied everywhere through
+-- TCEquipmentCooldownReleasedEvent.
+function TheContractorCooldown:releaseVehicles(vehicleIds)
+    if not g_currentMission:getIsServer() then
+        return
+    end
+
+    local released = {}
+    for _, vehicleId in ipairs(vehicleIds) do
+        if self:isVehicleInCooldown(vehicleId) then
+            table.insert(released, vehicleId)
+        end
+    end
+    if #released == 0 then
+        return
+    end
+
+    self:applyVehiclesReleased(released)
+    TCLog.info("TheContractor: %d vehicle(s) taken out of their cooldown", #released)
+
+    if g_server ~= nil then
+        g_server:broadcastEvent(TCEquipmentCooldownReleasedEvent.new(released))
+    end
+end
+
+-- Every machine.
+function TheContractorCooldown:applyVehiclesReleased(vehicleIds)
+    local isReleased = {}
+    for _, vehicleId in ipairs(vehicleIds) do
+        isReleased[vehicleId] = true
+        self.vehicleIdsInCooldown[vehicleId] = nil
+    end
+    for _, farmEntries in pairs(self.entriesByFarm) do
+        for _, entry in pairs(farmEntries) do
+            local kept = {}
+            for _, vehicleId in ipairs(entry.vehicleIds) do
+                if not isReleased[vehicleId] then
+                    table.insert(kept, vehicleId)
+                end
+            end
+            entry.vehicleIds = kept
+        end
+    end
+end
+
 -- Background tick (server-only, same shape as TCJobProgress/Watchdog's own
 -- update(dt) polling): counts every active cooldown down in game time (so
 -- it speeds up with the time scale) and ends whichever ones have expired.

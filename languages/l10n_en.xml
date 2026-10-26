@@ -228,6 +228,7 @@
 		<text name="tc_inbox_chipClaim" text="Claim"/>
 		<text name="tc_inbox_chipTheft" text="Theft"/>
 		<text name="tc_inbox_chipRoadAccident" text="Accident"/>
+		<text name="tc_inbox_chipTippedTrailer" text="Overturned"/>
 		<text name="tc_inbox_chipSprayDrift" text="Complaint"/>
 		<text name="tc_inbox_chipJoyriders" text="Vandalism"/>
 		<text name="tc_inbox_chipFlyTipping" text="Fly-tipping"/>
@@ -323,6 +324,8 @@
 		<text name="finance_tcGoodNews" text="Refunds and rebates"/>
 		<text name="tc_moneyType_wasteDisposal" text="Tipping fees"/>
 		<text name="finance_tcWasteDisposal" text="Tipping fees"/>
+		<text name="tc_moneyType_recovery" text="Vehicle recovery"/>
+		<text name="finance_tcRecovery" text="Vehicle recovery"/>
 		<text name="tc_staff_viewRoster" text="Roster"/>
 		<text name="tc_staff_viewCandidates" text="Candidates"/>
 		<text name="tc_staff_columnName" text="Name"/>
@@ -952,6 +955,15 @@
 		<text name="tc_roadAccident_paymentNotice" text="%s due from the other driver's insurer for the %s"/>
 		<text name="tc_roadAccident_paidTitle" text="Repair paid: %s"/>
 		<text name="tc_roadAccident_paidBody" text="The other driver's insurer has finally paid for the repair to your %s: %s."/>
+		<text name="tc_tippedTrailer_eventName" text="Tipped trailer"/>
+		<text name="tc_tippedTrailer_title" text="Trailer on its side after Field %s"/>
+		<text name="tc_tippedTrailer_body" text="On the way back from Field %s, %s took a bend too fast and tipped the %s over. Nobody was hurt and they got the %s unhitched, but both are damaged and they've been left by the road where it happened (they're on your map). Word gets around: your reputation has taken a knock. A recovery firm can right the trailer and bring both back to the yard for %s. Or go out there yourself: push the trailer back onto its wheels, hitch it up to the tractor and drive them home."/>
+		<text name="tc_tippedTrailer_bodyNoTractor" text="On the way back from Field %s, %s took a bend too fast and tipped the %s over. Nobody was hurt, but the trailer is damaged and lying on its side by the road where it happened (it's on your map). Word gets around: your reputation has taken a knock. A recovery firm can right it and bring it back to the yard for %s. Or go out there yourself: push the trailer back onto its wheels and bring it home with a tractor that can pull it."/>
+		<text name="tc_tippedTrailer_recoverButton" text="Call recovery"/>
+		<text name="tc_tippedTrailer_diyButton" text="We'll sort it"/>
+		<text name="tc_tippedTrailer_recoverConfirm" text="Call out a recovery firm to right the trailer and bring everything back to the yard for %s?"/>
+		<text name="tc_tippedTrailer_notice" text="The %s is on its side by the road after Field %s"/>
+		<text name="tc_tippedTrailer_activate" text="Push the trailer back onto its wheels"/>
 		<text name="tc_sprayDrift_eventName" text="Spray drift complaint"/>
 		<text name="tc_sprayDrift_complaintTitle" text="Spray drift complaint: Field %s"/>
 		<text name="tc_sprayDrift_neighbour_complaintBody" text="A neighbour of Field %s says the herbicide %s put on it drifted over the hedge and scorched their garden and paddock. We're looking into it: expect the findings in a week or two."/>
