@@ -40,7 +40,8 @@ TheContractorFlyTipping.MAX_PIECES = 30
 TheContractorFlyTipping.GATE_INSET = 6
 
 -- Per job piece taken to a skip, 1x UK (a landfill gate fee's share for a
--- bulky item), charged through scaleCost.
+-- bulky item), charged through scaleCost. An old ADS part (103) costs the
+-- same.
 TheContractorFlyTipping.TIPPING_FEE = 5
 
 table.insert(FinanceStats.statNames, "tcWasteDisposal")
@@ -212,4 +213,23 @@ function TheContractorFlyTipping:disposeDebris(debris)
     end
     debris:delete()
     return job
+end
+
+-- A skip took an old part a replacement left (103, TCADSStock.isUsedPart):
+-- its owner pays the tipping fee, then it's gone. Selling it to a dealer
+-- through ADS stays the other way out. Returns the fee charged.
+function TheContractorFlyTipping:disposeUsedPart(part)
+    local farmId = part.getOwnerFarmId ~= nil and part:getOwnerFarmId() or nil
+    local fee = 0
+    if farmId ~= nil and farmId ~= FarmManager.SPECTATOR_FARM_ID then
+        fee = TheContractorFlyTipping.getTippingFee()
+        if fee > 0 then
+            g_currentMission:addMoney(-fee, farmId, MoneyType.TC_WASTE_DISPOSAL, true, true)
+            g_currentMission.TheContractor.Finances:recordDisposal(farmId, fee)
+        end
+    end
+    Logging.info("TheContractor: farm %s: old part %s taken to a skip, fee %.0f", tostring(farmId),
+        part.getName ~= nil and part:getName() or "?", fee)
+    part:delete()
+    return fee
 end
