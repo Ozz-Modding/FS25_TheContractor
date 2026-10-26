@@ -376,7 +376,12 @@
 		<text name="tc_growth_stat_haulage" text="haulage"/>
 		<text name="tc_consequences_extraWear" text="Extra wear from %s's skill gaps: %s"/>
 		<text name="tc_consequences_unknownWorker" text="A former worker"/>
-		<text name="tc_sickness_offSick" text="%s has called in sick and can't take jobs for a few days"/>
+		<text name="tc_sickness_offSick" text="%s has called in sick and can't take jobs"/>
+		<text name="tc_sickness_offToday" text="%s has called in sick and can't take jobs today"/>
+		<text name="tc_sickness_offDays" text="%s has called in sick and can't take jobs for %d days"/>
+		<text name="tc_injury_offSick" text="%s has been hurt at work and can't take jobs"/>
+		<text name="tc_injury_offToday" text="%s has been hurt at work and can't take jobs today"/>
+		<text name="tc_injury_offDays" text="%s has been hurt at work and can't take jobs for %d days"/>
 		<text name="tc_sickness_recovered" text="%s is back at work after being off sick"/>
 		<text name="tc_staff_jobLine" text="%s (Field %s)"/>
 		<text name="tc_staff_hireConfirm" text="Hire %s for %s per month? The salary is charged at the start of every month while they're on your roster. The first month is paid now."/>
@@ -985,6 +990,16 @@
 		<text name="tc_poaching_stayedBody" text="%s has turned down the offer from %s and is staying with you, on the same pay."/>
 		<text name="tc_poaching_leftTitle" text="%s has taken the offer"/>
 		<text name="tc_poaching_leftBody" text="%s has accepted the offer from %s and handed in their notice. They leave at the start of %s."/>
+		<text name="tc_inbox_chipInjury" text="Injury"/>
+		<text name="tc_injury_eventName" text="Workplace injury"/>
+		<text name="tc_injury_title" text="%s hurt at work"/>
+		<text name="tc_injury_body" text="%s %s. Nothing's broken, but they're off work for %d day(s), counting today: %s."/>
+		<text name="tc_injury_bodyOnJob" text="%s %s. They've been patched up and are seeing the job through, but they'll be off work for %d day(s) once they're back."/>
+		<text name="tc_injury_scenario_pto" text="caught a sleeve on a PTO shaft and was pulled against the guard, badly bruising an arm"/>
+		<text name="tc_injury_scenario_trailer" text="slipped while sheeting a trailer and fell off the side, hurting their back"/>
+		<text name="tc_injury_scenario_hitching" text="trapped a hand between the drawbar and the hitch while hooking up an implement"/>
+		<text name="tc_injury_scenario_cab" text="missed the bottom step climbing down from a cab and twisted an ankle"/>
+		<text name="tc_injury_scenario_lifting" text="strained their back moving equipment about"/>
 		<text name="tc_joyriders_sowBody" text="The farmer was pleased with the plowing on Field %s and has offered you the job of sowing it back to grass."/>
 		<text name="tc_flyTipping_eventName" text="Fly-tipping"/>
 		<text name="tc_flyTipping_offerTitle" text="Fly-tipping on Field %s"/>

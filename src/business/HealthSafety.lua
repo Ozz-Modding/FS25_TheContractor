@@ -7,7 +7,8 @@
 -- less likely and shorter: the daily chance is multiplied by
 -- SICKNESS_MULTIPLIER and each extra sick day's chance drops by
 -- EXTRA_DAY_CHANCE_REDUCTION. It applies from the day the policy starts to
--- the day it lapses - it's read live, from overhead state.
+-- the day it lapses - it's read live, from overhead state. It also takes a
+-- quarter off the odds of a workplace injury (104, INJURY_MULTIPLIER).
 --
 -- Without it, each time a worker falls sick there's INSPECTION_CHANCE of a
 -- workplace inspection that finds shortcomings (server-only, from
@@ -27,6 +28,7 @@ TheContractorHealthSafety.COST_PER_WORKER = 250
 
 TheContractorHealthSafety.SICKNESS_MULTIPLIER = 0.6
 TheContractorHealthSafety.EXTRA_DAY_CHANCE_REDUCTION = 0.15
+TheContractorHealthSafety.INJURY_MULTIPLIER = 0.75
 
 TheContractorHealthSafety.INSPECTION_CHANCE = 0.03
 TheContractorHealthSafety.FINE_MIN = 2000
@@ -69,6 +71,11 @@ end
 -- Multiplies 031's daily sickness chance: 1 without the programme.
 function TheContractorHealthSafety:getSicknessMultiplier(farmId)
     return self:isActive(farmId) and TheContractorHealthSafety.SICKNESS_MULTIPLIER or 1
+end
+
+-- Multiplies 104's monthly injury rate: 1 without the programme.
+function TheContractorHealthSafety:getInjuryMultiplier(farmId)
+    return self:isActive(farmId) and TheContractorHealthSafety.INJURY_MULTIPLIER or 1
 end
 
 -- 031's chance of each further sick day, for this farm.

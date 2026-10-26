@@ -683,9 +683,14 @@ end
 
 -- A worker falls sick (server-only): off sick now if idle, else once
 -- they're back. Also used by tcWorker sick, whose forceInspection makes 055's
--- inspection certain if the farm has no H&S programme.
-function TheContractorStaff:makeWorkerSick(farmId, worker, forceInspection)
-    local days = TheContractorStaff.rollSickDays(g_currentMission.TheContractor.HealthSafety:getExtraDayChance(farmId))
+-- inspection certain if the farm has no H&S programme, and by 104's
+-- workplace injuries, whose days are set by the injury rather than rolled
+-- and whose isInjury changes the notification ("hurt at work", not "called
+-- in sick").
+function TheContractorStaff:makeWorkerSick(farmId, worker, forceInspection, days, isInjury)
+    days = days or
+        TheContractorStaff.rollSickDays(g_currentMission.TheContractor.HealthSafety:getExtraDayChance(farmId))
+    worker.isInjured = isInjury == true
 
     if worker:isIdle() then
         TCLog.info("TheContractor: farm %d worker %d (%s) off sick for %d day(s)", farmId, worker.id,
@@ -1273,10 +1278,17 @@ function TheContractorStaff:setWorkerStatus(farmId, workerId, status)
 
     -- The host's own notification - the broadcast below doesn't loop back
     -- to it (see src/events/README.md).
-    TCWorkerStatusChangedEvent.showNotification(self:getWorker(farmId, workerId), oldStatus, status)
+    -- Going off sick: how long for, and whether it's an injury (104), for
+    -- the notification. Clients don't hold either.
+    local sickDays, isInjury = 0, false
+    if worker ~= nil and status == TheContractorWorker.STATUS.SICK then
+        sickDays, isInjury = worker.sickDaysRemaining, worker.isInjured
+    end
+    TCWorkerStatusChangedEvent.showNotification(self:getWorker(farmId, workerId), oldStatus, status, sickDays,
+        isInjury)
 
     if g_server ~= nil then
-        g_server:broadcastEvent(TCWorkerStatusChangedEvent.new(farmId, workerId, status))
+        g_server:broadcastEvent(TCWorkerStatusChangedEvent.new(farmId, workerId, status, sickDays, isInjury))
     end
 end
 
@@ -1793,6 +1805,9 @@ function TheContractorStaff.writeWorkerXML(xmlFile, key, worker)
     if worker.pendingSickDays > 0 then
         setXMLInt(xmlFile, key .. "#pendingSickDays", worker.pendingSickDays)
     end
+    if worker.isInjured and (worker.status == TheContractorWorker.STATUS.SICK or worker.pendingSickDays > 0) then
+        setXMLBool(xmlFile, key .. "#injured", true)
+    end
     if worker.leavesAtPeriod ~= nil then
         setXMLInt(xmlFile, key .. "#leavesAtPeriod", worker.leavesAtPeriod)
         if worker.isQuitting then
@@ -1915,6 +1930,7 @@ function TheContractorStaff.readWorkerXML(xmlFile, key, farmId)
         worker.sickDaysRemaining = math.max(1, getXMLInt(xmlFile, key .. "#sickDaysRemaining") or 1)
     end
     worker.pendingSickDays = getXMLInt(xmlFile, key .. "#pendingSickDays") or 0
+    worker.isInjured = getXMLBool(xmlFile, key .. "#injured") or false
     -- 056 renamed these from retiresAtPeriod/retirementNoticeId.
     worker.leavesAtPeriod = getXMLInt(xmlFile, key .. "#leavesAtPeriod") or
         getXMLInt(xmlFile, key .. "#retiresAtPeriod")

@@ -128,6 +128,8 @@ function TheContractorWorker.new(id, farmId, name, workSpeed, tierCapability, sa
     self.sicknessPropensity = sicknessPropensity or 0
     self.sickDaysRemaining = 0
     self.pendingSickDays = 0
+    -- 104: that sickness is a workplace injury.
+    self.isInjured = false
 
     -- Driven by 018 (allocation) / 023 (buffer/cooldown) — just a field here.
     self.status = TheContractorWorker.STATUS.IDLE
