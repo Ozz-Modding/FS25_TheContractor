@@ -900,6 +900,9 @@ function MenuContractor:onFrameClose()
     if self.workerPortrait ~= nil then
         self.workerPortrait:destroy()
     end
+    if self.overviewTooltip ~= nil then
+        self.overviewTooltip:hide()
+    end
 end
 
 function MenuContractor:update(dt)
@@ -907,6 +910,10 @@ function MenuContractor:update(dt)
 
     if self.workerPortrait ~= nil then
         self.workerPortrait:update(dt)
+    end
+
+    if self.isFrameOpen then
+        self:getOverviewTooltip():update(dt)
     end
 
     -- 097: who's gone home, come in or been sent home changes with the
@@ -986,6 +993,23 @@ function MenuContractor:hasCompany()
         return false
     end
     return tc.Company:hasCompany(g_currentMission:getFarmId())
+end
+
+-- The Overview's mouse-over help: the company logo says where a logo of
+-- the player's own goes. A target hides with its page, so this only shows
+-- on the Overview.
+function MenuContractor:getOverviewTooltip()
+    if self.overviewTooltip == nil then
+        self.overviewTooltip = TCTooltip.new({
+            box = self.overviewTooltipBox,
+            surface = self.overviewTooltipSurface,
+            title = self.overviewTooltipTitle,
+            divider = self.overviewTooltipDivider,
+            text = self.overviewTooltipText
+        })
+        self.overviewTooltip:addTarget(self.companyLogo, TCCompanyLogo.getTooltipContent)
+    end
+    return self.overviewTooltip
 end
 
 -- The player's own logo from modSettings if there is one, else ours, the

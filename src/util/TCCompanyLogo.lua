@@ -137,3 +137,28 @@ end
 function TCCompanyLogo.getDefaultFilename()
     return Utils.getFilename(TCCompanyLogo.DEFAULT_FILENAME, TheContractor.dir)
 end
+
+-- The Overview logo's tooltip: where this machine looks for a logo (the
+-- real folders, the save's own one too when there is one), the README,
+-- and which file is showing now.
+function TCCompanyLogo.getTooltipContent()
+    local paragraphs = {}
+    local dir = TCCompanyLogo.settingsDir
+    if dir ~= nil then
+        table.insert(paragraphs, string.format(g_i18n:getText("tc_logoTip_shared"), dir))
+        local savegameDir = TCCompanyLogo.getSavegameDir()
+        if savegameDir ~= nil then
+            table.insert(paragraphs, string.format(g_i18n:getText("tc_logoTip_savegame"), savegameDir))
+        end
+        table.insert(paragraphs, string.format(g_i18n:getText("tc_logoTip_readme"), TCCompanyLogo.README_FILENAME))
+    end
+
+    local filename = TCCompanyLogo.getFilename()
+    local showing = g_i18n:getText("tc_logoTip_placeholder")
+    if filename ~= TCCompanyLogo.getDefaultFilename() then
+        showing = filename
+    end
+    table.insert(paragraphs, string.format(g_i18n:getText("tc_logoTip_showing"), showing))
+
+    return g_i18n:getText("tc_logoTip_title"), table.concat(paragraphs, "\n\n")
+end
