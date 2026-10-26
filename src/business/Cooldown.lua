@@ -152,7 +152,7 @@ function TheContractorCooldown:startCooldown(job)
         g_currentMission.TheContractor.Staff:setWorkerStatus(job.farmId, workerId, TheContractorWorker.STATUS.COOLDOWN)
     end
 
-    Logging.info("TheContractor: farm %d job %d entering cooldown %d (%d equipment, %.1f min)", job.farmId, job.id,
+    TCLog.info("TheContractor: farm %d job %d entering cooldown %d (%d equipment, %.1f min)", job.farmId, job.id,
         id, #entry.vehicleIds, durationMs / 60000)
 
     if g_server ~= nil then
@@ -210,7 +210,7 @@ function TheContractorCooldown:endCooldown(farmId, cooldownId)
         g_currentMission.TheContractor.Staff:setWorkerStatus(farmId, workerId, TheContractorWorker.STATUS.IDLE)
     end
 
-    Logging.info("TheContractor: farm %d cooldown %d ended, %d equipment back in the pool", farmId, cooldownId,
+    TCLog.info("TheContractor: farm %d cooldown %d ended, %d equipment back in the pool", farmId, cooldownId,
         #entry.vehicleIds)
 
     if g_server ~= nil then

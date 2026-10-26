@@ -296,7 +296,7 @@ function TheContractorFinances:invoiceJob(job)
         g_server:broadcastEvent(TCInvoiceIssuedEvent.new(invoice))
     end
 
-    Logging.info("TheContractor: farm %d invoice %d for job %d: %.0f due day %d (%s)", invoice.farmId, invoice.id,
+    TCLog.info("TheContractor: farm %d invoice %d for job %d: %.0f due day %d (%s)", invoice.farmId, invoice.id,
         invoice.jobId, amount, dueDay, isBadDebt and "bad debt" or (isLate and ("late, pays day " .. paymentDay) or "on time"))
 end
 
@@ -365,7 +365,7 @@ function TheContractorFinances:payInvoice(invoice)
     g_currentMission:addMoney(invoice.amount, invoice.farmId, MoneyType.TC_JOB_PAYOUT, true, true)
     self:addToYearStats(invoice.farmId, "received", invoice.amount)
     self:setInvoiceStatus(invoice, TheContractorFinances.STATUS.PAID)
-    Logging.info("TheContractor: farm %d invoice %d paid (%.0f)", invoice.farmId, invoice.id, invoice.amount)
+    TCLog.info("TheContractor: farm %d invoice %d paid (%.0f)", invoice.farmId, invoice.id, invoice.amount)
 
     -- 053: whether the pursuit did it or they'd have paid anyway, it's over.
     if wasPursued then
@@ -388,7 +388,7 @@ function TheContractorFinances:writeOffInvoice(invoice, isAutomatic)
             TheContractorFinances.WRITE_OFF_NOTICE_MONTHS)
     end
 
-    Logging.info("TheContractor: farm %d invoice %d written off (%.0f, %s)", invoice.farmId, invoice.id,
+    TCLog.info("TheContractor: farm %d invoice %d written off (%.0f, %s)", invoice.farmId, invoice.id,
         invoice.amount, isAutomatic and "automatic" or "by the player")
 end
 
@@ -442,7 +442,7 @@ function TheContractorFinances:requestPursuit(farmId, invoiceId)
         TheContractorFinances.PURSUIT_MAX_PERIODS * environment.daysPerPeriod)
     self:setInvoiceStatus(invoice, TheContractorFinances.STATUS.PURSUING)
 
-    Logging.info("TheContractor: farm %d pursuing invoice %d (%s, fee %.0f), resolves day %d", farmId, invoice.id,
+    TCLog.info("TheContractor: farm %d pursuing invoice %d (%s, fee %.0f), resolves day %d", farmId, invoice.id,
         fee == 0 and "legal cover" or "solicitor", fee, invoice.pursuitResolveDay)
 end
 
@@ -465,7 +465,7 @@ function TheContractorFinances:resolvePursuit(invoice)
         TheContractorFinances.RECOVERY_CHANCE_SOLICITOR
     local roll = math.random()
 
-    Logging.info("TheContractor: farm %d invoice %d pursuit resolved: %s", invoice.farmId, invoice.id,
+    TCLog.info("TheContractor: farm %d invoice %d pursuit resolved: %s", invoice.farmId, invoice.id,
         invoice.isBadDebt and string.format("bad debt, roll %.3f vs %.2f", roll, chance) or "late payer, pays")
 
     if not invoice.isBadDebt or roll < chance then

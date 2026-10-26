@@ -294,7 +294,7 @@ function TheContractorMorale:adjust(farmId, workers, delta, notify, amount)
     for _, worker in ipairs(workers) do
         local old = worker.morale
         worker.morale = TheContractorMorale.clamp(worker.morale + delta)
-        Logging.info("TheContractor: farm %d worker %d (%s) morale %.1f -> %.1f (%+d)", farmId, worker.id,
+        TCLog.info("TheContractor: farm %d worker %d (%s) morale %.1f -> %.1f (%+d)", farmId, worker.id,
             worker.name, old, worker.morale, delta)
     end
 
@@ -387,7 +387,7 @@ function TheContractorMorale:onPeriodChanged()
             local target = TheContractorMorale.getTarget(worker)
             local old = worker.morale
             worker.morale = TheContractorMorale.clamp(old + (target - old) * TheContractorMorale.DRIFT_SHARE)
-            Logging.info("TheContractor: farm %d worker %d (%s) morale %.1f -> %.1f (target %.1f, %d busy / %d idle days)",
+            TCLog.info("TheContractor: farm %d worker %d (%s) morale %.1f -> %.1f (target %.1f, %d busy / %d idle days)",
                 farmId, worker.id, worker.name, old, worker.morale, target, worker.busyDays, worker.idleDays)
             worker.busyDays = 0
             worker.idleDays = 0
@@ -419,7 +419,7 @@ function TheContractorMorale:postHarvestBonus(farmId)
 
     local small = TheContractorMorale.getBonusCost(TheContractorMorale.HARVEST_SMALL)
     local generous = TheContractorMorale.getBonusCost(TheContractorMorale.HARVEST_GENEROUS)
-    Logging.info("TheContractor: farm %d asked about a harvest bonus (%d staff)", farmId, count)
+    TCLog.info("TheContractor: farm %d asked about a harvest bonus (%d staff)", farmId, count)
 
     g_currentMission.TheContractor.Inbox:postMessage(farmId, TheContractorMorale.MESSAGE_KIND,
         "tc_morale_harvestTitle", "tc_morale_harvestBody",
@@ -459,7 +459,7 @@ function TheContractorMorale:onHarvestBonusAnswered(farmId, actionKey)
     end
 
     if each == 0 then
-        Logging.info("TheContractor: farm %d gave no harvest bonus", farmId)
+        TCLog.info("TheContractor: farm %d gave no harvest bonus", farmId)
         self:adjust(farmId, workers, TheContractorMorale.NO_HARVEST_BONUS, TheContractorMorale.NOTIFY.NO_HARVEST_BONUS)
         return
     end
@@ -468,7 +468,7 @@ function TheContractorMorale:onHarvestBonusAnswered(farmId, actionKey)
     local total = cost * #workers
     g_currentMission:addMoney(-total, farmId, MoneyType.TC_WAGES, true, true)
     g_currentMission.TheContractor.Finances:recordWages(farmId, total)
-    Logging.info("TheContractor: farm %d paid a harvest bonus of %.0f each (%.0f)", farmId, cost, total)
+    TCLog.info("TheContractor: farm %d paid a harvest bonus of %.0f each (%.0f)", farmId, cost, total)
 
     self:adjust(farmId, workers, TheContractorMorale.getBonusMorale(each), TheContractorMorale.NOTIFY.HARVEST_BONUS,
         cost)
@@ -492,7 +492,7 @@ function TheContractorMorale:requestBonus(farmId, workerId, amount)
     local cost = TheContractorMorale.getBonusCost(amount)
     g_currentMission:addMoney(-cost, farmId, MoneyType.TC_WAGES, true, true)
     g_currentMission.TheContractor.Finances:recordWages(farmId, cost)
-    Logging.info("TheContractor: farm %d gave worker %d (%s) a bonus of %.0f", farmId, workerId, worker.name, cost)
+    TCLog.info("TheContractor: farm %d gave worker %d (%s) a bonus of %.0f", farmId, workerId, worker.name, cost)
 
     self:adjust(farmId, { worker }, TheContractorMorale.getBonusMorale(amount), TheContractorMorale.NOTIFY.BONUS,
         cost)

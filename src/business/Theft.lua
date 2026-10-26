@@ -429,7 +429,7 @@ function TheContractorTheft:onStolen(incident)
     tc.Notices:publish(incident.farmId, string.format(g_i18n:getText("tc_theft_stolenNotice"), data.name),
         TheContractorTheft.NOTICE_MONTHS)
 
-    Logging.info("TheContractor: farm %d incident %d: %s (%d) stolen, worth %d", incident.farmId, incident.id,
+    TCLog.info("TheContractor: farm %d incident %d: %s (%d) stolen, worth %d", incident.farmId, incident.id,
         data.name, data.vehicleId, data.value)
     return nil
 end
@@ -449,7 +449,7 @@ function TheContractorTheft:onPoliceReport(incident)
     local data = incident.data
     local recovered = self:rollRecovered(data.antiTheft == true)
     local vehicle = getLiveVehicle(data.vehicleId)
-    Logging.info("TheContractor: farm %d incident %d: police report on %s - %s%s", incident.farmId, incident.id,
+    TCLog.info("TheContractor: farm %d incident %d: police report on %s - %s%s", incident.farmId, incident.id,
         data.name, recovered and "recovered" or "not found", vehicle == nil and " (vehicle gone)" or "")
 
     local tc = g_currentMission.TheContractor

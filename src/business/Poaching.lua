@@ -347,7 +347,7 @@ function TheContractorPoaching:onApproached(incident)
         { incidentId = incident.id, workerId = worker.id, offer = data.offer },
         g_currentMission.environment.daysPerPeriod)
 
-    Logging.info("TheContractor: farm %d incident %d: %s offered worker %d (%s) %.0f a month (paid %.0f, expects %.0f, market %.0f, morale %.1f)",
+    TCLog.info("TheContractor: farm %d incident %d: %s offered worker %d (%s) %.0f a month (paid %.0f, expects %.0f, market %.0f, morale %.1f)",
         incident.farmId, incident.id, data.rivalName, worker.id, worker.name, data.offer, worker.salary,
         worker.expectedSalary, TheContractorPayReviews.getMarketValue(worker), worker.morale)
     return TheContractorRandomEvents.WAIT
@@ -377,7 +377,7 @@ function TheContractorPoaching:onMatched(incident)
     tc.PayReviews:setPay(worker, math.max(worker.salary, incident.data.offer), TheContractorPayReviews.NOTIFY.RISE)
     tc.PayReviews:removeMessagesFor(incident.farmId, worker.id)
     tc.Morale:adjust(incident.farmId, { worker }, TheContractorPoaching.MATCH_MORALE)
-    Logging.info("TheContractor: farm %d incident %d: matched %s's offer for worker %d (%s)", incident.farmId,
+    TCLog.info("TheContractor: farm %d incident %d: matched %s's offer for worker %d (%s)", incident.farmId,
         incident.id, incident.data.rivalName, worker.id, worker.name)
     return TheContractorRandomEvents.DONE
 end
@@ -392,7 +392,7 @@ function TheContractorPoaching:onDecision(incident)
     local tc = g_currentMission.TheContractor
     local chance = TheContractorPoaching.getStayChance(worker)
     local stays = self:rollStays(worker)
-    Logging.info("TheContractor: farm %d incident %d: worker %d (%s) %s %s's offer (stay chance %.2f)",
+    TCLog.info("TheContractor: farm %d incident %d: worker %d (%s) %s %s's offer (stay chance %.2f)",
         incident.farmId, incident.id, worker.id, worker.name, stays and "turned down" or "took", data.rivalName,
         chance)
 
@@ -417,7 +417,7 @@ function TheContractorPoaching:onWorkerGone(farmId, workerId)
         return
     end
     self:removeMessage(incident)
-    Logging.info("TheContractor: farm %d incident %d: worker %d gone, offer closed", farmId, incident.id, workerId)
+    TCLog.info("TheContractor: farm %d incident %d: worker %d gone, offer closed", farmId, incident.id, workerId)
     self.randomEvents:closeIncident(incident)
 end
 

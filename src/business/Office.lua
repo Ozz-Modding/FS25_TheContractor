@@ -303,7 +303,7 @@ end
 function TheContractorOffice:hire(farmId, role)
     local problem = self:getHireProblem(farmId, role)
     if problem ~= nil then
-        Logging.info("TheContractor: farm %d can't hire a %s: %s", farmId, tostring(role), problem)
+        TCLog.info("TheContractor: farm %d can't hire a %s: %s", farmId, tostring(role), problem)
         return nil
     end
     local firstPay = TheContractorOffice.getFirstPay(role)
@@ -334,7 +334,7 @@ function TheContractorOffice:hire(farmId, role)
     -- 051: an employee, so employer's liability is required.
     tc.Overheads:ensureRequired(farmId)
 
-    Logging.info("TheContractor: farm %d hired %s as its %s (salary %.0f)", farmId, member.name, role,
+    TCLog.info("TheContractor: farm %d hired %s as its %s (salary %.0f)", farmId, member.name, role,
         member.salary)
     return member
 end
@@ -354,7 +354,7 @@ function TheContractorOffice:release(farmId, role)
 
     self:commit(farmId, role, nil)
 
-    Logging.info("TheContractor: farm %d released its %s %s after %d year(s): %.0f notice, %.0f redundancy",
+    TCLog.info("TheContractor: farm %d released its %s %s after %d year(s): %.0f notice, %.0f redundancy",
         farmId, role, member.name, cost.years, cost.noticePay, cost.redundancyPay)
 end
 
@@ -362,7 +362,7 @@ end
 function TheContractorOffice:train(farmId, role)
     local problem = self:getTrainProblem(farmId, role)
     if problem ~= nil then
-        Logging.info("TheContractor: farm %d's %s can't train: %s", farmId, tostring(role), problem)
+        TCLog.info("TheContractor: farm %d's %s can't train: %s", farmId, tostring(role), problem)
         return false
     end
     local member = self:getMember(farmId, role)
@@ -379,7 +379,7 @@ function TheContractorOffice:train(farmId, role)
         TheContractorOffice.getTrainDays(role, member.level)
     self:commit(farmId, role, updated)
 
-    Logging.info("TheContractor: farm %d's %s %s is training to level %d until day %d (%.0f)", farmId, role,
+    TCLog.info("TheContractor: farm %d's %s %s is training to level %d until day %d (%.0f)", farmId, role,
         member.name, member.level + 1, updated.trainingUntilDay, cost)
     return true
 end
@@ -410,7 +410,7 @@ function TheContractorOffice:setLevel(farmId, role, level)
     updated.trainingUntilDay = nil
     self:commit(farmId, role, updated)
 
-    Logging.info("TheContractor: farm %d's %s %s is now level %d (salary %.0f)", farmId, role, member.name,
+    TCLog.info("TheContractor: farm %d's %s %s is now level %d (salary %.0f)", farmId, role, member.name,
         updated.level, updated.salary)
     return updated
 end

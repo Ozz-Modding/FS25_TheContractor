@@ -56,7 +56,7 @@ function TCAutoDrive.install()
         AutoDrive.tcDriverHooksInstalled = true
     end
 
-    Logging.info("TheContractor: AutoDrive found - staff driver hooks installed")
+    TCLog.info("TheContractor: AutoDrive found - staff driver hooks installed")
     return true
 end
 
@@ -112,7 +112,7 @@ function TCAutoDrive.onUpdateTick(vehicle, superFunc, dt, ...)
 
     local refusal = drivers:getServerStartRefusal(vehicle)
     if refusal ~= nil then
-        Logging.info("TheContractor: stopped AutoDrive on '%s' (%s)", vehicle:getFullName(), refusal)
+        TCLog.info("TheContractor: stopped AutoDrive on '%s' (%s)", vehicle:getFullName(), refusal)
         vehicle.ad.isStoppingWithError = true
         vehicle:stopAutoDrive()
         drivers:notify(vehicle:getOwnerFarmId(), refusal, vehicle)

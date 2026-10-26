@@ -251,11 +251,11 @@ function TheContractorRandomEvents:rollNewEvents()
                 if chance > 0 and math.random() < chance then
                     if definition.triggerHours ~= nil then
                         local pending = self:addPendingTrigger(farmId, key, math.random())
-                        Logging.info("TheContractor: farm %d random event '%s' rolled (%.4f a day), due at %02d:00",
+                        TCLog.info("TheContractor: farm %d random event '%s' rolled (%.4f a day), due at %02d:00",
                             farmId, key, chance, pending.hour)
                     else
                         local incident = self:triggerEvent(farmId, key)
-                        Logging.info("TheContractor: farm %d random event '%s' rolled (%.4f a day)%s", farmId, key,
+                        TCLog.info("TheContractor: farm %d random event '%s' rolled (%.4f a day)%s", farmId, key,
                             chance, incident == nil and ", but nothing to act on" or "")
                     end
                 end
@@ -319,7 +319,7 @@ function TheContractorRandomEvents:firePendingTriggers()
     for _, pending in ipairs(due) do
         if companyNames[pending.farmId] ~= nil and self.eventTypes[pending.eventType] ~= nil and not isOff then
             local incident = self:triggerEvent(pending.farmId, pending.eventType)
-            Logging.info("TheContractor: farm %d random event '%s' due at %02d:00 triggered%s", pending.farmId,
+            TCLog.info("TheContractor: farm %d random event '%s' due at %02d:00 triggered%s", pending.farmId,
                 pending.eventType, pending.hour, incident == nil and ", but nothing to act on" or "")
         end
     end
@@ -381,7 +381,7 @@ function TheContractorRandomEvents:onJobCompleted(job, random)
     while #hits > 0 do
         local key = table.remove(hits, random(1, #hits))
         local incident = self:triggerEvent(job.farmId, key, job)
-        Logging.info("TheContractor: farm %d job %d: job event '%s' rolled%s", job.farmId, job.id, key,
+        TCLog.info("TheContractor: farm %d job %d: job event '%s' rolled%s", job.farmId, job.id, key,
             incident == nil and ", but nothing to act on" or "")
         if incident ~= nil then
             return incident
@@ -443,7 +443,7 @@ function TheContractorRandomEvents:triggerEvent(farmId, key, job)
     self.nextIncidentId = self.nextIncidentId + 1
 
     self:applyIncident(incident)
-    Logging.info("TheContractor: farm %d incident %d (%s) opened", farmId, incident.id, key)
+    TCLog.info("TheContractor: farm %d incident %d (%s) opened", farmId, incident.id, key)
 
     if #definition.stages == 0 then
         self:closeIncident(incident)
@@ -482,7 +482,7 @@ function TheContractorRandomEvents:goToStage(incident, stageKey)
     local definition = self.eventTypes[incident.eventType]
     local stageIndex = definition ~= nil and getStageIndex(definition, stageKey) or nil
     if stageIndex == nil then
-        Logging.warning("TheContractor: incident %d (%s) has no stage '%s', closing it", incident.id,
+        TCLog.warning("TheContractor: incident %d (%s) has no stage '%s', closing it", incident.id,
             incident.eventType, tostring(stageKey))
         self:closeIncident(incident)
         return
@@ -536,7 +536,7 @@ function TheContractorRandomEvents:runStage(incident, stageIndex)
         if result ~= nil then
             nextIndex = getStageIndex(definition, result)
             if nextIndex == nil then
-                Logging.warning("TheContractor: incident %d (%s) stage '%s' went to unknown stage '%s', closing it",
+                TCLog.warning("TheContractor: incident %d (%s) stage '%s' went to unknown stage '%s', closing it",
                     incident.id, incident.eventType, stage.key, tostring(result))
                 self:closeIncident(incident)
                 return
@@ -555,7 +555,7 @@ function TheContractorRandomEvents:runStage(incident, stageIndex)
         stageIndex = nextIndex
     end
 
-    Logging.warning("TheContractor: incident %d (%s) ran more than %d stages in one go, closing it", incident.id,
+    TCLog.warning("TheContractor: incident %d (%s) ran more than %d stages in one go, closing it", incident.id,
         incident.eventType, TheContractorRandomEvents.MAX_STAGES_PER_STEP)
     self:closeIncident(incident)
 end
@@ -570,7 +570,7 @@ end
 
 function TheContractorRandomEvents:closeIncident(incident)
     self:applyIncidentClosed(incident.id)
-    Logging.info("TheContractor: farm %d incident %d (%s) closed", incident.farmId, incident.id, incident.eventType)
+    TCLog.info("TheContractor: farm %d incident %d (%s) closed", incident.farmId, incident.id, incident.eventType)
     if g_server ~= nil then
         g_server:broadcastEvent(TCRandomEventIncidentEvent.new(incident, true))
     end
@@ -780,10 +780,10 @@ function TheContractorRandomEvents:loadFromXMLFile(xmlFile)
         -- it) has no stages to run: drop its incidents.
         local definition = incident.eventType ~= nil and self.eventTypes[incident.eventType] or nil
         if incident.id == nil or incident.farmId == nil or definition == nil then
-            Logging.warning("TheContractor: dropping saved incident %s of unknown event type '%s'",
+            TCLog.warning("TheContractor: dropping saved incident %s of unknown event type '%s'",
                 tostring(incident.id), tostring(incident.eventType))
         elseif getStageIndex(definition, incident.stage) == nil then
-            Logging.warning("TheContractor: dropping saved incident %d (%s) at unknown stage '%s'", incident.id,
+            TCLog.warning("TheContractor: dropping saved incident %d (%s) at unknown stage '%s'", incident.id,
                 incident.eventType, incident.stage)
         else
             self:applyIncident(incident)

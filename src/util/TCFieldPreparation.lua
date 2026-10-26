@@ -84,7 +84,7 @@ local function prepareStandingCrop(job, field)
     local fruitTypeIndex = job:getFruitTypeIndex()
     local fruitType = fruitTypeIndex ~= nil and g_fruitTypeManager:getFruitTypeByIndex(fruitTypeIndex) or nil
     if fruitType == nil then
-        Logging.warning("TheContractor: job %d has no resolvable crop, can't prepare field %d", job.id, job.fieldId)
+        TCLog.warning("TheContractor: job %d has no resolvable crop, can't prepare field %d", job.id, job.fieldId)
         return false
     end
 
@@ -202,9 +202,9 @@ local function finishSpawn(job, total, what)
     job.workTotal = total
     TCJobProgress.clearJob(job.id)
     if total <= 0 then
-        Logging.warning("TheContractor: job %d field %d - no %s could be laid out", job.id, job.fieldId, what)
+        TCLog.warning("TheContractor: job %d field %d - no %s could be laid out", job.id, job.fieldId, what)
     else
-        Logging.info("TheContractor: job %d field %d - laid out %.0f %s", job.id, job.fieldId, total, what)
+        TCLog.info("TheContractor: job %d field %d - laid out %.0f %s", job.id, job.fieldId, total, what)
     end
     -- 067: what a player delivering the straw has to take in is only known
     -- now.
@@ -375,7 +375,7 @@ function TCFieldPreparation.prepareFieldForJob(job)
     local field = g_fieldManager:getFieldById(job.fieldId)
     local jobDef = getJobDef(job)
     if field == nil or jobDef == nil then
-        Logging.warning("TheContractor: job %d field %d not found, can't prepare it", job.id, job.fieldId)
+        TCLog.warning("TheContractor: job %d field %d not found, can't prepare it", job.id, job.fieldId)
         return false
     end
 
@@ -394,7 +394,7 @@ function TCFieldPreparation.prepareFieldForJob(job)
     -- unless someone's dealt with the grass since (then the usual stubble,
     -- or the job could count their work as ours).
     if job.keepFieldState and TheContractorJoyriders.isGrassField(field) then
-        Logging.info("TheContractor: left field %d as it is for job %d (%s)", job.fieldId, job.id, job.jobType)
+        TCLog.info("TheContractor: left field %d as it is for job %d (%s)", job.fieldId, job.id, job.jobType)
         return true
     end
 
@@ -410,7 +410,7 @@ function TCFieldPreparation.prepareFieldForJob(job)
         local fruitTypeIndex = getJobFruitTypeIndex(job)
         local fillTypeIndex = TCFieldPreparation.getJobWindrowFillType(job)
         if fruitTypeIndex == nil or fillTypeIndex == nil then
-            Logging.warning("TheContractor: job %d has no resolvable crop/windrow, can't prepare field %d", job.id,
+            TCLog.warning("TheContractor: job %d has no resolvable crop/windrow, can't prepare field %d", job.id,
                 job.fieldId)
             return false
         end
@@ -422,7 +422,7 @@ function TCFieldPreparation.prepareFieldForJob(job)
     elseif jobType == "strawDelivery" then
         local fruitTypeIndex = job:getFruitTypeIndex()
         if TheContractorJobGeneration.getStrawFillType(fruitTypeIndex) == nil then
-            Logging.warning("TheContractor: job %d has no straw crop, can't prepare field %d", job.id, job.fieldId)
+            TCLog.warning("TheContractor: job %d has no straw crop, can't prepare field %d", job.id, job.fieldId)
             return false
         end
         prepareCutCrop(field, fruitTypeIndex)
@@ -450,7 +450,7 @@ function TCFieldPreparation.prepareFieldForJob(job)
         return false
     end
 
-    Logging.info("TheContractor: prepared field %d for job %d (%s)", job.fieldId, job.id, jobType)
+    TCLog.info("TheContractor: prepared field %d for job %d (%s)", job.fieldId, job.id, jobType)
     return ok
 end
 
@@ -504,7 +504,7 @@ function TCFieldPreparation.removeBaledCrop(job)
         bale:delete()
     end
     if #toDelete > 0 then
-        Logging.info("TheContractor: job %d handed over %d bales on field %d", job.id, #toDelete, job.fieldId)
+        TCLog.info("TheContractor: job %d handed over %d bales on field %d", job.id, #toDelete, job.fieldId)
     end
 end
 
@@ -519,7 +519,7 @@ local function resumeAfterLoad()
                     job.jobType == "strawDelivery") and
                 job.workTotal == nil and (job.state == TheContractorJob.STATE.ALLOCATED or
                     job.state == TheContractorJob.STATE.IN_PROGRESS) then
-                Logging.info("TheContractor: job %d field %d wasn't finished being laid out, preparing it again",
+                TCLog.info("TheContractor: job %d field %d wasn't finished being laid out, preparing it again",
                     job.id, job.fieldId)
                 TCFieldPreparation.prepareFieldForJob(job)
             end

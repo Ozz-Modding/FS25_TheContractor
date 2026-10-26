@@ -232,7 +232,7 @@ function TheContractorJobs:registerJob(job, isNewArrival)
         TheContractorRepairContracts.clearCache()
     end
 
-    Logging.info("TheContractor: farm %d created job %d (%s)", job.farmId, job.id, job.jobType)
+    TCLog.info("TheContractor: farm %d created job %d (%s)", job.farmId, job.id, job.jobType)
 
     if isNewArrival ~= false and job.state == TheContractorJob.STATE.OFFERED then
         local tc = g_currentMission.TheContractor
@@ -296,7 +296,7 @@ function TheContractorJobs:proposeCounterOffer(farmId, jobId, counterPrice)
         job:setPrice(resultPrice)
     end
 
-    Logging.info("TheContractor: farm %d job %d negotiation round %d -> %s ($%.0f)", farmId, jobId,
+    TCLog.info("TheContractor: farm %d job %d negotiation round %d -> %s ($%.0f)", farmId, jobId,
         job.negotiationRounds, outcome, job:getPrice())
 
     if g_server ~= nil then
@@ -410,7 +410,7 @@ function TheContractorJobs:applyJobStateChanged(farmId, jobId, newState)
     end
 
     if job:transitionTo(newState) then
-        Logging.info("TheContractor: farm %d job %d is now %s", farmId, jobId, newState)
+        TCLog.info("TheContractor: farm %d job %d is now %s", farmId, jobId, newState)
         -- 100: a workshop job's turnaround counts from here (its speed
         -- reputation). Stamped on every machine as the change arrives.
         if newState == TheContractorJob.STATE.ACCEPTED and job.workshop ~= nil then
@@ -654,7 +654,7 @@ function TheContractorJobs:missJob(job, noPenalty)
         g_server:broadcastEvent(TCJobMissedEvent.new(job.farmId, job.jobType, job.fieldId))
     end
 
-    Logging.info("TheContractor: farm %d job %d missed its deadline (%s, field %d, %.0f%% done, penalty -%d reputation)",
+    TCLog.info("TheContractor: farm %d job %d missed its deadline (%s, field %d, %.0f%% done, penalty -%d reputation)",
         job.farmId, job.id, job.jobType, job.fieldId, job.completionPercentage, penalty)
 end
 
@@ -766,7 +766,7 @@ function TheContractorJobs:unallocateJob(farmId, jobId)
     job:transitionTo(TheContractorJob.STATE.ACCEPTED)
     TCFieldAccess.refresh()
 
-    Logging.info("TheContractor: farm %d job %d unallocated (%.0f%% done)", farmId, jobId, job.completionPercentage)
+    TCLog.info("TheContractor: farm %d job %d unallocated (%.0f%% done)", farmId, jobId, job.completionPercentage)
 
     -- The whole snapshot, as an allocation sends it: the crew and kit are
     -- cleared along with the state.
@@ -1245,7 +1245,7 @@ function TheContractorJobs:completeJob(job, isForced)
     self:setJobSupplyStatus(job, nil, nil)
     g_currentMission.TheContractor.Inbox:removeMessagesForJob(job.farmId, job.id)
 
-    Logging.info("TheContractor: farm %d job %d completed (%s, field %d) - billed %.0f, %+d reputation, %s taken, %.0f l fuel (%.0f), quality %d",
+    TCLog.info("TheContractor: farm %d job %d completed (%s, field %d) - billed %.0f, %+d reputation, %s taken, %.0f l fuel (%.0f), quality %d",
         job.farmId, job.id, job.jobType, job.fieldId, job.paymentAmount, reputationReward,
         TheContractorJob.formatMinutes(job:getTimeTakenMinutes()), job.fuelUsedLiters, job.fuelCost,
         job.qualityScore)
@@ -1297,7 +1297,7 @@ function TheContractorJobs:completeWorkshopJob(job)
     g_currentMission.TheContractor.RepairContracts:onJobCompleted(job)
     g_currentMission.TheContractor.Inbox:removeMessagesForJob(job.farmId, job.id)
 
-    Logging.info("TheContractor: farm %d job %d completed (%s, %s) - billed %.0f, %+d reputation", job.farmId,
+    TCLog.info("TheContractor: farm %d job %d completed (%s, %s) - billed %.0f, %+d reputation", job.farmId,
         job.id, job.jobType, job.workshop.vehicleName or "?", job.paymentAmount, reputationReward)
 
     TCJobCompletedEvent.showNotification(job)

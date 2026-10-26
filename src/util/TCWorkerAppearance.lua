@@ -153,7 +153,7 @@ function TCWorkerAppearance.roll(gender)
 
     style:updateDisabledOptions()
     if not style:isValid() then
-        Logging.warning("TheContractor: rolled an invalid worker appearance (%s), using the helper look instead",
+        TCLog.warning("TheContractor: rolled an invalid worker appearance (%s), using the helper look instead",
             tostring(style.xmlFilename))
         return nil
     end

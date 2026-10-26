@@ -258,7 +258,7 @@ function TheContractorFieldBreakdowns:onBreakdown(incident)
         x, z, rotY = TheContractorFieldBreakdowns.pickSpot(data.fieldId, model, math.random)
     end
     if x == nil then
-        Logging.info("TheContractor: farm %d incident %d: no machine or no room for a breakdown on field %d",
+        TCLog.info("TheContractor: farm %d incident %d: no machine or no room for a breakdown on field %d",
             incident.farmId, incident.id, data.fieldId)
         return TheContractorRandomEvents.DONE
     end

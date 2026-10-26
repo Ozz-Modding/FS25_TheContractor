@@ -142,7 +142,7 @@ function TheContractorJobNews:onKettle(incident)
         postMessage(incident, TheContractorJobNews.KETTLE, "tc_jobNews_kettle_bodyTwo",
             { workers[1].name, workers[2].name, job.fieldId })
     end
-    Logging.info("TheContractor: farm %d incident %d: the kettle's on at job %d, %d worker(s) +%d morale",
+    TCLog.info("TheContractor: farm %d incident %d: the kettle's on at job %d, %d worker(s) +%d morale",
         incident.farmId, incident.id, job.id, #workers, TheContractorJobNews.KETTLE_MORALE)
     return TheContractorRandomEvents.DONE
 end
@@ -176,7 +176,7 @@ function TheContractorJobNews:onPaidEarly(incident)
     -- Paid whatever the hidden roll had in store for it (late, or never).
     g_currentMission.TheContractor.Finances:payInvoice(invoice)
     postMessage(incident, TheContractorJobNews.PAID_EARLY, nil, { job.fieldId, "$money_" .. invoice.amount })
-    Logging.info("TheContractor: farm %d incident %d: invoice %d for job %d paid early", incident.farmId,
+    TCLog.info("TheContractor: farm %d incident %d: invoice %d for job %d paid early", incident.farmId,
         incident.id, invoice.id, job.id)
     return TheContractorRandomEvents.DONE
 end
@@ -247,7 +247,7 @@ function TheContractorJobNews:onStepsUp(incident)
 
     postMessage(incident, TheContractorJobNews.STEPS_UP, nil,
         { worker.name, job.fieldId, "$l10n_tc_growth_stat_" .. incident.data.stat, value })
-    Logging.info("TheContractor: farm %d incident %d: worker %d (%s) stepped up on job %d, %s now %d",
+    TCLog.info("TheContractor: farm %d incident %d: worker %d (%s) stepped up on job %d, %s now %d",
         incident.farmId, incident.id, worker.id, worker.name, job.id, incident.data.stat, value)
     return TheContractorRandomEvents.DONE
 end

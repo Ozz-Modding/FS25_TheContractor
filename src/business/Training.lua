@@ -320,7 +320,7 @@ function TheContractorTraining.grandfather(worker)
         local definition = TheContractorTraining.getDefinition(cert)
         if worker:getSkill(definition.skill) >= TheContractorTraining.GRANDFATHER_SKILL then
             worker.certifications[cert] = true
-            Logging.info("TheContractor: farm %d worker %d (%s) given the %s certificate (from before 054)",
+            TCLog.info("TheContractor: farm %d worker %d (%s) given the %s certificate (from before 054)",
                 worker.farmId, worker.id, worker.name, cert)
         end
     end
@@ -350,7 +350,7 @@ function TheContractorTraining:requestBooking(farmId, workerId, cert)
         problem = TheContractorTraining.getBookingProblem(worker, cert)
     end
     if problem ~= nil then
-        Logging.info("TheContractor: farm %d worker %d can't be booked on %s: %s", farmId, workerId, cert, problem)
+        TCLog.info("TheContractor: farm %d worker %d can't be booked on %s: %s", farmId, workerId, cert, problem)
         return false, problem
     end
 
@@ -397,7 +397,7 @@ function TheContractorTraining:bookTraining(worker, cert, firstDay)
         worker.assessmentDay = firstDay + courseDays - 1 + math.random(TheContractorTraining.getAssessmentGap())
     end
 
-    Logging.info("TheContractor: farm %d worker %d (%s) booked for %s training: %d course day(s) from day %s, assessment day %s",
+    TCLog.info("TheContractor: farm %d worker %d (%s) booked for %s training: %d course day(s) from day %s, assessment day %s",
         worker.farmId, worker.id, worker.name, cert, worker.courseDaysLeft, tostring(worker.trainingDay),
         tostring(worker.assessmentDay))
 
@@ -472,7 +472,7 @@ function TheContractorTraining:updateWorker(worker, today)
                 worker.assessmentDay = worker.assessmentDay + shift
             end
             changed = true
-            Logging.info("TheContractor: farm %d worker %d (%s) missed a training day (%s), moved back %d day(s)",
+            TCLog.info("TheContractor: farm %d worker %d (%s) missed a training day (%s), moved back %d day(s)",
                 worker.farmId, worker.id, worker.name, worker.status, shift)
         end
     end
@@ -510,7 +510,7 @@ function TheContractorTraining:completeTradeCourse(worker)
     worker.assessmentDay = nil
 
     local level = TheContractorWorkshop.completeCourse(worker, role)
-    Logging.info("TheContractor: farm %d worker %d (%s) finished the %s course: level %s", worker.farmId, worker.id,
+    TCLog.info("TheContractor: farm %d worker %d (%s) finished the %s course: level %s", worker.farmId, worker.id,
         worker.name, role, tostring(level))
     self:sendTrainingChanged(worker, level ~= nil and TheContractorTraining.NOTIFY.COMPLETED or
         TheContractorTraining.NOTIFY.NONE, cert, level or 0)
@@ -531,7 +531,7 @@ function TheContractorTraining:resolveAssessment(worker)
     worker.trainingDay = nil
     worker.assessmentDay = nil
 
-    Logging.info("TheContractor: farm %d worker %d (%s) %s the %s assessment (chance %.2f)", worker.farmId,
+    TCLog.info("TheContractor: farm %d worker %d (%s) %s the %s assessment (chance %.2f)", worker.farmId,
         worker.id, worker.name, passed and "passed" or "failed", cert, chance)
 
     if passed then
@@ -587,7 +587,7 @@ function TheContractorTraining:postRequest(farmId, worker, cert)
     local price = TheContractorTraining.getPrice(farmId, worker, cert)
     local isRetake = TheContractorTraining.isRetake(worker, cert)
 
-    Logging.info("TheContractor: farm %d worker %d (%s) asked for %s training", farmId, worker.id, worker.name, cert)
+    TCLog.info("TheContractor: farm %d worker %d (%s) asked for %s training", farmId, worker.id, worker.name, cert)
 
     g_currentMission.TheContractor.Inbox:postMessage(farmId, TheContractorTraining.MESSAGE_KIND,
         "tc_training_requestTitle", isRetake and "tc_training_requestBodyRetake" or "tc_training_requestBody",
@@ -647,7 +647,7 @@ function TheContractorTraining:recordDecline(worker, message)
     end
 
     worker.declinedRequests = worker.declinedRequests + 1
-    Logging.info("TheContractor: farm %d worker %d (%s) training request declined (%d so far)", worker.farmId,
+    TCLog.info("TheContractor: farm %d worker %d (%s) training request declined (%d so far)", worker.farmId,
         worker.id, worker.name, worker.declinedRequests)
     self:sendTrainingChanged(worker, TheContractorTraining.NOTIFY.NONE)
 

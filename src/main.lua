@@ -2,6 +2,10 @@ TheContractor = {}
 TheContractor.dir = g_currentModDirectory
 TheContractor.SaveKey = "TheContractor"
 
+source(TheContractor.dir .. "src/util/TCLog.lua")
+-- First, so the switch is read before anything logs.
+TCLog.load()
+
 source(TheContractor.dir .. "src/extensions/TCI18NExtension.lua")
 source(TheContractor.dir .. "src/util/DisableVanillaContracts.lua")
 source(TheContractor.dir .. "src/util/TCFreezeNPCFieldwork.lua")
@@ -387,7 +391,7 @@ function TheContractor:loadMap()
     TheContractorRepairContracts.registerConsoleCommands()
     TCConsole.install()
 
-    Logging.info("TheContractor: loadMap")
+    TCLog.info("TheContractor: loadMap")
 end
 
 -- Called as a normal method (self == TheContractor) from loadMap, once the
@@ -572,7 +576,7 @@ function TheContractor.installStartMissionHook()
 end
 
 function TheContractor:deleteMap()
-    Logging.info("TheContractor: deleteMap")
+    TCLog.info("TheContractor: deleteMap")
 
     TCWardrobe.endSession()
     TCParkingSlotActivatable.uninstall()

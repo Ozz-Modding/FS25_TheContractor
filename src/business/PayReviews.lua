@@ -258,7 +258,7 @@ function TheContractorPayReviews:review(worker, expected)
 
     worker.expectedSalary = expected
     worker.lastReviewPeriod = TCCalendar.getPeriodIndex()
-    Logging.info("TheContractor: farm %d worker %d (%s) pay review: paid %.0f, market %.0f, loyalty %.2f, expects %.0f",
+    TCLog.info("TheContractor: farm %d worker %d (%s) pay review: paid %.0f, market %.0f, loyalty %.2f, expects %.0f",
         worker.farmId, worker.id, worker.name, worker.salary, TheContractorPayReviews.getMarketValue(worker),
         TheContractorPayReviews.getLoyaltyFactor(worker), expected)
     self:sendPayChanged(worker, TheContractorPayReviews.NOTIFY.NONE)
@@ -315,7 +315,7 @@ function TheContractorPayReviews:onMessageAnswered(farmId, message, actionKey)
     elseif actionKey == ACTION.HALFWAY then
         self:setPay(worker, math.max(worker.salary, message.payload.halfway), TheContractorPayReviews.NOTIFY.RISE)
     else
-        Logging.info("TheContractor: farm %d refused worker %d (%s) a pay rise", farmId, worker.id, worker.name)
+        TCLog.info("TheContractor: farm %d refused worker %d (%s) a pay rise", farmId, worker.id, worker.name)
         g_currentMission.TheContractor.Morale:adjust(farmId, { worker }, TheContractorPayReviews.REFUSED_MORALE)
     end
 end
@@ -348,7 +348,7 @@ end
 function TheContractorPayReviews:setPay(worker, salary, notify)
     local old = worker.salary
     worker.salary = salary
-    Logging.info("TheContractor: farm %d worker %d (%s) pay %.0f -> %.0f (expects %.0f)", worker.farmId, worker.id,
+    TCLog.info("TheContractor: farm %d worker %d (%s) pay %.0f -> %.0f (expects %.0f)", worker.farmId, worker.id,
         worker.name, old, salary, worker.expectedSalary)
     self:sendPayChanged(worker, notify)
 end

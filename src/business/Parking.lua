@@ -157,7 +157,7 @@ function TheContractorParking:returnVehicles(farmId, vehicleIds)
         g_server:broadcastEvent(TCParkingQueuedEvent.new(entries))
     end
 
-    Logging.info("TheContractor: farm %d batch %d of %d machines waiting to be parked", farmId, batchId, #entries)
+    TCLog.info("TheContractor: farm %d batch %d of %d machines waiting to be parked", farmId, batchId, #entries)
 
     self:updateNotice(farmId)
     TCVehicleLock.refresh()
@@ -282,7 +282,7 @@ function TheContractorParking:runPass()
             self.parkedByBatch[entry.batchId] = parked
             self:removeVehicles({ entry.vehicleId })
             TCParking.placeVehicle(vehicle, x, y, z, rotY)
-            Logging.info("TheContractor: farm %d parked '%s'", entry.farmId, vehicle:getFullName())
+            TCLog.info("TheContractor: farm %d parked '%s'", entry.farmId, vehicle:getFullName())
             placed = true
             break
         elseif not entry.notified then
@@ -429,7 +429,7 @@ function TheContractorParking:sendToShop(vehicleIds)
     self:removeVehicles(placedIds)
     for _, placement in ipairs(placed) do
         TCParking.placeVehicle(placement.vehicle, placement.x, placement.y, placement.z, placement.rotY)
-        Logging.info("TheContractor: '%s' sent to the shop instead of a parking slot", placement.vehicle:getFullName())
+        TCLog.info("TheContractor: '%s' sent to the shop instead of a parking slot", placement.vehicle:getFullName())
     end
 
     return failedNames

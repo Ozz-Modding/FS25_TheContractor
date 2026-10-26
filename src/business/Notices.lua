@@ -79,7 +79,7 @@ function TheContractorNotices:publish(farmId, text, ttlMonths, isTransient)
         g_server:broadcastEvent(TCNoticePublishedEvent.new(notice))
     end
 
-    Logging.info("TheContractor: farm %d notice %d published (%s): %s", farmId, notice.id,
+    TCLog.info("TheContractor: farm %d notice %d published (%s): %s", farmId, notice.id,
         expiresAtPeriod ~= nil and ("expires period " .. expiresAtPeriod) or "no expiry", text)
 
     return notice.id

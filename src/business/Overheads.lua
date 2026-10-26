@@ -319,7 +319,7 @@ function TheContractorOverheads:charge(farmId, definition, amount)
 
     g_currentMission:addMoney(-amount, farmId, MoneyType.TC_OVERHEADS, true, true)
     g_currentMission.TheContractor.Finances:recordOverheads(farmId, amount)
-    Logging.info("TheContractor: farm %d paid %.2f for overhead %s", farmId, amount, definition.key)
+    TCLog.info("TheContractor: farm %d paid %.2f for overhead %s", farmId, amount, definition.key)
 end
 
 -- Starts a new term now, priced now, and takes its first payment. levelKey
@@ -347,7 +347,7 @@ function TheContractorOverheads:startPolicy(farmId, definition, billing, levelKe
     self:charge(farmId, definition, TheContractorOverheads.getChargeAmount(termCost, billing))
     self:commitState(farmId, definition.key, state)
 
-    Logging.info("TheContractor: farm %d took out overhead %s (%s%s, %.0f a year, renews period %d)", farmId,
+    TCLog.info("TheContractor: farm %d took out overhead %s (%s%s, %.0f a year, renews period %d)", farmId,
         definition.key, billing, levelKey ~= nil and (", " .. levelKey) or "", termCost, renewalPeriod)
 end
 
@@ -395,7 +395,7 @@ function TheContractorOverheads:repriceMidTerm(farmId, key)
         self:repostRenewalNotice(farmId, definition, state)
     end
 
-    Logging.info("TheContractor: farm %d overhead %s repriced mid-term (%.0f a year, %.2f back)", farmId, key,
+    TCLog.info("TheContractor: farm %d overhead %s repriced mid-term (%.0f a year, %.2f back)", farmId, key,
         newCost, adjustment)
     return adjustment
 end
@@ -442,7 +442,7 @@ function TheContractorOverheads:renewPolicy(farmId, definition, state)
     if not self:willRenew(farmId, definition, state) then
         self:commitState(farmId, definition.key, { enabled = false, billing = state.billing, renewalPeriod = 0,
             paidUntil = 0, termCost = 0, cancelled = false })
-        Logging.info("TheContractor: farm %d overhead %s lapsed", farmId, definition.key)
+        TCLog.info("TheContractor: farm %d overhead %s lapsed", farmId, definition.key)
         return
     end
 
@@ -461,7 +461,7 @@ function TheContractorOverheads:renewPolicy(farmId, definition, state)
     self:charge(farmId, definition, TheContractorOverheads.getChargeAmount(state.termCost, billing))
     self:commitState(farmId, definition.key, state)
 
-    Logging.info("TheContractor: farm %d renewed overhead %s (%s, %.0f a year)", farmId, definition.key, billing,
+    TCLog.info("TheContractor: farm %d renewed overhead %s (%s, %.0f a year)", farmId, definition.key, billing,
         state.termCost)
 end
 
@@ -479,7 +479,7 @@ function TheContractorOverheads:billPolicy(farmId, definition, state)
             -- Monthly, cancelled: stops now.
             self:commitState(farmId, definition.key, { enabled = false, billing = state.billing,
                 renewalPeriod = 0, paidUntil = 0, termCost = 0, cancelled = false })
-            Logging.info("TheContractor: farm %d overhead %s ended (cancelled)", farmId, definition.key)
+            TCLog.info("TheContractor: farm %d overhead %s ended (cancelled)", farmId, definition.key)
             return
         end
 

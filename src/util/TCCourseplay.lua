@@ -25,7 +25,7 @@ function TCCourseplay.install()
         return false
     end
 
-    Logging.info("TheContractor: Courseplay found")
+    TCLog.info("TheContractor: Courseplay found")
     return true
 end
 

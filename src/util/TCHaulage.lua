@@ -265,7 +265,7 @@ function TCDeliveryTracker:fillSold(fillDelta)
 end
 
 function TCDeliveryTracker:onDeleteSellingStation(station)
-    Logging.warning("TheContractor: job %d delivery station was removed - the crop can't be delivered", self.jobId)
+    TCLog.warning("TheContractor: job %d delivery station was removed - the crop can't be delivered", self.jobId)
     local job = self:getJob()
     if job ~= nil then
         TCHaulage.stopDelivery(job)
@@ -279,7 +279,7 @@ local function registerTracker(job)
 
     local station = TCHaulage.resolveDeliveryStation(job)
     if station == nil then
-        Logging.warning("TheContractor: job %d delivery station '%s' can't be found", job.id,
+        TCLog.warning("TheContractor: job %d delivery station '%s' can't be found", job.id,
             tostring(job.deliveryStationName))
         return false
     end
@@ -313,7 +313,7 @@ function TCHaulage.startDelivery(job)
     dirtyJobIds[job.id] = true
 
     if registerTracker(job) then
-        Logging.info("TheContractor: job %d needs %.0f l delivered to %s", job.id, required,
+        TCLog.info("TheContractor: job %d needs %.0f l delivered to %s", job.id, required,
             tostring(job.deliveryStationName))
     end
 end
@@ -401,7 +401,7 @@ local function autoEmptyJobHarvesters(job, isFinal)
                 local level = vehicle:getFillUnitFillLevel(fillUnitIndex)
                 vehicle:addFillUnitFillLevel(vehicle:getOwnerFarmId(), fillUnitIndex, -math.huge, fillTypeIndex,
                     ToolType.UNDEFINED, nil)
-                Logging.info("TheContractor: job %d emptied %.0f l from '%s'", job.id, level, vehicle:getName())
+                TCLog.info("TheContractor: job %d emptied %.0f l from '%s'", job.id, level, vehicle:getName())
                 -- 063: our hauler drove that load away.
                 if job.haulerWorkerId ~= nil then
                     TCJobFuel.burnCartingFuel(job)

@@ -190,7 +190,7 @@ function TheContractorHolidays:endHoliday(worker)
     self:sendHolidayChanged(worker, TheContractorHolidays.NOTIFY.NONE)
 
     if worker.status == TheContractorWorker.STATUS.HOLIDAY then
-        Logging.info("TheContractor: farm %d worker %d (%s) back from holiday", worker.farmId, worker.id, worker.name)
+        TCLog.info("TheContractor: farm %d worker %d (%s) back from holiday", worker.farmId, worker.id, worker.name)
         g_currentMission.TheContractor.Staff:setWorkerStatus(worker.farmId, worker.id, TheContractorWorker.STATUS.IDLE)
     end
 end
@@ -203,7 +203,7 @@ function TheContractorHolidays:startHoliday(worker)
         return
     end
 
-    Logging.info("TheContractor: farm %d worker %d (%s) on holiday until day %d", worker.farmId, worker.id,
+    TCLog.info("TheContractor: farm %d worker %d (%s) on holiday until day %d", worker.farmId, worker.id,
         worker.name, worker:getHolidayEndDay())
     worker.sickDaysRemaining = 0
     worker.pendingSickDays = 0
@@ -307,7 +307,7 @@ function TheContractorHolidays:bookHoliday(worker, startDay, days, notify)
     worker.holidayDaysPerPeriod = daysPerPeriod
     worker.holidayAllowance = math.max(0, worker.holidayAllowance - days / daysPerPeriod)
 
-    Logging.info("TheContractor: farm %d worker %d (%s) booked %d day(s) holiday from day %d (%.2f periods left)",
+    TCLog.info("TheContractor: farm %d worker %d (%s) booked %d day(s) holiday from day %d (%.2f periods left)",
         worker.farmId, worker.id, worker.name, days, startDay, worker.holidayAllowance)
 
     self:sendHolidayChanged(worker, notify or TheContractorHolidays.NOTIFY.BOOKED)
@@ -340,7 +340,7 @@ end
 function TheContractorHolidays:postRequest(worker, startDay, days)
     local today = g_currentMission.environment.currentMonotonicDay
 
-    Logging.info("TheContractor: farm %d worker %d (%s) asked for %d day(s) holiday from day %d", worker.farmId,
+    TCLog.info("TheContractor: farm %d worker %d (%s) asked for %d day(s) holiday from day %d", worker.farmId,
         worker.id, worker.name, days, startDay)
 
     return g_currentMission.TheContractor.Inbox:postMessage(worker.farmId, TheContractorHolidays.MESSAGE_KIND,
@@ -424,7 +424,7 @@ end
 -- warning that the next one's booked whatever.
 function TheContractorHolidays:recordDecline(worker, isIgnored)
     worker.holidayDeclines = worker.holidayDeclines + 1
-    Logging.info("TheContractor: farm %d worker %d (%s) holiday request %s (%d this year)", worker.farmId,
+    TCLog.info("TheContractor: farm %d worker %d (%s) holiday request %s (%d this year)", worker.farmId,
         worker.id, worker.name, isIgnored and "ignored" or "declined", worker.holidayDeclines)
 
     g_currentMission.TheContractor.Morale:onHolidayRefused(worker, worker.holidayDeclines, isIgnored)
@@ -459,7 +459,7 @@ function TheContractorHolidays:reconcileRequest(worker)
 
     for day = message.payload.startDay, TheContractorHolidays.getRequestEndDay(message) do
         if TCCalendar.getDaysPerPeriodOn(day) ~= message.payload.daysPerPeriod then
-            Logging.info("TheContractor: farm %d worker %d (%s) holiday request withdrawn - days per period changed",
+            TCLog.info("TheContractor: farm %d worker %d (%s) holiday request withdrawn - days per period changed",
                 worker.farmId, worker.id, worker.name)
             g_currentMission.TheContractor.Inbox:removeMessage(message.id)
             self:sendHolidayChanged(worker, TheContractorHolidays.NOTIFY.REQUEST_WITHDRAWN)
@@ -608,7 +608,7 @@ function TheContractorHolidays:reconcileBooking(worker)
         worker.holidayDays = 0
         worker.holidayDaysPerPeriod = nil
 
-        Logging.info("TheContractor: farm %d worker %d (%s) holiday cancelled - days per period changed",
+        TCLog.info("TheContractor: farm %d worker %d (%s) holiday cancelled - days per period changed",
             worker.farmId, worker.id, worker.name)
         self:sendHolidayChanged(worker, TheContractorHolidays.NOTIFY.CANCELLED)
         return
@@ -620,7 +620,7 @@ function TheContractorHolidays:reconcileBooking(worker)
     worker.holidayDays = newEndDay - worker.holidayStartDay + 1
     worker.holidayAllowance = worker.holidayAllowance + (oldDays - worker.holidayDays) / worker.holidayDaysPerPeriod
 
-    Logging.info("TheContractor: farm %d worker %d (%s) holiday cut to %d day(s) - days per period changed",
+    TCLog.info("TheContractor: farm %d worker %d (%s) holiday cut to %d day(s) - days per period changed",
         worker.farmId, worker.id, worker.name, worker.holidayDays)
     self:sendHolidayChanged(worker, TheContractorHolidays.NOTIFY.NONE)
 end

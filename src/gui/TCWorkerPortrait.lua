@@ -183,7 +183,7 @@ function TCWorkerPortrait:loadCharacter(worker)
             self:setSceneVisible(self.wantedWorker ~= nil and self.wantedWorker.id == worker.id)
             self.render:setRenderDirty()
         else
-            Logging.warning("TheContractor: couldn't load the portrait for worker %d (%s)", worker.id, worker.name)
+            TCLog.warning("TheContractor: couldn't load the portrait for worker %d (%s)", worker.id, worker.name)
         end
     end, nil, nil, true)
 end

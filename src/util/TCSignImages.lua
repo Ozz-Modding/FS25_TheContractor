@@ -128,7 +128,7 @@ function TCSignImages.getImages()
         return a.sortKey < b.sortKey
     end)
     if #images > TCSignImages.MAX_IMAGES then
-        Logging.warning("The Contractor: only the first %d images in %s are used as sign designs",
+        TCLog.warning("The Contractor: only the first %d images in %s are used as sign designs",
             TCSignImages.MAX_IMAGES, folder)
         for i = #images, TCSignImages.MAX_IMAGES + 1, -1 do
             images[i] = nil
@@ -141,10 +141,10 @@ end
 -- once per sign store item, so the folder is listed for each.
 function TCSignImages.getDesigns()
     if TCSignImages.getIsMultiplayer() then
-        Logging.info("TheContractor: multiplayer, so signs only offer the company logo")
+        TCLog.info("TheContractor: multiplayer, so signs only offer the company logo")
         return {}
     end
     local images = TCSignImages.getImages()
-    Logging.info("TheContractor: %d sign design(s) found in %s", #images, tostring(TCSignImages.getFolder()))
+    TCLog.info("TheContractor: %d sign design(s) found in %s", #images, tostring(TCSignImages.getFolder()))
     return images
 end

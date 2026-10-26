@@ -99,7 +99,7 @@ function PlaceableTCParkingSlot:onLoad(savegame)
     if slotType == PlaceableTCParkingSlot.SLOT_TYPE.IMPLEMENT or slotType == PlaceableTCParkingSlot.SLOT_TYPE.HARVESTER then
         data.slotType = slotType
     elseif slotType ~= nil and slotType ~= PlaceableTCParkingSlot.SLOT_TYPE.VEHICLE then
-        Logging.xmlWarning(xmlFile, "Unknown parkingSlot#slotType '%s', using 'vehicle'", slotType)
+        TCLog.xmlWarning(xmlFile, "Unknown parkingSlot#slotType '%s', using 'vehicle'", slotType)
     end
     self[PlaceableTCParkingSlot.KEY] = data
 

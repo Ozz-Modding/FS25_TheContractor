@@ -72,7 +72,7 @@ function PlaceableTCRepairZone:onLoad(savegame)
     if zoneType == PlaceableTCRepairZone.ZONE_TYPE.HARVESTER then
         data.zoneType = zoneType
     elseif zoneType ~= nil and zoneType ~= PlaceableTCRepairZone.ZONE_TYPE.VEHICLE then
-        Logging.xmlWarning(xmlFile, "Unknown repairZone#zoneType '%s', using 'vehicle'", zoneType)
+        TCLog.xmlWarning(xmlFile, "Unknown repairZone#zoneType '%s', using 'vehicle'", zoneType)
     end
     self[PlaceableTCRepairZone.KEY] = data
 

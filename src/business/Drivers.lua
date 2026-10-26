@@ -152,7 +152,7 @@ function TheContractorDrivers.onAISystemStartJob(aiSystem, superFunc, job, start
     if drivers ~= nil and vehicle ~= nil and not g_currentMission.TheContractor.Dispatch:isOurAIJob(job) then
         local refusal = drivers:getServerStartRefusal(vehicle)
         if refusal ~= nil then
-            Logging.info("TheContractor: refused %s start on '%s' (%s)",
+            TCLog.info("TheContractor: refused %s start on '%s' (%s)",
                 TheContractorDrivers.getAIJobLabel(job), vehicle:getFullName(), refusal)
             drivers:notify(vehicle:getOwnerFarmId(), refusal, vehicle)
             return
@@ -387,7 +387,7 @@ function TheContractorDrivers:assignDriver(farmId, workerId, vehicle)
 
     local errorKey = self:getAssignError(farmId, workerId, vehicle)
     if errorKey ~= nil then
-        Logging.info("TheContractor: farm %d couldn't assign worker %d as a driver (%s)", farmId, workerId, errorKey)
+        TCLog.info("TheContractor: farm %d couldn't assign worker %d as a driver (%s)", farmId, workerId, errorKey)
         self:notify(farmId, errorKey, vehicle)
         return false
     end
@@ -408,7 +408,7 @@ function TheContractorDrivers:bindDriver(vehicleId, farmId, workerId, activeMs, 
     g_currentMission.TheContractor.Logbook:onDriverBound(vehicleId, farmId, workerId)
 
     local vehicle = NetworkUtil.getObject(vehicleId)
-    Logging.info("TheContractor: farm %d worker %d now driving '%s'", farmId, workerId,
+    TCLog.info("TheContractor: farm %d worker %d now driving '%s'", farmId, workerId,
         vehicle ~= nil and vehicle:getFullName() or tostring(vehicleId))
 
     if g_server ~= nil then
@@ -438,7 +438,7 @@ function TheContractorDrivers:releaseDriver(vehicleId, vehicle)
     g_currentMission.TheContractor.Staff:setWorkerStatus(binding.farmId, binding.workerId,
         TheContractorWorker.STATUS.IDLE)
 
-    Logging.info("TheContractor: farm %d worker %d finished driving (%.0f in-game min)", binding.farmId,
+    TCLog.info("TheContractor: farm %d worker %d finished driving (%.0f in-game min)", binding.farmId,
         binding.workerId, binding.activeMs / 60000)
 
     if g_server ~= nil then

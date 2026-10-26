@@ -152,7 +152,7 @@ function TheContractorFlyTipping:onDump(incident)
         for _, debris in ipairs(pieces) do
             debris:delete()
         end
-        Logging.info("TheContractor: farm %d incident %d: fly-tipping on field %d, but no job could be dated",
+        TCLog.info("TheContractor: farm %d incident %d: fly-tipping on field %d, but no job could be dated",
             incident.farmId, incident.id, incident.data.fieldId)
         return TheContractorRandomEvents.DONE
     end
@@ -164,7 +164,7 @@ function TheContractorFlyTipping:onDump(incident)
     tc.Inbox:postMessage(incident.farmId, TheContractorFlyTipping.MESSAGE_KIND, "tc_flyTipping_offerTitle",
         "tc_flyTipping_offerBody", { incident.data.fieldId, #pieces }, nil,
         { incidentId = incident.id, jobId = job.id })
-    Logging.info("TheContractor: farm %d incident %d: %d pieces fly-tipped on field %d, job %d offered",
+    TCLog.info("TheContractor: farm %d incident %d: %d pieces fly-tipped on field %d, job %d offered",
         incident.farmId, incident.id, #pieces, incident.data.fieldId, job.id)
     return TheContractorRandomEvents.DONE
 end
@@ -208,7 +208,7 @@ function TheContractorFlyTipping:disposeDebris(debris)
             g_currentMission:addMoney(-fee, job.farmId, MoneyType.TC_WASTE_DISPOSAL, true, true)
             g_currentMission.TheContractor.Finances:recordDisposal(job.farmId, fee)
         end
-        Logging.info("TheContractor: farm %d job %d: debris taken to a skip (%d taken, %d left), fee %.0f",
+        TCLog.info("TheContractor: farm %d job %d: debris taken to a skip (%d taken, %d left), fee %.0f",
             job.farmId, job.id, job.debrisDisposed, #job.debrisIds, fee)
     end
     debris:delete()
@@ -228,7 +228,7 @@ function TheContractorFlyTipping:disposeUsedPart(part)
             g_currentMission.TheContractor.Finances:recordDisposal(farmId, fee)
         end
     end
-    Logging.info("TheContractor: farm %s: old part %s taken to a skip, fee %.0f", tostring(farmId),
+    TCLog.info("TheContractor: farm %s: old part %s taken to a skip, fee %.0f", tostring(farmId),
         part.getName ~= nil and part:getName() or "?", fee)
     part:delete()
     return fee

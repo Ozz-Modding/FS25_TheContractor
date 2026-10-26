@@ -270,7 +270,7 @@ function TheContractorSprayDrift:rollComplaint(farmId, job, random)
             TheContractorJobs.getBaseReputationReward(job) * TheContractorSprayDrift.REPUTATION_PENALTY_MULTIPLIER))
     end
 
-    Logging.info("TheContractor: farm %d job %d: spray drift complaint (%s), %s spraying (crop care %d, windiness %.2f): drift chance %.2f, upheld chance %.2f, rolled %.2f - %s",
+    TCLog.info("TheContractor: farm %d job %d: spray drift complaint (%s), %s spraying (crop care %d, windiness %.2f): drift chance %.2f, upheld chance %.2f, rolled %.2f - %s",
         farmId, job.id, complainant, worker.name, cropCare, windiness, driftChance, upheldChance, roll,
         upheld and "upheld" or "cleared")
     return data
@@ -293,7 +293,7 @@ function TheContractorSprayDrift:onComplaint(incident)
         args, nil, { incidentId = incident.id })
     data.noticeId = tc.Notices:publish(farmId, string.format(g_i18n:getText("tc_sprayDrift_notice"), data.fieldId))
 
-    Logging.info("TheContractor: farm %d incident %d: %s complains of spray drift from field %d (%s)", farmId,
+    TCLog.info("TheContractor: farm %d incident %d: %s complains of spray drift from field %d (%s)", farmId,
         incident.id, data.complainant, data.fieldId, data.upheld and "will be upheld" or "will be cleared")
     return TheContractorSprayDrift.STAGE.FINDINGS
 end
@@ -313,7 +313,7 @@ function TheContractorSprayDrift:onFindings(incident)
             data.windiness < TheContractorSprayDrift.CALM_WINDINESS and "tc_sprayDrift_clearedBodyCalm" or
             "tc_sprayDrift_clearedBodyBreezy",
             { data.fieldId, data.workerName }, nil, { incidentId = incident.id })
-        Logging.info("TheContractor: farm %d incident %d: spray drift complaint cleared", farmId, incident.id)
+        TCLog.info("TheContractor: farm %d incident %d: spray drift complaint cleared", farmId, incident.id)
         return TheContractorRandomEvents.DONE
     end
 
@@ -334,7 +334,7 @@ function TheContractorSprayDrift:onFindings(incident)
     tc.Notices:publish(farmId, string.format(g_i18n:getText("tc_sprayDrift_upheldNotice"), data.fieldId,
         g_i18n:formatMoney(paid, 0, true, true)), TheContractorSprayDrift.NOTICE_MONTHS)
 
-    Logging.info("TheContractor: farm %d incident %d: spray drift complaint upheld: %.0f claimed, %.0f paid (%s), -%d reputation",
+    TCLog.info("TheContractor: farm %d incident %d: spray drift complaint upheld: %.0f claimed, %.0f paid (%s), -%d reputation",
         farmId, incident.id, data.claimAmount, paid, data.insured and "insured" or "uninsured",
         data.reputationPenalty)
     return TheContractorRandomEvents.DONE

@@ -34,7 +34,7 @@ local warned = {}
 local function warnOnce(key, text, ...)
     if not warned[key] then
         warned[key] = true
-        Logging.warning("TheContractor: " .. text, ...)
+        TCLog.warning("TheContractor: " .. text, ...)
     end
 end
 
@@ -91,7 +91,7 @@ function TCADSWorkshop.register()
         openStaffMenu = TCADSWorkshop.openStaffMenu,
     })
     if not ok then
-        Logging.warning("TheContractor: %s refused our workshop staff: %s", TCADSWorkshop.MOD_NAME, tostring(reason))
+        TCLog.warning("TheContractor: %s refused our workshop staff: %s", TCADSWorkshop.MOD_NAME, tostring(reason))
     end
 end
 

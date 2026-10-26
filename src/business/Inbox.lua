@@ -171,7 +171,7 @@ function TheContractorInbox:postMessage(farmId, kind, titleKey, bodyKey, args, a
     if actions == nil or #actions == 0 then
         actions = { TheContractorInbox.DISMISS_ACTION }
     elseif #actions > TheContractorInbox.MAX_ACTIONS then
-        Logging.warning("TheContractor: inbox message kind '%s' has %d actions, only the first %d are kept", kind,
+        TCLog.warning("TheContractor: inbox message kind '%s' has %d actions, only the first %d are kept", kind,
             #actions, TheContractorInbox.MAX_ACTIONS)
         local kept = {}
         for i = 1, TheContractorInbox.MAX_ACTIONS do
@@ -181,7 +181,7 @@ function TheContractorInbox:postMessage(farmId, kind, titleKey, bodyKey, args, a
     end
 
     if self.kinds[kind] == nil then
-        Logging.warning("TheContractor: inbox message posted with unregistered kind '%s'", kind)
+        TCLog.warning("TheContractor: inbox message posted with unregistered kind '%s'", kind)
     end
 
     local today = g_currentMission.environment.currentMonotonicDay
@@ -207,7 +207,7 @@ function TheContractorInbox:postMessage(farmId, kind, titleKey, bodyKey, args, a
         g_server:broadcastEvent(TCMessagePostedEvent.new(message))
     end
 
-    Logging.info("TheContractor: farm %d inbox message %d posted (%s, %s)", farmId, message.id, kind,
+    TCLog.info("TheContractor: farm %d inbox message %d posted (%s, %s)", farmId, message.id, kind,
         message.expiresDay ~= nil and ("expires day " .. message.expiresDay) or "no expiry")
 
     return message.id
@@ -264,7 +264,7 @@ function TheContractorInbox:removeEndedJobMessages()
     end
     table.sort(ended)
     for _, messageId in ipairs(ended) do
-        Logging.info("TheContractor: inbox message %d's job is over, removed", messageId)
+        TCLog.info("TheContractor: inbox message %d's job is over, removed", messageId)
         self:removeMessage(messageId)
     end
 end
@@ -322,11 +322,11 @@ function TheContractorInbox:requestAction(farmId, messageId, actionKey)
     if definition ~= nil and definition.onAction ~= nil then
         definition.onAction(farmId, message, actionKey)
     elseif actionKey ~= TheContractorInbox.DISMISS_ACTION.key then
-        Logging.warning("TheContractor: inbox message %d kind '%s' has no handler for action '%s'", messageId,
+        TCLog.warning("TheContractor: inbox message %d kind '%s' has no handler for action '%s'", messageId,
             message.kind, actionKey)
     end
 
-    Logging.info("TheContractor: farm %d inbox message %d answered (%s)", farmId, messageId, actionKey)
+    TCLog.info("TheContractor: farm %d inbox message %d answered (%s)", farmId, messageId, actionKey)
     self:removeMessage(messageId)
 end
 
@@ -362,7 +362,7 @@ function TheContractorInbox:onDayChanged()
         if definition ~= nil and definition.onExpire ~= nil then
             definition.onExpire(message.farmId, message)
         end
-        Logging.info("TheContractor: farm %d inbox message %d expired (%s)", message.farmId, message.id, message.kind)
+        TCLog.info("TheContractor: farm %d inbox message %d expired (%s)", message.farmId, message.id, message.kind)
         self:removeMessage(message.id)
     end
 
@@ -401,7 +401,7 @@ local function getArgEntries(args)
     for i, value in ipairs(args) do
         local valueType = getValueType(value)
         if valueType == nil then
-            Logging.warning("TheContractor: inbox message arg %d isn't a plain value, sending an empty string", i)
+            TCLog.warning("TheContractor: inbox message arg %d isn't a plain value, sending an empty string", i)
             valueType, value = "s", ""
         end
         table.insert(entries, { type = valueType, value = value })
@@ -426,7 +426,7 @@ local function getPayloadEntries(payload)
         if valueType ~= nil then
             table.insert(entries, { key = key, type = valueType, value = value })
         else
-            Logging.warning("TheContractor: inbox payload '%s' isn't a plain value, dropped", key)
+            TCLog.warning("TheContractor: inbox payload '%s' isn't a plain value, dropped", key)
         end
     end
     return entries

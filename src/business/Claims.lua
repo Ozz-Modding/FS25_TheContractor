@@ -185,7 +185,7 @@ function TheContractorClaims:rollForJob(job)
             local roll = math.random()
 
             local forced = self.forceBotch ~= nil
-            Logging.info("TheContractor: farm %d job %d worker %d (%s) botch roll %.3f vs %.3f (cleanliness %d, gap %d)%s",
+            TCLog.info("TheContractor: farm %d job %d worker %d (%s) botch roll %.3f vs %.3f (cleanliness %d, gap %d)%s",
                 job.farmId, job.id, worker.id, worker.name, roll, chance, worker.cleanliness, operationGap,
                 forced and " - forced" or "")
 
@@ -223,7 +223,7 @@ function TheContractorClaims:createPendingClaim(job, worker, delayDays)
     }
     table.insert(self.pendingClaims, claim)
 
-    Logging.info("TheContractor: farm %d job %d botched by %s (%s): claim of %.0f arrives day %d (%s)",
+    TCLog.info("TheContractor: farm %d job %d botched by %s (%s): claim of %.0f arrives day %d (%s)",
         claim.farmId, claim.jobId, claim.workerName, claim.cause, claim.amount, claim.notifyDay,
         claim.insured and "insured" or "uninsured")
 end
@@ -330,7 +330,7 @@ function TheContractorClaims:deliverClaim(claim)
         g_i18n:getText(claim.insured and "tc_claims_noticeInsured" or "tc_claims_noticeUninsured"),
         claim.fieldId, g_i18n:formatMoney(paid, 0, true, true)), TheContractorClaims.NOTICE_MONTHS)
 
-    Logging.info("TheContractor: farm %d claim for job %d delivered: %.0f claimed, %.0f paid (%s), -%d reputation",
+    TCLog.info("TheContractor: farm %d claim for job %d delivered: %.0f claimed, %.0f paid (%s), -%d reputation",
         claim.farmId, claim.jobId, claim.amount, paid, claim.insured and "insured" or "uninsured",
         claim.reputationPenalty)
 end
