@@ -198,7 +198,7 @@ function TheContractorDieselTheft:onDiscovered(incident)
     else
         data.liters, data.vehicleCount = self:siphonVehicles(farmId)
     end
-    Logging.info("TheContractor: farm %d incident %d: diesel theft (%s), %d l taken%s", farmId, incident.id,
+    TCLog.info("TheContractor: farm %d incident %d: diesel theft (%s), %d l taken%s", farmId, incident.id,
         tostring(data.variant), data.liters,
         isTank and "" or string.format(" from %d machine(s)", data.vehicleCount))
 

@@ -286,7 +286,7 @@ function TCIdleStaff.loadModel(workerId, figure)
             placeModel(figure)
             figure.isReady = true
         else
-            Logging.warning("TheContractor: couldn't load worker %d (%s) for a standing spot", workerId,
+            TCLog.warning("TheContractor: couldn't load worker %d (%s) for a standing spot", workerId,
                 figure.worker.name)
             TCIdleStaff.noStyle[workerId] = true
         end

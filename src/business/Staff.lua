@@ -551,7 +551,7 @@ function TheContractorStaff:addCandidateToPool()
         g_server:broadcastEvent(TCStaffCandidateAddedEvent.new(candidate))
     end
 
-    Logging.info("TheContractor: staff pool gained candidate %d (%s, age %d, speed %d, potential %d, salary %.0f)",
+    TCLog.info("TheContractor: staff pool gained candidate %d (%s, age %d, speed %d, potential %d, salary %.0f)",
         candidate.id, candidate.name, candidate.age, candidate.workSpeed, candidate.growthPotential,
         candidate.salary)
 
@@ -688,12 +688,12 @@ function TheContractorStaff:makeWorkerSick(farmId, worker, forceInspection)
     local days = TheContractorStaff.rollSickDays(g_currentMission.TheContractor.HealthSafety:getExtraDayChance(farmId))
 
     if worker:isIdle() then
-        Logging.info("TheContractor: farm %d worker %d (%s) off sick for %d day(s)", farmId, worker.id,
+        TCLog.info("TheContractor: farm %d worker %d (%s) off sick for %d day(s)", farmId, worker.id,
             worker.name, days)
         worker.sickDaysRemaining = days
         self:setWorkerStatus(farmId, worker.id, TheContractorWorker.STATUS.SICK)
     else
-        Logging.info("TheContractor: farm %d worker %d (%s) fell ill on a job, off sick for %d day(s) once back",
+        TCLog.info("TheContractor: farm %d worker %d (%s) fell ill on a job, off sick for %d day(s) once back",
             farmId, worker.id, worker.name, days)
         worker.pendingSickDays = days
     end
@@ -752,7 +752,7 @@ function TheContractorStaff:paySalaries()
         if total > 0 and g_farmManager:getFarmById(farmId) ~= nil then
             g_currentMission:addMoney(-total, farmId, MoneyType.TC_WAGES, true, true)
             g_currentMission.TheContractor.Finances:recordWages(farmId, total)
-            Logging.info("TheContractor: farm %d paid %.0f in staff salaries, %.0f in overtime and %.0f in pension contributions",
+            TCLog.info("TheContractor: farm %d paid %.0f in staff salaries, %.0f in overtime and %.0f in pension contributions",
                 farmId, salary, overtime, pension)
         end
     end
@@ -792,7 +792,7 @@ function TheContractorStaff:ageWorkers()
         return
     end
 
-    Logging.info("TheContractor: %d staff/candidates had a birthday in period %d", #aged, period)
+    TCLog.info("TheContractor: %d staff/candidates had a birthday in period %d", #aged, period)
 
     if g_server ~= nil then
         g_server:broadcastEvent(TCWorkersAgedEvent.new(aged))
@@ -843,7 +843,7 @@ function TheContractorStaff:announceLeaving(farmId, workerId, noticeMonths, isQu
         string.format(g_i18n:getText(isQuitting and "tc_morale_quitNotice" or "tc_retirement_notice"), worker.name,
             TCCalendar.formatPeriodIndex(leavesAtPeriod)))
 
-    Logging.info("TheContractor: farm %d worker %d (%s, age %d, morale %.1f) %s at period %d", farmId, workerId,
+    TCLog.info("TheContractor: farm %d worker %d (%s, age %d, morale %.1f) %s at period %d", farmId, workerId,
         worker.name, worker.age, worker.morale, isQuitting and "quits" or "retires", leavesAtPeriod)
 
     -- The host's own notification - the broadcast below doesn't loop back
@@ -911,7 +911,7 @@ function TheContractorStaff:retireWorker(farmId, workerId)
     -- 097: any overtime they've done this month.
     g_currentMission.TheContractor.WorkingHours:payLeaver(farmId, worker)
 
-    Logging.info("TheContractor: farm %d worker %d (%s) %s at %d", farmId, workerId, worker.name,
+    TCLog.info("TheContractor: farm %d worker %d (%s) %s at %d", farmId, workerId, worker.name,
         worker.isQuitting and "quit" or "retired", worker.age)
 
     -- The host's own notification, while the worker's still on the roster.
@@ -1061,7 +1061,7 @@ function TheContractorStaff:registerWorker(worker)
         self.nextWorkerId = worker.id + 1
     end
 
-    Logging.info("TheContractor: farm %d hired worker %d (%s, speed %d, salary %.0f)", worker.farmId, worker.id,
+    TCLog.info("TheContractor: farm %d hired worker %d (%s, speed %d, salary %.0f)", worker.farmId, worker.id,
         worker.name, worker.workSpeed, worker.salary)
 end
 
@@ -1198,7 +1198,7 @@ function TheContractorStaff:releaseWorker(farmId, workerId)
     -- 083: and any rival's offer.
     g_currentMission.TheContractor.Poaching:onWorkerGone(farmId, workerId)
 
-    Logging.info("TheContractor: farm %d released worker %d (%s) after %d year(s): %.1f weeks' notice pay (%.0f), %.1f weeks' redundancy pay (%.0f)",
+    TCLog.info("TheContractor: farm %d released worker %d (%s) after %d year(s): %.1f weeks' notice pay (%.0f), %.1f weeks' redundancy pay (%.0f)",
         farmId, workerId, worker.name, cost.years, cost.noticeWeeks, cost.noticePay, cost.redundancyWeeks,
         cost.redundancyPay)
 
@@ -1245,7 +1245,7 @@ function TheContractorStaff:setWorkerStatus(farmId, workerId, status)
     -- any sickness they picked up on the job.
     if worker ~= nil and status == TheContractorWorker.STATUS.IDLE and
             worker:isHolidayOn(g_currentMission.environment.currentMonotonicDay) then
-        Logging.info("TheContractor: farm %d worker %d (%s) back during their holiday, now on holiday", farmId,
+        TCLog.info("TheContractor: farm %d worker %d (%s) back during their holiday, now on holiday", farmId,
             workerId, worker.name)
         worker.pendingSickDays = 0
         status = TheContractorWorker.STATUS.HOLIDAY
@@ -1254,7 +1254,7 @@ function TheContractorStaff:setWorkerStatus(farmId, workerId, status)
     -- 031: someone who fell ill while out on a job goes off sick, not idle,
     -- when they get back.
     if worker ~= nil and status == TheContractorWorker.STATUS.IDLE and worker.pendingSickDays > 0 then
-        Logging.info("TheContractor: farm %d worker %d (%s) back from their job, now off sick for %d day(s)", farmId,
+        TCLog.info("TheContractor: farm %d worker %d (%s) back from their job, now off sick for %d day(s)", farmId,
             workerId, worker.name, worker.pendingSickDays)
         worker.sickDaysRemaining = worker.pendingSickDays
         worker.pendingSickDays = 0
@@ -1264,7 +1264,7 @@ function TheContractorStaff:setWorkerStatus(farmId, workerId, status)
     -- 054: someone back on a day they're due in for training goes straight
     -- there. Sickness comes first: they miss the day, and it slides.
     if worker ~= nil and status == TheContractorWorker.STATUS.IDLE and TheContractorTraining.isDueToday(worker) then
-        Logging.info("TheContractor: farm %d worker %d (%s) back on a training day, now training", farmId, workerId,
+        TCLog.info("TheContractor: farm %d worker %d (%s) back on a training day, now training", farmId, workerId,
             worker.name)
         status = TheContractorWorker.STATUS.TRAINING
     end
@@ -1426,7 +1426,7 @@ function TheContractorStaff:announceGrowth(farmId, worker, stat, value)
     local oldValue = worker:getStat(stat)
     self:applyWorkerGrowth(farmId, worker.id, stat, value)
 
-    Logging.info("TheContractor: farm %d worker %d (%s) grew %s %s -> %d, %d potential left", farmId,
+    TCLog.info("TheContractor: farm %d worker %d (%s) grew %s %s -> %d, %d potential left", farmId,
         worker.id, worker.name, stat, tostring(oldValue), value, worker.growthPotential)
 
     -- The host's own notification - the broadcast below doesn't loop back
@@ -1581,12 +1581,12 @@ function TheContractorStaff:editWorker(farmId, workerId, name, gender, appearanc
     end
     local problem = TheContractorStaff.getEditProblem(name, gender, appearance)
     if problem ~= nil then
-        Logging.warning("TheContractor: edit of worker %d (%s) refused: %s", workerId, worker.name, problem)
+        TCLog.warning("TheContractor: edit of worker %d (%s) refused: %s", workerId, worker.name, problem)
         return problem
     end
 
     name = TheContractorStaff.cleanName(name)
-    Logging.info("TheContractor: farm %d worker %d edited: %s -> %s, %s -> %s", farmId, workerId, worker.name, name,
+    TCLog.info("TheContractor: farm %d worker %d edited: %s -> %s, %s -> %s", farmId, workerId, worker.name, name,
         worker.gender, gender)
     self:applyWorkerEdited(farmId, workerId, name, gender, appearance)
 

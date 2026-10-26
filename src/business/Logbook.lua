@@ -486,7 +486,7 @@ function TheContractorLogbook:recordJob(job, outcome, reputation)
         self:applyVehicleEntry(update.record, update.entry)
     end
 
-    Logging.info("TheContractor: farm %d job %d logged (%s, %d machine(s), margin %s)", job.farmId, job.id, outcome,
+    TCLog.info("TheContractor: farm %d job %d logged (%s, %d machine(s), margin %s)", job.farmId, job.id, outcome,
         #entry.equipment, tostring(TheContractorLogbook.getMargin(entry)))
 
     if g_server ~= nil then

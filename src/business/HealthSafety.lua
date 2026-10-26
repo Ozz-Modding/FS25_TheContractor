@@ -90,7 +90,7 @@ function TheContractorHealthSafety:onWorkerFellSick(farmId, worker, force)
     end
 
     local roll = math.random()
-    Logging.info("TheContractor: farm %d no H&S programme, inspection roll %.3f vs %.3f%s", farmId, roll,
+    TCLog.info("TheContractor: farm %d no H&S programme, inspection roll %.3f vs %.3f%s", farmId, roll,
         TheContractorHealthSafety.INSPECTION_CHANCE, force and " - forced" or "")
     if force or roll < TheContractorHealthSafety.INSPECTION_CHANCE then
         self:runInspection(farmId, worker)
@@ -109,7 +109,7 @@ function TheContractorHealthSafety:runInspection(farmId, worker)
     tc.Notices:publish(farmId, string.format(g_i18n:getText("tc_healthSafety_inspectionNotice"), worker.name,
         g_i18n:formatMoney(fine, 0, true, true)), TheContractorHealthSafety.NOTICE_MONTHS)
 
-    Logging.info("TheContractor: farm %d workplace inspection after %s fell sick: fined %d, -%d reputation", farmId,
+    TCLog.info("TheContractor: farm %d workplace inspection after %s fell sick: fined %d, -%d reputation", farmId,
         worker.name, fine, TheContractorHealthSafety.REPUTATION_PENALTY)
 end
 

@@ -443,7 +443,7 @@ function TheContractorJobGeneration:tryGenerateJob(farmId, onlyJobType)
     end
 
     local settings = g_currentMission.TheContractor.Settings
-    Logging.info("TheContractor: priced %s on field %d at %.0f (%.2f/ha, job pay rate %d%% = %.2fx vanilla)",
+    TCLog.info("TheContractor: priced %s on field %d at %.0f (%.2f/ha, job pay rate %d%% = %.2fx vanilla)",
         jobType, field:getId(), price, price / math.max(field:getAreaHa() or 1, 0.01), settings:get("jobPayRate"),
         settings:getJobPayMultiplier())
 

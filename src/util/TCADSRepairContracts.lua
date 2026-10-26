@@ -61,7 +61,7 @@ local warned = {}
 local function warnOnce(key, text, ...)
     if not warned[key] then
         warned[key] = true
-        Logging.warning("TheContractor: " .. text, ...)
+        TCLog.warning("TheContractor: " .. text, ...)
     end
 end
 

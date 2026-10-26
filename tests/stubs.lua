@@ -479,6 +479,10 @@ function stubs.install()
     -- (g_currentMission.EconomyScale unset) its factor is 1.
     world:load("src/util/TCEconomyScale.lua")
 
+    -- Every src/ file logs through it. On, so world.logs gets the info lines.
+    world:load("src/util/TCLog.lua")
+    TCLog.enabled = true
+
     return world
 end
 

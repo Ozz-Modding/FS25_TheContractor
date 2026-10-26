@@ -539,7 +539,7 @@ end
 -- persistence/broadcast — this is just the state-machine guard.
 function TheContractorJob:transitionTo(newState)
     if not self:canTransitionTo(newState) then
-        Logging.warning("TheContractor: job %s illegal transition %s -> %s", tostring(self.id), self.state,
+        TCLog.warning("TheContractor: job %s illegal transition %s -> %s", tostring(self.id), self.state,
             tostring(newState))
         return false
     end

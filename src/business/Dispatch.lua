@@ -228,7 +228,7 @@ function TheContractorDispatch:startJobForWorker(job, skipTransport)
         job.transportRemainingMs = TheContractorDispatch.getTransportWaitMs(job)
     end
     if job.transportRemainingMs > 0 then
-        Logging.info("TheContractor: farm %d job %d on the road, arriving in %.1f min", job.farmId, job.id,
+        TCLog.info("TheContractor: farm %d job %d on the road, arriving in %.1f min", job.farmId, job.id,
             job.transportRemainingMs / 60000)
     end
 
@@ -278,7 +278,7 @@ function TheContractorDispatch:update(dt)
                 pending.elapsedMs >= TheContractorDispatch.HIDDEN_MS then
                 local operatingVehicle, errorText = TCJobSiteSetup.rigAndPlace(job)
                 if operatingVehicle == nil then
-                    Logging.warning("TheContractor: farm %d job %d equipment couldn't be rigged: %s", job.farmId,
+                    TCLog.warning("TheContractor: farm %d job %d equipment couldn't be rigged: %s", job.farmId,
                         job.id, tostring(errorText))
                     self:cancelPending(jobId, job)
                     -- 062: it never got going, so it's parked. The haulage
@@ -326,7 +326,7 @@ function TheContractorDispatch:resumeJobsAfterLoad()
                     job.state == TheContractorJob.STATE.IN_PROGRESS) and self.aiJobByOurJobId[job.id] == nil then
                 local worker = tc.Staff:getWorker(job.farmId, job.assignedWorkerId)
                 if worker ~= nil then
-                    Logging.info("TheContractor: farm %d job %d resuming AI dispatch after load", job.farmId, job.id)
+                    TCLog.info("TheContractor: farm %d job %d resuming AI dispatch after load", job.farmId, job.id)
                     self:startJobForWorker(job, job.state == TheContractorJob.STATE.IN_PROGRESS)
                 end
             end
@@ -360,7 +360,7 @@ function TheContractorDispatch:startAIJob(job)
     aiJob.tcFieldSpeedFactor = TCWorkerFieldSpeed.getFactor(worker)
     local vehicle = self:findOperatingVehicle(aiJob, job.assignedEquipmentIds)
     if vehicle == nil then
-        Logging.warning(
+        TCLog.warning(
             "TheContractor: farm %d job %d has no allocated equipment ready for AI dispatch after rigging",
             job.farmId, job.id)
         self:notifyDispatchFailed(job, g_i18n:getText("tc_dispatch_noVehicleReady"))
@@ -372,7 +372,7 @@ function TheContractorDispatch:startAIJob(job)
 
     local isValid, validationError = aiJob:validate(job.farmId)
     if not isValid then
-        Logging.warning("TheContractor: farm %d job %d AI job failed validation: %s", job.farmId, job.id,
+        TCLog.warning("TheContractor: farm %d job %d AI job failed validation: %s", job.farmId, job.id,
             tostring(validationError))
         self:notifyDispatchFailed(job, tostring(validationError))
         return
@@ -390,7 +390,7 @@ function TheContractorDispatch:startAIJob(job)
     local isStartable, startError = aiJob:getIsStartable(nil)
     if not isStartable then
         local errorText = AIJobFieldWork.getIsStartErrorText(startError)
-        Logging.warning("TheContractor: farm %d job %d AI job not startable: %s", job.farmId, job.id, errorText)
+        TCLog.warning("TheContractor: farm %d job %d AI job not startable: %s", job.farmId, job.id, errorText)
         self:notifyDispatchFailed(job, errorText)
         return
     end
@@ -400,7 +400,7 @@ function TheContractorDispatch:startAIJob(job)
 
     g_currentMission.aiSystem:startJob(aiJob, job.farmId)
 
-    Logging.info("TheContractor: farm %d job %d dispatched to AI Helper on vehicle '%s' (worker %s, %d%% field speed)",
+    TCLog.info("TheContractor: farm %d job %d dispatched to AI Helper on vehicle '%s' (worker %s, %d%% field speed)",
         job.farmId, job.id, vehicle:getName(), worker ~= nil and worker.name or "?", aiJob.tcFieldSpeedFactor * 100)
 end
 
@@ -452,7 +452,7 @@ function TheContractorDispatch:onAIJobStopped(aiJob, aiMessage)
     end
 
     local isClean = aiMessage == nil or aiMessage:getType() ~= AIMessageType.ERROR
-    Logging.info("TheContractor: job %d AI job stopped (%s): %s", ourJobId, isClean and "clean" or "error",
+    TCLog.info("TheContractor: job %d AI job stopped (%s): %s", ourJobId, isClean and "clean" or "error",
         aiMessage ~= nil and aiMessage:getMessage(aiJob) or "no message")
 
     -- 032: an empty tank isn't the watchdog's business - it's a supplies
@@ -569,7 +569,7 @@ end
 -- worker stays on the field, the job in_progress, until TCJobSupplies'
 -- poll restarts it (startJobForWorker, skipping the trip).
 function TheContractorDispatch:pauseForSupplies(job)
-    Logging.info("TheContractor: farm %d job %d on hold for supplies (%s %s)", job.farmId, job.id,
+    TCLog.info("TheContractor: farm %d job %d on hold for supplies (%s %s)", job.farmId, job.id,
         tostring(job.supplyStatus), tostring(job.supplyFillTypeName))
     self:stopJob(job.id, AIMessageErrorOutOfFill.new())
     self.ranOutOfFillJobIds[job.id] = nil

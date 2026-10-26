@@ -180,13 +180,13 @@ function TheContractorGoodNews:onAnnounce(incident)
         g_currentMission:addMoney(amount, farmId, MoneyType.TC_GOOD_NEWS, true, true)
         tc.Finances:recordGoodNews(farmId, amount)
         arg = "$money_" .. amount
-        Logging.info("TheContractor: farm %d incident %d: good news '%s', %d paid in", farmId, incident.id,
+        TCLog.info("TheContractor: farm %d incident %d: good news '%s', %d paid in", farmId, incident.id,
             story.key, amount)
     else
         local amount = TheContractorGoodNews.getReputationReward(farmId, story.reputation or 0)
         tc.Reputation:addReputation(farmId, amount)
         arg = amount
-        Logging.info("TheContractor: farm %d incident %d: good news '%s', +%d reputation", farmId, incident.id,
+        TCLog.info("TheContractor: farm %d incident %d: good news '%s', +%d reputation", farmId, incident.id,
             story.key, amount)
     end
 

@@ -98,13 +98,13 @@ end
 function TCDebris:load(propKey, x, y, z, rx, ry, rz)
     local def = TCDebris.PROPS[propKey]
     if def == nil then
-        Logging.warning("TheContractor: unknown debris prop '%s'", tostring(propKey))
+        TCLog.warning("TheContractor: unknown debris prop '%s'", tostring(propKey))
         return false
     end
     local filename = Utils.getFilename(def.filename, TheContractor.dir)
     local root, sharedLoadRequestId = g_i3DManager:loadSharedI3DFile(filename, false, false)
     if root == nil or root == 0 then
-        Logging.warning("TheContractor: could not load debris i3d '%s'", filename)
+        TCLog.warning("TheContractor: could not load debris i3d '%s'", filename)
         return false
     end
     self.sharedLoadRequestId = sharedLoadRequestId
@@ -176,7 +176,7 @@ function TCDebris:update(dt)
             self.settleFramesLeft = self.settleFramesLeft - 1
             if self.settleFramesLeft <= 0 then
                 self.settleFramesLeft = nil
-                Logging.warning("TheContractor: debris %s didn't settle (mass %.3f t, sleeping %s)",
+                TCLog.warning("TheContractor: debris %s didn't settle (mass %.3f t, sleeping %s)",
                     tostring(self.propKey), getMass(node), tostring(getIsSleeping(node)))
             else
                 self:raiseActive()

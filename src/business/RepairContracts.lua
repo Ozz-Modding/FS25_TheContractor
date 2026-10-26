@@ -567,7 +567,7 @@ function TheContractorRepairContracts:getEligibleModels(zoneType)
     table.sort(models, function(a, b)
         return a.xmlFilename < b.xmlFilename
     end)
-    Logging.info("TheContractor: %d models for %s repair zones", #models, zoneType)
+    TCLog.info("TheContractor: %d models for %s repair zones", #models, zoneType)
     self.modelCache[zoneType] = models
     return models
 end
@@ -705,7 +705,7 @@ function TheContractorRepairContracts:queueArrival(farmId, zone, bayIndex, kind,
         isLoading = false,
     }
     table.insert(self.arrivals, entry)
-    Logging.info("TheContractor: farm %d repair zone bay %d: %s (%s, severity %d) on its way", farmId, bayIndex,
+    TCLog.info("TheContractor: farm %d repair zone bay %d: %s (%s, severity %d) on its way", farmId, bayIndex,
         model.name, entry.kind, entry.severity)
     return entry
 end
@@ -731,7 +731,7 @@ function TheContractorRepairContracts:queueFieldArrival(farmId, fieldId, model, 
         isLoading = false,
     }
     table.insert(self.arrivals, entry)
-    Logging.info("TheContractor: farm %d field %d: %s (breakdown, %s, severity %d) on its way", farmId, fieldId,
+    TCLog.info("TheContractor: farm %d field %d: %s (breakdown, %s, severity %d) on its way", farmId, fieldId,
         model.name, tostring(fieldService), severity)
     return entry
 end
@@ -774,12 +774,12 @@ function TheContractorRepairContracts:onDayChanged()
         end
         if entry.fieldId ~= nil and not entry.isLoading and entry.queuedDay < today then
             -- 101: a breakdown not placed by midnight would be due yesterday.
-            Logging.info("TheContractor: farm %d breakdown on field %d never placed, dropped", entry.farmId,
+            TCLog.info("TheContractor: farm %d breakdown on field %d never placed, dropped", entry.farmId,
                 entry.fieldId)
         elseif entry.isLoading or (entry.blockedDays or 0) <= TheContractorRepairContracts.ARRIVAL_GIVE_UP_DAYS then
             table.insert(kept, entry)
         else
-            Logging.info("TheContractor: farm %d repair zone bay %d had no room for days, arrival dropped",
+            TCLog.info("TheContractor: farm %d repair zone bay %d had no room for days, arrival dropped",
                 entry.farmId, entry.bayIndex)
         end
     end
@@ -947,7 +947,7 @@ function TheContractorRepairContracts:retryFieldSpot(entry, model)
         x, z, rotY = TheContractorFieldBreakdowns.pickSpot(entry.fieldId, model, math.random)
     end
     if x == nil then
-        Logging.info("TheContractor: farm %d breakdown on field %d: no room, dropped", entry.farmId, entry.fieldId)
+        TCLog.info("TheContractor: farm %d breakdown on field %d: no room, dropped", entry.farmId, entry.fieldId)
         removeFrom(self.arrivals, entry)
         return
     end
@@ -966,7 +966,7 @@ function TheContractorRepairContracts:retryArrival(entry, zone, reason)
             x, z, rotY = TheContractorFieldBreakdowns.pickSpot(entry.fieldId, model, math.random)
         end
         if x == nil then
-            Logging.info("TheContractor: farm %d breakdown on field %d: arrival dropped (%s)", entry.farmId,
+            TCLog.info("TheContractor: farm %d breakdown on field %d: arrival dropped (%s)", entry.farmId,
                 entry.fieldId, tostring(reason))
             removeFrom(self.arrivals, entry)
             return
@@ -977,7 +977,7 @@ function TheContractorRepairContracts:retryArrival(entry, zone, reason)
         return
     end
     if entry.attempts > TheContractorRepairContracts.PREPARE_RETRIES or zone == nil then
-        Logging.info("TheContractor: farm %d repair zone bay %d: arrival dropped (%s)", entry.farmId, entry.bayIndex,
+        TCLog.info("TheContractor: farm %d repair zone bay %d: arrival dropped (%s)", entry.farmId, entry.bayIndex,
             tostring(reason))
         removeFrom(self.arrivals, entry)
         return
@@ -1260,7 +1260,7 @@ function TheContractorRepairContracts:createOffer(entry, vehicle, quote)
         vehicle:delete()
         return
     end
-    Logging.info("TheContractor: farm %d job %d: %s in for %s, quoted %.0f (parts %.0f, %.1f h), %.0f at the %.0f%% benchmark, ceiling %.0f%%",
+    TCLog.info("TheContractor: farm %d job %d: %s in for %s, quoted %.0f (parts %.0f, %.1f h), %.0f at the %.0f%% benchmark, ceiling %.0f%%",
         entry.farmId, job.id, workshop.vehicleName, entry.kind, quote.price, partsCost, workshop.laborHours,
         job:getPrice(), benchmark * 100, workshop.refusalMargin * 100)
 end
@@ -1312,7 +1312,7 @@ function TheContractorRepairContracts:proposeQuote(farmId, jobId, margin)
     else
         jobs:transitionJobState(farmId, jobId, TheContractorJob.STATE.DECLINED)
     end
-    Logging.info("TheContractor: farm %d job %d: quoted at a %.0f%% margin (benchmark %.0f%%, ceiling %.0f%%) - %s",
+    TCLog.info("TheContractor: farm %d job %d: quoted at a %.0f%% margin (benchmark %.0f%%, ceiling %.0f%%) - %s",
         farmId, jobId, margin * 100, benchmark * 100, ceiling * 100, outcome)
     return outcome
 end
@@ -1349,7 +1349,7 @@ function TheContractorRepairContracts:onJobCompleted(job)
     local noticeId = notices:publish(job.farmId, string.format(g_i18n:getText("tc_repair_overchargingNotice"),
         TheContractorRepairContracts.OVERCHARGE_MONTHS))
     self.overcharged[job.farmId] = { untilDay = untilDay, noticeId = noticeId }
-    Logging.info("TheContractor: farm %d job %d finished at a %.0f%% margin: known for overcharging until day %d",
+    TCLog.info("TheContractor: farm %d job %d finished at a %.0f%% margin: known for overcharging until day %d",
         job.farmId, job.id, margin * 100, untilDay)
 end
 
@@ -1367,7 +1367,7 @@ function TheContractorRepairContracts:expireOvercharging(today)
             g_currentMission.TheContractor.Notices:remove(entry.noticeId)
         end
         self.overcharged[farmId] = nil
-        Logging.info("TheContractor: farm %d no longer known for overcharging", farmId)
+        TCLog.info("TheContractor: farm %d no longer known for overcharging", farmId)
     end
 end
 
@@ -1408,7 +1408,7 @@ function TheContractorRepairContracts:tryCollect(entry)
         return
     end
     removeFrom(self.removals, entry)
-    Logging.info("TheContractor: farm %d: the customer collected %s", entry.farmId, vehicle:getFullName())
+    TCLog.info("TheContractor: farm %d: the customer collected %s", entry.farmId, vehicle:getFullName())
     vehicle:delete()
 end
 
@@ -1569,7 +1569,7 @@ function TheContractorRepairContracts:judgeTampering(job, penalty)
     tc.Inbox:postMessage(job.farmId, TheContractorRepairContracts.MESSAGE_KIND, "tc_repair_tamperedTitle",
         claimAmount > 0 and "tc_repair_tamperedBodyClaim" or "tc_repair_tamperedBody",
         { job.workshop.vehicleName, tamperPenalty }, nil, { jobId = job.id })
-    Logging.info("TheContractor: farm %d job %d: %s went back tampered with (%d finding(s), %.0f lost), -%d reputation%s",
+    TCLog.info("TheContractor: farm %d job %d: %s went back tampered with (%d finding(s), %.0f lost), -%d reputation%s",
         job.farmId, job.id, job.workshop.vehicleName, #(findings or {}), value, tamperPenalty,
         claimAmount > 0 and string.format(", claim of %.0f to come", claimAmount) or "")
     return tamperPenalty
@@ -1588,7 +1588,7 @@ function TheContractorRepairContracts:deliverClaim(claim)
         { claim.vehicleName, "$money_" .. paid }, nil, { jobId = claim.jobId })
     tc.Notices:publish(claim.farmId, string.format(g_i18n:getText("tc_repair_claimNotice"), claim.vehicleName,
         g_i18n:formatMoney(paid, 0, true, true)), TheContractorRepairContracts.NOTICE_MONTHS)
-    Logging.info("TheContractor: farm %d tamper claim for job %d: %.0f paid", claim.farmId, claim.jobId, paid)
+    TCLog.info("TheContractor: farm %d tamper claim for job %d: %.0f paid", claim.farmId, claim.jobId, paid)
 end
 
 -- Persistence (server) -------------------------------------------------------------------
@@ -1789,7 +1789,7 @@ function TheContractorRepairContracts:endUnworkableJobs()
         end
     end
     for _, job in ipairs(unworkable) do
-        Logging.info("TheContractor: farm %d job %d: %s can't be worked after loading (%s), ended without penalty",
+        TCLog.info("TheContractor: farm %d job %d: %s can't be worked after loading (%s), ended without penalty",
             job.farmId, job.id, job.workshop.vehicleName or "?",
             not TCADSRepairContracts.isActive() and "no ADS" or
             TheContractorRepairContracts.getVehicle(job) == nil and "machine gone" or "no contract")

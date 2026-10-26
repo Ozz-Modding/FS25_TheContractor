@@ -232,10 +232,10 @@ function TheContractorAdvertising:applyAdvertisingState(farmId, levelKey, expire
     self.expiresOnDay[farmId] = expiresOnDay
 
     if levelKey ~= nil then
-        Logging.info("TheContractor: farm %d advertising is now %s (expires day %d)", farmId, levelKey,
+        TCLog.info("TheContractor: farm %d advertising is now %s (expires day %d)", farmId, levelKey,
             expiresOnDay)
     else
-        Logging.info("TheContractor: farm %d advertising has expired", farmId)
+        TCLog.info("TheContractor: farm %d advertising has expired", farmId)
     end
 end
 

@@ -294,7 +294,7 @@ function TheContractorMachineryInsurance:onClaim(incident)
         self:publishClaimNotice(incident)
         tc.Inbox:postMessage(incident.farmId, TheContractorMachineryInsurance.MESSAGE_KIND,
             "tc_insurance_claimTitle", "tc_insurance_claimByAdminBody", args, nil, { incidentId = incident.id })
-        Logging.info("TheContractor: farm %d incident %d: administrator submitted the insurance claim for %s",
+        TCLog.info("TheContractor: farm %d incident %d: administrator submitted the insurance claim for %s",
             incident.farmId, incident.id, data.name)
         return TheContractorMachineryInsurance.STAGE.SETTLE_FAST
     end
@@ -317,7 +317,7 @@ function TheContractorMachineryInsurance:submitClaim(incidentId)
     end
     incident.data.claimSubmittedDay = getToday()
     self:publishClaimNotice(incident)
-    Logging.info("TheContractor: farm %d incident %d: insurance claim for %s submitted", incident.farmId,
+    TCLog.info("TheContractor: farm %d incident %d: insurance claim for %s submitted", incident.farmId,
         incident.id, incident.data.name)
     self.randomEvents:goToStage(incident, TheContractorMachineryInsurance.STAGE.SETTLE)
 end
@@ -369,7 +369,7 @@ function TheContractorMachineryInsurance:settle(incident)
     tc.Notices:publish(farmId, string.format(g_i18n:getText("tc_insurance_settledNotice"),
         g_i18n:formatMoney(payout, 0, true, true), data.name), TheContractorMachineryInsurance.NOTICE_MONTHS)
 
-    Logging.info("TheContractor: farm %d incident %d: insurance settled for %s (%s): value %.0f, paid %.0f, excess %.0f",
+    TCLog.info("TheContractor: farm %d incident %d: insurance settled for %s (%s): value %.0f, paid %.0f, excess %.0f",
         farmId, incident.id, data.name, level.key, data.value, payout, excessBorne)
 end
 

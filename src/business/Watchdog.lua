@@ -153,14 +153,14 @@ function TheContractorWatchdog:handleStuckJob(job, entry)
 
     if entry.retryCount > TheContractorWatchdog.MAX_RETRIES_PER_JOB then
         entry.needsAttention = true
-        Logging.warning(
+        TCLog.warning(
             "TheContractor: farm %d job %d stuck watchdog exhausted %d retries - needs player attention",
             job.farmId, job.id, TheContractorWatchdog.MAX_RETRIES_PER_JOB)
         self:notify(job, true)
         return
     end
 
-    Logging.info(
+    TCLog.info(
         "TheContractor: farm %d job %d appears stuck (no field progress for %d min) - resetting and retrying (%d/%d)",
         job.farmId, job.id, TheContractorWatchdog.STUCK_TIMEOUT_MINUTES, entry.retryCount,
         TheContractorWatchdog.MAX_RETRIES_PER_JOB)

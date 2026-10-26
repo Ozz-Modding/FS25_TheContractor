@@ -123,7 +123,7 @@ end
 -- receiving TCReputationChangedEvent) is applying the change.
 function TheContractorReputation:applyReputationScore(farmId, score)
     self.scores[farmId] = score
-    Logging.info("TheContractor: farm %d reputation is now %d", farmId, score)
+    TCLog.info("TheContractor: farm %d reputation is now %d", farmId, score)
 end
 
 function TheContractorReputation:loadFromXMLFile(xmlFile)

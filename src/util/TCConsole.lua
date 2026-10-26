@@ -1,6 +1,7 @@
 -- Console commands. Everything the mod offers in the developer console is
 -- a subcommand of one of a few group commands (tcWorker, tcJob, tcFinance,
--- tcCompany), and tcHelp lists the groups. Typing a group on its own (or
+-- tcCompany), and tcHelp lists the groups. tcLog, which toggles TCLog's
+-- detailed log, is the one other top-level command. Typing a group on its own (or
 -- with "help") lists its subcommands with their arguments, so players can
 -- find their way around without the docs. docs/commands.md has the detail.
 --
@@ -26,6 +27,8 @@
 TCConsole = {}
 
 TCConsole.HELP_COMMAND = "tcHelp"
+TCConsole.LOG_COMMAND = "tcLog"
+TCConsole.LOG_DESCRIPTION = "Toggle the mod's detailed log on this machine (off by default)"
 
 -- In tcHelp's order.
 TCConsole.GROUPS = {
@@ -57,7 +60,7 @@ end
 function TCConsole.register(groupKey, name, def)
     local group = TCConsole.groups[groupKey]
     if group == nil then
-        Logging.error("TheContractor: unknown console group '%s' for '%s'", tostring(groupKey), tostring(name))
+        TCLog.error("TheContractor: unknown console group '%s' for '%s'", tostring(groupKey), tostring(name))
         return
     end
     def.name = name
@@ -81,6 +84,11 @@ function TCConsole.install()
             return TCConsole.getHelpText()
         end,
     })
+    addConsoleCommand(TCConsole.LOG_COMMAND, TCConsole.LOG_DESCRIPTION, "run", {
+        run = function()
+            return TCLog.toggle()
+        end,
+    })
 
     for _, groupInfo in ipairs(TCConsole.GROUPS) do
         local group = TCConsole.groups[groupInfo.key]
@@ -100,6 +108,7 @@ function TCConsole.uninstall()
     end
 
     removeConsoleCommand(TCConsole.HELP_COMMAND)
+    removeConsoleCommand(TCConsole.LOG_COMMAND)
     for _, groupInfo in ipairs(TCConsole.GROUPS) do
         removeConsoleCommand(groupInfo.command)
     end
@@ -113,6 +122,7 @@ function TCConsole.getHelpText()
     for _, groupInfo in ipairs(TCConsole.GROUPS) do
         table.insert(lines, string.format("  %-11s %s", groupInfo.command, groupInfo.description))
     end
+    table.insert(lines, string.format("  %-11s %s", TCConsole.LOG_COMMAND, TCConsole.LOG_DESCRIPTION))
     table.insert(lines, "Type a command on its own to see what it can do, e.g. tcWorker")
     return table.concat(lines, "\n")
 end

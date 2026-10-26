@@ -48,7 +48,7 @@ function TCParkingSlotFilterEvent:run(connection)
         local filter = TCParkingSlotFilter.sanitise(slot, self.farmId, self.filter)
         -- Applied here: the broadcast doesn't loop back in single-player.
         PlaceableTCParkingSlot.setFilter(slot, filter)
-        Logging.info("TheContractor: farm %d set a parking slot to take %s", self.farmId,
+        TCLog.info("TheContractor: farm %d set a parking slot to take %s", self.farmId,
             TCParkingSlotFilter.getSummary(slot, filter))
         -- To every client, the requester included: it only sent a request.
         g_server:broadcastEvent(TCParkingSlotFilterEvent.new(self.slotId, self.farmId, filter))

@@ -310,19 +310,19 @@ function TheContractorCourtesyVehicle:lend(incident, stolenVehicle)
         TheContractorCourtesyVehicle.getDefaultConfigurations(stolenStoreItem)
     local power = TheContractorCourtesyVehicle.getConfiguredPower(stolenStoreItem, configurations)
     if power == nil or power <= 0 then
-        Logging.info("TheContractor: farm %d incident %d: %s has no power spec, no courtesy vehicle",
+        TCLog.info("TheContractor: farm %d incident %d: %s has no power spec, no courtesy vehicle",
             incident.farmId, incident.id, data.name)
         return false
     end
 
     local picked = TheContractorCourtesyVehicle.pickForStolen(stolenStoreItem, power)
     if picked == nil then
-        Logging.warning("TheContractor: farm %d incident %d: no courtesy vehicle to be had for %s (%d hp)",
+        TCLog.warning("TheContractor: farm %d incident %d: no courtesy vehicle to be had for %s (%d hp)",
             incident.farmId, incident.id, data.name, power)
         return false
     end
 
-    Logging.info("TheContractor: farm %d incident %d: courtesy %s (%d hp) for %s (%d hp)", incident.farmId,
+    TCLog.info("TheContractor: farm %d incident %d: courtesy %s (%d hp) for %s (%d hp)", incident.farmId,
         incident.id, picked.name, picked.power, data.name, power)
     return self:spawn(incident, picked.storeItem)
 end
@@ -345,7 +345,7 @@ end
 function TheContractorCourtesyVehicle:onSpawned(vehicles, loadingState, args)
     local vehicle = vehicles ~= nil and vehicles[1] or nil
     if vehicle == nil or loadingState ~= VehicleLoadingState.OK then
-        Logging.warning("TheContractor: incident %d: the courtesy vehicle failed to load", args.incidentId)
+        TCLog.warning("TheContractor: incident %d: the courtesy vehicle failed to load", args.incidentId)
         return
     end
 
@@ -375,7 +375,7 @@ function TheContractorCourtesyVehicle:onSpawned(vehicles, loadingState, args)
         { incidentId = incident.id })
     tc.Notices:publish(incident.farmId, string.format(g_i18n:getText("tc_courtesy_lentNotice"), data.courtesyName,
         g_i18n:getText(placeKey)), TheContractorCourtesyVehicle.NOTICE_MONTHS)
-    Logging.info("TheContractor: farm %d incident %d: courtesy %s (%d) at %s", incident.farmId, incident.id,
+    TCLog.info("TheContractor: farm %d incident %d: courtesy %s (%d) at %s", incident.farmId, incident.id,
         data.courtesyName, data.courtesyVehicleId, placeKey)
 end
 
@@ -417,7 +417,7 @@ function TheContractorCourtesyVehicle:onReturn(incident, isFirstTry)
         if isFirstTry then
             tc.Inbox:postMessage(incident.farmId, TheContractorCourtesyVehicle.MESSAGE_KIND,
                 "tc_courtesy_dueTitle", "tc_courtesy_dueBody", { data.courtesyName }, nil, { incidentId = incident.id })
-            Logging.info("TheContractor: farm %d incident %d: courtesy %s is busy, collecting it when it's free",
+            TCLog.info("TheContractor: farm %d incident %d: courtesy %s is busy, collecting it when it's free",
                 incident.farmId, incident.id, data.courtesyName)
         end
         return TheContractorCourtesyVehicle.STAGE.RETRY
@@ -478,7 +478,7 @@ function TheContractorCourtesyVehicle:collect(incident, vehicle)
         "tc_courtesy_returnedBody", { data.courtesyName }, nil, { incidentId = incident.id })
     tc.Notices:publish(incident.farmId, string.format(g_i18n:getText("tc_courtesy_returnedNotice"),
         data.courtesyName), TheContractorCourtesyVehicle.NOTICE_MONTHS)
-    Logging.info("TheContractor: farm %d incident %d: courtesy %s collected", incident.farmId, incident.id,
+    TCLog.info("TheContractor: farm %d incident %d: courtesy %s collected", incident.farmId, incident.id,
         data.courtesyName)
 end
 

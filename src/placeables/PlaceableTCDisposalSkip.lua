@@ -74,16 +74,16 @@ function PlaceableTCDisposalSkip:onLoad(savegame)
         return
     end
     if data.triggerNode == nil then
-        Logging.xmlWarning(self.xmlFile, "Disposal skip has no trigger node, debris won't be taken")
+        TCLog.xmlWarning(self.xmlFile, "Disposal skip has no trigger node, debris won't be taken")
         return
     end
     if not CollisionFlag.getHasMaskFlagSet(data.triggerNode, CollisionFlag.DYNAMIC_OBJECT) then
-        Logging.xmlWarning(self.xmlFile, "Disposal skip trigger doesn't have bit %d (%s) in its collision mask",
+        TCLog.xmlWarning(self.xmlFile, "Disposal skip trigger doesn't have bit %d (%s) in its collision mask",
             CollisionFlag.getBit(CollisionFlag.DYNAMIC_OBJECT), "DYNAMIC_OBJECT")
         return
     end
     if not CollisionFlag.getHasMaskFlagSet(data.triggerNode, CollisionFlag.VEHICLE) then
-        Logging.xmlWarning(self.xmlFile, "Disposal skip trigger doesn't have bit %d (%s) in its collision mask, "
+        TCLog.xmlWarning(self.xmlFile, "Disposal skip trigger doesn't have bit %d (%s) in its collision mask, "
             .. "old parts won't be taken", CollisionFlag.getBit(CollisionFlag.VEHICLE), "VEHICLE")
     end
     addTrigger(data.triggerNode, "tcDisposalTriggerCallback", self)

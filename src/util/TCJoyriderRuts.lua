@@ -793,7 +793,7 @@ function TCJoyriderRuts.paintDumpSite(field, random)
 
     local pieceCount = paintRunIn(boundary, site.points, TCJoyriderRuts.getDumpPatchPiece(site))
 
-    Logging.info("TheContractor: fly-tipping site on field %s: %.1f m in from the edge at (%.0f, %.0f), %d rut pieces",
+    TCLog.info("TheContractor: fly-tipping site on field %s: %.1f m in from the edge at (%.0f, %.0f), %d rut pieces",
         tostring(field:getId()), site.depth, site.edgeX, site.edgeZ, pieceCount)
     return site
 end
@@ -817,7 +817,7 @@ function TCJoyriderRuts.paintMachineSite(field, x, z, heading, width, length)
     local patch = TCJoyriderRuts.getPatchPiece(x, z, heading, width + margin, length + margin)
     local pieceCount = paintRunIn(boundary, TCJoyriderRuts.getRunInPoints(boundary, x, z, heading), patch)
 
-    Logging.info("TheContractor: breakdown spot on field %s at (%.0f, %.0f), %.1f m from the edge, %d rut pieces",
+    TCLog.info("TheContractor: breakdown spot on field %s at (%.0f, %.0f), %.1f m from the edge, %d rut pieces",
         tostring(field:getId()), x, z, TCJoyriderRuts.getDistanceToBoundary(x, z, boundary), pieceCount)
     return pieceCount
 end
@@ -831,7 +831,7 @@ function TCJoyriderRuts.paintField(field, style, random)
     end
     local boundary = TCJoyriderRuts.getFieldBoundary(field)
     if #boundary < 3 then
-        Logging.warning("TheContractor: field %s has no boundary, can't add joyrider ruts", tostring(field:getId()))
+        TCLog.warning("TheContractor: field %s has no boundary, can't add joyrider ruts", tostring(field:getId()))
         return nil
     end
 
@@ -862,7 +862,7 @@ function TCJoyriderRuts.paintField(field, style, random)
         targetCoverage = stats.targetCoverage,
         cellSize = stats.cellSize,
     }
-    Logging.info("TheContractor: joyrider ruts on field %s (%s): %.0f m driven, %.0f m inside, %d pieces, "
+    TCLog.info("TheContractor: joyrider ruts on field %s (%s): %.0f m driven, %.0f m inside, %d pieces, "
         .. "ruts in %d%% of its %.0f m squares (target %d%%)", tostring(field:getId()), style, result.length,
         result.insideLength, pieceCount, math.floor(result.coverage * 100 + 0.5), result.cellSize,
         math.floor(result.targetCoverage * 100 + 0.5))

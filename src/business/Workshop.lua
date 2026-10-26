@@ -232,7 +232,7 @@ function TheContractorWorkshop.setRole(farmId, workerId, role)
     local worker = staff:getWorker(farmId, workerId)
     local problem = TheContractorWorkshop.getRoleProblem(worker, role)
     if problem ~= nil then
-        Logging.info("TheContractor: farm %d can't put worker %d in the workshop as %s: %s", farmId, workerId,
+        TCLog.info("TheContractor: farm %d can't put worker %d in the workshop as %s: %s", farmId, workerId,
             tostring(role), problem)
         return problem
     end
@@ -244,7 +244,7 @@ function TheContractorWorkshop.setRole(farmId, workerId, role)
         end
     end
     TheContractorWorkshop.commit(worker, worker.adsSkills, role)
-    Logging.info("TheContractor: farm %d worker %d (%s) workshop role: %s", farmId, worker.id, worker.name,
+    TCLog.info("TheContractor: farm %d worker %d (%s) workshop role: %s", farmId, worker.id, worker.name,
         tostring(role))
     return nil
 end

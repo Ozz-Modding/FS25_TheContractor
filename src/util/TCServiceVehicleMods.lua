@@ -39,7 +39,7 @@ function TCServiceVehicleMods.installServiceVehicle(workshopClass, modName)
     workshopClass.determineCurrentVehicles = Utils.overwrittenFunction(
         workshopClass.determineCurrentVehicles, TCServiceVehicleMods.determineCurrentVehicles)
     workshopClass.tcHookInstalled = true
-    Logging.info("TheContractor: service vehicle workshop found in %s", modName)
+    TCLog.info("TheContractor: service vehicle workshop found in %s", modName)
 end
 
 function TCServiceVehicleMods.installMobileWorkshop(mobileWorkshop, modName)
@@ -50,7 +50,7 @@ function TCServiceVehicleMods.installMobileWorkshop(mobileWorkshop, modName)
     mobileWorkshop.getIsValidVehicle = Utils.overwrittenFunction(
         mobileWorkshop.getIsValidVehicle, TCServiceVehicleMods.getIsValidVehicle)
     mobileWorkshop.tcHookInstalled = true
-    Logging.info("TheContractor: mobile workshop found in %s", modName)
+    TCLog.info("TheContractor: mobile workshop found in %s", modName)
 end
 
 -- The service vehicle's list is also its currentVehicles (shown on its info

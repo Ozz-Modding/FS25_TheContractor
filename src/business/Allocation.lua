@@ -705,7 +705,7 @@ function TheContractorAllocation:allocateJob(farmId, jobId, workerIds, equipment
         TCHaulage.startDelivery(job)
     end
 
-    Logging.info("TheContractor: farm %d job %d allocated (worker=%s, hauler=%s, equipment=%s, haulage=%s)", farmId,
+    TCLog.info("TheContractor: farm %d job %d allocated (worker=%s, hauler=%s, equipment=%s, haulage=%s)", farmId,
         jobId, tostring(operatorId), tostring(haulerId), TheContractorJobs.encodeIdList(equipmentIds),
         TheContractorJobs.encodeIdList(haulageEquipmentIds))
 

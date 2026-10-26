@@ -58,7 +58,7 @@ local function lookUp(env, tableName, fieldName, expectedType)
         local name = tableName .. "." .. fieldName
         if not warned[name] then
             warned[name] = true
-            Logging.warning("TheContractor: %s's %s is missing or has changed - what needs it is switched off",
+            TCLog.warning("TheContractor: %s's %s is missing or has changed - what needs it is switched off",
                 TCADSStock.MOD_NAME, name)
         end
         return nil

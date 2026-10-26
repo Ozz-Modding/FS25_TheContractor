@@ -21,7 +21,7 @@ function TCAIRestart.onFieldWorkerUpdate(vehicle, superFunc, ...)
         local worker, isContract = TCWorkerAppearance.getWorkerOnVehicle(vehicle)
         if worker ~= nil and isContract then
             spec.pendingAIFieldWorkerStart = false
-            Logging.info("TheContractor: skipped vanilla's AI restart on '%s', its contract job resumes itself",
+            TCLog.info("TheContractor: skipped vanilla's AI restart on '%s', its contract job resumes itself",
                 vehicle:getFullName())
         end
     end

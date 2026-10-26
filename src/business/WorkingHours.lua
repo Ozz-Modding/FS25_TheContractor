@@ -341,7 +341,7 @@ function TheContractorWorkingHours:requestDuty(farmId, workerId, action, untilMi
     local now = TheContractorWorkingHours.getNow()
     local problem = TheContractorWorkingHours.getDutyProblem(worker, action, untilMinutes, now)
     if problem ~= nil then
-        Logging.info("TheContractor: farm %d worker %d duty %s refused: %s", farmId, workerId, tostring(action), problem)
+        TCLog.info("TheContractor: farm %d worker %d duty %s refused: %s", farmId, workerId, tostring(action), problem)
         return problem
     end
 
@@ -359,7 +359,7 @@ function TheContractorWorkingHours:requestDuty(farmId, workerId, action, untilMi
     if g_server ~= nil then
         g_server:broadcastEvent(TCWorkerDutyEvent.new(farmId, workerId, action, dutyFrom, dutyArrive, dutyUntil))
     end
-    Logging.info("TheContractor: farm %d worker %d (%s) %s%s", farmId, workerId, worker.name, action,
+    TCLog.info("TheContractor: farm %d worker %d (%s) %s%s", farmId, workerId, worker.name, action,
         dutyUntil ~= nil and " until " .. TheContractorWorkingHours.formatTime(dutyUntil) or "")
 
     if TCADSWorkshop ~= nil and TCADSWorkshop.refresh ~= nil then
@@ -496,7 +496,7 @@ function TheContractorWorkingHours:payLeaver(farmId, worker)
     if owed > 0 then
         g_currentMission:addMoney(-owed, farmId, MoneyType.TC_WAGES, true, true)
         g_currentMission.TheContractor.Finances:recordWages(farmId, owed)
-        Logging.info("TheContractor: farm %d paid worker %d (%s) %d in overtime as they left", farmId, worker.id,
+        TCLog.info("TheContractor: farm %d paid worker %d (%s) %d in overtime as they left", farmId, worker.id,
             worker.name, owed)
     end
 end

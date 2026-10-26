@@ -53,7 +53,7 @@ end
 function TCSettingsMenu.inject()
     local settingsPage = TCSettingsMenu.getSettingsPage()
     if settingsPage == nil then
-        Logging.warning("TheContractor: settings page not found, settings not added to the menu")
+        TCLog.warning("TheContractor: settings page not found, settings not added to the menu")
         return
     end
 
@@ -182,7 +182,7 @@ function TCSettingsMenu.onFocusSetGui(gui)
     for _, control in pairs(TCSettingsMenu.controls) do
         if not control.focusId or not FocusManager.currentFocusData.idToElementMapping[control.focusId] then
             if not FocusManager:loadElementFromCustomValues(control, nil, nil, false, false) then
-                Logging.warning("TheContractor: could not register settings control %s with the focus manager",
+                TCLog.warning("TheContractor: could not register settings control %s with the focus manager",
                     tostring(control.id or control.name or control.focusId))
             end
         end

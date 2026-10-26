@@ -318,7 +318,7 @@ function TheContractorRoadAccident:rollAccident(farmId, job, random)
             TheContractorJobs.getBaseReputationReward(job) * TheContractorRoadAccident.REPUTATION_PENALTY_MULTIPLIER))
     end
 
-    Logging.info("TheContractor: farm %d job %d: road accident (%s), %s driving (rating %d, rig wear %.2f): fault chance %.2f, rolled %.2f - %s",
+    TCLog.info("TheContractor: farm %d job %d: road accident (%s), %s driving (rating %d, rig wear %.2f): fault chance %.2f, rolled %.2f - %s",
         farmId, job.id, scenario, worker.name, rating, wear, faultChance, faultRoll, atFault and "ours" or "theirs")
     return data
 end
@@ -350,7 +350,7 @@ function TheContractorRoadAccident:onReport(incident)
     tc.Notices:publish(farmId, string.format(g_i18n:getText("tc_roadAccident_notice"), data.fieldId,
         data.vehicleName), TheContractorRoadAccident.NOTICE_MONTHS)
 
-    Logging.info("TheContractor: farm %d incident %d: %s's %s damaged (%.2f) on the way back from field %d, %s fault",
+    TCLog.info("TheContractor: farm %d incident %d: %s's %s damaged (%.2f) on the way back from field %d, %s fault",
         farmId, incident.id, data.workerName, data.vehicleName, data.severity, data.fieldId,
         data.atFault and "our" or "their")
 
@@ -386,7 +386,7 @@ function TheContractorRoadAccident:onClaim(incident)
     tc.Notices:publish(farmId, string.format(g_i18n:getText("tc_roadAccident_claimNotice"),
         g_i18n:formatMoney(paid, 0, true, true)), TheContractorRoadAccident.NOTICE_MONTHS)
 
-    Logging.info("TheContractor: farm %d incident %d: accident claim of %.0f, %.0f paid (%s)", farmId, incident.id,
+    TCLog.info("TheContractor: farm %d incident %d: accident claim of %.0f, %.0f paid (%s)", farmId, incident.id,
         data.claimAmount, paid, data.insured and "insured" or "uninsured")
     return TheContractorRandomEvents.DONE
 end
@@ -427,7 +427,7 @@ function TheContractorRoadAccident:onPaid(incident)
         "tc_roadAccident_paidBody", { data.vehicleName, "$money_" .. data.repairEstimate }, nil,
         { incidentId = incident.id })
 
-    Logging.info("TheContractor: farm %d incident %d: the other driver's insurer paid %.0f for the %s",
+    TCLog.info("TheContractor: farm %d incident %d: the other driver's insurer paid %.0f for the %s",
         farmId, incident.id, data.repairEstimate, data.vehicleName)
     return TheContractorRandomEvents.DONE
 end

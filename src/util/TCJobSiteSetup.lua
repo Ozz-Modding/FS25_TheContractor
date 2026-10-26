@@ -242,7 +242,7 @@ function TCJobSiteSetup.rigAndPlace(job)
         hitch(plan, plan.implement)
     end
 
-    Logging.info("TheContractor: job %d equipment rigged (%d hitched) and placed on field %d", job.id, #plans,
+    TCLog.info("TheContractor: job %d equipment rigged (%d hitched) and placed on field %d", job.id, #plans,
         job.fieldId)
     return operatingVehicle
 end

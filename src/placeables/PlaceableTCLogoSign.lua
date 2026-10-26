@@ -100,7 +100,7 @@ function PlaceableTCLogoSign:onLoad(savegame)
         end
     end)
     if #data.faces == 0 then
-        Logging.xmlWarning(self.xmlFile, "Logo sign has no logo faces")
+        TCLog.xmlWarning(self.xmlFile, "Logo sign has no logo faces")
         return
     end
     -- A construction preview is the player's own sign-to-be.

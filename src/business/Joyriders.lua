@@ -127,14 +127,14 @@ function TheContractorJoyriders:onDamage(incident)
     if data.isOwnField then
         tc.Inbox:postMessage(incident.farmId, TheContractorJoyriders.MESSAGE_KIND, "tc_joyriders_ownTitle",
             "tc_joyriders_ownBody", { data.fieldId }, nil, { incidentId = incident.id })
-        Logging.info("TheContractor: farm %d incident %d: joyriders tore up the farm's own field %d", incident.farmId,
+        TCLog.info("TheContractor: farm %d incident %d: joyriders tore up the farm's own field %d", incident.farmId,
             incident.id, data.fieldId)
         return TheContractorRandomEvents.DONE
     end
 
     local job = tc.JobGeneration:createJobOnField(incident.farmId, "plow", field, true)
     if job == nil then
-        Logging.info("TheContractor: farm %d incident %d: joyriders tore up field %d, but no plow job could be dated",
+        TCLog.info("TheContractor: farm %d incident %d: joyriders tore up field %d, but no plow job could be dated",
             incident.farmId, incident.id, data.fieldId)
         return TheContractorRandomEvents.DONE
     end
@@ -143,7 +143,7 @@ function TheContractorJoyriders:onDamage(incident)
 
     tc.Inbox:postMessage(incident.farmId, TheContractorJoyriders.MESSAGE_KIND, "tc_joyriders_offerTitle",
         "tc_joyriders_offerBody", { data.fieldId }, nil, { incidentId = incident.id, jobId = job.id })
-    Logging.info("TheContractor: farm %d incident %d: joyriders tore up field %d, plow job %d offered",
+    TCLog.info("TheContractor: farm %d incident %d: joyriders tore up field %d, plow job %d offered",
         incident.farmId, incident.id, data.fieldId, job.id)
     return TheContractorRandomEvents.DONE
 end
@@ -174,14 +174,14 @@ function TheContractorJoyriders:onJobCompleted(job, random)
     local sowJob = tc.JobGeneration:createJobOnField(job.farmId, "sow", field)
     if sowJob == nil then
         field.plannedFruitTypeIndex = previousPlan
-        Logging.info("TheContractor: farm %d job %d: no follow-on sow job, grass can't be sown on field %d now",
+        TCLog.info("TheContractor: farm %d job %d: no follow-on sow job, grass can't be sown on field %d now",
             job.farmId, job.id, job.fieldId)
         return nil
     end
 
     tc.Inbox:postMessage(job.farmId, TheContractorJoyriders.MESSAGE_KIND, "tc_joyriders_sowTitle",
         "tc_joyriders_sowBody", { job.fieldId }, nil, { jobId = sowJob.id })
-    Logging.info("TheContractor: farm %d job %d: follow-on grass sow job %d offered on field %d", job.farmId, job.id,
+    TCLog.info("TheContractor: farm %d job %d: follow-on grass sow job %d offered on field %d", job.farmId, job.id,
         sowJob.id, job.fieldId)
     return sowJob
 end

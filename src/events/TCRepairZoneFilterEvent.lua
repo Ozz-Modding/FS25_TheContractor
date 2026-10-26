@@ -48,7 +48,7 @@ function TCRepairZoneFilterEvent:run(connection)
         local filter = TCRepairZoneActivatable.sanitise(self.filter)
         -- Applied here: the broadcast doesn't loop back in single-player.
         PlaceableTCRepairZone.setFilter(zone, filter)
-        Logging.info("TheContractor: farm %d set a repair zone to take %s", self.farmId,
+        TCLog.info("TheContractor: farm %d set a repair zone to take %s", self.farmId,
             TCRepairZoneActivatable.getSummary(zone, filter))
         g_server:broadcastEvent(TCRepairZoneFilterEvent.new(self.zoneId, self.farmId, filter))
     else

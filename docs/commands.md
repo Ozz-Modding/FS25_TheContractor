@@ -1,6 +1,6 @@
 # Console commands
 
-You type these into the developer console. You don't need cheats on. There are four group commands and a help command:
+You type these into the developer console. You don't need cheats on. There are four group commands, a help command and a log switch:
 
 | Command | What it covers |
 |---|---|
@@ -9,6 +9,7 @@ You type these into the developer console. You don't need cheats on. There are f
 | `tcJob` | List, offer, create and force jobs |
 | `tcFinance` | Invoices, claims and botched jobs |
 | `tcCompany` | Reputation, Overview notices and random events |
+| `tcLog` | Toggles the mod's detailed log ([below](#tclog)) |
 
 Type a group on its own (or with `help`) to list its subcommands and their arguments. Subcommand names aren't case-sensitive. If you get the arguments wrong, the command prints that subcommand's usage.
 
@@ -590,3 +591,13 @@ tcCompany debris 20 ladder
 ### `tcCompany debrisClear`
 
 Removes every piece of debris from the map.
+
+## Log — `tcLog`
+
+### `tcLog`
+
+Toggles the mod's detailed log (jobs dispatched, invoices paid, events rolled and so on) in `log.txt`, and says whether it's now on or off. It takes no arguments. It's off by default; warnings and errors are logged whether it's on or not. The switch belongs to this machine only (it works from any player's console, and isn't synced) and is remembered across loads in `modSettings/FS25_TheContractor/debugLog.xml`, so turn it on and reload to catch a save loading.
+
+```
+tcLog
+```

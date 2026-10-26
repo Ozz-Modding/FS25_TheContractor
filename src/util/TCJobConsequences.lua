@@ -261,7 +261,7 @@ function TCJobConsequences.applyOnCompletion(job)
                 local breakdownId = TCJobConsequences.rollBreakdown(job, worker, entry.vehicle, entry.id, gap)
                 if breakdownId ~= nil then
                     table.insert(report.breakdowns, entry.vehicle:getFullName())
-                    Logging.info("TheContractor: farm %d job %d worker %d (%s) caused ADS breakdown %s on %s",
+                    TCLog.info("TheContractor: farm %d job %d worker %d (%s) caused ADS breakdown %s on %s",
                         job.farmId, job.id, worker.id, worker.name, tostring(breakdownId),
                         entry.vehicle:getFullName())
                 end
@@ -306,13 +306,13 @@ function TCJobConsequences.applyOnCompletion(job)
                     report.wash = TCJobConsequences.WASH.UNWASHED
                 end
 
-                Logging.info("TheContractor: farm %d job %d worker %d (%s, cleanliness %d) +%.2f dirt, %s (%.1f min)",
+                TCLog.info("TheContractor: farm %d job %d worker %d (%s, cleanliness %d) +%.2f dirt, %s (%.1f min)",
                     job.farmId, job.id, worker.id, worker.name, worker.cleanliness, extraDirt,
                     report.wash == TCJobConsequences.WASH.WASHED and "washed" or "unwashed", minutes)
             end
 
             for _, wear in ipairs(report.extraWear) do
-                Logging.info("TheContractor: farm %d job %d worker %d (%s) +%d%% wear on %s", job.farmId, job.id,
+                TCLog.info("TheContractor: farm %d job %d worker %d (%s) +%d%% wear on %s", job.farmId, job.id,
                     worker.id, worker.name, wear.percent, wear.vehicleName)
             end
 

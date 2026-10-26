@@ -46,7 +46,7 @@ function TCFollowMe.install()
         end
     end
 
-    Logging.info("TheContractor: Follow Me found - staff driver hooks installed on %d vehicle types", count)
+    TCLog.info("TheContractor: Follow Me found - staff driver hooks installed on %d vehicle types", count)
     return true
 end
 

@@ -363,7 +363,7 @@ function TCParking.installConstructionScreenHook()
     TCParking.isConstructionScreenOpen = false
     local element = g_gui ~= nil and g_gui.screens[ConstructionScreen] or nil
     if element == nil then
-        Logging.warning("[TheContractor] Construction screen not found; parking slots won't show in it.")
+        TCLog.warning("[TheContractor] Construction screen not found; parking slots won't show in it.")
         return
     end
     if element.tcOriginalOnOpenCallback == nil then

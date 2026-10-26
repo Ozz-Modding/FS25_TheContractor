@@ -499,7 +499,7 @@ local function fillTank(farmId, tank)
         return 0
     end
     vehicle:addFillUnitFillLevel(farmId, fillUnitIndex, taken, fillTypeIndex, ToolType.UNDEFINED, nil)
-    Logging.info("TheContractor: filled '%s' with %s from farm %d's stock", vehicle:getName(),
+    TCLog.info("TheContractor: filled '%s' with %s from farm %d's stock", vehicle:getName(),
         TCJobSupplies.formatAmount(fillTypeIndex, taken), farmId)
     return taken, fillTypeIndex
 end
@@ -670,7 +670,7 @@ local function checkWorkerJob(job, jobs, dispatch)
             -- seeder's fertilizer tank, say) - restarting would just stop
             -- again, so it's left to the stuck watchdog (021) to retry and
             -- then flag.
-            Logging.warning("TheContractor: job %d's AI ran out of something the contractor doesn't supply", job.id)
+            TCLog.warning("TheContractor: job %d's AI ran out of something the contractor doesn't supply", job.id)
         end
         return
     end
