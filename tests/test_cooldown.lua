@@ -65,3 +65,22 @@ test("a player-driven job's equipment is left where the player left it", functio
     assertEquals(world.hidden[tractor.id], nil, "hidden")
     assertEquals(next(cooldown.entriesByFarm), nil, "no cooldown entry, so nothing to park later")
 end)
+
+-- 105: a tipped trailer leaves its cooldown while the rest carries on.
+test("releasing a vehicle takes it out of its cooldown and leaves the rest running", function()
+    local world, cooldown = setup()
+    local tractor = world:addVehicle({})
+    local trailer = world:addVehicle({})
+    world:addJob({ workerId = 3, vehicles = { tractor, trailer } })
+    cooldown:startCooldown(world.jobs[1])
+
+    cooldown:releaseVehicles({ trailer.id })
+
+    assertEquals(cooldown:isVehicleInCooldown(trailer.id), false, "trailer out")
+    assertTrue(cooldown:isVehicleInCooldown(tractor.id), "tractor still in")
+    local _, farmEntries = next(cooldown.entriesByFarm)
+    local _, entry = next(farmEntries)
+    assertEquals(#entry.vehicleIds, 1, "only the tractor goes to parking at the end")
+    assertEquals(entry.vehicleIds[1], tractor.id)
+    assertEquals(world.statuses[3], "cooldown", "the crew still on its way back")
+end)

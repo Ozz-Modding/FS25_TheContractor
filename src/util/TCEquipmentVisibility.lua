@@ -72,6 +72,14 @@ function TCEquipmentVisibility.hideVehicle(vehicle)
 end
 
 function TCEquipmentVisibility.revealVehicle(vehicle)
+    -- 105: a tipped trailer is frozen on the server, its body in physics
+    -- without its wheels (TheContractorTippedTrailer.setLying). Re-adding
+    -- it here would build wheel shapes on a kinematic body.
+    if vehicle.tcFrozen then
+        vehicle:setVisibility(true)
+        TCEquipmentVisibility.setHotspotHidden(vehicle, false)
+        return
+    end
     vehicle:removeFromPhysics()
     vehicle:setVisibility(true)
     vehicle:addToPhysics()

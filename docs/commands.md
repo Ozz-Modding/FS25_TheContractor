@@ -517,7 +517,7 @@ Makes a random event happen to your farm now, ignoring the odds, the Random even
 - `poaching [worker]`: the rival goes after that worker (a `<worker>` as for `tcWorker`: an id or the start of a name), however long they've been with you. Without one it picks as the real event does: someone with at least 3 months' service, nearly always one of your most valuable. Not someone who's leaving or already has an offer.
 - `fieldBreakdown [player|mobile]`: a customer's machine breaks down on an NPC's field, fixable on the spot with ADS's tool box (`player`) or only with a mobile workshop (`mobile`). Without one it picks as the real event does: even odds, or mostly `player` if you've a tool box and no mobile workshop. The machine is placed like a repair zone arrival (within a couple of seconds) and the offer, due today, goes up in your Inbox.
 
-The events that happen as a job ends (`kettle`, `paidEarly`, `stepsUp`, `roadAccident`, `sprayDrift`) use your latest completed job they can act on, whatever its quality score: one with hired workers for `kettle`, one whose invoice isn't due yet for `paidEarly` (so none with the late invoices setting off), one with a worker rated 5 or under for their part of it for `stepsUp`, and one a hired worker drove whose machines are still yours for `roadAccident` (its machines are damaged wherever they are now), and a hired worker's herbicide job with no botch claim on its way for `sprayDrift` (judged on the wind right now, not on the day). Use `tcCompany outcome` first to decide how an event comes out.
+The events that happen as a job ends (`kettle`, `paidEarly`, `stepsUp`, `roadAccident`, `tippedTrailer`, `sprayDrift`) use your latest completed job they can act on, whatever its quality score: one with hired workers for `kettle`, one whose invoice isn't due yet for `paidEarly` (so none with the late invoices setting off), one with a worker rated 5 or under for their part of it for `stepsUp`, and one a hired worker drove whose machines are still yours for `roadAccident` (its machines are damaged wherever they are now), a harvest & haul job with a hired hauler whose trailer is still yours, not stolen, not already on its side and not out on another job for `tippedTrailer` (the trailer is taken from wherever it is now, even a parking slot, and laid on its side by a road between that job's field and your parking slots, or near the field if there's no road that way, with the job's haul tractor left beside it if that's free too; it needs a road near the field), and a hired worker's herbicide job with no botch claim on its way for `sprayDrift` (judged on the wind right now, not on the day). Use `tcCompany outcome` first to decide how an event comes out.
 
 ```
 tcCompany event theft
@@ -530,6 +530,7 @@ tcCompany event kettle
 tcCompany event paidEarly
 tcCompany event stepsUp
 tcCompany event roadAccident
+tcCompany event tippedTrailer
 tcCompany event sprayDrift
 tcCompany event poaching
 tcCompany event poaching amy

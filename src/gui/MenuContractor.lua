@@ -5242,8 +5242,9 @@ function MenuContractor:refreshFinanceYearState(farmId, finances)
     self.financesYearOverheads:setText(formatMoney((stats.overheads or 0) + (stats.disposal or 0)))
     -- 053/055: solicitors' fees and H&S fines share the claims row - there's
     -- no room for another.
-    -- 070: as is what insurers paid back.
-    local claimsText = formatMoney((stats.claims or 0) + (stats.legal or 0) + (stats.fines or 0))
+    -- 070: as is what insurers paid back. 105: and recovery call-outs.
+    local claimsText = formatMoney((stats.claims or 0) + (stats.legal or 0) + (stats.fines or 0) +
+        (stats.recovery or 0))
     if (stats.insurancePayouts or 0) > 0 then
         claimsText = string.format(g_i18n:getText("tc_finances_claimsWithPayouts"), claimsText,
             formatMoney(stats.insurancePayouts))

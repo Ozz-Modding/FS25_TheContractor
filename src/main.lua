@@ -21,6 +21,7 @@ source(TheContractor.dir .. "src/util/TCJobSiteSetup.lua")
 source(TheContractor.dir .. "src/util/TCParking.lua")
 source(TheContractor.dir .. "src/util/TCParkingSlotFilter.lua")
 source(TheContractor.dir .. "src/util/TCParkingSlotActivatable.lua")
+source(TheContractor.dir .. "src/util/TCTippedTrailerActivatable.lua")
 source(TheContractor.dir .. "src/util/TCHaulage.lua")
 source(TheContractor.dir .. "src/util/TCJobSupplies.lua")
 source(TheContractor.dir .. "src/util/TCSupplyStock.lua")
@@ -104,6 +105,7 @@ source(TheContractor.dir .. "src/business/DieselTheft.lua")
 source(TheContractor.dir .. "src/business/GoodNews.lua")
 source(TheContractor.dir .. "src/business/JobNews.lua")
 source(TheContractor.dir .. "src/business/RoadAccident.lua")
+source(TheContractor.dir .. "src/business/TippedTrailer.lua")
 source(TheContractor.dir .. "src/business/SprayDrift.lua")
 source(TheContractor.dir .. "src/business/Poaching.lua")
 source(TheContractor.dir .. "src/business/Injury.lua")
@@ -146,6 +148,8 @@ source(TheContractor.dir .. "src/events/TCDispatchFailedEvent.lua")
 source(TheContractor.dir .. "src/events/TCWatchdogInterventionEvent.lua")
 source(TheContractor.dir .. "src/events/TCEquipmentCooldownStartedEvent.lua")
 source(TheContractor.dir .. "src/events/TCEquipmentCooldownEndedEvent.lua")
+source(TheContractor.dir .. "src/events/TCEquipmentCooldownReleasedEvent.lua")
+source(TheContractor.dir .. "src/events/TCRightTrailerEvent.lua")
 source(TheContractor.dir .. "src/events/TCEquipmentVisibilityEvent.lua")
 source(TheContractor.dir .. "src/events/TCAssignDriverEvent.lua")
 source(TheContractor.dir .. "src/events/TCDriverBindingEvent.lua")
@@ -271,6 +275,9 @@ function TheContractor:loadMap()
     self.JobNews:register(self.RandomEvents)
     self.RoadAccident = TheContractorRoadAccident.new()
     self.RoadAccident:register(self.RandomEvents, self.Inbox)
+    -- 105: a hauler tips their trailer on the way back.
+    self.TippedTrailer = TheContractorTippedTrailer.new()
+    self.TippedTrailer:register(self.RandomEvents, self.Inbox)
     self.SprayDrift = TheContractorSprayDrift.new()
     self.SprayDrift:register(self.RandomEvents, self.Inbox)
     self.Poaching = TheContractorPoaching.new()
@@ -329,6 +336,8 @@ function TheContractor:loadMap()
     TCParkingSlotActivatable.install()
     -- 100: repair zone filters, the same way.
     TCRepairZoneActivatable.install()
+    -- 105: pushing a tipped trailer back onto its wheels.
+    TCTippedTrailerActivatable.install()
     -- 077: a worker's look is edited in the vanilla wardrobe.
     TCWardrobe.install()
 
@@ -470,6 +479,7 @@ function TheContractor:resolveSavedVehicles()
     self.Theft:resolveSavedVehicles()
     self.CourtesyVehicle:resolveSavedVehicles()
     self.RoadAccident:resolveSavedVehicles()
+    self.TippedTrailer:resolveSavedVehicles()
     -- 100: after Jobs, whose workshop jobs it checks against ADS.
     self.RepairContracts:resolveSavedVehicles()
     TCVehicleLock.repairSavedTabbable()
@@ -585,6 +595,7 @@ function TheContractor:deleteMap()
     TCWardrobe.endSession()
     TCParkingSlotActivatable.uninstall()
     TCRepairZoneActivatable.uninstall()
+    TCTippedTrailerActivatable.uninstall()
 
     if self.JobGeneration ~= nil then
         self.JobGeneration:stopHourlyTick()
@@ -689,6 +700,11 @@ function TheContractor:update(dt)
 
     if self.Parking ~= nil then
         self.Parking:update(dt)
+    end
+
+    -- 105: tipped trailers righted or gone (server).
+    if self.TippedTrailer ~= nil then
+        self.TippedTrailer:update(dt)
     end
 
     -- 100: customers' machines arriving and being collected (server).

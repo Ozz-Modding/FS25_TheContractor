@@ -88,3 +88,21 @@ test("a hidden vehicle's map hotspot is hidden, and back when it is", function()
     assertEquals(tractor.hotspotVisible, true, "back at once")
     assertEquals(tractor:getIsMapHotspotVisible(), true)
 end)
+
+-- 105: a tipped trailer's frozen body is in physics without its wheels;
+-- revealing it mustn't re-add it (that builds wheel shapes on it).
+test("a frozen vehicle is shown without its physics being touched", function()
+    local world = setup()
+    local trailer = addHideableVehicle(world)
+    trailer.isVisible = false
+    trailer.tcFrozen = true
+    trailer.physicsCalls = 0
+    function trailer:removeFromPhysics() self.physicsCalls = self.physicsCalls + 1 end
+    function trailer:addToPhysics() self.physicsCalls = self.physicsCalls + 1 end
+
+    TCEquipmentVisibility.revealVehicles({ trailer.id })
+
+    assertEquals(trailer.isVisible, true, "shown")
+    assertEquals(trailer.physicsCalls, 0, "physics left alone")
+    assertEquals(trailer.tcIsHotspotHidden, nil, "on the map")
+end)
