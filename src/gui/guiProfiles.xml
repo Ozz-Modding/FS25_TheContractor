@@ -157,7 +157,57 @@
         <size value="204px 204px"/>
         <imageColor value="1 1 1 1"/>
     </Profile>
-    <Profile name="tc_progressTitle" extends="fs25_textDefault" with="anchorTopLeft">
+    <!-- Mouse-over tooltip (TCTooltip, after ADS's vehicle summary
+         tooltip): a bordered card sized and placed at runtime, its children
+         anchored bottom-left and positioned upwards by TCTooltip:show.
+         newLayer: the engine draws a 2D layer's text after its images, so
+         without a layer of its own the page's text shows through the card. -->
+    <Profile name="tc_tooltipBox" extends="baseReference">
+        <anchors value="0 0 0 0"/>
+        <pivot value="0 0"/>
+        <size value="680px 100px"/>
+        <color value="$preset_tc_headerDivider"/>
+        <cornerSize value="0.4"/>
+        <handleFocus value="false"/>
+        <newLayer value="true"/>
+    </Profile>
+    <Profile name="tc_tooltipSurface" extends="tc_tooltipBox">
+        <position value="2px 2px"/>
+        <size value="676px 96px"/>
+        <color value="0.01 0.01 0.01 1"/>
+        <cornerSize value="0.3"/>
+        <newLayer value="false"/>
+    </Profile>
+    <Profile name="tc_tooltipText" extends="baseReference">
+        <anchors value="0 0 0 0"/>
+        <pivot value="0 0"/>
+        <size value="640px 22px"/>
+        <textSize value="14px"/>
+        <textColor value="$preset_tc_valueText"/>
+        <textAlignment value="left"/>
+        <textVerticalAlignment value="top"/>
+        <textMaxNumLines value="40"/>
+        <textLayoutMode value="truncate"/>
+        <handleFocus value="false"/>
+    </Profile>
+    <Profile name="tc_tooltipTitle" extends="tc_tooltipText">
+        <size value="640px 28px"/>
+        <textSize value="16px"/>
+        <textBold value="true"/>
+        <textUpperCase value="true"/>
+        <textColor value="$preset_fs25_colorMainHighlight"/>
+        <textVerticalAlignment value="middle"/>
+        <textMaxNumLines value="1"/>
+    </Profile>
+    <Profile name="tc_tooltipDivider" extends="baseReference">
+        <anchors value="0 0 0 0"/>
+        <pivot value="0 0"/>
+        <size value="640px 1px"/>
+        <imageSliceId value="gui.colorPreset"/>
+        <imageColor value="$preset_tc_headerDivider"/>
+        <handleFocus value="false"/>
+    </Profile>
+    <Profile name="tc_progressTitle"extends="fs25_textDefault" with="anchorTopLeft">
         <size value="500px 26px"/>
         <textSize value="16px"/>
         <textBold value="true"/>

@@ -42,6 +42,12 @@
 		<text name="tc_header_workshop" text="Workshop"/>
 		<text name="tc_overview_companyHeading" text="Company"/>
 		<text name="tc_overview_businessHeading" text="Business"/>
+		<text name="tc_logoTip_title" text="Your company logo"/>
+		<text name="tc_logoTip_shared" text="To use your own logo here and on your Company Signs, save it as logo.dds (or logo.png) in this folder: %s"/>
+		<text name="tc_logoTip_savegame" text="For this save only, put it in this folder instead (make it if it isn't there): %s"/>
+		<text name="tc_logoTip_readme" text="%s in the first folder explains image sizes, formats and sign designs."/>
+		<text name="tc_logoTip_showing" text="Showing now: %s"/>
+		<text name="tc_logoTip_placeholder" text="the placeholder logo"/>
 		<text name="tc_inbox_negotiationHeading" text="Negotiation"/>
 		<text name="tc_detail_nextRank" text="Next rank"/>
 		<text name="tc_detail_advertising" text="Advertising"/>

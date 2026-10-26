@@ -105,6 +105,14 @@
                 <Bitmap profile="tc_divider" position="874px -384px" size="582px 1px"/>
                 <Text profile="tc_panelText" id="textNotices" text="" position="874px -396px" size="582px 220px" textMaxNumLines="9"/>
             </GuiElement>
+
+            <!-- Mouse-over tooltip (TCTooltip), last so it draws on top. -->
+            <RoundCorner profile="tc_tooltipBox" id="overviewTooltipBox" visible="false">
+                <RoundCorner profile="tc_tooltipSurface" id="overviewTooltipSurface"/>
+                <Text profile="tc_tooltipTitle" id="overviewTooltipTitle" text=""/>
+                <Bitmap profile="tc_tooltipDivider" id="overviewTooltipDivider"/>
+                <Text profile="tc_tooltipText" id="overviewTooltipText" text=""/>
+            </RoundCorner>
         </GuiElement>
 
         <!-- Inbox ========================================================== -->
