@@ -639,7 +639,7 @@
 		<text name="tc_standingSpot_name" text="Standing Spot"/>
 		<text name="tc_standingSpot_function" text="Somewhere for one of your staff to stand while they've nothing on, facing the arrow. Only visible in the construction menu."/>
 		<text name="tc_disposalSkip_name" text="Disposal Skip"/>
-		<text name="tc_disposalSkip_function" text="Where fly-tipped junk from a clearing job goes. Drop each piece in or right next to it and it's taken away. Every piece from a job costs a small tipping fee."/>
+		<text name="tc_disposalSkip_function" text="Where fly-tipped junk from a clearing job goes, and old parts taken off a machine with Advanced Damage System. Drop each piece in or right next to it and it's taken away. Every piece from a job, and every old part, costs a small tipping fee."/>
 		<text name="tc_logoSign_name" text="Company Sign"/>
 		<text name="tc_logoSign_function" text="A freestanding sign showing your company logo, or in single-player a design of your own. Put your square logo.dds in modSettings/FS25_TheContractor, and designs as square .dds images in its signs folder (see the README there). Reload the save to pick new designs."/>
 		<text name="tc_wallSign1m_name" text="Company Wall Sign (1 m)"/>
@@ -1337,5 +1337,8 @@
 		<text name="tc_supplies_boxCount" text="Boxes"/>
 		<text name="tc_supplies_free" text="Free"/>
 		<text name="tc_supplies_reserved" text="Reserved"/>
+		<text name="tc_supplies_condition" text="Condition"/>
+		<text name="tc_supplies_chipUsed" text="Used"/>
+		<text name="tc_supplies_chipNew" text="New"/>
 	</texts>
 </l10n>

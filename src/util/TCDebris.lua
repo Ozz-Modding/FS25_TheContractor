@@ -341,7 +341,8 @@ end
 
 -- Whether a player has this piece in their hands. The server runs
 -- HandToolHands:pickUpTarget for every player, remote ones too, so its
--- heldItemNode is right there.
+-- heldItemNode is right there. Works for any node object (the disposal
+-- skip asks it about ADS parts too, 103).
 function TCDebris.isHeld(debris)
     local playerSystem = g_currentMission.playerSystem
     if playerSystem == nil then

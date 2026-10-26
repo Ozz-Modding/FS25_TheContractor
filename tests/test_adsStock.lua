@@ -6,12 +6,15 @@
 -- ADS_PlayerWorkshop.collectStockSources(object, list) appends
 -- { kind, key, tier, grade, amount, fillUnitIndex, fillTypeIndex } entries
 -- (a drum pallet's opened drum and full ones as two entries from one fill
--- unit), and ADS_SparePartsBox.isBox/getState/isReserved.
+-- unit), ADS_SparePartsBox.isBox/getState/isReserved/isUsed, and (103)
+-- ADS_ConsumablePack.isPack/isGrippable/getPartState for old batteries and
+-- air filters, checked at ADS 0.10.0.8.
 
 local MOD = "FS25_AdvancedDamageSystem"
 
 -- The fake ADS env: each object's `adsSources` is what the classifier
--- reports for it, `adsBox` its box state, `adsReserved` its reservation.
+-- reports for it, `adsBox` its box state, `adsReserved` its reservation,
+-- `adsPack` a pack's part state and `adsPallet` a pack that's a pallet.
 local function newADSEnv()
     return {
         ADS_PlayerWorkshop = {
@@ -36,6 +39,24 @@ local function newADSEnv()
             end,
             isReserved = function(object)
                 return object.adsReserved == true
+            end,
+            -- ADS's own rule: the removal flag, the legacy USED tier, or
+            -- carried wear or stress.
+            isUsed = function(object)
+                local state = object.adsBox
+                return state.isUsed == true or state.tier == "USED" or (state.resource or 1) < 1 or
+                    (state.stress or 0) > 0
+            end,
+        },
+        ADS_ConsumablePack = {
+            isPack = function(object)
+                return object.adsPack ~= nil and not object.isDeleted
+            end,
+            isGrippable = function(object)
+                return object.adsPack ~= nil and not object.adsPallet
+            end,
+            getPartState = function(object)
+                return object.adsPack
             end,
         },
     }
@@ -66,6 +87,8 @@ local function addItem(world, def)
     object.adsSources = def.sources
     object.adsBox = def.box
     object.adsReserved = def.reserved
+    object.adsPack = def.pack
+    object.adsPallet = def.isPallet
     return object
 end
 
@@ -90,7 +113,17 @@ end
 local function addBox(world, def)
     return addItem(world, { name = def.name or "Hydraulic pump", farmId = def.farmId, reserved = def.reserved,
         box = { componentId = def.componentId or "hydraulicPump", tier = def.tier or "OEM",
-            vehicleName = def.vehicleName or "Fendt 942", isPreview = def.isPreview or false } })
+            vehicleName = def.vehicleName or "Fendt 942", isPreview = def.isPreview or false,
+            isUsed = def.isUsed, resource = def.resource } })
+end
+
+-- A single loose battery (or a pallet of them), with its part state.
+local function addBattery(world, def)
+    local state = { targetId = "battery", grade = "L", quality = "ORIGINAL", health = def.health or 1,
+        clogging = def.clogging }
+    return addItem(world, { name = "Battery", pack = state, isPallet = def.isPallet, sources = {
+        { kind = "pack", key = "battery", tier = "ORIGINAL", grade = "L", amount = def.count or 1 },
+    } })
 end
 
 test("without ADS nothing is offered and nothing is logged", function()
@@ -170,6 +203,86 @@ test("spare parts boxes group by part and tier, without ADS's free samples", fun
     assertEquals(oem.fits[2].count, 2, "Fendt boxes")
     assertEquals(used.tierText, "USED", "raw tier without an ADS text")
     assertEquals(used.count, 1, "used boxes")
+    assertTrue(used.isUsed and not oem.isUsed, "the legacy USED tier counts as used")
+end)
+
+test("a part a replacement took off has a row of its own, after the new ones", function()
+    local world = setup(newADSEnv())
+    TCADSStock.detect()
+    addBox(world, {})
+    addBox(world, { isUsed = true, vehicleName = "Customer's Deutz" })
+    addBox(world, { resource = 0.4 })
+
+    local rows = TCADSStock.getPartBoxRows(1)
+    assertEquals(#rows, 2, "new and used rows of the same part and tier")
+    assertTrue(not rows[1].isUsed, "new first")
+    assertEquals(rows[1].count, 1, "new boxes")
+    assertTrue(rows[2].isUsed, "then used")
+    assertEquals(rows[2].count, 2, "used boxes: the removal flag or carried wear")
+    assertEquals(rows[2].tierText, "OEM", "same tier text")
+    assertTrue(rows[1].key ~= rows[2].key, "keys differ")
+end)
+
+test("old batteries and air filters have rows of their own; a pallet of packs is new", function()
+    local world = setup(newADSEnv())
+    TCADSStock.detect()
+    addBattery(world, {})
+    addBattery(world, { isPallet = true, count = 4 })
+    addBattery(world, { health = 0.3 })
+    addBattery(world, { clogging = 0.2 })
+
+    local rows = TCADSStock.getConsumableRows(1)
+    assertEquals(#rows, 2, "rows")
+    assertTrue(not rows[1].isUsed, "new first")
+    assertEquals(rows[1].amount, 5, "a loose new one and a pallet of four")
+    assertTrue(rows[2].isUsed, "then used")
+    assertEquals(rows[2].amount, 2, "worn health or clogging")
+end)
+
+test("isUsedPart: used boxes and worn loose packs, never samples, new parts or other machines", function()
+    local world = setup(newADSEnv())
+    TCADSStock.detect()
+    assertTrue(TCADSStock.isUsedPart(addBox(world, { isUsed = true })), "used box")
+    assertTrue(not TCADSStock.isUsedPart(addBox(world, {})), "new box")
+    assertTrue(not TCADSStock.isUsedPart(addBox(world, { isUsed = true, isPreview = true })), "ADS's sample")
+    assertTrue(TCADSStock.isUsedPart(addBattery(world, { health = 0.9 })), "worn battery")
+    assertTrue(not TCADSStock.isUsedPart(addBattery(world, {})), "new battery")
+    assertTrue(not TCADSStock.isUsedPart(addBattery(world, { health = 0.5, isPallet = true })), "pallet")
+    assertTrue(not TCADSStock.isUsedPart(world:addVehicle({ name = "Tractor" })), "a tractor")
+    local gone = addBox(world, { isUsed = true })
+    gone.isDeleted = true
+    assertTrue(not TCADSStock.isUsedPart(gone), "deleted")
+
+    assertTrue(TCADSStock.isReservedPart(addBox(world, { isUsed = true, reserved = true })), "reserved box")
+    assertTrue(not TCADSStock.isReservedPart(addBattery(world, { health = 0.5 })), "packs are never reserved")
+end)
+
+test("without isUsed no box is used, and nothing else goes", function()
+    local env = newADSEnv()
+    env.ADS_SparePartsBox.isUsed = nil
+    local world = setup(env)
+    TCADSStock.detect()
+    assertTrue(TCADSStock.hasPartsBoxes(), "parts boxes")
+    local box = addBox(world, { isUsed = true })
+    assertTrue(not TCADSStock.isUsedPart(box), "not used")
+    assertEquals(#TCADSStock.getPartBoxRows(1), 1, "still listed")
+    assertTrue(TCADSStock.isUsedPart(addBattery(world, { health = 0.5 })), "packs still known")
+    assertEquals(#world.warnings, 1, "one warning")
+    assertTrue(world.warnings[1]:find("ADS_SparePartsBox.isUsed", 1, true) ~= nil, "names isUsed")
+end)
+
+test("without the consumable pack functions no pack is used, and nothing else goes", function()
+    for _, name in ipairs({ "isPack", "isGrippable", "getPartState" }) do
+        local env = newADSEnv()
+        env.ADS_ConsumablePack[name] = nil
+        local world = setup(env)
+        TCADSStock.detect()
+        assertTrue(TCADSStock.hasConsumables() and TCADSStock.hasPartsBoxes(), "views")
+        assertTrue(not TCADSStock.isUsedPart(addBattery(world, { health = 0.5 })), "no used pack without " .. name)
+        assertTrue(TCADSStock.isUsedPart(addBox(world, { isUsed = true })), "boxes still known")
+        assertEquals(#world.warnings, 1, "one warning")
+        assertTrue(world.warnings[1]:find("ADS_ConsumablePack." .. name, 1, true) ~= nil, "names " .. name)
+    end
 end)
 
 -- Each ADS entry point removed in turn: only what needs it goes.

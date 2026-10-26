@@ -112,6 +112,13 @@ local function setup()
     world:load("src/business/FlyTipping.lua")
     world:load("src/placeables/PlaceableTCDisposalSkip.lua")
 
+    -- ADS for the skip's old parts (103): no ADS until a test sets
+    -- world.adsEnv and calls TCADSStock.detect again.
+    MountableObject = { MOUNT_TYPE_NONE = 0, MOUNT_TYPE_DYNAMIC = 1 }
+    TheContractorDrivers = { getModEnv = function() return world.adsEnv end }
+    world:load("src/util/TCADSStock.lua")
+    TCADSStock.detect()
+
     -- Pieces: plain objects with a uniqueId, found by the item system
     -- until deleted. world.spawned records where each landed.
     world.spawned = {}
@@ -395,6 +402,112 @@ test("the skip disposes of what's been let go, keeps what's held or strapped, dr
     PlaceableTCDisposalSkip.processWaiting(waiting)
     assertEquals(#waiting, 0)
     assertEquals(job.debrisDisposed, 3)
+end)
+
+-- Old ADS parts (103). The fake ADS knows boxes (`adsBox` state, its
+-- isUsed flag, `adsReserved`) and loose packs (`adsPack` state).
+local function withADS(world)
+    world.adsEnv = {
+        ADS_PlayerWorkshop = { STOCK_KINDS = { PACK = "pack" }, collectStockSources = function() end },
+        ADS_SparePartsBox = {
+            isBox = function(object) return object.adsBox ~= nil end,
+            getState = function(object) return object.adsBox end,
+            isReserved = function(object) return object.adsReserved == true end,
+            isUsed = function(object) return object.adsBox.isUsed == true end,
+        },
+        ADS_ConsumablePack = {
+            isPack = function(object) return object.adsPack ~= nil end,
+            isGrippable = function(object) return object.adsPack ~= nil end,
+            getPartState = function(object) return object.adsPack end,
+        },
+    }
+    TCADSStock.detect()
+end
+
+local function addPart(world, def)
+    local part = { nodeId = nil, rootNode = 5000 + world.nextUniqueId, farmId = def.farmId or 1,
+        adsBox = def.box, adsPack = def.pack, adsReserved = def.reserved, dynamicMountType = def.mountType }
+    world.nextUniqueId = world.nextUniqueId + 1
+    function part:getOwnerFarmId() return self.farmId end
+    function part:getName() return "Hydraulic pump" end
+    function part:delete() self.isDeleted = true end
+    world.nodeObjects[part.rootNode] = part
+    return part
+end
+
+test("the skip takes old ADS parts for the tipping fee, and leaves new ones alone", function()
+    local world, tc = setup()
+    withADS(world)
+    local fee = TheContractorFlyTipping.getTippingFee()
+    local oldBox = addPart(world, { box = { isUsed = true }, farmId = 2 })
+    local oldBattery = addPart(world, { pack = { health = 0.4 } })
+    local newBox = addPart(world, { box = { isUsed = false } })
+    local newBattery = addPart(world, { pack = { health = 1, clogging = 0 } })
+
+    assertTrue(PlaceableTCDisposalSkip.isTaken(oldBox), "old box")
+    assertTrue(PlaceableTCDisposalSkip.isTaken(oldBattery), "old battery")
+    assertTrue(not PlaceableTCDisposalSkip.isTaken(newBox), "new box")
+    assertTrue(not PlaceableTCDisposalSkip.isTaken(newBattery), "new battery")
+
+    local waiting = { oldBox, oldBattery }
+    PlaceableTCDisposalSkip.processWaiting(waiting)
+    assertEquals(#waiting, 0)
+    assertTrue(oldBox.isDeleted and oldBattery.isDeleted, "both gone")
+    assertEquals(#world.money, 2, "a fee each")
+    assertEquals(world.money[1].amount, -fee)
+    assertEquals(world.money[1].moneyType, MoneyType.TC_WASTE_DISPOSAL)
+    local farms = { [world.money[1].farmId] = true, [world.money[2].farmId] = true }
+    assertTrue(farms[1] and farms[2], "each charged to its owner")
+    assertEquals(world.disposalRecorded, 2 * fee, "recorded as disposal")
+end)
+
+test("the trigger only lists what the skip takes", function()
+    local world, tc = setup()
+    withADS(world)
+    local skip = { [PlaceableTCDisposalSkip.KEY] = { waiting = {} }, raiseActive = function() end }
+    local oldBox = addPart(world, { box = { isUsed = true } })
+    local newBox = addPart(world, { box = { isUsed = false } })
+    local tractor = addPart(world, {})
+    for _, object in ipairs({ oldBox, newBox, tractor }) do
+        PlaceableTCDisposalSkip.tcDisposalTriggerCallback(skip, 1, object.rootNode, true, false)
+    end
+    local waiting = skip[PlaceableTCDisposalSkip.KEY].waiting
+    assertEquals(#waiting, 1)
+    assertEquals(waiting[1], oldBox)
+    PlaceableTCDisposalSkip.tcDisposalTriggerCallback(skip, 1, oldBox.rootNode, false, true)
+    assertEquals(#waiting, 0, "carried back out")
+end)
+
+test("an old part waits while it's held, strapped or on a fork, or reserved by a work order", function()
+    local world, tc = setup()
+    withADS(world)
+    local held = addPart(world, { box = { isUsed = true } })
+    local strapped = addPart(world, { box = { isUsed = true }, mountType = MountableObject.MOUNT_TYPE_DYNAMIC })
+    local reserved = addPart(world, { box = { isUsed = true }, reserved = true })
+    world.held = held.rootNode
+
+    local waiting = { held, strapped, reserved }
+    PlaceableTCDisposalSkip.processWaiting(waiting)
+    assertEquals(#waiting, 3, "all wait")
+    assertEquals(#world.money, 0)
+
+    world.held = nil
+    strapped.dynamicMountType = MountableObject.MOUNT_TYPE_NONE
+    reserved.adsReserved = false
+    PlaceableTCDisposalSkip.processWaiting(waiting)
+    assertEquals(#waiting, 0)
+    assertEquals(#world.money, 3)
+end)
+
+test("without ADS no part is taken, and debris still is", function()
+    local world, tc = setup()
+    local part = addPart(world, { box = { isUsed = true } })
+    assertTrue(not PlaceableTCDisposalSkip.isTaken(part), "no ADS")
+    local waiting = { part }
+    PlaceableTCDisposalSkip.processWaiting(waiting)
+    assertEquals(#waiting, 0, "dropped off")
+    assertTrue(not part.isDeleted, "left where it is")
+    assertTrue(PlaceableTCDisposalSkip.isTaken(TCDebris.spawn("barrel", 0, 0, 0, 0, 0, 0, 1)), "debris")
 end)
 
 test("the field's left alone at allocation", function()

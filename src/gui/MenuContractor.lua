@@ -6825,8 +6825,21 @@ local function buildADSConsumableRow(item)
     if item.capacity ~= nil then
         row.ratio = item.amount / item.capacity
         row.isDanger = row.ratio < TCSupplyStock.LOW_RATIO
+    elseif item.isUsed then
+        row.chip, row.tone = g_i18n:getText("tc_supplies_chipUsed"), "warn"
     end
     return row
+end
+
+-- A part's new/used row in its details, for packs and boxes alike.
+local function addPartConditionRow(add, item)
+    if item.isUsed then
+        add.row(g_i18n:getText("tc_supplies_condition"), "",
+            { chip = g_i18n:getText("tc_supplies_chipUsed"), tone = "warn" })
+    else
+        add.row(g_i18n:getText("tc_supplies_condition"), "",
+            { chip = g_i18n:getText("tc_supplies_chipNew"), tone = "good" })
+    end
 end
 
 local function getPartBoxName(item)
@@ -6845,6 +6858,8 @@ local function buildADSPartRow(item)
     }
     if item.reserved ~= nil and item.reserved > 0 then
         row.chip, row.tone = string.format(g_i18n:getText("tc_supplies_chipReserved"), item.reserved), "info"
+    elseif item.isUsed then
+        row.chip, row.tone = g_i18n:getText("tc_supplies_chipUsed"), "warn"
     end
     return row
 end
@@ -7061,6 +7076,9 @@ function MenuContractor:getADSConsumableDetailRows(item)
     if item.tierText ~= "" then
         add.row(text("tc_supplies_quality"), item.tierText)
     end
+    if item.kind == "pack" then
+        addPartConditionRow(add, item)
+    end
     if item.capacity ~= nil then
         local ratio = item.amount / item.capacity
         add.row(text("tc_supplies_capacity"), TCJobSupplies.formatQuantity(item.fillTypeIndex, item.capacity))
@@ -7094,6 +7112,7 @@ function MenuContractor:getADSPartDetailRows(item)
     if item.tierText ~= "" then
         add.row(text("tc_supplies_quality"), item.tierText)
     end
+    addPartConditionRow(add, item)
     -- Without ADS's isReserved there's no telling free from reserved.
     if item.reserved ~= nil then
         add.row(text("tc_supplies_free"), string.format(text("tc_supplies_boxes"), item.count - item.reserved))
@@ -7134,9 +7153,14 @@ function MenuContractor:updateSupplyDetails()
             rows = self:getADSConsumableDetailRows(row.adsConsumable)
             if row.isDanger then
                 chipText, chipTone = g_i18n:getText("tc_supplies_chipLow"), "warn"
+            elseif row.adsConsumable.isUsed then
+                chipText, chipTone = g_i18n:getText("tc_supplies_chipUsed"), "warn"
             end
         elseif row.adsPart ~= nil then
             rows = self:getADSPartDetailRows(row.adsPart)
+            if row.adsPart.isUsed then
+                chipText, chipTone = g_i18n:getText("tc_supplies_chipUsed"), "warn"
+            end
         end
     end
 

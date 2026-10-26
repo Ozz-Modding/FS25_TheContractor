@@ -10,14 +10,21 @@
 --                 one its workshop uses to find stock near a vehicle). It
 --                 reports fluids, grease and packs as { kind, key, tier,
 --                 grade, amount, ... }, grouped here by kind/key/tier/grade.
---   parts boxes   ADS_SparePartsBox.isBox/getState, one row per part and
---                 tier, and isReserved for the ones a work order holds.
+--   parts boxes   ADS_SparePartsBox.isBox/getState, one row per part,
+--                 tier and new/used, and isReserved for the ones a work
+--                 order holds.
+--   used parts    what a replacement took off a machine (103): a box
+--                 ADS_SparePartsBox.isUsed says is used, or a single loose
+--                 battery or air filter (ADS_ConsumablePack) that's lost
+--                 any condition. The Supplies tab marks them, and the
+--                 disposal skip (075) takes them for the tipping fee.
 --
 -- Each feature has its own capability flag, worked out once per loadMap
 -- (detect). A missing entry point hides only what needs it, with one
 -- warning per session naming it: no consumables view without the
 -- classifier, no spare parts view without isBox/getState, no free/reserved
--- split without isReserved. Checked against refs/FS25_AdvancedDamageSystem
+-- split without isReserved, no used boxes without isUsed, no used packs
+-- without isPack/isGrippable/getPartState. Checked against refs/FS25_AdvancedDamageSystem
 -- (0.10.0.0). Tier labels use ADS's own texts where it has one, and the raw
 -- tier otherwise.
 
@@ -51,7 +58,7 @@ local function lookUp(env, tableName, fieldName, expectedType)
         local name = tableName .. "." .. fieldName
         if not warned[name] then
             warned[name] = true
-            Logging.warning("TheContractor: %s's %s is missing or has changed - the Supplies tab hides what needs it",
+            Logging.warning("TheContractor: %s's %s is missing or has changed - what needs it is switched off",
                 TCADSStock.MOD_NAME, name)
         end
         return nil
@@ -80,7 +87,15 @@ function TCADSStock.detect()
     if capabilities.partsBoxes then
         entryPoints.isReserved = lookUp(env, "ADS_SparePartsBox", "isReserved", "function")
         capabilities.reservations = entryPoints.isReserved ~= nil
+        entryPoints.isUsedBox = lookUp(env, "ADS_SparePartsBox", "isUsed", "function")
+        capabilities.usedBoxes = entryPoints.isUsedBox ~= nil
     end
+
+    entryPoints.isPack = lookUp(env, "ADS_ConsumablePack", "isPack", "function")
+    entryPoints.isGrippable = lookUp(env, "ADS_ConsumablePack", "isGrippable", "function")
+    entryPoints.getPackState = lookUp(env, "ADS_ConsumablePack", "getPartState", "function")
+    capabilities.usedPacks = entryPoints.isPack ~= nil and entryPoints.isGrippable ~= nil and
+        entryPoints.getPackState ~= nil
 end
 
 function TCADSStock.hasConsumables()
@@ -97,6 +112,38 @@ end
 
 function TCADSStock.isAvailable()
     return TCADSStock.hasConsumables() or TCADSStock.hasPartsBoxes()
+end
+
+-- Used parts ------------------------------------------------------------------
+
+-- Whether a battery's or air filter's state has lost anything since ADS's
+-- shop: a new one has full health and no clogging.
+local function isWornPackState(state)
+    return state ~= nil and ((tonumber(state.health) or 1) < 1 or (tonumber(state.clogging) or 0) > 0 or
+        (tonumber(state.permanentClogging) or 0) > 0)
+end
+
+-- Whether an object is a part a replacement took off a machine: a used
+-- spare parts box (never one of ADS's free samples), or a single loose
+-- battery or air filter that's lost condition. Pallets of packs are new.
+function TCADSStock.isUsedPart(object)
+    if object == nil or object.isDeleted then
+        return false
+    end
+    if capabilities.usedBoxes and entryPoints.isBox(object) then
+        local state = entryPoints.getBoxState(object)
+        return state ~= nil and not state.isPreview and entryPoints.isUsedBox(object) == true
+    end
+    if capabilities.usedPacks and entryPoints.isPack(object) then
+        return entryPoints.isGrippable(object) == true and isWornPackState(entryPoints.getPackState(object))
+    end
+    return false
+end
+
+-- Whether a work order holds a box (false for anything else, or without
+-- isReserved).
+function TCADSStock.isReservedPart(object)
+    return capabilities.reservations == true and entryPoints.isBox(object) and entryPoints.isReserved(object) == true
 end
 
 -- ADS's own text for a tier, or the tier as it is.
@@ -144,8 +191,9 @@ local function getConsumableName(source, object, tierText)
     return table.concat(parts, ", ")
 end
 
--- The farm's ADS consumables, one row per kind/key/tier/grade: {
---   key, kind, name, tierText, fillTypeIndex (fluids and grease),
+-- The farm's ADS consumables, one row per kind/key/tier/grade, used packs
+-- (isUsedPart) on rows of their own after the new ones: {
+--   key, kind, name, tierText, isUsed, fillTypeIndex (fluids and grease),
 --   amount     litres/grams of a fluid or grease, a count of packs
 --   capacity   the fluid/grease containers' capacity, nil for packs
 --   sources    { { name, amount, capacity }... }, one per object
@@ -166,15 +214,17 @@ function TCADSStock.getConsumableRows(farmId)
         for _, source in ipairs(list) do
             local amount = tonumber(source.amount) or 0
             if source.key ~= nil and amount > 0 then
+                local isPack = source.kind == packKind
+                local isUsed = isPack and TCADSStock.isUsedPart(object)
                 local key = table.concat({ tostring(source.kind), tostring(source.key), tostring(source.tier),
-                    tostring(source.grade or "") }, "|")
+                    tostring(source.grade or ""), isUsed and "used" or "" }, "|")
                 local row = rowsByKey[key]
                 if row == nil then
                     local tierText = TCADSStock.getTierText(TCADSStock.CONSUMABLE_TIER_PREFIX, source.tier)
-                    local isPack = source.kind == packKind
                     row = {
                         key = key,
                         kind = source.kind,
+                        isUsed = isUsed,
                         tierText = tierText,
                         name = getConsumableName(source, object, tierText),
                         fillTypeIndex = not isPack and source.fillTypeIndex or nil,
@@ -220,16 +270,19 @@ function TCADSStock.getConsumableRows(farmId)
         local orderA, orderB = KIND_ORDER[a.kind] or 99, KIND_ORDER[b.kind] or 99
         if orderA ~= orderB then
             return orderA < orderB
+        elseif a.name ~= b.name then
+            return a.name < b.name
         end
-        return a.name < b.name
+        return not a.isUsed and b.isUsed
     end)
     return rows
 end
 
 -- Spare parts boxes -----------------------------------------------------------
 
--- The farm's spare parts boxes, one row per part and tier: {
---   key, name, tierText, count,
+-- The farm's spare parts boxes, one row per part and tier, used boxes
+-- (isUsedPart) on rows of their own after the new ones: {
+--   key, name, tierText, isUsed, count,
 --   reserved   how many a work order holds, nil without isReserved
 --   fits       { { vehicleName, count }... }
 -- }. ADS's free preview samples aren't stock. Empty without isBox/getState.
@@ -244,11 +297,13 @@ function TCADSStock.getPartBoxRows(farmId)
         if entryPoints.isBox(object) then
             local state = entryPoints.getBoxState(object)
             if state ~= nil and not state.isPreview then
-                local key = tostring(state.componentId) .. "|" .. tostring(state.tier)
+                local isUsed = TCADSStock.isUsedPart(object)
+                local key = tostring(state.componentId) .. "|" .. tostring(state.tier) .. (isUsed and "|used" or "")
                 local row = rowsByKey[key]
                 if row == nil then
                     row = {
                         key = key,
+                        isUsed = isUsed,
                         name = getObjectName(object),
                         tierText = TCADSStock.getTierText(TCADSStock.PART_TIER_PREFIX, state.tier),
                         count = 0,
@@ -285,6 +340,8 @@ function TCADSStock.getPartBoxRows(farmId)
     table.sort(rows, function(a, b)
         if a.name ~= b.name then
             return a.name < b.name
+        elseif a.isUsed ~= b.isUsed then
+            return not a.isUsed
         end
         return a.tierText < b.tierText
     end)
