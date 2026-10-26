@@ -509,7 +509,7 @@ Seeds:
 
 ### `tcCompany event <type> [details]`
 
-Makes a random event happen to your farm now, ignoring the odds, the Random events setting, the event type's cooldown, its months (poaching only comes March to May) and its time of day (diesel theft normally comes to light between 07:00 and 09:00). It still needs something to act on (a theft needs a vehicle that can be stolen, joyriders a grass field outside winter, fly-tipping an NPC's field with no job on it, diesel theft some diesel in a storage of yours or in a parked machine, poaching a worker who isn't leaving, a field breakdown needs FS25_AdvancedDamageSystem, an NPC's field with no job on it and no other breakdown of yours on the go), and says so if there isn't anything. It starts the event's cooldown like a real one. `<type>` is the event type's key, case-insensitive. With no type, or an unknown one, it lists the ones there are.
+Makes a random event happen to your farm now, ignoring the odds, the Random events setting, the event type's cooldown, its months (poaching only comes March to May) and its time of day (diesel theft normally comes to light between 07:00 and 09:00, an injury between 09:00 and 17:00). It still needs something to act on (a theft needs a vehicle that can be stolen, joyriders a grass field outside winter, fly-tipping an NPC's field with no job on it, diesel theft some diesel in a storage of yours or in a parked machine, poaching a worker who isn't leaving, an injury a field worker who isn't already off sick, on holiday, training or due to be off sick (at work or not: the real event only picks someone in the yard during working hours or out working), a field breakdown needs FS25_AdvancedDamageSystem, an NPC's field with no job on it and no other breakdown of yours on the go), and says so if there isn't anything. It starts the event's cooldown like a real one. `<type>` is the event type's key, case-insensitive. With no type, or an unknown one, it lists the ones there are.
 
 `[details]` picks what the event acts on, for the types that take one (any other type refuses them):
 
@@ -533,6 +533,7 @@ tcCompany event roadAccident
 tcCompany event sprayDrift
 tcCompany event poaching
 tcCompany event poaching amy
+tcCompany event injury
 tcCompany event fieldBreakdown
 tcCompany event fieldBreakdown mobile
 ```
