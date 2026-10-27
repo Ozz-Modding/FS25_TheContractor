@@ -191,6 +191,7 @@ local function setup(def)
     world:load("src/util/TCADSRepairContracts.lua")
     world:load("src/business/Job.lua")
     world:load("src/business/Jobs.lua")
+    world:load("src/business/CropSpill.lua")
     world:load("src/business/RepairContracts.lua")
     world:load("src/util/TCRepairZoneActivatable.lua")
 

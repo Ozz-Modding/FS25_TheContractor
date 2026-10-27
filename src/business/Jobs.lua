@@ -173,10 +173,10 @@ end
 -- startState is the field state the job starts from, for job types that
 -- record one (032, JOB_TYPES' startState). workshop (100) is a workshop
 -- job's customer machine and contract (TheContractorRepairContracts), whose
--- fieldId is 0.
+-- fieldId is 0. spill (106) is a spilt crop's job.spill (TheContractorCropSpill).
 function TheContractorJobs:createJob(farmId, jobType, fieldId, requiredSkillLevel, targetPeriod, targetDayInPeriod,
                                       price, equipmentAvailable, fruitTypeName, deadlineDay, includesHaulage,
-                                      deliveryStation, startState, workshop)
+                                      deliveryStation, startState, workshop, spill)
     if not g_currentMission:getIsServer() then
         return nil
     end
@@ -200,6 +200,7 @@ function TheContractorJobs:createJob(farmId, jobType, fieldId, requiredSkillLeve
         TCHaulage.setDeliveryStation(job, deliveryStation)
     end
     job.workshop = workshop
+    job.spill = spill
     self:registerJob(job)
 
     if g_server ~= nil then
@@ -238,6 +239,10 @@ function TheContractorJobs:registerJob(job, isNewArrival)
         local tc = g_currentMission.TheContractor
         if tc.InboxHUD ~= nil then
             tc.InboxHUD:onJobOffered(job)
+        end
+        -- 106: a spilt crop's urgent job says so as it arrives.
+        if job.spill ~= nil then
+            TheContractorCropSpill.showNotification(job)
         end
     end
 end
@@ -621,6 +626,9 @@ function TheContractorJobs:missJob(job, noPenalty)
     local penalty = math.floor(fullPenalty * (1 - job.completionPercentage / 100))
     if noPenalty then
         penalty = 0
+    elseif job.spill ~= nil then
+        -- 106: the lot, whatever was delivered.
+        penalty = TheContractorCropSpill.getMissPenalty(job)
     elseif job.workshop ~= nil then
         -- 100: judged as the customer comes for it - worse than it arrived
         -- costs more, and maybe a claim.
@@ -638,6 +646,12 @@ function TheContractorJobs:missJob(job, noPenalty)
     -- 060: into the logbook, while its machines are still where the job
     -- left them.
     g_currentMission.TheContractor.Logbook:recordJobMissed(job, penalty)
+
+    -- 106: the council clears the road, and a claim may follow (on the
+    -- entry just written).
+    if job.spill ~= nil then
+        g_currentMission.TheContractor.CropSpill:onJobMissed(job)
+    end
 
     if wasAllocated then
         self:releaseMissedJobResources(job)
@@ -715,6 +729,10 @@ end
 function TheContractorJobs.getUnallocateProblem(job)
     if job == nil then
         return "tc_unallocate_problemGone"
+    end
+    -- 106: a spill is the farm's own to clear up.
+    if job.spill ~= nil then
+        return "tc_unallocate_problemSpill"
     end
     if job.state ~= TheContractorJob.STATE.ALLOCATED and job.state ~= TheContractorJob.STATE.IN_PROGRESS then
         return "tc_unallocate_problemState"
@@ -1000,6 +1018,11 @@ function TheContractorJobs.getBaseReputationReward(job)
         return TheContractorRepairContracts.getBaseReputation(job)
     end
     local jobDef = TheContractorJobGeneration.JOB_TYPES[job.jobType]
+    -- 106: a spill's clear-up earns nothing (its miss costs what its spill
+    -- says).
+    if jobDef ~= nil and jobDef.noReward then
+        return 0
+    end
     -- 075: a job paid per piece earns per piece too.
     if jobDef ~= nil and jobDef.reputationPerItem ~= nil then
         return jobDef.reputationPerItem * (job.workTotal or 0)
@@ -1023,6 +1046,11 @@ end
 -- priced at (102, getMarginFactor): a factor at or below 0 makes it a loss
 -- of that share of the base, whatever the quality and speed.
 function TheContractorJobs:calculateReputationReward(job)
+    -- 106: putting right your own spill earns nothing.
+    local jobDef = TheContractorJobGeneration.JOB_TYPES[job.jobType]
+    if jobDef ~= nil and jobDef.noReward then
+        return 0
+    end
     local factor = TheContractorJobs.getQualityReputationFactor(job.qualityScore or 100)
     local reward = TheContractorJobs.getBaseReputationReward(job) * factor
     if factor > 0 and job.workshop ~= nil then
@@ -1262,6 +1290,11 @@ function TheContractorJobs:completeJob(job, isForced)
     -- broadcast so the "job complete" notification comes first.
     g_currentMission.TheContractor.Staff:applyGrowthFromJob(job)
 
+    -- 106: whatever's left of a spill is cleared away.
+    if job.spill ~= nil then
+        g_currentMission.TheContractor.CropSpill:onJobCompleted(job)
+    end
+
     -- 072: a joyrider plow job may lead to a grass sow job.
     if job.followOnSow then
         g_currentMission.TheContractor.Joyriders:onJobCompleted(job)
@@ -1384,6 +1417,8 @@ function TheContractorJobs.writeJob(streamId, job)
 
     -- 100.
     TheContractorJobs.writeWorkshop(streamId, job.workshop)
+    -- 106.
+    TheContractorCropSpill.writeStream(streamId, job.spill)
 end
 
 -- 100: what a client needs of a workshop job (the uniqueIds stay on the
@@ -1557,6 +1592,7 @@ function TheContractorJobs.readJob(streamId)
     job.allocatedPlayerName = allocatedPlayerName ~= "" and allocatedPlayerName or nil
 
     job.workshop = TheContractorJobs.readWorkshop(streamId)
+    job.spill = TheContractorCropSpill.readStream(streamId)
 
     return job
 end
@@ -1686,6 +1722,7 @@ function TheContractorJobs:loadFromXMLFile(xmlFile)
             job.debrisDisposed = Utils.getNoNil(getXMLInt(xmlFile, jobKey .. "#debrisDisposed"), 0)
             job.graceRemainingMs = getXMLFloat(xmlFile, jobKey .. "#graceRemainingMs")
             job.workshop = TheContractorJobs.loadWorkshop(xmlFile, jobKey .. ".workshop")
+            job.spill = TheContractorCropSpill.loadFromXML(xmlFile, jobKey .. ".spill")
 
             self.jobsByFarm[farmId] = self.jobsByFarm[farmId] or {}
             self.jobsByFarm[farmId][id] = job
@@ -1971,6 +2008,9 @@ function TheContractorJobs:saveToXmlFile(xmlFile)
             end
             if job.workshop ~= nil then
                 TheContractorJobs.saveWorkshop(xmlFile, jobKey .. ".workshop", job.workshop)
+            end
+            if job.spill ~= nil then
+                TheContractorCropSpill.saveToXML(xmlFile, jobKey .. ".spill", job.spill)
             end
 
             if job.assignedWorkerId ~= nil then

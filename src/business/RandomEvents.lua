@@ -364,6 +364,10 @@ function TheContractorRandomEvents:onJobCompleted(job, random)
     if multiplier <= 0 then
         return nil
     end
+    -- 106: a spilt crop's clear-up has had its event.
+    if not TheContractorRandomEvents.canHaveJobEvents(job) then
+        return nil
+    end
 
     local hits = {}
     for _, key in ipairs(self.eventTypeOrder) do
@@ -402,12 +406,18 @@ function TheContractorRandomEvents:findLatestJobFor(farmId, definition)
         return a.id > b.id
     end)
     for _, job in ipairs(jobs) do
-        local data = definition.canTrigger(farmId, job)
+        local data = TheContractorRandomEvents.canHaveJobEvents(job) and definition.canTrigger(farmId, job) or nil
         if data ~= nil then
             return job, data
         end
     end
     return nil, nil
+end
+
+-- Whether job events can happen on the job at all (JOB_TYPES' noJobEvents).
+function TheContractorRandomEvents.canHaveJobEvents(job)
+    local jobDef = TheContractorJobGeneration ~= nil and TheContractorJobGeneration.JOB_TYPES[job.jobType] or nil
+    return jobDef == nil or not jobDef.noJobEvents
 end
 
 -- Opens an incident now (server), cooldown or not - the rolls and the

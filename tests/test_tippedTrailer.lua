@@ -1,10 +1,11 @@
 -- 105: a tipped trailer on the real random events framework (068): the
--- odds from the hauler's haulage skill, which rig it's rolled for, where on
--- the road it ends up, the tipping (out of the cooldown, unhitched, put
--- down, both machines damaged, morale and reputation), the recovery firm or
--- doing it yourself, and the incident closing once it's righted or gone.
--- The engine side of the spot (splines, overlap tests, rotations) and the
--- rest of the mod are faked.
+-- odds from the hauler's haulage skill, which rig it's rolled for, where in
+-- the field it ends up, the tipping (out of the cooldown, unhitched, put
+-- down, both machines damaged, morale and reputation), the spill (106,
+-- faked here: tests/test_cropSpill.lua has it) and the message that goes
+-- with it, and the incident closing once it's righted or gone. The engine
+-- side of the spot (ground, overlap tests, rotations) and the rest of the
+-- mod are faked.
 
 local function setup()
     local world = stubs.install()
@@ -109,23 +110,17 @@ local function setup()
     world:load("src/business/RandomEvents.lua")
     world:load("src/business/RoadAccident.lua")
     world:load("src/business/TippedTrailer.lua")
+    world:load("src/business/CropSpill.lua")
+    world:load("src/util/TCJoyriderRuts.lua")
 
-    -- A road running north past the field (at the origin), x = 50, every
-    -- 10 m from z = -500 to 1500.
-    world.roadSamples = {}
-    for z = -500, 1500, 10 do
-        table.insert(world.roadSamples, { x = 50, y = 0, z = z, dirX = 0, dirZ = 1 })
-    end
-    TheContractorTippedTrailer.sampleRoads = function()
-        local copy = {}
-        for i, sample in ipairs(world.roadSamples) do
-            copy[i] = { x = sample.x, y = sample.y, z = sample.z, dirX = sample.dirX, dirZ = sample.dirZ }
-        end
-        return copy
+    -- The field: centred on the origin, 120 m square unless a test says.
+    world.boundary = { { -60, -60 }, { 60, -60 }, { 60, 60 }, { -60, 60 } }
+    TheContractorTippedTrailer.getFieldBoundary = function()
+        return world.boundary
     end
     world.clear = function() return true end
-    TheContractorTippedTrailer.isPlacementClear = function(placement, sample, size)
-        return world.clear(placement, sample, size)
+    TheContractorTippedTrailer.isPlacementClear = function(placement, size)
+        return world.clear(placement, size)
     end
     TheContractorTippedTrailer.placeOnSide = function(trailer, data)
         table.insert(world.placed, { vehicleId = trailer.id, x = data.x, z = data.z })
@@ -159,7 +154,6 @@ local function setup()
     world.notices, world.removedNotices = {}, {}
     world.reputation, world.morale, world.returned = {}, {}, {}
     world.inCooldown, world.released, world.busy = {}, {}, {}
-    world.recovery = 0
 
     local tc = g_currentMission.TheContractor
     tc.hasResolvedSavedVehicles = true
@@ -194,9 +188,21 @@ local function setup()
             end
         end,
     }
-    tc.Finances = {
-        recordRecovery = function(_, farmId, amount)
-            world.recovery = world.recovery + amount
+    -- 106: the harvest job, and the spill (world.spillJob, nil for none).
+    world.sourceJobs, world.spills = {}, {}
+    tc.Jobs = {
+        getJob = function(_, farmId, jobId)
+            return world.sourceJobs[jobId]
+        end,
+    }
+    tc.CropSpill = {
+        spill = function(_, farmId, sourceJob, trailer, data, incidentId)
+            table.insert(world.spills, { sourceJob = sourceJob, trailer = trailer, incidentId = incidentId,
+                placed = #world.placed, tractorsPlaced = #world.tractorsPlaced })
+            return world.spillJob
+        end,
+        setForcedClaim = function(_, isClaim)
+            world.forcedClaim = isClaim
         end,
     }
     tc.Reputation = {
@@ -232,6 +238,8 @@ local function setup()
             for i, arg in ipairs(args) do
                 if type(arg) == "string" and string.sub(arg, 1, 7) == "$money_" then
                     resolved[i] = g_i18n:formatMoney(tonumber(string.sub(arg, 8)), 0, true, true)
+                elseif type(arg) == "string" and string.sub(arg, 1, 8) == "$volume_" then
+                    resolved[i] = g_i18n:formatVolume(tonumber(string.sub(arg, 9)), 0)
                 else
                     resolved[i] = arg
                 end
@@ -321,6 +329,7 @@ local function setup()
         if def.noHauler then
             job.haulerWorkerId = nil
         end
+        self.sourceJobs[job.id] = job
         return job, tractor, trailer, hauler
     end
 
@@ -330,9 +339,11 @@ local function setup()
         tc.RandomEvents:advanceDueIncidents()
     end
 
-    function world:answer(actionKey)
-        local message = self.messages[#self.messages]
-        world.messageKind.onAction(1, message, actionKey)
+    -- A spill job, as 106 makes it.
+    function world:addSpillJob()
+        self.spillJob = { id = 40, requiredLiters = 8000, deliveryStationName = "Grain Mill",
+            spill = { fillTypeName = "WHEAT", liters = 10000 } }
+        return self.spillJob
     end
 
     return world, tc
@@ -411,8 +422,9 @@ test("never without a hauler, a trailer, a field or a road, or for a stolen or b
     assertEquals(tc.TippedTrailer:rollTipping(1, job, rolls({})), nil, "no field")
     job.fieldId = 12
 
-    world.roadSamples = {}
-    assertEquals(tc.TippedTrailer:rollTipping(1, job, rolls({})), nil, "no road")
+    world.clear = function() return false end
+    assertEquals(tc.TippedTrailer:rollTipping(1, job, rolls({})), nil, "no room in the field")
+    world.clear = function() return true end
 
     job.haulageEquipmentIds = { job.haulageEquipmentIds[1] }
     assertEquals(tc.TippedTrailer:rollTipping(1, job, rolls({})), nil, "no trailer")
@@ -420,69 +432,69 @@ end)
 
 -- Where -----------------------------------------------------------------------------
 
-test("on the road between the field and the yard, clear of both", function()
+test("in the field, 10-20 m from its centre, the trailer and its spill inside it", function()
     local world, tc = setup()
-    -- The yard 1 km north of the field.
-    world.slots = { { rootNode = { x = 0, z = 1000 } } }
     local job = world:addHaulJob()
     for seed = 1, 20 do
-        local random = rolls({ seed / 21, (seed * 7 % 20) / 21 })
+        local random = rolls({ seed / 21, (seed * 7 % 20) / 21, (seed * 3 % 20) / 21 })
         local data = tc.TippedTrailer:rollTipping(1, job, random)
-        assertTrue(data.z >= 60 and data.z <= 930, "between the two: " .. data.z)
-        assertNear(math.abs(data.x - 50), 3.0, 1e-6, "at the road's edge")
-        assertNear(data.dirZ, 1, 1e-9, "along the road")
+        local centreX = data.x + data.sideX * 3.5 * 0.5
+        local centreZ = data.z + data.sideZ * 3.5 * 0.5
+        local fromCentre = math.sqrt(centreX * centreX + centreZ * centreZ)
+        assertTrue(fromCentre >= 10 - 1e-6 and fromCentre <= 20 + 1e-6, "10-20 m out: " .. fromCentre)
+        assertNear(data.dirX * data.dirX + data.dirZ * data.dirZ, 1, 1e-9)
+        assertNear(data.dirX * data.sideX + data.dirZ * data.sideZ, 0, 1e-9, "its top at right angles to its length")
     end
 end)
 
-test("the candidates: the corridor first, else the nearest to the field", function()
-    setup()
-    local samples = {}
-    for z = -1000, 1000, 10 do
-        table.insert(samples, { x = 50, y = 0, z = z, dirX = 0, dirZ = 1 })
-    end
-    local candidates = TheContractorTippedTrailer.getCandidates(samples, 0, 0, 0, 1000, rolls({}))
-    for _, sample in ipairs(candidates) do
-        assertTrue(sample.z > 0, "on the way to the yard, not behind the field")
-        local fromYard = math.sqrt(sample.x * sample.x + (sample.z - 1000) * (sample.z - 1000))
-        assertTrue(fromYard >= 80, "clear of the yard: " .. fromYard)
-    end
+test("a field too small to hold it, or the spill, is no event", function()
+    local world, tc = setup()
+    local job = world:addHaulJob()
+    world.boundary = { { -12, -12 }, { 12, -12 }, { 12, 12 }, { -12, 12 } }
+    assertEquals(tc.TippedTrailer:rollTipping(1, job, rolls({})), nil)
 
-    candidates = TheContractorTippedTrailer.getCandidates(samples, 0, 0, nil, nil, rolls({}))
-    assertEquals(#candidates, TheContractorTippedTrailer.FALLBACK_COUNT)
-    for _, sample in ipairs(candidates) do
-        local fromField = math.sqrt(sample.x * sample.x + sample.z * sample.z)
-        -- Ten each way along the road: z 70 to 160.
-        assertTrue(fromField >= 80 and fromField <= math.sqrt(50 * 50 + 160 * 160) + 1e-6, "near the field: " .. fromField)
+    -- A long thin field: only spots along it fit.
+    world.boundary = { { -100, -8 }, { 100, -8 }, { 100, 8 }, { -100, 8 } }
+    local random = math.random
+    math.randomseed(4)
+    local found = 0
+    for _ = 1, 20 do
+        local data = tc.TippedTrailer:rollTipping(1, job, random)
+        if data ~= nil then
+            found = found + 1
+            local plan = TheContractorCropSpill.planSpill(data, { length = 9, height = 3.5 })
+            for _, point in ipairs({ { plan.heapStartX, plan.heapStartZ }, { plan.heapEndX, plan.heapEndZ } }) do
+                assertTrue(math.abs(point[2]) <= 8, "the spill's inside too")
+            end
+        end
     end
+    assertTrue(found > 0, "some spot fits")
 end)
 
-test("wheels at the road's edge, body lying back across the road", function()
+test("the trailer's footprint: its wheels half its height to one side, its top the other", function()
     setup()
-    local sample = { x = 0, y = 0, z = 0, dirX = 0, dirZ = 1 }
-    local right = TheContractorTippedTrailer.getPlacement(sample, 1, { height = 4 })
-    assertNear(right.x, 3, 1e-9, "wheels at the right-hand edge")
-    assertNear(right.centreX, 1, 1e-9, "body back toward the middle")
-    assertNear(right.sideX, -1, 1e-9, "its top points to the middle")
-    local left = TheContractorTippedTrailer.getPlacement(sample, -1, { height = 4 })
-    assertNear(left.x, -3, 1e-9)
-    assertNear(left.centreX, -1, 1e-9)
-    assertNear(left.sideX, 1, 1e-9)
+    local placement = TheContractorTippedTrailer.getPlacement(5, 7, 0, { height = 4 })
+    assertNear(placement.centreX, 5, 1e-9)
+    assertNear(placement.centreZ, 7, 1e-9)
+    assertNear(placement.dirX, 0, 1e-9)
+    assertNear(placement.dirZ, 1, 1e-9, "facing its heading")
+    assertNear(placement.x, 3, 1e-9, "wheels half its height one way")
+    assertNear(placement.x + placement.sideX * 4, 7, 1e-9, "its top the other")
 end)
 
 test("the footprint: four corners and the middle of it lying down", function()
     setup()
-    local sample = { x = 0, y = 0, z = 0, dirX = 0, dirZ = 1 }
     local size = { height = 4, length = 10 }
-    local points = TheContractorTippedTrailer.getFootprintPoints(
-        TheContractorTippedTrailer.getPlacement(sample, 1, size), size)
+    local points = TheContractorTippedTrailer.getFootprintPoints(TheContractorTippedTrailer.getPlacement(0, 0, 0, size),
+        size)
     assertEquals(#points, 5)
     local minX, maxX, minZ, maxZ = math.huge, -math.huge, math.huge, -math.huge
     for _, point in ipairs(points) do
         minX, maxX = math.min(minX, point.x), math.max(maxX, point.x)
         minZ, maxZ = math.min(minZ, point.z), math.max(maxZ, point.z)
     end
-    assertNear(minX, -1, 1e-9)
-    assertNear(maxX, 3, 1e-9)
+    assertNear(minX, -2, 1e-9)
+    assertNear(maxX, 2, 1e-9)
     assertNear(minZ, -5, 1e-9)
     assertNear(maxZ, 5, 1e-9)
 end)
@@ -491,10 +503,13 @@ test("a spot that isn't clear is skipped; none clear is no event", function()
     local world, tc = setup()
     local job = world:addHaulJob()
     world.clear = function(placement)
-        return placement.z > 100
+        return placement.centreX > 0
     end
-    local data = tc.TippedTrailer:rollTipping(1, job, rolls({}))
-    assertTrue(data.z > 100, "a clear spot")
+    local data
+    for seed = 1, 5 do
+        data = tc.TippedTrailer:rollTipping(1, job, rolls({ seed / 7, 0.5, 0.5, 0.9, 0.2, 0.3, 0.1 }))
+        assertTrue(data.x + data.sideX * 1.75 > 0, "a clear spot")
+    end
     world.clear = function() return false end
     assertEquals(tc.TippedTrailer:rollTipping(1, job, rolls({})), nil)
 end)
@@ -522,28 +537,29 @@ test("tipping: out of the cooldown, unhitched, put down, both damaged, morale an
     assertEquals(#world.notices, 1)
 
     local message = world.messages[1]
-    assertEquals(message.title, "Trailer on its side after Field 12")
+    assertEquals(message.title, "Trailer on its side in Field 12")
+    assertEquals(message.bodyKey, "tc_tippedTrailer_bodyNoSpill", "nothing spilt")
     assertTrue(string.find(message.body, "Worker 2", 1, true) ~= nil, message.body)
     assertTrue(string.find(message.body, "Haul tractor", 1, true) ~= nil, message.body)
-    assertEquals(#message.actions, 2)
-    assertEquals(getIncident(tc).stage, "offer")
+    assertEquals(message.actions, nil, "nothing to choose: just a Dismiss")
+    assertEquals(message.payload.jobId, nil)
+    assertEquals(getIncident(tc).stage, "atScene")
+    assertEquals(getIncident(tc).data.spillJobId, 0)
     assertTrue(tc.TippedTrailer:isTipped(trailer.id), "locked out of allocation")
     assertTrue(not tc.Allocation:isVehicleFree(1, trailer))
     assertTrue(not tc.TippedTrailer:isTipped(tractor.id), "the tractor isn't tipped")
     assertTrue(not tc.Allocation:isVehicleFree(1, tractor), "but it's kept at the scene")
 end)
 
-test("the tractor stands just ahead of the trailer in its lane, slewed a little", function()
+test("the tractor stands just ahead of the trailer, slewed a little", function()
     setup()
-    local sample = { x = 0, y = 0, z = 0, dirX = 0, dirZ = 1 }
     local trailerSize = { length = 9, height = 3.5, width = 3 }
     local tractorSize = { length = 5, width = 2.5 }
-    -- Wheels at x = 3, its body back across to x = -0.5.
-    local placement = TheContractorTippedTrailer.getPlacement(sample, 1, trailerSize)
+    local placement = TheContractorTippedTrailer.getPlacement(1, 0, 0, trailerSize)
     local straight = TheContractorTippedTrailer.getTractorPlacement(placement, trailerSize, tractorSize, 0.5)
     assertNear(straight.z, 4.5 + 2 + 2.5, 1e-9, "the trailer's half length, the gap and its own half length ahead")
-    assertNear(straight.x, 3 - 1.25 - 0.3, 1e-9, "its side just in from the road's edge")
-    assertNear(straight.rotY, 0, 1e-9, "along the road")
+    assertNear(straight.x, 1, 1e-9, "in line with it")
+    assertNear(straight.rotY, 0, 1e-9, "the way it faces")
     local slewed = TheContractorTippedTrailer.getTractorPlacement(placement, trailerSize, tractorSize, 1)
     assertNear(slewed.rotY, math.rad(25), 1e-9)
     slewed = TheContractorTippedTrailer.getTractorPlacement(placement, trailerSize, tractorSize, 0)
@@ -554,10 +570,10 @@ test("no room for the tractor is another spot; a tractor that's busy isn't left 
     local world, tc = setup()
     local job, tractor = world:addHaulJob()
     world.tractorClear = function(tractorPlacement)
-        return tractorPlacement.z > 120
+        return tractorPlacement.x > 0
     end
-    local data = tc.TippedTrailer:rollTipping(1, job, rolls({}))
-    assertTrue(data.tractorZ > 120, "a spot with room for both")
+    local data = tc.TippedTrailer:rollTipping(1, job, rolls({ 0.1, 0.5, 0.5, 0.5, 0.3, 0.5, 0.2, 0.5, 0.5 }))
+    assertTrue(data.tractorX > 0, "a spot with room for both")
     assertEquals(data.tractorId, tractor.id)
     assertEquals(data.tractorUniqueId, tractor.uniqueId)
 
@@ -569,7 +585,7 @@ test("no room for the tractor is another spot; a tractor that's busy isn't left 
     assertEquals(data.tractorName, "")
     local incident = tc.RandomEvents:triggerEvent(1, TheContractorTippedTrailer.EVENT_TYPE, job)
     assertEquals(#world.tractorsPlaced, 0)
-    assertEquals(world.messages[1].bodyKey, "tc_tippedTrailer_bodyNoTractor")
+    assertEquals(world.messages[1].bodyKey, "tc_tippedTrailer_bodyNoTractorNoSpill")
     assertTrue(incident ~= nil)
 end)
 
@@ -580,44 +596,66 @@ test("a small job still costs the minimum reputation", function()
     assertEquals(world.reputation[1], -5)
 end)
 
-test("calling recovery: the scaled fee, charged and recorded, and both back to the parking queue", function()
+-- The spill (106) -----------------------------------------------------------------------
+
+test("the load spills once both are down, and the message tells the story and goes with the spill's job", function()
     local world, tc = setup()
-    local job, tractor, trailer = world:addHaulJob()
-    tc.RandomEvents:triggerEvent(1, TheContractorTippedTrailer.EVENT_TYPE, job)
-    local expected = tc.Settings:scaleCost(TheContractorTippedTrailer.RECOVERY_COST)
-    assertTrue(expected > TheContractorTippedTrailer.RECOVERY_COST, "scaled up at the default job pay")
+    local job, _, trailer = world:addHaulJob()
+    world:addSpillJob()
+    local incident = tc.RandomEvents:triggerEvent(1, TheContractorTippedTrailer.EVENT_TYPE, job)
+
+    local spill = world.spills[1]
+    assertEquals(spill.sourceJob, job, "the harvest job's crop")
+    assertEquals(spill.trailer, trailer)
+    assertEquals(spill.incidentId, incident.id)
+    assertEquals(spill.placed, 1, "after the trailer's down")
+    assertEquals(spill.tractorsPlaced, 1, "and the tractor")
+    assertEquals(incident.data.spillJobId, 40)
 
     local message = world.messages[1]
-    local confirm = world.messageKind.getConfirmText(message, TheContractorTippedTrailer.ACTION.RECOVER)
-    assertTrue(string.find(confirm, g_i18n:formatMoney(expected, 0, true, true), 1, true) ~= nil, confirm)
-    assertEquals(world.messageKind.getConfirmText(message, TheContractorTippedTrailer.ACTION.DIY), nil)
-
-    world:answer(TheContractorTippedTrailer.ACTION.RECOVER)
-    assertEquals(world.money[1].amount, -expected)
-    assertEquals(world.money[1].moneyType, "tcRecovery")
-    assertEquals(world.recovery, expected)
-    assertEquals(world.returned[1], trailer.id)
-    assertEquals(world.returned[2], tractor.id, "the tractor back to the yard too")
-    assertEquals(trailer.frozen, false, "unfrozen before it's parked")
-    assertEquals(world.removedNotices[1], 1)
-    assertEquals(next(tc.RandomEvents.incidents), nil, "closed")
-    assertTrue(not tc.TippedTrailer:isTipped(trailer.id))
-    assertTrue(not tc.TippedTrailer:isAtScene(tractor.id))
+    assertEquals(message.bodyKey, "tc_tippedTrailer_body")
+    assertEquals(message.payload.jobId, 40, "ends with the spill's job")
+    assertEquals(message.actions, nil)
+    for _, part in ipairs({ "10000 l", "Wheat", "8000 l", "Grain Mill", "end of tomorrow" }) do
+        assertTrue(string.find(message.body, part, 1, true) ~= nil, part .. ": " .. message.body)
+    end
+    assertEquals(world.messageKind.endsWithJob, true)
+    assertEquals(world.messageKind.onAction, nil, "no choice to answer")
 end)
 
-test("doing it yourself: nothing charged, and the offer comes again if it's still over", function()
+test("righting the trailer leaves a spill's message up: it goes with the job", function()
     local world, tc = setup()
-    local job = world:addHaulJob()
-    tc.RandomEvents:triggerEvent(1, TheContractorTippedTrailer.EVENT_TYPE, job)
-    world:answer(TheContractorTippedTrailer.ACTION.DIY)
-    assertEquals(#world.money, 0)
-    assertEquals(getIncident(tc).stage, "diy")
+    local job, _, trailer = world:addHaulJob()
+    world:addSpillJob()
+    local incident = tc.RandomEvents:triggerEvent(1, TheContractorTippedTrailer.EVENT_TYPE, job)
+    tc.TippedTrailer:rightTrailer(1, incident.id)
+    assertEquals(#world.removedMessages, 0)
+    assertEquals(world.removedNotices[1], 1, "the trailer's notice goes")
+    assertEquals(next(tc.RandomEvents.incidents), nil, "closed")
+    assertTrue(trailer.stoodUp)
+end)
 
-    for _ = 1, 5 do
-        world:nextDay()
-    end
-    assertEquals(#world.messages, 2, "offered again half a month later")
-    assertEquals(getIncident(tc).stage, "offer")
+test("without a tractor at the scene, the spill's story says so", function()
+    local world, tc = setup()
+    local job, tractor = world:addHaulJob()
+    world.inCooldown[tractor.id] = nil
+    world.busy[tractor.id] = true
+    world:addSpillJob()
+    tc.RandomEvents:triggerEvent(1, TheContractorTippedTrailer.EVENT_TYPE, job)
+    local message = world.messages[1]
+    assertEquals(message.bodyKey, "tc_tippedTrailer_bodyNoTractor")
+    assertTrue(string.find(message.body, "Grain Mill", 1, true) ~= nil, message.body)
+end)
+
+test("the console forces whether the next missed spill brings a claim", function()
+    local world, tc = setup()
+    local definition = tc.RandomEvents:getEventType(TheContractorTippedTrailer.EVENT_TYPE)
+    assertEquals(definition.console.outcomes[1], "claim")
+    assertEquals(definition.console.outcomes[2], "noClaim")
+    definition.console.setOutcome("claim")
+    assertEquals(world.forcedClaim, true)
+    definition.console.setOutcome("noClaim")
+    assertEquals(world.forcedClaim, false)
 end)
 
 test("righted by the player, or sold: the incident closes and takes its message and notice", function()
@@ -676,16 +714,7 @@ test("pushed back onto its wheels: unfrozen, stood up, message and notice gone, 
     assertTrue(tc.Allocation:isVehicleFree(1, trailer), "free again")
     assertTrue(tc.Allocation:isVehicleFree(1, tractor), "the tractor too, wherever it's been driven")
     assertEquals(#world.money, 0, "nothing charged")
-end)
-
-test("after choosing to sort it yourself, the push works the same", function()
-    local world, tc = setup()
-    local job, _, trailer = world:addHaulJob()
-    local incident = tc.RandomEvents:triggerEvent(1, TheContractorTippedTrailer.EVENT_TYPE, job)
-    world:answer(TheContractorTippedTrailer.ACTION.DIY)
-    tc.TippedTrailer:rightTrailer(1, incident.id)
-    assertTrue(trailer.stoodUp)
-    assertEquals(next(tc.RandomEvents.incidents), nil, "closed")
+    assertEquals(world.removedMessages[1], 1, "with no spill, its message goes with it")
 end)
 
 test("another farm can't push it, and an unknown incident is ignored", function()

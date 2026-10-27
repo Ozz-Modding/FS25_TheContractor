@@ -20,8 +20,8 @@
 -- JOB_TYPES: tedder/bale (litres of windrow left, against what was spawned
 -- at allocation), weed/hoe (weed area left, against what was there at
 -- allocation), bale wrap (the spawned bales' wrapping), straw delivery
--- (what's been delivered, 067) and fly-tipping (pieces taken to a skip,
--- 075) are measured against a baseline only the server has
+-- (what's been delivered, 067), fly-tipping (pieces taken to a skip,
+-- 075) and spilt crop (delivered and the road clear, 106) are measured against a baseline only the server has
 -- (job.workTotal/spawnedBaleIds/requiredLiters/debrisIds),
 -- so only the server measures them, and sends the result to clients
 -- (TCJobProgressEvent) whenever it moves by a whole percent.
@@ -332,6 +332,10 @@ local JOB_TYPE_HANDLERS = {
     baleWrap = { getCompletion = getBaleWrapCompletion },
     strawDelivery = { getCompletion = getDeliveryCompletion },
     flyTipping = { getCompletion = getFlyTippingCompletion },
+    -- 106: delivered, and the road clear.
+    spillRecovery = { getCompletion = function(job)
+        return TheContractorCropSpill.getCompletion(job)
+    end },
     fertilize = { createModifier = createFertilizeModifier },
     herbicide = { createModifier = createHerbicideModifier },
     weed = { createModifier = createWeedModifier, measure = "remainingArea" },

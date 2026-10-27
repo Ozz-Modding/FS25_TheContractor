@@ -21,7 +21,8 @@
 --
 -- 101: a field breakdown (a customer's machine to fix on the spot) gets the
 -- same circle, smaller, on the machine itself while it's on offer or taken
--- on, following it if it's moved. One per job.
+-- on, following it if it's moved. One per job. 106: a spilt crop's job gets
+-- one on the spill, not its field.
 
 TCJobHotspots = {}
 
@@ -60,8 +61,10 @@ function TCJobHotspots.getMarkedFieldIds(farmId)
 
     local lastDayOfMonth = TCJobHotspots.getLastDayOfMonth()
     for _, job in ipairs(tc.Jobs:getAllJobs(farmId)) do
-        -- 100: a workshop job (field 0) has no field to mark.
-        if job.fieldId ~= nil and job.fieldId ~= 0 and TCJobHotspots.isMarked(job, lastDayOfMonth) then
+        -- 100: a workshop job (field 0) has no field to mark. 106: a spill's
+        -- is marked where it lies (getSpotPositions).
+        if job.fieldId ~= nil and job.fieldId ~= 0 and job.spill == nil and
+                TCJobHotspots.isMarked(job, lastDayOfMonth) then
             fieldIds[job.fieldId] = true
         end
     end
@@ -99,14 +102,34 @@ function TCJobHotspots.getBreakdownMachines(farmId)
     return machines
 end
 
+-- jobId -> { x, z } for each circle that isn't a field's: 101's breakdowns
+-- (on the machine) and 106's spills (on the spill, while it's taken on).
+function TCJobHotspots.getSpotPositions(farmId)
+    local positions = {}
+    for jobId, vehicle in pairs(TCJobHotspots.getBreakdownMachines(farmId)) do
+        local x, _, z = getWorldTranslation(vehicle.rootNode)
+        positions[jobId] = { x = x, z = z }
+    end
+    local tc = g_currentMission.TheContractor
+    if farmId == nil or farmId == FarmManager.SPECTATOR_FARM_ID or tc == nil or tc.Jobs == nil then
+        return positions
+    end
+    for _, job in ipairs(tc.Jobs:getAllJobs(farmId)) do
+        if job.spill ~= nil and isTakenOn(job.state) then
+            positions[job.id] = { x = job.spill.x, z = job.spill.z }
+        end
+    end
+    return positions
+end
+
 function TCJobHotspots.refreshMachines()
-    local wanted = TCJobHotspots.getBreakdownMachines(g_currentMission:getFarmId())
+    local wanted = TCJobHotspots.getSpotPositions(g_currentMission:getFarmId())
     for jobId in pairs(TCJobHotspots.machineHotspotsByJobId) do
         if wanted[jobId] == nil then
             TCJobHotspots.removeMachineHotspot(jobId)
         end
     end
-    for jobId, vehicle in pairs(wanted) do
+    for jobId, position in pairs(wanted) do
         local hotspot = TCJobHotspots.machineHotspotsByJobId[jobId]
         if hotspot == nil then
             hotspot = AbstractFieldMissionHotspot.new()
@@ -114,8 +137,7 @@ function TCJobHotspots.refreshMachines()
             g_currentMission:addMapHotspot(hotspot)
             TCJobHotspots.machineHotspotsByJobId[jobId] = hotspot
         end
-        local x, _, z = getWorldTranslation(vehicle.rootNode)
-        hotspot:setWorldPosition(x, z)
+        hotspot:setWorldPosition(position.x, position.z)
     end
 end
 

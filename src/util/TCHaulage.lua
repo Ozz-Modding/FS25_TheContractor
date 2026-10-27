@@ -119,6 +119,10 @@ end
 -- What a job delivers: the crop on a harvest job, straw on a bale job
 -- (067).
 function TCHaulage.getDeliveryFillType(job)
+    -- 106: the crop that was spilt.
+    if job.spill ~= nil then
+        return g_fillTypeManager:getFillTypeIndexByName(job.spill.fillTypeName)
+    end
     local jobDef = TheContractorJobGeneration.JOB_TYPES[job.jobType]
     local fruitTypeIndex = job:getFruitTypeIndex()
     if jobDef == nil or fruitTypeIndex == nil then
@@ -193,6 +197,10 @@ function TCHaulage.getRequiredLiters(job)
     local jobDef = TheContractorJobGeneration.JOB_TYPES[job.jobType]
     if jobDef == nil then
         return nil
+    end
+    -- 106: a share of the spill, with its own allowance for losses.
+    if job.spill ~= nil then
+        return TheContractorCropSpill.getRequiredLiters(job)
     end
 
     local liters

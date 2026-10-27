@@ -83,7 +83,7 @@ TheContractorFinances.KEEP_SETTLED_PERIODS = 24
 TheContractorFinances.FORECAST_PERIODS = 3
 
 TheContractorFinances.YEAR_STAT_KEYS = { "invoiced", "received", "writtenOff", "wages", "overheads", "claims",
-    "legal", "training", "fines", "insurancePayouts", "goodNews", "disposal", "recovery" }
+    "legal", "training", "fines", "insurancePayouts", "goodNews", "disposal" }
 
 function TheContractorFinances.new()
     local self = {}
@@ -95,7 +95,7 @@ function TheContractorFinances.new()
 
     -- yearStatsByFarm[farmId] = { year, invoiced, received, writtenOff, wages,
     -- overheads, claims, legal, training, fines, insurancePayouts, goodNews,
-    -- disposal, recovery }
+    -- disposal }
     self.yearStatsByFarm = {}
 
     return self
@@ -181,7 +181,7 @@ function TheContractorFinances:getYearStats(farmId)
     if stats == nil or stats.year ~= year then
         return { year = year, invoiced = 0, received = 0, writtenOff = 0, wages = 0,
             overheads = 0, claims = 0, legal = 0, training = 0, fines = 0, insurancePayouts = 0,
-            goodNews = 0, disposal = 0, recovery = 0 }
+            goodNews = 0, disposal = 0 }
     end
     return stats
 end
@@ -247,6 +247,10 @@ function TheContractorFinances:invoiceJob(job)
     end
 
     local amount = job.paymentAmount
+    -- 106: nothing to bill for a job done for nothing.
+    if amount == nil or amount <= 0 then
+        return
+    end
     self:addToYearStats(job.farmId, "invoiced", amount)
 
     if not g_currentMission.TheContractor.Settings:get("lateInvoices") then
@@ -593,11 +597,6 @@ end
 -- Tipping fees for fly-tipped debris taken to a skip (075).
 function TheContractorFinances:recordDisposal(farmId, amount)
     self:addToYearStats(farmId, "disposal", amount)
-end
-
--- Recovery firms' call-outs for a tipped trailer (105).
-function TheContractorFinances:recordRecovery(farmId, amount)
-    self:addToYearStats(farmId, "recovery", amount)
 end
 
 -- Wire serialization ---------------------------------------------------------

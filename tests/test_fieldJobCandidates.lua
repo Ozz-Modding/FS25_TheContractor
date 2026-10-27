@@ -13,6 +13,7 @@ local function setup()
 
     world:load("src/business/Job.lua")
     world:load("src/business/Jobs.lua")
+    world:load("src/business/CropSpill.lua")
     world:load("src/business/JobGeneration.lua")
 
     local wheat = { index = FruitType.WHEAT, name = "WHEAT", getIsCatchCrop = function() return false end }

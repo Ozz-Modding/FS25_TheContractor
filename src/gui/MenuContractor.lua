@@ -3371,6 +3371,10 @@ function MenuContractor:getJobStatusChip(job)
     elseif job:isWaitingForSupplies() and (job.state == TheContractorJob.STATE.ALLOCATED or
             job.state == TheContractorJob.STATE.IN_PROGRESS) then
         return job:getSupplyStatusText(), "warn"
+    elseif job.spill ~= nil and (job.state == TheContractorJob.STATE.ALLOCATED or
+            job.state == TheContractorJob.STATE.IN_PROGRESS) then
+        -- 106: urgent, and what's left to do.
+        return TheContractorCropSpill.getStatusText(job), "bad"
     elseif job:isWorkshop() and (job.state == TheContractorJob.STATE.OFFERED or
             job.state == TheContractorJob.STATE.NEGOTIATING) then
         -- 102: an offer's first to be inspected, then priced.
@@ -5242,9 +5246,8 @@ function MenuContractor:refreshFinanceYearState(farmId, finances)
     self.financesYearOverheads:setText(formatMoney((stats.overheads or 0) + (stats.disposal or 0)))
     -- 053/055: solicitors' fees and H&S fines share the claims row - there's
     -- no room for another.
-    -- 070: as is what insurers paid back. 105: and recovery call-outs.
-    local claimsText = formatMoney((stats.claims or 0) + (stats.legal or 0) + (stats.fines or 0) +
-        (stats.recovery or 0))
+    -- 070: as is what insurers paid back.
+    local claimsText = formatMoney((stats.claims or 0) + (stats.legal or 0) + (stats.fines or 0))
     if (stats.insurancePayouts or 0) > 0 then
         claimsText = string.format(g_i18n:getText("tc_finances_claimsWithPayouts"), claimsText,
             formatMoney(stats.insurancePayouts))

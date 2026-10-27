@@ -106,6 +106,7 @@ source(TheContractor.dir .. "src/business/GoodNews.lua")
 source(TheContractor.dir .. "src/business/JobNews.lua")
 source(TheContractor.dir .. "src/business/RoadAccident.lua")
 source(TheContractor.dir .. "src/business/TippedTrailer.lua")
+source(TheContractor.dir .. "src/business/CropSpill.lua")
 source(TheContractor.dir .. "src/business/SprayDrift.lua")
 source(TheContractor.dir .. "src/business/Poaching.lua")
 source(TheContractor.dir .. "src/business/Injury.lua")
@@ -275,6 +276,9 @@ function TheContractor:loadMap()
     self.JobNews:register(self.RandomEvents)
     self.RoadAccident = TheContractorRoadAccident.new()
     self.RoadAccident:register(self.RandomEvents, self.Inbox)
+    -- 106: the load a tipped trailer spills, and the urgent job to clear it.
+    self.CropSpill = TheContractorCropSpill.new()
+    self.CropSpill:register(self.Inbox)
     -- 105: a hauler tips their trailer on the way back.
     self.TippedTrailer = TheContractorTippedTrailer.new()
     self.TippedTrailer:register(self.RandomEvents, self.Inbox)
@@ -705,6 +709,11 @@ function TheContractor:update(dt)
     -- 105: tipped trailers righted or gone (server).
     if self.TippedTrailer ~= nil then
         self.TippedTrailer:update(dt)
+    end
+
+    -- 106: where spills can be cleared up (every machine).
+    if self.CropSpill ~= nil then
+        self.CropSpill:update(dt)
     end
 
     -- 100: customers' machines arriving and being collected (server).

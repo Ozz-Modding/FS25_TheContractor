@@ -1,13 +1,14 @@
 -- Tipped trailer (105): a job event (074) on harvest & haul jobs (035). As
--- the job completes, the hauler tips their trailer over on the way back to
--- the yard. They get the tractor unhitched (the drawbar's eye swivels, so
--- the tractor stays on its wheels). Both are taken out of the cooldown (023)
--- and left at the scene for the player to turn up to: the trailer laid on
--- its side by an AI road spline (the roads vanilla's helpers drive,
--- g_currentMission.aiSystem's getRoadSplines, as RedTape's salt spreading
--- scheme reads them), somewhere between the job's field and the farm's
--- parking slots, and the tractor on its wheels just ahead of it in the same
--- lane, slewed round a little. The rest of the kit comes home as usual.
+-- the job completes, the hauler tips their trailer over on the last load,
+-- in the field. They get the tractor unhitched (the drawbar's eye swivels,
+-- so the tractor stays on its wheels). Both are taken out of the cooldown
+-- (023) and left at the scene for the player to turn up to: the trailer
+-- laid on its side SPOT_MIN_DISTANCE to SPOT_MAX_DISTANCE from the field's
+-- centre in a random direction, all of it and its spill inside the field,
+-- and the tractor on its wheels just ahead of it, slewed round a little.
+-- The rest of the kit comes home as usual. (105 laid it by a road between
+-- the field and the yard; 106 moved it into the field, since the game won't
+-- keep a heap on tarmac and the spill came out patchy.)
 --
 -- Odds are per job, from the hauler's haulage skill alone (getChance):
 -- CHANCE_AT_MIN_SKILL at 1 down to CHANCE_AT_MAX_SKILL at 10, no cooldown.
@@ -16,19 +17,14 @@
 --
 -- Both machines are damaged (vanilla damage, or an ADS breakdown, as 079's
 -- road accidents do it), the hauler's morale drops and the farm loses some
--- reputation. The inbox message offers:
+-- reputation. 106: its load goes onto the verge (TheContractorCropSpill),
+-- with an urgent job to clear it and deliver it, and the inbox message
+-- tells the story and ends with that job. It's left where it lies for the
+-- player to push back onto its wheels: walk up to it and press the
+-- activate key (TCTippedTrailerActivatable -> TCRightTrailerEvent ->
+-- rightTrailer). 106 dropped the recovery firm 105 offered.
 --
---   recover   a recovery firm rights it and brings it and the tractor
---             back: RECOVERY_COST (1x UK, scaleCost) under tcRecovery, and
---             both go to the parking queue, which parks them (upright)
---   diy       "we'll sort it": it's left where it lies for the player to
---             push back onto its wheels: walk up to it and press the
---             activate key (TCTippedTrailerActivatable -> TCRightTrailerEvent
---             -> rightTrailer). If it's still on its side
---             DIY_REOFFER_PERIODS later, the offer comes again
---
--- The prompt's there from the start, whatever's been answered. While it's
--- on its side the trailer is frozen (setLying: physics won't keep a vehicle
+-- While it's on its side the trailer is frozen (setLying: physics won't keep a vehicle
 -- on its side), and neither it nor the tractor can be allocated
 -- (isAtScene, read by Allocation:isVehicleFree on every machine from the
 -- synced incident). The tractor can be driven: once the trailer's back on
@@ -42,8 +38,9 @@
 -- vehicleUniqueId / vehicleName (the trailer), tractorId / tractorUniqueId
 -- / tractorName (tractorId 0 when it isn't at the scene), the trailer's spot
 -- (x, z, dirX, dirZ, sideX, sideZ), the tractor's (tractorX, tractorZ,
--- tractorRotY), trailerSeverity, tractorSeverity, reputationPenalty,
--- recoveryCost, and later messageId and noticeId.
+-- tractorRotY), trailerSeverity, tractorSeverity, reputationPenalty, and
+-- later spillJobId (106's job, 0 with no spill), messageId (only with no
+-- spill: a spill's message goes with its job) and noticeId.
 
 TheContractorTippedTrailer = {}
 TheContractorTippedTrailer_mt = Class(TheContractorTippedTrailer)
@@ -66,73 +63,39 @@ TheContractorTippedTrailer.REPUTATION_PENALTY_MULTIPLIER = 0.5
 TheContractorTippedTrailer.MIN_REPUTATION_PENALTY = 5
 TheContractorTippedTrailer.MORALE_PENALTY = -5
 
--- A recovery firm's call-out to right a trailer and bring it back, 1x UK.
-TheContractorTippedTrailer.RECOVERY_COST = 750
-
--- Months.
-TheContractorTippedTrailer.DIY_REOFFER_PERIODS = { 0.5, 0.5 }
-
 TheContractorTippedTrailer.CHECK_INTERVAL_MS = 2000
 -- Its up axis at least this far up (cos of about 45 degrees) is upright.
 TheContractorTippedTrailer.UPRIGHT_MIN_Y = 0.7
 
--- Where it can end up: road spline points every SAMPLE_STEP metres, at
--- least MIN_FROM_FIELD from the field's centre and MIN_FROM_YARD from the
--- yard, no further than MAX_FROM_FIELD, and within CORRIDOR of the straight
--- line from the field to the yard (beside it, not beyond either end). With
--- no point in that corridor (or no parking slots to call the yard), the
--- FALLBACK_COUNT points nearest the field. At most MAX_TRIES of them are
--- tested for room.
-TheContractorTippedTrailer.SAMPLE_STEP = 10
-TheContractorTippedTrailer.MIN_FROM_FIELD = 80
-TheContractorTippedTrailer.MIN_FROM_YARD = 80
-TheContractorTippedTrailer.MAX_FROM_FIELD = 1500
-TheContractorTippedTrailer.CORRIDOR = 150
-TheContractorTippedTrailer.FALLBACK_COUNT = 20
-TheContractorTippedTrailer.MAX_TRIES = 30
--- The trailer's wheels this far from the spline (the road's middle), at its
--- edge, with its body lying back across the road: flat tarmac, where a bank
--- on the verge could have the physics push it back onto its wheels.
-TheContractorTippedTrailer.ROAD_EDGE_OFFSET = 3.0
--- Further than this between the spline and the ground is a bridge.
-TheContractorTippedTrailer.MAX_ROAD_HEIGHT_GAP = 1.5
+-- Where it can end up: this far from the field's centre (metres), in a
+-- random direction, at a random heading, with the trailer, the tractor and
+-- the heap's line all inside the field. At most SPOT_TRIES tried.
+TheContractorTippedTrailer.SPOT_MIN_DISTANCE = 10
+TheContractorTippedTrailer.SPOT_MAX_DISTANCE = 20
+TheContractorTippedTrailer.SPOT_TRIES = 30
 -- The ground under it can't rise or fall more than this across its
 -- footprint. It's set down resting on the highest of it, never dropped (a
 -- fall onto one edge rolls it back onto its wheels) and never sunk into the
 -- ground (the physics pushing it out does the same), so this is as far as
 -- it can settle.
 TheContractorTippedTrailer.MAX_GROUND_GAP = 0.3
--- The tractor at the scene: this far ahead of the trailer's front, its
--- side this far in from the road's edge, slewed up to this many degrees
--- either way off the road's line.
+-- The tractor at the scene: this far ahead of the trailer's front, slewed
+-- up to this many degrees either way off its line.
 TheContractorTippedTrailer.TRACTOR_GAP = 2.0
-TheContractorTippedTrailer.TRACTOR_EDGE_MARGIN = 0.3
 TheContractorTippedTrailer.TRACTOR_SLEW_DEGREES = 25
 -- Back on its wheels this soon after being put down is the physics
 -- righting it, not the player: warned about.
 TheContractorTippedTrailer.SELF_RIGHTED_MS = 30000
 
-TheContractorTippedTrailer.ACTION = {
-    RECOVER = "recover",
-    DIY = "diy",
-}
-
+-- tipped: being put down. atScene: down, waiting to be righted.
 TheContractorTippedTrailer.STAGE = {
     TIPPED = "tipped",
-    OFFER = "offer",
-    RECOVER = "recover",
-    DIY = "diy",
+    AT_SCENE = "atScene",
 }
-
-table.insert(FinanceStats.statNames, "tcRecovery")
-FinanceStats.statNameToIndex["tcRecovery"] = #FinanceStats.statNames
 
 function TheContractorTippedTrailer.new()
     local self = {}
     setmetatable(self, TheContractorTippedTrailer_mt)
-
-    MoneyType.TC_RECOVERY = MoneyType.register("tcRecovery", "tc_moneyType_recovery")
-    MoneyType.LAST_ID = MoneyType.LAST_ID + 1
 
     self.checkMs = 0
     -- Server, not saved: incident id -> g_time it was put down, for the
@@ -155,34 +118,28 @@ function TheContractorTippedTrailer:register(randomEvents, inbox)
         canTrigger = function(farmId, job)
             return self:rollTipping(farmId, job, math.random)
         end,
+        -- 106: whether the next missed spill brings a claim.
+        console = {
+            outcomes = { "claim", "noClaim" },
+            setOutcome = function(outcome)
+                g_currentMission.TheContractor.CropSpill:setForcedClaim(outcome == "claim")
+                return string.format("The next missed spill will bring %s", outcome == "claim" and "a claim" or
+                    "no claim")
+            end,
+        },
         stages = {
             { key = STAGE.TIPPED, run = function(incident)
                 return self:onTipped(incident)
             end },
-            { key = STAGE.OFFER, run = function(incident)
-                return self:onOffer(incident)
+            { key = STAGE.AT_SCENE, run = function(incident)
+                return TheContractorRandomEvents.WAIT
             end },
-            { key = STAGE.RECOVER, run = function(incident)
-                return self:onRecover(incident)
-            end },
-            { key = STAGE.DIY, delayPeriods = TheContractorTippedTrailer.DIY_REOFFER_PERIODS,
-                run = function(incident)
-                    return self:onDiyCheck(incident)
-                end },
         },
     })
 
+    -- 106: a spill's message names its job, and goes with it.
     inbox:registerMessageKind(TheContractorTippedTrailer.MESSAGE_KIND, {
-        onAction = function(farmId, message, actionKey)
-            self:onMessageAnswered(message, actionKey)
-        end,
-        getConfirmText = function(message, actionKey)
-            if actionKey ~= TheContractorTippedTrailer.ACTION.RECOVER then
-                return nil
-            end
-            return string.format(g_i18n:getText("tc_tippedTrailer_recoverConfirm"),
-                g_i18n:formatMoney(message.payload.recoveryCost or 0, 0, true, true))
-        end,
+        endsWithJob = true,
         chipKey = "tc_inbox_chipTippedTrailer",
         chipTone = "bad",
     })
@@ -225,7 +182,7 @@ function TheContractorTippedTrailer:getIncidentForVehicle(vehicleId)
     return nil
 end
 
--- On its side by the road, waiting to be righted or recovered.
+-- On its side in the field, waiting to be righted.
 function TheContractorTippedTrailer:isTipped(vehicleId)
     return self:getIncidentForVehicle(vehicleId) ~= nil
 end
@@ -255,129 +212,21 @@ local function getLiveVehicle(vehicleId)
     return vehicle
 end
 
-local function distance(ax, az, bx, bz)
-    local dx, dz = ax - bx, az - bz
-    return math.sqrt(dx * dx + dz * dz)
-end
-
--- From a point to the segment a-b, and how far along it the point lies
--- (0 at a, 1 at b, outside that beyond either end).
-function TheContractorTippedTrailer.distanceToSegment(x, z, ax, az, bx, bz)
-    local abX, abZ = bx - ax, bz - az
-    local lengthSq = abX * abX + abZ * abZ
-    if lengthSq <= 0 then
-        return distance(x, z, ax, az), 0
-    end
-    local along = ((x - ax) * abX + (z - az) * abZ) / lengthSq
-    local t = math.max(0, math.min(1, along))
-    return distance(x, z, ax + t * abX, az + t * abZ), along
-end
-
--- The middle of the farm's parking slots, or nil with none.
-function TheContractorTippedTrailer.getYardPosition(farmId)
-    local slots = TCParking.getSlots(farmId)
-    if #slots == 0 then
-        return nil
-    end
-    local sumX, sumZ, count = 0, 0, 0
-    for _, slot in ipairs(slots) do
-        if slot.rootNode ~= nil then
-            local x, _, z = getWorldTranslation(slot.rootNode)
-            sumX, sumZ, count = sumX + x, sumZ + z, count + 1
-        end
-    end
-    if count == 0 then
-        return nil
-    end
-    return sumX / count, sumZ / count
-end
-
--- Every road spline point within reach of the field, as { x, y, z, dirX,
--- dirZ } with the direction flat and normalised. Server only (vanilla only
--- keeps the splines there).
-function TheContractorTippedTrailer.sampleRoads(fieldX, fieldZ)
-    local samples = {}
-    local aiSystem = g_currentMission.aiSystem
-    if aiSystem == nil or aiSystem.getRoadSplines == nil then
-        return samples
-    end
-    local step = TheContractorTippedTrailer.SAMPLE_STEP
-    local reach = TheContractorTippedTrailer.MAX_FROM_FIELD
-    for spline in pairs(aiSystem:getRoadSplines()) do
-        local length = getSplineLength(spline)
-        if length ~= nil and length > 0 then
-            local count = math.max(1, math.floor(length / step))
-            for i = 0, count do
-                local t = i / count
-                local x, y, z = getSplinePosition(spline, t)
-                if distance(x, z, fieldX, fieldZ) <= reach then
-                    local dirX, _, dirZ = getSplineDirection(spline, t)
-                    local dirLength = math.sqrt(dirX * dirX + dirZ * dirZ)
-                    if dirLength > 0.001 then
-                        table.insert(samples, { x = x, y = y, z = z, dirX = dirX / dirLength, dirZ = dirZ / dirLength })
-                    end
-                end
-            end
-        end
-    end
-    return samples
-end
-
--- The samples worth trying, in the order to try them (see the tunables).
--- yardX nil: no yard, so the nearest to the field. random is for the tests.
-function TheContractorTippedTrailer.getCandidates(samples, fieldX, fieldZ, yardX, yardZ, random)
-    local T = TheContractorTippedTrailer
-    local inReach = {}
-    local onTheWay = {}
-    for _, sample in ipairs(samples) do
-        local fromField = distance(sample.x, sample.z, fieldX, fieldZ)
-        if fromField >= T.MIN_FROM_FIELD and fromField <= T.MAX_FROM_FIELD then
-            sample.fromField = fromField
-            table.insert(inReach, sample)
-            if yardX ~= nil and distance(sample.x, sample.z, yardX, yardZ) >= T.MIN_FROM_YARD then
-                local fromLine, along = T.distanceToSegment(sample.x, sample.z, fieldX, fieldZ, yardX, yardZ)
-                if fromLine <= T.CORRIDOR and along > 0 and along < 1 then
-                    table.insert(onTheWay, sample)
-                end
-            end
-        end
-    end
-
-    local candidates = onTheWay
-    if #candidates == 0 then
-        table.sort(inReach, function(a, b)
-            return a.fromField < b.fromField
-        end)
-        candidates = {}
-        for i = 1, math.min(T.FALLBACK_COUNT, #inReach) do
-            candidates[i] = inReach[i]
-        end
-    end
-
-    for i = #candidates, 2, -1 do
-        local j = math.min(i, math.floor(random() * i) + 1)
-        candidates[i], candidates[j] = candidates[j], candidates[i]
-    end
-    return candidates
-end
-
--- Where the trailer goes for one sample, at the road's edge on side (+1
--- right of the spline's direction, -1 left): its origin (the wheels), the
--- footprint's centre, its facing, and the way its top points (sideX/Z:
--- back toward the road's middle). size is vehicle.size.
-function TheContractorTippedTrailer.getPlacement(sample, side, size)
-    local edgeX, edgeZ = sample.dirZ * side, -sample.dirX * side
-    local sideX, sideZ = -edgeX, -edgeZ
-    local offset = TheContractorTippedTrailer.ROAD_EDGE_OFFSET
+-- Where the trailer goes with its footprint's centre at x, z, facing
+-- heading (radians, as MathUtil.getYRotationFromDirection): its origin (the
+-- wheels, half its height to one side), the footprint's centre, its facing
+-- and the way its top points (sideX/Z). size is vehicle.size.
+function TheContractorTippedTrailer.getPlacement(x, z, heading, size)
+    local dirX, dirZ = math.sin(heading), math.cos(heading)
+    local sideX, sideZ = dirZ, -dirX
     local height = size.height or 3
-    local x, z = sample.x + edgeX * offset, sample.z + edgeZ * offset
     return {
-        x = x,
-        z = z,
-        centreX = x + sideX * height * 0.5,
-        centreZ = z + sideZ * height * 0.5,
-        dirX = sample.dirX,
-        dirZ = sample.dirZ,
+        x = x - sideX * height * 0.5,
+        z = z - sideZ * height * 0.5,
+        centreX = x,
+        centreZ = z,
+        dirX = dirX,
+        dirZ = dirZ,
         sideX = sideX,
         sideZ = sideZ,
     }
@@ -410,14 +259,10 @@ function TheContractorTippedTrailer.getGroundRange(placement, size)
     return minY, maxY
 end
 
--- On flat ground (not a bridge, not a bank) with room for it on its side:
--- trailer height across, its length along, its width up. Engine side,
--- replaced in the tests.
-function TheContractorTippedTrailer.isPlacementClear(placement, sample, size)
-    local terrainY = getTerrainHeightAtWorldPos(g_terrainNode, placement.centreX, 0, placement.centreZ)
-    if math.abs(terrainY - sample.y) > TheContractorTippedTrailer.MAX_ROAD_HEIGHT_GAP then
-        return false
-    end
+-- On flat enough ground with room for it on its side: trailer height
+-- across, its length along, its width up. Engine side, replaced in the
+-- tests.
+function TheContractorTippedTrailer.isPlacementClear(placement, size)
     local minY, maxY = TheContractorTippedTrailer.getGroundRange(placement, size)
     if maxY - minY > TheContractorTippedTrailer.MAX_GROUND_GAP then
         return false
@@ -428,21 +273,19 @@ function TheContractorTippedTrailer.isPlacementClear(placement, sample, size)
 end
 
 -- Where the tractor stands for a trailer placement: just ahead of the
--- trailer's front (its +z, the way it faces), in the same lane with its
--- side TRACTOR_EDGE_MARGIN in from the road's edge, slewed slewRoll (0-1)
--- of the way from -TRACTOR_SLEW_DEGREES to +TRACTOR_SLEW_DEGREES off the
--- road's line. { x, z, rotY }; sizes are vehicle.size.
+-- trailer's front (its +z, the way it faces), in line with it, slewed
+-- slewRoll (0-1) of the way from -TRACTOR_SLEW_DEGREES to
+-- +TRACTOR_SLEW_DEGREES off its line. { x, z, rotY }; sizes are
+-- vehicle.size.
 function TheContractorTippedTrailer.getTractorPlacement(placement, trailerSize, tractorSize, slewRoll)
     local T = TheContractorTippedTrailer
     local ahead = (trailerSize.length or 8) * 0.5 + T.TRACTOR_GAP + (tractorSize.length or 5) * 0.5
-    local inward = (tractorSize.width or 3) * 0.5 + T.TRACTOR_EDGE_MARGIN
-    local height = trailerSize.height or 3
-    -- The trailer's centre is half its height in from the edge, the
-    -- tractor's is inward.
-    local x = placement.centreX + placement.dirX * ahead + placement.sideX * (inward - height * 0.5)
-    local z = placement.centreZ + placement.dirZ * ahead + placement.sideZ * (inward - height * 0.5)
     local slew = math.rad((slewRoll * 2 - 1) * T.TRACTOR_SLEW_DEGREES)
-    return { x = x, z = z, rotY = MathUtil.getYRotationFromDirection(placement.dirX, placement.dirZ) + slew }
+    return {
+        x = placement.centreX + placement.dirX * ahead,
+        z = placement.centreZ + placement.dirZ * ahead,
+        rotY = MathUtil.getYRotationFromDirection(placement.dirX, placement.dirZ) + slew,
+    }
 end
 
 -- Room for the tractor on its wheels there. Engine side, replaced in the
@@ -452,23 +295,56 @@ function TheContractorTippedTrailer.isTractorPlacementClear(tractorPlacement, si
         size.length or 5, size.height)
 end
 
--- A placement for the trailer on the way from the field to the yard, and
--- one for the tractor with it if there's a tractor to leave there, or nil.
-function TheContractorTippedTrailer.findPlacement(trailer, tractor, farmId, fieldX, fieldZ, random)
+-- The field's outline, as { { x, z }, ... }. Engine side, replaced in the
+-- tests.
+function TheContractorTippedTrailer.getFieldBoundary(field)
+    return TCJoyriderRuts.getFieldBoundary(field)
+end
+
+-- Whether every point is inside the field (a field without an outline
+-- takes anything).
+function TheContractorTippedTrailer.isInsideField(points, boundary)
+    if #boundary == 0 then
+        return true
+    end
+    for _, point in ipairs(points) do
+        if not TCJoyriderRuts.isPointInside(point.x, point.z, boundary) then
+            return false
+        end
+    end
+    return true
+end
+
+-- The trailer lying there, and the heap 106 tips beside it, inside the
+-- field.
+function TheContractorTippedTrailer.isSpotInsideField(placement, size, boundary)
+    local points = TheContractorTippedTrailer.getFootprintPoints(placement, size)
+    local plan = TheContractorCropSpill.planSpill(placement, size)
+    table.insert(points, { x = plan.heapStartX, z = plan.heapStartZ })
+    table.insert(points, { x = plan.heapEndX, z = plan.heapEndZ })
+    return TheContractorTippedTrailer.isInsideField(points, boundary)
+end
+
+-- A placement for the trailer in the field, and one for the tractor with
+-- it if there's a tractor to leave there, or nil. random is for the tests.
+function TheContractorTippedTrailer.findPlacement(trailer, tractor, field, random)
     local T = TheContractorTippedTrailer
     local size = trailer.size or {}
     local tractorSize = tractor ~= nil and tractor.size or {}
-    local yardX, yardZ = T.getYardPosition(farmId)
-    local candidates = T.getCandidates(T.sampleRoads(fieldX, fieldZ), fieldX, fieldZ, yardX, yardZ, random)
-    for i = 1, math.min(T.MAX_TRIES, #candidates) do
-        local sample = candidates[i]
-        local placement = T.getPlacement(sample, random() < 0.5 and 1 or -1, size)
-        if T.isPlacementClear(placement, sample, size) then
+    local centreX, centreZ = field:getCenterOfFieldWorldPosition()
+    local boundary = T.getFieldBoundary(field)
+    for _ = 1, T.SPOT_TRIES do
+        local angle = random() * 2 * math.pi
+        local distance = T.SPOT_MIN_DISTANCE + random() * (T.SPOT_MAX_DISTANCE - T.SPOT_MIN_DISTANCE)
+        local placement = T.getPlacement(centreX + math.sin(angle) * distance, centreZ + math.cos(angle) * distance,
+            random() * 2 * math.pi, size)
+        if T.isSpotInsideField(placement, size, boundary) and T.isPlacementClear(placement, size) then
             if tractor == nil then
                 return placement, nil
             end
             local tractorPlacement = T.getTractorPlacement(placement, size, tractorSize, random())
-            if T.isTractorPlacementClear(tractorPlacement, tractorSize) then
+            if T.isInsideField({ tractorPlacement }, boundary) and
+                    T.isTractorPlacementClear(tractorPlacement, tractorSize) then
                 return placement, tractorPlacement
             end
         end
@@ -498,7 +374,7 @@ end
 
 -- The incident's starting data, or nil: no hired hauler, no trailer, a
 -- trailer that isn't ours to tip (courtesy, stolen, already over), off on
--- another job, or no road to put it on. random is for the tests.
+-- another job, or no room for it in the field. random is for the tests.
 function TheContractorTippedTrailer:rollTipping(farmId, job, random)
     local tc = g_currentMission.TheContractor
     if job.haulerWorkerId == nil then
@@ -534,11 +410,9 @@ function TheContractorTippedTrailer:rollTipping(farmId, job, random)
         tractor, tractorId = nil, 0
     end
 
-    local fieldX, fieldZ = field:getCenterOfFieldWorldPosition()
-    local placement, tractorPlacement = TheContractorTippedTrailer.findPlacement(trailer, tractor, farmId, fieldX,
-        fieldZ, random)
+    local placement, tractorPlacement = TheContractorTippedTrailer.findPlacement(trailer, tractor, field, random)
     if placement == nil then
-        TCLog.info("TheContractor: farm %d job %d: no road near field %d to tip a trailer on", farmId, job.id,
+        TCLog.info("TheContractor: farm %d job %d: no room in field %d to tip a trailer over", farmId, job.id,
             job.fieldId)
         return nil
     end
@@ -575,8 +449,8 @@ end
 
 -- Laying it down (server) ------------------------------------------------------------
 
--- Facing along the road, rolled a quarter turn so its up axis points
--- (sideX, sideZ) back across the road. Engine side, replaced in the tests.
+-- Facing (dirX, dirZ), rolled a quarter turn so its up axis points
+-- (sideX, sideZ). Engine side, replaced in the tests.
 function TheContractorTippedTrailer.getTippedRotation(dirX, dirZ, sideX, sideZ)
     local node = createTransformGroup("tcTippedTrailer")
     setDirection(node, dirX, 0, dirZ, 0, 1, 0)
@@ -680,8 +554,8 @@ function TheContractorTippedTrailer.isUpright(vehicle)
     return TheContractorTippedTrailer.getUpY(vehicle) >= TheContractorTippedTrailer.UPRIGHT_MIN_Y
 end
 
--- Pushed back onto its wheels: stood up where its body lay, facing along
--- the road, just above the ground (as the parking queue puts a vehicle
+-- Pushed back onto its wheels: stood up where its body lay, facing the way
+-- it did, just above the ground (as the parking queue puts a vehicle
 -- down). Already unfrozen (cleanUp). Its position replicates by itself.
 -- Engine side, replaced in the tests.
 function TheContractorTippedTrailer.placeUpright(trailer, data)
@@ -734,7 +608,7 @@ function TheContractorTippedTrailer:onTipped(incident)
     end
 
     -- Both out of the cooldown (and the parking queue, from the console),
-    -- the trailer off the tractor and down on the road, the tractor just
+    -- the trailer off the tractor and down in the field, the tractor just
     -- ahead of it. The rest of the job's kit comes home as usual.
     local tractor = getLiveVehicle(data.tractorId)
     local sceneIds = { data.vehicleId }
@@ -769,83 +643,50 @@ function TheContractorTippedTrailer:onTipped(incident)
     data.noticeId = tc.Notices:publish(farmId, string.format(g_i18n:getText("tc_tippedTrailer_notice"),
         data.vehicleName, data.fieldId))
 
-    TCLog.info("TheContractor: farm %d incident %d: %s tipped the %s (%.2f) on the way back from field %d at %.0f, %.0f; %s damaged (%.2f), -%d reputation",
+    -- 106: its load beside it, once both are down (the heap keeps out
+    -- from under them).
+    local sourceJob = tc.Jobs:getJob(farmId, data.jobId)
+    local spillJob = tc.CropSpill:spill(farmId, sourceJob, trailer, data, incident.id)
+    data.spillJobId = spillJob ~= nil and spillJob.id or 0
+    self:postMessage(incident, spillJob)
+
+    TCLog.info("TheContractor: farm %d incident %d: %s tipped the %s (%.2f) on the way back from field %d at %.0f, %.0f; %s damaged (%.2f), -%d reputation, spill job %d",
         farmId, incident.id, data.workerName, data.vehicleName, data.trailerSeverity, data.fieldId, data.x, data.z,
-        data.tractorName, data.tractorSeverity, data.reputationPenalty)
+        data.tractorName, data.tractorSeverity, data.reputationPenalty, data.spillJobId)
     return nil
 end
 
--- The choice: a recovery firm or the farm itself. Stays up until answered
--- or the trailer's righted.
-function TheContractorTippedTrailer:onOffer(incident)
+-- The story, with no choice to make. With a spill it says what's to be
+-- done and goes with the job; without one it goes once the trailer's
+-- righted (cleanUp).
+function TheContractorTippedTrailer:postMessage(incident, spillJob)
     local tc = g_currentMission.TheContractor
     local data = incident.data
-    data.recoveryCost = tc.Settings:scaleCost(TheContractorTippedTrailer.RECOVERY_COST)
-
-    local bodyKey = "tc_tippedTrailer_body"
-    local args = { data.fieldId, data.workerName, data.vehicleName, data.tractorName, "$money_" .. data.recoveryCost }
-    if data.tractorName == "" then
-        bodyKey = "tc_tippedTrailer_bodyNoTractor"
-        args = { data.fieldId, data.workerName, data.vehicleName, "$money_" .. data.recoveryCost }
-    end
-    data.messageId = tc.Inbox:postMessage(incident.farmId, TheContractorTippedTrailer.MESSAGE_KIND,
-        "tc_tippedTrailer_title", bodyKey, args,
-        {
-            { key = TheContractorTippedTrailer.ACTION.RECOVER, textKey = "tc_tippedTrailer_recoverButton" },
-            { key = TheContractorTippedTrailer.ACTION.DIY, textKey = "tc_tippedTrailer_diyButton" },
-        },
-        { incidentId = incident.id, recoveryCost = data.recoveryCost })
-    return TheContractorRandomEvents.WAIT
-end
-
--- The message's answer. The inbox takes the message down after this.
-function TheContractorTippedTrailer:onMessageAnswered(message, actionKey)
-    local incident = self.randomEvents:getIncident(message.payload.incidentId)
-    if incident == nil or incident.stage ~= TheContractorTippedTrailer.STAGE.OFFER then
-        return
-    end
-    incident.data.messageId = nil
-
-    local STAGE = TheContractorTippedTrailer.STAGE
-    self.randomEvents:goToStage(incident,
-        actionKey == TheContractorTippedTrailer.ACTION.RECOVER and STAGE.RECOVER or STAGE.DIY)
-end
-
--- Paid for, and off to the parking queue, which parks it upright.
-function TheContractorTippedTrailer:onRecover(incident)
-    local tc = g_currentMission.TheContractor
-    local data = incident.data
-    local farmId = incident.farmId
-    self:cleanUp(incident)
-
-    local trailer = getLiveVehicle(data.vehicleId)
-    if trailer == nil then
-        return TheContractorRandomEvents.DONE
+    local hasTractor = data.tractorName ~= ""
+    local args = { data.fieldId, data.workerName, data.vehicleName }
+    if hasTractor then
+        table.insert(args, data.tractorName)
     end
 
-    local cost = data.recoveryCost or tc.Settings:scaleCost(TheContractorTippedTrailer.RECOVERY_COST)
-    if cost > 0 then
-        g_currentMission:addMoney(-cost, farmId, MoneyType.TC_RECOVERY, true, true)
-        tc.Finances:recordRecovery(farmId, cost)
+    local bodyKey
+    local payload = { incidentId = incident.id }
+    if spillJob ~= nil then
+        bodyKey = hasTractor and "tc_tippedTrailer_body" or "tc_tippedTrailer_bodyNoTractor"
+        local fillTypeIndex = g_fillTypeManager:getFillTypeIndexByName(spillJob.spill.fillTypeName)
+        table.insert(args, "$volume_" .. math.floor(spillJob.spill.liters))
+        table.insert(args, g_fillTypeManager:getFillTypeTitleByIndex(fillTypeIndex) or spillJob.spill.fillTypeName)
+        table.insert(args, "$volume_" .. math.floor(spillJob.requiredLiters))
+        table.insert(args, spillJob.deliveryStationName or "?")
+        payload.jobId = spillJob.id
+    else
+        bodyKey = hasTractor and "tc_tippedTrailer_bodyNoSpill" or "tc_tippedTrailer_bodyNoTractorNoSpill"
     end
-    local returning = { data.vehicleId }
-    if getLiveVehicle(data.tractorId) ~= nil then
-        table.insert(returning, data.tractorId)
-    end
-    tc.Parking:returnVehicles(farmId, returning)
 
-    TCLog.info("TheContractor: farm %d incident %d: recovery firm called out for the %s (%.0f), %d machine(s) back to the yard",
-        farmId, incident.id, data.vehicleName, cost, #returning)
-    return TheContractorRandomEvents.DONE
-end
-
--- Left to the farm. Still on its side by now: the offer again.
-function TheContractorTippedTrailer:onDiyCheck(incident)
-    if getLiveVehicle(incident.data.vehicleId) == nil then
-        self:cleanUp(incident)
-        return TheContractorRandomEvents.DONE
+    local messageId = tc.Inbox:postMessage(incident.farmId, TheContractorTippedTrailer.MESSAGE_KIND,
+        "tc_tippedTrailer_title", bodyKey, args, nil, payload)
+    if spillJob == nil then
+        data.messageId = messageId
     end
-    return TheContractorTippedTrailer.STAGE.OFFER
 end
 
 -- The player pushed it back onto its wheels (TCRightTrailerEvent, from
