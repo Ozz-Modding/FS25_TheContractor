@@ -517,7 +517,7 @@ Makes a random event happen to your farm now, ignoring the odds, the Random even
 - `poaching [worker]`: the rival goes after that worker (a `<worker>` as for `tcWorker`: an id or the start of a name), however long they've been with you. Without one it picks as the real event does: someone with at least 3 months' service, nearly always one of your most valuable. Not someone who's leaving or already has an offer.
 - `fieldBreakdown [player|mobile]`: a customer's machine breaks down on an NPC's field, fixable on the spot with ADS's tool box (`player`) or only with a mobile workshop (`mobile`). Without one it picks as the real event does: even odds, or mostly `player` if you've a tool box and no mobile workshop. The machine is placed like a repair zone arrival (within a couple of seconds) and the offer, due today, goes up in your Inbox.
 
-The events that happen as a job ends (`kettle`, `paidEarly`, `stepsUp`, `roadAccident`, `tippedTrailer`, `sprayDrift`) use your latest completed job they can act on, whatever its quality score: one with hired workers for `kettle`, one whose invoice isn't due yet for `paidEarly` (so none with the late invoices setting off), one with a worker rated 5 or under for their part of it for `stepsUp`, and one a hired worker drove whose machines are still yours for `roadAccident` (its machines are damaged wherever they are now), a harvest & haul job with a hired hauler whose trailer is still yours, not stolen, not already on its side and not out on another job for `tippedTrailer` (the trailer is taken from wherever it is now, even a parking slot, and laid on its side by a road between that job's field and your parking slots, or near the field if there's no road that way, with the job's haul tractor left beside it if that's free too; it needs a road near the field), and a hired worker's herbicide job with no botch claim on its way for `sprayDrift` (judged on the wind right now, not on the day). Use `tcCompany outcome` first to decide how an event comes out.
+The events that happen as a job ends (`kettle`, `paidEarly`, `stepsUp`, `roadAccident`, `tippedTrailer`, `sprayDrift`) use your latest completed job they can act on, whatever its quality score: one with hired workers for `kettle`, one whose invoice isn't due yet for `paidEarly` (so none with the late invoices setting off), one with a worker rated 5 or under for their part of it for `stepsUp`, and one a hired worker drove whose machines are still yours for `roadAccident` (its machines are damaged wherever they are now), a harvest & haul job with a hired hauler whose trailer is still yours, not stolen, not already on its side and not out on another job for `tippedTrailer` (the trailer is taken from wherever it is now, even a parking slot, and laid on its side in that job's field, 10-20 m from its middle, with the job's haul tractor left beside it if that's free too; the field needs room for it. Its load is spilt beside it and the urgent delivery job (106) starts at once, due by the end of tomorrow, if that job's crop can lie on the ground and has somewhere to go), and a hired worker's herbicide job with no botch claim on its way for `sprayDrift` (judged on the wind right now, not on the day). Use `tcCompany outcome` first to decide how an event comes out.
 
 ```
 tcCompany event theft
@@ -552,6 +552,7 @@ Decides how the next event of that type comes out, instead of the usual roll. It
 | `theft` | `recovered`, `lost` | The next police report on a stolen vehicle: `recovered` brings it back (damaged, through the parking queue), `lost` writes it off and removes it (or, if the farm had machinery insurance on the day of the theft, starts the insurance claim, and the vehicle goes when it settles). Normally a 35% chance of recovery, 95% for a vehicle with FS25_AdvancedDamageSystem's anti-theft system fitted. |
 | `roadAccident` | `ours`, `theirs` | Who's to blame for the next road accident: `ours` (a claim through public liability, a reputation hit and a morale knock for the driver), `theirs` (the other driver's insurer pays an estimated repair cost a month or two later). Normally rolled from the driver's tractor rating and the state of the machines. |
 | `sprayDrift` | `upheld`, `cleared` | The findings on the next spray drift complaint: `upheld` (the complainant's claim through public liability, a reputation hit and a morale knock for the operator), `cleared` (nothing else happens). Normally rolled from the operator's crop care and the wind. |
+| `tippedTrailer` | `claim`, `noClaim` | Whether the next spilt crop (106) that isn't cleared up in time brings a claim for the lost crop and the farmer's clear-up, through public liability. Normally a 50% chance. Force the miss with `tcJob state <jobId> missed`. |
 | `poaching` | `stays`, `leaves` | What the next poached worker you do nothing about decides (matching the offer always keeps them): `stays` on the same pay, or `leaves`, handing in a month's notice. Normally they stay with a 5-25% chance, from their morale and their pay against what they expect. |
 
 ```
@@ -563,6 +564,9 @@ tcCompany event roadAccident
 
 tcCompany outcome poaching leaves
 tcCompany event poaching amy
+
+tcCompany outcome tippedTrailer claim
+tcCompany event tippedTrailer
 ```
 
 ### `tcCompany office`

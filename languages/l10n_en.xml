@@ -197,6 +197,7 @@
 		<text name="tc_jobType_baleWrap" text="Wrap Bales"/>
 		<text name="tc_jobType_baleHaul" text="Bale &amp; Deliver"/>
 		<text name="tc_jobType_strawDelivery" text="Deliver Straw"/>
+		<text name="tc_jobType_spillRecovery" text="Clear Spilt Crop"/>
 		<text name="tc_jobType_flyTipping" text="Clear Fly-tipping"/>
 		<text name="tc_jobType_fertilize" text="Fertilize"/>
 		<text name="tc_jobType_herbicide" text="Spray Herbicide"/>
@@ -296,6 +297,7 @@
 		<text name="tc_unallocate_dueTomorrow" text="This job is due tomorrow: a new crew may not finish it in time."/>
 		<text name="tc_unallocate_problemGone" text="That job no longer exists."/>
 		<text name="tc_unallocate_problemState" text="Only an allocated or in-progress job can be unallocated."/>
+		<text name="tc_unallocate_problemSpill" text="A spill is yours to clear up: it can't be unallocated."/>
 		<text name="tc_logbook_earlierCrew" text="Earlier crew"/>
 		<text name="tc_job_missedNotification" text="Job failed: %s on Field %s wasn't done by its deadline."/>
 		<text name="tc_dispatch_noVehicleReady" text="None of the allocated equipment can be driven by the worker (is it free, and can it do this job?)."/>
@@ -324,8 +326,6 @@
 		<text name="finance_tcGoodNews" text="Refunds and rebates"/>
 		<text name="tc_moneyType_wasteDisposal" text="Tipping fees"/>
 		<text name="finance_tcWasteDisposal" text="Tipping fees"/>
-		<text name="tc_moneyType_recovery" text="Vehicle recovery"/>
-		<text name="finance_tcRecovery" text="Vehicle recovery"/>
 		<text name="tc_staff_viewRoster" text="Roster"/>
 		<text name="tc_staff_viewCandidates" text="Candidates"/>
 		<text name="tc_staff_columnName" text="Name"/>
@@ -956,14 +956,18 @@
 		<text name="tc_roadAccident_paidTitle" text="Repair paid: %s"/>
 		<text name="tc_roadAccident_paidBody" text="The other driver's insurer has finally paid for the repair to your %s: %s."/>
 		<text name="tc_tippedTrailer_eventName" text="Tipped trailer"/>
-		<text name="tc_tippedTrailer_title" text="Trailer on its side after Field %s"/>
-		<text name="tc_tippedTrailer_body" text="On the way back from Field %s, %s took a bend too fast and tipped the %s over. Nobody was hurt and they got the %s unhitched, but both are damaged and they've been left by the road where it happened (they're on your map). Word gets around: your reputation has taken a knock. A recovery firm can right the trailer and bring both back to the yard for %s. Or go out there yourself: push the trailer back onto its wheels, hitch it up to the tractor and drive them home."/>
-		<text name="tc_tippedTrailer_bodyNoTractor" text="On the way back from Field %s, %s took a bend too fast and tipped the %s over. Nobody was hurt, but the trailer is damaged and lying on its side by the road where it happened (it's on your map). Word gets around: your reputation has taken a knock. A recovery firm can right it and bring it back to the yard for %s. Or go out there yourself: push the trailer back onto its wheels and bring it home with a tractor that can pull it."/>
-		<text name="tc_tippedTrailer_recoverButton" text="Call recovery"/>
-		<text name="tc_tippedTrailer_diyButton" text="We'll sort it"/>
-		<text name="tc_tippedTrailer_recoverConfirm" text="Call out a recovery firm to right the trailer and bring everything back to the yard for %s?"/>
-		<text name="tc_tippedTrailer_notice" text="The %s is on its side by the road after Field %s"/>
+		<text name="tc_tippedTrailer_title" text="Trailer on its side in Field %s"/>
+		<text name="tc_tippedTrailer_body" text="On the last load in Field %s, %s turned too sharply with a full trailer and tipped the %s over. Nobody was hurt and they got the %s unhitched, but both are damaged and they've been left in the field where it happened (they're on your map). Word gets around: your reputation has taken a knock. Worse, %s of the customer's %s went all over their field. That's yours to put right, and it's urgent: get %s of it to %s by the end of tomorrow. Pick it up, and make up any shortfall from your own stores if you have to. You won't be paid for it. Leave it, and your name is mud with the customer, and they may well claim. The trailer needs pushing back onto its wheels before you can hitch it up and drive it home."/>
+		<text name="tc_tippedTrailer_bodyNoTractor" text="On the last load in Field %s, %s turned too sharply with a full trailer and tipped the %s over. Nobody was hurt, but the trailer is damaged and lying on its side in the field where it happened (it's on your map). Word gets around: your reputation has taken a knock. Worse, %s of the customer's %s went all over their field. That's yours to put right, and it's urgent: get %s of it to %s by the end of tomorrow. Pick it up, and make up any shortfall from your own stores if you have to. You won't be paid for it. Leave it, and your name is mud with the customer, and they may well claim. The trailer needs pushing back onto its wheels before a tractor that can pull it can bring it home."/>
+		<text name="tc_tippedTrailer_bodyNoSpill" text="On the last load in Field %s, %s turned too sharply and tipped the %s over. Nobody was hurt and they got the %s unhitched, but both are damaged and they've been left in the field where it happened (they're on your map). Word gets around: your reputation has taken a knock. Go out there yourself: push the trailer back onto its wheels, hitch it up to the tractor and drive them home."/>
+		<text name="tc_tippedTrailer_bodyNoTractorNoSpill" text="On the last load in Field %s, %s turned too sharply and tipped the %s over. Nobody was hurt, but the trailer is damaged and lying on its side in the field where it happened (it's on your map). Word gets around: your reputation has taken a knock. Go out there yourself: push the trailer back onto its wheels and bring it home with a tractor that can pull it."/>
+		<text name="tc_tippedTrailer_notice" text="The %s is on its side in Field %s"/>
 		<text name="tc_tippedTrailer_activate" text="Push the trailer back onto its wheels"/>
+		<text name="tc_spill_notification" text="Urgent: %s spilt in Field %s. Deliver %s of it to %s by the end of tomorrow."/>
+		<text name="tc_spill_chipDelivering" text="Urgent: %d%% delivered"/>
+		<text name="tc_spill_claimTitle" text="Spill claim: Field %s"/>
+		<text name="tc_spill_claimBodyInsured" text="The crop spilt in Field %s was never cleared up. The farmer has had to clear it, and with the crop they lost they're claiming %s. Your public liability insurance covers it, less the excess: %s has been charged. The claim goes on your record and will raise your premium for the next 3 years."/>
+		<text name="tc_spill_claimBodyUninsured" text="The crop spilt in Field %s was never cleared up. The farmer has had to clear it, and with the crop they lost they're claiming %s. You don't have public liability insurance, so the whole %s has been charged."/>
 		<text name="tc_sprayDrift_eventName" text="Spray drift complaint"/>
 		<text name="tc_sprayDrift_complaintTitle" text="Spray drift complaint: Field %s"/>
 		<text name="tc_sprayDrift_neighbour_complaintBody" text="A neighbour of Field %s says the herbicide %s put on it drifted over the hedge and scorched their garden and paddock. We're looking into it: expect the findings in a week or two."/>
@@ -1069,6 +1073,7 @@
 		<text name="tc_claims_cause_cropDamage" text="went too close and tore out part of the crop"/>
 		<text name="tc_claims_cause_roadAccident" text="caused a road accident on the way back"/>
 		<text name="tc_claims_cause_sprayDrift" text="let the spray drift onto a neighbour's land"/>
+		<text name="tc_claims_cause_cropSpill" text="left a tipped trailer's load in the field"/>
 		<text name="tc_overhead_tradeAssociation" text="Agricultural Contractors' Association"/>
 		<text name="tc_overhead_tradeAssociation_desc" text="Trade association membership, %s a year. Members earn 5%% more reputation per job, get 25%% off certification courses and cheaper legal cover."/>
 		<text name="tc_overhead_legalExpenses" text="Legal expenses insurance"/>

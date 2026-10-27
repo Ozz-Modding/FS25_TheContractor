@@ -187,3 +187,22 @@ test("refreshed once a second, and reset clears every marker", function()
     _, count = world:markedFields()
     assertEquals(count, 0, "after reset")
 end)
+
+test("106: a spill's job is marked where the spill lies, not on its field", function()
+    local world = setup()
+    local spillJob = world:addJob({ fieldId = 2, state = TheContractorJob.STATE.ALLOCATED })
+    spillJob.spill = { x = 120, z = -40 }
+    world:addJob({ fieldId = 3 })
+
+    local markedFields = TCJobHotspots.getMarkedFieldIds(1)
+    assertTrue(markedFields[3], "an ordinary job's field")
+    assertEquals(markedFields[2], nil, "not the spill's field")
+
+    local positions = TCJobHotspots.getSpotPositions(1)
+    assertEquals(positions[spillJob.id].x, 120)
+    assertEquals(positions[spillJob.id].z, -40)
+    assertEquals(TCJobHotspots.getSpotPositions(2)[spillJob.id], nil, "only the local farm's")
+
+    spillJob.state = TheContractorJob.STATE.COMPLETED
+    assertEquals(TCJobHotspots.getSpotPositions(1)[spillJob.id], nil, "gone once it's done")
+end)

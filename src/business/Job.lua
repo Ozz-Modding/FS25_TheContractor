@@ -290,6 +290,11 @@ function TheContractorJob.new(id, farmId, jobType, fieldId, requiredSkillLevel, 
     -- server-only: vehicleUniqueId, zoneUniqueId.
     self.workshop = nil
 
+    -- 106: a spilt crop's urgent clear-up job's spill (TheContractorCropSpill:
+    -- what lies where, and what a miss costs), nil for every other job.
+    -- Saved and sent to clients.
+    self.spill = nil
+
     return self
 end
 

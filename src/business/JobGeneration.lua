@@ -84,6 +84,11 @@ TheContractorJobGeneration_mt = Class(TheContractorJobGeneration)
 --   rewardPerItem    075: paid per piece rather than per hectare (fly-tipping,
 --                    see estimatePrice's itemCount), with reputationPerItem
 --                    in place of reputationPerHa.
+--   spill            106: a tipped trailer's spilt crop to clear off the road
+--                    and deliver (TheContractorCropSpill), on the harvest
+--                    job's field. Also deliveryOnly, and:
+--   noReward         106: no reputation for doing it (or pay: its price is 0)
+--   noJobEvents      106: no job events (074) roll on it as it completes
 --   workAreaTypes    076: the WorkAreaType names the job's field can be
 --                    worked with (TCFieldAccess), copied from the vanilla
 --                    mission's own workAreaTypes, so a cultivate job lets
@@ -92,9 +97,10 @@ TheContractorJobGeneration_mt = Class(TheContractorJobGeneration)
 --                    the WorkAreaType values, since those are looked up
 --                    when the map loads. None at all for a job with no
 --                    ground work (bale wrap, deliveries, fly-tipping).
--- A type left out of JOB_TYPE_KEYS (flyTipping) is never generated, shown
--- by the availability snapshot or created by tcJob: only its random event
--- (075) makes one, with createJobOnField.
+-- A type left out of JOB_TYPE_KEYS (flyTipping, spillRecovery) is never
+-- generated, shown by the availability snapshot or created by tcJob: only
+-- its random event makes one (075 with createJobOnField, 106 with
+-- createJob).
 -- reputationPerHa is the completion reputation reward per hectare for a
 -- 100% job (see TheContractorJobs:calculateReputationReward, 080): plow anchored at ~10 for a
 -- 1.07 ha (2.65 acre) field, the rest scaled from it by the same ratios as
@@ -151,6 +157,10 @@ TheContractorJobGeneration.JOB_TYPES = {
     -- a plow job (REPUTATION_PER_REWARD).
     flyTipping = { serverMeasured = true, playerOnly = true, noEquipment = true, rewardPerItem = 300,
         reputationPerItem = 1 },
+    -- 106: a tipped trailer's load off the road and to the customer's
+    -- selling point, by the end of tomorrow, for nothing.
+    spillRecovery = { serverMeasured = true, playerOnly = true, noEquipment = true, deliveryOnly = true,
+        spill = true, noReward = true, noJobEvents = true, skill = "haulage" },
     -- 100: a customer's machine in a repair zone, for a repair or a
     -- service with FS25_AdvancedDamageSystem (TheContractorRepairContracts).
     -- No field (fieldId 0), crew or kit of ours: priced from ADS's quote,
