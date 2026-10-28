@@ -22,7 +22,8 @@
 -- 101: a field breakdown (a customer's machine to fix on the spot) gets the
 -- same circle, smaller, on the machine itself while it's on offer or taken
 -- on, following it if it's moved. One per job. 106: a spilt crop's job gets
--- one on the spill, not its field.
+-- one on the spill, not its field, and 107's fallen trees one on each
+-- tree's road until that road's clear.
 
 TCJobHotspots = {}
 
@@ -62,9 +63,11 @@ function TCJobHotspots.getMarkedFieldIds(farmId)
     local lastDayOfMonth = TCJobHotspots.getLastDayOfMonth()
     for _, job in ipairs(tc.Jobs:getAllJobs(farmId)) do
         -- 100: a workshop job (field 0) has no field to mark. 106: a spill's
-        -- is marked where it lies (getSpotPositions).
+        -- is marked where it lies (getSpotPositions), as is 107's fallen
+        -- tree (offField).
+        local jobDef = TheContractorJobGeneration ~= nil and TheContractorJobGeneration.JOB_TYPES[job.jobType] or nil
         if job.fieldId ~= nil and job.fieldId ~= 0 and job.spill == nil and
-                TCJobHotspots.isMarked(job, lastDayOfMonth) then
+                not (jobDef ~= nil and jobDef.offField) and TCJobHotspots.isMarked(job, lastDayOfMonth) then
             fieldIds[job.fieldId] = true
         end
     end
@@ -104,6 +107,8 @@ end
 
 -- jobId -> { x, z } for each circle that isn't a field's: 101's breakdowns
 -- (on the machine) and 106's spills (on the spill, while it's taken on).
+-- 107's fallen trees have one per tree still on its road, keyed
+-- "<jobId>_<n>".
 function TCJobHotspots.getSpotPositions(farmId)
     local positions = {}
     for jobId, vehicle in pairs(TCJobHotspots.getBreakdownMachines(farmId)) do
@@ -117,6 +122,11 @@ function TCJobHotspots.getSpotPositions(farmId)
     for _, job in ipairs(tc.Jobs:getAllJobs(farmId)) do
         if job.spill ~= nil and isTakenOn(job.state) then
             positions[job.id] = { x = job.spill.x, z = job.spill.z }
+        elseif isTakenOn(job.state) and TheContractorFallenTree ~= nil then
+            -- 107: on each fallen tree.
+            for _, spot in ipairs(TheContractorFallenTree.getJobSpots(job)) do
+                positions[job.id .. "_" .. spot.index] = spot
+            end
         end
     end
     return positions

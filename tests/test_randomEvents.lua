@@ -576,3 +576,131 @@ test("forcing an event ignores its time of day", function()
     assertTrue(randomEvents:triggerEvent(1, "dummy") ~= nil, "opened")
     assertEquals(#log, 1, "now")
 end)
+
+-- After bad weather (107) -----------------------------------------------------------------
+
+-- A dummy event rolled after bad weather: chancePerStorm, found 07:00-08:59.
+local function registerStorm(randomEvents, chance, cooldownPeriods)
+    return registerDummy(randomEvents, {
+        ratePerPeriod = nil,
+        chancePerStorm = chance or 1,
+        triggerHours = { 7, 9 },
+        cooldownPeriods = cooldownPeriods or 0,
+    })
+end
+
+local function setWeather(weatherType)
+    WeatherType = { SUN = 1, PARTIALLY_CLOUDY = 2, CLOUDY = 3, RAIN = 4, SNOW = 5, HAIL = 6, TWISTER = 7, THUNDER = 8 }
+    local weather = g_currentMission.environment.weather or { forecastItems = { {} } }
+    weather.type = WeatherType[weatherType]
+    function weather:getCurrentWeatherType() return self.type end
+    g_currentMission.environment.weather = weather
+end
+
+test("anything but sun or cloud is bad weather", function()
+    setup()
+    setWeather("SUN")
+    for name, isBad in pairs({ SUN = false, PARTIALLY_CLOUDY = false, CLOUDY = false, RAIN = true, SNOW = true,
+        HAIL = true, TWISTER = true, THUNDER = true }) do
+        assertEquals(TheContractorRandomEvents.isBadWeatherType(WeatherType[name]), isBad, name)
+    end
+    assertEquals(TheContractorRandomEvents.isBadWeatherType(nil), false)
+end)
+
+test("rolled once as a spell of bad weather ends, not while it lasts or in fine weather", function()
+    local _, randomEvents = setup(5)
+    registerStorm(randomEvents)
+    g_currentMission.environment.currentHour = 20
+
+    setWeather("SUN")
+    randomEvents:checkWeather()
+    randomEvents:checkWeather()
+    assertEquals(#randomEvents.pendingTriggers, 0, "fine weather")
+
+    setWeather("RAIN")
+    randomEvents:checkWeather()
+    setWeather("THUNDER")
+    randomEvents:checkWeather()
+    assertEquals(#randomEvents.pendingTriggers, 0, "still going")
+
+    setWeather("CLOUDY")
+    randomEvents:checkWeather()
+    assertEquals(#randomEvents.pendingTriggers, 1, "it's over")
+    randomEvents:checkWeather()
+    assertEquals(#randomEvents.pendingTriggers, 1, "only once")
+
+    -- A load in clear weather: nothing to end.
+    local loaded = TheContractorRandomEvents.new()
+    registerStorm(loaded)
+    loaded:checkWeather()
+    assertEquals(#loaded.pendingTriggers, 0)
+
+    -- No weather to read: nothing.
+    g_currentMission.environment.weather = nil
+    randomEvents.wasBadWeather = true
+    randomEvents:checkWeather()
+    assertEquals(randomEvents.wasBadWeather, true, "left as it was")
+end)
+
+test("found the next hour if it clears in the morning, else the next morning", function()
+    setup()
+    local hours = { 7, 9 }
+    local day, hour = TheContractorRandomEvents.getStormFoundAt(10, 3, hours, 0)
+    assertEquals(day, 10, "before dawn: this morning")
+    assertEquals(hour, 7)
+    day, hour = TheContractorRandomEvents.getStormFoundAt(10, 10, hours, 0)
+    assertEquals(day, 10, "mid-morning: the next hour")
+    assertEquals(hour, 11)
+    day, hour = TheContractorRandomEvents.getStormFoundAt(10, 13, hours, 0)
+    assertEquals(hour, 14)
+    day, hour = TheContractorRandomEvents.getStormFoundAt(10, 14, hours, 0.99)
+    assertEquals(day, 11, "afternoon: tomorrow morning")
+    assertEquals(hour, 8)
+    day, hour = TheContractorRandomEvents.getStormFoundAt(10, 23, nil, 0)
+    assertEquals(day, 11, "without a window, STORM_FOUND_HOURS")
+    assertEquals(hour, 7)
+end)
+
+test("the chance per spell follows the setting and the cooldown, and a held one isn't rolled again", function()
+    local world, randomEvents = setup(5)
+    local log = registerStorm(randomEvents, 0.5, 2)
+    g_currentMission.environment.currentHour = 20
+
+    randomEvents:onBadWeatherEnded(function() return 0.6 end)
+    assertEquals(#randomEvents.pendingTriggers, 0, "missed at 50%")
+    g_currentMission.TheContractor.Settings:set("randomEvents", 0.5)
+    randomEvents:onBadWeatherEnded(function() return 0.3 end)
+    assertEquals(#randomEvents.pendingTriggers, 0, "rare: 25%")
+    randomEvents:onBadWeatherEnded(function() return 0.2 end)
+    assertEquals(#randomEvents.pendingTriggers, 1)
+    randomEvents:onBadWeatherEnded(function() return 0 end)
+    assertEquals(#randomEvents.pendingTriggers, 1, "already held")
+
+    -- It happens the next morning, and then cools down.
+    world:nextDay()
+    g_currentMission.environment.currentHour = 9
+    randomEvents:firePendingTriggers()
+    assertEquals(#log, 1)
+    randomEvents:onBadWeatherEnded(function() return 0 end)
+    assertEquals(#randomEvents.pendingTriggers, 0, "cooling down")
+
+    g_currentMission.TheContractor.Settings:set("randomEvents", 0)
+    randomEvents.lastPeriodByFarm = {}
+    randomEvents:onBadWeatherEnded(function() return 0 end)
+    assertEquals(#randomEvents.pendingTriggers, 0, "off")
+end)
+
+test("an event after bad weather isn't rolled daily, and tcCompany events says how it comes", function()
+    local _, randomEvents = setup(5)
+    local log = registerStorm(randomEvents, 0.15)
+    for _ = 1, 50 do
+        randomEvents:rollNewEvents()
+    end
+    assertEquals(#log + #randomEvents.pendingTriggers, 0, "never from the daily roll")
+
+    TCConsole.reset()
+    TheContractorRandomEvents.registerConsoleCommands()
+    g_farmManager.getFarmByUserId = function() return { farmId = 1 } end
+    local text = TCConsole.dispatch(TCConsole.groups.company, { "events" })
+    assertTrue(string.find(text, "15.0% after each spell of bad weather", 1, true) ~= nil, text)
+end)

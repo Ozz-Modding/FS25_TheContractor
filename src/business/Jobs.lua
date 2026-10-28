@@ -313,8 +313,9 @@ end
 
 -- Validates the transition against the job's state machine, applies
 -- locally, then broadcasts to other clients. Only the server may drive
--- transitions.
-function TheContractorJobs:transitionJobState(farmId, jobId, newState)
+-- transitions. playerName (107): who accepted it, for a job that's
+-- allocated to its players as it's accepted (allocateOnAccept).
+function TheContractorJobs:transitionJobState(farmId, jobId, newState, playerName)
     if not g_currentMission:getIsServer() then
         return false
     end
@@ -336,7 +337,7 @@ function TheContractorJobs:transitionJobState(farmId, jobId, newState)
     if newState == TheContractorJob.STATE.DECLINED then
         self:onJobDeclined(job)
     elseif newState == TheContractorJob.STATE.ACCEPTED then
-        self:onJobAccepted(job)
+        self:onJobAccepted(job, playerName)
     end
 
     return true
@@ -356,8 +357,16 @@ end
 -- Server: an offer's just been accepted. 100: a customer's machine that's
 -- already been put right counts at once (ADS only says when it changes).
 -- 102: ADS lets the work start (proposeQuote has already; this covers
--- tcJob state, and costs nothing twice).
-function TheContractorJobs:onJobAccepted(job)
+-- tcJob state, and costs nothing twice). 107: a job that's allocated to
+-- the farm's players as it's taken on (allocateOnAccept) is, under the
+-- name of whoever accepted it (nil: "A player").
+function TheContractorJobs:onJobAccepted(job, playerName)
+    local jobDef = TheContractorJobGeneration.JOB_TYPES[job.jobType]
+    if jobDef ~= nil and jobDef.allocateOnAccept and
+            not g_currentMission.TheContractor.Allocation:allocateJob(job.farmId, job.id, {}, {}, {}, nil, playerName) then
+        TCLog.warning("TheContractor: farm %d job %d (%s) couldn't be allocated to the farm's players as it was accepted",
+            job.farmId, job.id, job.jobType)
+    end
     if job.workshop ~= nil then
         local vehicle = TheContractorRepairContracts.getVehicle(job)
         if vehicle ~= nil then
@@ -1026,6 +1035,10 @@ function TheContractorJobs.getBaseReputationReward(job)
     -- 075: a job paid per piece earns per piece too.
     if jobDef ~= nil and jobDef.reputationPerItem ~= nil then
         return jobDef.reputationPerItem * (job.workTotal or 0)
+    end
+    -- 107: a job with no area of its own earns a fixed amount.
+    if jobDef ~= nil and jobDef.reputationReward ~= nil then
+        return jobDef.reputationReward
     end
     local field = g_fieldManager:getFieldById(job.fieldId)
     local areaHa = field ~= nil and field:getAreaHa() or 1

@@ -2655,9 +2655,10 @@ function MenuContractor:getInboxEquipmentRows(job, missingFree, haulageMissingFr
 
     -- 067: a straw delivery needs nothing in particular - whatever the
     -- player moves bales with. One unchecked row says so. 075: fly-tipping
-    -- is carried by hand to a skip.
+    -- is carried by hand to a skip. 107: a job type can name its own
+    -- (equipmentNeed: a fallen tree's chainsaw).
     if jobDef.noEquipment then
-        local key = jobDef.rewardPerItem ~= nil and "disposalSkip" or "baleTransport"
+        local key = jobDef.equipmentNeed or (jobDef.rewardPerItem ~= nil and "disposalSkip" or "baleTransport")
         table.insert(rows, { key = key, isHaulage = false, isUnchecked = true })
         return rows
     end

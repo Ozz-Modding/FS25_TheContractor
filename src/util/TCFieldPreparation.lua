@@ -381,8 +381,9 @@ function TCFieldPreparation.prepareFieldForJob(job)
 
     -- 075: a fly-tipping job is the pile already lying there, nothing to
     -- do to the field (and its workTotal is the pile's size, set at
-    -- creation). 106: a spill lies on the road, not the field.
-    if jobDef.rewardPerItem ~= nil or jobDef.spill then
+    -- creation). 106: a spill lies on the road, not the field. 107: an
+    -- offField job's field only says where it is.
+    if jobDef.rewardPerItem ~= nil or jobDef.spill or jobDef.offField then
         return true
     end
 

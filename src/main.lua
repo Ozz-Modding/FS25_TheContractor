@@ -110,6 +110,7 @@ source(TheContractor.dir .. "src/business/CropSpill.lua")
 source(TheContractor.dir .. "src/business/SprayDrift.lua")
 source(TheContractor.dir .. "src/business/Poaching.lua")
 source(TheContractor.dir .. "src/business/Injury.lua")
+source(TheContractor.dir .. "src/business/FallenTree.lua")
 source(TheContractor.dir .. "src/business/CourtesyVehicle.lua")
 source(TheContractor.dir .. "src/business/RepairContracts.lua")
 source(TheContractor.dir .. "src/business/FieldBreakdowns.lua")
@@ -289,6 +290,9 @@ function TheContractor:loadMap()
     -- 104: a worker hurt at work, off sick through Staff.
     self.Injury = TheContractorInjury.new()
     self.Injury:register(self.RandomEvents, self.Inbox)
+    -- 107: a tree down across a road after bad weather.
+    self.FallenTree = TheContractorFallenTree.new()
+    self.FallenTree:register(self.RandomEvents, self.Inbox)
     -- 100: customers' machines in repair zones (ADS).
     self.RepairContracts = TheContractorRepairContracts.new()
     self.RepairContracts:register(self.Inbox)
@@ -709,6 +713,11 @@ function TheContractor:update(dt)
     -- 105: tipped trailers righted or gone (server).
     if self.TippedTrailer ~= nil then
         self.TippedTrailer:update(dt)
+    end
+
+    -- 107: fallen tree sites (every machine), cuts and clearing (server).
+    if self.FallenTree ~= nil then
+        self.FallenTree:update(dt)
     end
 
     -- 106: where spills can be cleared up (every machine).
