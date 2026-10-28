@@ -34,7 +34,7 @@
 		<text name="tc_toolTip_jobPayRate" text="Scales what new contract offers pay. 100% is half of base-game contract pay. Jobs already offered or accepted keep their price. Business costs (insurance, memberships, training, claims and fines) scale with it; staff pay doesn't."/>
 		<text name="tc_header_inbox" text="Inbox"/>
 		<text name="tc_header_calendar" text="Calendar"/>
-		<text name="tc_header_staff" text="Staff"/>
+		<text name="tc_header_staff" text="People"/>
 		<text name="tc_header_overview" text="Overview"/>
 		<text name="tc_header_finances" text="Finances"/>
 		<text name="tc_header_logbook" text="Logbook"/>
@@ -61,6 +61,7 @@
 		<text name="tc_detail_deliverTo" text="Deliver to"/>
 		<text name="tc_detail_supplies" text="Supplies"/>
 		<text name="tc_detail_messageType" text="Type"/>
+		<text name="tc_detail_from" text="From"/>
 		<text name="tc_detail_received" text="Received"/>
 		<text name="tc_detail_replyBy" text="Reply by"/>
 		<text name="tc_inbox_equipmentHeading" text="Equipment needed"/>
@@ -68,7 +69,7 @@
 		<text name="tc_inbox_skillValue" text="%s %d"/>
 		<text name="tc_inbox_skillNone" text="N/A"/>
 		<text name="tc_inbox_crewOne" text="1 worker, or yourself"/>
-		<text name="tc_inbox_crewHaul" text="2 workers (one harvesting, one hauling), or harvest and haul it all yourself"/>
+		<text name="tc_inbox_crewHaul" text="2 workers or do it yourself"/>
 		<text name="tc_inbox_crewPlayerOnly" text="Yourself only - workers can't do this job"/>
 		<text name="tc_inbox_suppliesInStock" text="In stock"/>
 		<text name="tc_inbox_suppliesNone" text="None"/>
@@ -280,6 +281,7 @@
 		<text name="tc_jobDetails_sectionHaulage" text="Haulage"/>
 		<text name="tc_jobDetails_job" text="Job"/>
 		<text name="tc_jobDetails_field" text="Field"/>
+		<text name="tc_jobDetails_customer" text="Customer"/>
 		<text name="tc_jobDetails_due" text="Due"/>
 		<text name="tc_jobDetails_price" text="Price"/>
 		<text name="tc_jobDetails_status" text="Status"/>
@@ -331,6 +333,44 @@
 		<text name="finance_tcWasteDisposal" text="Tipping fees"/>
 		<text name="tc_staff_viewRoster" text="Roster"/>
 		<text name="tc_staff_viewCandidates" text="Candidates"/>
+		<text name="tc_staff_viewOthers" text="Others"/>
+		<text name="tc_people_columnLand" text="Land"/>
+		<text name="tc_people_columnFields" text="Fields"/>
+		<text name="tc_people_columnYard" text="Yard"/>
+		<text name="tc_people_editButton" text="Edit"/>
+		<text name="tc_people_yes" text="Yes"/>
+		<text name="tc_people_no" text="No"/>
+		<text name="tc_people_empty" text="Nobody here yet: the farmers and the local official arrive once the map has loaded."/>
+		<text name="tc_people_detailRole" text="Role"/>
+		<text name="tc_people_roleFarmer" text="Farmer"/>
+		<text name="tc_people_roleOfficial" text="Local official"/>
+		<text name="tc_customer_official" text="%s (local official)"/>
+		<text name="tc_inbox_customerUnknown" text="The farmer"/>
+		<text name="tc_people_detailLand" text="Land"/>
+		<text name="tc_people_landNone" text="None"/>
+		<text name="tc_people_landOne" text="%s on 1 field"/>
+		<text name="tc_people_landMany" text="%s on %d fields"/>
+		<text name="tc_people_detailYard" text="Yard"/>
+		<text name="tc_people_yardOn" text="On farmland %d"/>
+		<text name="tc_people_yardOff" text="Off the map"/>
+		<text name="tc_people_detailJobs" text="Jobs done"/>
+		<text name="tc_people_jobsMissed" text="%d (%d missed)"/>
+		<text name="tc_people_detailPaid" text="Paid"/>
+		<text name="tc_people_paidOwed" text="%s (%s still owed)"/>
+		<text name="tc_people_detailLastJob" text="Last job"/>
+		<text name="tc_people_lastJob" text="%s, %s"/>
+		<text name="tc_people_lastJobNone" text="None yet"/>
+		<text name="tc_people_aboutHeading" text="About"/>
+		<text name="tc_people_about_farmer" text="A local farmer. Work on their land comes from them, and they pay for it."/>
+		<text name="tc_people_about_official" text="The local official. Work that belongs to no farmer, such as clearing a fallen tree, comes from them."/>
+		<text name="tc_people_noteNoLand" text="They have no land at the moment, so no work comes from them."/>
+		<text name="tc_people_detailRelationship" text="Relationship"/>
+		<text name="tc_people_noteFallenOut" text="They've fallen out with you, so they offer you no work for now. It mends a little each month."/>
+		<text name="tc_relationship_excellent" text="Excellent"/>
+		<text name="tc_relationship_good" text="Good"/>
+		<text name="tc_relationship_neutral" text="Neutral"/>
+		<text name="tc_relationship_poor" text="Poor"/>
+		<text name="tc_relationship_fallenOut" text="Fallen out"/>
 		<text name="tc_staff_columnName" text="Name"/>
 		<text name="tc_staff_columnWorkSpeed" text="Speed"/>
 		<text name="tc_staff_columnBestSkills" text="Best skill"/>
@@ -909,7 +949,7 @@
 		<text name="tc_joyriders_ownTitle" text="Joyriders on Field %s"/>
 		<text name="tc_joyriders_ownBody" text="Joyriders have been driving round your grass on Field %s and torn it up. It'll need plowing and sowing again."/>
 		<text name="tc_joyriders_offerTitle" text="Joyriders on Field %s"/>
-		<text name="tc_joyriders_offerBody" text="Joyriders have been driving round the grass on Field %s and torn it up. The farmer wants it plowed so it can be sown again, and has offered you the job."/>
+		<text name="tc_joyriders_offerBody" text="Joyriders have been driving round the grass on Field %s and torn it up. %s wants it plowed so it can be sown again, and has offered you the job."/>
 		<text name="tc_joyriders_sowTitle" text="Sow Field %s with grass"/>
 		<text name="tc_dieselTheft_eventName" text="Diesel theft"/>
 		<text name="tc_dieselTheft_tankTitle" text="Diesel tank drained"/>
@@ -1023,10 +1063,10 @@
 		<text name="tc_injury_scenario_hitching" text="trapped a hand between the drawbar and the hitch while hooking up an implement"/>
 		<text name="tc_injury_scenario_cab" text="missed the bottom step climbing down from a cab and twisted an ankle"/>
 		<text name="tc_injury_scenario_lifting" text="strained their back moving equipment about"/>
-		<text name="tc_joyriders_sowBody" text="The farmer was pleased with the plowing on Field %s and has offered you the job of sowing it back to grass."/>
+		<text name="tc_joyriders_sowBody" text="The plowing on Field %s went down well. %s has offered you the job of sowing it back to grass."/>
 		<text name="tc_flyTipping_eventName" text="Fly-tipping"/>
 		<text name="tc_flyTipping_offerTitle" text="Fly-tipping on Field %s"/>
-		<text name="tc_flyTipping_offerBody" text="Someone has dumped a load of junk just inside the gate of Field %s, %s pieces in all. The farmer wants it cleared and has offered you the job. Carry each piece to a disposal skip (from the Contractor tab of the construction menu) and drop it there."/>
+		<text name="tc_flyTipping_offerBody" text="Someone has dumped a load of junk just inside the gate of Field %s, %s pieces in all. %s wants it cleared and has offered you the job. Carry each piece to a disposal skip (from the Contractor tab of the construction menu) and drop it there."/>
 		<text name="tc_overheads_priceLevel" text="%s cover: %s"/>
 		<text name="tc_overheads_levelSwitching" text="%s (%s cover from renewal)"/>
 		<text name="tc_overheads_priceFrom" text="From %s a year paid annually, or %s a month"/>
@@ -1226,9 +1266,11 @@
 		<text name="tc_editWorker_genderHint" text="Follows the body picked in the wardrobe."/>
 		<text name="tc_editWorker_save" text="Save"/>
 		<text name="tc_editWorker_wardrobe" text="Wardrobe"/>
-		<text name="tc_editWorker_lookRefused" text="That look can't be used for a worker, so their look hasn't changed."/>
+		<text name="tc_editWorker_lookRefused" text="That look can't be used here, so their look hasn't changed."/>
+		<text name="tc_editPerson_titleFarmer" text="Edit farmer"/>
+		<text name="tc_editPerson_titleOfficial" text="Edit local official"/>
 		<text name="tc_editWorker_rename" text="Rename"/>
-		<text name="tc_editWorker_renamePrompt" text="Enter a new name for this worker"/>
+		<text name="tc_editWorker_renamePrompt" text="Enter a new name"/>
 		<text name="tc_editWorker_invalidName" text="A name must be between 1 and %d characters."/>
 		<text name="tc_logbook_viewJobs" text="Jobs"/>
 		<text name="tc_logbook_viewVehicles" text="Vehicles"/>

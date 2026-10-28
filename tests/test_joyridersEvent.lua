@@ -106,6 +106,9 @@ local function setup()
     world:load("src/business/JobGeneration.lua")
     world:load("src/util/TCFieldPreparation.lua")
     world:load("src/business/Joyriders.lua")
+    -- For its text rendering only (getCustomerNamedArgs, 112); the inbox
+    -- itself is faked below.
+    world:load("src/business/Inbox.lua")
 
     TCRandomEventIncidentEvent = {
         new = function(incident, isClosed)
@@ -162,10 +165,19 @@ local function setup()
         registerMessageKind = function(_, kind, definition)
             world.kind = { kind = kind, definition = definition }
         end,
+        getKind = function(_, kind)
+            return world.kind ~= nil and world.kind.kind == kind and world.kind.definition or nil
+        end,
+        -- No farmers here (110), so the offers name nobody.
+        getMessageCustomer = function()
+            return nil
+        end,
         postMessage = function(_, farmId, kind, titleKey, bodyKey, args, actions, payload)
             -- Rendered as the client would, so a broken text fails here.
-            local title = string.format(g_i18n:getText(titleKey), unpack(args))
-            local body = string.format(g_i18n:getText(bodyKey), unpack(args))
+            local message = { farmId = farmId, kind = kind, titleKey = titleKey, bodyKey = bodyKey, args = args,
+                payload = payload }
+            local title = TheContractorInbox.getTitle(message)
+            local body = TheContractorInbox.getBody(message)
             table.insert(world.messages, { farmId = farmId, kind = kind, titleKey = titleKey, title = title,
                 body = body, payload = payload })
             return #world.messages

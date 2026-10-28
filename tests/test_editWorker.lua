@@ -167,7 +167,7 @@ test("a worker on a standing spot reloads their model but stays put", function()
     local worker = addWorker(staff, 1, 7)
     local deleted = false
     local spot = { key = "3|0" }
-    TCIdleStaff.figures[7] = { worker = { id = 7, stale = true }, spot = spot, isReady = true, isVisible = true,
+    TCIdleStaff.figures[7] = { person = { id = 7, stale = true }, spot = spot, isReady = true, isVisible = true,
         graphics = { delete = function() deleted = true end } }
     TCIdleStaff.occupied[spot.key] = 7
     TCIdleStaff.noStyle[7] = true
@@ -180,7 +180,7 @@ test("a worker on a standing spot reloads their model but stays put", function()
     assertTrue(deleted, "old model freed")
     assertEquals(figure.graphics, nil, "loads again next update")
     assertEquals(figure.isReady, false)
-    assertEquals(figure.worker, worker, "with the edited worker")
+    assertEquals(figure.person, worker, "with the edited worker")
     assertEquals(TCIdleStaff.noStyle[7], nil, "new look gets a try")
 end)
 

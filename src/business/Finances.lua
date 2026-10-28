@@ -29,6 +29,10 @@
 -- shorter delays and lower bad-debt and late-payer chances for the
 -- invoices issued while they're employed.
 --
+-- 113: the customer's pay habit (TheContractorFarmers.PAY_HABITS, hidden
+-- from the player) scales those two chances, so some farmers tend to pay
+-- late. Pursuing an invoice costs the customer's relationship.
+--
 -- With the lateInvoices setting off, invoiceJob pays on the spot (the
 -- pre-049 behaviour) and no invoice is kept. Invoices already issued still
 -- run their course.
@@ -270,8 +274,10 @@ function TheContractorFinances:invoiceJob(job)
         math.random(0, daysPerPeriod - 1))
     local dueDay = today + delayDays
 
-    local isBadDebt = math.random() < administrator:getBadDebtChance(job.farmId)
-    local isLate = not isBadDebt and math.random() < administrator:getLatePayerChance(job.farmId)
+    local habit = g_currentMission.TheContractor.Farmers:getPayHabit(job.customerId)
+    local isBadDebt = math.random() < administrator:getBadDebtChance(job.farmId) * habit.badDebtMultiplier
+    local isLate = not isBadDebt and
+        math.random() < administrator:getLatePayerChance(job.farmId) * habit.latePayerMultiplier
     local paymentDay = nil
     if isLate then
         paymentDay = dueDay + math.random(TheContractorFinances.LATE_MIN_PERIODS * daysPerPeriod,
@@ -300,8 +306,9 @@ function TheContractorFinances:invoiceJob(job)
         g_server:broadcastEvent(TCInvoiceIssuedEvent.new(invoice))
     end
 
-    TCLog.info("TheContractor: farm %d invoice %d for job %d: %.0f due day %d (%s)", invoice.farmId, invoice.id,
-        invoice.jobId, amount, dueDay, isBadDebt and "bad debt" or (isLate and ("late, pays day " .. paymentDay) or "on time"))
+    TCLog.info("TheContractor: farm %d invoice %d for job %d: %.0f due day %d (%s, a %s payer)", invoice.farmId,
+        invoice.id, invoice.jobId, amount, dueDay,
+        isBadDebt and "bad debt" or (isLate and ("late, pays day " .. paymentDay) or "on time"), habit.key)
 end
 
 function TheContractorFinances:applyInvoiceIssued(invoice)
@@ -445,6 +452,8 @@ function TheContractorFinances:requestPursuit(farmId, invoiceId)
     invoice.pursuitResolveDay = today + math.random(TheContractorFinances.PURSUIT_MIN_PERIODS * environment.daysPerPeriod,
         TheContractorFinances.PURSUIT_MAX_PERIODS * environment.daysPerPeriod)
     self:setInvoiceStatus(invoice, TheContractorFinances.STATUS.PURSUING)
+    -- 113: the customer won't thank you for the solicitor's letter.
+    tc.Relationships:onInvoicePursued(farmId, tc.Jobs:getJob(farmId, invoice.jobId))
 
     TCLog.info("TheContractor: farm %d pursuing invoice %d (%s, fee %.0f), resolves day %d", farmId, invoice.id,
         fee == 0 and "legal cover" or "solicitor", fee, invoice.pursuitResolveDay)

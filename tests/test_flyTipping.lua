@@ -161,6 +161,7 @@ local function setup()
     local tc = g_currentMission.TheContractor
     tc.Settings = TheContractorSettings.new()
     tc.Company = { companyNames = { [1] = "Test Contracting" } }
+    world:addRelationships()
     tc.Reputation = {
         getStanding = function() return 0.5 end,
         getReputationTier = function() return {} end,
@@ -179,15 +180,16 @@ local function setup()
     end
     tc.JobGeneration = TheContractorJobGeneration.new()
 
-    -- The real inbox; world.messages records each post's text.
+    -- The real inbox; world.messages records each post's text, rendered as
+    -- the client would.
     world.messages = {}
     tc.Inbox = TheContractorInbox.new()
     local postMessage = tc.Inbox.postMessage
     tc.Inbox.postMessage = function(self, farmId, kind, titleKey, bodyKey, args, actions, payload, expiresInDays)
-        local title = string.format(g_i18n:getText(titleKey), unpack(args))
-        local body = string.format(g_i18n:getText(bodyKey), unpack(args))
-        table.insert(world.messages, { farmId = farmId, kind = kind, title = title, body = body,
-            payload = payload })
+        local message = { farmId = farmId, kind = kind, titleKey = titleKey, bodyKey = bodyKey, args = args,
+            payload = payload }
+        table.insert(world.messages, { farmId = farmId, kind = kind, title = TheContractorInbox.getTitle(message),
+            body = TheContractorInbox.getBody(message), payload = payload })
         return postMessage(self, farmId, kind, titleKey, bodyKey, args, actions, payload, expiresInDays)
     end
 

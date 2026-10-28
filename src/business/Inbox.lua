@@ -153,6 +153,39 @@ function TheContractorInbox.getBody(message)
     return formatText(message.bodyKey, getArgs(message))
 end
 
+-- 112: the job an endsWithJob message offers, on any machine, or nil.
+function TheContractorInbox:getMessageJob(message)
+    local jobId = self:getMessageJobId(message.kind, message.payload)
+    local tc = g_currentMission.TheContractor
+    if jobId == nil or tc.Jobs == nil then
+        return nil
+    end
+    return tc.Jobs:getJob(message.farmId, jobId)
+end
+
+-- 112: who an offer is from (its job's customer, 110), or nil.
+function TheContractorInbox:getMessageCustomer(message)
+    local job = self:getMessageJob(message)
+    return job ~= nil and job:getCustomer() or nil
+end
+
+-- 112: a kind's getArgs for offer texts that name the customer: for a body
+-- in namedBodyKeys, the message's args with the customer's name as it is
+-- now on the end (so a rename shows, and older saved messages get it too).
+-- The name always starts a sentence there, hence the fallback's capital.
+function TheContractorInbox.getCustomerNamedArgs(message, namedBodyKeys)
+    if not namedBodyKeys[message.bodyKey] then
+        return message.args
+    end
+    local args = {}
+    for i, arg in ipairs(message.args) do
+        args[i] = arg
+    end
+    local customer = g_currentMission.TheContractor.Inbox:getMessageCustomer(message)
+    table.insert(args, customer ~= nil and customer.name or g_i18n:getText("tc_inbox_customerUnknown"))
+    return args
+end
+
 -- The type chip's label and tone; unregistered kinds get the default.
 function TheContractorInbox:getChip(message)
     local definition = self.kinds[message.kind] or {}

@@ -50,6 +50,7 @@ source(TheContractor.dir .. "src/util/TCNames.lua")
 source(TheContractor.dir .. "src/util/TCAINotifications.lua")
 source(TheContractor.dir .. "src/util/TCAIRestart.lua")
 source(TheContractor.dir .. "src/util/TCIdleStaff.lua")
+source(TheContractor.dir .. "src/util/TCYardFarmers.lua")
 source(TheContractor.dir .. "src/util/TCJoyriderRuts.lua")
 source(TheContractor.dir .. "src/util/TCDebris.lua")
 source(TheContractor.dir .. "src/util/TCJobHotspots.lua")
@@ -60,7 +61,7 @@ source(TheContractor.dir .. "src/gui/TCSettingsMenu.lua")
 source(TheContractor.dir .. "src/gui/TCAdvertisingDialog.lua")
 source(TheContractor.dir .. "src/gui/TCDriverPickerDialog.lua")
 source(TheContractor.dir .. "src/gui/TCWardrobe.lua")
-source(TheContractor.dir .. "src/gui/TCEditWorkerDialog.lua")
+source(TheContractor.dir .. "src/gui/TCEditPersonDialog.lua")
 source(TheContractor.dir .. "src/gui/TCParkingSlotDialog.lua")
 source(TheContractor.dir .. "src/gui/TCJobDetailsDialog.lua")
 source(TheContractor.dir .. "src/gui/TCRepairQuoteDialog.lua")
@@ -114,6 +115,10 @@ source(TheContractor.dir .. "src/business/FallenTree.lua")
 source(TheContractor.dir .. "src/business/CourtesyVehicle.lua")
 source(TheContractor.dir .. "src/business/RepairContracts.lua")
 source(TheContractor.dir .. "src/business/FieldBreakdowns.lua")
+source(TheContractor.dir .. "src/business/Yards.lua")
+source(TheContractor.dir .. "src/business/FarmerSplit.lua")
+source(TheContractor.dir .. "src/business/Farmers.lua")
+source(TheContractor.dir .. "src/business/Relationships.lua")
 source(TheContractor.dir .. "src/events/TCInitialClientStateEvent.lua")
 source(TheContractor.dir .. "src/events/TCSettingsEvent.lua")
 source(TheContractor.dir .. "src/events/TCCreateCompanyEvent.lua")
@@ -196,6 +201,12 @@ source(TheContractor.dir .. "src/events/TCParkingSlotFilterEvent.lua")
 source(TheContractor.dir .. "src/events/TCRepairZoneFilterEvent.lua")
 source(TheContractor.dir .. "src/events/TCRepairQuoteEvent.lua")
 source(TheContractor.dir .. "src/events/TCRandomEventIncidentEvent.lua")
+source(TheContractor.dir .. "src/events/TCYardOverrideEvent.lua")
+source(TheContractor.dir .. "src/events/TCYardSpotsEvent.lua")
+source(TheContractor.dir .. "src/events/TCFarmersEvent.lua")
+source(TheContractor.dir .. "src/events/TCFarmerLandEvent.lua")
+source(TheContractor.dir .. "src/events/TCEditPersonEvent.lua")
+source(TheContractor.dir .. "src/events/TCRelationshipChangedEvent.lua")
 
 -- The top-level Contractor page itself stays always-visible (see Company.lua
 -- and MenuContractor's Overview tab): "Create Company" has to live somewhere
@@ -299,6 +310,12 @@ function TheContractor:loadMap()
     -- 101: customers' machines broken down in the field (ADS), through 100.
     self.FieldBreakdowns = TheContractorFieldBreakdowns.new()
     self.FieldBreakdowns:register(self.RandomEvents)
+    -- 108: the map's farm yards, for the farmers (109, 110).
+    self.Yards = TheContractorYards.new()
+    -- 110: the farmers and the local official, made from 109's split.
+    self.Farmers = TheContractorFarmers.new()
+    -- 113: each farm's relationship with each of them.
+    self.Relationships = TheContractorRelationships.new()
     self.InboxHUD = TCInboxHUD.new()
 
     -- Module-level caches outlive a savegame; start each load clean.
@@ -309,6 +326,7 @@ function TheContractor:loadMap()
     TCFieldPreparation.reset()
     TCJobSupplies.reset()
     TCIdleStaff.reset()
+    TCYardFarmers.reset()
     TCJobHotspots.reset()
     TheContractorRepairContracts.clearCache()
 
@@ -334,7 +352,7 @@ function TheContractor:loadMap()
     g_gui:loadProfiles(TheContractor.dir .. "src/gui/guiProfiles.xml")
     TCAdvertisingDialog.register()
     TCDriverPickerDialog.register()
-    TCEditWorkerDialog.register()
+    TCEditPersonDialog.register()
     -- 086: parking slot filters, set from a prompt standing in the slot.
     TCParkingSlotDialog.register()
     -- 093: the Calendar's Job details.
@@ -385,6 +403,10 @@ function TheContractor:loadMap()
     self.Logbook:startDailyTick()
     self.RandomEvents:startDailyTick()
     self.RepairContracts:startDailyTick()
+    -- 110: land changing hands (server).
+    self.Farmers:startListening()
+    -- 113: relationships drift back towards neutral (server).
+    self.Relationships:startPeriodTick()
 
     -- Console commands: each subsystem registers its own (see TCConsole).
     TCConsole.reset()
@@ -410,6 +432,10 @@ function TheContractor:loadMap()
     TCIdleStaff.registerConsoleCommands()
     TCDebris.registerConsoleCommands()
     TheContractorRepairContracts.registerConsoleCommands()
+    TheContractorYards.registerConsoleCommands()
+    -- 110: tcCompany farmers, with 109's preview.
+    TheContractorFarmers.registerConsoleCommands()
+    TheContractorRelationships.registerConsoleCommands()
     TCConsole.install()
 
     TCLog.info("TheContractor: loadMap")
@@ -464,6 +490,9 @@ function TheContractor:loadFromXMLFile()
     self.MachineryInsurance:loadFromXMLFile(xmlFile)
     self.GoodNews:loadFromXMLFile(xmlFile)
     self.RepairContracts:loadFromXMLFile(xmlFile)
+    self.Yards:loadFromXMLFile(xmlFile)
+    self.Farmers:loadFromXMLFile(xmlFile)
+    self.Relationships:loadFromXMLFile(xmlFile)
 
     delete(xmlFile)
 end
@@ -491,6 +520,11 @@ function TheContractor:resolveSavedVehicles()
     -- 100: after Jobs, whose workshop jobs it checks against ADS.
     self.RepairContracts:resolveSavedVehicles()
     TCVehicleLock.repairSavedTabbable()
+    -- 110: not vehicles, but the same moment: the map's fields, farmland
+    -- owners and buildings are in place. After Jobs, whose customers it links.
+    -- 114: the yards' standing spots, worked out on the server and synced.
+    self.Yards:setUp()
+    self.Farmers:setUp()
 end
 
 -- Appended onto FSBaseMission.saveSavegame (see installSaveHook below), so
@@ -535,6 +569,9 @@ function TheContractor:saveToXmlFile()
     tc.MachineryInsurance:saveToXmlFile(xmlFile)
     tc.GoodNews:saveToXmlFile(xmlFile)
     tc.RepairContracts:saveToXmlFile(xmlFile)
+    tc.Yards:saveToXmlFile(xmlFile)
+    tc.Farmers:saveToXmlFile(xmlFile)
+    tc.Relationships:saveToXmlFile(xmlFile)
 
     saveXMLFile(xmlFile)
     delete(xmlFile)
@@ -658,12 +695,28 @@ function TheContractor:deleteMap()
         self.RepairContracts:stopListening()
     end
 
+    if self.Farmers ~= nil then
+        self.Farmers:stopListening()
+    end
+
+    if self.Relationships ~= nil then
+        self.Relationships:stopPeriodTick()
+    end
+
     if self.InboxHUD ~= nil then
         self.InboxHUD:delete()
     end
 
+    -- 108: the yard markers, if shown.
+    if self.Yards ~= nil then
+        self.Yards:hideMarkers()
+    end
+    -- 109: the farmer split's markers, if shown.
+    TheContractorFarmerSplit.hideMarkers()
+
     -- 065: frees the standing workers' models.
     TCIdleStaff.reset()
+    TCYardFarmers.reset()
     -- 088: the due jobs' map markers.
     TCJobHotspots.reset()
 
@@ -747,6 +800,8 @@ function TheContractor:update(dt)
 
     -- 065: idle staff on standing spots (clients only).
     TCIdleStaff.update(dt)
+    -- 114: farmers in their yards (clients only).
+    TCYardFarmers.update(dt)
 
     -- 088: map markers on the fields of jobs due this month.
     TCJobHotspots.update(dt)

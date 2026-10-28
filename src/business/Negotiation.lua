@@ -55,12 +55,14 @@ function TheContractorNegotiation.rollInitialEagerness()
     return math.random(TheContractorNegotiation.MIN_INITIAL_EAGERNESS, TheContractorNegotiation.MAX_INITIAL_EAGERNESS)
 end
 
--- This round's tolerance, as a fraction of the original offer.
+-- This round's tolerance, as a fraction of the original offer. 113: scaled
+-- by the farm's relationship with the customer (more room with a good one).
 function TheContractorNegotiation.getTolerance(job)
-    local standing = g_currentMission.TheContractor.Reputation:getStanding(job.farmId)
+    local tc = g_currentMission.TheContractor
+    local standing = tc.Reputation:getStanding(job.farmId)
     local maxTolerance = TheContractorNegotiation.MIN_TOLERANCE_PERCENT +
         standing * (TheContractorNegotiation.MAX_TOLERANCE_PERCENT - TheContractorNegotiation.MIN_TOLERANCE_PERCENT)
-    return maxTolerance * (job.eagerness / 100)
+    return maxTolerance * (job.eagerness / 100) * tc.Relationships:getToleranceFactor(job)
 end
 
 -- Resolves a single round of negotiation against the job's original offer

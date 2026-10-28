@@ -1,5 +1,6 @@
--- Staff tab worker portrait (042): the highlighted worker's look (041),
--- rendered live in a vanilla Render element.
+-- People tab portrait (042): the highlighted worker's look (041), or (111) a
+-- farmer's or the official's, rendered live in a vanilla Render element.
+-- 112: and the Inbox's, for who an offer is from (setRender).
 --
 -- A Render element draws a small separate scene through its own camera
 -- into a GUI box - vanilla's colour picker and licence plate preview do
@@ -44,43 +45,68 @@ function TCWorkerPortrait.new(renderElement)
     self.loadToken = 0
     self.isCharacterReady = false
 
-    -- What's been asked for, and the id of who's shown/loading. Compared by
-    -- id: a client swaps in a fresh worker object on some updates (e.g. a
-    -- hire), and that's still the same person.
+    -- What's been asked for, and the key of who's shown/loading. Compared by
+    -- key (the id, unless setWorker's given one): a client swaps in a fresh
+    -- worker object on some updates (e.g. a hire), and that's still the
+    -- same person.
     self.wantedWorker = nil
-    self.shownWorkerId = nil
+    self.wantedKey = nil
+    self.shownKey = nil
     self.switchTimer = 0
 
     return self
 end
 
--- The worker to show, or nil to show nothing.
-function TCWorkerPortrait:setWorker(worker)
+-- The worker (or any person with a look) to show, or nil to show nothing.
+-- key tells people apart, the id by default: 111's farmers count their ids
+-- separately from the staff, so they pass their own.
+function TCWorkerPortrait:setWorker(worker, key)
     if worker ~= nil and TCWorkerAppearance.getPlayerStyle(worker) == nil then
         worker = nil
     end
 
-    local previousWanted = self.wantedWorker
+    local previousKey = self.wantedKey
     self.wantedWorker = worker
+    self.wantedKey = nil
     if worker == nil then
         self:setSceneVisible(false)
         return
     end
+    if key == nil then
+        key = worker.id
+    end
+    self.wantedKey = key
 
     self:ensureScene()
-    if worker.id == self.shownWorkerId then
+    if key == self.shownKey then
         self:setSceneVisible(self.isCharacterReady)
-    elseif previousWanted == nil or previousWanted.id ~= worker.id then
+    elseif previousKey ~= key then
         -- Only a new pick restarts the delay - setWorker also runs on every
         -- menu refresh.
         self.switchTimer = TCWorkerPortrait.SWITCH_DELAY_MS
     end
 end
 
+-- 112: the Render box to draw in. The menu has one portrait and a box on
+-- each tab that shows one (People, Inbox), so moving it frees the old box's
+-- scene first: only one scene may be in the world at a time.
+function TCWorkerPortrait:setRender(renderElement)
+    if renderElement == self.render then
+        return
+    end
+    self:deleteCharacter()
+    self.shownKey = nil
+    self.characterNode = nil
+    if self.render.scene ~= nil or self.render.loadingRequestId ~= nil then
+        self.render:destroyScene()
+    end
+    self.render = renderElement
+end
+
 -- The shown worker's look changed (066): load it again on the next update.
 function TCWorkerPortrait:reload()
     self:deleteCharacter()
-    self.shownWorkerId = nil
+    self.shownKey = nil
     self.switchTimer = 0
     self:setSceneVisible(false)
 end
@@ -88,8 +114,9 @@ end
 -- Menu closed: frees the character and the scene.
 function TCWorkerPortrait:destroy()
     self:deleteCharacter()
-    self.shownWorkerId = nil
+    self.shownKey = nil
     self.wantedWorker = nil
+    self.wantedKey = nil
     self.characterNode = nil
     if self.render.scene ~= nil or self.render.loadingRequestId ~= nil then
         self.render:destroyScene()
@@ -108,10 +135,10 @@ function TCWorkerPortrait:update(dt)
         self:setupScene()
     end
 
-    if self.wantedWorker.id ~= self.shownWorkerId then
+    if self.wantedKey ~= self.shownKey then
         self.switchTimer = self.switchTimer - dt
         if self.switchTimer <= 0 then
-            self:loadCharacter(self.wantedWorker)
+            self:loadCharacter(self.wantedWorker, self.wantedKey)
         end
     end
 
@@ -153,9 +180,9 @@ end
 
 -- Character -------------------------------------------------------------------
 
-function TCWorkerPortrait:loadCharacter(worker)
+function TCWorkerPortrait:loadCharacter(worker, key)
     self:deleteCharacter()
-    self.shownWorkerId = worker.id
+    self.shownKey = key
     self:setSceneVisible(false)
 
     local style = TCWorkerAppearance.getPlayerStyle(worker)
@@ -180,10 +207,10 @@ function TCWorkerPortrait:loadCharacter(worker)
         if loadingState == HumanModelLoadingState.OK then
             self.isCharacterReady = true
             graphics:defaultAllParameters()
-            self:setSceneVisible(self.wantedWorker ~= nil and self.wantedWorker.id == worker.id)
+            self:setSceneVisible(self.wantedWorker ~= nil and self.wantedKey == key)
             self.render:setRenderDirty()
         else
-            TCLog.warning("TheContractor: couldn't load the portrait for worker %d (%s)", worker.id, worker.name)
+            TCLog.warning("TheContractor: couldn't load the portrait for %s (%s)", tostring(key), worker.name)
         end
     end, nil, nil, true)
 end

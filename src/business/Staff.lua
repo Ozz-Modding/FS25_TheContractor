@@ -1535,7 +1535,7 @@ end
 
 -- Editing (066) ------------------------------------------------------------
 -- The player can rename a hired worker, change their gender and re-roll
--- their look (TCEditWorkerDialog, or tcWorker rename). Cosmetic and free.
+-- their look (TCEditPersonDialog, or tcWorker rename). Cosmetic and free.
 -- Changing gender never touches the name.
 
 -- Characters, like the Create Company prompt.

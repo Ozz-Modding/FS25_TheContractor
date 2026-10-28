@@ -81,6 +81,7 @@ local function setup(def)
             return world.adsMargin or 0.4
         end,
     }
+    world:addRelationships()
     tc.Reputation = {
         getStanding = function() return world.standing or 0 end,
         addReputation = function(_, farmId, delta) table.insert(world.calls.reputation, delta) end,

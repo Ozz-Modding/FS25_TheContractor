@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8" standalone="no" ?>
-<!-- Edit worker dialog (066), see TCEditWorkerDialog.lua. Same dialog frame
+<!-- Edit person dialog (066, 111), see TCEditPersonDialog.lua. Same dialog frame
      as TCAdvertisingDialog.xml; anchorTopCenter profiles (tc_editWorker* in
      guiProfiles.xml), so x positions are each element's centre relative to
      the content container's top-centre. Portrait on the left, name and

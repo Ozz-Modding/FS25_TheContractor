@@ -30,11 +30,14 @@ TCWorkerAppearance.GENDER = {
 TCWorkerAppearance.FEMALE_CHANCE = 0.5
 TCWorkerAppearance.BEARD_CHANCE = 0.5
 
--- Wardrobe presets (by name) too costume-like for a hired hand.
+-- Wardrobe presets (by name) too costume-like for a hired hand (or, 110,
+-- a farmer or the official, whose looks are rolled the same way).
 TCWorkerAppearance.BLOCKED_PRESETS = {
     horsebackRider = true,
     motorbikeRacer = true,
     beekeeper = true,
+    -- The emergency services' one-piece.
+    emergPack = true,
 }
 
 -- Every wardrobe slot, in a fixed order for the network stream.

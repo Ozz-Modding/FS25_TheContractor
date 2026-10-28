@@ -318,6 +318,9 @@ function TheContractorLogbook:buildJobEntry(job, outcome, reputation)
         location = job.workshop ~= nil and job:getLocationText() or nil,
         -- 101: a breakdown's field, for the list's Field column.
         workshopFieldId = job.workshop ~= nil and job.workshop.fieldId or nil,
+        -- 111: who it was for (110's farmer or the official), so the People
+        -- tab can show what's been done for them. nil for a workshop job.
+        customerId = job.customerId,
         requiredSkillLevel = job.requiredSkillLevel,
         day = getToday(),
         completedAt = now,
@@ -1097,6 +1100,8 @@ function TheContractorLogbook.writeJobEntry(streamId, entry)
     -- 100.
     writeString(streamId, entry.location)
     streamWriteInt32(streamId, entry.workshopFieldId or 0)
+    -- 111.
+    streamWriteInt32(streamId, entry.customerId or 0)
 end
 
 function TheContractorLogbook.readJobEntry(streamId)
@@ -1165,6 +1170,8 @@ function TheContractorLogbook.readJobEntry(streamId)
     entry.location = readString(streamId)
     local workshopFieldId = streamReadInt32(streamId)
     entry.workshopFieldId = workshopFieldId ~= 0 and workshopFieldId or nil
+    local customerId = streamReadInt32(streamId)
+    entry.customerId = customerId ~= 0 and customerId or nil
     return entry
 end
 
@@ -1295,6 +1302,9 @@ local function saveJobEntry(xmlFile, key, entry)
     if entry.workshopFieldId ~= nil then
         setXMLInt(xmlFile, key .. "#workshopFieldId", entry.workshopFieldId)
     end
+    if entry.customerId ~= nil then
+        setXMLInt(xmlFile, key .. "#customerId", entry.customerId)
+    end
     if entry.requiredSkillLevel ~= nil then
         setXMLInt(xmlFile, key .. "#requiredSkill", entry.requiredSkillLevel)
     end
@@ -1377,6 +1387,8 @@ local function loadJobEntry(xmlFile, key)
         fieldId = Utils.getNoNil(getXMLInt(xmlFile, key .. "#fieldId"), 0),
         location = getXMLString(xmlFile, key .. "#location"),
         workshopFieldId = getXMLInt(xmlFile, key .. "#workshopFieldId"),
+        -- 111: nil from an older save until TheContractorFarmers:linkLogbook.
+        customerId = getXMLInt(xmlFile, key .. "#customerId"),
         requiredSkillLevel = getXMLInt(xmlFile, key .. "#requiredSkill"),
         day = Utils.getNoNil(getXMLInt(xmlFile, key .. "#day"), 0),
         completedAt = getXMLFloat(xmlFile, key .. "#completedAt"),

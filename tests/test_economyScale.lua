@@ -79,6 +79,7 @@ end)
 local function newJob(world, price)
     world:load("src/business/Negotiation.lua")
     world:load("src/business/Job.lua")
+    world:addRelationships()
     return TheContractorJob.new(1, 1, "plow", 7, 3, 1, 1, price)
 end
 

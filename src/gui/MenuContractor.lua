@@ -426,6 +426,16 @@ function MenuContractor:initialize()
     self.menuButtonInfoStaffOfficeEmployed = { self.btnBack, self.btnNextPage, self.btnPrevPage,
         self.btnReleaseOffice, self.btnManageOffice }
 
+    -- 111: the Others view - edit the highlighted farmer or the official.
+    self.btnEditPerson = {
+        inputAction = InputAction.MENU_ACTIVATE,
+        text = g_i18n:getText("tc_people_editButton"),
+        callback = function()
+            self:onClickEditPerson()
+        end
+    }
+    self.menuButtonInfoStaffPerson = { self.btnBack, self.btnNextPage, self.btnPrevPage, self.btnEditPerson }
+
     -- Finances (049) - write off the highlighted invoice, only while it's
     -- overdue (see getMenuButtonInfo).
     self.btnWriteOffInvoice = {
@@ -655,6 +665,10 @@ function MenuContractor:initialize()
     -- member } (member nil for a vacancy), and the highlighted one's role.
     self.officeRows = {}
     self.selectedOfficeRole = nil
+    -- 111: the Others view's rows (TheContractorFarmers:getPeopleRows) and
+    -- the highlighted person's id.
+    self.personRows = {}
+    self.selectedPersonId = nil
 
     self.inboxTable:setDataSource(self)
     self.inboxTable:setDelegate(self)
@@ -846,6 +860,9 @@ function MenuContractor:getMenuButtonInfo()
             return officeRow.member ~= nil and self.menuButtonInfoStaffOfficeEmployed or
                 self.menuButtonInfoStaffOfficeVacant
         end
+        if self:getSelectedPerson() ~= nil then
+            return self.menuButtonInfoStaffPerson
+        end
     end
 
     if state == MenuContractor.SUB_CATEGORY.FINANCES and self:hasCompany() then
@@ -966,7 +983,8 @@ function MenuContractor:getStaffHoursSignature(farmId)
 end
 
 -- 042: shows the highlighted worker's portrait while the Staff tab is the
--- one showing, nothing otherwise.
+-- one showing, (112) the highlighted offer's customer on the Inbox tab, and
+-- nothing otherwise. The one portrait moves between the two tabs' boxes.
 function MenuContractor:updateWorkerPortrait()
     if self.workerPortrait == nil then
         self.workerPortrait = TCWorkerPortrait.new(self.staffPortraitRender)
@@ -974,17 +992,31 @@ function MenuContractor:updateWorkerPortrait()
 
     -- 066: not while the edit dialog's showing its own - both scenes sit in
     -- the same spot in the world.
-    local worker = nil
-    if self.isFrameOpen and not self.isEditingWorker and
-            self.subCategoryPaging:getState() == MenuContractor.SUB_CATEGORY.STAFF and self:hasCompany() then
+    local worker, key = nil, nil
+    local state = self.subCategoryPaging:getState()
+    if self.isFrameOpen and not self.isEditingWorker and state == MenuContractor.SUB_CATEGORY.INBOX and
+            self:hasCompany() then
+        local customer = self:getSelectedInboxCustomer()
+        if customer ~= nil then
+            self.workerPortrait:setRender(self.inboxPortraitRender)
+            worker, key = customer, MenuContractor.getPersonPortraitKey(customer.id)
+        end
+    elseif self.isFrameOpen and not self.isEditingWorker and state == MenuContractor.SUB_CATEGORY.STAFF and
+            self:hasCompany() then
+        self.workerPortrait:setRender(self.staffPortraitRender)
         worker = self:getSelectedStaffWorker()
         -- 090: or the office member highlighted.
         local officeRow = self:getSelectedOfficeRow()
         if worker == nil and officeRow ~= nil then
             worker = officeRow.member
         end
+        -- 111: or a farmer or the official, whose ids are their own.
+        local person = self:getSelectedPerson()
+        if worker == nil and person ~= nil then
+            worker, key = person, MenuContractor.getPersonPortraitKey(person.id)
+        end
     end
-    self.workerPortrait:setWorker(worker)
+    self.workerPortrait:setWorker(worker, key)
 end
 
 function MenuContractor:hasCompany()
@@ -1036,6 +1068,7 @@ function MenuContractor:refreshCompanyState()
         self.inboxEmptyText:setVisible(false)
         self.inboxDetailsBox:setVisible(false)
         self.inboxMessageBox:setVisible(false)
+        self.inboxPortraitFrame:setVisible(false)
         self.selectedInboxJobId = nil
         self.selectedInboxMessageId = nil
 
@@ -1054,9 +1087,11 @@ function MenuContractor:refreshCompanyState()
         self.staffListContainer:setVisible(false)
         self.staffDetailsBox:setVisible(false)
         self.staffOfficeDetailsBox:setVisible(false)
+        self.staffPersonDetailsBox:setVisible(false)
         self.selectedRosterWorkerId = nil
         self.selectedCandidateId = nil
         self.selectedOfficeRole = nil
+        self.selectedPersonId = nil
 
         self.financesContent:setVisible(false)
         self.selectedInvoiceId = nil
@@ -1231,6 +1266,46 @@ function MenuContractor:getCurrentJobLine(job)
     return line
 end
 
+-- The People tab's views (111), in staffViewSelector's order: the roster,
+-- the candidates and the others (the farmers and the official).
+MenuContractor.STAFF_VIEWS = { "roster", "candidates", "others" }
+MenuContractor.STAFF_VIEW_STATES = { roster = 1, candidates = 2, others = 3 }
+MenuContractor.STAFF_VIEW_TEXTS = { "tc_staff_viewRoster", "tc_staff_viewCandidates", "tc_staff_viewOthers" }
+-- Column 2, 4 and 5's headings per view (column 1 is always the name).
+MenuContractor.STAFF_HEADERS = {
+    roster = { "tc_staff_columnWorkSpeed", "tc_staff_columnStatus", "tc_staff_columnJob" },
+    candidates = { "tc_staff_columnWorkSpeed", "tc_staff_columnSalary", "tc_staff_columnBestSkills" },
+    others = { "tc_people_columnLand", "tc_people_columnFields", "tc_people_columnYard" },
+}
+-- Each column's x and width in px, per view: the roster and candidates use
+-- staffTable's template as laid out in the XML; Others has short columns,
+-- so its names get the room. Header ids by column: staffHeaderCol1, 2, 4, 5.
+MenuContractor.STAFF_COLUMNS = {
+    staff = { name = { 14, 150 }, workSpeed = { 170, 60 }, col4 = { 236, 100 }, col5 = { 342, 198 } },
+    others = { name = { 14, 266 }, workSpeed = { 290, 90 }, col4 = { 390, 80 }, col5 = { 480, 110 } },
+}
+MenuContractor.STAFF_COLUMN_HEADERS = { name = "staffHeaderCol1", workSpeed = "staffHeaderCol2",
+    col4 = "staffHeaderCol4", col5 = "staffHeaderCol5" }
+
+function MenuContractor:getStaffColumns()
+    return MenuContractor.STAFF_COLUMNS[self.staffView == "others" and "others" or "staff"]
+end
+
+-- Cells are reused across views, so every row is laid out every time.
+function MenuContractor:layoutStaffCell(cell)
+    for attribute, column in pairs(self:getStaffColumns()) do
+        local element = cell:getAttribute(attribute)
+        element:setPosition(column[1] * g_pixelSizeScaledX, nil)
+        element:setSize(column[2] * g_pixelSizeScaledX, nil)
+    end
+end
+
+MenuContractor.STAFF_EMPTY_TEXTS = {
+    roster = "tc_staff_rosterEmpty",
+    candidates = "tc_staff_candidatesEmpty",
+    others = "tc_people_empty",
+}
+
 -- Staff (017) — rebuilds both the roster and candidate-pool lists (sorted by
 -- id, oldest first — a hire/candidate-add order, not particularly meaningful
 -- but stable frame to frame, same non-architectural ordering call as
@@ -1257,30 +1332,40 @@ function MenuContractor:refreshStaffState(farmId, staff, jobs)
         table.insert(self.officeRows, { role = role, member = office:getMember(farmId, role) })
     end
 
-    self.staffViewSelector:setTexts({ g_i18n:getText("tc_staff_viewRoster"), g_i18n:getText("tc_staff_viewCandidates") })
-    self.staffViewSelector:setState(self.staffView == "candidates" and 2 or 1)
+    -- 111: the farmers and the official.
+    self.personRows = g_currentMission.TheContractor.Farmers:getPeopleRows((TheContractorFarmers.getLand()))
+
+    local texts = {}
+    for _, key in ipairs(MenuContractor.STAFF_VIEW_TEXTS) do
+        table.insert(texts, g_i18n:getText(key))
+    end
+    self.staffViewSelector:setTexts(texts)
+    self.staffViewSelector:setState(MenuContractor.STAFF_VIEW_STATES[self.staffView])
     self.staffViewSelector:setVisible(true)
     self.staffHeaderRow:setVisible(true)
 
-    -- 055: so the player can see why sickness has changed.
+    -- 055: so the player can see why sickness has changed. Only about staff.
+    local isOthers = self.staffView == "others"
     local hasHealthSafety = g_currentMission.TheContractor.HealthSafety:isActive(farmId)
-    setChip(self.staffHealthSafetyChip, self.staffHealthSafetyChipText,
-        g_i18n:getText(hasHealthSafety and "tc_healthSafety_chipActive" or "tc_healthSafety_chipInactive"),
+    setChip(self.staffHealthSafetyChip, self.staffHealthSafetyChipText, not isOthers and
+        g_i18n:getText(hasHealthSafety and "tc_healthSafety_chipActive" or "tc_healthSafety_chipInactive") or nil,
         hasHealthSafety and "good" or "warn")
 
     -- Job column only makes sense for the roster view (candidates were never
     -- assigned anything) — blank it out entirely in the candidates view
-    -- rather than showing a column full of "None".
-    self.staffHeaderCol4:setText(self.staffView == "candidates" and g_i18n:getText("tc_staff_columnSalary") or
-        g_i18n:getText("tc_staff_columnStatus"))
-    self.staffHeaderCol5:setText(self.staffView == "candidates" and g_i18n:getText("tc_staff_columnBestSkills") or
-        g_i18n:getText("tc_staff_columnJob"))
+    -- rather than showing a column full of "None". 111: Others has its own.
+    local headers = MenuContractor.STAFF_HEADERS[self.staffView]
+    self.staffHeaderCol2:setText(g_i18n:getText(headers[1]))
+    self.staffHeaderCol4:setText(g_i18n:getText(headers[2]))
+    self.staffHeaderCol5:setText(g_i18n:getText(headers[3]))
+    for attribute, column in pairs(self:getStaffColumns()) do
+        self[MenuContractor.STAFF_COLUMN_HEADERS[attribute]]:setPosition(column[1] * g_pixelSizeScaledX, nil)
+    end
     -- 091: only while ADS takes our staff.
-    self.staffHeaderCol6:setVisible(TCADSWorkshop.isActive())
+    self.staffHeaderCol6:setVisible(not isOthers and TCADSWorkshop.isActive())
 
     local hasItems = self:getStaffRowCount() > 0
-    self.staffEmptyText:setText(self.staffView == "candidates" and g_i18n:getText("tc_staff_candidatesEmpty") or
-        g_i18n:getText("tc_staff_rosterEmpty"))
+    self.staffEmptyText:setText(g_i18n:getText(MenuContractor.STAFF_EMPTY_TEXTS[self.staffView]))
     self.staffEmptyText:setVisible(not hasItems)
     self.staffListContainer:setVisible(hasItems)
     self.staffTable:reloadData()
@@ -1311,6 +1396,10 @@ function MenuContractor:refreshStaffState(farmId, staff, jobs)
         self.selectedCandidateId = nil
     end
 
+    if self:getSelectedPersonRow() == nil then
+        self.selectedPersonId = nil
+    end
+
     self:updateStaffDetails()
 end
 
@@ -1328,6 +1417,8 @@ end
 function MenuContractor:getStaffRowCount()
     if self.staffView == "candidates" then
         return #self.candidateList
+    elseif self.staffView == "others" then
+        return #self.personRows
     end
     return #self.rosterWorkers + #self.officeRows
 end
@@ -1351,8 +1442,10 @@ end
 function MenuContractor:getSelectedStaffWorker()
     if self.staffView == "roster" then
         return self:getSelectedRosterWorker()
+    elseif self.staffView == "candidates" then
+        return self:getSelectedCandidate()
     end
-    return self:getSelectedCandidate()
+    return nil
 end
 
 function MenuContractor:getSelectedCandidate()
@@ -1396,6 +1489,15 @@ local function setADSChip(cell, worker)
 end
 
 function MenuContractor:populateStaffCell(index, cell)
+    self:layoutStaffCell(cell)
+    if self.staffView == "others" then
+        local row = self.personRows[index]
+        if row ~= nil then
+            self:populatePersonCell(row, cell)
+        end
+        return
+    end
+
     if self.staffView == "candidates" then
         local candidate = self.candidateList[index]
         if candidate == nil then
@@ -1448,6 +1550,12 @@ function MenuContractor:updateStaffDetails()
     self.staffOfficeDetailsBox:setVisible(officeRow ~= nil)
     if officeRow ~= nil then
         self:updateOfficeDetails(officeRow)
+    end
+    -- 111: and the Others view's.
+    local personRow = self:getSelectedPersonRow()
+    self.staffPersonDetailsBox:setVisible(personRow ~= nil)
+    if personRow ~= nil then
+        self:updatePersonDetails(personRow)
     end
     self:updateWorkerPortrait()
     if worker == nil then
@@ -1668,16 +1776,16 @@ function MenuContractor:updateHolidayDetails(worker)
     end
 end
 
--- The only way to switch between Roster and Candidates — same "in-page
--- MultiTextOption, not a bottom-bar button" pattern as
--- calendarPeriodSelector. Switching views clears the *other* view's
--- selection's relevance (kept in memory, just no longer driving the details
+-- The only way to switch between Roster, Candidates and (111) Others —
+-- same "in-page MultiTextOption, not a bottom-bar button" pattern as
+-- calendarPeriodSelector. Switching views clears the *other* views'
+-- selections' relevance (kept in memory, just no longer driving the details
 -- box/button bar) by virtue of updateStaffDetails/getMenuButtonInfo both
 -- keying off self.staffView, not by actually discarding
--- selectedRosterWorkerId/selectedCandidateId — so flipping back and forth
--- remembers where you were in each list.
+-- selectedRosterWorkerId/selectedCandidateId/selectedPersonId — so flipping
+-- back and forth remembers where you were in each list.
 function MenuContractor:onClickStaffView()
-    self.staffView = self.staffViewSelector:getState() == 2 and "candidates" or "roster"
+    self.staffView = MenuContractor.STAFF_VIEWS[self.staffViewSelector:getState()] or "roster"
     self:refreshStaffState(g_currentMission:getFarmId(), g_currentMission.TheContractor.Staff,
         g_currentMission.TheContractor.Jobs)
 end
@@ -2028,21 +2136,31 @@ function MenuContractor:sendWorkshopRole(worker, role)
     g_client:getServerConnection():sendEvent(TCWorkerWorkshopEvent.new(worker.farmId, worker.id, nil, role))
 end
 
--- 066: the dialog sends the edit itself. The Staff tab's portrait is
+-- 066: the dialog sends the edit itself. The People tab's portrait is
 -- hidden while it's open (updateWorkerPortrait) and comes back on close.
 function MenuContractor:onClickEditWorker()
     local worker = self:getSelectedRosterWorker()
     if worker == nil then
         return
     end
-    self:openEditWorker(worker)
+    self:openEditPerson(worker, TCEditPersonDialog.KIND.WORKER)
 end
 
--- draft: TCEditWorkerDialog.show's unsaved edit to carry on with, or nil.
-function MenuContractor:openEditWorker(worker, draft)
+-- 111: the highlighted farmer or the official.
+function MenuContractor:onClickEditPerson()
+    local person = self:getSelectedPerson()
+    if person == nil then
+        return
+    end
+    self:openEditPerson(person, TCEditPersonDialog.KIND.FARMER)
+end
+
+-- kind: TCEditPersonDialog.KIND. draft: TCEditPersonDialog.show's unsaved
+-- edit to carry on with, or nil.
+function MenuContractor:openEditPerson(person, kind, draft)
     self.isEditingWorker = true
     self:updateWorkerPortrait()
-    TCEditWorkerDialog.show(worker, function(target)
+    TCEditPersonDialog.show(person, kind, function(target)
         target.isEditingWorker = false
         -- Same "synchronous for host/SP, catches up when the edit arrives
         -- for a remote client" as the other Staff actions.
@@ -2052,35 +2170,48 @@ function MenuContractor:openEditWorker(worker, draft)
 end
 
 -- 077: back from the wardrobe. The menu closed when it opened, so this
--- opens it again on the Staff tab's roster and puts the edit dialog back
--- with its draft. A worker who's gone meanwhile just isn't reopened.
-function MenuContractor:reopenEditWorker(workerId, draft)
+-- opens it again on the People tab's view the person is in (the roster, or
+-- 111's Others) and puts the edit dialog back with its draft. Someone
+-- who's gone meanwhile just isn't reopened.
+function MenuContractor:reopenEditPerson(kind, personId, draft)
     if g_gui.currentGuiName ~= "InGameMenu" then
         g_gui:showGui("InGameMenu")
     end
     g_inGameMenu:goToPage(self)
 
+    local isFarmer = kind == TCEditPersonDialog.KIND.FARMER
+    local view = isFarmer and "others" or "roster"
     self.subCategoryPaging:setState(MenuContractor.SUB_CATEGORY.STAFF, true)
-    if self.staffView ~= "roster" then
-        self.staffViewSelector:setState(1)
+    if self.staffView ~= view then
+        self.staffViewSelector:setState(MenuContractor.STAFF_VIEW_STATES[view])
         self:onClickStaffView()
     end
     self:setMenuButtonInfoDirty()
-
-    -- 090: or one of the office staff.
-    local worker = self:hasCompany() and
-        g_currentMission.TheContractor.Staff:getEditablePerson(g_currentMission:getFarmId(), workerId) or nil
-    if worker == nil then
+    if not self:hasCompany() then
         return
     end
-    self:openEditWorker(worker, draft)
+
+    local person
+    if isFarmer then
+        person = g_currentMission.TheContractor.Farmers:getPerson(personId)
+        if person ~= nil then
+            self:selectPerson(personId)
+        end
+    else
+        -- 090: or one of the office staff.
+        person = g_currentMission.TheContractor.Staff:getEditablePerson(g_currentMission:getFarmId(), personId)
+    end
+    if person == nil then
+        return
+    end
+    self:openEditPerson(person, kind, draft)
 end
 
 -- 066: a worker was edited (TheContractorStaff:applyWorkerEdited, every
 -- machine). Their portrait loads the new look, and an open Staff tab shows
 -- the new name.
 function MenuContractor:onWorkerEdited(workerId)
-    if self.workerPortrait ~= nil and self.workerPortrait.shownWorkerId == workerId then
+    if self.workerPortrait ~= nil and self.workerPortrait.shownKey == workerId then
         self.workerPortrait:reload()
     end
     if self.isFrameOpen and self:hasCompany() then
@@ -2279,10 +2410,17 @@ function MenuContractor:updateInboxMessageDetails()
 
     local inbox = g_currentMission.TheContractor.Inbox
     self.inboxMessageTitle:setText(TheContractorInbox.getTitle(message))
+    -- 112: an offer's customer.
+    local customer = inbox:getMessageCustomer(message)
+    self.inboxMessageRowFrom:setVisible(customer ~= nil)
+    self.inboxMessageFrom:setText(customer ~= nil and MenuContractor.getCustomerText(customer) or "")
+    setChip(self.inboxMessageRelationshipChip, self.inboxMessageRelationshipChipText,
+        MenuContractor.getRelationshipChip(customer))
     local chipText, chipTone = inbox:getChip(message)
     setChip(self.inboxMessageChip, self.inboxMessageChipText, chipText, chipTone)
     self.inboxMessageReceived:setText(TCCalendar.formatDay(message.createdDay))
     self.inboxMessageRowExpires:setVisible(message.expiresDay ~= nil)
+    self.inboxMessageRowPortraitSpacer:setVisible(customer ~= nil and message.expiresDay == nil)
     if message.expiresDay ~= nil then
         self.inboxMessageExpires:setText(TCCalendar.formatDay(message.expiresDay))
     end
@@ -2341,18 +2479,57 @@ function MenuContractor:getSelectedInboxJob()
     return nil
 end
 
+-- 112: who the highlighted Inbox item is from: a job offer's customer, or
+-- that of the job a message offers. nil for anything else, and for an ADS
+-- repair contract (no customer, 110).
+function MenuContractor:getSelectedInboxCustomer()
+    local job = self:getSelectedInboxJob()
+    if job ~= nil then
+        return job:getCustomer()
+    end
+    local message = self:getSelectedInboxMessage()
+    if message ~= nil then
+        return g_currentMission.TheContractor.Inbox:getMessageCustomer(message)
+    end
+    return nil
+end
+
+-- 112: a customer as the From and Customer rows name them.
+function MenuContractor.getCustomerText(person)
+    if person.isOfficial then
+        return string.format(g_i18n:getText("tc_customer_official"), person.name)
+    end
+    return person.name
+end
+
+-- 113: the player's farm's relationship with a person, as chip text and
+-- tone (nil for nobody).
+function MenuContractor.getRelationshipChip(person)
+    if person == nil then
+        return nil
+    end
+    return g_currentMission.TheContractor.Relationships:getChip(g_currentMission:getFarmId(), person.id)
+end
+
 function MenuContractor:updateInboxDetails()
     self:updateInboxMessageDetails()
 
     local job = self:getSelectedInboxJob()
     self.inboxDetailsBox:setVisible(job ~= nil)
     self:setMenuButtonInfoDirty()
+    self:updateWorkerPortrait()
+    self.inboxPortraitFrame:setVisible(self:getSelectedInboxCustomer() ~= nil)
 
     if job == nil then
         return
     end
 
     self.inboxDetailTitle:setText(job:getDisplayTitle())
+    local customer = job:getCustomer()
+    self.inboxRowCustomer:setVisible(customer ~= nil)
+    self.inboxDetailCustomer:setText(customer ~= nil and MenuContractor.getCustomerText(customer) or "")
+    setChip(self.inboxDetailRelationshipChip, self.inboxDetailRelationshipChipText,
+        MenuContractor.getRelationshipChip(customer))
 
     -- 100: a customer's machine in a repair zone.
     self.inboxRowSkill:setVisible(not job:isWorkshop())
@@ -2955,6 +3132,9 @@ function MenuContractor:onListSelectionChanged(list, section, index)
         if self.staffView == "candidates" then
             local candidate = self.candidateList[index]
             self.selectedCandidateId = candidate ~= nil and candidate.id or nil
+        elseif self.staffView == "others" then
+            local row = self.personRows[index]
+            self.selectedPersonId = row ~= nil and row.person.id or nil
         else
             local worker = self.rosterWorkers[index]
             self.selectedRosterWorkerId = worker ~= nil and worker.id or nil
@@ -3528,6 +3708,14 @@ function MenuContractor:getJobDetailRows(job)
     table.insert(rows, { section = g_i18n:getText("tc_jobDetails_sectionJob") })
     add(g_i18n:getText("tc_jobDetails_job"), job:getDisplayTitle())
     add(g_i18n:getText(job:isWorkshop() and "tc_jobDetails_machine" or "tc_jobDetails_field"), job:getLocationText())
+    -- 112: none for an ADS repair contract (110).
+    local customer = job:getCustomer()
+    if customer ~= nil then
+        add(g_i18n:getText("tc_jobDetails_customer"), MenuContractor.getCustomerText(customer))
+        -- 113: its own row, since a chip sits where the value would.
+        local chipText, chipTone = MenuContractor.getRelationshipChip(customer)
+        add(g_i18n:getText("tc_people_detailRelationship"), "", chipText, chipTone)
+    end
     add(g_i18n:getText("tc_jobDetails_due"), formatTargetDate(job.targetPeriod, job.targetDayInPeriod))
     if job:isWorkshop() and (job.state == TheContractorJob.STATE.OFFERED or
             job.state == TheContractorJob.STATE.NEGOTIATING) then
@@ -5746,6 +5934,144 @@ function MenuContractor:onClickSwitchOverheadBilling()
     self:sendOverheadRequest(definition, TheContractorOverheads.REQUEST.SWITCH_BILLING)
 end
 
+-- Others: the farmers and the local official (111) ------------------------------
+
+-- The portrait's key for a person: their ids are their own (110), so they
+-- mustn't be taken for a worker with the same one.
+function MenuContractor.getPersonPortraitKey(personId)
+    return "person" .. personId
+end
+
+-- The highlighted Others row ({ person, acres, farmlandCount, hasYard }), or
+-- nil.
+function MenuContractor:getSelectedPersonRow()
+    if self.staffView ~= "others" or self.selectedPersonId == nil then
+        return nil
+    end
+    for _, row in ipairs(self.personRows) do
+        if row.person.id == self.selectedPersonId then
+            return row
+        end
+    end
+    return nil
+end
+
+function MenuContractor:getSelectedPerson()
+    local row = self:getSelectedPersonRow()
+    return row ~= nil and row.person or nil
+end
+
+-- Highlights a person in the Others view, if they're listed.
+function MenuContractor:selectPerson(personId)
+    for i, row in ipairs(self.personRows) do
+        if row.person.id == personId then
+            self.staffTable:setSelectedIndex(i, true)
+            return
+        end
+    end
+end
+
+local function formatAcres(acres)
+    return g_i18n:formatArea(acres / TheContractorFarmerSplit.ACRES_PER_HA, 0)
+end
+
+-- Name, land, fields (farmland count) and yard. The official has no land, so only a name.
+function MenuContractor:populatePersonCell(row, cell)
+    local person = row.person
+    cell:getAttribute("name"):setText(person.name)
+    local land, farmlands, yard = "", "", ""
+    if not person.isOfficial then
+        land = row.farmlandCount > 0 and formatAcres(row.acres) or "-"
+        farmlands = tostring(row.farmlandCount)
+        yard = g_i18n:getText(row.hasYard and "tc_people_yes" or "tc_people_no")
+    end
+    cell:getAttribute("workSpeed"):setText(land)
+    cell:getAttribute("col4"):setText(farmlands)
+    cell:getAttribute("col4"):setVisible(true)
+    setChip(cell:getAttribute("statusChip"), cell:getAttribute("statusChipText"), nil)
+    cell:getAttribute("col5"):setText(yard)
+    setADSChip(cell, nil)
+end
+
+-- Their land and yard (a farmer's), and what the player's farm has done
+-- for them, from its logbook and invoices.
+function MenuContractor:updatePersonDetails(row)
+    local person = row.person
+    local farmId = g_currentMission:getFarmId()
+    local tc = g_currentMission.TheContractor
+
+    self.staffPersonTitle:setText(person.name)
+    self.staffPersonRole:setText(g_i18n:getText(person.isOfficial and "tc_people_roleOfficial" or
+        "tc_people_roleFarmer"))
+    -- 113
+    setChip(self.staffPersonRelationshipChip, self.staffPersonRelationshipChipText,
+        MenuContractor.getRelationshipChip(person))
+
+    self.staffPersonRowLand:setVisible(not person.isOfficial)
+    self.staffPersonRowYard:setVisible(not person.isOfficial)
+    if not person.isOfficial then
+        local land = g_i18n:getText("tc_people_landNone")
+        if row.farmlandCount == 1 then
+            land = string.format(g_i18n:getText("tc_people_landOne"), formatAcres(row.acres))
+        elseif row.farmlandCount > 1 then
+            land = string.format(g_i18n:getText("tc_people_landMany"), formatAcres(row.acres), row.farmlandCount)
+        end
+        self.staffPersonLand:setText(land)
+        self.staffPersonYard:setText(person.yardFarmlandId ~= nil and
+            string.format(g_i18n:getText("tc_people_yardOn"), person.yardFarmlandId) or
+            g_i18n:getText("tc_people_yardOff"))
+    end
+
+    local history = TheContractorFarmers.getCustomerHistory(tc.Logbook:getJobEntries(farmId), person.id,
+        TheContractorLogbook.getInvoice)
+    local jobs = tostring(history.completed)
+    if history.missed > 0 then
+        jobs = string.format(g_i18n:getText("tc_people_jobsMissed"), history.completed, history.missed)
+    end
+    self.staffPersonJobs:setText(jobs)
+    local paid = formatMoney(history.paid)
+    if history.owed > 0 then
+        paid = string.format(g_i18n:getText("tc_people_paidOwed"), paid, formatMoney(history.owed))
+    end
+    self.staffPersonPaid:setText(paid)
+    self.staffPersonLastJob:setText(history.last ~= nil and string.format(g_i18n:getText("tc_people_lastJob"),
+        history.last.title or "", TCCalendar.formatDay(history.last.day)) or g_i18n:getText("tc_people_lastJobNone"))
+
+    self.staffPersonAbout:setText(g_i18n:getText(person.isOfficial and "tc_people_about_official" or
+        "tc_people_about_farmer"))
+    local hasNoLand = not person.isOfficial and row.farmlandCount == 0
+    local note = ""
+    if tc.Relationships:refuses(farmId, person.id) then
+        note = g_i18n:getText("tc_people_noteFallenOut")
+    elseif hasNoLand then
+        note = g_i18n:getText("tc_people_noteNoLand")
+    end
+    self.staffPersonNote:setText(note)
+    self.staffPersonRows:invalidateLayout()
+end
+
+-- A farmer or the official was edited (TheContractorFarmers:
+-- applyPersonEdited, every machine): their portrait loads the new look.
+function MenuContractor:onPersonEdited(personId)
+    if self.workerPortrait ~= nil and
+            self.workerPortrait.shownKey == MenuContractor.getPersonPortraitKey(personId) then
+        self.workerPortrait:reload()
+    end
+    self:onPeopleChanged()
+end
+
+-- The people or their land changed, on any machine.
+function MenuContractor:onPeopleChanged()
+    if self.isFrameOpen and self:hasCompany() then
+        local tc = g_currentMission.TheContractor
+        self:refreshStaffState(g_currentMission:getFarmId(), tc.Staff, tc.Jobs)
+        -- 112: and the Inbox names offers' customers.
+        if self.subCategoryPaging:getState() == MenuContractor.SUB_CATEGORY.INBOX then
+            self:refreshInboxState(g_currentMission:getFarmId(), tc.Jobs)
+        end
+    end
+end
+
 -- Office staff (090) -------------------------------------------------------
 
 -- Level chip tones, levels 1-3.
@@ -5926,7 +6252,7 @@ function MenuContractor:onClickManageOffice()
     local role = row.role
     local actions = {
         { text = g_i18n:getText("tc_editWorker_button"), run = function()
-            self:openEditWorker(member)
+            self:openEditPerson(member, TCEditPersonDialog.KIND.WORKER)
         end },
     }
     if g_currentMission.TheContractor.Office:getTrainProblem(farmId, role) == nil then
