@@ -100,6 +100,7 @@
 		<text name="tc_equipment_need_implement_stonePick" text="Stone picker"/>
 		<text name="tc_equipment_need_baleTransport" text="Whatever you move bales with (bale loader, trailer, front loader)"/>
 		<text name="tc_equipment_need_disposalSkip" text="A disposal skip to carry the pieces to (Contractor tab of the construction menu)"/>
+		<text name="tc_equipment_need_chainsaw" text="Chainsaw"/>
 		<text name="tc_detail_age" text="Age"/>
 		<text name="tc_detail_workSpeed" text="Work speed"/>
 		<text name="tc_detail_tiers" text="Tractors"/>
@@ -198,6 +199,7 @@
 		<text name="tc_jobType_baleHaul" text="Bale &amp; Deliver"/>
 		<text name="tc_jobType_strawDelivery" text="Deliver Straw"/>
 		<text name="tc_jobType_spillRecovery" text="Clear Spilt Crop"/>
+		<text name="tc_jobType_fallenTree" text="Clear Fallen Trees"/>
 		<text name="tc_jobType_flyTipping" text="Clear Fly-tipping"/>
 		<text name="tc_jobType_fertilize" text="Fertilize"/>
 		<text name="tc_jobType_herbicide" text="Spray Herbicide"/>
@@ -230,6 +232,7 @@
 		<text name="tc_inbox_chipTheft" text="Theft"/>
 		<text name="tc_inbox_chipRoadAccident" text="Accident"/>
 		<text name="tc_inbox_chipTippedTrailer" text="Overturned"/>
+		<text name="tc_inbox_chipFallenTree" text="Road blocked"/>
 		<text name="tc_inbox_chipSprayDrift" text="Complaint"/>
 		<text name="tc_inbox_chipJoyriders" text="Vandalism"/>
 		<text name="tc_inbox_chipFlyTipping" text="Fly-tipping"/>
@@ -1008,6 +1011,10 @@
 		<text name="tc_poaching_leftBody" text="%s has accepted the offer from %s and handed in their notice. They leave at the start of %s."/>
 		<text name="tc_inbox_chipInjury" text="Injury"/>
 		<text name="tc_injury_eventName" text="Workplace injury"/>
+		<text name="tc_fallenTree_eventName" text="Fallen tree"/>
+		<text name="tc_fallenTree_location" text="Roads around Field %s"/>
+		<text name="tc_fallenTree_offerTitle" text="Trees down on the roads around Field %s"/>
+		<text name="tc_fallenTree_offerBody" text="The bad weather has brought trees down across the roads around Field %s: %s big beeches, by Fields %s, each one blocking a road. The council's highways team want them all cleared today and will pay %s. Take it on and each tree is marked on your map. Cut them up with a chainsaw and get them off the roads; the wood's yours to keep or sell. Turn it down and their own crew will deal with them, but they'll remember you didn't."/>
 		<text name="tc_injury_title" text="%s hurt at work"/>
 		<text name="tc_injury_body" text="%s %s. Nothing's broken, but they're off work for %d day(s), counting today: %s."/>
 		<text name="tc_injury_bodyOnJob" text="%s %s. They've been patched up and are seeing the job through, but they'll be off work for %d day(s) once they're back."/>

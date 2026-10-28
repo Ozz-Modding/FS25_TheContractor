@@ -52,6 +52,15 @@
 -- type isn't rolled again on that farm. Pending triggers are server-only
 -- and saved. The console's tcCompany event ignores the window.
 --
+-- After bad weather (107): an event type with chancePerStorm (0-1) instead
+-- of ratePerPeriod is rolled once at the end of each spell of bad weather
+-- (anything but sun or cloud: rain, snow, hail, thunder, a twister), read
+-- from vanilla's weather every hour on the server. A hit is held as a
+-- pending trigger (below) for when it's found: the next hour if the weather
+-- clears during the morning, else in the event's triggerHours window
+-- (STORM_FOUND_HOURS without one) that morning or the next. The setting's
+-- multiplier and the cooldown apply, as for daily events.
+--
 -- Console (083): an optional console = { ... } on the definition, all
 -- server-side:
 --   prepareTrigger(farmId, details)  tcCompany event <type> [details]: sets up
@@ -75,6 +84,12 @@ TheContractorRandomEvents.WAIT = "wait"
 
 -- Guards against stages that send each other round in a loop with no delay.
 TheContractorRandomEvents.MAX_STAGES_PER_STEP = 20
+
+-- 107: when an event after bad weather is found (see the header). The
+-- weather clearing before STORM_SAME_DAY_UNTIL (and after the window's
+-- start) finds it the next hour; any later, the next morning.
+TheContractorRandomEvents.STORM_FOUND_HOURS = { 7, 9 }
+TheContractorRandomEvents.STORM_SAME_DAY_UNTIL = 14
 
 TheContractorRandomEvents.VALUE_TYPE = {
     NUMBER = 1,
@@ -101,6 +116,11 @@ function TheContractorRandomEvents.new()
     -- Rolled events waiting for their hour (triggerHours, 078): { farmId,
     -- eventType, day, hour }, oldest first. Server-only.
     self.pendingTriggers = {}
+
+    -- 107: whether the weather was bad at the last hourly look, nil before
+    -- the first. Server-only, not saved: a load during a spell of bad
+    -- weather starts watching it afresh.
+    self.wasBadWeather = nil
 
     return self
 end
@@ -218,6 +238,7 @@ function TheContractorRandomEvents:stopDailyTick()
 end
 
 function TheContractorRandomEvents:onHourChanged()
+    self:checkWeather()
     self:firePendingTriggers()
 end
 
@@ -244,8 +265,10 @@ function TheContractorRandomEvents:rollNewEvents()
     local daysPerPeriod = getDaysPerPeriod()
     for _, farmId in ipairs(self:getCompanyFarmIds()) do
         for _, key in ipairs(self.eventTypeOrder) do
-            if self:getCooldownLeft(farmId, key) == 0 and not self:hasPendingTrigger(farmId, key) then
-                local definition = self.eventTypes[key]
+            local definition = self.eventTypes[key]
+            -- 107: one after bad weather is rolled as the weather clears.
+            if self:getCooldownLeft(farmId, key) == 0 and not self:hasPendingTrigger(farmId, key) and
+                    not TheContractorRandomEvents.isStormEvent(definition) then
                 local rate = definition.ratePerPeriod ~= nil and definition.ratePerPeriod(farmId) or 0
                 local chance = TheContractorRandomEvents.getDailyChance(rate, multiplier, daysPerPeriod)
                 if chance > 0 and math.random() < chance then
@@ -284,12 +307,13 @@ function TheContractorRandomEvents:hasPendingTrigger(farmId, key)
 end
 
 -- Holds a rolled event until its hour today. roll (0-1) picks the hour.
-function TheContractorRandomEvents:addPendingTrigger(farmId, key, roll)
+-- day and hour (107) set when instead.
+function TheContractorRandomEvents:addPendingTrigger(farmId, key, roll, day, hour)
     local pending = {
         farmId = farmId,
         eventType = key,
-        day = getToday(),
-        hour = TheContractorRandomEvents.getTriggerHour(self.eventTypes[key].triggerHours, roll),
+        day = day or getToday(),
+        hour = hour or TheContractorRandomEvents.getTriggerHour(self.eventTypes[key].triggerHours, roll),
     }
     table.insert(self.pendingTriggers, pending)
     return pending
@@ -321,6 +345,84 @@ function TheContractorRandomEvents:firePendingTriggers()
             local incident = self:triggerEvent(pending.farmId, pending.eventType)
             TCLog.info("TheContractor: farm %d random event '%s' due at %02d:00 triggered%s", pending.farmId,
                 pending.eventType, pending.hour, incident == nil and ", but nothing to act on" or "")
+        end
+    end
+end
+
+-- After bad weather (server, 107) ---------------------------------------------------
+
+function TheContractorRandomEvents.isStormEvent(definition)
+    return definition.chancePerStorm ~= nil
+end
+
+-- Anything but sun or cloud is bad weather (WeatherType: rain, snow, hail,
+-- a twister, thunder).
+function TheContractorRandomEvents.isBadWeatherType(weatherType)
+    return weatherType ~= nil and weatherType ~= WeatherType.SUN and weatherType ~= WeatherType.PARTIALLY_CLOUDY and
+        weatherType ~= WeatherType.CLOUDY
+end
+
+-- The weather type now, or nil if vanilla's weather can't say.
+function TheContractorRandomEvents.getCurrentWeatherType()
+    local environment = g_currentMission.environment
+    local weather = environment ~= nil and environment.weather or nil
+    if weather == nil or weather.getCurrentWeatherType == nil or weather.forecastItems == nil or
+            #weather.forecastItems == 0 then
+        return nil
+    end
+    return weather:getCurrentWeatherType()
+end
+
+-- When an event after bad weather that cleared at hour (today) is found:
+-- day, hour. roll (0-1) picks the hour in the window.
+function TheContractorRandomEvents.getStormFoundAt(today, hour, foundHours, roll)
+    local T = TheContractorRandomEvents
+    foundHours = foundHours or T.STORM_FOUND_HOURS
+    if hour < foundHours[1] then
+        return today, T.getTriggerHour(foundHours, roll)
+    elseif hour < T.STORM_SAME_DAY_UNTIL then
+        return today, hour + 1
+    end
+    return today + 1, T.getTriggerHour(foundHours, roll)
+end
+
+-- Hourly: a spell of bad weather that's just ended rolls the events that
+-- follow one.
+function TheContractorRandomEvents:checkWeather()
+    local weatherType = TheContractorRandomEvents.getCurrentWeatherType()
+    if weatherType == nil then
+        return
+    end
+    local isBad = TheContractorRandomEvents.isBadWeatherType(weatherType)
+    local hasCleared = self.wasBadWeather == true and not isBad
+    self.wasBadWeather = isBad
+    if hasCleared then
+        self:onBadWeatherEnded()
+    end
+end
+
+-- random is for the tests.
+function TheContractorRandomEvents:onBadWeatherEnded(random)
+    random = random or math.random
+    local multiplier = TheContractorRandomEvents.getRateMultiplier()
+    if multiplier <= 0 then
+        return
+    end
+    local today, hour = getToday(), getCurrentHour()
+    for _, farmId in ipairs(self:getCompanyFarmIds()) do
+        for _, key in ipairs(self.eventTypeOrder) do
+            local definition = self.eventTypes[key]
+            if TheContractorRandomEvents.isStormEvent(definition) and self:getCooldownLeft(farmId, key) == 0 and
+                    not self:hasPendingTrigger(farmId, key) then
+                local chance = definition.chancePerStorm * multiplier
+                if chance > 0 and random() < chance then
+                    local day, foundHour = TheContractorRandomEvents.getStormFoundAt(today, hour,
+                        definition.triggerHours, random())
+                    self:addPendingTrigger(farmId, key, nil, day, foundHour)
+                    TCLog.info("TheContractor: farm %d random event '%s' rolled after bad weather (%.2f), due day %d at %02d:00",
+                        farmId, key, chance, day, foundHour)
+                end
+            end
         end
     end
 end
@@ -1028,7 +1130,10 @@ function TheContractorRandomEvents.registerConsoleCommands()
                 local definition = randomEvents:getEventType(key)
                 local cooldownLeft = randomEvents:getCooldownLeft(farmId, key)
                 local odds
-                if TheContractorRandomEvents.isJobEvent(definition) then
+                if TheContractorRandomEvents.isStormEvent(definition) then
+                    odds = string.format("%.1f%% after each spell of bad weather",
+                        definition.chancePerStorm * multiplier * 100)
+                elseif TheContractorRandomEvents.isJobEvent(definition) then
                     local chanceText = type(definition.chancePerJob) == "function" and "depends on the job" or
                         string.format("%.1f%%", TheContractorRandomEvents.getJobChance(definition.chancePerJob,
                             multiplier) * 100)

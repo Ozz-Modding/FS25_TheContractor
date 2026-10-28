@@ -316,7 +316,13 @@ function TheContractorJob:getLocationText()
         return self.workshop.vehicleName or "?"
     end
     local field = g_fieldManager:getFieldById(self.fieldId)
-    return field ~= nil and field:getName() or tostring(self.fieldId)
+    local name = field ~= nil and field:getName() or tostring(self.fieldId)
+    -- 107: "Roads around Field 12".
+    local jobDef = TheContractorJobGeneration ~= nil and TheContractorJobGeneration.JOB_TYPES[self.jobType] or nil
+    if jobDef ~= nil and jobDef.locationKey ~= nil then
+        return string.format(g_i18n:getText(jobDef.locationKey), name)
+    end
+    return name
 end
 
 -- 044: operationSkill, worked out on first use for a job from before it
@@ -517,13 +523,18 @@ function TheContractorJob:getListTitle()
 end
 
 -- A table row's Field cell: the field's name, a breakdown's field, or "-"
--- for a machine in one of our repair zones.
+-- for a machine in one of our repair zones or (107) a job whose field only
+-- says where it is (offField).
 function TheContractorJob:getListFieldText()
     if self.workshop ~= nil then
         if self.workshop.fieldId ~= nil then
             local field = g_fieldManager:getFieldById(self.workshop.fieldId)
             return field ~= nil and field:getName() or tostring(self.workshop.fieldId)
         end
+        return "-"
+    end
+    local jobDef = TheContractorJobGeneration ~= nil and TheContractorJobGeneration.JOB_TYPES[self.jobType] or nil
+    if jobDef ~= nil and jobDef.offField then
         return "-"
     end
     return self:getLocationText()

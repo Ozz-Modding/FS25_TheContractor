@@ -57,5 +57,8 @@ function TCRespondToJobOfferEvent:run(connection)
     end
 
     local newState = self.accept and TheContractorJob.STATE.ACCEPTED or TheContractorJob.STATE.DECLINED
-    jobs:transitionJobState(self.farmId, self.jobId, newState)
+    -- 107: who accepted it, for a job allocated to its players at once.
+    local playerName = TheContractorAllocation ~= nil and TheContractorAllocation.getConnectionPlayerName(connection) or
+        nil
+    jobs:transitionJobState(self.farmId, self.jobId, newState, playerName)
 end

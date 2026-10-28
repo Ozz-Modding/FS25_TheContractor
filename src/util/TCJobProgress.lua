@@ -332,6 +332,10 @@ local JOB_TYPE_HANDLERS = {
     baleWrap = { getCompletion = getBaleWrapCompletion },
     strawDelivery = { getCompletion = getDeliveryCompletion },
     flyTipping = { getCompletion = getFlyTippingCompletion },
+    -- 107: the road clear of the fallen tree.
+    fallenTree = { getCompletion = function(job)
+        return TheContractorFallenTree.getJobCompletion(job)
+    end },
     -- 106: delivered, and the road clear.
     spillRecovery = { getCompletion = function(job)
         return TheContractorCropSpill.getCompletion(job)

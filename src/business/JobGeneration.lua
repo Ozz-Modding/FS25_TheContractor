@@ -161,6 +161,16 @@ TheContractorJobGeneration.JOB_TYPES = {
     -- selling point, by the end of tomorrow, for nothing.
     spillRecovery = { serverMeasured = true, playerOnly = true, noEquipment = true, deliveryOnly = true,
         spill = true, noReward = true, noJobEvents = true, skill = "haulage" },
+    -- 107: trees down across roads after bad weather, for the council
+    -- (TheContractorFallenTree). Its field is only the one nearest the
+    -- first tree, to say where they are (offField: nothing's done to it,
+    -- the markers are on the trees). Taken on means allocated to the farm's
+    -- players at once (allocateOnAccept), since it's due the same day. A
+    -- fixed reward and price (the event's own), done once every road is
+    -- clear.
+    fallenTree = { serverMeasured = true, playerOnly = true, noEquipment = true, offField = true,
+        allocateOnAccept = true, noJobEvents = true, reputationReward = 10, locationKey = "tc_fallenTree_location",
+        equipmentNeed = "chainsaw" },
     -- 100: a customer's machine in a repair zone, for a repair or a
     -- service with FS25_AdvancedDamageSystem (TheContractorRepairContracts).
     -- No field (fieldId 0), crew or kit of ours: priced from ADS's quote,
