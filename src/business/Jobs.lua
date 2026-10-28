@@ -201,6 +201,11 @@ function TheContractorJobs:createJob(farmId, jobType, fieldId, requiredSkillLeve
     end
     job.workshop = workshop
     job.spill = spill
+    -- 110: after workshop and spill, which decide it.
+    local farmers = g_currentMission.TheContractor.Farmers
+    if farmers ~= nil then
+        job.customerId = farmers:getCustomerIdForJob(job)
+    end
     self:registerJob(job)
 
     if g_server ~= nil then
@@ -296,7 +301,7 @@ function TheContractorJobs:proposeCounterOffer(farmId, jobId, counterPrice)
     elseif outcome == TheContractorNegotiation.OUTCOME.REJECTED or roundCapHit or eagernessBottomedOut then
         outcome = TheContractorNegotiation.OUTCOME.REJECTED
         job:transitionTo(TheContractorJob.STATE.DECLINED)
-        self:onJobDeclined(job)
+        self:onJobDeclined(job, TheContractorRelationships.DECLINE_REASON.WALKED_AWAY)
     else
         job:setPrice(resultPrice)
     end
@@ -315,7 +320,9 @@ end
 -- locally, then broadcasts to other clients. Only the server may drive
 -- transitions. playerName (107): who accepted it, for a job that's
 -- allocated to its players as it's accepted (allocateOnAccept).
-function TheContractorJobs:transitionJobState(farmId, jobId, newState, playerName)
+-- declineReason (113): how an offer going to declined ended, a
+-- TheContractorRelationships.DECLINE_REASON (nil: the player declined it).
+function TheContractorJobs:transitionJobState(farmId, jobId, newState, playerName, declineReason)
     if not g_currentMission:getIsServer() then
         return false
     end
@@ -335,7 +342,7 @@ function TheContractorJobs:transitionJobState(farmId, jobId, newState, playerNam
     end
 
     if newState == TheContractorJob.STATE.DECLINED then
-        self:onJobDeclined(job)
+        self:onJobDeclined(job, declineReason)
     elseif newState == TheContractorJob.STATE.ACCEPTED then
         self:onJobAccepted(job, playerName)
     end
@@ -378,8 +385,11 @@ end
 
 -- Server: an offer turned down, run out or walked away from in negotiation.
 -- Anything laid out for it before it was even taken (075's fly-tipped pile)
--- goes - the farmer has found someone else.
-function TheContractorJobs:onJobDeclined(job)
+-- goes - the farmer has found someone else. reason (113): a
+-- TheContractorRelationships.DECLINE_REASON, nil for a plain decline; the
+-- customer's relationship drops by it.
+function TheContractorJobs:onJobDeclined(job, reason)
+    g_currentMission.TheContractor.Relationships:onJobDeclined(job, reason)
     TCFieldPreparation.clearUpAfterJob(job)
     g_currentMission.TheContractor.Inbox:removeMessagesForJob(job.farmId, job.id)
     -- 100: the customer takes their machine elsewhere.
@@ -582,7 +592,7 @@ end
 --
 -- Offers nobody answered (offered/negotiating) lapse at the same point,
 -- quietly flipping to declined: the player never committed, so there's no
--- reputation hit, and it stops a stale offer being accepted only to fail
+-- reputation hit (only the customer's relationship, 113), and it stops a stale offer being accepted only to fail
 -- at the very next day change.
 function TheContractorJobs:onDayChanged()
     local today = g_currentMission.environment.currentMonotonicDay
@@ -593,12 +603,14 @@ function TheContractorJobs:onDayChanged()
             if isOffer and job.workshop ~= nil and job.workshop.offerExpiresDay ~= nil and
                     today > job.workshop.offerExpiresDay then
                 -- 100: a workshop offer lapses before its job would be due.
-                self:transitionJobState(farmId, job.id, TheContractorJob.STATE.DECLINED)
+                self:transitionJobState(farmId, job.id, TheContractorJob.STATE.DECLINED, nil,
+                    TheContractorRelationships.DECLINE_REASON.LAPSED)
             elseif job.deadlineDay ~= nil and today > job.deadlineDay then
                 if isMissableState(job.state) then
                     self:missJob(job)
                 elseif job.state == TheContractorJob.STATE.OFFERED or job.state == TheContractorJob.STATE.NEGOTIATING then
-                    self:transitionJobState(farmId, job.id, TheContractorJob.STATE.DECLINED)
+                    self:transitionJobState(farmId, job.id, TheContractorJob.STATE.DECLINED, nil,
+                        TheContractorRelationships.DECLINE_REASON.LAPSED)
                 end
             end
         end
@@ -644,6 +656,10 @@ function TheContractorJobs:missJob(job, noPenalty)
         penalty = g_currentMission.TheContractor.RepairContracts:judgeTampering(job, penalty)
     end
     g_currentMission.TheContractor.Reputation:addReputation(job.farmId, -penalty)
+    -- 113: the customer remembers (a workshop job has none).
+    if not noPenalty then
+        g_currentMission.TheContractor.Relationships:onJobMissed(job)
+    end
 
     local wasAllocated = job.state ~= TheContractorJob.STATE.ACCEPTED
     self:applyJobStateChanged(job.farmId, job.id, TheContractorJob.STATE.MISSED)
@@ -1243,6 +1259,8 @@ function TheContractorJobs:completeJob(job, isForced)
 
     local reputationReward = self:calculateReputationReward(job)
     g_currentMission.TheContractor.Reputation:addReputation(job.farmId, reputationReward)
+    -- 113: and the customer's opinion, by the same quality.
+    g_currentMission.TheContractor.Relationships:onJobCompleted(job)
 
     -- 045: extra wear from skill gaps, dirt, and whether the workers wash
     -- the equipment - before the cooldown (it adds the washing time) and
@@ -1432,6 +1450,8 @@ function TheContractorJobs.writeJob(streamId, job)
     TheContractorJobs.writeWorkshop(streamId, job.workshop)
     -- 106.
     TheContractorCropSpill.writeStream(streamId, job.spill)
+    -- 110. 0 stands in for "no customer".
+    streamWriteInt32(streamId, job.customerId or 0)
 end
 
 -- 100: what a client needs of a workshop job (the uniqueIds stay on the
@@ -1606,6 +1626,8 @@ function TheContractorJobs.readJob(streamId)
 
     job.workshop = TheContractorJobs.readWorkshop(streamId)
     job.spill = TheContractorCropSpill.readStream(streamId)
+    local customerId = streamReadInt32(streamId)
+    job.customerId = customerId ~= 0 and customerId or nil
 
     return job
 end
@@ -1736,6 +1758,9 @@ function TheContractorJobs:loadFromXMLFile(xmlFile)
             job.graceRemainingMs = getXMLFloat(xmlFile, jobKey .. "#graceRemainingMs")
             job.workshop = TheContractorJobs.loadWorkshop(xmlFile, jobKey .. ".workshop")
             job.spill = TheContractorCropSpill.loadFromXML(xmlFile, jobKey .. ".spill")
+            -- 110: nil for a job saved before it existed - TheContractorFarmers:
+            -- setUp links it from its field.
+            job.customerId = getXMLInt(xmlFile, jobKey .. "#customerId")
 
             self.jobsByFarm[farmId] = self.jobsByFarm[farmId] or {}
             self.jobsByFarm[farmId][id] = job
@@ -2024,6 +2049,9 @@ function TheContractorJobs:saveToXmlFile(xmlFile)
             end
             if job.spill ~= nil then
                 TheContractorCropSpill.saveToXML(xmlFile, jobKey .. ".spill", job.spill)
+            end
+            if job.customerId ~= nil then
+                setXMLInt(xmlFile, jobKey .. "#customerId", job.customerId)
             end
 
             if job.assignedWorkerId ~= nil then

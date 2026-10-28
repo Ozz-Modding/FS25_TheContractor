@@ -160,25 +160,34 @@
                 <Text profile="tc_panelHeading" id="inboxDetailTitle" text="" position="24px -16px" size="752px 32px"/>
                 <Bitmap profile="tc_divider" position="24px -56px" size="752px 1px"/>
 
+                <!-- 112: the first rows' values stop short of the customer's portrait (inboxPortraitRender). -->
                 <BoxLayout profile="tc_detailRows" id="inboxDetailRows" position="24px -60px" size="752px 545px">
+                    <!-- 113: the relationship chip leads the customer's name. -->
+                    <GuiElement profile="tc_detailRow" id="inboxRowCustomer" size="752px 34px">
+                        <Text profile="tc_detailLabel" text="$l10n_tc_detail_from" position="0px 0px"/>
+                        <RoundCorner profile="tc_chip" id="inboxDetailRelationshipChip" position="220px -7px" size="96px 20px"/>
+                        <Text profile="tc_chipText" id="inboxDetailRelationshipChipText" position="220px -7px" size="96px 20px"/>
+                        <Text profile="tc_detailValue" id="inboxDetailCustomer" text="" position="326px 0px" size="304px 34px"/>
+                        <Bitmap profile="tc_detailRowDivider"/>
+                    </GuiElement>
                     <GuiElement profile="tc_detailRow" size="752px 34px">
                         <Text profile="tc_detailLabel" id="inboxLabelField" text="$l10n_tc_detail_field" position="0px 0px"/>
-                        <Text profile="tc_detailValue" id="inboxDetailField" text="" position="220px 0px" size="532px 34px"/>
+                        <Text profile="tc_detailValue" id="inboxDetailField" text="" position="220px 0px" size="410px 34px"/>
                         <Bitmap profile="tc_detailRowDivider"/>
                     </GuiElement>
                     <GuiElement profile="tc_detailRow" size="752px 34px">
                         <Text profile="tc_detailLabel" text="$l10n_tc_detail_dueBy" position="0px 0px"/>
-                        <Text profile="tc_detailValue" id="inboxDetailTargetDate" text="" position="220px 0px" size="532px 34px"/>
+                        <Text profile="tc_detailValue" id="inboxDetailTargetDate" text="" position="220px 0px" size="410px 34px"/>
                         <Bitmap profile="tc_detailRowDivider"/>
                     </GuiElement>
                     <GuiElement profile="tc_detailRow" size="752px 34px">
                         <Text profile="tc_detailLabel" text="$l10n_tc_detail_price" position="0px 0px"/>
-                        <Text profile="tc_detailValue" id="inboxDetailPrice" text="" position="220px 0px" size="532px 34px"/>
+                        <Text profile="tc_detailValue" id="inboxDetailPrice" text="" position="220px 0px" size="410px 34px"/>
                         <Bitmap profile="tc_detailRowDivider"/>
                     </GuiElement>
                     <GuiElement profile="tc_detailRow" size="752px 34px">
                         <Text profile="tc_detailLabel" id="inboxLabelCrew" text="$l10n_tc_detail_crew" position="0px 0px"/>
-                        <Text profile="tc_detailValue" id="inboxDetailCrew" text="" position="220px 0px" size="532px 34px"/>
+                        <Text profile="tc_detailValue" id="inboxDetailCrew" text="" position="220px 0px" size="410px 34px"/>
                         <Bitmap profile="tc_detailRowDivider"/>
                     </GuiElement>
                     <GuiElement profile="tc_detailRow" id="inboxRowSkill" size="752px 34px">
@@ -270,6 +279,14 @@
                 <Bitmap profile="tc_divider" position="24px -56px" size="752px 1px"/>
 
                 <BoxLayout profile="tc_detailRows" id="inboxMessageRows" position="24px -60px" size="752px 545px">
+                    <!-- 112: an offer's customer, their portrait beside these rows. -->
+                    <GuiElement profile="tc_detailRow" id="inboxMessageRowFrom" size="752px 34px">
+                        <Text profile="tc_detailLabel" text="$l10n_tc_detail_from" position="0px 0px"/>
+                        <RoundCorner profile="tc_chip" id="inboxMessageRelationshipChip" position="220px -7px" size="96px 20px"/>
+                        <Text profile="tc_chipText" id="inboxMessageRelationshipChipText" position="220px -7px" size="96px 20px"/>
+                        <Text profile="tc_detailValue" id="inboxMessageFrom" text="" position="326px 0px" size="304px 34px"/>
+                        <Bitmap profile="tc_detailRowDivider"/>
+                    </GuiElement>
                     <GuiElement profile="tc_detailRow" size="752px 34px">
                         <Text profile="tc_detailLabel" text="$l10n_tc_detail_messageType" position="0px 0px"/>
                         <RoundCorner profile="tc_chip" id="inboxMessageChip" position="220px -7px" size="110px 20px"/>
@@ -278,19 +295,29 @@
                     </GuiElement>
                     <GuiElement profile="tc_detailRow" size="752px 34px">
                         <Text profile="tc_detailLabel" text="$l10n_tc_detail_received" position="0px 0px"/>
-                        <Text profile="tc_detailValue" id="inboxMessageReceived" text="" position="220px 0px" size="532px 34px"/>
+                        <Text profile="tc_detailValue" id="inboxMessageReceived" text="" position="220px 0px" size="410px 34px"/>
                         <Bitmap profile="tc_detailRowDivider"/>
                     </GuiElement>
                     <GuiElement profile="tc_detailRow" id="inboxMessageRowExpires" size="752px 34px">
                         <Text profile="tc_detailLabel" text="$l10n_tc_detail_replyBy" position="0px 0px"/>
-                        <Text profile="tc_detailValue" id="inboxMessageExpires" text="" position="220px 0px" size="532px 34px"/>
+                        <Text profile="tc_detailValue" id="inboxMessageExpires" text="" position="220px 0px" size="410px 34px"/>
                         <Bitmap profile="tc_detailRowDivider"/>
                     </GuiElement>
+                    <!-- 112: keeps the body below the portrait when there's no Reply by row above it. -->
+                    <GuiElement profile="tc_detailRow" id="inboxMessageRowPortraitSpacer" size="752px 34px"/>
                     <GuiElement profile="tc_detailRow" size="752px 400px">
                         <Text profile="tc_panelText" id="inboxMessageBody" text="" position="0px -16px" size="752px 384px" textMaxNumLines="18"/>
                     </GuiElement>
                 </BoxLayout>
             </GuiElement>
+
+            <!-- 112: who the highlighted offer is from, top right of whichever panel shows. The menu's one
+                 portrait (TCWorkerPortrait) moves between this box and the People tab's. -->
+            <GuiElement id="inboxPortraitFrame" position="1320px -82px" visible="false">
+                <RoundCorner profile="tc_portraitFrame" position="0px 0px"/>
+                <RoundCorner profile="tc_portraitFrameSurface" position="2px -2px"/>
+            </GuiElement>
+            <Render profile="tc_customerPortrait" id="inboxPortraitRender" position="1324px -86px"/>
         </GuiElement>
 
         <!-- Calendar ======================================================= -->
@@ -652,7 +679,58 @@
                 <Text profile="tc_panelNote" id="staffOfficeNote" text="" position="24px -540px" size="752px 50px" textMaxNumLines="2"/>
             </GuiElement>
 
-            <!-- 042: live portrait, driven by TCWorkerPortrait (it sets the scene). Outside both panels, which share it (090). -->
+            <!-- 111: the Others view: a farmer or the local official. -->
+            <GuiElement id="staffPersonDetailsBox" position="680px -20px">
+                <RoundCorner profile="tc_panel" position="0px 0px" size="800px 610px"/>
+                <Text profile="tc_panelHeading" id="staffPersonTitle" text="" position="24px -16px" size="752px 32px"/>
+                <Bitmap profile="tc_divider" position="24px -56px" size="752px 1px"/>
+
+                <BoxLayout profile="tc_detailRows" id="staffPersonRows" position="24px -64px" size="480px 340px">
+                    <GuiElement profile="tc_detailRow" size="480px 34px">
+                        <Text profile="tc_detailLabel" text="$l10n_tc_people_detailRole" position="0px 0px" size="170px 34px"/>
+                        <Text profile="tc_detailValue" id="staffPersonRole" text="" position="170px 0px" size="310px 34px"/>
+                        <Bitmap profile="tc_detailRowDivider"/>
+                    </GuiElement>
+                    <!-- 113: the player's farm's relationship with them. -->
+                    <GuiElement profile="tc_detailRow" size="480px 34px">
+                        <Text profile="tc_detailLabel" text="$l10n_tc_people_detailRelationship" position="0px 0px" size="170px 34px"/>
+                        <RoundCorner profile="tc_chip" id="staffPersonRelationshipChip" position="170px -7px" size="96px 20px"/>
+                        <Text profile="tc_chipText" id="staffPersonRelationshipChipText" position="170px -7px" size="96px 20px"/>
+                        <Bitmap profile="tc_detailRowDivider"/>
+                    </GuiElement>
+                    <GuiElement profile="tc_detailRow" id="staffPersonRowLand" size="480px 34px">
+                        <Text profile="tc_detailLabel" text="$l10n_tc_people_detailLand" position="0px 0px" size="170px 34px"/>
+                        <Text profile="tc_detailValue" id="staffPersonLand" text="" position="170px 0px" size="310px 34px"/>
+                        <Bitmap profile="tc_detailRowDivider"/>
+                    </GuiElement>
+                    <GuiElement profile="tc_detailRow" id="staffPersonRowYard" size="480px 34px">
+                        <Text profile="tc_detailLabel" text="$l10n_tc_people_detailYard" position="0px 0px" size="170px 34px"/>
+                        <Text profile="tc_detailValue" id="staffPersonYard" text="" position="170px 0px" size="310px 34px"/>
+                        <Bitmap profile="tc_detailRowDivider"/>
+                    </GuiElement>
+                    <GuiElement profile="tc_detailRow" size="480px 34px">
+                        <Text profile="tc_detailLabel" text="$l10n_tc_people_detailJobs" position="0px 0px" size="170px 34px"/>
+                        <Text profile="tc_detailValue" id="staffPersonJobs" text="" position="170px 0px" size="310px 34px"/>
+                        <Bitmap profile="tc_detailRowDivider"/>
+                    </GuiElement>
+                    <GuiElement profile="tc_detailRow" size="480px 34px">
+                        <Text profile="tc_detailLabel" text="$l10n_tc_people_detailPaid" position="0px 0px" size="170px 34px"/>
+                        <Text profile="tc_detailValue" id="staffPersonPaid" text="" position="170px 0px" size="310px 34px"/>
+                        <Bitmap profile="tc_detailRowDivider"/>
+                    </GuiElement>
+                    <GuiElement profile="tc_detailRow" size="480px 34px">
+                        <Text profile="tc_detailLabel" text="$l10n_tc_people_detailLastJob" position="0px 0px" size="170px 34px"/>
+                        <Text profile="tc_detailValue" id="staffPersonLastJob" text="" position="170px 0px" size="310px 34px"/>
+                    </GuiElement>
+                </BoxLayout>
+
+                <Text profile="tc_sectionTitle" text="$l10n_tc_people_aboutHeading" position="24px -418px" size="752px 24px"/>
+                <Bitmap profile="tc_divider" position="24px -446px" size="752px 1px"/>
+                <Text profile="tc_panelText" id="staffPersonAbout" text="" position="24px -460px" size="752px 66px" textMaxNumLines="3"/>
+                <Text profile="tc_panelNote" id="staffPersonNote" text="" position="24px -540px" size="752px 50px" textMaxNumLines="2"/>
+            </GuiElement>
+
+            <!-- 042: live portrait, driven by TCWorkerPortrait (it sets the scene). Outside every panel, which share it (090, 111). -->
             <Render profile="tc_workerPortrait" id="staffPortraitRender" position="1200px -88px"/>
         </GuiElement>
 

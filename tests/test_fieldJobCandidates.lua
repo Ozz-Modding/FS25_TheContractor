@@ -44,6 +44,12 @@ local function setup()
 
     local tc = g_currentMission.TheContractor
     tc.Jobs = TheContractorJobs.new()
+    -- 113: each field's customer (none unless set).
+    world.customers = {}
+    tc.Farmers = {
+        getCustomerIdForField = function(_, fieldId) return world.customers[fieldId] end,
+    }
+    world:addRelationships()
     function world:addJob(farmId, id, fieldId, state)
         local job = TheContractorJob.new(id, farmId, "harvest", fieldId, 1, 1, 1, 1000)
         job.state = state

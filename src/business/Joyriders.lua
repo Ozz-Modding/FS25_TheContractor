@@ -24,6 +24,8 @@ TheContractorJoyriders_mt = Class(TheContractorJoyriders)
 
 TheContractorJoyriders.EVENT_TYPE = "joyriders"
 TheContractorJoyriders.MESSAGE_KIND = "joyriders"
+-- 112: the bodies that end with the customer's name (getCustomerNamedArgs).
+TheContractorJoyriders.NAMED_BODY_KEYS = { tc_joyriders_offerBody = true, tc_joyriders_sowBody = true }
 
 -- About one every 2-3 years, whatever the farm's size: it's the area's
 -- grass fields that get hit, not the farm's fleet.
@@ -62,6 +64,10 @@ function TheContractorJoyriders:register(randomEvents, inbox)
         chipKey = "tc_inbox_chipJoyriders",
         endsWithJob = true,
         chipTone = "bad",
+        -- 112: the offers name the farmer.
+        getArgs = function(message)
+            return TheContractorInbox.getCustomerNamedArgs(message, TheContractorJoyriders.NAMED_BODY_KEYS)
+        end,
     })
 end
 

@@ -153,6 +153,7 @@ local function setup()
     tc.Parking = { returnVehicles = function() end, returnHiddenVehicles = function() end,
         isPending = function() return false end, sendToShop = function() return {} end }
     world.reputation = {}
+    world:addRelationships()
     tc.Reputation = {
         addReputation = function(_, farmId, delta) table.insert(world.reputation, delta) end,
         getStanding = function() return 0.5 end,

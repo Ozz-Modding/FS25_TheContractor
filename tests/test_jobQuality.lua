@@ -240,6 +240,7 @@ test("completeJob scores quality before the reward, so a poor job loses reputati
     local world, tc = setup()
     local changes = {}
     tc.Finances = { invoiceJob = function() end }
+    world:addRelationships()
     tc.Reputation = {
         addReputation = function(_, farmId, delta)
             table.insert(changes, delta)

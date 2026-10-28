@@ -1,7 +1,7 @@
--- Editing a worker's look in the vanilla wardrobe (077). TCEditWorkerDialog's
--- Wardrobe button opens WardrobeScreen on the worker's look, and the
--- wardrobe's Back hands the confirmed look back instead of putting it on
--- the player.
+-- Editing a person's look in the vanilla wardrobe (077): a worker's, or
+-- (111) a farmer's or the official's. TCEditPersonDialog's Wardrobe button
+-- opens WardrobeScreen on their look, and the wardrobe's Back hands the
+-- confirmed look back instead of putting it on the player.
 --
 -- WardrobeScreen only touches the local player in two places: onOpen copies
 -- g_localPlayer's style into currentPlayerStyle/temporaryPlayerStyle (every
@@ -10,7 +10,7 @@
 -- and exits. Neither can be hooked on the class: loadGui copies onOpen and
 -- onClose into the screen element, and TabbedMenu captures onButtonBack in
 -- a closure that every way back (button, Esc, gamepad) shares. So:
--- - the worker's style is swapped in right after changeScreen, which runs
+-- - the person's style is swapped in right after changeScreen, which runs
 --   onOpen synchronously;
 -- - for the session, the local player's setStyleAsync is shadowed by an
 --   instance field that takes the look while the wardrobe is the current
@@ -21,7 +21,8 @@
 --   outlive the screen, however it closes.
 --
 -- Client-side and local only: the look comes back as appearance data in the
--- dialog's draft, and Save sends it through 066's TCEditWorkerEvent.
+-- dialog's draft, and Save sends it through 066's TCEditWorkerEvent or
+-- 111's TCEditPersonEvent.
 
 TCWardrobe = {}
 
@@ -139,7 +140,7 @@ function TCWardrobe.open(appearance, onConfirmed)
         return false
     end
 
-    -- onOpen has just loaded the player's own look into both: the worker's
+    -- onOpen has just loaded the player's own look into both: the person's
     -- replaces it before the first update builds the preview.
     screen.currentPlayerStyle:copyFrom(style)
     screen.temporaryPlayerStyle:copyFrom(style)

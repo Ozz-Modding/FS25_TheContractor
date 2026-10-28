@@ -716,7 +716,8 @@ function TheContractorJobGeneration.removeCandidate(option, field)
 end
 
 -- Picks one of a job type's candidate fields (getCandidateFields), weighted
--- by size (026).
+-- by size (026) and by the farm's relationship with the field's customer
+-- (113, Relationships:getOfferWeight).
 function TheContractorJobGeneration:pickField(farmId, candidates)
     if #candidates == 0 then
         return nil
@@ -724,13 +725,15 @@ function TheContractorJobGeneration:pickField(farmId, candidates)
 
     -- Job size (026): fields over the farm's tier's size are rarer, not
     -- ruled out - see OVERSIZE_FIELD_WEIGHT.
-    local maxPreferredHa = g_currentMission.TheContractor.Reputation:getReputationTier(farmId).maxPreferredFieldHa
+    local tc = g_currentMission.TheContractor
+    local maxPreferredHa = tc.Reputation:getReputationTier(farmId).maxPreferredFieldHa
     local weights, totalWeight = {}, 0
     for i, field in ipairs(candidates) do
         local weight = 1
         if maxPreferredHa ~= nil and (field:getAreaHa() or 0) > maxPreferredHa then
             weight = TheContractorJobGeneration.OVERSIZE_FIELD_WEIGHT
         end
+        weight = weight * tc.Relationships:getOfferWeight(farmId, tc.Farmers:getCustomerIdForField(field:getId()))
         weights[i] = weight
         totalWeight = totalWeight + weight
     end
@@ -770,7 +773,8 @@ end
 -- rolls. A field with a live job on it (any farm's, offers included) is
 -- left out: the job freezes vanilla's NPC fieldwork there (034), so the
 -- field still qualifies for the same work and would otherwise be offered
--- again, a month later, as a second job on top of the first.
+-- again, a month later, as a second job on top of the first. 113: so is a
+-- field whose customer has fallen out with the farm (Relationships:refuses).
 function TheContractorJobGeneration:getCandidateFields(farmId, jobDef)
     local candidates = {}
     if jobDef.requiresWeeds and not TheContractorJobGeneration.getHasWeeds() then
@@ -784,10 +788,12 @@ function TheContractorJobGeneration:getCandidateFields(farmId, jobDef)
         return candidates
     end
 
-    local jobs = g_currentMission.TheContractor.Jobs
+    local tc = g_currentMission.TheContractor
+    local jobs = tc.Jobs
     for _, field in ipairs(g_fieldManager:getFields()) do
         if field:getOwner() ~= farmId and not jobs:isFieldProtected(field:getId()) and
-            TheContractorJobGeneration.isFieldEligible(field, jobDef) then
+            TheContractorJobGeneration.isFieldEligible(field, jobDef) and
+            not tc.Relationships:refuses(farmId, tc.Farmers:getCustomerIdForField(field:getId())) then
             table.insert(candidates, field)
         end
     end

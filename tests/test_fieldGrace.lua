@@ -141,6 +141,7 @@ end)
 local function fakeCompletion(world, tc)
     tc.Finances = { invoiceJob = function() end }
     tc.Reputation = { addReputation = function() end }
+    world:addRelationships()
     tc.Claims = { rollForJob = function() end }
     tc.Inbox = { removeMessagesForJob = function() end }
     tc.Dispatch = { stopJob = function() end }

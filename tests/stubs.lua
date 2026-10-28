@@ -224,6 +224,7 @@ function stubs.install()
             table.insert(world.farmStats, { farmId = farmId, statName = statName, delta = delta })
         end,
     }
+    FarmlandManager = { NO_OWNER_FARM_ID = 0 }
     SowingMachine = {
         processSowingMachineArea = function() end,
         onEndWorkAreaProcessing = function() end,
@@ -473,6 +474,14 @@ function stubs.install()
     -- Loads a src/ file (path relative to the repo root).
     function world:load(path)
         dofile(path)
+    end
+
+    -- 113: the real relationships, everyone neutral. Jobs, negotiation and
+    -- generation go through them for a job's or field's customer.
+    function world:addRelationships()
+        self:load("src/business/Relationships.lua")
+        g_currentMission.TheContractor.Relationships = TheContractorRelationships.new()
+        return g_currentMission.TheContractor.Relationships
     end
 
     -- Read by every price and pay helper. Without FS25_EconomyScale

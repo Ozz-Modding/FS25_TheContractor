@@ -295,6 +295,12 @@ function TheContractorJob.new(id, farmId, jobType, fieldId, requiredSkillLevel, 
     -- Saved and sent to clients.
     self.spill = nil
 
+    -- 110: who the job is for, a TheContractorFarmers person id (a farmer
+    -- or the local official), set as it's created (TheContractorFarmers:
+    -- getCustomerIdForJob). nil for an ADS repair contract. Saved and sent
+    -- to clients; read it through getCustomer/getCustomerName.
+    self.customerId = nil
+
     return self
 end
 
@@ -538,6 +544,21 @@ function TheContractorJob:getListFieldText()
         return "-"
     end
     return self:getLocationText()
+end
+
+-- 110: the person the job is for (a farmer or the local official), or nil
+-- for none (an ADS repair contract).
+function TheContractorJob:getCustomer()
+    local tc = g_currentMission.TheContractor
+    if self.customerId == nil or tc == nil or tc.Farmers == nil then
+        return nil
+    end
+    return tc.Farmers:getPerson(self.customerId)
+end
+
+function TheContractorJob:getCustomerName()
+    local customer = self:getCustomer()
+    return customer ~= nil and customer.name or nil
 end
 
 function TheContractorJob:canTransitionTo(newState)

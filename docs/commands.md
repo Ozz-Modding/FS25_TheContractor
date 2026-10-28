@@ -14,7 +14,7 @@ You type these into the developer console. You don't need cheats on. There are f
 Type a group on its own (or with `help`) to list its subcommands and their arguments. Subcommand names aren't case-sensitive. If you get the arguments wrong, the command prints that subcommand's usage.
 
 - **Your farm:** every command acts on your current farm. Most need that farm to have created a company first.
-- **Server only:** commands that change something only work on the server, which means single player or the host of a multiplayer game. The read-only lists `tcWorker list`, `tcWorker pool`, `tcJob list`, `tcJob log`, `tcCompany storages`, `tcCompany notices`, `tcCompany vehicleLog`, `tcCompany events`, `tcWorker standing` and `tcWorker hours` also work on a joined client.
+- **Server only:** commands that change something only work on the server, which means single player or the host of a multiplayer game. The read-only lists `tcWorker list`, `tcWorker pool`, `tcJob list`, `tcJob log`, `tcCompany storages`, `tcCompany yards`, `tcCompany farmers`, `tcCompany notices`, `tcCompany vehicleLog`, `tcCompany events`, `tcWorker standing` and `tcWorker hours` also work on a joined client.
 - **`<worker>`:** a hired worker's id, or the start of their first or last name. `amy`, `Hall` and `3` could all mean Amy Hall (#3). If a name matches more than one worker, the command lists them and asks for the id. `tcWorker list` shows ids and names.
 
 ## Workers — `tcWorker`
@@ -600,6 +600,90 @@ tcCompany debris 20 ladder
 ### `tcCompany debrisClear`
 
 Removes every piece of debris from the map.
+
+### `tcCompany yards [farmlandId|show [farmlandId]|hide]`
+
+A spike for finding the map's farm yards (108), where the generated farmers will live. A yard is a farmland with at least 2 of the map's own buildings that change hands with the land (sheds, silos, animal pens, farmhouses, ...), at least one of them a shed or a farmhouse. Detection runs on the live map each time; only your overrides (`tcCompany yard`) are saved. Read-only, so it also works on a joined client.
+
+- With no argument: one line per yard with its farmland id, owner farm (0 for nobody), how it became a yard (`detected`, or `declared` with `tcCompany yard`), its buildings by store category, whether any has a sell point or unloading station, its standing spots (how many it keeps, spread over the yard, of how many open ones it found) and where its middle is. Then the farmlands that have such buildings but aren't yards (the near misses, including any you ruled out), and every store category seen, so the rule's categories can be set from real maps. Spots are worked out as you ask (it can take a moment); on a joined client the navigation map check is skipped, so the count can be higher than the server's.
+- `<farmlandId>`: that farmland's buildings, one per line, with name, store category, whether it counts towards a yard, stations and position.
+- `show`: a red circle on the map at every yard, on this machine only. `show <farmlandId>`: just that yard, with a small circle on each of its standing spots: the server's list, the one its farmer stands on (114), worked out once a load and again when the yard's override changes.
+- `hide`: clears the circles.
+
+```
+tcCompany yards
+tcCompany yards 12
+tcCompany yards show
+tcCompany yards show 12
+tcCompany yards hide
+```
+
+```
+Yards (1):
+  #12 owner 0, detected, 4 building(s) (ANIMALPENS 1, SHEDS 2, SILOS 1), unloading, spots 40 of 212, at 412, -318
+Farmlands with buildings but no yard (1):
+  #5 owner 0, 1 building(s) (SHEDS 1)
+Categories seen: ANIMALPENS 1, SHEDS 3, SILOS 1
+```
+
+### `tcCompany yard <farmlandId> <on|off|auto>`
+
+Overrides yard detection for a farmland, for every farm (it's saved and sent to everyone): `on` makes it a yard whatever's on it (with no buildings it sits at the farmland's middle), `off` rules it out, and `auto` goes back to detection. Server only.
+
+```
+tcCompany yard 12 off
+tcCompany yard 30 on
+tcCompany yard 30 auto
+```
+
+### `tcCompany farmers [preview|show|hide|standing|regenerate] [targetAcres] [seed]`
+
+The map's farmers and the local official (110), who the jobs come from. The farmers are made the first time the mod runs on a save, by sharing out every farmland with a field that no player owns (see `preview` below), and they're the same for every farm. A farmer can lose all their land to players and still be on the list; land a player sells goes to a farmer near it. Jobs on a farmer's land are for that farmer, and anything else (jobs on land no farmer has, a fallen tree) is for the local official.
+
+- With no argument: one line per farmer with their id, name and gender, their acres (and the target they were made with), their farmlands, and their yard (or "yard off the map"), then the local official. Read-only, so it also works on a joined client.
+- `preview`: how the land would be split now, without changing anything. The total acres and number of farmers, then one line per farmer with their acres (and target), how many farmlands and which, and their yard (`(start)` if the farmer started there). Last, the largest and smallest holdings, how many yards were used and how many balancing moves were made. The split: only farmlands with at least one field and no player owner, every one of them to a farmer, a farmland's size its fields' area in acres; one farmer per `targetAcres` (default 50), at least 4, each aiming for that size give or take up to 30%; farm yards (`tcCompany yards`) on or near field land start a farmer, and any yard left over goes to a nearby farmer who has none. Read-only.
+- `show`: the same, and a label on the map at the middle of each farmland's fields with its farmer's number, and `Y` and the number on each farmer's yard, one colour per farmer, on this machine only.
+- `hide`: clears the labels.
+- `standing`: where each farmer stands in their yard today (114): the yard, which of its spots (`farmland:spot`) and how far it is from you, and whether they're there, shown or waiting until you look away; or why they're not in a yard (none on the map, a player owns it, no open spots). Farmers are only about from 07:00 to 19:00. Read-only.
+- `seed` (`preview` and `show`): the same seed always gives the same split. Without one a random one is used, and the first line says which, so a split you like can be shown again.
+- `regenerate [targetAcres]`: throws the farmers away and makes new ones from a fresh split at `targetAcres` (default 50), with new names, looks and ids. The local official stays. Every job loses its link to the old farmers, and every farm its relationships with them (`tcCompany relationship`; the official's are kept): jobs are linked again from their fields, and the command says how many changed. Server only.
+
+```
+tcCompany farmers
+tcCompany farmers preview 80
+tcCompany farmers show 80 1234
+tcCompany farmers hide
+tcCompany farmers standing
+tcCompany farmers regenerate 60
+```
+
+```
+Farmers (5), from a split at 30 acres a farmer, seed 1234:
+  #2 Tom Hargreaves (male): 92 acres (target 88), 3 farmland(s): 12, 14, 15, yard 12
+  #3 Ruth Bell (female): no land, yard off the map
+  ...
+Local official: #1 Alan Price (male)
+```
+
+### `tcCompany relationship [<person> <amount>]`
+
+Your farm's relationship with each farmer and the local official (113), from -100 to 100. Everyone starts at 0. Completed jobs raise it (more for better quality, and poor work lowers it). Missed, declined and lapsed offers, a counter-offer they walked away from, and an invoice you pursue all lower it. Every month it drifts 5 back towards 0. Good relationships bring more of that customer's offers and more room to haggle. Below -40 they offer you no work at all.
+
+- With no argument: one line per person (the official first) with their id, name, score and band (`excellent`, `good`, `neutral`, `poor`, `fallenOut`). Read-only, so it also works on a joined client.
+- `<person> <amount>`: changes the relationship with that person (their id or full name) by `amount`, which can be negative. The result is kept within -100 to 100. Server only.
+
+```
+tcCompany relationship
+tcCompany relationship 4 -50
+tcCompany relationship Tom Hargreaves 20
+```
+
+```
+Farm 1's relationships (-100 to 100, refusing work below -40):
+  #1 Alan Price (local official): 0 (neutral)
+  #2 Tom Hargreaves: 18 (good)
+  #3 Ruth Bell: -45 (fallenOut)
+```
 
 ## Log — `tcLog`
 

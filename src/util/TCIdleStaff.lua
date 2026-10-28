@@ -68,7 +68,9 @@ function TCIdleStaff.getSpotKey(x, z)
     return string.format("%d:%d", math.floor(x * 10 + 0.5), math.floor(z * 10 + 0.5))
 end
 
-local function hash(text)
+-- Our own string hash (not math.random, which every machine rolls
+-- differently). 114's farmers pick their spot with it too.
+function TCIdleStaff.hash(text)
     local h = 0
     for i = 1, #text do
         h = (h * 31 + text:byte(i)) % HASH_MODULUS
@@ -80,7 +82,7 @@ local function hash(text)
 end
 
 function TCIdleStaff.getScore(farmId, day, workerId, spotKey)
-    return hash(string.format("%d|%d|%d|%s", farmId, day, workerId, spotKey))
+    return TCIdleStaff.hash(string.format("%d|%d|%d|%s", farmId, day, workerId, spotKey))
 end
 
 -- workerId -> spotKey for one farm. Extra workers get no spot, spare spots
@@ -195,7 +197,7 @@ end
 
 -- Showing them (clients) ------------------------------------------------------
 
--- figures[workerId] = { worker, spot (where they're standing), yaw,
+-- figures[workerId] = { person (the worker), spot (where they're standing), yaw,
 -- graphics (nil until loaded nearby), isReady, isVisible }. A figure only
 -- exists while its worker is on a spot. occupied[spotKey] = workerId
 -- standing there. noStyle[workerId]: their look couldn't be built, so it
@@ -243,6 +245,8 @@ function TCIdleStaff.isSeen(spot, camera, cx, cy, cz)
     return sx > -margin and sx < 1 + margin and sy > -margin and sy < 1 + margin
 end
 
+-- A figure (here and 114's farmers): { person, spot = { x, y, z, yaw }, yaw,
+-- graphics, isReady, isVisible }.
 local function setFigureVisible(figure, isVisible)
     if figure.isVisible ~= isVisible then
         figure.isVisible = isVisible
@@ -259,10 +263,12 @@ local function placeModel(figure)
     figure.graphics:setModelYaw(figure.yaw)
 end
 
-function TCIdleStaff.loadModel(workerId, figure)
-    local style = TCWorkerAppearance.getPlayerStyle(figure.worker)
+-- Starts loading a figure's model from its person's look. noStyle[id] is
+-- set when the look can't be built, so it isn't retried every frame.
+function TCIdleStaff.loadModel(id, figure, noStyle)
+    local style = TCWorkerAppearance.getPlayerStyle(figure.person)
     if style == nil then
-        TCIdleStaff.noStyle[workerId] = true
+        noStyle[id] = true
         return
     end
 
@@ -286,9 +292,9 @@ function TCIdleStaff.loadModel(workerId, figure)
             placeModel(figure)
             figure.isReady = true
         else
-            TCLog.warning("TheContractor: couldn't load worker %d (%s) for a standing spot", workerId,
-                figure.worker.name)
-            TCIdleStaff.noStyle[workerId] = true
+            TCLog.warning("TheContractor: couldn't load the look of #%d (%s) to stand them about", id,
+                figure.person.name)
+            noStyle[id] = true
         end
     end, nil, nil, true)
 end
@@ -308,13 +314,13 @@ function TCIdleStaff.reloadLook(worker)
     TCIdleStaff.noStyle[worker.id] = nil
     local figure = TCIdleStaff.figures[worker.id]
     if figure ~= nil then
-        figure.worker = worker
+        figure.person = worker
         TCIdleStaff.freeModel(figure)
     end
 end
 
 function TCIdleStaff.putOnSpot(workerId, worker, spot)
-    local figure = { worker = worker, spot = spot, yaw = spot.yaw, graphics = nil, isReady = false,
+    local figure = { person = worker, spot = spot, yaw = spot.yaw, graphics = nil, isReady = false,
         isVisible = false }
     TCIdleStaff.figures[workerId] = figure
     TCIdleStaff.occupied[spot.key] = workerId
@@ -338,8 +344,8 @@ function TCIdleStaff.takeOffSpot(workerId)
     end
 end
 
--- Turns a shown worker towards a local player on foot nearby, or back to
--- the spot's arrow, at NPC's speed, feeding the turn to the animation.
+-- Turns a shown figure towards a local player on foot nearby, or back to
+-- the spot's own facing, at NPC's speed, feeding the turn to the animation.
 local function updateFacing(figure, dt)
     local targetYaw = figure.spot.yaw
     local player = g_localPlayer
@@ -385,14 +391,18 @@ function TCIdleStaff.updateWorker(workerId, entry, dt, camera, cx, cy, cz)
         figure = TCIdleStaff.putOnSpot(workerId, entry.worker, entry.spot)
     end
 
-    if figure == nil then
-        return
+    if figure ~= nil then
+        TCIdleStaff.updateModel(workerId, figure, TCIdleStaff.noStyle, dt, cx, cy, cz)
     end
+end
 
+-- Loads a figure's model once its spot is within LOAD_DISTANCE, frees it
+-- beyond UNLOAD_DISTANCE, and shows and animates it within CLIP_DISTANCE.
+function TCIdleStaff.updateModel(id, figure, noStyle, dt, cx, cy, cz)
     local distance = getDistance(figure.spot, cx, cy, cz)
     if figure.graphics == nil then
-        if distance <= TCIdleStaff.LOAD_DISTANCE and not TCIdleStaff.noStyle[workerId] then
-            TCIdleStaff.loadModel(workerId, figure)
+        if distance <= TCIdleStaff.LOAD_DISTANCE and not noStyle[id] then
+            TCIdleStaff.loadModel(id, figure, noStyle)
         end
     elseif distance > TCIdleStaff.UNLOAD_DISTANCE then
         TCIdleStaff.freeModel(figure)
@@ -410,7 +420,7 @@ function TCIdleStaff.updateWorker(workerId, entry, dt, camera, cx, cy, cz)
     end
 end
 
-local function getCamera()
+function TCIdleStaff.getCamera()
     local camera = g_cameraManager ~= nil and g_cameraManager:getActiveCamera() or nil
     if camera == nil or camera == 0 then
         return nil
@@ -430,7 +440,7 @@ function TCIdleStaff.update(dt)
         TCIdleStaff.wanted = TCIdleStaff.getWanted()
     end
 
-    local camera = getCamera()
+    local camera = TCIdleStaff.getCamera()
     if camera == nil then
         return
     end
@@ -454,7 +464,7 @@ end
 function TCIdleStaff.describe(farmId)
     local mission = g_currentMission
     local wanted = TCIdleStaff.getWanted()
-    local camera = getCamera()
+    local camera = TCIdleStaff.getCamera()
     local cx, cy, cz = 0, 0, 0
     if camera ~= nil then
         cx, cy, cz = getWorldTranslation(camera)

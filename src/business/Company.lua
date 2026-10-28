@@ -78,6 +78,10 @@ function TheContractorCompany:applyCompanyCreation(farmId, name)
     if tc ~= nil and tc.Reputation ~= nil then
         tc.Reputation:reset(farmId)
     end
+    -- 113: and nobody has an opinion of it yet.
+    if tc ~= nil and tc.Relationships ~= nil then
+        tc.Relationships:reset(farmId)
+    end
 
     -- On an MP client this lands a round trip after the player confirmed
     -- the name, with the menu still open on the "create a company" state.

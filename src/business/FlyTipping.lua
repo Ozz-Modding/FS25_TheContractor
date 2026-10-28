@@ -22,6 +22,8 @@ TheContractorFlyTipping_mt = Class(TheContractorFlyTipping)
 
 TheContractorFlyTipping.EVENT_TYPE = "flyTipping"
 TheContractorFlyTipping.MESSAGE_KIND = "flyTipping"
+-- 112: the body that ends with the customer's name (getCustomerNamedArgs).
+TheContractorFlyTipping.NAMED_BODY_KEYS = { tc_flyTipping_offerBody = true }
 TheContractorFlyTipping.JOB_TYPE = "flyTipping"
 
 -- About one every couple of years, like joyriders: it's the area's fields
@@ -79,6 +81,10 @@ function TheContractorFlyTipping:register(randomEvents, inbox)
         chipKey = "tc_inbox_chipFlyTipping",
         endsWithJob = true,
         chipTone = "bad",
+        -- 112: the offer names the farmer.
+        getArgs = function(message)
+            return TheContractorInbox.getCustomerNamedArgs(message, TheContractorFlyTipping.NAMED_BODY_KEYS)
+        end,
     })
 end
 

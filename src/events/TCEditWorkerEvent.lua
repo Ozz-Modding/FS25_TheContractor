@@ -1,5 +1,5 @@
 -- Client asks to edit one of its farm's hired workers (066): a new name,
--- gender and look from TCEditWorkerDialog. The server checks them again
+-- gender and look from TCEditPersonDialog. The server checks them again
 -- (TheContractorStaff:editWorker), and the result goes out as a
 -- TCWorkerEditedEvent. See src/events/README.md for the general event
 -- conventions.
