@@ -74,6 +74,10 @@ TheContractorYards.BUILDING_RING_RADIUS = 10
 TheContractorYards.SPOT_SEPARATION = 3
 -- Most spots a yard keeps, spread over all the open ones it finds.
 TheContractorYards.MAX_SPOTS = 40
+-- 114: a spot this close (metres) to a farmhouse (its footprint, or its
+-- position without one) is near the house, which its farmer favours.
+TheContractorYards.NEAR_HOUSE_DISTANCE = 15
+TheContractorYards.HOUSE_CATEGORY = "FARMHOUSES"
 -- The box a person needs to stand: half width and height (metres), from
 -- just above the ground.
 TheContractorYards.SPOT_HALF_SIZE = 0.75
@@ -92,6 +96,11 @@ local SPOT_MASK = CollisionFlag ~= nil and (CollisionFlag.STATIC_OBJECT + Collis
 
 TheContractorYards.YARD_MARKER_RADIUS = 30
 TheContractorYards.SPOT_MARKER_RADIUS = 2
+-- Checking which way farmhouses face (show <farmlandId>): a big circle this
+-- far out along the house's own +Z, and a small one on its spawn node.
+TheContractorYards.FORWARD_MARKER_DISTANCE = 10
+TheContractorYards.FORWARD_MARKER_RADIUS = 4
+TheContractorYards.SPAWN_MARKER_RADIUS = 1
 
 function TheContractorYards.new()
     local self = {}
@@ -100,7 +109,7 @@ function TheContractorYards.new()
     -- farmlandId -> MODE.ON / MODE.OFF
     self.overrides = {}
 
-    -- 114: farmlandId -> { x, z (the yard's middle), spots = { { x, z }, ... } }
+    -- 114: farmlandId -> { x, z (the yard's middle), spots = { { x, z, nearHouse }, ... } }
     -- for every yard, the server's, synced in this order.
     self.spots = {}
 
@@ -586,11 +595,45 @@ function TheContractorYards:setUp()
     end
 end
 
--- { x, z, spots } for a yard, worked out now.
-function TheContractorYards.makeSpotsEntry(yard)
+local function distanceToSegment(x, z, a, b)
+    local dx, dz = b.x - a.x, b.z - a.z
+    local lengthSq = dx * dx + dz * dz
+    local t = 0
+    if lengthSq > 0 then
+        t = math.max(0, math.min(1, ((x - a.x) * dx + (z - a.z) * dz) / lengthSq))
+    end
+    local px, pz = a.x + dx * t - x, a.z + dz * t - z
+    return math.sqrt(px * px + pz * pz)
+end
+
+-- Whether x, z is within NEAR_HOUSE_DISTANCE of one of the buildings'
+-- farmhouses.
+function TheContractorYards.isNearHouse(buildings, x, z)
+    local Y = TheContractorYards
+    for _, building in ipairs(buildings) do
+        if building.category == Y.HOUSE_CATEGORY then
+            local distance = math.sqrt((building.x - x) ^ 2 + (building.z - z) ^ 2)
+            for _, corners in ipairs(building.footprints or {}) do
+                for i, a in ipairs(corners) do
+                    distance = math.min(distance, distanceToSegment(x, z, a, corners[i % #corners + 1]))
+                end
+            end
+            if distance <= Y.NEAR_HOUSE_DISTANCE then
+                return true
+            end
+        end
+    end
+    return false
+end
+
+-- { x, z, spots } for a yard and its spots (findSpots'), each marked
+-- nearHouse or not.
+function TheContractorYards.makeSpotsEntry(yard, spots)
     local entry = { x = yard.x, z = yard.z, spots = {} }
-    for _, spot in ipairs((TheContractorYards.findSpots(yard))) do
-        table.insert(entry.spots, { x = spot.x, z = spot.z })
+    local buildings = yard.group ~= nil and yard.group.buildings or {}
+    for _, spot in ipairs(spots or (TheContractorYards.findSpots(yard))) do
+        table.insert(entry.spots, { x = spot.x, z = spot.z,
+            nearHouse = TheContractorYards.isNearHouse(buildings, spot.x, spot.z) })
     end
     return entry
 end
@@ -625,6 +668,7 @@ function TheContractorYards.writeSpotsEntry(streamId, entry)
         for _, spot in ipairs(entry.spots) do
             streamWriteFloat32(streamId, spot.x)
             streamWriteFloat32(streamId, spot.z)
+            streamWriteBool(streamId, spot.nearHouse == true)
         end
     end
 end
@@ -635,7 +679,8 @@ function TheContractorYards.readSpotsEntry(streamId)
     end
     local entry = { x = streamReadFloat32(streamId), z = streamReadFloat32(streamId), spots = {} }
     for _ = 1, streamReadUInt16(streamId) do
-        table.insert(entry.spots, { x = streamReadFloat32(streamId), z = streamReadFloat32(streamId) })
+        table.insert(entry.spots, { x = streamReadFloat32(streamId), z = streamReadFloat32(streamId),
+            nearHouse = streamReadBool(streamId) })
     end
     return entry
 end
@@ -766,15 +811,69 @@ local function addMarker(hotspots, x, z, radius)
     table.insert(hotspots, hotspot)
 end
 
+-- The angle (degrees, -180 to 180, positive clockwise seen from above)
+-- from a house's +Z direction (fx, fz) to the direction (dx, dz) of its
+-- spawn node, or nil with the node on the root.
+function TheContractorYards.getTurnFromForward(fx, fz, dx, dz)
+    if dx * dx + dz * dz < 0.0001 then
+        return nil
+    end
+    -- From above, with x east and z south, clockwise is +x towards +z.
+    return math.deg(math.atan2(fx * dz - fz * dx, fx * dx + fz * dz))
+end
+
+-- A farmhouse's facing, for checking it against the map: where its root
+-- is, its own +Z direction, and its spawn node (nil without one).
+local function getHouseFacing(placeable)
+    if placeable == nil or placeable.rootNode == nil then
+        return nil
+    end
+    local x, _, z = getWorldTranslation(placeable.rootNode)
+    local fx, _, fz = localDirectionToWorld(placeable.rootNode, 0, 0, 1)
+    local facing = { x = x, z = z, fx = fx, fz = fz }
+    local spec = placeable.spec_farmhouse
+    if spec ~= nil and spec.spawnNode ~= nil and spec.spawnNode ~= placeable.rootNode then
+        facing.spawnX, _, facing.spawnZ = getWorldTranslation(spec.spawnNode)
+    end
+    return facing
+end
+
+-- Markers and a line for each farmhouse in a yard: its +Z, and its spawn
+-- node with the turn from +Z to it.
+function TheContractorYards:markHouses(yard)
+    local Y = TheContractorYards
+    local lines = {}
+    for _, building in ipairs(yard.group ~= nil and yard.group.buildings or {}) do
+        local facing = building.category == Y.HOUSE_CATEGORY and getHouseFacing(building.placeable) or nil
+        if facing ~= nil then
+            addMarker(self.markers.hotspots, facing.x + facing.fx * Y.FORWARD_MARKER_DISTANCE,
+                facing.z + facing.fz * Y.FORWARD_MARKER_DISTANCE, Y.FORWARD_MARKER_RADIUS)
+            local spawn = "no spawn node"
+            if facing.spawnX ~= nil then
+                addMarker(self.markers.hotspots, facing.spawnX, facing.spawnZ, Y.SPAWN_MARKER_RADIUS)
+                local dx, dz = facing.spawnX - facing.x, facing.spawnZ - facing.z
+                local turn = Y.getTurnFromForward(facing.fx, facing.fz, dx, dz)
+                spawn = string.format("spawn node %.1f m out, %s", math.sqrt(dx * dx + dz * dz),
+                    turn ~= nil and string.format("%.0f degrees clockwise from +Z", turn) or "on the root")
+            end
+            table.insert(lines, string.format("  %s at %.0f, %.0f: +Z points to %.2f, %.2f (big circle), %s%s",
+                building.name, facing.x, facing.z, facing.fx, facing.fz, spawn,
+                facing.spawnX ~= nil and " (small circle)" or ""))
+        end
+    end
+    return lines
+end
+
 -- A circle on every yard, or with farmlandId just that yard's, with a
--- small one on each of its spots. Returns how many yards and spots.
+-- small one on each of its spots and its farmhouses' facing markers.
+-- Returns how many yards and spots, and a line per farmhouse.
 function TheContractorYards:showMarkers(farmlandId)
     self:hideMarkers()
     if AbstractFieldMissionHotspot == nil or g_currentMission.addMapHotspot == nil then
-        return 0, 0
+        return 0, 0, {}
     end
     self.markers = { farmlandId = farmlandId, hotspots = {} }
-    local yardCount, spotCount = 0, 0
+    local yardCount, spotCount, houseLines = 0, 0, {}
     for _, yard in ipairs((self:getYards())) do
         if yard.x ~= nil and (farmlandId == nil or yard.farmlandId == farmlandId) then
             addMarker(self.markers.hotspots, yard.x, yard.z, TheContractorYards.YARD_MARKER_RADIUS)
@@ -787,10 +886,11 @@ function TheContractorYards:showMarkers(farmlandId)
                     addMarker(self.markers.hotspots, spot.x, spot.z, TheContractorYards.SPOT_MARKER_RADIUS)
                     spotCount = spotCount + 1
                 end
+                houseLines = self:markHouses(yard)
             end
         end
     end
-    return yardCount, spotCount
+    return yardCount, spotCount, houseLines
 end
 
 function TheContractorYards:hideMarkers()
@@ -908,14 +1008,18 @@ function TheContractorYards.registerConsoleCommands()
                 if args[2] ~= nil and farmlandId == nil then
                     return false
                 end
-                local yardCount, spotCount = yardsSystem:showMarkers(farmlandId)
+                local yardCount, spotCount, houseLines = yardsSystem:showMarkers(farmlandId)
                 if farmlandId ~= nil then
                     if yardCount == 0 then
                         yardsSystem:hideMarkers()
                         return string.format("Farmland %d isn't a yard.", farmlandId)
                     end
-                    return string.format("Marked yard %d and its %d spot(s). tcCompany yards hide to clear.",
+                    local text = string.format("Marked yard %d and its %d spot(s). tcCompany yards hide to clear.",
                         farmlandId, spotCount)
+                    if #houseLines > 0 then
+                        text = text .. "\nFarmhouses:\n" .. table.concat(houseLines, "\n")
+                    end
+                    return text
                 end
                 return string.format("Marked %d yard(s). tcCompany yards hide to clear.", yardCount)
             elseif first == "hide" then

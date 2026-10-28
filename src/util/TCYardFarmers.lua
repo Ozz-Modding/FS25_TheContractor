@@ -6,11 +6,13 @@
 -- Like the idle staff on standing spots (065, TCIdleStaff), it's only
 -- visual, local to each machine with a client, with no state, events or
 -- saving of its own. Every machine picks the same spot from synced state
--- only: the day, the farmer's id and the yard's spot list, which is the
--- server's (TheContractorYards:getSpots), since a client can't work the
--- same list out for itself. One spot a day per farmer, from our own hash,
--- never math.random. A farmer faces the yard's middle and turns to a local
--- player who walks up.
+-- only: the day, the time of day, the farmer's id and the yard's spot
+-- list, which is the server's (TheContractorYards:getSpots), since a client
+-- can't work the same list out for itself. Daylight is split into slots of
+-- SLOT_HOURS, with a spot for each, from our own hash, never math.random.
+-- In a yard with a farmhouse, a slot is spent near it (a spot marked
+-- nearHouse) NEAR_HOUSE_PERCENT of the time, and on any spot otherwise. A
+-- farmer faces the yard's middle and turns to a local player who walks up.
 --
 -- Showing them is TCIdleStaff's: a HumanGraphicsComponent from their look,
 -- loaded within LOAD_DISTANCE and freed beyond UNLOAD_DISTANCE, so a map
@@ -25,6 +27,11 @@ TCYardFarmers = {}
 -- VISIBLE_TO.
 TCYardFarmers.VISIBLE_FROM = 7
 TCYardFarmers.VISIBLE_TO = 19
+-- A farmer may move (out of view) every this many hours.
+TCYardFarmers.SLOT_HOURS = 3
+-- The chance (percent) a slot is spent near the farmhouse, if the yard has
+-- spots near one.
+TCYardFarmers.NEAR_HOUSE_PERCENT = 50
 -- How often (ms) who-should-stand-where is worked out again.
 TCYardFarmers.RECHECK_MS = 2000
 -- A spot nearer the yard's middle than this (metres) faces north rather
@@ -40,22 +47,41 @@ function TCYardFarmers.isVisibleTime(minutes)
     return minute >= TCYardFarmers.VISIBLE_FROM * 60 and minute < TCYardFarmers.VISIBLE_TO * 60
 end
 
--- Which of a yard's spotCount spots (1-based) a farmer stands on today, or
--- nil with none.
-function TCYardFarmers.pickSpot(day, personId, spotCount)
-    if spotCount == nil or spotCount < 1 then
+-- Which slot of daylight it is (0 at VISIBLE_FROM), or nil outside it.
+function TCYardFarmers.getSlot(minutes)
+    if not TCYardFarmers.isVisibleTime(minutes) then
         return nil
     end
-    return TCYardFarmers.hashSpot(day, personId) % spotCount + 1
+    return math.floor((minutes % MINUTES_PER_DAY - TCYardFarmers.VISIBLE_FROM * 60) / (TCYardFarmers.SLOT_HOURS * 60))
 end
 
--- TCIdleStaff.hash is affine in each character, so from one day to the
+-- Which of a yard's spots (1-based) a farmer stands on in a day's slot, or
+-- nil with none.
+function TCYardFarmers.pickSpot(day, slot, personId, spots)
+    if #spots == 0 then
+        return nil
+    end
+    local nearHouse = {}
+    for index, spot in ipairs(spots) do
+        if spot.nearHouse then
+            table.insert(nearHouse, index)
+        end
+    end
+    local roll = TCYardFarmers.hashSpot(day, slot, personId, "house") % 100
+    local pick = TCYardFarmers.hashSpot(day, slot, personId, "spot")
+    if #nearHouse > 0 and roll < TCYardFarmers.NEAR_HOUSE_PERCENT then
+        return nearHouse[pick % #nearHouse + 1]
+    end
+    return pick % #spots + 1
+end
+
+-- TCIdleStaff.hash is affine in each character, so from one slot to the
 -- next it moves by the same amount, and its remainder by a small spot count
 -- hardly changes. Squaring (in a modulus small enough for doubles to hold
 -- the square exactly) breaks that up.
 local MIX_MODULUS = 65521
-function TCYardFarmers.hashSpot(day, personId)
-    local h = TCIdleStaff.hash(string.format("yard|%d|%d", day, personId)) % MIX_MODULUS
+function TCYardFarmers.hashSpot(day, slot, personId, purpose)
+    local h = TCIdleStaff.hash(string.format("yard|%s|%d|%d|%d", purpose, day, slot, personId)) % MIX_MODULUS
     for round = 1, 3 do
         h = (h * h + round * 7919) % MIX_MODULUS
     end
@@ -79,9 +105,10 @@ function TCYardFarmers.getReason(person, yards)
     return nil
 end
 
--- The spot a farmer stands on today: { key, x, y, z, yaw }.
-function TCYardFarmers.getSpot(person, entry, day)
-    local index = TCYardFarmers.pickSpot(day, person.id, #entry.spots)
+-- The spot a farmer stands on in a day's slot: { key, x, y, z, yaw,
+-- nearHouse }.
+function TCYardFarmers.getSpot(person, entry, day, slot)
+    local index = TCYardFarmers.pickSpot(day, slot, person.id, entry.spots)
     local point = entry.spots[index]
     local y = getTerrainHeightAtWorldPos(g_terrainNode, point.x, 0, point.z)
     local dx, dz = entry.x - point.x, entry.z - point.z
@@ -96,6 +123,7 @@ function TCYardFarmers.getSpot(person, entry, day)
         y = y,
         z = point.z,
         yaw = yaw,
+        nearHouse = point.nearHouse,
     }
 end
 
@@ -105,8 +133,11 @@ function TCYardFarmers.getWanted()
     local wanted = {}
     local mission = g_currentMission
     local tc = mission.TheContractor
-    if tc == nil or tc.Farmers == nil or tc.Yards == nil or mission.environment == nil or
-            not TCYardFarmers.isVisibleTime(TheContractorWorkingHours.getNow()) then
+    if tc == nil or tc.Farmers == nil or tc.Yards == nil or mission.environment == nil then
+        return wanted
+    end
+    local slot = TCYardFarmers.getSlot(TheContractorWorkingHours.getNow())
+    if slot == nil then
         return wanted
     end
     local day = mission.environment.currentMonotonicDay or 0
@@ -114,7 +145,7 @@ function TCYardFarmers.getWanted()
         if TCYardFarmers.getReason(person, tc.Yards) == nil then
             wanted[person.id] = {
                 person = person,
-                spot = TCYardFarmers.getSpot(person, tc.Yards:getSpots(person.yardFarmlandId), day),
+                spot = TCYardFarmers.getSpot(person, tc.Yards:getSpots(person.yardFarmlandId), day, slot),
             }
         end
     end
@@ -208,17 +239,22 @@ end
 
 -- Console ---------------------------------------------------------------------
 
--- tcCompany farmers standing: where each farmer is today, and why anyone
+-- tcCompany farmers standing: where each farmer is now, and why anyone
 -- isn't in their yard.
 function TCYardFarmers.describe()
     local mission = g_currentMission
     local tc = mission.TheContractor
     local now = TheContractorWorkingHours.getNow()
     local day = mission.environment.currentMonotonicDay or 0
-    local lines = { string.format("Farmers in their yards, day %d:", day) }
-    if not TCYardFarmers.isVisibleTime(now) then
-        table.insert(lines, string.format("Outside daylight (%02d:00-%02d:00): nobody's about", TCYardFarmers.VISIBLE_FROM,
-            TCYardFarmers.VISIBLE_TO))
+    local slot = TCYardFarmers.getSlot(now)
+    local lines = {}
+    if slot == nil then
+        table.insert(lines, string.format("Farmers in their yards, day %d: outside daylight (%02d:00-%02d:00), " ..
+            "nobody's about", day, TCYardFarmers.VISIBLE_FROM, TCYardFarmers.VISIBLE_TO))
+    else
+        local slotStart = TCYardFarmers.VISIBLE_FROM + slot * TCYardFarmers.SLOT_HOURS
+        table.insert(lines, string.format("Farmers in their yards, day %d, %02d:00-%02d:00:", day, slotStart,
+            math.min(slotStart + TCYardFarmers.SLOT_HOURS, TCYardFarmers.VISIBLE_TO)))
     end
 
     local camera = TCIdleStaff.getCamera()
@@ -232,13 +268,23 @@ function TCYardFarmers.describe()
         local text
         if reason ~= nil then
             text = reason
+        elseif slot == nil then
+            text = string.format("yard %d", person.yardFarmlandId)
+            if figure ~= nil then
+                text = text .. string.format(", still on spot %s until you look away", figure.spot.key)
+            end
         else
             local entry = tc.Yards:getSpots(person.yardFarmlandId)
-            local spot = TCYardFarmers.getSpot(person, entry, day)
-            text = string.format("yard %d, spot %s of %d at %.0f, %.0f, %.0f m away", person.yardFarmlandId, spot.key,
-                #entry.spots, spot.x, spot.z, MathUtil.vector3Length(spot.x - cx, spot.y - cy, spot.z - cz))
+            local nearCount = 0
+            for _, point in ipairs(entry.spots) do
+                nearCount = nearCount + (point.nearHouse and 1 or 0)
+            end
+            local spot = TCYardFarmers.getSpot(person, entry, day, slot)
+            text = string.format("yard %d, spot %s of %d (%d near the farmhouse)%s at %.0f, %.0f, %.0f m away",
+                person.yardFarmlandId, spot.key, #entry.spots, nearCount, spot.nearHouse and ", by the house" or "",
+                spot.x, spot.z, MathUtil.vector3Length(spot.x - cx, spot.y - cy, spot.z - cz))
             if figure == nil then
-                text = text .. (TCYardFarmers.isVisibleTime(now) and ", not there yet" or "")
+                text = text .. ", not there yet"
             elseif figure.spot.key ~= spot.key then
                 text = text .. string.format(", still on spot %s until you look away", figure.spot.key)
             elseif TCYardFarmers.noStyle[person.id] then
