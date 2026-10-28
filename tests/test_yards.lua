@@ -264,3 +264,17 @@ test("with more open spots than it keeps, a yard spreads them out from its middl
         assertTrue(xs[i] - xs[i - 1] <= 16)
     end
 end)
+
+test("a farmhouse's spawn node is measured clockwise from its +Z, seen from above", function()
+    setup()
+    local turn = TheContractorYards.getTurnFromForward
+    -- A house facing +Z (south on the map): the node out in front, to its
+    -- west (clockwise from south), to its east and behind it.
+    assertNear(0, turn(0, 1, 0, 6), 0.001)
+    assertNear(90, turn(0, 1, -6, 0), 0.001)
+    assertNear(-90, turn(0, 1, 6, 0), 0.001)
+    assertNear(180, math.abs(turn(0, 1, 0, -6)), 0.001)
+    -- Turned to face east, the node out in front of it.
+    assertNear(0, turn(1, 0, 6, 0), 0.001)
+    assertEquals(nil, turn(0, 1, 0, 0), "a node on the root")
+end)

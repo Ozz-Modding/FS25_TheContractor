@@ -1,7 +1,8 @@
 -- 114: farmers standing in their yards - who's about (daylight, a yard no
 -- player owns, with open spots), the spot every machine picks from the
 -- server's synced list (through a client join and a refresh), a new spot
--- on a new day, and which way they face.
+-- some slots of the day, favouring the farmhouse but not always, and which
+-- way they face.
 
 local function setup()
     local world = stubs.install()
@@ -93,7 +94,9 @@ end)
 
 test("a joined client puts the farmer on the same spot as the server", function()
     local world = setup()
-    world.yards:applySpots(5, spotsEntry(12))
+    local withHouse = spotsEntry(12)
+    withHouse.spots[3].nearHouse = true
+    world.yards:applySpots(5, withHouse)
     world.yards:applySpots(9, spotsEntry(8, 300, 200))
     addFarmer(world, 2, 5)
     addFarmer(world, 3, 9)
@@ -106,6 +109,8 @@ test("a joined client puts the farmer on the same spot as the server", function(
     g_currentMission.TheContractor.Yards = client
     local clientWanted = TCYardFarmers.getWanted()
 
+    assertTrue(client:getSpots(5).spots[3].nearHouse)
+    assertTrue(not client:getSpots(5).spots[4].nearHouse)
     for _, id in ipairs({ 2, 3 }) do
         assertEquals(serverWanted[id].spot.key, clientWanted[id].spot.key)
         assertNear(serverWanted[id].spot.x, clientWanted[id].spot.x, 0.001)
@@ -135,35 +140,87 @@ test("a refreshed yard's spots reach the clients, and a yard that's gone takes i
     assertEquals(nil, TCYardFarmers.getWanted()[2])
 end)
 
-test("one spot all day, a new one some days, and every spot gets used", function()
+test("one spot through a slot, a new one in some slots, and every spot gets used", function()
     local world = setup()
     world.yards:applySpots(5, spotsEntry(5))
     addFarmer(world, 2, 5)
 
-    setHour(8)
-    local morning = TCYardFarmers.getWanted()[2].spot.key
-    setHour(17)
-    assertEquals(morning, TCYardFarmers.getWanted()[2].spot.key)
+    setHour(7)
+    local early = TCYardFarmers.getWanted()[2].spot.key
+    setHour(9.9)
+    assertEquals(early, TCYardFarmers.getWanted()[2].spot.key, "the same slot")
 
-    local used, moves, last = {}, 0, nil
-    for day = 1, 60 do
+    local used, moves, last, slots = {}, 0, nil, 0
+    for day = 1, 15 do
         g_currentMission.environment.currentMonotonicDay = day
-        local key = TCYardFarmers.getWanted()[2].spot.key
-        used[key] = true
-        if last ~= nil and key ~= last then
-            moves = moves + 1
+        for _, hour in ipairs({ 8, 11, 14, 17 }) do
+            setHour(hour)
+            local key = TCYardFarmers.getWanted()[2].spot.key
+            used[key] = true
+            if last ~= nil and key ~= last then
+                moves = moves + 1
+            end
+            last = key
+            slots = slots + 1
         end
-        last = key
     end
     local count = 0
     for _ in pairs(used) do
         count = count + 1
     end
     assertEquals(5, count)
-    assertTrue(moves > 30, "moved on " .. moves .. " of 59 days")
+    assertTrue(moves > (slots - 1) / 2, "moved in " .. moves .. " of " .. (slots - 1) .. " slots")
 end)
 
-test("two farmers on the same day don't share a pattern", function()
+test("a yard with a farmhouse: near it about half the slots, and on other spots too", function()
+    local world = setup()
+    -- 10 spots, the first 2 near the house.
+    local entry = spotsEntry(10)
+    entry.spots[1].nearHouse = true
+    entry.spots[2].nearHouse = true
+    world.yards:applySpots(5, entry)
+    addFarmer(world, 2, 5)
+
+    local near, slots = 0, 0
+    for day = 1, 100 do
+        g_currentMission.environment.currentMonotonicDay = day
+        for _, hour in ipairs({ 8, 11, 14, 17 }) do
+            setHour(hour)
+            if TCYardFarmers.getWanted()[2].spot.nearHouse then
+                near = near + 1
+            end
+            slots = slots + 1
+        end
+    end
+    -- Half by the roll, plus a fifth of the other half landing there anyway.
+    assertTrue(near > slots * 0.45 and near < slots * 0.75, near .. " of " .. slots .. " slots near the house")
+end)
+
+test("a spot is near the house within the distance of its footprint, and only a farmhouse's", function()
+    setup()
+    local footprint = { { x = 0, z = 0 }, { x = 20, z = 0 }, { x = 20, z = 10 }, { x = 0, z = 10 } }
+    local house = { category = "FARMHOUSES", x = 10, z = 5, footprints = { footprint } }
+    local shed = { category = "SHEDS", x = 100, z = 5, footprints = {} }
+    local buildings = { house, shed }
+    local reach = TheContractorYards.NEAR_HOUSE_DISTANCE
+
+    assertTrue(TheContractorYards.isNearHouse(buildings, 10, -reach + 1), "off the long side")
+    assertTrue(not TheContractorYards.isNearHouse(buildings, 10, -reach - 1))
+    assertTrue(TheContractorYards.isNearHouse(buildings, 20 + reach - 1, 5), "off the far end, by the edge")
+    assertTrue(not TheContractorYards.isNearHouse(buildings, 100, 5 + 2), "beside the shed")
+
+    -- A house without a footprint: from its position.
+    house.footprints = {}
+    assertTrue(not TheContractorYards.isNearHouse(buildings, 20 + reach - 1, 5))
+    assertTrue(TheContractorYards.isNearHouse(buildings, 10 + reach - 1, 5))
+
+    local yard = { farmlandId = 5, x = 50, z = 5, group = { buildings = buildings } }
+    local made = TheContractorYards.makeSpotsEntry(yard, { { x = 10, z = 12 }, { x = 60, z = 40 } })
+    assertTrue(made.spots[1].nearHouse)
+    assertTrue(not made.spots[2].nearHouse)
+end)
+
+test("two farmers in the same slot don't share a pattern", function()
     local world = setup()
     world.yards:applySpots(5, spotsEntry(10))
     world.yards:applySpots(6, spotsEntry(10))
