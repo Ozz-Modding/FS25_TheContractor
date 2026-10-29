@@ -132,7 +132,8 @@ function TheContractorFieldBreakdowns.hasOpenBreakdown(farmId)
         end
     end
     for _, entry in ipairs(tc.RepairContracts.arrivals) do
-        if entry.farmId == farmId and entry.fieldId ~= nil then
+        -- 116: a favour on a farmer's field isn't a breakdown.
+        if entry.farmId == farmId and entry.fieldId ~= nil and not entry.favour then
             return true
         end
     end

@@ -49,6 +49,14 @@
 -- kind, and an offer due the same day. What they need is the kit that can
 -- work in a field (getBreakdownProblem, a warning), not the workshop's tools.
 --
+-- Farmer favours (116, TheContractorFarmerFavours) use it too: a farmer's
+-- own machine at a spot in their yard or on their field (entry.favour), with
+-- one stock part worn (a service of only that, prepareVehicle's targets),
+-- picked here once it's loaded (prepareFavour). The job (adsFavour,
+-- isFavourJob) has the farmer as its customer, is accepted or declined with
+-- no quote, and pays the part back (createFavourOffer). The part's fitted by
+-- hand, so it needs no kit.
+--
 -- State (server, saved in TheContractor.xml): the arrivals queue, the
 -- machines waiting to be collected, pending tamper claims and which farms
 -- are known for overcharging. Clients only ever see the jobs (and the
@@ -196,9 +204,26 @@ function TheContractorRepairContracts.isWorkshopJob(job)
     return job ~= nil and job.workshop ~= nil
 end
 
+-- 116: a farmer's own machine, to fit a part to as a favour (JOB_TYPES'
+-- favour flag).
+function TheContractorRepairContracts.isFavourJob(job)
+    local jobDef = job ~= nil and job.workshop ~= nil and TheContractorJobGeneration.JOB_TYPES[job.jobType] or nil
+    return jobDef ~= nil and jobDef.favour == true
+end
+
 -- 101: a customer's machine broken down on a field.
 function TheContractorRepairContracts.isBreakdownJob(job)
     return job ~= nil and job.workshop ~= nil and job.workshop.kind == TCADSRepairContracts.KIND.BREAKDOWN
+end
+
+-- 116: what the Inbox and the Workshop tab call a job's work: "favour", or
+-- ADS's kind ("repair", "maintenance", "breakdown"), for the l10n keys
+-- tc_repair_work_<key> and tc_repair_kindChip_<key>.
+function TheContractorRepairContracts.getWorkKey(job)
+    if TheContractorRepairContracts.isFavourJob(job) then
+        return "favour"
+    end
+    return job.workshop ~= nil and job.workshop.kind or "repair"
 end
 
 -- 101: the farm's places that can fix a breakdown on the spot: the tool box
@@ -379,6 +404,10 @@ end
 -- can only be replaced, not repaired. Upgrades by name (ADS's own workshop
 -- equipment). Read live on every machine.
 function TheContractorRepairContracts.getToolsWarning(job)
+    -- 116: a favour's part is fitted by hand.
+    if TheContractorRepairContracts.isFavourJob(job) then
+        return nil
+    end
     if TheContractorRepairContracts.isBreakdownJob(job) then
         return TheContractorRepairContracts.getBreakdownProblem(job)
     end
@@ -736,6 +765,37 @@ function TheContractorRepairContracts:queueFieldArrival(farmId, fieldId, model, 
     return entry
 end
 
+-- 116: a farmer's own machine to a spot in their yard or on their field
+-- (TheContractorFarmerFavours.pickSpot's), for a favour: the machine's own
+-- model, seed and age. What's wrong with it is picked once it's loaded.
+function TheContractorRepairContracts:queueFavourArrival(farmId, farmer, machine, model, spot)
+    local environment = g_currentMission.environment
+    local entry = {
+        farmId = farmId,
+        favour = true,
+        farmerId = farmer.id,
+        machineId = machine.id,
+        yardFarmlandId = spot.yardFarmlandId,
+        fieldId = spot.fieldId,
+        x = spot.x,
+        z = spot.z,
+        rotY = spot.rotY,
+        xmlFilename = model.xmlFilename,
+        severity = TheContractorFarmerFavours.SEVERITY,
+        seed = machine.seed,
+        operatingHours = TheContractorFarmerFavours.getHours(machine, environment.currentMonotonicDay,
+            environment.daysPerPeriod),
+        queuedDay = environment.currentMonotonicDay,
+        attempts = 0,
+        blockedDays = 0,
+        isLoading = false,
+    }
+    table.insert(self.arrivals, entry)
+    TCLog.info("TheContractor: farm %d favour for farmer #%d: %s to %s on its way", farmId, farmer.id, model.name,
+        spot.yardFarmlandId ~= nil and ("yard " .. spot.yardFarmlandId) or ("field " .. tostring(spot.fieldId)))
+    return entry
+end
+
 -- The first free bay of the farm's zones, or nil: zone, bayIndex.
 function TheContractorRepairContracts:findFreeBay(farmId)
     for _, zone in ipairs(TheContractorRepairContracts.getZones(farmId)) do
@@ -772,10 +832,11 @@ function TheContractorRepairContracts:onDayChanged()
         if entry.blockedDays ~= nil and entry.blockedDays > 0 then
             entry.blockedDays = entry.blockedDays + 1
         end
-        if entry.fieldId ~= nil and not entry.isLoading and entry.queuedDay < today then
+        if (entry.fieldId ~= nil or entry.favour) and not entry.isLoading and entry.queuedDay < today then
             -- 101: a breakdown not placed by midnight would be due yesterday.
-            TCLog.info("TheContractor: farm %d breakdown on field %d never placed, dropped", entry.farmId,
-                entry.fieldId)
+            -- 116: and a favour has found someone else.
+            TCLog.info("TheContractor: farm %d %s never placed, dropped", entry.farmId,
+                entry.favour and "favour" or ("breakdown on field " .. tostring(entry.fieldId)))
         elseif entry.isLoading or (entry.blockedDays or 0) <= TheContractorRepairContracts.ARRIVAL_GIVE_UP_DAYS then
             table.insert(kept, entry)
         else
@@ -890,7 +951,7 @@ end
 -- Where a queued arrival goes and what it is: area, model (nil if its
 -- zone's been sold or shrunk, or the model's gone).
 function TheContractorRepairContracts:getArrivalPlace(entry)
-    if entry.fieldId ~= nil then
+    if entry.fieldId ~= nil or entry.favour then
         local model = self:findModelByXml(entry.xmlFilename)
         if model == nil or entry.x == nil or entry.z == nil then
             return nil, nil
@@ -916,7 +977,11 @@ function TheContractorRepairContracts:tryPlaceArrival(entry)
     local clearance = TheContractorRepairContracts.CLEARANCE
     if not TCParking.isAreaClear(centreX, centreZ, rotY, model.width + clearance, model.length + clearance,
             model.height) then
-        if entry.fieldId ~= nil then
+        if entry.favour then
+            -- 116: somewhere else on their yard or fields.
+            self:retryFavourSpot(entry, model)
+            return
+        elseif entry.fieldId ~= nil then
             -- 101: something's on that spot: another spot on the field.
             self:retryFieldSpot(entry, model)
             return
@@ -954,9 +1019,37 @@ function TheContractorRepairContracts:retryFieldSpot(entry, model)
     entry.x, entry.z, entry.rotY = x, z, rotY
 end
 
+-- 116: a favour's spot was taken: another of the farmer's, up to
+-- PREPARE_RETRIES. The machine stays the same.
+function TheContractorRepairContracts:retryFavourSpot(entry, model)
+    entry.attempts = (entry.attempts or 0) + 1
+    local farmer = g_currentMission.TheContractor.Farmers:getPerson(entry.farmerId)
+    local spot = nil
+    if farmer ~= nil and entry.attempts <= TheContractorRepairContracts.PREPARE_RETRIES then
+        spot = TheContractorFarmerFavours.pickSpot(farmer, model, math.random)
+    end
+    if spot == nil then
+        TCLog.info("TheContractor: farm %d favour for farmer #%s: no room, dropped", entry.farmId,
+            tostring(entry.farmerId))
+        removeFrom(self.arrivals, entry)
+        return
+    end
+    entry.x, entry.z, entry.rotY = spot.x, spot.z, spot.rotY
+    entry.yardFarmlandId, entry.fieldId = spot.yardFarmlandId, spot.fieldId
+end
+
 -- A model ADS turned down: another one, another seed, up to PREPARE_RETRIES.
 function TheContractorRepairContracts:retryArrival(entry, zone, reason)
     entry.attempts = (entry.attempts or 0) + 1
+    if entry.favour then
+        -- 116: the farmer's own machine or nothing: it's loaded again.
+        if entry.attempts > TheContractorRepairContracts.PREPARE_RETRIES then
+            TCLog.info("TheContractor: farm %d favour for farmer #%s: arrival dropped (%s)", entry.farmId,
+                tostring(entry.farmerId), tostring(reason))
+            removeFrom(self.arrivals, entry)
+        end
+        return
+    end
     if entry.fieldId ~= nil then
         -- 101: another model for the field, somewhere on it that it fits.
         local model = entry.attempts <= TheContractorRepairContracts.PREPARE_RETRIES and
@@ -1002,7 +1095,7 @@ function TheContractorRepairContracts:onArrivalLoaded(vehicles, loadingState, ar
         isQueued = isQueued or queued == entry
     end
     local zone = TheContractorRepairContracts.getZoneByUniqueId(entry.zoneUniqueId)
-    if not isQueued or (zone == nil and entry.fieldId == nil) then
+    if not isQueued or (zone == nil and entry.fieldId == nil and not entry.favour) then
         if vehicle ~= nil then
             vehicle:delete()
         end
@@ -1011,6 +1104,10 @@ function TheContractorRepairContracts:onArrivalLoaded(vehicles, loadingState, ar
     end
     if vehicle == nil or loadingState ~= VehicleLoadingState.OK then
         self:retryArrival(entry, zone, "loadFailed")
+        return
+    end
+    if entry.favour then
+        self:prepareFavour(entry, vehicle)
         return
     end
 
@@ -1038,6 +1135,99 @@ function TheContractorRepairContracts:onArrivalLoaded(vehicles, loadingState, ar
         TheContractorFieldBreakdowns.clearSpot(entry, self:findModelByXml(entry.xmlFilename))
     end
     self:createOffer(entry, vehicle, quote)
+end
+
+-- 116: a favour's machine is loaded: one of the stock parts
+-- (TheContractorFarmerFavours.getTargets), in random order, and ADS prepares
+-- the machine as a service of only that. One it hasn't got, or with no
+-- price (nothing to pay back), gives way to the next. If none takes, the
+-- machine goes and so does the favour.
+function TheContractorRepairContracts:prepareFavour(entry, vehicle)
+    local tc = g_currentMission.TheContractor
+    local environment = g_currentMission.environment
+    local farmer = tc.Farmers:getPerson(entry.farmerId)
+    local machine = TheContractorFarmerFavours.getMachine(farmer, entry.machineId)
+    local targets = TheContractorFarmerFavours.getTargets(TCADSRepairContracts.getStockParts(),
+        machine ~= nil and machine.fitted or nil, environment.currentMonotonicDay, environment.daysPerPeriod)
+    for i = #targets, 2, -1 do
+        local j = math.random(1, i)
+        targets[i], targets[j] = targets[j], targets[i]
+    end
+
+    local reason = "noTargets"
+    for _, target in ipairs(targets) do
+        local ok, result = TCADSRepairContracts.prepareVehicle(vehicle, {
+            kind = TCADSRepairContracts.KIND.MAINTENANCE,
+            severity = entry.severity,
+            seed = entry.seed,
+            operatingHours = entry.operatingHours,
+            ref = string.format("TheContractor:%d:favour:%d", entry.farmId, entry.farmerId),
+            targets = { target.request },
+        })
+        local quote = ok and TCADSRepairContracts.getQuote(vehicle) or nil
+        if quote ~= nil and (tonumber(quote.partsCost) or 0) > 0 then
+            removeFrom(self.arrivals, entry)
+            if entry.fieldId ~= nil then
+                TheContractorFieldBreakdowns.clearSpot(entry, self:findModelByXml(entry.xmlFilename))
+            end
+            self:createFavourOffer(entry, vehicle, quote, target)
+            return
+        end
+        if ok then
+            TCADSRepairContracts.release(vehicle)
+        end
+        reason = ok and "noPrice" or result
+    end
+
+    TCLog.info("TheContractor: farm %d favour for farmer #%s: nothing to fit on %s (%s), dropped", entry.farmId,
+        tostring(entry.farmerId), vehicle:getFullName(), tostring(reason))
+    vehicle:delete()
+    removeFrom(self.arrivals, entry)
+end
+
+-- 116: a favour's offer: due today, as a field breakdown is, its price the part at
+-- ADS's list price (the quote's parts, without EconomyScale's factor), with
+-- the farmer as the customer. Accepted or declined as it stands.
+function TheContractorRepairContracts:createFavourOffer(entry, vehicle, quote, target)
+    local environment = g_currentMission.environment
+    local today = environment.currentMonotonicDay
+    local partsCost = math.max(tonumber(quote.partsCost) or 0, 0)
+    local baseParts = partsCost / TCEconomyScale.getADSFactor()
+    local deadlineDay = today
+    local workshop = {
+        vehicleId = NetworkUtil.getObjectId(vehicle),
+        vehicleUniqueId = vehicle.getUniqueId ~= nil and vehicle:getUniqueId() or nil,
+        vehicleName = vehicle:getFullName(),
+        kind = TCADSRepairContracts.KIND.MAINTENANCE,
+        severity = entry.severity,
+        offerExpiresDay = today,
+        quotePrice = quote.price,
+        partsCost = partsCost,
+        requiredTools = quote.minTools or {},
+        operatingHours = quote.operatingHours,
+        fieldId = entry.fieldId,
+        yardFarmlandId = entry.yardFarmlandId,
+        baseParts = baseParts,
+        baseLabour = 0,
+        laborHours = tonumber(quote.laborHours) or 0,
+        farmerId = entry.farmerId,
+        machineId = entry.machineId,
+        targetId = target.id,
+        targetNameKey = target.nameKey,
+        -- The size this machine takes, so the player brings the right one.
+        partGrade = TCADSRepairContracts.getPartGrade(vehicle, target.id),
+    }
+    local job = g_currentMission.TheContractor.Jobs:createJob(entry.farmId, TheContractorFarmerFavours.JOB_TYPE, 0, 1,
+        environment:getPeriodFromDay(deadlineDay), environment:getDayInPeriodFromDay(deadlineDay),
+        math.floor(baseParts + 0.5), true, nil, deadlineDay, false, nil, nil, workshop)
+    if job == nil then
+        TCADSRepairContracts.release(vehicle)
+        vehicle:delete()
+        return
+    end
+    TheContractorFarmerFavours.onOffered(job, quote)
+    TCLog.info("TheContractor: farm %d job %d: farmer #%d's %s needs a new %s, %.0f to pay back", entry.farmId,
+        job.id, entry.farmerId, workshop.vehicleName, tostring(target.id), job:getPrice())
 end
 
 -- Pricing (102) ---------------------------------------------------------------------
@@ -1334,6 +1524,11 @@ end
 -- Jobs:completeWorkshopJob: a job finished far over the benchmark marks the
 -- farm (again) for OVERCHARGE_MONTHS, with an Overview notice until then.
 function TheContractorRepairContracts:onJobCompleted(job)
+    -- 116: a favour has no margin, only a grateful farmer.
+    if TheContractorRepairContracts.isFavourJob(job) then
+        TheContractorFarmerFavours.onCompleted(job)
+        return
+    end
     local margin = job.workshop ~= nil and job.workshop.margin or nil
     if margin == nil or TheContractorRepairContracts.getJobReaction(job, margin) ~= "ripOff" then
         return
@@ -1473,6 +1668,10 @@ end
 -- The base reputation reward for a finished workshop job, before quality
 -- and speed.
 function TheContractorRepairContracts.getBaseReputation(job)
+    -- 116: word of a favour gets round, a little.
+    if TheContractorRepairContracts.isFavourJob(job) then
+        return TheContractorFarmerFavours.REPUTATION
+    end
     local workshop = job.workshop or {}
     local bySeverity = TheContractorRepairContracts.REPUTATION_BY_KIND[workshop.kind]
         or TheContractorRepairContracts.REPUTATION_BY_KIND.repair
@@ -1493,7 +1692,9 @@ end
 -- The reputation multiplier for how quickly a finished job was done (see
 -- SPEED_MAX_FACTOR): 1 for a service, or without a turnaround or deadline.
 function TheContractorRepairContracts.getSpeedFactor(job)
-    local maxFactor = job.workshop ~= nil and TheContractorRepairContracts.SPEED_MAX_FACTOR[job.workshop.kind] or nil
+    -- 116: a favour's done when it's done.
+    local maxFactor = job.workshop ~= nil and not TheContractorRepairContracts.isFavourJob(job) and
+        TheContractorRepairContracts.SPEED_MAX_FACTOR[job.workshop.kind] or nil
     local turnaround = TheContractorRepairContracts.getTurnaroundMinutes(job)
     if maxFactor == nil or turnaround == nil or job.deadlineDay == nil then
         return 1
@@ -1623,6 +1824,12 @@ function TheContractorRepairContracts:loadFromXMLFile(xmlFile)
             z = getXMLFloat(xmlFile, key .. "#z"),
             rotY = getXMLFloat(xmlFile, key .. "#rotY"),
             fieldService = getXMLString(xmlFile, key .. "#fieldService"),
+            -- 116: a favour's farmer, machine and yard.
+            favour = getXMLBool(xmlFile, key .. "#favour") == true or nil,
+            farmerId = getXMLInt(xmlFile, key .. "#farmerId"),
+            machineId = getXMLInt(xmlFile, key .. "#machineId"),
+            yardFarmlandId = getXMLInt(xmlFile, key .. "#yard"),
+            operatingHours = getXMLFloat(xmlFile, key .. "#operatingHours"),
             isLoading = false,
         })
         index = index + 1
@@ -1683,10 +1890,27 @@ function TheContractorRepairContracts:saveToXmlFile(xmlFile)
 
     local index = 0
     for _, entry in ipairs(self.arrivals) do
-        if (entry.zoneUniqueId ~= nil or entry.fieldId ~= nil) and entry.xmlFilename ~= nil then
+        if (entry.zoneUniqueId ~= nil or entry.fieldId ~= nil or entry.favour) and entry.xmlFilename ~= nil then
             local key = string.format("%s.arrival(%d)", rootKey, index)
             setXMLInt(xmlFile, key .. "#farmId", entry.farmId)
-            if entry.fieldId ~= nil then
+            if entry.favour then
+                -- 116: its spot (a field's, or a yard's), farmer and machine.
+                setXMLBool(xmlFile, key .. "#favour", true)
+                setXMLInt(xmlFile, key .. "#farmerId", entry.farmerId)
+                setXMLInt(xmlFile, key .. "#machineId", entry.machineId)
+                if entry.fieldId ~= nil then
+                    setXMLInt(xmlFile, key .. "#fieldId", entry.fieldId)
+                end
+                if entry.yardFarmlandId ~= nil then
+                    setXMLInt(xmlFile, key .. "#yard", entry.yardFarmlandId)
+                end
+                if entry.operatingHours ~= nil then
+                    setXMLFloat(xmlFile, key .. "#operatingHours", entry.operatingHours)
+                end
+                setXMLFloat(xmlFile, key .. "#x", entry.x)
+                setXMLFloat(xmlFile, key .. "#z", entry.z)
+                setXMLFloat(xmlFile, key .. "#rotY", entry.rotY or 0)
+            elseif entry.fieldId ~= nil then
                 setXMLInt(xmlFile, key .. "#fieldId", entry.fieldId)
                 setXMLFloat(xmlFile, key .. "#x", entry.x)
                 setXMLFloat(xmlFile, key .. "#z", entry.z)
@@ -1699,7 +1923,10 @@ function TheContractorRepairContracts:saveToXmlFile(xmlFile)
                 setXMLInt(xmlFile, key .. "#bayIndex", entry.bayIndex)
             end
             setXMLString(xmlFile, key .. "#xmlFilename", entry.xmlFilename)
-            setXMLString(xmlFile, key .. "#kind", entry.kind)
+            -- A favour's kind is only picked once it's loaded.
+            if entry.kind ~= nil then
+                setXMLString(xmlFile, key .. "#kind", entry.kind)
+            end
             setXMLInt(xmlFile, key .. "#severity", entry.severity)
             setXMLInt(xmlFile, key .. "#seed", entry.seed)
             setXMLInt(xmlFile, key .. "#queuedDay", entry.queuedDay)

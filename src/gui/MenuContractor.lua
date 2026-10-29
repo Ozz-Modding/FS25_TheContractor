@@ -348,6 +348,9 @@ function MenuContractor:initialize()
     }
     self.menuButtonInfoInboxWorkshop = { self.btnBack, self.btnNextPage, self.btnPrevPage,
         self.btnNegotiateRepair, self.btnDeclineJob }
+    -- 116: a farmer's favour is taken on or not, never haggled over.
+    self.menuButtonInfoInboxFavour = { self.btnBack, self.btnNextPage, self.btnPrevPage,
+        self.btnAcceptJob, self.btnDeclineJob }
 
     -- Inbox messages (050): one button per action of the highlighted
     -- message, labelled and listed by updateInboxMessageDetails.
@@ -817,7 +820,10 @@ function MenuContractor:getMenuButtonInfo()
 
     if state == MenuContractor.SUB_CATEGORY.INBOX and self.selectedInboxJobId ~= nil then
         -- 102: a workshop job is priced through its own Negotiate dialog.
-        if TheContractorRepairContracts.isWorkshopJob(self:getSelectedInboxJob()) then
+        local job = self:getSelectedInboxJob()
+        if TheContractorRepairContracts.isFavourJob(job) then
+            return self.menuButtonInfoInboxFavour
+        elseif TheContractorRepairContracts.isWorkshopJob(job) then
             return self.menuButtonInfoInboxWorkshop
         end
         return self.menuButtonInfoInboxWithSelection
@@ -2597,16 +2603,22 @@ function MenuContractor:updateInboxWorkshopDetails(job)
         machineText = string.format(g_i18n:getText("tc_repair_machineHours"), machineText,
             math.floor(workshop.operatingHours + 0.5))
     end
-    -- 101: and the field it's broken down on.
+    -- 101: and the field it's broken down on. 116: or the farmer's yard.
     if isBreakdown then
         local field = g_fieldManager:getFieldById(workshop.fieldId)
         machineText = string.format(g_i18n:getText("tc_breakdown_location"), machineText,
             field ~= nil and field:getName() or tostring(workshop.fieldId))
+    elseif TheContractorRepairContracts.isFavourJob(job) then
+        local hours = workshop.operatingHours ~= nil and math.floor(workshop.operatingHours + 0.5) or nil
+        machineText = job:getLocationText()
+        if hours ~= nil then
+            machineText = string.format(g_i18n:getText("tc_repair_machineHours"), machineText, hours)
+        end
     end
     self.inboxDetailField:setText(machineText)
     self.inboxDetailTargetDate:setText(formatTargetDate(job.targetPeriod, job.targetDayInPeriod))
     self.inboxDetailPrice:setText(MenuContractor.getJobPriceText(job))
-    self.inboxDetailCrew:setText(g_i18n:getText("tc_repair_work_" .. (workshop.kind or "repair")))
+    self.inboxDetailCrew:setText(MenuContractor.getWorkshopWorkText(job))
     self.inboxRowDelivery:setVisible(false)
     self.inboxRowSupplies:setVisible(false)
 
@@ -2621,12 +2633,27 @@ function MenuContractor:updateInboxWorkshopDetails(job)
     self.inboxDetailRows:invalidateLayout()
 end
 
+-- What a workshop job's work is, in a sentence: 116's favour names the part.
+function MenuContractor.getWorkshopWorkText(job)
+    if TheContractorRepairContracts.isFavourJob(job) then
+        return string.format(g_i18n:getText("tc_repair_work_favour"), TheContractorFarmerFavours.getPartText(job))
+    end
+    return g_i18n:getText("tc_repair_work_" .. TheContractorRepairContracts.getWorkKey(job))
+end
+
+-- 102: whether a job's price is still the player's to quote: a workshop
+-- offer, but never a favour (116).
+function MenuContractor.isPriceToAgree(job)
+    return job:isWorkshop() and not TheContractorRepairContracts.isFavourJob(job) and
+        (job.state == TheContractorJob.STATE.OFFERED or job.state == TheContractorJob.STATE.NEGOTIATING)
+end
+
 -- 102: a workshop offer's price, or "To agree" while it's still an offer
 -- (the price is the player's quote, and the stored one would give the
 -- hidden faults away).
 function MenuContractor.getJobPriceText(job)
-    if job:isWorkshop() and (job.state == TheContractorJob.STATE.OFFERED or
-            job.state == TheContractorJob.STATE.NEGOTIATING) then
+    -- 116: a favour's price is the part, known from the start.
+    if MenuContractor.isPriceToAgree(job) then
         return g_i18n:getText("tc_repair_priceToAgree")
     end
     return g_i18n:formatMoney(job:getPrice(), 0, true, true)
@@ -2671,15 +2698,22 @@ end
 function MenuContractor:updateInboxWorkshopKit(job)
     local vehicle = TheContractorRepairContracts.getVehicle(job)
     local inspected = vehicle ~= nil and TCADSRepairContracts.isInspected(vehicle)
-    self.inboxInspectionHeadingRow:setVisible(true)
-    self.inboxInspectionRow:setVisible(true)
+    -- 116: a favour's farmer has said what's wrong, so there's nothing to
+    -- find out before taking it on.
+    local isFavour = TheContractorRepairContracts.isFavourJob(job)
+    self.inboxInspectionHeadingRow:setVisible(not isFavour)
+    self.inboxInspectionRow:setVisible(not isFavour)
     self.inboxInspectionName:setText(g_i18n:getText("tc_repair_inspectionRow"))
     setChip(self.inboxInspectionChip, self.inboxInspectionChipText,
         g_i18n:getText(inspected and "tc_repair_chipInspected" or "tc_repair_chipNeedsInspection"),
         inspected and "good" or "warn")
 
     local rows = {}
-    if TheContractorRepairContracts.isBreakdownJob(job) then
+    if isFavour then
+        -- The part to bring, from stock or bought for it; it's fitted by hand.
+        table.insert(rows, { name = string.format(g_i18n:getText("tc_favour_kitRowPart"),
+            TheContractorFarmerFavours.getPartText(job)), chip = g_i18n:getText("tc_favour_chipBring"), tone = "info" })
+    elseif TheContractorRepairContracts.isBreakdownJob(job) then
         local fieldService = job.workshop.serviceLevel
         local hasKit = TheContractorRepairContracts.hasBreakdownKit(job.farmId, fieldService)
         table.insert(rows, { name = g_i18n:getText("tc_breakdown_kit_" ..
@@ -3043,7 +3077,10 @@ function MenuContractor:populateCellForItemInSection(list, section, index, cell)
     -- 100: a workshop job needs ADS's tools, not machines of ours. 102: it
     -- has to be inspected first, and missing tools only mean subcontracting.
     local canDo
-    if job:isWorkshop() then
+    if TheContractorRepairContracts.isFavourJob(job) then
+        -- 116: nothing to inspect first, and no kit: it's fitted by hand.
+        canDo = TheContractorJobs.getAcceptProblem(job) == nil
+    elseif job:isWorkshop() then
         local vehicle = TheContractorRepairContracts.getVehicle(job)
         if vehicle ~= nil and not TCADSRepairContracts.isInspected(vehicle) then
             setChip(chip, chipText, g_i18n:getText("tc_repair_chipInspect"), "warn")
@@ -3556,6 +3593,10 @@ function MenuContractor:getJobStatusChip(job)
             job.state == TheContractorJob.STATE.IN_PROGRESS) then
         -- 106: urgent, and what's left to do.
         return TheContractorCropSpill.getStatusText(job), "bad"
+    elseif TheContractorRepairContracts.isFavourJob(job) and (job.state == TheContractorJob.STATE.OFFERED or
+            job.state == TheContractorJob.STATE.NEGOTIATING) then
+        -- 116: asked, not to be priced.
+        return g_i18n:getText("tc_favour_chipAsked"), "info"
     elseif job:isWorkshop() and (job.state == TheContractorJob.STATE.OFFERED or
             job.state == TheContractorJob.STATE.NEGOTIATING) then
         -- 102: an offer's first to be inspected, then priced.
@@ -3580,6 +3621,8 @@ function MenuContractor:getJobStatusChip(job)
         -- 101: still out in its field.
         if TheContractorRepairContracts.isBreakdownJob(job) then
             return g_i18n:getText("tc_breakdown_chipBrokenDown"), "info"
+        elseif TheContractorRepairContracts.isFavourJob(job) then
+            return g_i18n:getText("tc_favour_chipAtFarm"), "info"
         end
         return g_i18n:getText("tc_repair_chipInWorkshop"), "info"
     elseif job.state == TheContractorJob.STATE.ACCEPTED then
@@ -3717,8 +3760,7 @@ function MenuContractor:getJobDetailRows(job)
         add(g_i18n:getText("tc_people_detailRelationship"), "", chipText, chipTone)
     end
     add(g_i18n:getText("tc_jobDetails_due"), formatTargetDate(job.targetPeriod, job.targetDayInPeriod))
-    if job:isWorkshop() and (job.state == TheContractorJob.STATE.OFFERED or
-            job.state == TheContractorJob.STATE.NEGOTIATING) then
+    if MenuContractor.isPriceToAgree(job) then
         -- 102: no price until the customer's agreed one.
         add(g_i18n:getText("tc_jobDetails_price"), "", g_i18n:getText("tc_repair_priceToAgree"), "warn")
     else
@@ -3788,8 +3830,15 @@ end
 function MenuContractor:addWorkshopDetailRows(job, add, addSection)
     local workshop = job.workshop
     local isBreakdown = TheContractorRepairContracts.isBreakdownJob(job)
-    add(g_i18n:getText("tc_repair_detailWork"), "", g_i18n:getText("tc_repair_kindChip_" .. (workshop.kind or "repair")),
-        "info")
+    -- 116: a favour's the part, fitted by hand, and nothing to price.
+    local isFavour = TheContractorRepairContracts.isFavourJob(job)
+    add(g_i18n:getText("tc_repair_detailWork"), "",
+        g_i18n:getText("tc_repair_kindChip_" .. TheContractorRepairContracts.getWorkKey(job)), "info")
+    if isFavour then
+        -- 116: the part as a chip, and the size the machine takes.
+        add(g_i18n:getText("tc_favour_detailPart"), TheContractorFarmerFavours.getPartSizeText(job) or "",
+            TheContractorFarmerFavours.getPartTitle(job), "info")
+    end
     if isBreakdown then
         -- 101: the kit to fix it on the spot, not workshop tools.
         local hasKit = TheContractorRepairContracts.hasBreakdownKit(job.farmId, workshop.serviceLevel)
@@ -3815,8 +3864,10 @@ function MenuContractor:addWorkshopDetailRows(job, add, addSection)
     end
     local farmPlan = TCADSRepairContracts.getFarmPlan(vehicle, job.farmId)
     addSection("tc_workshop_sectionChecklist")
-    self:addWorkshopProgressRows(vehicle, isService, add, farmPlan)
-    self:addWorkshopPlanRows(job, farmPlan, add, addSection)
+    self:addWorkshopProgressRows(vehicle, isService, add, farmPlan, isFavour)
+    if not isFavour then
+        self:addWorkshopPlanRows(job, farmPlan, add, addSection)
+    end
 end
 
 -- 102: how a fault still to do can be fixed with the farm's own kit, as a
@@ -3966,7 +4017,10 @@ function MenuContractor.getWorkshopDoneWhenText(job)
     if job.state == TheContractorJob.STATE.OFFERED or job.state == TheContractorJob.STATE.NEGOTIATING then
         return MenuContractor.getWorkshopPendingText(job)
     end
-    if TheContractorRepairContracts.isBreakdownJob(job) then
+    if TheContractorRepairContracts.isFavourJob(job) then
+        return string.format(g_i18n:getText("tc_favour_doneWhen"), TheContractorFarmerFavours.getPartText(job),
+            job:getCustomerName() or "?")
+    elseif TheContractorRepairContracts.isBreakdownJob(job) then
         return g_i18n:getText("tc_repair_doneWhen_breakdown")
     end
     return g_i18n:getText(job.workshop.kind == "maintenance" and "tc_repair_doneWhen_maintenance" or
@@ -3977,7 +4031,8 @@ end
 -- serviced", "1 fixed so far" while a fault may still be hidden, or "Not
 -- inspected" before anything's found. nil without ADS's view of it.
 function MenuContractor.getWorkshopProgressText(job, vehicle)
-    local progress = TCADSRepairContracts.getProgress(vehicle)
+    -- 116: a favour's farmer has said what's wrong.
+    local progress = TCADSRepairContracts.getProgress(vehicle, TheContractorRepairContracts.isFavourJob(job))
     if progress == nil then
         return nil
     end
@@ -3997,8 +4052,8 @@ end
 -- fix it (getFaultMethod: "Repair or replace", "Replace" with "Repair needs
 -- ..."), for a consumable the service it needs; a done one, Fixed or
 -- Serviced.
-function MenuContractor:addWorkshopProgressRows(vehicle, isService, add, farmPlan)
-    local progress = TCADSRepairContracts.getProgress(vehicle)
+function MenuContractor:addWorkshopProgressRows(vehicle, isService, add, farmPlan, allKnown)
+    local progress = TCADSRepairContracts.getProgress(vehicle, allKnown)
     if progress == nil then
         return
     end
@@ -4224,7 +4279,7 @@ function MenuContractor:getCompletedWorkshopRows(job)
     add(g_i18n:getText("tc_jobDetails_job"), job:getDisplayTitle())
     add(g_i18n:getText("tc_jobDetails_machine"), job:getLocationText())
     add(g_i18n:getText("tc_repair_detailWork"), "", g_i18n:getText("tc_repair_kindChip_" ..
-        (job.workshop.kind or "repair")), "info")
+        TheContractorRepairContracts.getWorkKey(job)), "info")
     if job.state == TheContractorJob.STATE.MISSED then
         add(g_i18n:getText("tc_jobDetails_due"), formatTargetDate(job.targetPeriod, job.targetDayInPeriod))
         table.insert(rows, { section = g_i18n:getText("tc_workshop_sectionEarnings") })
@@ -4294,6 +4349,10 @@ function MenuContractor:updateWorkshopJobDetails()
     if isCompleted then
         setChip(self.workshopDetailChip, self.workshopDetailChipText, g_i18n:getText("tc_logbook_completed"), "good")
         local noteKey = job.workshop.partsCost ~= nil and "tc_workshop_earningsNote" or "tc_workshop_earningsNoteQuote"
+        -- 116: a favour's billed the part, no more.
+        if TheContractorRepairContracts.isFavourJob(job) then
+            noteKey = "tc_favour_earningsNote"
+        end
         self.workshopDoneWhen:setText(g_i18n:getText(noteKey))
     elseif isMissed then
         setChip(self.workshopDetailChip, self.workshopDetailChipText, g_i18n:getText("tc_calendar_jobMissed"), "bad")
@@ -4307,6 +4366,11 @@ end
 -- 102: a pending offer's paragraph: inspect it, then Negotiate from the
 -- Inbox.
 function MenuContractor.getWorkshopPendingText(job)
+    -- 116: a favour's taken on as it stands.
+    if TheContractorRepairContracts.isFavourJob(job) then
+        return string.format(g_i18n:getText("tc_favour_pending"), job:getCustomerName() or "?",
+            TheContractorFarmerFavours.getPartText(job))
+    end
     local vehicle = TheContractorRepairContracts.getVehicle(job)
     if vehicle ~= nil and TCADSRepairContracts.isInspected(vehicle) then
         return g_i18n:getText("tc_repair_pendingInspected")
@@ -5183,7 +5247,12 @@ end
 -- one-button confirmations).
 function MenuContractor:showJobAcceptedNotification(job)
     -- 100: a workshop job is the machine, not a field.
-    if TheContractorRepairContracts.isBreakdownJob(job) then
+    if TheContractorRepairContracts.isFavourJob(job) then
+        InfoDialog.show(string.format(g_i18n:getText("tc_favour_acceptedInfo"), job:getCustomerName() or "?",
+            TheContractorFarmerFavours.getPartText(job), job:getLocationText(),
+            g_i18n:formatMoney(job:getPrice(), 0, true, true)))
+        return
+    elseif TheContractorRepairContracts.isBreakdownJob(job) then
         InfoDialog.show(string.format(g_i18n:getText("tc_breakdown_acceptedInfo"), job:getDisplayTitle(),
             g_i18n:formatMoney(job:getPrice(), 0, true, true), job:getLocationText()))
         return

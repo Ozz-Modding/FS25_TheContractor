@@ -501,6 +501,7 @@
 		<text name="tc_jobType_adsRepair" text="Workshop Repair"/>
 		<text name="tc_jobType_adsMaintenance" text="Workshop Service"/>
 		<text name="tc_jobType_adsBreakdown" text="Field Breakdown"/>
+		<text name="tc_jobType_adsFavour" text="Farmer's Favour"/>
 		<text name="tc_inbox_chipRepair" text="Workshop"/>
 		<text name="tc_jobDetails_machine" text="Machine"/>
 		<text name="tc_repair_problemGone" text="The customer's machine isn't there any more."/>
@@ -535,6 +536,7 @@
 		<text name="tc_repair_kindChip_repair" text="Repair"/>
 		<text name="tc_repair_kindChip_maintenance" text="Service"/>
 		<text name="tc_repair_kindChip_breakdown" text="Breakdown"/>
+		<text name="tc_repair_kindChip_favour" text="Favour"/>
 		<text name="tc_repair_methodChip_repairOrReplace" text="Repair or replace"/>
 		<text name="tc_repair_methodChip_repair" text="Repair"/>
 		<text name="tc_repair_methodChip_replacement" text="Replace"/>
@@ -611,6 +613,7 @@
 		<text name="tc_repair_work_repair" text="Repair: it's not right, inspect it to find out why"/>
 		<text name="tc_repair_work_maintenance" text="Service: oils, filters and grease"/>
 		<text name="tc_repair_work_breakdown" text="Broken down in the field: fix it where it stands, today"/>
+		<text name="tc_repair_work_favour" text="A favour: fit a new %s"/>
 		<text name="tc_repair_doneWhen_repair" text="Every fault it came in with is fixed: the list below, once you've inspected it. Repairing a part counts as much as replacing it. A quick fix doesn't count, and nothing that goes wrong after it came in needs fixing. It's paid as soon as the last one's done."/>
 		<text name="tc_repair_doneWhen_breakdown" text="Every fault that stopped it is fixed where it stands, before the day's out: the list below, once you've inspected it. A quick fix doesn't count. It's paid as soon as the last one's done."/>
 		<text name="tc_repair_doneWhen_maintenance" text="Everything on the list below is done: fluids over 85% full and fresh, grease points over 85% full, filters and the battery as good as new. Doing more than the list doesn't hurt. It's paid as soon as the last one's done."/>
@@ -668,6 +671,20 @@
 		<text name="tc_breakdown_chipBrokenDown" text="Broken down"/>
 		<text name="tc_breakdown_acceptedInfo" text="The customer's agreed: %s for %s. It's at %s, marked on the map. Fix it there before the day's out: the Workshop tab has a checklist."/>
 		<text name="tc_breakdown_missedNotification" text="Job failed: a customer's machine broken down in the field wasn't fixed in time, and they've had it recovered."/>
+		<text name="tc_favour_eventName" text="Farmer's favour"/>
+		<text name="tc_favour_locationYard" text="%s, %s's yard"/>
+		<text name="tc_favour_kitRowPart" text="Part: %s"/>
+		<text name="tc_favour_chipBring" text="Bring it"/>
+		<text name="tc_favour_detailPart" text="Part"/>
+		<text name="tc_favour_partSize" text="Size %s"/>
+		<text name="tc_favour_partWithSize" text="%s (size %s)"/>
+		<text name="tc_favour_chipAsked" text="Asked"/>
+		<text name="tc_favour_chipAtFarm" text="At the farm"/>
+		<text name="tc_favour_pending" text="%s has asked you a favour: a new %s fitted to their machine. There's nothing to price: accept it or decline it from the Inbox."/>
+		<text name="tc_favour_doneWhen" text="The new %s is fitted. Take one from your stock, or buy one from the parts shop in the machine's pre-shift inspection, and fit it by hand before the day's out. %s pays you back its list price once it's in."/>
+		<text name="tc_favour_acceptedInfo" text="You've told %s you'll fit a new %s. The machine's at %s, marked on the map. Take one from your stock (or buy one), take the old one out and fit the new one before the day's out. They'll pay you back %s."/>
+		<text name="tc_favour_missedNotification" text="Favour not done: a farmer's machine never got its new part in time, and they've stopped waiting."/>
+		<text name="tc_favour_earningsNote" text="A favour is billed the part's list price and nothing for the work: what it earns is the farmer's goodwill. Fit a cheaper part and you keep the difference."/>
 		<text name="tc_claims_cause_tampering" text="parts taken or swapped while it was in for repair"/>
 		<text name="tc_drivers_customerVehicle" text="%s is a customer's machine in for repair, so AI helpers, AutoDrive, Courseplay and Follow Me can't drive it."/>
 		<text name="tc_drivers_customerVehicleDialog" text="This is a customer's machine in for repair, so AI helpers, AutoDrive, Courseplay and Follow Me can't drive it."/>

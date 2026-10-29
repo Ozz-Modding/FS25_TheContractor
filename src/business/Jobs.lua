@@ -1486,6 +1486,12 @@ function TheContractorJobs.writeWorkshop(streamId, workshop)
     if workshop.reputationReward ~= nil then
         streamWriteInt32(streamId, workshop.reputationReward)
     end
+    -- 116: a favour's part (ADS's l10n key), its size and the yard, for the
+    -- menu. The farmer's the job's customer; the machine's record stays on
+    -- the server.
+    streamWriteString(streamId, workshop.targetNameKey or "")
+    streamWriteString(streamId, workshop.partGrade or "")
+    streamWriteInt32(streamId, workshop.yardFarmlandId or 0)
 end
 
 -- A float that -1 stands in for nil.
@@ -1534,6 +1540,12 @@ function TheContractorJobs.readWorkshop(streamId)
     if streamReadBool(streamId) then
         workshop.reputationReward = streamReadInt32(streamId)
     end
+    local targetNameKey = streamReadString(streamId)
+    workshop.targetNameKey = targetNameKey ~= "" and targetNameKey or nil
+    local partGrade = streamReadString(streamId)
+    workshop.partGrade = partGrade ~= "" and partGrade or nil
+    local yardFarmlandId = streamReadInt32(streamId)
+    workshop.yardFarmlandId = yardFarmlandId ~= 0 and yardFarmlandId or nil
     return workshop
 end
 
@@ -1808,6 +1820,13 @@ function TheContractorJobs.loadWorkshop(xmlFile, key)
         refusalMargin = getXMLFloat(xmlFile, key .. "#refusalMargin"),
         margin = getXMLFloat(xmlFile, key .. "#margin"),
         reputationReward = getXMLInt(xmlFile, key .. "#reputationReward"),
+        -- 116.
+        farmerId = getXMLInt(xmlFile, key .. "#farmerId"),
+        machineId = getXMLInt(xmlFile, key .. "#machineId"),
+        yardFarmlandId = getXMLInt(xmlFile, key .. "#yardFarmlandId"),
+        targetId = getXMLString(xmlFile, key .. "#targetId"),
+        targetNameKey = getXMLString(xmlFile, key .. "#targetNameKey"),
+        partGrade = getXMLString(xmlFile, key .. "#partGrade"),
     }
 end
 
@@ -1854,6 +1873,17 @@ function TheContractorJobs.saveWorkshop(xmlFile, key, workshop)
     end
     if workshop.reputationReward ~= nil then
         setXMLInt(xmlFile, key .. "#reputationReward", workshop.reputationReward)
+    end
+    -- 116: a favour's farmer, machine, part and yard.
+    for _, name in ipairs({ "farmerId", "machineId", "yardFarmlandId" }) do
+        if workshop[name] ~= nil then
+            setXMLInt(xmlFile, key .. "#" .. name, workshop[name])
+        end
+    end
+    for _, name in ipairs({ "targetId", "targetNameKey", "partGrade" }) do
+        if workshop[name] ~= nil then
+            setXMLString(xmlFile, key .. "#" .. name, workshop[name])
+        end
     end
 end
 

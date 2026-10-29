@@ -311,13 +311,19 @@ function TheContractorJob:isWorkshop()
 end
 
 -- Where the job is, for lines that would name its field: the field's name,
--- or a workshop job's machine (and a breakdown's field, 101).
+-- or a workshop job's machine (and a breakdown's field, 101, or a favour's
+-- yard or field, 116).
 function TheContractorJob:getLocationText()
     if self.workshop ~= nil then
         if self.workshop.fieldId ~= nil then
             local field = g_fieldManager:getFieldById(self.workshop.fieldId)
             return string.format(g_i18n:getText("tc_breakdown_location"), self.workshop.vehicleName or "?",
                 field ~= nil and field:getName() or tostring(self.workshop.fieldId))
+        end
+        -- 116: a favour's machine in its farmer's yard.
+        if self.workshop.yardFarmlandId ~= nil then
+            return string.format(g_i18n:getText("tc_favour_locationYard"), self.workshop.vehicleName or "?",
+                self:getCustomerName() or "?")
         end
         return self.workshop.vehicleName or "?"
     end
