@@ -1607,3 +1607,112 @@ test("without ADS's stage gate the feature stays off", function()
     TCADSRepairContracts.detect()
     assertTrue(not TCADSRepairContracts.isActive())
 end)
+
+-- Parts services --------------------------------------------------------------------------
+
+-- ADS takes targets and has the two stock parts; a machine without one of
+-- `lacking` refuses any request naming it. Every request is kept.
+local function enableParts(world, lacking)
+    local api = world.adsEnv.ADS_RepairContracts
+    api.getInfo = function() return { version = 1, targets = true } end
+    world.adsEnv.ADS_Config = { SPARE_PARTS_BOX = { GRADED_PARTS = {
+        { id = "battery", nameKey = "ads_ws_consumable_battery" },
+        { id = "airFilter", nameKey = "ads_ws_consumable_air_filter" },
+    } } }
+    world.requests = {}
+    local prepare = api.prepareVehicle
+    api.prepareVehicle = function(vehicle, request)
+        table.insert(world.requests, request)
+        for _, target in ipairs(request.targets or {}) do
+            if lacking ~= nil and lacking[target.consumable] then
+                return false, "targetNotApplicable"
+            end
+        end
+        return prepare(vehicle, request)
+    end
+end
+
+test("arrivals split 50% repair, 30% service, 20% parts service; no parts service without ADS's targets", function()
+    setup()
+    local pick = TheContractorRepairContracts.pickKind
+    local function at(roll, hasParts)
+        return pick(function() return roll end, hasParts)
+    end
+    assertEquals(at(0.49, true), "repair")
+    assertEquals(at(0.5, true), "maintenance")
+    assertEquals(at(0.79, true), "maintenance")
+    assertEquals(at(0.8, true), "parts")
+    assertEquals(at(0.99, false), "maintenance", "its share goes to the others")
+    assertEquals(at(0.62, false), "repair")
+    assertTrue(not TheContractorRepairContracts.canServiceParts(), "ADS without targets")
+end)
+
+test("a parts service's targets: one or both stock parts, then each on its own", function()
+    setup()
+    local parts = { { id = "battery" }, { id = "airFilter" } }
+    local both, one = 0, 0
+    for seed = 1, 40 do
+        math.randomseed(seed)
+        local sets = TheContractorRepairContracts.getPartTargetSets(parts, math.random)
+        if #sets[1] == 2 then
+            both = both + 1
+            assertEquals(#sets, 3)
+            assertEquals(#sets[2], 1)
+            assertEquals(#sets[3], 1)
+            assertTrue(sets[2][1].consumable ~= sets[3][1].consumable)
+        else
+            one = one + 1
+            assertEquals(#sets, 2, "then the other part")
+            assertTrue(sets[1][1].consumable ~= sets[2][1].consumable)
+        end
+    end
+    assertTrue(both > 0 and one > 0, "both on " .. both .. " of 40")
+    assertEquals(#TheContractorRepairContracts.getPartTargetSets({}, math.random), 0)
+end)
+
+test("a parts service is an ordinary service job of only the parts the machine takes, with labour", function()
+    local world, tc = setup()
+    enableParts(world, { airFilter = true })
+    world.partsCost, world.laborHours = 400, 1
+    local zone = world:addZone()
+    for seed = 1, 6 do
+        math.randomseed(seed)
+        world.requests = {}
+        tc.Jobs = TheContractorJobs.new()
+        tc.RepairContracts = TheContractorRepairContracts.new()
+        tc.RepairContracts:queueArrival(1, zone, 1, "parts", 2)
+        assertTrue(tc.RepairContracts.arrivals[1].stockParts)
+        tc.RepairContracts:update(TheContractorRepairContracts.PLACE_CHECK_MS)
+        world:finishLoad()
+        assertEquals(#tc.RepairContracts.arrivals, 0)
+
+        local last = world.requests[#world.requests]
+        assertEquals(last.kind, "maintenance")
+        assertEquals(#last.targets, 1, "the battery alone, once the air filter's refused")
+        assertEquals(last.targets[1].consumable, "battery")
+        local job = tc.Jobs:getAllJobs(1)[1]
+        assertEquals(job.jobType, "adsMaintenance")
+        assertEquals(job.state, TheContractorJob.STATE.OFFERED)
+        assertTrue(job.workshop.baseLabour > 0, "labour charged")
+        assertEquals(world.stages[job.workshop.vehicleId], "inspection", "found on inspection")
+    end
+end)
+
+test("a machine with neither part gets an ordinary service; a queued parts service keeps its kind over a save", function()
+    local world, tc = setup()
+    enableParts(world, { battery = true, airFilter = true })
+    local zone = world:addZone()
+    tc.RepairContracts:queueArrival(1, zone, 1, "parts", 2)
+
+    local xmlFile = {}
+    tc.RepairContracts:saveToXmlFile(xmlFile)
+    local loaded = TheContractorRepairContracts.new()
+    loaded:loadFromXMLFile(xmlFile)
+    assertTrue(loaded.arrivals[1].stockParts)
+    assertEquals(loaded.arrivals[1].kind, "maintenance")
+
+    tc.RepairContracts:update(TheContractorRepairContracts.PLACE_CHECK_MS)
+    world:finishLoad()
+    assertEquals(world.requests[#world.requests].targets, nil)
+    assertEquals(tc.Jobs:getAllJobs(1)[1].jobType, "adsMaintenance")
+end)
