@@ -259,7 +259,7 @@ Farm 1 jobs (open, today is day 212):
 Offers your farm a job of the given type right now, through the normal job generator. You get a real offer on a real field, with the usual price, deadline and required skill, so the game could have offered the same job by itself. This is useful for testing and for setting up a storyline.
 
 - No `jobType` lists the available types.
-- Job types (case-insensitive): `harvest`, `cultivate`, `sow`, `plow`, `mow`, `tedder`, `bale`, `baleWrap`, `strawDelivery`, `fertilize`, `herbicide`, `weed`, `hoe`, `stonePick`, plus `repair` and `maintenance` (see below).
+- Job types (case-insensitive): `harvest`, `cultivate`, `sow`, `plow`, `mow`, `tedder`, `bale`, `baleWrap`, `strawDelivery`, `fertilize`, `herbicide`, `weed`, `hoe`, `stonePick`, plus `repair`, `maintenance` and `parts` (see below).
 - A `harvest` offer, or a `bale` offer on a straw crop, sometimes includes delivery (Harvest & Haul, Bale & Deliver), just as a generated offer would. `strawDelivery` is only possible when a selling point on the map takes straw bales.
 - It picks a field your farm has the equipment for when it can, and falls back to any eligible field otherwise.
 - It fails only when the generator itself couldn't offer that type right now, and the output says why. Examples are harvest in winter, weeding on a save with weeds off, or a crop whose ready date can't be predicted. Use `tcJob availability` to see which types have work available.
@@ -268,16 +268,17 @@ Offers your farm a job of the given type right now, through the normal job gener
 tcJob offer mow
 ```
 
-**Repair contracts** (needs FS25_AdvancedDamageSystem): `repair` and `maintenance` send a customer's machine to your first free repair zone bay instead. It's queued like a normal arrival and placed within a couple of seconds, then ADS prepares it and the job offer goes up in your Inbox. The model is picked at random from those the zone takes (its type, its filter, what fits a bay). Field breakdowns aren't offered here: use `tcCompany event fieldBreakdown`.
+**Repair contracts** (needs FS25_AdvancedDamageSystem): `repair`, `maintenance` and `parts` send a customer's machine to your first free repair zone bay instead. It's queued like a normal arrival and placed within a couple of seconds, then ADS prepares it and the job offer goes up in your Inbox. The model is picked at random from those the zone takes (its type, its filter, what fits a bay). Field breakdowns aren't offered here: use `tcCompany event fieldBreakdown`.
 
 | Argument | Meaning |
 |---|---|
-| `repair\|maintenance` | A repair (hidden faults) or a service (worn oils, filters and grease). |
-| `severity` | Optional, 1-3, and only for these two. How big a job: more or later faults, or more worn consumables. Rolled if left out (20% 1, 30% 2, 50% 3). |
+| `repair\|maintenance\|parts` | A repair (hidden faults), a service (worn oils, filters and grease), or a parts service: a service of only the stock parts (the battery and/or the air filter), found on inspection and charged with labour like any service. `parts` needs a version of ADS that takes service targets. |
+| `severity` | Optional, 1-3, and only for these three. How big a job: more or later faults, or more worn consumables. Rolled if left out (20% 1, 30% 2, 50% 3). |
 
 ```
 tcJob offer repair
 tcJob offer maintenance 3
+tcJob offer parts
 ```
 
 ```

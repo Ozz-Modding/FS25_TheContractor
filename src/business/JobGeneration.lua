@@ -1122,11 +1122,12 @@ function TheContractorJobGeneration.registerConsoleCommands()
     -- scripting a storyline. Jobs broadcasts the new job itself. Fails only
     -- when no field qualifies for the type right now, or none that does has
     -- a workable deadline.
-    -- `repair` and `maintenance` (100) go to RepairContracts instead: a
-    -- customer's machine sent to a repair zone bay, with an optional severity.
+    -- `repair`, `maintenance` and `parts` (100) go to RepairContracts
+    -- instead: a customer's machine sent to a repair zone bay, with an
+    -- optional severity.
     TCConsole.register("job", "offer", {
         args = "<jobType> [severity]",
-        description = "Offer your farm a real job of that type now (no type lists the types; repair/maintenance take a severity 1-3)",
+        description = "Offer your farm a real job of that type now (no type lists the types; repair/maintenance/parts take a severity 1-3)",
         run = function(farmId, args)
             local tc = g_currentMission.TheContractor
             local typeList = table.concat(TheContractorJobGeneration.JOB_TYPE_KEYS, ", ")

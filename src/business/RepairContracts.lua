@@ -9,7 +9,10 @@
 -- customer (ARRIVAL_CHANCE), queued with its model, kind, severity and seed.
 -- A queued arrival is spawned on the next look at the queue
 -- (PLACE_CHECK_MS), seen or not. Then ADS prepares it and the offer goes
--- up. Nothing runs while the queue is empty.
+-- up. Nothing runs while the queue is empty. Of the arrivals, KIND_WEIGHTS'
+-- share are a parts service: ADS's service kind with 116's targets (the
+-- battery and/or the air filter, entry.stockParts), otherwise an ordinary
+-- service job, inspected, negotiated and charged for its labour.
 --
 -- 102: inspect, negotiate, then accept. ADS keeps the machine in its
 -- inspection stage (inspections only) until we authorize it. Once it's
@@ -74,7 +77,12 @@ TheContractorRepairContracts.JOB_TYPES = {
 
 -- The chance an empty bay gets a customer each day, and what they want.
 TheContractorRepairContracts.ARRIVAL_CHANCE = 0.5
-TheContractorRepairContracts.KIND_WEIGHTS = { repair = 65, maintenance = 35 }
+-- "parts" is a service of only ADS's stock parts (the battery and/or the
+-- air filter, as 116's favours are), but an ordinary service job otherwise:
+-- inspected to find which, negotiated, labour charged. Without ADS's
+-- targets or stock parts its share goes to the other two.
+TheContractorRepairContracts.PARTS_KIND = "parts"
+TheContractorRepairContracts.KIND_WEIGHTS = { repair = 50, maintenance = 30, parts = 20 }
 -- How likely each severity (1-3) is, whatever the farm's reputation.
 TheContractorRepairContracts.SEVERITY_WEIGHTS = { 20, 30, 50 }
 
@@ -686,11 +694,52 @@ function TheContractorRepairContracts:stopListening()
     end
 end
 
-function TheContractorRepairContracts.pickKind(random)
+-- "repair", "maintenance" or PARTS_KIND (only with hasParts), by
+-- KIND_WEIGHTS.
+function TheContractorRepairContracts.pickKind(random, hasParts)
     local weights = TheContractorRepairContracts.KIND_WEIGHTS
-    local total = weights.repair + weights.maintenance
-    return random() * total < weights.repair and TCADSRepairContracts.KIND.REPAIR or
-        TCADSRepairContracts.KIND.MAINTENANCE
+    local parts = hasParts and weights.parts or 0
+    local roll = random() * (weights.repair + weights.maintenance + parts)
+    if roll < weights.repair then
+        return TCADSRepairContracts.KIND.REPAIR
+    elseif roll < weights.repair + weights.maintenance then
+        return TCADSRepairContracts.KIND.MAINTENANCE
+    end
+    return TheContractorRepairContracts.PARTS_KIND
+end
+
+-- Whether ADS can prepare a service of only the stock parts.
+function TheContractorRepairContracts.canServiceParts()
+    return TCADSRepairContracts.hasTargets() and #TCADSRepairContracts.getStockParts() > 0
+end
+
+-- The targets to try for a parts service, in order: a random one or more of
+-- the stock parts ({ id, nameKey }), then each stock part on its own (ADS
+-- refuses the lot if the machine lacks one). Each a list of ADS targets.
+function TheContractorRepairContracts.getPartTargetSets(parts, random)
+    local shuffled = {}
+    for i, part in ipairs(parts) do
+        shuffled[i] = part
+    end
+    for i = #shuffled, 2, -1 do
+        local j = math.min(math.floor(random() * i) + 1, i)
+        shuffled[i], shuffled[j] = shuffled[j], shuffled[i]
+    end
+    if #shuffled == 0 then
+        return {}
+    end
+    local count = math.min(math.floor(random() * #shuffled) + 1, #shuffled)
+    local first = {}
+    for i = 1, count do
+        table.insert(first, { consumable = shuffled[i].id })
+    end
+    local sets = { first }
+    for i = 1, #shuffled do
+        if count > 1 or i > 1 then
+            table.insert(sets, { { consumable = shuffled[i].id } })
+        end
+    end
+    return sets
 end
 
 -- 1-3, weighted by SEVERITY_WEIGHTS.
@@ -720,12 +769,16 @@ function TheContractorRepairContracts:queueArrival(farmId, zone, bayIndex, kind,
         return nil
     end
     local model = models[math.random(1, #models)]
+    kind = kind or TheContractorRepairContracts.pickKind(math.random, TheContractorRepairContracts.canServiceParts())
+    local isParts = kind == TheContractorRepairContracts.PARTS_KIND
     local entry = {
         farmId = farmId,
         zoneUniqueId = TheContractorRepairContracts.getZoneUniqueId(zone),
         bayIndex = bayIndex,
         xmlFilename = model.xmlFilename,
-        kind = kind or TheContractorRepairContracts.pickKind(math.random),
+        kind = isParts and TCADSRepairContracts.KIND.MAINTENANCE or kind,
+        -- A service of only the stock parts (PARTS_KIND).
+        stockParts = isParts or nil,
         severity = severity or TheContractorRepairContracts.pickSeverity(math.random),
         seed = TheContractorRepairContracts.rollSeed(math.random),
         queuedDay = g_currentMission.environment.currentMonotonicDay,
@@ -735,7 +788,7 @@ function TheContractorRepairContracts:queueArrival(farmId, zone, bayIndex, kind,
     }
     table.insert(self.arrivals, entry)
     TCLog.info("TheContractor: farm %d repair zone bay %d: %s (%s, severity %d) on its way", farmId, bayIndex,
-        model.name, entry.kind, entry.severity)
+        model.name, isParts and "parts service" or entry.kind, entry.severity)
     return entry
 end
 
@@ -1111,21 +1164,46 @@ function TheContractorRepairContracts:onArrivalLoaded(vehicles, loadingState, ar
         return
     end
 
-    local ok, result = TCADSRepairContracts.prepareVehicle(vehicle, {
-        kind = entry.kind,
-        severity = entry.severity,
-        -- 101: a breakdown's field service level (nil for the rest).
-        fieldService = entry.fieldService,
-        seed = entry.seed,
-        ref =string.format("TheContractor:%d:%d", entry.farmId, entry.seed),
-    })
-    local quote = ok and TCADSRepairContracts.getQuote(vehicle) or nil
-    if not ok or quote == nil or (tonumber(quote.price) or 0) <= 0 then
+    -- A parts service tries its target sets, then falls back to an ordinary
+    -- service (false: no targets) if the machine takes none of them.
+    local targetSets = {}
+    if entry.stockParts then
+        targetSets = TheContractorRepairContracts.getPartTargetSets(TCADSRepairContracts.getStockParts(), math.random)
+    end
+    table.insert(targetSets, false)
+
+    local ok, result, quote = false, nil, nil
+    for _, targets in ipairs(targetSets) do
+        ok, result = TCADSRepairContracts.prepareVehicle(vehicle, {
+            kind = entry.kind,
+            severity = entry.severity,
+            -- 101: a breakdown's field service level (nil for the rest).
+            fieldService = entry.fieldService,
+            seed = entry.seed,
+            ref = string.format("TheContractor:%d:%d", entry.farmId, entry.seed),
+            targets = targets or nil,
+        })
+        quote = ok and TCADSRepairContracts.getQuote(vehicle) or nil
+        if ok and quote ~= nil and (tonumber(quote.price) or 0) > 0 then
+            if entry.stockParts then
+                local ids = {}
+                for _, target in ipairs(targets or {}) do
+                    table.insert(ids, target.consumable)
+                end
+                TCLog.info("TheContractor: farm %d parts service on %s: %s", entry.farmId, vehicle:getFullName(),
+                    #ids > 0 and table.concat(ids, ", ") or "none fit, an ordinary service")
+            end
+            break
+        end
         if ok then
             TCADSRepairContracts.release(vehicle)
+            ok, result = false, "noQuote"
         end
+        quote = nil
+    end
+    if not ok then
         vehicle:delete()
-        self:retryArrival(entry, zone, ok and "noQuote" or result)
+        self:retryArrival(entry, zone, result)
         return
     end
 
@@ -1813,6 +1891,7 @@ function TheContractorRepairContracts:loadFromXMLFile(xmlFile)
             bayIndex = getXMLInt(xmlFile, key .. "#bayIndex"),
             xmlFilename = getXMLString(xmlFile, key .. "#xmlFilename"),
             kind = getXMLString(xmlFile, key .. "#kind"),
+            stockParts = getXMLBool(xmlFile, key .. "#stockParts") == true or nil,
             severity = Utils.getNoNil(getXMLInt(xmlFile, key .. "#severity"), 1),
             seed = getXMLInt(xmlFile, key .. "#seed"),
             queuedDay = Utils.getNoNil(getXMLInt(xmlFile, key .. "#queuedDay"), 0),
@@ -1927,6 +2006,9 @@ function TheContractorRepairContracts:saveToXmlFile(xmlFile)
             if entry.kind ~= nil then
                 setXMLString(xmlFile, key .. "#kind", entry.kind)
             end
+            if entry.stockParts then
+                setXMLBool(xmlFile, key .. "#stockParts", true)
+            end
             setXMLInt(xmlFile, key .. "#severity", entry.severity)
             setXMLInt(xmlFile, key .. "#seed", entry.seed)
             setXMLInt(xmlFile, key .. "#queuedDay", entry.queuedDay)
@@ -2028,7 +2110,7 @@ end
 
 -- The bay kinds `tcJob offer` takes (JobGeneration's command hands them to
 -- consoleOffer): field breakdowns come from `tcCompany event` instead.
-TheContractorRepairContracts.CONSOLE_OFFER_KINDS = { "repair", "maintenance" }
+TheContractorRepairContracts.CONSOLE_OFFER_KINDS = { "repair", "maintenance", "parts" }
 
 function TheContractorRepairContracts.findConsoleOfferKind(name)
     if name == nil then
@@ -2042,8 +2124,9 @@ function TheContractorRepairContracts.findConsoleOfferKind(name)
     return nil
 end
 
--- `tcJob offer repair|maintenance [severity]`: a customer's machine sent to
--- the farm's first free repair zone bay, queued like a normal arrival.
+-- `tcJob offer repair|maintenance|parts [severity]`: a customer's machine
+-- sent to the farm's first free repair zone bay, queued like a normal
+-- arrival.
 function TheContractorRepairContracts.consoleOffer(farmId, kind, severityArg)
     local severity = tonumber(severityArg)
     if severityArg ~= nil and (severity == nil or severity < 1 or severity > 3) then
@@ -2051,6 +2134,9 @@ function TheContractorRepairContracts.consoleOffer(farmId, kind, severityArg)
     end
     if not TCADSRepairContracts.isActive() then
         return TCADSRepairContracts.describe()
+    end
+    if kind == TheContractorRepairContracts.PARTS_KIND and not TheContractorRepairContracts.canServiceParts() then
+        return "This version of ADS can't do a service of only the stock parts (no targets or stock parts)."
     end
     local repairContracts = g_currentMission.TheContractor.RepairContracts
     local zone, bayIndex = repairContracts:findFreeBay(farmId)
@@ -2061,8 +2147,8 @@ function TheContractorRepairContracts.consoleOffer(farmId, kind, severityArg)
     if entry == nil then
         return "No model fits that zone (check its filter)."
     end
-    return string.format("Queued %s (%s, severity %d) for bay %d.", entry.xmlFilename, entry.kind,
-        entry.severity, bayIndex)
+    return string.format("Queued %s (%s, severity %d) for bay %d.", entry.xmlFilename,
+        entry.stockParts and "parts service" or entry.kind, entry.severity, bayIndex)
 end
 
 function TheContractorRepairContracts.registerConsoleCommands()
