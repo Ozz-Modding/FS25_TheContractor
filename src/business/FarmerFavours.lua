@@ -66,6 +66,10 @@ TheContractorFarmerFavours.SMALL_ACRES = 40
 TheContractorFarmerFavours.LARGE_ACRES = 150
 TheContractorFarmerFavours.HOURS_PER_MONTH = { 20, 0.3, 70 }
 
+-- A farmer with a yard is this many times likelier to be the one asking,
+-- so the machine's in a yard rather than on a headland when it can be.
+TheContractorFarmerFavours.YARD_WEIGHT = 4
+
 -- A yard spot faces the yard's middle; the machine's corners must be open
 -- ground (108's test) as well as its middle.
 TheContractorFarmerFavours.YARD_SPOT_TRIES = 12
@@ -180,7 +184,8 @@ end
 
 -- canTrigger (068): { farmerId } or nil. A farmer with land and a yard or
 -- a field to stand a machine on, asking nothing already, and not fallen out
--- with the farm; picked by the relationship's offer weight (113).
+-- with the farm; picked by the relationship's offer weight (113), times
+-- YARD_WEIGHT for a farmer with a yard.
 function TheContractorFarmerFavours:pickFarmer(farmId)
     if TheContractorFarmerFavours.getRate(farmId) <= 0 then
         return nil
@@ -193,6 +198,9 @@ function TheContractorFarmerFavours:pickFarmer(farmId)
     local candidates, total = {}, 0
     for _, farmer in ipairs(tc.Farmers:getFarmers()) do
         local weight = tc.Relationships:getOfferWeight(farmId, farmer.id)
+        if farmer.yardFarmlandId ~= nil then
+            weight = weight * TheContractorFarmerFavours.YARD_WEIGHT
+        end
         if (self.forcedFarmerId == nil or self.forcedFarmerId == farmer.id) and not openFarmers[farmer.id] and
                 #farmer.farmlandIds > 0 and weight > 0 then
             table.insert(candidates, { farmer = farmer, weight = weight })

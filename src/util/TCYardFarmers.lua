@@ -13,6 +13,8 @@
 -- In a yard with a farmhouse, a slot is spent near it (a spot marked
 -- nearHouse) NEAR_HOUSE_PERCENT of the time, and on any spot otherwise. A
 -- farmer faces the yard's middle and turns to a local player who walks up.
+-- A farmer with a favour open (116) waits by its machine instead, yard or
+-- field, day or night (getFavourSpot).
 --
 -- Showing them is TCIdleStaff's: a HumanGraphicsComponent from their look,
 -- loaded within LOAD_DISTANCE and freed beyond UNLOAD_DISTANCE, so a map
@@ -127,8 +129,89 @@ function TCYardFarmers.getSpot(person, entry, day, slot)
     }
 end
 
+-- 116: a farmer who's asked a favour waits by their machine instead, at any
+-- time of day, while the favour's on offer or taken on and the machine's on
+-- this machine's map: beside it, FAVOUR_GAP out from its side and
+-- FAVOUR_FORWARD of its length ahead of its middle, facing its middle. In a
+-- yard they stand on the side nearer the yard's middle (the open side,
+-- away from walls); on a field, a side by our hash. The machine's synced,
+-- so every machine has the same spot. Its key has the machine's position
+-- (to FAVOUR_KEY_GRID metres), so a moved machine moves them, out of view.
+TCYardFarmers.FAVOUR_GAP = 1
+TCYardFarmers.FAVOUR_FORWARD = 0.25
+TCYardFarmers.FAVOUR_KEY_GRID = 2
+
+local function isFavourOpen(job)
+    local state = job.state
+    return TheContractorRepairContracts.isFavourJob(job) and (state == TheContractorJob.STATE.OFFERED or
+        state == TheContractorJob.STATE.NEGOTIATING or state == TheContractorJob.STATE.ACCEPTED)
+end
+
+-- The open favour this farmer asked, with its machine, or nil. The farmer's
+-- the job's customer (workshop.farmerId stays on the server).
+function TCYardFarmers.getFavour(person, jobs)
+    if TheContractorRepairContracts == nil or jobs == nil then
+        return nil
+    end
+    for _, farmJobs in pairs(jobs.jobsByFarm) do
+        for _, job in pairs(farmJobs) do
+            if job.customerId == person.id and isFavourOpen(job) then
+                local vehicle = TheContractorRepairContracts.getVehicle(job)
+                if vehicle ~= nil and vehicle.rootNode ~= nil then
+                    return job, vehicle
+                end
+            end
+        end
+    end
+    return nil
+end
+
+-- Where to stand beside a machine at (x, z) heading (dirX, dirZ), width by
+-- length: x, z and the yaw facing its middle. side is 1 or -1; with
+-- (towardX, towardZ) given, the side nearer that point instead.
+function TCYardFarmers.getBesideSpot(x, z, dirX, dirZ, width, length, side, towardX, towardZ)
+    local sideX, sideZ = dirZ, -dirX
+    if towardX ~= nil then
+        side = (towardX - x) * sideX + (towardZ - z) * sideZ >= 0 and 1 or -1
+    end
+    local out = width * 0.5 + TCYardFarmers.FAVOUR_GAP
+    local ahead = length * TCYardFarmers.FAVOUR_FORWARD
+    local px = x + sideX * out * side + dirX * ahead
+    local pz = z + sideZ * out * side + dirZ * ahead
+    return px, pz, MathUtil.getYRotationFromDirection(x - px, z - pz)
+end
+
+-- The spot by a favour's machine, in getSpot's shape.
+function TCYardFarmers.getFavourSpot(person, job, vehicle, yards)
+    local x, _, z = getWorldTranslation(vehicle.rootNode)
+    local dirX, _, dirZ = localDirectionToWorld(vehicle.rootNode, 0, 0, 1)
+    local length = math.sqrt(dirX * dirX + dirZ * dirZ)
+    if length < 0.001 then
+        dirX, dirZ, length = 0, 1, 1
+    end
+    dirX, dirZ = dirX / length, dirZ / length
+    local size = vehicle.size or {}
+    local towardX, towardZ = nil, nil
+    local entry = job.workshop.yardFarmlandId ~= nil and yards ~= nil and yards:getSpots(job.workshop.yardFarmlandId) or nil
+    if entry ~= nil then
+        towardX, towardZ = entry.x, entry.z
+    end
+    local side = TCYardFarmers.hashSpot(job.id, 0, person.id, "favour") % 2 == 0 and 1 or -1
+    local px, pz, yaw = TCYardFarmers.getBesideSpot(x, z, dirX, dirZ, size.width or 3, size.length or 5, side,
+        towardX, towardZ)
+    local grid = TCYardFarmers.FAVOUR_KEY_GRID
+    return {
+        key = string.format("favour:%d:%d:%d", job.id, math.floor(x / grid + 0.5), math.floor(z / grid + 0.5)),
+        x = px,
+        y = getTerrainHeightAtWorldPos(g_terrainNode, px, 0, pz),
+        z = pz,
+        yaw = yaw,
+        jobId = job.id,
+    }
+end
+
 -- personId -> { person, spot } for every farmer who should be in their
--- yard now.
+-- yard (or by their favour's machine) now.
 function TCYardFarmers.getWanted()
     local wanted = {}
     local mission = g_currentMission
@@ -137,12 +220,12 @@ function TCYardFarmers.getWanted()
         return wanted
     end
     local slot = TCYardFarmers.getSlot(TheContractorWorkingHours.getNow())
-    if slot == nil then
-        return wanted
-    end
     local day = mission.environment.currentMonotonicDay or 0
     for _, person in ipairs(tc.Farmers:getFarmers()) do
-        if TCYardFarmers.getReason(person, tc.Yards) == nil then
+        local job, vehicle = TCYardFarmers.getFavour(person, tc.Jobs)
+        if job ~= nil then
+            wanted[person.id] = { person = person, spot = TCYardFarmers.getFavourSpot(person, job, vehicle, tc.Yards) }
+        elseif slot ~= nil and TCYardFarmers.getReason(person, tc.Yards) == nil then
             wanted[person.id] = {
                 person = person,
                 spot = TCYardFarmers.getSpot(person, tc.Yards:getSpots(person.yardFarmlandId), day, slot),
@@ -265,8 +348,18 @@ function TCYardFarmers.describe()
     for _, person in ipairs(tc.Farmers:getFarmers()) do
         local reason = TCYardFarmers.getReason(person, tc.Yards)
         local figure = TCYardFarmers.figures[person.id]
+        local favourJob, favourVehicle = TCYardFarmers.getFavour(person, tc.Jobs)
         local text
-        if reason ~= nil then
+        if favourJob ~= nil then
+            local spot = TCYardFarmers.getFavourSpot(person, favourJob, favourVehicle, tc.Yards)
+            text = string.format("by their favour's machine (job %d) at %.0f, %.0f, %.0f m away", favourJob.id,
+                spot.x, spot.z, MathUtil.vector3Length(spot.x - cx, spot.y - cy, spot.z - cz))
+            if figure == nil then
+                text = text .. ", not there yet"
+            elseif figure.spot.key ~= spot.key then
+                text = text .. string.format(", still on spot %s until you look away", figure.spot.key)
+            end
+        elseif reason ~= nil then
             text = reason
         elseif slot == nil then
             text = string.format("yard %d", person.yardFarmlandId)

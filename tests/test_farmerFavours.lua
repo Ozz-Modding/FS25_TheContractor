@@ -355,6 +355,22 @@ test("a farmer with land who isn't asking already and hasn't fallen out with the
     assertEquals(world.definition.canTrigger(1), nil)
 end)
 
+test("a farmer with a yard is likelier to be the one asking", function()
+    local world = setup()
+    world:addFarmer(4, "Tom", 30)
+    world:addFarmer(5, "Ann", 30, 50)
+    local random = math.random
+    -- Equal weights would make 0.3 of the way through Tom's share; Ann's
+    -- yard puts it in hers.
+    math.random = function() return 0.3 end
+    local data = world.definition.canTrigger(1)
+    math.random = function() return 0.1 end
+    local low = world.definition.canTrigger(1)
+    math.random = random
+    assertEquals(data.farmerId, 5)
+    assertEquals(low.farmerId, 4, "a farmer without one can still ask")
+end)
+
 test("the console asks a farmer by id or name, and refuses anyone else", function()
     local world, tc = setup()
     world:addFarmer(4, "Tom Hargreaves", 30)

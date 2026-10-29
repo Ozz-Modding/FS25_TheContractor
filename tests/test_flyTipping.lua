@@ -42,6 +42,12 @@ local function setup()
 
     FarmlandManager = { NO_OWNER_FARM_ID = 0 }
     FruitType = { UNKNOWN = 0, GRASS = 1 }
+    -- Fields are in grass (cut at 9) unless a test says otherwise.
+    g_fruitTypeManager = {
+        getFruitTypeByIndex = function(_, index)
+            return index == FruitType.GRASS and { getIsCut = function(_, state) return state == 9 end } or nil
+        end,
+    }
     FieldGroundType = { STUBBLE_TILLAGE = 2, CULTIVATED = 3, PLOWED = 5 }
 
     -- Fields: def { id, owner, noBoundary }. A 40 x 40 m square from
@@ -58,7 +64,8 @@ local function setup()
         function field:getId() return self.id end
         function field:getOwner() return self.owner end
         function field:getAreaHa() return 2 end
-        function field:getFieldState() return { isValid = true, fruitTypeIndex = FruitType.UNKNOWN } end
+        field.fieldState = { isValid = true, fruitTypeIndex = FruitType.GRASS, growthState = 3 }
+        function field:getFieldState() return self.fieldState end
         function field:getPlannedFruitTypeIndex() return nil end
         function field:getTeleportPosition() return -5, 0 end
         function field:getCenterOfFieldWorldPosition() return 20, 0 end
