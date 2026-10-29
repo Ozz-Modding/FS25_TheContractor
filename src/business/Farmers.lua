@@ -22,9 +22,15 @@
 --
 -- Jobs get their customer as they're created (getCustomerIdForJob): the
 -- farmer holding the job's field, the official for an offField job or land
--- no farmer holds, the original job's customer for a spilt crop (106), and
--- nobody for an ADS repair contract (100-102). A loaded job without one
--- gets one the same way (linkJobs).
+-- no farmer holds, the original job's customer for a spilt crop (106), the
+-- farmer whose machine it is for a favour (116), and nobody for any other
+-- ADS repair contract (100-102). A loaded job without one gets one the same
+-- way (linkJobs).
+--
+-- 116: a farmer's machines (machines, made by TheContractorFarmerFavours the
+-- first time a favour needs one) are kept on their record: { id,
+-- xmlFilename, seed, hours, hoursDay, hoursPerMonth, fitted = { [part] = day } }.
+-- Server only: saved here, never streamed.
 --
 -- 113: each farmer also has a pay habit (PAY_HABITS), rolled as they're
 -- made and never shown or streamed: it only changes how their invoices
@@ -186,7 +192,9 @@ end
 -- A job's customer id (see the file header), or nil for none.
 function TheContractorFarmers:getCustomerIdForJob(job)
     if job.workshop ~= nil then
-        return nil
+        -- 116: a favour is for the farmer whose machine it is.
+        local farmerId = job.workshop.farmerId
+        return farmerId ~= nil and self.people[farmerId] ~= nil and farmerId or nil
     end
     if job.spill ~= nil and job.spill.sourceJobId ~= nil then
         local jobs = g_currentMission.TheContractor.Jobs
@@ -748,6 +756,72 @@ local function decodeIds(text)
     return ids
 end
 
+-- 116: a farmer's machines, under their person key; nil with none.
+function TheContractorFarmers.loadMachines(xmlFile, personKey)
+    local machines = {}
+    local index = 0
+    while true do
+        local key = string.format("%s.machine(%d)", personKey, index)
+        if not hasXMLProperty(xmlFile, key) then
+            break
+        end
+        local machine = {
+            id = getXMLInt(xmlFile, key .. "#id"),
+            xmlFilename = getXMLString(xmlFile, key .. "#xmlFilename"),
+            seed = getXMLInt(xmlFile, key .. "#seed"),
+            hours = getXMLFloat(xmlFile, key .. "#hours"),
+            hoursDay = getXMLInt(xmlFile, key .. "#hoursDay"),
+            hoursPerMonth = getXMLFloat(xmlFile, key .. "#hoursPerMonth") or 0,
+            fitted = {},
+        }
+        local fittedIndex = 0
+        while true do
+            local fittedKey = string.format("%s.fitted(%d)", key, fittedIndex)
+            if not hasXMLProperty(xmlFile, fittedKey) then
+                break
+            end
+            local part = getXMLString(xmlFile, fittedKey .. "#part")
+            local day = getXMLInt(xmlFile, fittedKey .. "#day")
+            if part ~= nil and day ~= nil then
+                machine.fitted[part] = day
+            end
+            fittedIndex = fittedIndex + 1
+        end
+        if machine.id ~= nil and machine.xmlFilename ~= nil and machine.seed ~= nil then
+            table.insert(machines, machine)
+        else
+            TCLog.warning("TheContractor: skipping %s in the save, no id, model or seed", key)
+        end
+        index = index + 1
+    end
+    return #machines > 0 and machines or nil
+end
+
+function TheContractorFarmers.saveMachines(xmlFile, personKey, machines)
+    for index, machine in ipairs(machines or {}) do
+        local key = string.format("%s.machine(%d)", personKey, index - 1)
+        setXMLInt(xmlFile, key .. "#id", machine.id)
+        setXMLString(xmlFile, key .. "#xmlFilename", machine.xmlFilename)
+        setXMLInt(xmlFile, key .. "#seed", machine.seed)
+        if machine.hours ~= nil then
+            setXMLFloat(xmlFile, key .. "#hours", machine.hours)
+            setXMLInt(xmlFile, key .. "#hoursDay", machine.hoursDay or 0)
+        end
+        setXMLFloat(xmlFile, key .. "#hoursPerMonth", machine.hoursPerMonth or 0)
+        -- By part, so the save doesn't shuffle.
+        local parts = {}
+        for part in pairs(machine.fitted or {}) do
+            table.insert(parts, part)
+        end
+        table.sort(parts)
+        for fittedIndex, part in ipairs(parts) do
+            local fittedKey = string.format("%s.fitted(%d)", key, fittedIndex - 1)
+            setXMLString(xmlFile, fittedKey .. "#part", part)
+            setXMLInt(xmlFile, fittedKey .. "#day", machine.fitted[part])
+        end
+    end
+end
+
 function TheContractorFarmers:loadFromXMLFile(xmlFile)
     local rootKey = string.format("%s.farmers", TheContractor.SaveKey)
     if not hasXMLProperty(xmlFile, rootKey) then
@@ -778,6 +852,7 @@ function TheContractorFarmers:loadFromXMLFile(xmlFile)
                 yardFarmlandId = getXMLInt(xmlFile, key .. "#yard"),
                 targetAcres = getXMLFloat(xmlFile, key .. "#targetAcres") or 0,
                 payHabit = getXMLString(xmlFile, key .. "#payHabit"),
+                machines = TheContractorFarmers.loadMachines(xmlFile, key),
             }
             self.people[id] = person
             if person.isOfficial then
@@ -822,6 +897,7 @@ function TheContractorFarmers:saveToXmlFile(xmlFile)
             if person.yardFarmlandId ~= nil then
                 setXMLInt(xmlFile, key .. "#yard", person.yardFarmlandId)
             end
+            TheContractorFarmers.saveMachines(xmlFile, key, person.machines)
         end
         TCWorkerAppearance.writeXML(xmlFile, key .. ".appearance", person.appearance)
     end

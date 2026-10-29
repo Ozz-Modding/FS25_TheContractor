@@ -51,8 +51,10 @@ function TCRespondToJobOfferEvent:run(connection)
     end
 
     -- 102: a workshop job is only taken on at a price the customer's
-    -- agreed (TCRepairQuoteEvent); it can still be turned down here.
-    if self.accept and TheContractorRepairContracts.isWorkshopJob(job) then
+    -- agreed (TCRepairQuoteEvent); it can still be turned down here. 116:
+    -- a favour has nothing to agree, so it's accepted as it stands.
+    if self.accept and TheContractorRepairContracts.isWorkshopJob(job) and
+            not TheContractorRepairContracts.isFavourJob(job) then
         return
     end
 

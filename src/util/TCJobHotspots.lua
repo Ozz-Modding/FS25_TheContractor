@@ -94,7 +94,9 @@ function TCJobHotspots.getBreakdownMachines(farmId)
     end
     for _, job in ipairs(tc.Jobs:getAllJobs(farmId)) do
         local state = job.state
-        if TheContractorRepairContracts.isBreakdownJob(job) and (state == TheContractorJob.STATE.OFFERED or
+        -- 116: and each favour's, wherever the farmer's machine stands.
+        if (TheContractorRepairContracts.isBreakdownJob(job) or TheContractorRepairContracts.isFavourJob(job)) and
+                (state == TheContractorJob.STATE.OFFERED or
                 state == TheContractorJob.STATE.NEGOTIATING or state == TheContractorJob.STATE.ACCEPTED) then
             local vehicle = TheContractorRepairContracts.getVehicle(job)
             if vehicle ~= nil and vehicle.rootNode ~= nil then

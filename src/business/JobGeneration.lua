@@ -97,6 +97,10 @@ TheContractorJobGeneration_mt = Class(TheContractorJobGeneration)
 --                    the WorkAreaType values, since those are looked up
 --                    when the map loads. None at all for a job with no
 --                    ground work (bale wrap, deliveries, fly-tipping).
+--   favour           116: a workshop job on a farmer's own machine, a part
+--                    to fit as a favour (TheContractorFarmerFavours):
+--                    accepted as it stands, never negotiated, the farmer
+--                    its customer.
 -- A type left out of JOB_TYPE_KEYS (flyTipping, spillRecovery) is never
 -- generated, shown by the availability snapshot or created by tcJob: only
 -- its random event makes one (075 with createJobOnField, 106 with
@@ -180,6 +184,8 @@ TheContractorJobGeneration.JOB_TYPES = {
     -- 101: a customer's machine broken down on a field, fixed on the spot
     -- (TheContractorFieldBreakdowns), otherwise as 100's.
     adsBreakdown = { workshopJob = true, playerOnly = true, noEquipment = true },
+    -- 116: a farmer's own machine needing a new part, fitted as a favour.
+    adsFavour = { workshopJob = true, playerOnly = true, noEquipment = true, favour = true },
 }
 TheContractorJobGeneration.JOB_TYPE_KEYS = { "harvest", "cultivate", "sow", "plow", "mow", "tedder", "bale",
     "baleWrap", "strawDelivery", "fertilize", "herbicide", "weed", "hoe", "stonePick" }

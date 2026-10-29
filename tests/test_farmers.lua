@@ -505,3 +505,46 @@ test("113: every farmer has a pay habit, saved but never streamed; older farmers
     loaded:setUp()
     assertTrue(TheContractorFarmers.findPayHabit(loaded:getPerson(farmer.id).payHabit) ~= nil)
 end)
+
+test("116: a farmer's machines and what's been fitted to them survive a save, and never go to a client", function()
+    local world = setup()
+    world.farmers:setUp()
+    local farmer = world.farmers:getFarmers()[1]
+    local other = world.farmers:getFarmers()[2]
+    farmer.machines = {
+        { id = 1, xmlFilename = "fendt.xml", seed = 1234, hours = 2400.5, hoursDay = 12, hoursPerMonth = 40,
+            fitted = { battery = 12, airFilter = 30 } },
+        { id = 2, xmlFilename = "deutz.xml", seed = 99, hoursPerMonth = 25, fitted = {} },
+    }
+
+    local xmlFile = {}
+    world.farmers:saveToXmlFile(xmlFile)
+    local loaded = TheContractorFarmers.new()
+    loaded:loadFromXMLFile(xmlFile)
+    local machines = loaded:getPerson(farmer.id).machines
+    assertEquals(#machines, 2)
+    assertEquals(machines[1].xmlFilename, "fendt.xml")
+    assertEquals(machines[1].seed, 1234)
+    assertNear(machines[1].hours, 2400.5, 0.01)
+    assertEquals(machines[1].hoursDay, 12)
+    assertNear(machines[1].hoursPerMonth, 40, 0.01)
+    assertEquals(machines[1].fitted.battery, 12)
+    assertEquals(machines[1].fitted.airFilter, 30)
+    assertEquals(machines[2].hours, nil, "not aged yet")
+    assertEquals(loaded:getPerson(other.id).machines, nil, "none until a favour needs one")
+
+    local stream = world:newStream()
+    world.farmers:writeInitialClientState(stream)
+    local client = TheContractorFarmers.new()
+    client:readInitialClientState(stream)
+    assertEquals(client:getPerson(farmer.id).machines, nil)
+end)
+
+test("116: a favour's customer is the farmer whose machine it is, while they're on the list", function()
+    local world = setup()
+    world.farmers:setUp()
+    local farmer = world.farmers:getFarmers()[1]
+    assertEquals(world.farmers:getCustomerIdForJob({ workshop = { farmerId = farmer.id } }), farmer.id)
+    assertEquals(world.farmers:getCustomerIdForJob({ workshop = { farmerId = 999 } }), nil, "regenerated away")
+    assertEquals(world.farmers:getCustomerIdForJob({ workshop = {} }), nil, "a repair contract")
+end)

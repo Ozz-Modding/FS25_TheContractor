@@ -10,7 +10,8 @@
 -- with one warning. Nothing else in the mod calls ADS_RepairContracts. Checked
 -- against FS25_AdvancedDamageSystem 0.10.0.8 (commit a0285ed), and 102's
 -- stage gate and per-option costs at fffc957 (still API version 1, so they're
--- detected by their functions).
+-- detected by their functions). 116's targets are optional (hasTargets,
+-- getStockParts).
 
 TCADSRepairContracts = {}
 
@@ -106,6 +107,63 @@ end
 -- ADS is loaded with an API we can use.
 function TCADSRepairContracts.isActive()
     return api ~= nil
+end
+
+-- 116: whether ADS can be told which consumables a service is
+-- (prepareVehicle's targets), which getInfo says. Optional: without it
+-- there are no farmer favours, and everything else works as before.
+function TCADSRepairContracts.hasTargets()
+    if api == nil then
+        return false
+    end
+    local info = api.getInfo()
+    if type(info) ~= "table" or info.targets ~= true then
+        warnOnce("targets", "%s's repair contracts API takes no targets - no farmer favours",
+            TCADSRepairContracts.MOD_NAME)
+        return false
+    end
+    return true
+end
+
+-- 116: the parts a farm can keep in stock and fit to any machine: ADS's
+-- fixed-size parts (SPARE_PARTS_BOX.GRADED_PARTS, the battery and the air
+-- filter), sold in S/M/L as items of their own rather than in a parts box
+-- made for one model, and fitted by hand. { { id, nameKey } }, empty
+-- without them (one warning).
+function TCADSRepairContracts.getStockParts()
+    local env = TCADSRepairContracts.getEnv()
+    local config = env ~= nil and env.ADS_Config or nil
+    local box = type(config) == "table" and config.SPARE_PARTS_BOX or nil
+    local parts = type(box) == "table" and box.GRADED_PARTS or nil
+    if type(parts) ~= "table" then
+        warnOnce("stockParts", "%s has no ADS_Config.SPARE_PARTS_BOX.GRADED_PARTS - no farmer favours",
+            TCADSRepairContracts.MOD_NAME)
+        return {}
+    end
+    local result = {}
+    for _, part in ipairs(parts) do
+        if type(part) == "table" and part.id ~= nil then
+            table.insert(result, { id = part.id, nameKey = part.nameKey })
+        end
+    end
+    return result
+end
+
+-- 116: the size (ADS's grade, "S", "M" or "L") of a stock part the vehicle
+-- takes, from ADS's parts shop, or nil (one warning without it).
+function TCADSRepairContracts.getPartGrade(vehicle, partId)
+    local env = TCADSRepairContracts.getEnv()
+    local partsShop = env ~= nil and env.ADS_PartsShop or nil
+    if partsShop == nil or type(partsShop.getPartGrade) ~= "function" then
+        warnOnce("partGrade", "%s has no ADS_PartsShop.getPartGrade - favours don't say the part's size",
+            TCADSRepairContracts.MOD_NAME)
+        return nil
+    end
+    if vehicle == nil then
+        return nil
+    end
+    local grade = partsShop.getPartGrade(vehicle, partId)
+    return grade ~= nil and tostring(grade) or nil
 end
 
 -- Server: prepares a freshly spawned vehicle. true, contractId or false,
@@ -244,7 +302,9 @@ function TCADSRepairContracts.isInspected(vehicle)
     return true
 end
 
-function TCADSRepairContracts.getProgress(vehicle)
+-- 116: allKnown (a farmer's favour): the customer has said what's wrong, so
+-- every item's known whatever's been inspected.
+function TCADSRepairContracts.getProgress(vehicle, allKnown)
     local quote = TCADSRepairContracts.getQuote(vehicle)
     local doneById = quote ~= nil and getDoneById(vehicle) or nil
     if doneById == nil then
@@ -257,7 +317,7 @@ function TCADSRepairContracts.getProgress(vehicle)
     for _, item in ipairs(quote.items or {}) do
         if item.kind == "fault" or item.kind == "consumable" then
             local done = doneById[tostring(item.id)] == true
-            local known = isItemKnown(item, done, breakdowns, serviceInspected)
+            local known = allKnown == true or isItemKnown(item, done, breakdowns, serviceInspected)
             progress.total = progress.total + 1
             if known then
                 if done then

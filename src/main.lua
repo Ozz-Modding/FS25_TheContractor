@@ -119,6 +119,7 @@ source(TheContractor.dir .. "src/business/Yards.lua")
 source(TheContractor.dir .. "src/business/FarmerSplit.lua")
 source(TheContractor.dir .. "src/business/Farmers.lua")
 source(TheContractor.dir .. "src/business/Relationships.lua")
+source(TheContractor.dir .. "src/business/FarmerFavours.lua")
 source(TheContractor.dir .. "src/events/TCInitialClientStateEvent.lua")
 source(TheContractor.dir .. "src/events/TCSettingsEvent.lua")
 source(TheContractor.dir .. "src/events/TCCreateCompanyEvent.lua")
@@ -316,6 +317,10 @@ function TheContractor:loadMap()
     self.Farmers = TheContractorFarmers.new()
     -- 113: each farm's relationship with each of them.
     self.Relationships = TheContractorRelationships.new()
+    -- 116: a farmer asking for a new part fitted to their own machine
+    -- (ADS), through 100.
+    self.FarmerFavours = TheContractorFarmerFavours.new()
+    self.FarmerFavours:register(self.RandomEvents)
     self.InboxHUD = TCInboxHUD.new()
 
     -- Module-level caches outlive a savegame; start each load clean.
