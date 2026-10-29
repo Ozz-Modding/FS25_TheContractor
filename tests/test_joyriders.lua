@@ -350,6 +350,16 @@ local function setupPainting(world, boundary)
             return 7
         end,
     }
+    -- Maize: growing from 1, cut at 10.
+    FruitType = { UNKNOWN = 0, MAIZE = 5 }
+    g_fruitTypeManager = {
+        getFruitTypeByIndex = function(_, index)
+            if index ~= FruitType.MAIZE then
+                return nil
+            end
+            return { getIsCut = function(_, state) return state == 10 end }
+        end,
+    }
     local nodes = {}
     for i, point in ipairs(boundary) do
         nodes[i] = point
@@ -358,8 +368,12 @@ local function setupPainting(world, boundary)
         return node[1], 0, node[2]
     end
     return {
+        fieldState = { fruitTypeIndex = FruitType.MAIZE, growthState = 4 },
         getPolygonPoints = function()
             return nodes
+        end,
+        getFieldState = function(self)
+            return self.fieldState
         end,
         getId = function()
             return 12
@@ -493,4 +507,29 @@ test("painting a dump site: the ruts in, inside the field only, and the patch un
         return false
     end
     assertEquals(TCJoyriderRuts.paintDumpSite(field, seeded(4)), nil)
+end)
+
+test("dump and machine sites are only painted in a standing crop, but the dump site is still planned", function()
+    local world = load()
+    local field = setupPainting(world, rectangle(0, 0, 100, 60))
+    field.getTeleportPosition = function()
+        return -5, 30
+    end
+
+    for _, state in ipairs({
+        { fruitTypeIndex = FruitType.UNKNOWN, growthState = 0 }, -- bare or cultivated
+        { fruitTypeIndex = FruitType.MAIZE, growthState = 10 }, -- harvested
+        { fruitTypeIndex = FruitType.MAIZE, growthState = 0 }, -- sown, not up yet
+    }) do
+        field.fieldState = state
+        world.painted = {}
+        local site = TCJoyriderRuts.paintDumpSite(field, seeded(4))
+        assertTrue(site ~= nil, "still somewhere to dump")
+        assertEquals(TCJoyriderRuts.paintMachineSite(field, site.x, site.z, site.heading, 3, 5), 0)
+        assertEquals(#world.painted, 0)
+    end
+
+    field.fieldState = { fruitTypeIndex = FruitType.MAIZE, growthState = 4 }
+    assertTrue(TCJoyriderRuts.paintMachineSite(field, 50, 6, 0, 3, 5) > 0)
+    assertTrue(#world.painted > 0)
 end)

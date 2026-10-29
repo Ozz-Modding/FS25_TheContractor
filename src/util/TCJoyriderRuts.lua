@@ -35,7 +35,9 @@
 -- 101's field breakdowns use the same plan with their own depth (a broken
 -- machine stands within 10 m of the edge, see planDumpSite's depthRange),
 -- and paintMachineSite paints its run in and a patch the machine's size,
--- so it isn't left standing in the middle of a crop.
+-- so it isn't left standing in the middle of a crop. Both sites are only
+-- painted when the field has a crop standing (hasStandingCrop): the paint
+-- is there for clearance, so a harvested or bare field is left alone.
 
 TCJoyriderRuts = {}
 
@@ -756,6 +758,20 @@ local function paintPiece(piece, style, maxAngle)
     FSDensityMapUtil.clearDecoArea(sx, sz, wx, wz, hx, hz)
 end
 
+-- Whether the field has a crop standing on it: a fruit that's come up and
+-- not been cut. The dump and machine sites are only painted then - the
+-- paint is there to clear room in a crop, so bare ground, stubble or
+-- cultivated land is left as it is.
+function TCJoyriderRuts.hasStandingCrop(field)
+    local fieldState = field.getFieldState ~= nil and field:getFieldState() or nil
+    if fieldState == nil or fieldState.fruitTypeIndex == nil or fieldState.fruitTypeIndex == FruitType.UNKNOWN then
+        return false
+    end
+    local fruitType = g_fruitTypeManager:getFruitTypeByIndex(fieldState.fruitTypeIndex)
+    local growthState = fieldState.growthState or 0
+    return fruitType ~= nil and growthState > 0 and not fruitType:getIsCut(growthState)
+end
+
 -- A run in's two ruts (inside the field only) and then the patch at its
 -- end. Returns the number of rut pieces.
 local function paintRunIn(boundary, points, patch)
@@ -774,9 +790,9 @@ local function paintRunIn(boundary, points, patch)
 end
 
 -- 075: plans a fly-tipping dump site on the field (planDumpSite) and paints
--- the van's ruts in from the edge and the churned patch under the pile.
--- Returns the site, or nil if it can't (not the server, no boundary,
--- nowhere suitable).
+-- the van's ruts in from the edge and the churned patch under the pile, if
+-- there's a crop standing (hasStandingCrop). Returns the site, or nil if it
+-- can't (not the server, no boundary, nowhere suitable).
 function TCJoyriderRuts.paintDumpSite(field, random)
     if not g_currentMission:getIsServer() or field == nil then
         return nil
@@ -791,7 +807,10 @@ function TCJoyriderRuts.paintDumpSite(field, random)
         return nil
     end
 
-    local pieceCount = paintRunIn(boundary, site.points, TCJoyriderRuts.getDumpPatchPiece(site))
+    local pieceCount = 0
+    if TCJoyriderRuts.hasStandingCrop(field) then
+        pieceCount = paintRunIn(boundary, site.points, TCJoyriderRuts.getDumpPatchPiece(site))
+    end
 
     TCLog.info("TheContractor: fly-tipping site on field %s: %.1f m in from the edge at (%.0f, %.0f), %d rut pieces",
         tostring(field:getId()), site.depth, site.edgeX, site.edgeZ, pieceCount)
@@ -801,8 +820,9 @@ end
 -- 101: a broken-down machine's spot on the field (its centre x, z, facing
 -- heading, its width and length): the ruts it made coming in from the edge,
 -- and the crop cleared from a patch MACHINE_PATCH_MARGIN bigger than it all
--- round. Returns the number of rut pieces, or nil if it can't (not the
--- server, no boundary).
+-- round, if there's a crop standing (hasStandingCrop; 0 pieces if not).
+-- Returns the number of rut pieces, or nil if it can't (not the server, no
+-- boundary).
 TCJoyriderRuts.MACHINE_PATCH_MARGIN = 2
 
 function TCJoyriderRuts.paintMachineSite(field, x, z, heading, width, length)
@@ -812,6 +832,11 @@ function TCJoyriderRuts.paintMachineSite(field, x, z, heading, width, length)
     local boundary = TCJoyriderRuts.getFieldBoundary(field)
     if #boundary < 3 then
         return nil
+    end
+    if not TCJoyriderRuts.hasStandingCrop(field) then
+        TCLog.info("TheContractor: breakdown spot on field %s at (%.0f, %.0f), no crop standing, nothing painted",
+            tostring(field:getId()), x, z)
+        return 0
     end
     local margin = TCJoyriderRuts.MACHINE_PATCH_MARGIN * 2
     local patch = TCJoyriderRuts.getPatchPiece(x, z, heading, width + margin, length + margin)

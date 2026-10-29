@@ -77,6 +77,13 @@ local function setup(def)
         clearDecoArea = function() end,
     }
     g_currentMission.fieldGroundSystem = { getGroundAngleMaxValue = function() return 7 end }
+    -- Fields are in maize (cut at 10) unless a test says otherwise.
+    FruitType = { UNKNOWN = 0, MAIZE = 5 }
+    g_fruitTypeManager = {
+        getFruitTypeByIndex = function(_, index)
+            return index == FruitType.MAIZE and { getIsCut = function(_, state) return state == 10 end } or nil
+        end,
+    }
 
     local tc = g_currentMission.TheContractor
     tc.Settings = {
@@ -157,8 +164,10 @@ local function setup(def)
     function world:addField(fieldDef)
         local size = fieldDef.small and 10 or 100
         local field = { id = fieldDef.id, owner = fieldDef.owner or 0,
-            nodes = { { 0, 0 }, { size, 0 }, { size, size }, { 0, size } } }
+            nodes = { { 0, 0 }, { size, 0 }, { size, size }, { 0, size } },
+            fieldState = { fruitTypeIndex = FruitType.MAIZE, growthState = 4 } }
         function field:getPolygonPoints() return self.nodes end
+        function field:getFieldState() return self.fieldState end
         function field:getId() return self.id end
         function field:getOwner() return self.owner end
         function field:getName() return tostring(self.id) end

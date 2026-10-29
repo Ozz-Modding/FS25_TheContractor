@@ -238,6 +238,60 @@ test("two farmers in the same slot don't share a pattern", function()
     assertTrue(same < 15, "the same spot number on " .. same .. " of 40 days")
 end)
 
+-- 116: farmer 2's favour (job 7, farm 1) with its machine at (100, 50),
+-- facing +x, 3 m wide and 6 long; in yard 5 if yard is true.
+local function addFavour(world, yard)
+    TheContractorJob = { STATE = { OFFERED = 1, NEGOTIATING = 2, ACCEPTED = 3, COMPLETED = 4 } }
+    local vehicle = { rootNode = { x = 100, z = 50, dirX = 1, dirZ = 0 }, size = { width = 3, length = 6 } }
+    TheContractorRepairContracts = {
+        isFavourJob = function(job) return job.favour == true end,
+        getVehicle = function(job) return job.workshop.vehicleId == 9 and vehicle or nil end,
+    }
+    getWorldTranslation = function(node) return node.x, 0, node.z end
+    localDirectionToWorld = function(node) return node.dirX, 0, node.dirZ end
+    local job = { id = 7, favour = true, state = TheContractorJob.STATE.OFFERED, customerId = 2,
+        workshop = { vehicleId = 9, yardFarmlandId = yard and 5 or nil } }
+    g_currentMission.TheContractor.Jobs = { jobsByFarm = { [1] = { [7] = job } } }
+    return job, vehicle
+end
+
+test("a farmer with a favour open waits beside its machine, facing it, day or night", function()
+    local world = setup()
+    world.yards:applySpots(5, spotsEntry(3))
+    addFarmer(world, 2, nil)
+    local job = addFavour(world, false)
+
+    setHour(23)
+    local spot = TCYardFarmers.getWanted()[2].spot
+    -- Facing +x, its sides are 2.5 m north or south, 1.5 m ahead of its middle.
+    assertNear(101.5, spot.x, 0.0001)
+    assertNear(2.5, math.abs(spot.z - 50), 0.0001)
+    local yaw = math.atan2(100 - spot.x, 50 - spot.z)
+    assertNear(yaw, spot.yaw, 0.0001)
+
+    -- Done, or the machine not on this map: back to the yard (or nowhere).
+    job.state = TheContractorJob.STATE.COMPLETED
+    assertEquals(nil, TCYardFarmers.getWanted()[2])
+    job.state = TheContractorJob.STATE.ACCEPTED
+    job.workshop.vehicleId = 0
+    assertEquals(nil, TCYardFarmers.getWanted()[2])
+end)
+
+test("in a yard the farmer stands on the machine's side nearer the yard's middle, and moves with it", function()
+    local world = setup()
+    -- The yard's middle north of the machine.
+    world.yards:applySpots(5, spotsEntry(3, 100, 80))
+    addFarmer(world, 2, 5)
+    local _, vehicle = addFavour(world, true)
+
+    local spot = TCYardFarmers.getWanted()[2].spot
+    assertNear(52.5, spot.z, 0.0001)
+    vehicle.rootNode.z = 20
+    local moved = TCYardFarmers.getWanted()[2].spot
+    assertNear(22.5, moved.z, 0.0001)
+    assertTrue(moved.key ~= spot.key, "a new spot once the machine's moved")
+end)
+
 test("a farmer faces the yard's middle, standing on the ground", function()
     local world = setup()
     -- One spot, 4 m east of a middle at (0, 0).
