@@ -125,7 +125,8 @@ function TheContractorJob.new(id, farmId, jobType, fieldId, requiredSkillLevel, 
 
     -- Job types that record their crop (JOB_TYPES' recordsCrop - harvest,
     -- mow, bale) only: the crop on the field when the job was generated, by
-    -- fruit type name. nil for everything else, and for harvest jobs saved
+    -- fruit type name. A sow job (recordsPlannedCrop) records the crop to
+    -- sow. nil for everything else, and for harvest and sow jobs saved
     -- before this existed (see getFruitTypeIndex).
     self.fruitTypeName = nil
 
@@ -480,12 +481,18 @@ function TheContractorJob:getAllEquipmentIds()
 end
 
 -- Falls back to the field's current crop for a harvest job that predates
--- fruitTypeName being recorded.
+-- fruitTypeName being recorded, and to its planned crop for a sow job that
+-- does (on the server only: clients don't have the plan).
 function TheContractorJob:getFruitTypeIndex()
     local fruitTypeName = self.fruitTypeName
-    if fruitTypeName == nil and TheContractorJobGeneration.JOB_TYPES[self.jobType] ~= nil and
-        TheContractorJobGeneration.JOB_TYPES[self.jobType].cropDependent then
-        fruitTypeName = TheContractorJobGeneration.getFieldFruitTypeName(g_fieldManager:getFieldById(self.fieldId))
+    local jobDef = TheContractorJobGeneration.JOB_TYPES[self.jobType]
+    if fruitTypeName == nil and jobDef ~= nil then
+        if jobDef.cropDependent then
+            fruitTypeName = TheContractorJobGeneration.getFieldFruitTypeName(g_fieldManager:getFieldById(self.fieldId))
+        elseif jobDef.recordsPlannedCrop then
+            fruitTypeName = TheContractorJobGeneration.getFieldPlannedFruitTypeName(
+                g_fieldManager:getFieldById(self.fieldId))
+        end
     end
     return TheContractorJobGeneration.getFruitTypeIndexByName(fruitTypeName)
 end

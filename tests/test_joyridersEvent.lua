@@ -40,6 +40,20 @@ local function setup()
     FarmlandManager = { NO_OWNER_FARM_ID = 0 }
     FruitType = { UNKNOWN = 0, GRASS = 1, WHEAT = 2 }
     FieldGroundType = { STUBBLE_TILLAGE = 2, CULTIVATED = 3, PLOWED = 5 }
+    local fruitNames = { [FruitType.GRASS] = "GRASS", [FruitType.WHEAT] = "WHEAT" }
+    g_fruitTypeManager = {
+        getFruitTypeNameByIndex = function(_, index)
+            return fruitNames[index]
+        end,
+        getFruitTypeByName = function(_, name)
+            for index, fruitName in pairs(fruitNames) do
+                if fruitName == name then
+                    return { index = index, name = name }
+                end
+            end
+            return nil
+        end,
+    }
     MowMission = { NAME = "mow" }
     g_missionManager = {
         getMissionTypeDataByName = function()
@@ -60,6 +74,7 @@ local function setup()
         function field:getId() return self.id end
         function field:getOwner() return self.owner end
         function field:getFieldState() return self.fieldState end
+        function field:getPlannedFruitTypeIndex() return self.plannedFruitTypeIndex end
         function field:getAngle() return 0 end
         table.insert(self.fields, field)
         return field
@@ -323,6 +338,7 @@ test("finishing the plowing: half the time a grass sow job follows", function()
     assertEquals(sowJob.jobType, "sow")
     assertEquals(sowJob.fieldId, 12)
     assertEquals(field.plannedFruitTypeIndex, FruitType.GRASS, "sows grass")
+    assertEquals(sowJob.fruitTypeName, "GRASS", "the crop to sow is on the job, for clients to show")
     assertTrue(not sowJob.keepFieldState and not sowJob.followOnSow, "an ordinary sow job")
     assertEquals(#world.messages, 1)
     assertEquals(world.messages[1].titleKey, "tc_joyriders_sowTitle")
@@ -364,6 +380,9 @@ test("createJobOnField dates, prices and flags the job like an offer, without ha
     assertEquals(job.equipmentAvailable, true)
     assertEquals(job.includesHaulage, false)
     assertEquals(job.fruitTypeName, nil, "plow doesn't record a crop")
+
+    field.plannedFruitTypeIndex = FruitType.UNKNOWN
+    assertEquals(tc.JobGeneration:createJobOnField(1, "sow", field).fruitTypeName, nil, "sow with no plan has none")
 
     assertEquals(tc.JobGeneration:createJobOnField(1, "nonsense", field), nil)
     assertEquals(tc.JobGeneration:createJobOnField(1, "plow", nil), nil)

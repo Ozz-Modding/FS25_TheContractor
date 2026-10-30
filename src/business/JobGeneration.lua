@@ -40,6 +40,10 @@ TheContractorJobGeneration_mt = Class(TheContractorJobGeneration)
 --                    ready-date prediction, 035's haulage and auto-empty.
 --   recordsCrop      the field's crop is recorded on the job at generation
 --                    (fruitTypeName) - "Mow (Grass)", "Bale (Barley)".
+--   recordsPlannedCrop  sow: the crop to sow (the field's planned crop) is
+--                    recorded instead - "Sow (Wheat)". Clients only ever
+--                    learn it from the job, since vanilla keeps the plan on
+--                    the server.
 --   startState       which field state the job starts from, recorded at
 --                    generation (job.startState) and put back at allocation
 --                    (TCFieldPreparation) - fertilize's spray level and
@@ -117,7 +121,8 @@ TheContractorJobGeneration.JOB_TYPES = {
     cultivate = { implementSpec = "spec_cultivator", excludedSpecs = { "spec_plow" }, vanillaMission = CultivateMission,
         rewardPerHa = 2300, reputationPerHa = 7.8, skill = "tillage",
         workAreaTypes = { "CULTIVATOR" } },
-    sow = { implementSpec = "spec_sowingMachine", vanillaMission = SowMission, rewardPerHa = 2000,
+    sow = { implementSpec = "spec_sowingMachine", vanillaMission = SowMission, recordsPlannedCrop = true,
+        rewardPerHa = 2000,
         reputationPerHa = 6.8, skill = "seeding",
         workAreaTypes = { "SOWINGMACHINE", "RIDGEMARKER" } },
     plow = { implementSpec = "spec_plow", vanillaMission = PlowMission, rewardPerHa = 2800, reputationPerHa = 9.5,
@@ -438,7 +443,7 @@ function TheContractorJobGeneration:tryGenerateJob(farmId, onlyJobType)
 
     local jobType, jobDef = option.jobType, option.jobDef
     local requiredSkillLevel = self:rollRequiredSkillLevel(farmId)
-    local fruitTypeName = jobDef.recordsCrop and TheContractorJobGeneration.getFieldFruitTypeName(field) or nil
+    local fruitTypeName = TheContractorJobGeneration.getRecordedFruitTypeName(field, jobDef)
     local fruitTypeIndex = TheContractorJobGeneration.getFruitTypeIndexByName(fruitTypeName)
     local equipmentAvailable = table.hasElement(option.fulfillable, field)
 
@@ -499,7 +504,7 @@ function TheContractorJobGeneration:createJobOnField(farmId, jobType, field, sam
     end
 
     local requiredSkillLevel = self:rollRequiredSkillLevel(farmId)
-    local fruitTypeName = jobDef.recordsCrop and TheContractorJobGeneration.getFieldFruitTypeName(field) or nil
+    local fruitTypeName = TheContractorJobGeneration.getRecordedFruitTypeName(field, jobDef)
     local equipmentAvailable = self:canFulfill(farmId, jobDef,
         TheContractorJobGeneration.getFruitTypeIndexByName(fruitTypeName))
     local price = self:estimatePrice(field, jobDef, farmId, requiredSkillLevel, nil, itemCount)
@@ -533,6 +538,28 @@ function TheContractorJobGeneration.getFieldFruitTypeName(field)
         return nil
     end
     return g_fruitTypeManager:getFruitTypeNameByIndex(fieldState.fruitTypeIndex)
+end
+
+-- The crop the field's owner plans to sow next (vanilla's NPC plan, what
+-- SowMission sows), by name, or nil if none. Server only: vanilla never
+-- streams the plan.
+function TheContractorJobGeneration.getFieldPlannedFruitTypeName(field)
+    local plannedFruitTypeIndex = field ~= nil and field:getPlannedFruitTypeIndex() or nil
+    if plannedFruitTypeIndex == nil or plannedFruitTypeIndex == FruitType.UNKNOWN then
+        return nil
+    end
+    return g_fruitTypeManager:getFruitTypeNameByIndex(plannedFruitTypeIndex)
+end
+
+-- The crop a new job of this type records (fruitTypeName): the one on the
+-- field for recordsCrop, the one to sow for recordsPlannedCrop.
+function TheContractorJobGeneration.getRecordedFruitTypeName(field, jobDef)
+    if jobDef.recordsCrop then
+        return TheContractorJobGeneration.getFieldFruitTypeName(field)
+    elseif jobDef.recordsPlannedCrop then
+        return TheContractorJobGeneration.getFieldPlannedFruitTypeName(field)
+    end
+    return nil
 end
 
 -- The JOB_TYPE_KEYS entry matching `name`, case-insensitively (console

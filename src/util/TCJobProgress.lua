@@ -397,11 +397,9 @@ local function getOrCreateState(job)
 
     if handler.fruitTypeSource ~= nil then
         -- A job's own recorded crop wins over the live field state, which
-        -- can lag behind TCFieldPreparation's forced update for a moment.
-        local fruitTypeIndex = nil
-        if handler.fruitTypeSource == "current" then
-            fruitTypeIndex = job:getFruitTypeIndex()
-        end
+        -- can lag behind TCFieldPreparation's forced update for a moment
+        -- (harvest), and is the crop the player was told to sow (sow).
+        local fruitTypeIndex = job:getFruitTypeIndex()
         if fruitTypeIndex == nil then
             fruitTypeIndex = resolveTargetFruitType(field, handler.fruitTypeSource)
         end
