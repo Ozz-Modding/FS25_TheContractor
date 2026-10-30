@@ -62,9 +62,7 @@ function TCDebugCreateJobEvent:run(connection)
         local fruitTypeName = nil
         local startState = nil
         if jobDef ~= nil then
-            if jobDef.recordsCrop then
-                fruitTypeName = TheContractorJobGeneration.getFieldFruitTypeName(field)
-            end
+            fruitTypeName = TheContractorJobGeneration.getRecordedFruitTypeName(field, jobDef)
             startState = TheContractorJobGeneration.getFieldStartState(field, jobDef)
             equipmentAvailable = g_currentMission.TheContractor.JobGeneration:canFulfill(self.farmId, jobDef,
                 TheContractorJobGeneration.getFruitTypeIndexByName(fruitTypeName))
