@@ -732,10 +732,13 @@
                     </GuiElement>
                 </BoxLayout>
 
-                <Text profile="tc_sectionTitle" text="$l10n_tc_people_aboutHeading" position="24px -418px" size="752px 24px"/>
+                <!-- 122: a farmer's machines where the official's About goes, in two columns. -->
+                <Text profile="tc_sectionTitle" id="staffPersonSectionTitle" text="$l10n_tc_people_aboutHeading" position="24px -418px" size="752px 24px"/>
                 <Bitmap profile="tc_divider" position="24px -446px" size="752px 1px"/>
                 <Text profile="tc_panelText" id="staffPersonAbout" text="" position="24px -460px" size="752px 66px" textMaxNumLines="3"/>
-                <Text profile="tc_panelNote" id="staffPersonNote" text="" position="24px -540px" size="752px 50px" textMaxNumLines="2"/>
+                <Text profile="tc_panelText" id="staffPersonMachinesLeft" text="" position="24px -456px" size="368px 100px" textMaxNumLines="5" visible="false"/>
+                <Text profile="tc_panelText" id="staffPersonMachinesRight" text="" position="408px -456px" size="368px 100px" textMaxNumLines="5" visible="false"/>
+                <Text profile="tc_panelNote" id="staffPersonNote" text="" position="24px -560px" size="752px 40px" textMaxNumLines="2"/>
             </GuiElement>
 
             <!-- 042: live portrait, driven by TCWorkerPortrait (it sets the scene). Outside every panel, which share it (090, 111). -->

@@ -121,6 +121,7 @@ source(TheContractor.dir .. "src/business/FieldBreakdowns.lua")
 source(TheContractor.dir .. "src/business/Yards.lua")
 source(TheContractor.dir .. "src/business/FarmerSplit.lua")
 source(TheContractor.dir .. "src/business/Farmers.lua")
+source(TheContractor.dir .. "src/business/FarmerFleet.lua")
 source(TheContractor.dir .. "src/business/Relationships.lua")
 source(TheContractor.dir .. "src/business/FarmerFavours.lua")
 source(TheContractor.dir .. "src/events/TCInitialClientStateEvent.lua")
@@ -211,6 +212,8 @@ source(TheContractor.dir .. "src/events/TCYardSpotsEvent.lua")
 source(TheContractor.dir .. "src/events/TCFarmersEvent.lua")
 source(TheContractor.dir .. "src/events/TCFarmerLandEvent.lua")
 source(TheContractor.dir .. "src/events/TCEditPersonEvent.lua")
+source(TheContractor.dir .. "src/events/TCFarmerFleetEvent.lua")
+source(TheContractor.dir .. "src/events/TCEditFarmerMachineEvent.lua")
 source(TheContractor.dir .. "src/events/TCRelationshipChangedEvent.lua")
 
 -- The top-level Contractor page itself stays always-visible (see Company.lua
@@ -338,6 +341,7 @@ function TheContractor:loadMap()
     TCYardFarmers.reset()
     TCJobHotspots.reset()
     TheContractorRepairContracts.clearCache()
+    TheContractorFarmerFleet.clearCatalog()
 
     -- 064: which parts of FS25_AdvancedDamageSystem's stock the Supplies
     -- tab can show (none without the mod).

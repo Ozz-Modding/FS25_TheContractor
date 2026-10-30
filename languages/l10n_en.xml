@@ -361,11 +361,34 @@
 		<text name="tc_people_lastJob" text="%s, %s"/>
 		<text name="tc_people_lastJobNone" text="None yet"/>
 		<text name="tc_people_aboutHeading" text="About"/>
-		<text name="tc_people_about_farmer" text="A local farmer. Work on their land comes from them, and they pay for it."/>
 		<text name="tc_people_about_official" text="The local official. Work that belongs to no farmer, such as clearing a fallen tree, comes from them."/>
 		<text name="tc_people_noteNoLand" text="They have no land at the moment, so no work comes from them."/>
 		<text name="tc_people_detailRelationship" text="Relationship"/>
-		<text name="tc_people_noteFallenOut" text="They've fallen out with you, so they offer you no work for now. It mends a little each month."/>
+		<!-- 122: a farmer's machines -->
+		<text name="tc_fleet_machinesButton" text="Machines"/>
+		<text name="tc_fleet_machinesTitle" text="Machines"/>
+		<text name="tc_fleet_machinesPrompt" text="%s's machines. Choose one to change its model."/>
+		<text name="tc_fleet_modelsPrompt" text="Choose a model for %s's %s."/>
+		<text name="tc_fleet_modelCurrent" text="%s (current)"/>
+		<text name="tc_fleet_machineLine" text="%s: %s"/>
+		<text name="tc_fleet_detailsHeading" text="Machines"/>
+		<text name="tc_fleet_none" text="None"/>
+		<text name="tc_fleet_noModels" text="The shop has no models for a %s."/>
+		<text name="tc_fleet_attachmentRepicked" text="The old one didn't fit the %s, so its %s is now a %s."/>
+		<text name="tc_fleet_refused_noCompany" text="Only a farm with a company can change a farmer's machines."/>
+		<text name="tc_fleet_refused_notFarmer" text="Only a farmer's machines can be changed."/>
+		<text name="tc_fleet_refused_noMachine" text="They don't have that machine any more."/>
+		<text name="tc_fleet_refused_badModel" text="That model can't be used for this machine."/>
+		<text name="tc_fleet_refused_machineOut" text="That machine is out at the moment, on a job or on its way. It can be changed once it's been collected."/>
+		<text name="tc_fleet_role_smallTractor" text="Small tractor"/>
+		<text name="tc_fleet_role_mediumTractor" text="Medium tractor"/>
+		<text name="tc_fleet_role_largeTractor" text="Large tractor"/>
+		<text name="tc_fleet_role_telehandler" text="Telehandler"/>
+		<text name="tc_fleet_role_baleFork" text="Bale fork"/>
+		<text name="tc_fleet_role_combine" text="Combine"/>
+		<text name="tc_fleet_role_header" text="Header"/>
+		<text name="tc_fleet_role_trailer" text="Trailer"/>
+		<text name="tc_people_noteFallenOut"text="They've fallen out with you, so they offer you no work for now. It mends a little each month."/>
 		<text name="tc_relationship_excellent" text="Excellent"/>
 		<text name="tc_relationship_good" text="Good"/>
 		<text name="tc_relationship_neutral" text="Neutral"/>

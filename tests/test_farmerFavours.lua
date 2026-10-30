@@ -261,6 +261,7 @@ local function setup(def)
     world:load("src/business/RepairContracts.lua")
     world:load("src/business/FieldBreakdowns.lua")
     world:load("src/business/Farmers.lua")
+    world:load("src/business/FarmerFleet.lua")
     world:load("src/business/FarmerFavours.lua")
 
     TCADSRepairContracts.getEnv = function() return world.adsEnv end
@@ -272,11 +273,15 @@ local function setup(def)
     tc.Farmers = TheContractorFarmers.new()
     tc.Farmers.officialId = 99
     tc.Farmers.people[99] = { id = 99, name = "The Official", isOfficial = true, farmlandIds = {} }
-    function world:addFarmer(id, name, acres, yardFarmlandId)
+    -- 121: a farmer's fleet is made at setUp; here they have a small tractor
+    -- unless they're given their machines.
+    function world:addFarmer(id, name, acres, yardFarmlandId, machines)
         self:addField(id)
         table.insert(self.landList, { id = id, x = 0, z = 0, acres = acres, ownerFarmId = 0 })
         local farmer = { id = id, name = name, isOfficial = false, farmlandIds = { id }, yardFarmlandId = yardFarmlandId,
-            targetAcres = acres }
+            targetAcres = acres, machines = machines or {
+                { id = 1, role = "smallTractor", xmlFilename = "small.xml", seed = 4242, hoursPerMonth = 29, fitted = {} },
+            } }
         tc.Farmers.people[id] = farmer
         return farmer
     end
@@ -387,34 +392,94 @@ end)
 
 -- The machines ------------------------------------------------------------------------------
 
-test("a farmer's machines: sized to the holding, a second from 80 acres, made once", function()
+test("121: a favour is about one of the farmer's machines that drives and ADS takes, never one that's out", function()
     local world, tc = setup()
-    local models = tc.RepairContracts:getEligibleModels(PlaceableTCRepairZone.ZONE_TYPE.VEHICLE)
-    local small = { id = 1, name = "Small" }
-    local machines = TheContractorFarmerFavours.ensureMachines(small, models, 30, math.random)
-    assertEquals(#machines, 1)
-    assertEquals(machines[1].xmlFilename, "small.xml")
-    assertTrue(machines[1].seed ~= nil)
-    assertEquals(TheContractorFarmerFavours.ensureMachines(small, models, 30, math.random), machines, "kept")
+    addYard(world, 50)
+    world:addFarmer(4, "Tom", 30, 50, {
+        { id = 1, role = "trailer", xmlFilename = "trailer.xml", seed = 1, fitted = {} },
+        { id = 2, role = "mediumTractor", xmlFilename = "medium.xml", seed = 2, fitted = {} },
+    })
+    world:trigger()
+    local entry = tc.RepairContracts.arrivals[1]
+    assertEquals(entry.machineId, 2, "never the trailer")
+    assertEquals(entry.seed, 2)
 
-    local big = { id = 2, name = "Big" }
-    machines = TheContractorFarmerFavours.ensureMachines(big, models, 90, math.random)
-    assertEquals(#machines, 2)
-    assertEquals(machines[1].xmlFilename, "medium.xml")
-    assertTrue(machines[1].seed ~= machines[2].seed)
-
-    -- No large tractors on the map: any will do.
-    local huge = { id = 3, name = "Huge" }
-    machines = TheContractorFarmerFavours.ensureMachines(huge, models, 500, math.random)
-    assertEquals(#machines, 2)
+    -- The tractor's broken down in a field (101): nothing left to ask about.
+    world, tc = setup()
+    addYard(world, 50)
+    world:addFarmer(4, "Tom", 30, 50)
+    table.insert(tc.RepairContracts.arrivals, { farmId = 2, fieldId = 4, farmerId = 4, machineId = 1 })
+    world:trigger()
+    assertEquals(#tc.RepairContracts.arrivals, 1, "no favour queued")
 end)
 
-test("a machine's hours: none until ADS ages it, then a month's work for every month", function()
-    local machine = { hoursPerMonth = 40 }
-    assertEquals(TheContractorFarmerFavours.getHours(machine, 10, 2), nil)
-    machine.hours, machine.hoursDay = 2400, 10
-    assertNear(TheContractorFarmerFavours.getHours(machine, 10, 2), 2400, 0.001)
-    assertNear(TheContractorFarmerFavours.getHours(machine, 16, 2), 2520, 0.001, "three months at 2 days each")
+test("121: a telehandler comes with its bale fork, hitched on; both are the customer's and both are collected", function()
+    local world, tc = setup({ models = {
+        { xml = "teli.xml", category = "TELELOADERVEHICLES", specs = { AdvancedDamageSystem = true, drivable = true },
+            width = 2.5, length = 5 },
+        { xml = "baleFork.xml", category = "TELELOADERTOOLS", specs = { dynamicMountAttacher = true }, width = 2,
+            length = 1.5 },
+    } })
+    localDirectionToWorld = function() return 0, 0, 1 end
+    world.hitched = {}
+    TCJobSiteSetup = { hitchImplement = function(attacher, implement)
+        table.insert(world.hitched, { attacher.id, implement.id })
+        return true
+    end }
+    addYard(world, 50)
+    world:addFarmer(4, "Tom", 30, 50, {
+        { id = 1, role = "telehandler", xmlFilename = "teli.xml", seed = 7, fitted = {} },
+        { id = 2, role = "baleFork", attachedTo = 1, xmlFilename = "baleFork.xml", seed = 8, fitted = {} },
+    })
+    world:trigger()
+    local entry = tc.RepairContracts.arrivals[1]
+    assertEquals(entry.attachment.machineId, 2)
+    tc.RepairContracts:update(TheContractorRepairContracts.PLACE_CHECK_MS)
+    local vehicle = world:finishLoad()
+    assertEquals(#tc.Jobs:getAllJobs(1), 0, "not offered until the fork's on")
+    assertEquals(world.calls.spawned[2].storeItem.xmlFilename, "baleFork.xml")
+    assertNear(world.calls.spawned[2].z - world.calls.spawned[1].z, 2.5 + 0.75 + TheContractorRepairContracts.CLEARANCE,
+        0.001, "loaded in front of it")
+    local fork = world:finishLoad()
+    assertEquals(world.hitched[1][1], vehicle.id)
+    assertEquals(world.hitched[1][2], fork.id)
+
+    local job = tc.Jobs:getAllJobs(1)[1]
+    assertEquals(job.workshop.attachmentId, fork.id)
+    assertEquals(job.workshop.attachmentMachineId, 2)
+    assertTrue(TheContractorRepairContracts.isContractVehicle(fork), "the customer's")
+    assertTrue(not TheContractorRepairContracts.isWorkableVehicle(fork, 1), "but nothing for a workshop")
+    assertTrue(TheContractorFarmerFleet.isMachineOut(4, 1))
+
+    tc.Jobs:transitionJobState(1, job.id, TheContractorJob.STATE.DECLINED)
+    assertEquals(#tc.RepairContracts.removals, 2)
+    tc.RepairContracts:update(TheContractorRepairContracts.PLACE_CHECK_MS)
+    assertTrue(vehicle.isDeleted and fork.isDeleted, "both taken away")
+    assertTrue(not TheContractorFarmerFleet.isMachineOut(4, 1), "home again")
+end)
+
+test("121: a fork that won't hitch is left out, and the favour goes ahead without it", function()
+    local world, tc = setup({ models = {
+        { xml = "teli.xml", category = "TELELOADERVEHICLES", specs = { AdvancedDamageSystem = true, drivable = true },
+            width = 2.5, length = 5 },
+        { xml = "baleFork.xml", category = "TELELOADERTOOLS", specs = { dynamicMountAttacher = true }, width = 2,
+            length = 1.5 },
+    } })
+    localDirectionToWorld = function() return 0, 0, 1 end
+    TCJobSiteSetup = { hitchImplement = function() return false end }
+    addYard(world, 50)
+    world:addFarmer(4, "Tom", 30, 50, {
+        { id = 1, role = "telehandler", xmlFilename = "teli.xml", seed = 7, fitted = {} },
+        { id = 2, role = "baleFork", attachedTo = 1, xmlFilename = "baleFork.xml", seed = 8, fitted = {} },
+    })
+    world:trigger()
+    tc.RepairContracts:update(TheContractorRepairContracts.PLACE_CHECK_MS)
+    world:finishLoad()
+    local fork = world:finishLoad()
+    assertTrue(fork.isDeleted)
+    local job = tc.Jobs:getAllJobs(1)[1]
+    assertTrue(job ~= nil)
+    assertEquals(job.workshop.attachmentId, nil)
 end)
 
 test("the stock parts, none refitted too soon", function()

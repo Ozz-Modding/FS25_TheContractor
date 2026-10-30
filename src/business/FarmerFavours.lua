@@ -8,13 +8,14 @@
 -- the part back and earns goodwill (113) more than reputation. See
 -- docs/ads-farmer-favours.md.
 --
--- The machines: each farmer owns one or two, kept on their record by
--- TheContractorFarmers and made here the first time a favour needs one
--- (ensureMachines): a tractor sized to their holding, with a seed of its own.
--- ADS ages it the first time it comes out (its quote's operating hours), and
--- from then on it's that age plus HOURS_PER_MONTH for every month since, so
--- it's the same machine every time, only older. What's been fitted to it and
--- when is kept too, so it isn't asked for again within REFIT_MONTHS.
+-- The machines are the farmer's fleet (121, TheContractorFarmerFleet): any
+-- of their machines that drives and ADS can take, and isn't out already
+-- (a breakdown, 101). Its attachment comes with it (a telehandler's bale
+-- fork, a combine's header). ADS ages it the first time it comes out (its
+-- quote's operating hours), and from then on it's that age plus a month's
+-- work for every month since, so it's the same machine every time, only
+-- older. What's been fitted to it and when is kept too, so it isn't asked
+-- for again within REFIT_MONTHS.
 --
 -- Once the machine's loaded, ADS prepares it as a service of just one of
 -- those parts (prepareVehicle's targets), worn as a service wears it, which
@@ -57,14 +58,6 @@ TheContractorFarmerFavours.REPUTATION = 2
 
 -- A part fitted to a machine isn't asked for again on it for this long.
 TheContractorFarmerFavours.REFIT_MONTHS = 12
-
--- A farmer's machines: a second one from SECOND_MACHINE_ACRES, tractors by
--- holding (under SMALL_ACRES small, under LARGE_ACRES medium, else large),
--- and HOURS_PER_MONTH { base, per acre, most } of work a month.
-TheContractorFarmerFavours.SECOND_MACHINE_ACRES = 80
-TheContractorFarmerFavours.SMALL_ACRES = 40
-TheContractorFarmerFavours.LARGE_ACRES = 150
-TheContractorFarmerFavours.HOURS_PER_MONTH = { 20, 0.3, 70 }
 
 -- A farmer with a yard is this many times likelier to be the one asking,
 -- so the machine's in a yard rather than on a headland when it can be.
@@ -232,78 +225,7 @@ function TheContractorFarmerFavours:prepareTrigger(details)
     return "Usage: tcCompany event farmerFavour [farmer id or name] (tcCompany farmers lists them)"
 end
 
--- The machines (server) -----------------------------------------------------------------
-
--- The tractor category for a holding's acres.
-function TheContractorFarmerFavours.getCategoryForAcres(acres)
-    local F = TheContractorFarmerFavours
-    if acres < F.SMALL_ACRES then
-        return "TRACTORSS"
-    elseif acres < F.LARGE_ACRES then
-        return "TRACTORSM"
-    end
-    return "TRACTORSL"
-end
-
-function TheContractorFarmerFavours.getHoursPerMonth(acres)
-    local hours = TheContractorFarmerFavours.HOURS_PER_MONTH
-    return math.min(hours[1] + acres * hours[2], hours[3])
-end
-
--- Gives a farmer with none their machines, from models (100's tractor
--- models) of their holding's size, or any if there are none of it. Returns
--- the machines (empty without models).
-function TheContractorFarmerFavours.ensureMachines(farmer, models, acres, random)
-    if farmer.machines ~= nil and #farmer.machines > 0 then
-        return farmer.machines
-    end
-    farmer.machines = {}
-    local category = TheContractorFarmerFavours.getCategoryForAcres(acres)
-    local sized = {}
-    for _, model in ipairs(models) do
-        if model.categoryName == category then
-            table.insert(sized, model)
-        end
-    end
-    if #sized == 0 then
-        sized = models
-    end
-    if #sized == 0 then
-        return farmer.machines
-    end
-    local count = acres >= TheContractorFarmerFavours.SECOND_MACHINE_ACRES and 2 or 1
-    for i = 1, count do
-        local model = sized[math.floor(random() * #sized) + 1] or sized[#sized]
-        table.insert(farmer.machines, {
-            id = i,
-            xmlFilename = model.xmlFilename,
-            seed = TheContractorRepairContracts.rollSeed(random),
-            hoursPerMonth = TheContractorFarmerFavours.getHoursPerMonth(acres),
-            fitted = {},
-        })
-    end
-    TCLog.info("TheContractor: farmer #%d (%s, %.0f acres) owns %d machine(s)", farmer.id, farmer.name, acres, count)
-    return farmer.machines
-end
-
-function TheContractorFarmerFavours.getMachine(farmer, machineId)
-    for _, machine in ipairs(farmer ~= nil and farmer.machines or {}) do
-        if machine.id == machineId then
-            return machine
-        end
-    end
-    return nil
-end
-
--- A machine's operating hours on a day: its first age, plus its months of
--- work since. nil before ADS has aged it.
-function TheContractorFarmerFavours.getHours(machine, today, daysPerPeriod)
-    if machine.hours == nil then
-        return nil
-    end
-    local months = math.max(0, today - (machine.hoursDay or today)) / math.max(daysPerPeriod or 1, 1)
-    return machine.hours + months * (machine.hoursPerMonth or 0)
-end
+-- The parts (server) ---------------------------------------------------------------------
 
 -- The parts a favour can be about: the stock parts (getStockParts' { id,
 -- nameKey }) not fitted to the machine within REFIT_MONTHS, each with its
@@ -399,31 +321,23 @@ function TheContractorFarmerFavours:onAsked(incident)
     if farmer == nil or farmer.isOfficial or TheContractorFarmerFavours.getRate(incident.farmId) <= 0 then
         return TheContractorRandomEvents.DONE
     end
-    local land = TheContractorFarmers.getLand()
-    local models = tc.RepairContracts:getEligibleModels(PlaceableTCRepairZone.ZONE_TYPE.VEHICLE)
-    local machines = TheContractorFarmerFavours.ensureMachines(farmer, models,
-        TheContractorFarmers.getAcres(farmer, land), math.random)
-    local machine = machines[math.random(1, math.max(#machines, 1))]
-    local model = machine ~= nil and tc.RepairContracts:findModelByXml(machine.xmlFilename) or nil
-    local spot = model ~= nil and TheContractorFarmerFavours.pickSpot(farmer, model, math.random) or nil
+    -- 121: one of their machines ADS can take that isn't out already, with
+    -- its attachment, and room for both.
+    local choices = TheContractorFarmerFleet.getRepairableMachines(farmer, tc.RepairContracts)
+    local choice = choices[math.random(1, math.max(#choices, 1))]
+    local attachment, spot = nil, nil
+    if choice ~= nil then
+        attachment = TheContractorFarmerFleet.getAttachmentArrival(farmer, choice.machine)
+        spot = TheContractorFarmerFavours.pickSpot(farmer,
+            TheContractorFarmerFleet.getFootprint(choice.model, attachment), math.random)
+    end
     if spot == nil then
         TCLog.info("TheContractor: farm %d incident %d: no machine or nowhere to stand it for farmer #%d",
             incident.farmId, incident.id, farmer.id)
         return TheContractorRandomEvents.DONE
     end
-    tc.RepairContracts:queueFavourArrival(incident.farmId, farmer, machine, model, spot)
+    tc.RepairContracts:queueFavourArrival(incident.farmId, farmer, choice.machine, choice.model, spot, attachment)
     return TheContractorRandomEvents.DONE
-end
-
--- RepairContracts:createFavourOffer: the machine's first time out sets its
--- age (ADS's), counted on from today.
-function TheContractorFarmerFavours.onOffered(job, quote)
-    local farmer = g_currentMission.TheContractor.Farmers:getPerson(job.workshop.farmerId)
-    local machine = TheContractorFarmerFavours.getMachine(farmer, job.workshop.machineId)
-    if machine ~= nil and machine.hours == nil and quote.operatingHours ~= nil then
-        machine.hours = quote.operatingHours
-        machine.hoursDay = g_currentMission.environment.currentMonotonicDay
-    end
 end
 
 -- RepairContracts:onJobCompleted: the farmer's thanks (in place of a job's
@@ -431,7 +345,7 @@ end
 function TheContractorFarmerFavours.onCompleted(job)
     local tc = g_currentMission.TheContractor
     tc.Relationships:adjust(job.farmId, job.customerId, TheContractorFarmerFavours.RELATIONSHIP_GAIN, "favour")
-    local machine = TheContractorFarmerFavours.getMachine(tc.Farmers:getPerson(job.workshop.farmerId),
+    local machine = TheContractorFarmerFleet.getMachine(tc.Farmers:getPerson(job.workshop.farmerId),
         job.workshop.machineId)
     if machine ~= nil and job.workshop.targetId ~= nil then
         machine.fitted = machine.fitted or {}

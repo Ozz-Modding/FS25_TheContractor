@@ -29,10 +29,13 @@
 -- ADS repair contract (100-102). A loaded job without one gets one the same
 -- way (linkJobs).
 --
--- 116: a farmer's machines (machines, made by TheContractorFarmerFavours the
--- first time a favour needs one) are kept on their record: { id,
--- xmlFilename, seed, hours, hoursDay, hoursPerMonth, fitted = { [part] = day } }.
--- Server only: saved here, never streamed.
+-- 116, 121: a farmer's machines (machines, their fleet, made by
+-- TheContractorFarmerFleet when they're set up and whenever land or a yard
+-- changes hands) are kept on their record: { id, role, attachedTo,
+-- xmlFilename, seed, hours, hoursDay, hoursPerMonth, fitted = { [part] =
+-- day } }. Saved here; 122 streams each machine's id, role, xmlFilename and
+-- attachedTo (TheContractorFarmerFleet.writeStream), the rest stays on the
+-- server.
 --
 -- 113: each farmer also has a pay habit (PAY_HABITS), rolled as they're
 -- made and never shown or streamed: it only changes how their invoices
@@ -525,6 +528,8 @@ function TheContractorFarmers:setUp()
         self:reconcileLand()
         self:ensurePayHabits()
     end
+    -- 121: everyone's fleet, made or filled in.
+    TheContractorFarmerFleet.ensureAll()
     self:linkJobs(false)
     self:linkLogbook()
     notifyMenu()
@@ -594,6 +599,7 @@ end
 -- job is linked again from its field, and everyone's told.
 function TheContractorFarmers:regenerate(targetAcres)
     self:generate(targetAcres, math.random(1, 99999))
+    TheContractorFarmerFleet.ensureAll()
     -- 113: the old farmers' relationships go with them.
     g_currentMission.TheContractor.Relationships:forgetMissing(self.people)
     local links = self:linkJobs(true)
@@ -723,6 +729,10 @@ function TheContractorFarmers:reconcileLand()
         end
     end
     if #ids > 0 then
+        -- 121: a new yard or more land can bring machines (never takes any).
+        if self.isSetUp then
+            TheContractorFarmerFleet.ensureAll()
+        end
         notifyMenu()
     end
     return ids
@@ -737,6 +747,22 @@ function TheContractorFarmers:applyLand(personId, farmlandIds, yardFarmlandId)
     person.farmlandIds = farmlandIds
     person.yardFarmlandId = yardFarmlandId
     notifyMenu()
+end
+
+-- Any machine (122): a farmer's machines changed, so an open People tab
+-- shows them.
+function TheContractorFarmers:onFleetChanged(personId)
+    notifyMenu()
+end
+
+-- Clients: TCFarmerFleetEvent (122), the streamed part of a farmer's fleet.
+function TheContractorFarmers:applyFleet(personId, machines)
+    local person = self.people[personId]
+    if person == nil then
+        return
+    end
+    person.machines = machines
+    self:onFleetChanged(personId)
 end
 
 -- Clients: TCFarmersEvent (new farmers, and the jobs linked to them).
@@ -772,7 +798,7 @@ local function decodeIds(text)
     return ids
 end
 
--- 116: a farmer's machines, under their person key; nil with none.
+-- 116, 121: a farmer's machines, under their person key; nil with none.
 function TheContractorFarmers.loadMachines(xmlFile, personKey)
     local machines = {}
     local index = 0
@@ -783,6 +809,9 @@ function TheContractorFarmers.loadMachines(xmlFile, personKey)
         end
         local machine = {
             id = getXMLInt(xmlFile, key .. "#id"),
+            -- 121 (nil on 116's machines: TheContractorFarmerFleet gives one).
+            role = getXMLString(xmlFile, key .. "#role"),
+            attachedTo = getXMLInt(xmlFile, key .. "#attachedTo"),
             xmlFilename = getXMLString(xmlFile, key .. "#xmlFilename"),
             seed = getXMLInt(xmlFile, key .. "#seed"),
             hours = getXMLFloat(xmlFile, key .. "#hours"),
@@ -817,6 +846,12 @@ function TheContractorFarmers.saveMachines(xmlFile, personKey, machines)
     for index, machine in ipairs(machines or {}) do
         local key = string.format("%s.machine(%d)", personKey, index - 1)
         setXMLInt(xmlFile, key .. "#id", machine.id)
+        if machine.role ~= nil then
+            setXMLString(xmlFile, key .. "#role", machine.role)
+        end
+        if machine.attachedTo ~= nil then
+            setXMLInt(xmlFile, key .. "#attachedTo", machine.attachedTo)
+        end
         setXMLString(xmlFile, key .. "#xmlFilename", machine.xmlFilename)
         setXMLInt(xmlFile, key .. "#seed", machine.seed)
         if machine.hours ~= nil then
@@ -955,6 +990,8 @@ function TheContractorFarmers:writeState(streamId)
         TheContractorFarmers.writeIds(streamId, person.farmlandIds)
         streamWriteInt32(streamId, person.yardFarmlandId or 0)
         streamWriteFloat32(streamId, person.targetAcres)
+        -- 122
+        TheContractorFarmerFleet.writeStream(streamId, person.machines)
     end
 end
 
@@ -976,6 +1013,7 @@ function TheContractorFarmers.readState(streamId)
         local yardFarmlandId = streamReadInt32(streamId)
         person.yardFarmlandId = yardFarmlandId ~= 0 and yardFarmlandId or nil
         person.targetAcres = streamReadFloat32(streamId)
+        person.machines = TheContractorFarmerFleet.readStream(streamId)
         table.insert(state.people, person)
     end
     return state
@@ -1031,9 +1069,9 @@ end
 
 function TheContractorFarmers.registerConsoleCommands()
     TCConsole.register("company", "farmers", {
-        args = "[preview|show|hide|standing|regenerate] [targetAcres] [seed]",
+        args = "[preview|show|hide|standing|fleet|regenerate] [targetAcres|farmer] [seed]",
         description = "List the farmers and the local official, preview a land split, show who's in their yard, " ..
-            "or generate the farmers again",
+            "list the farmers' machines, or generate the farmers again",
         serverOnly = false,
         run = function(farmId, args)
             local tc = g_currentMission.TheContractor
@@ -1044,6 +1082,12 @@ function TheContractorFarmers.registerConsoleCommands()
                 return TheContractorFarmerSplit.runPreview(mode, args)
             elseif mode == "standing" then
                 return TCYardFarmers.describe()
+            elseif mode == "fleet" then
+                -- 121: the machines are the server's.
+                if not g_currentMission:getIsServer() then
+                    return "tcCompany farmers fleet only works on the server (single player or the host)."
+                end
+                return TheContractorFarmerFleet.getListText(args[2] ~= nil and table.concat(args, " ", 2) or nil)
             elseif mode ~= "regenerate" then
                 return false
             end

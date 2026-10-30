@@ -267,7 +267,17 @@ function stubs.install()
                 return world.storages
             end,
         },
-        vehicleSystem = { vehicles = {} },
+        vehicleSystem = {
+            vehicles = {},
+            getVehicleByUniqueId = function(self, uniqueId)
+                for _, vehicle in ipairs(self.vehicles) do
+                    if vehicle.getUniqueId ~= nil and vehicle:getUniqueId() == uniqueId then
+                        return vehicle
+                    end
+                end
+                return nil
+            end,
+        },
         getIsServer = function()
             return true
         end,
