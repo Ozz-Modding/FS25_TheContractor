@@ -923,8 +923,8 @@ function MenuContractor:onFrameClose()
     if self.workerPortrait ~= nil then
         self.workerPortrait:destroy()
     end
-    if self.overviewTooltip ~= nil then
-        self.overviewTooltip:hide()
+    for _, tooltip in ipairs(self.pageTooltips or {}) do
+        tooltip:hide()
     end
 end
 
@@ -936,7 +936,9 @@ function MenuContractor:update(dt)
     end
 
     if self.isFrameOpen then
-        self:getOverviewTooltip():update(dt)
+        for _, tooltip in ipairs(self:getPageTooltips()) do
+            tooltip:update(dt)
+        end
     end
 
     -- 097: who's gone home, come in or been sent home changes with the
@@ -1033,21 +1035,43 @@ function MenuContractor:hasCompany()
     return tc.Company:hasCompany(g_currentMission:getFarmId())
 end
 
--- The Overview's mouse-over help: the company logo says where a logo of
--- the player's own goes. A target hides with its page, so this only shows
--- on the Overview.
-function MenuContractor:getOverviewTooltip()
-    if self.overviewTooltip == nil then
-        self.overviewTooltip = TCTooltip.new({
-            box = self.overviewTooltipBox,
-            surface = self.overviewTooltipSurface,
-            title = self.overviewTooltipTitle,
-            divider = self.overviewTooltipDivider,
-            text = self.overviewTooltipText
-        })
-        self.overviewTooltip:addTarget(self.companyLogo, TCCompanyLogo.getTooltipContent)
+-- The pages' mouse-over help, one popup per page (each its own layer): the
+-- company logo says where a logo of the player's own goes, and the rank and
+-- every relationship chip say what reputation and relationships are each
+-- for. A target hides with its page, so each only shows on its own.
+function MenuContractor:getPageTooltips()
+    if self.pageTooltips == nil then
+        local function newTooltip(prefix)
+            return TCTooltip.new({
+                box = self[prefix .. "TooltipBox"],
+                surface = self[prefix .. "TooltipSurface"],
+                title = self[prefix .. "TooltipTitle"],
+                divider = self[prefix .. "TooltipDivider"],
+                text = self[prefix .. "TooltipText"]
+            })
+        end
+
+        local overview = newTooltip("overview")
+        overview:addTarget(self.companyLogo, TCCompanyLogo.getTooltipContent)
+        overview:addTarget(self.progressBox, MenuContractor.getReputationTooltipContent)
+
+        local inbox = newTooltip("inbox")
+        inbox:addTarget(self.inboxDetailRelationshipChip, MenuContractor.getReputationTooltipContent)
+        inbox:addTarget(self.inboxMessageRelationshipChip, MenuContractor.getReputationTooltipContent)
+
+        local staff = newTooltip("staff")
+        staff:addTarget(self.staffPersonRelationshipChip, MenuContractor.getReputationTooltipContent)
+
+        self.pageTooltips = { overview, inbox, staff }
     end
-    return self.overviewTooltip
+    return self.pageTooltips
+end
+
+-- The company's reputation against one customer's relationship, the same
+-- on the rank and on a relationship chip.
+function MenuContractor.getReputationTooltipContent()
+    return g_i18n:getText("tc_reputationTip_title"),
+        g_i18n:getText("tc_reputationTip_reputation") .. "\n\n" .. g_i18n:getText("tc_reputationTip_relationship")
 end
 
 -- The player's own logo from modSettings if there is one, else ours, the

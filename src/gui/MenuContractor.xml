@@ -318,6 +318,14 @@
                 <RoundCorner profile="tc_portraitFrameSurface" position="2px -2px"/>
             </GuiElement>
             <Render profile="tc_customerPortrait" id="inboxPortraitRender" position="1324px -86px"/>
+
+            <!-- Mouse-over tooltip (TCTooltip), last so it draws on top. -->
+            <RoundCorner profile="tc_tooltipBox" id="inboxTooltipBox" visible="false">
+                <RoundCorner profile="tc_tooltipSurface" id="inboxTooltipSurface"/>
+                <Text profile="tc_tooltipTitle" id="inboxTooltipTitle" text=""/>
+                <Bitmap profile="tc_tooltipDivider" id="inboxTooltipDivider"/>
+                <Text profile="tc_tooltipText" id="inboxTooltipText" text=""/>
+            </RoundCorner>
         </GuiElement>
 
         <!-- Calendar ======================================================= -->
@@ -732,6 +740,14 @@
 
             <!-- 042: live portrait, driven by TCWorkerPortrait (it sets the scene). Outside every panel, which share it (090, 111). -->
             <Render profile="tc_workerPortrait" id="staffPortraitRender" position="1200px -88px"/>
+
+            <!-- Mouse-over tooltip (TCTooltip), last so it draws on top. -->
+            <RoundCorner profile="tc_tooltipBox" id="staffTooltipBox" visible="false">
+                <RoundCorner profile="tc_tooltipSurface" id="staffTooltipSurface"/>
+                <Text profile="tc_tooltipTitle" id="staffTooltipTitle" text=""/>
+                <Bitmap profile="tc_tooltipDivider" id="staffTooltipDivider"/>
+                <Text profile="tc_tooltipText" id="staffTooltipText" text=""/>
+            </RoundCorner>
         </GuiElement>
 
         <!-- Finances (049) ================================================= -->
