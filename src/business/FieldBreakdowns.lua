@@ -32,6 +32,13 @@
 -- farmer's the customer. A field no farmer holds, or a farmer with nothing
 -- ADS can take, gets a random model with no customer, as before.
 --
+-- 123: a farmer with a yard (108) that no player owns has it break down
+-- there instead YARD_SHARE of the time, on one of the yard's synced spots
+-- where the machine (and its attachment) fits on open ground (pickYardSpot,
+-- shared with 116's favours); with no room it's on the field after all. A
+-- yard breakdown has the yard (workshop.yardFarmlandId) and no field. The
+-- farmer waits by their machine either way (TCYardFarmers, as for a favour).
+--
 -- State: none of its own. The incident's data is { fieldId, fieldService,
 -- severity }; the machine, the model and the spot are picked as it happens.
 
@@ -58,6 +65,12 @@ TheContractorFieldBreakdowns.HARVESTER_SHARE = 0.2
 -- as it must). It faces in, as it drove.
 TheContractorFieldBreakdowns.EDGE_GAP = 1
 TheContractorFieldBreakdowns.MAX_EDGE_DEPTH = 10
+
+-- 123: the share of a farmer's breakdowns in their yard, when they have one.
+TheContractorFieldBreakdowns.YARD_SHARE = 0.3
+-- A yard spot faces the yard's middle; the machine's corners must be open
+-- ground (108's test) as well as its middle. This many spots are tried.
+TheContractorFieldBreakdowns.YARD_SPOT_TRIES = 12
 
 function TheContractorFieldBreakdowns.new()
     local self = {}
@@ -139,8 +152,7 @@ function TheContractorFieldBreakdowns.hasOpenBreakdown(farmId)
         end
     end
     for _, entry in ipairs(tc.RepairContracts.arrivals) do
-        -- 116: a favour on a farmer's field isn't a breakdown.
-        if entry.farmId == farmId and entry.fieldId ~= nil and not entry.favour then
+        if entry.farmId == farmId and entry.kind == TCADSRepairContracts.KIND.BREAKDOWN then
             return true
         end
     end
@@ -276,6 +288,69 @@ function TheContractorFieldBreakdowns.pickSpot(fieldId, model, random)
     return site.x, site.z, site.heading
 end
 
+-- 116, 123: a spot in a farmer's yard for a machine this size: one of the
+-- yard's synced standing spots (114's, the server's) facing the yard's
+-- middle, with every corner of the machine on open ground too. x, z, rotY
+-- or nil.
+function TheContractorFieldBreakdowns.pickYardSpot(farmlandId, model, random)
+    local entry = g_currentMission.TheContractor.Yards:getSpots(farmlandId)
+    if entry == nil or #entry.spots == 0 then
+        return nil
+    end
+    local halfWidth, halfLength = model.width * 0.5, model.length * 0.5
+    for _ = 1, TheContractorFieldBreakdowns.YARD_SPOT_TRIES do
+        local spot = entry.spots[math.floor(random() * #entry.spots) + 1] or entry.spots[1]
+        local rotY = MathUtil.getYRotationFromDirection(entry.x - spot.x, entry.z - spot.z)
+        local vX, vZ = math.sin(rotY), math.cos(rotY)
+        local uX, uZ = vZ, -vX
+        local open = true
+        for _, corner in ipairs({ { 1, 1 }, { 1, -1 }, { -1, 1 }, { -1, -1 } }) do
+            local x = spot.x + uX * halfWidth * corner[1] + vX * halfLength * corner[2]
+            local z = spot.z + uZ * halfWidth * corner[1] + vZ * halfLength * corner[2]
+            if not TheContractorYards.isOpenGround(farmlandId, x, z) then
+                open = false
+                break
+            end
+        end
+        if open then
+            return spot.x, spot.z, rotY
+        end
+    end
+    return nil
+end
+
+-- 123: the farmer's yard, if they have one no player owns and the yards are
+-- known, else nil.
+function TheContractorFieldBreakdowns.getUsableYard(farmer)
+    local farmlandId = farmer ~= nil and farmer.yardFarmlandId or nil
+    if farmlandId == nil or g_currentMission.TheContractor.Yards == nil then
+        return nil
+    end
+    if g_farmlandManager ~= nil and
+            g_farmlandManager:getFarmlandOwner(farmlandId) ~= FarmlandManager.NO_OWNER_FARM_ID then
+        return nil
+    end
+    return farmlandId
+end
+
+-- 123: where a farmer's machine breaks down: { x, z, rotY, yardFarmlandId
+-- or fieldId }. In their yard YARD_SHARE of the time (if there's room),
+-- else on the field's headland; nil with neither.
+function TheContractorFieldBreakdowns.pickFarmerSpot(farmer, fieldId, model, random)
+    local yardFarmlandId = TheContractorFieldBreakdowns.getUsableYard(farmer)
+    if yardFarmlandId ~= nil and random() < TheContractorFieldBreakdowns.YARD_SHARE then
+        local x, z, rotY = TheContractorFieldBreakdowns.pickYardSpot(yardFarmlandId, model, random)
+        if x ~= nil then
+            return { x = x, z = z, rotY = rotY, yardFarmlandId = yardFarmlandId }
+        end
+    end
+    local x, z, rotY = TheContractorFieldBreakdowns.pickSpot(fieldId, model, random)
+    if x == nil then
+        return nil
+    end
+    return { x = x, z = z, rotY = rotY, fieldId = fieldId }
+end
+
 -- Server, once the machine's there: its ruts in from the edge and the crop
 -- round it cleared, so it isn't standing in the middle of the maize.
 function TheContractorFieldBreakdowns.clearSpot(entry, model)
@@ -297,16 +372,17 @@ function TheContractorFieldBreakdowns:onBreakdown(incident)
         return TheContractorRandomEvents.DONE
     end
 
-    -- 121: the farmer's own machine, with room for it and its attachment.
+    -- 121: the farmer's own machine, with room for it and its attachment;
+    -- 123: now and then in their yard.
     local farmer = TheContractorFieldBreakdowns.getFieldFarmer(field)
     local choice = TheContractorFieldBreakdowns.pickFarmerMachine(farmer, tc.RepairContracts, math.random)
     if choice ~= nil then
         local attachment = TheContractorFarmerFleet.getAttachmentArrival(farmer, choice.machine)
-        local x, z, rotY = TheContractorFieldBreakdowns.pickSpot(data.fieldId,
+        local spot = TheContractorFieldBreakdowns.pickFarmerSpot(farmer, data.fieldId,
             TheContractorFarmerFleet.getFootprint(choice.model, attachment), math.random)
-        if x ~= nil then
-            tc.RepairContracts:queueFieldArrival(incident.farmId, data.fieldId, choice.model, x, z, rotY,
-                data.fieldService, data.severity, { farmer = farmer, machine = choice.machine, attachment = attachment })
+        if spot ~= nil then
+            tc.RepairContracts:queueBreakdownArrival(incident.farmId, spot, choice.model, data.fieldService,
+                data.severity, { farmer = farmer, machine = choice.machine, attachment = attachment })
             return TheContractorRandomEvents.DONE
         end
     end
@@ -322,7 +398,7 @@ function TheContractorFieldBreakdowns:onBreakdown(incident)
         return TheContractorRandomEvents.DONE
     end
 
-    tc.RepairContracts:queueFieldArrival(incident.farmId, data.fieldId, model, x, z, rotY, data.fieldService,
-        data.severity)
+    tc.RepairContracts:queueBreakdownArrival(incident.farmId, { x = x, z = z, rotY = rotY, fieldId = data.fieldId },
+        model, data.fieldService, data.severity)
     return TheContractorRandomEvents.DONE
 end

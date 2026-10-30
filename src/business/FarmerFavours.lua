@@ -63,10 +63,6 @@ TheContractorFarmerFavours.REFIT_MONTHS = 12
 -- so the machine's in a yard rather than on a headland when it can be.
 TheContractorFarmerFavours.YARD_WEIGHT = 4
 
--- A yard spot faces the yard's middle; the machine's corners must be open
--- ground (108's test) as well as its middle.
-TheContractorFarmerFavours.YARD_SPOT_TRIES = 12
-
 function TheContractorFarmerFavours.new()
     local self = {}
     setmetatable(self, TheContractorFarmerFavours_mt)
@@ -244,36 +240,6 @@ end
 
 -- Where (server) --------------------------------------------------------------------------
 
--- A spot in the farmer's yard for a machine this size: one of the yard's
--- synced standing spots (114's, the server's) facing the yard's middle,
--- with every corner of the machine on open ground too. x, z, rotY or nil.
-function TheContractorFarmerFavours.pickYardSpot(farmlandId, model, random)
-    local entry = g_currentMission.TheContractor.Yards:getSpots(farmlandId)
-    if entry == nil or #entry.spots == 0 then
-        return nil
-    end
-    local halfWidth, halfLength = model.width * 0.5, model.length * 0.5
-    for _ = 1, TheContractorFarmerFavours.YARD_SPOT_TRIES do
-        local spot = entry.spots[math.floor(random() * #entry.spots) + 1] or entry.spots[1]
-        local rotY = MathUtil.getYRotationFromDirection(entry.x - spot.x, entry.z - spot.z)
-        local vX, vZ = math.sin(rotY), math.cos(rotY)
-        local uX, uZ = vZ, -vX
-        local open = true
-        for _, corner in ipairs({ { 1, 1 }, { 1, -1 }, { -1, 1 }, { -1, -1 } }) do
-            local x = spot.x + uX * halfWidth * corner[1] + vX * halfLength * corner[2]
-            local z = spot.z + uZ * halfWidth * corner[1] + vZ * halfLength * corner[2]
-            if not TheContractorYards.isOpenGround(farmlandId, x, z) then
-                open = false
-                break
-            end
-        end
-        if open then
-            return spot.x, spot.z, rotY
-        end
-    end
-    return nil
-end
-
 -- The farmer's fields with no live job on them.
 function TheContractorFarmerFavours.getFreeFields(farmer)
     local held = {}
@@ -292,11 +258,11 @@ function TheContractorFarmerFavours.getFreeFields(farmer)
 end
 
 -- Where the machine stands: { x, z, rotY, yardFarmlandId or fieldId }, in
--- the yard if there's room, else on the headland of one of their fields
--- (101's spot). nil with neither.
+-- the yard if there's room (101's pickYardSpot), else on the headland of one
+-- of their fields (101's spot). nil with neither.
 function TheContractorFarmerFavours.pickSpot(farmer, model, random)
     if farmer.yardFarmlandId ~= nil then
-        local x, z, rotY = TheContractorFarmerFavours.pickYardSpot(farmer.yardFarmlandId, model, random)
+        local x, z, rotY = TheContractorFieldBreakdowns.pickYardSpot(farmer.yardFarmlandId, model, random)
         if x ~= nil then
             return { x = x, z = z, rotY = rotY, yardFarmlandId = farmer.yardFarmlandId }
         end

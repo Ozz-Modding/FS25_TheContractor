@@ -638,7 +638,7 @@
 		<text name="tc_repair_machineHours" text="%s, %d h"/>
 		<text name="tc_repair_work_repair" text="Repair: it's not right, inspect it to find out why"/>
 		<text name="tc_repair_work_maintenance" text="Service: oils, filters and grease"/>
-		<text name="tc_repair_work_breakdown" text="Broken down in the field: fix it where it stands, today"/>
+		<text name="tc_repair_work_breakdown" text="Broken down: fix it where it stands, today"/>
 		<text name="tc_repair_work_favour" text="A favour: fit a new %s"/>
 		<text name="tc_repair_doneWhen_repair" text="Every fault it came in with is fixed: the list below, once you've inspected it. Repairing a part counts as much as replacing it. A quick fix doesn't count, and nothing that goes wrong after it came in needs fixing. It's paid as soon as the last one's done."/>
 		<text name="tc_repair_doneWhen_breakdown" text="Every fault that stopped it is fixed where it stands, before the day's out: the list below, once you've inspected it. A quick fix doesn't count. It's paid as soon as the last one's done."/>
@@ -696,7 +696,7 @@
 		<text name="tc_breakdown_kit_mobile" text="Mobile workshop"/>
 		<text name="tc_breakdown_chipBrokenDown" text="Broken down"/>
 		<text name="tc_breakdown_acceptedInfo" text="The customer's agreed: %s for %s. It's at %s, marked on the map. Fix it there before the day's out: the Workshop tab has a checklist."/>
-		<text name="tc_breakdown_missedNotification" text="Job failed: a customer's machine broken down in the field wasn't fixed in time, and they've had it recovered."/>
+		<text name="tc_breakdown_missedNotification" text="Job failed: a customer's broken-down machine wasn't fixed in time, and they've had it recovered."/>
 		<text name="tc_favour_eventName" text="Farmer's favour"/>
 		<text name="tc_favour_locationYard" text="%s, %s's yard"/>
 		<text name="tc_favour_kitRowPart" text="Part: %s"/>
