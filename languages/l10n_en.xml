@@ -371,6 +371,9 @@
 		<text name="tc_relationship_neutral" text="Neutral"/>
 		<text name="tc_relationship_poor" text="Poor"/>
 		<text name="tc_relationship_fallenOut" text="Fallen out"/>
+		<text name="tc_reputationTip_title" text="Reputation and relationships"/>
+		<text name="tc_reputationTip_reputation" text="Reputation is what the area thinks of your company. Good work builds it, and missed jobs, claims and accidents knock it back. It doesn't fade. It brings more offers, bigger fields and better rates, and unlocks bigger adverts."/>
+		<text name="tc_reputationTip_relationship" text="A relationship is what one customer thinks of you, from your own dealings with them. Good work builds it, and missed jobs and turned-down or ignored offers wear it down. Without repeat work it drifts back to neutral. It decides how often they offer you work and how far they'll move when you negotiate. A customer who has fallen out with you offers nothing until it mends."/>
 		<text name="tc_staff_columnName" text="Name"/>
 		<text name="tc_staff_columnWorkSpeed" text="Speed"/>
 		<text name="tc_staff_columnBestSkills" text="Best skill"/>
