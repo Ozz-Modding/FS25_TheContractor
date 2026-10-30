@@ -74,29 +74,32 @@ test("an offer whose job is gone, or has no customer, is from nobody", function(
     assertEquals(nil, tc.Inbox:getMessageCustomer(world:message("joyriders", "tc_joyriders_offerBody", { 4 }, 8)))
 end)
 
+-- The args the inbox formats the body with, as its kind gives them.
+local function shownArgs(tc, message)
+    return tc.Inbox:getKind(message.kind).getArgs(message)
+end
+
 test("an offer's text names the customer as they're called now", function()
-    local world = setup()
+    local world, tc = setup()
     world:addJob(7, 2)
     local message = world:message("joyriders", "tc_joyriders_offerBody", { 4 }, 7)
 
-    local body = TheContractorInbox.getBody(message)
-    assertTrue(string.find(body, "Field 4", 1, true) ~= nil, body)
-    assertTrue(string.find(body, "Tom Hargreaves wants it plowed", 1, true) ~= nil, body)
+    local args = shownArgs(tc, message)
+    assertEquals(args[1], 4, "the posted args first")
+    assertEquals(args[2], world.people[2].name, "then the customer")
 
     world.people[2].name = "Tom Fairweather"
-    body = TheContractorInbox.getBody(message)
-    assertTrue(string.find(body, "Tom Fairweather wants it plowed", 1, true) ~= nil, body)
+    assertEquals(shownArgs(tc, message)[2], "Tom Fairweather", "renamed")
     -- The saved args aren't touched.
     assertEquals(1, #message.args)
 end)
 
-test("an offer with no customer falls back on the farmer", function()
-    local world = setup()
+test("an offer with no customer still gets a name to show", function()
+    local world, tc = setup()
     local message = world:message("joyriders", "tc_joyriders_offerBody", { 4 }, 7)
 
-    local body = TheContractorInbox.getBody(message)
-    assertTrue(string.find(body, g_i18n:getText("tc_inbox_customerUnknown") .. " wants it plowed", 1, true) ~= nil,
-        body)
+    assertEquals(tc.Inbox:getMessageCustomer(message), nil)
+    assertEquals(#shownArgs(tc, message), 2, "a stand-in for the customer")
 end)
 
 test("a body not named for it keeps its own args", function()

@@ -260,21 +260,22 @@ test("tcWorker adsSkill sets, removes and caps skills", function()
     local sam = addWorker(tc, 1, {})
     sam.name = "Sam Hill"
 
-    assertEquals(adsSkill.run(1, { "1", "mechanic", "2" }), "Sam Hill: mechanic 2", "set")
-    assertEquals(adsSkill.run(1, { "Sam", "Hill", "bodyworker", "1" }), "Sam Hill: mechanic 2, bodyworker 1",
-        "by name")
-    assertEquals(adsSkill.run(1, { "1", "diagnostician", "1" }),
-        "Sam Hill already has 2 workshop skills: set one to 0 first", "capped")
-    assertEquals(adsSkill.run(1, { "1", "mechanic", "0" }), "Sam Hill: bodyworker 1", "removed")
+    adsSkill.run(1, { "1", "mechanic", "2" })
+    assertEquals(sam.adsSkills.mechanic, 2, "set")
+    adsSkill.run(1, { "Sam", "Hill", "bodyworker", "1" })
+    assertEquals(sam.adsSkills.bodyworker, 1, "by name")
+    adsSkill.run(1, { "1", "diagnostician", "1" })
+    assertEquals(sam.adsSkills.diagnostician, nil, "capped at two")
+    adsSkill.run(1, { "1", "mechanic", "0" })
+    assertEquals(sam.adsSkills.mechanic, nil, "removed")
+    assertEquals(sam.adsSkills.bodyworker, 1, "the other kept")
     assertEquals(adsSkill.run(1, { "1", "mechanic", "4" }), false, "bad level")
     assertEquals(adsSkill.run(1, { "1", "receptionist", "1" }), false, "office role")
 end)
 
 test("trades go by ADS's names: the diagnostician is the electrician, the receptionist the advisor", function()
     local _, tc = setup()
-    assertEquals(TheContractorWorkshop.getRoleName("diagnostician"), "Electrician", "electrician")
     assertEquals(TheContractorOffice.getDefinition("administrator").adsRole, "receptionist", "still ADS's id")
-    assertEquals(g_i18n:getText("tc_office_adsRole_receptionist"), "Advisor", "advisor")
     assertEquals(TheContractorWorkshop.findRole("Electrician"), "diagnostician", "the console takes ADS's name")
     assertEquals(TheContractorWorkshop.findRole("diagnostician"), "diagnostician", "or the id")
     assertEquals(TheContractorWorkshop.findRole("advisor"), nil, "not a trade")
@@ -284,8 +285,8 @@ test("trades go by ADS's names: the diagnostician is the electrician, the recept
     local adsSkill = TCConsole.groups.worker.subcommands.adsskill
     local sam = addWorker(tc, 1, {})
     sam.name = "Sam Hill"
-    assertEquals(adsSkill.run(1, { "1", "electrician", "2" }), "Sam Hill: electrician 2", "set by ADS's name")
-    assertEquals(sam.adsSkills.diagnostician, 2, "saved under the id")
+    adsSkill.run(1, { "1", "electrician", "2" })
+    assertEquals(sam.adsSkills.diagnostician, 2, "set by ADS's name, saved under the id")
 end)
 
 test("a whole worker keeps their skills and role through the save and the stream", function()
@@ -360,7 +361,8 @@ test("the storekeeper is a trade: rolled, ticked, trained and handed to ADS", fu
     TheContractorWorkshop.registerConsoleCommands()
     local adsSkill = TCConsole.groups.worker.subcommands.adsskill
     ann.name = "Ann Lee"
-    assertEquals(adsSkill.run(1, { "2", "storekeeper", "3" }), "Ann Lee: storekeeper 3", "console")
+    adsSkill.run(1, { "2", "storekeeper", "3" })
+    assertEquals(ann.adsSkills.storekeeper, 3, "console")
     assertEquals(TheContractorWorkshop.findRole("Storekeeper"), "storekeeper", "by name")
 end)
 

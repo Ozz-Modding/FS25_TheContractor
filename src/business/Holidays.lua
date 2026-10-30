@@ -518,12 +518,12 @@ function TheContractorHolidays.isTrainingOn(worker, day)
     return worker.assessmentDay == day
 end
 
--- The roster's other workers off on any day from firstDay to lastDay, as
--- text, e.g. "Amy Hall (holiday June 10-12, Year 2), John Smith (asked for
--- June 12, Year 2)": booked holidays, open requests and training days
--- (054). nil if nobody is. Sickness can't be known ahead (and how long it
--- lasts is server-only), so it isn't listed.
-function TheContractorHolidays.getOthersOffText(farmId, workerId, firstDay, lastDay)
+-- The roster's other workers off on any day from firstDay to lastDay, by
+-- name: { { worker, spells = { { reason, firstDay, lastDay }... } }... },
+-- reason being "holiday" (booked), "requested" (an open request) or
+-- "training" (054's course and assessment days). Sickness can't be known
+-- ahead (and how long it lasts is server-only), so it isn't listed.
+function TheContractorHolidays.getOthersOff(farmId, workerId, firstDay, lastDay)
     local workers = {}
     for _, worker in ipairs(g_currentMission.TheContractor.Staff:getRoster(farmId)) do
         if worker.id ~= workerId then
@@ -539,36 +539,56 @@ function TheContractorHolidays.getOthersOffText(farmId, workerId, firstDay, last
         local request = TheContractorHolidays.findRequest(farmId, worker.id)
         local reasons = {
             {
-                key = "tc_holidayRequest_offHoliday",
+                reason = "holiday",
                 isOff = function(day)
                     return worker:isHolidayOn(day)
                 end,
             },
             {
-                key = "tc_holidayRequest_offRequested",
+                reason = "requested",
                 isOff = function(day)
                     return request ~= nil and day >= request.payload.startDay and
                         day <= TheContractorHolidays.getRequestEndDay(request)
                 end,
             },
             {
-                key = "tc_holidayRequest_offTraining",
+                reason = "training",
                 isOff = function(day)
                     return TheContractorHolidays.isTrainingOn(worker, day)
                 end,
             },
         }
 
-        local parts = {}
+        local spells = {}
         for _, reason in ipairs(reasons) do
             for _, run in ipairs(getRuns(firstDay, lastDay, reason.isOff)) do
-                table.insert(parts, string.format(g_i18n:getText(reason.key),
-                    TCCalendar.formatDayRange(run[1], run[2])))
+                table.insert(spells, { reason = reason.reason, firstDay = run[1], lastDay = run[2] })
             end
         end
-        if #parts > 0 then
-            table.insert(entries, string.format("%s (%s)", worker.name, table.concat(parts, "; ")))
+        if #spells > 0 then
+            table.insert(entries, { worker = worker, spells = spells })
         end
+    end
+    return entries
+end
+
+TheContractorHolidays.OFF_REASON_KEYS = {
+    holiday = "tc_holidayRequest_offHoliday",
+    requested = "tc_holidayRequest_offRequested",
+    training = "tc_holidayRequest_offTraining",
+}
+
+-- getOthersOff as text, e.g. "Amy Hall (holiday June 10-12, Year 2), John
+-- Smith (asked for June 12, Year 2)", or nil if nobody's off.
+function TheContractorHolidays.getOthersOffText(farmId, workerId, firstDay, lastDay)
+    local entries = {}
+    for _, entry in ipairs(TheContractorHolidays.getOthersOff(farmId, workerId, firstDay, lastDay)) do
+        local parts = {}
+        for _, spell in ipairs(entry.spells) do
+            table.insert(parts, string.format(g_i18n:getText(TheContractorHolidays.OFF_REASON_KEYS[spell.reason]),
+                TCCalendar.formatDayRange(spell.firstDay, spell.lastDay)))
+        end
+        table.insert(entries, string.format("%s (%s)", entry.worker.name, table.concat(parts, "; ")))
     end
 
     if #entries == 0 then

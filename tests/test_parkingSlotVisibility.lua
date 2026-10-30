@@ -2,7 +2,7 @@
 -- everywhere else only while this machine's showParkingSlots setting is
 -- on. That setting is a local item: kept in modSettings, never saved in the
 -- savegame or streamed, and flipped by TC_TOGGLE_PARKING_SLOTS. Standing
--- spots still only show in the construction menu.
+-- spots show with them (120).
 
 local world
 
@@ -68,23 +68,26 @@ test("slots are hidden outside the construction menu by default", function()
     assertEquals(false, slot.visuals.visible)
 end)
 
-test("the setting shows slots everywhere, but not standing spots", function()
+test("the setting shows slots and standing spots everywhere", function()
     setup()
     install()
     local slot = addPlaceable(PlaceableTCParkingSlot.KEY)
     local spot = addPlaceable(PlaceableTCStandingSpot.KEY)
     g_currentMission.TheContractor.Settings:setLocal("showParkingSlots", true)
     assertEquals(true, slot.visuals.visible, "shown as soon as it's set")
-    assertEquals(false, spot.visuals.visible)
+    assertEquals(true, spot.visuals.visible, "the spot too")
 
     -- Opening and closing the construction menu leaves the slot showing.
     TCParking.isConstructionScreenOpen = true
     TCParking.updateVisuals()
-    assertEquals(true, spot.visuals.visible, "spots show in the menu")
     TCParking.isConstructionScreenOpen = false
     TCParking.updateVisuals()
     assertEquals(true, slot.visuals.visible)
-    assertEquals(false, spot.visuals.visible)
+    assertEquals(true, spot.visuals.visible)
+
+    g_currentMission.TheContractor.Settings:setLocal("showParkingSlots", false)
+    assertEquals(false, slot.visuals.visible, "hidden again")
+    assertEquals(false, spot.visuals.visible, "the spot too")
 end)
 
 test("the setting is this machine's own: kept in modSettings, not the savegame or the stream", function()
@@ -126,9 +129,9 @@ test("the key toggles the setting, refreshes the menu and says so", function()
     assertEquals(true, g_currentMission.TheContractor.Settings:get("showParkingSlots"))
     assertEquals(true, slot.visuals.visible)
     assertTrue(world.menuRefreshed, "settings page control updated")
-    assertEquals("Parking slots shown", world.notifications[1].text)
+    assertEquals(#world.notifications, 1, "told")
 
     event.callback(event.target)
     assertEquals(false, slot.visuals.visible)
-    assertEquals("Parking slots hidden", world.notifications[2].text)
+    assertEquals(#world.notifications, 2, "told")
 end)

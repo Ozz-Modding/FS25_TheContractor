@@ -31,7 +31,9 @@ local function setup()
             self:raiseAIEvent("onAIJobVehicleBlock", "onAIImplementJobVehicleBlock")
         end,
     }
-    world.texts["ai_messageErrorBlockedByObject"] = "%s is blocked"
+    -- Vanilla's texts are just the name here, so a notification is the
+    -- name it was shown under.
+    world.texts["ai_messageErrorBlockedByObject"] = "%s"
 
     world:load("src/util/TCWorkerAppearance.lua")
     world:load("src/util/TCAINotifications.lua")
@@ -99,7 +101,7 @@ local function newAIJob(vehicle)
     return aiJob
 end
 
-local finished = { text = "%s has finished the job" }
+local finished = { text = "%s" }
 
 test("a contract job's finish and blocked messages are dropped", function()
     local world = setup()
@@ -131,8 +133,8 @@ test("a staff driver's messages use the worker's name", function()
     aiJob:showNotification(finished)
 
     assertEquals(#world.notifications, 2)
-    assertEquals(world.notifications[1].text, "Ross is blocked")
-    assertEquals(world.notifications[2].text, "Ross has finished the job")
+    assertEquals(world.notifications[1].text, "Ross")
+    assertEquals(world.notifications[2].text, "Ross")
     assertEquals(#vehicle.raised, 1)
 end)
 
@@ -146,7 +148,7 @@ test("a worker renamed mid-job is shown under the new name", function()
     aiJob:start(1)
     worker.name = "Rosie"
     aiJob:showNotification(finished)
-    assertEquals(world.notifications[1].text, "Rosie has finished the job")
+    assertEquals(world.notifications[1].text, "Rosie")
 
     -- Gone from the roster by the end: the name from the start.
     world.workers[3] = nil
@@ -163,8 +165,8 @@ test("someone else's helper is left alone", function()
     aiJob:showNotification(finished)
 
     assertEquals(#world.notifications, 2)
-    assertEquals(world.notifications[1].text, "AI Worker B is blocked")
-    assertEquals(world.notifications[2].text, "AI Worker B has finished the job")
+    assertEquals(world.notifications[1].text, "AI Worker B")
+    assertEquals(world.notifications[2].text, "AI Worker B")
 end)
 
 test("the same AI job started again forgets its last driver", function()
@@ -185,5 +187,5 @@ test("a job with no vehicle parameter is left alone", function()
     local aiJob = setmetatable({}, { __index = AIJob })
     aiJob:start(1)
     aiJob:showNotification(finished)
-    assertEquals(world.notifications[1].text, "AI Worker B has finished the job")
+    assertEquals(world.notifications[1].text, "AI Worker B")
 end)

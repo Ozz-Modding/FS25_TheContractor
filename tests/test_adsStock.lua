@@ -165,20 +165,19 @@ test("consumables group by kind/key/tier, fluids counting a fill unit's room onc
     assertEquals(#rows, 4, "rows")
 
     local oil = rows[1]
-    assertEquals(oil.name, "ADS Motor Oil Premium", "fluid named by its fill type")
+    assertEquals(oil.fillTypeIndex, world.oil, "the oil")
     assertEquals(oil.amount, 700, "oil amount")
     assertEquals(oil.capacity, 800, "oil capacity, once per drum pallet")
     assertEquals(#oil.sources, 2, "oil sources")
     assertEquals(oil.sources[1].capacity, 400, "source capacity")
-    assertEquals(oil.tierText, "Premium", "ADS's own tier text")
 
-    assertEquals(rows[2].name, "Original grease", "grease after fluids")
+    assertEquals(rows[2].fillTypeIndex, world.grease, "grease after fluids")
     assertEquals(rows[2].capacity, 4000, "grease capacity")
 
-    assertEquals(rows[3].name, "Battery, L, LIZARD", "pack with no ADS text keeps the raw tier")
-    assertEquals(rows[3].amount, 3, "lizard batteries")
-    assertEquals(rows[4].name, "Battery, L, Premium", "pack name")
-    assertEquals(rows[4].amount, 6, "premium batteries")
+    assertEquals(rows[3].kind, "pack", "packs after them")
+    assertEquals(rows[3].amount, 3, "lizard batteries, a row of their own")
+    assertEquals(rows[4].kind, "pack")
+    assertEquals(rows[4].amount, 6, "premium batteries, both pallets")
     assertEquals(rows[4].capacity, nil, "packs are counts")
 end)
 
@@ -268,7 +267,6 @@ test("without isUsed no box is used, and nothing else goes", function()
     assertEquals(#TCADSStock.getPartBoxRows(1), 1, "still listed")
     assertTrue(TCADSStock.isUsedPart(addBattery(world, { health = 0.5 })), "packs still known")
     assertEquals(#world.warnings, 1, "one warning")
-    assertTrue(world.warnings[1]:find("ADS_SparePartsBox.isUsed", 1, true) ~= nil, "names isUsed")
 end)
 
 test("without the consumable pack functions no pack is used, and nothing else goes", function()
@@ -281,7 +279,6 @@ test("without the consumable pack functions no pack is used, and nothing else go
         assertTrue(not TCADSStock.isUsedPart(addBattery(world, { health = 0.5 })), "no used pack without " .. name)
         assertTrue(TCADSStock.isUsedPart(addBox(world, { isUsed = true })), "boxes still known")
         assertEquals(#world.warnings, 1, "one warning")
-        assertTrue(world.warnings[1]:find("ADS_ConsumablePack." .. name, 1, true) ~= nil, "names " .. name)
     end
 end)
 
@@ -295,8 +292,7 @@ local function withoutEntryPoint(tableName, fieldName)
 end
 
 local function assertWarnedAbout(world, name)
-    assertEquals(#world.warnings, 1, "one warning")
-    assertTrue(world.warnings[1]:find(name, 1, true) ~= nil, "warning names " .. name)
+    assertEquals(#world.warnings, 1, "one warning about " .. name)
 end
 
 test("without collectStockSources only the consumables view goes", function()

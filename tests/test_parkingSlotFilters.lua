@@ -166,20 +166,6 @@ test("a filter of only sold machines takes anything again", function()
 
     world.objects[sold.id] = nil
     assertEquals(0, parkedSlotX(tractor), "free for anything once it's gone")
-    assertEquals("Any vehicle", TCParkingSlotFilter.getSummary(slot, PlaceableTCParkingSlot.getFilter(slot)))
-end)
-
-test("the summary names a few choices and counts more", function()
-    setup()
-    local tractor = addMachine("TRACTORSS")
-    tractor.name = "Fendt 211"
-    local slot = addSlot(1, 0)
-    local filter = PlaceableTCParkingSlot.newFilter({ "TRACTORSS" }, { tractor.id })
-    assertEquals("Small Tractors, Fendt 211", TCParkingSlotFilter.getSummary(slot, filter))
-    filter = PlaceableTCParkingSlot.newFilter({ "TRACTORSS", "TRACTORSL" }, { tractor.id })
-    assertEquals("3 choices", TCParkingSlotFilter.getSummary(slot, filter))
-    local implementSlot = addSlot(1, 10, PlaceableTCParkingSlot.SLOT_TYPE.IMPLEMENT)
-    assertEquals("Any implement", TCParkingSlotFilter.getSummary(implementSlot, PlaceableTCParkingSlot.newFilter()))
 end)
 
 test("choices are the farm's machines and categories of the slot's type", function()

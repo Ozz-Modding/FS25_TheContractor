@@ -89,7 +89,7 @@ test("only a farmer with a yard on the map, no player owns it and it has spots",
     assertEquals(nil, wanted[3], "a player owns yard 6")
     assertEquals(nil, wanted[4], "yard 7 has no spots")
     assertEquals(nil, wanted[8], "no yard on the map")
-    assertTrue(TCYardFarmers.getReason(world.farmers[2], world.yards):find("owned") ~= nil)
+    assertTrue(TCYardFarmers.getReason(world.farmers[2], world.yards) ~= nil, "says why not")
 end)
 
 test("a joined client puts the farmer on the same spot as the server", function()

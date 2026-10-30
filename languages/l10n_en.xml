@@ -18,7 +18,7 @@
 		<text name="tc_toolTip_adsWorkshopMargin" text="Your usual margin on Advanced Damage System repairs and services in your repair zones, on top of what the cheapest fix costs (parts and labour). The Negotiate dialog starts here, and customers judge your price against it: less earns more reputation, well over it costs reputation."/>
 		<text name="tc_toolTip_adsFieldMargin" text="Your usual margin on Advanced Damage System breakdowns out in the field, on top of what the cheapest fix costs (parts and labour). The Negotiate dialog starts here, and customers judge your price against it: less earns more reputation, well over it costs reputation."/>
 		<text name="tc_setting_showParkingSlots" text="Show parking slots"/>
-		<text name="tc_toolTip_showParkingSlots" text="Show your parking slots' markings outside the construction menu too. Just for you: other players choose their own. Right Ctrl+P switches it by default."/>
+		<text name="tc_toolTip_showParkingSlots" text="Show your parking slots', repair zones' and standing spots' markings outside the construction menu too. Just for you: other players choose their own. Right Ctrl+P switches it by default."/>
 		<text name="tc_nameStyle_british" text="British"/>
 		<text name="tc_nameStyle_irish" text="Irish"/>
 		<text name="tc_nameStyle_american" text="American"/>
@@ -331,7 +331,7 @@
 		<text name="finance_tcGoodNews" text="Refunds and rebates"/>
 		<text name="tc_moneyType_wasteDisposal" text="Tipping fees"/>
 		<text name="finance_tcWasteDisposal" text="Tipping fees"/>
-		<text name="tc_staff_viewRoster" text="Roster"/>
+		<text name="tc_staff_viewRoster" text="Your Staff"/>
 		<text name="tc_staff_viewCandidates" text="Candidates"/>
 		<text name="tc_staff_viewOthers" text="Others"/>
 		<text name="tc_people_columnLand" text="Land"/>
@@ -694,9 +694,9 @@
 		<text name="tc_drivers_customerVehicle" text="%s is a customer's machine in for repair, so AI helpers, AutoDrive, Courseplay and Follow Me can't drive it."/>
 		<text name="tc_drivers_customerVehicleDialog" text="This is a customer's machine in for repair, so AI helpers, AutoDrive, Courseplay and Follow Me can't drive it."/>
 		<text name="tc_parkingSlotImplement_function" text="Marks a parking space for implements and trailers coming back from contract jobs, facing the arrow. Vehicles go in vehicle parking slots. Stand in a placed slot to choose what it takes. Only visible in the construction menu, unless you turn on Show parking slots (Right Ctrl+P)."/>
-		<text name="tc_parking_slotsShown" text="Parking slots shown"/>
-		<text name="tc_parking_slotsHidden" text="Parking slots hidden"/>
-		<text name="input_TC_TOGGLE_PARKING_SLOTS" text="Show/hide parking slots"/>
+		<text name="tc_parking_slotsShown" text="Parking slots and standing spots shown"/>
+		<text name="tc_parking_slotsHidden" text="Parking slots and standing spots hidden"/>
+		<text name="input_TC_TOGGLE_PARKING_SLOTS" text="Show/hide parking slots and standing spots"/>
 		<text name="tc_parkingSlot_activate" text="Set parking slot filter"/>
 		<text name="tc_parkingSlot_dialogTitle" text="Parking Slot Filter"/>
 		<text name="tc_parkingSlot_dialogHeading" text="Takes: %s"/>
@@ -716,7 +716,16 @@
 		<text name="tc_parkingSlot_save" text="Save"/>
 		<text name="tc_parkingSlot_clear" text="Clear all"/>
 		<text name="tc_standingSpot_name" text="Standing Spot"/>
-		<text name="tc_standingSpot_function" text="Somewhere for one of your staff to stand while they've nothing on, facing the arrow. Only visible in the construction menu."/>
+		<text name="tc_standingSpot_function" text="Somewhere for one of your staff to stand while they've nothing on, facing the arrow. Stand by a placed spot to choose who stands there. Only visible in the construction menu, unless you turn on Show parking slots (Right Ctrl+P)."/>
+		<text name="tc_standingSpot_activate" text="Choose who stands here"/>
+		<text name="tc_standingSpot_dialogTitle" text="Standing Spot"/>
+		<text name="tc_standingSpot_dialogHeading" text="Kept for: %s"/>
+		<text name="tc_standingSpot_dialogHint" text="Tick staff to keep this spot for them. Only they will stand here, and they use it before any open spot. Tick nobody to let anyone stand here."/>
+		<text name="tc_standingSpot_keptForAnyone" text="Anyone"/>
+		<text name="tc_standingSpot_keptForCount" text="%d staff"/>
+		<text name="tc_standingSpot_kind_worker" text="Worker"/>
+		<text name="tc_standingSpot_kind_office" text="Office"/>
+		<text name="tc_standingSpot_nothingToPick" text="Your company has no staff yet."/>
 		<text name="tc_disposalSkip_name" text="Disposal Skip"/>
 		<text name="tc_disposalSkip_function" text="Where fly-tipped junk from a clearing job goes, and old parts taken off a machine with Advanced Damage System. Drop each piece in or right next to it and it's taken away. Every piece from a job, and every old part, costs a small tipping fee."/>
 		<text name="tc_logoSign_name" text="Company Sign"/>

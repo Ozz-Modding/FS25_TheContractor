@@ -9,6 +9,11 @@
 -- 100: repair zones use it too, through an adapter (show's second
 -- argument): where the filter lives, what's on offer, the summary, the
 -- texts and the event. SLOT_ADAPTER is the parking slot's own.
+--
+-- 120: standing spots use it for staff (TCStandingSpotActivatable's
+-- SPOT_ADAPTER). An adapter whose filter isn't categories and machines
+-- gives its own getRows, getTickedKeys and newFilter (all three, see the
+-- defaults below), and can give its own headingKey and emptyKey.
 
 TCParkingSlotDialog = {}
 local TCParkingSlotDialog_mt = Class(TCParkingSlotDialog, MessageDialog)
@@ -16,6 +21,7 @@ local TCParkingSlotDialog_mt = Class(TCParkingSlotDialog, MessageDialog)
 TCParkingSlotDialog.KIND_TONE = {
     category = "info",
     vehicle = "neutral",
+    staff = "neutral",
 }
 
 local CHECKBOX_ON_COLOR = { 0.30, 0.62, 0.06, 1 }
@@ -75,9 +81,8 @@ function TCParkingSlotDialog.new(target, customMt)
     -- { kind = "category"|"vehicle", key (name or object id), title,
     --   isHere }
     self.rows = {}
-    -- The draft: category name / vehicle id -> true.
-    self.categories = {}
-    self.vehicleIds = {}
+    -- The draft: kind -> { key -> true }.
+    self.ticked = {}
     self.isChanged = false
     self.selectedIndex = 1
 
@@ -103,21 +108,21 @@ function TCParkingSlotDialog:onOpen()
     TCParkingSlotDialog:superClass().onOpen(self)
 
     local filter = self.adapter.getFilter(self.slot)
-    self.categories = {}
-    for _, name in ipairs(filter.categories) do
-        self.categories[name] = true
-    end
-    self.vehicleIds = {}
-    for _, vehicleId in ipairs(filter.vehicleIds) do
-        self.vehicleIds[vehicleId] = true
+    self.ticked = {}
+    for kind, keys in pairs((self.adapter.getTickedKeys or TCParkingSlotDialog.getTickedKeys)(filter)) do
+        self.ticked[kind] = {}
+        for _, key in ipairs(keys) do
+            self.ticked[kind][key] = true
+        end
     end
     self.isChanged = false
-    self:buildRows(filter)
+    self.rows = (self.adapter.getRows or TCParkingSlotDialog.getRows)(self.adapter, self.slot, self.farmId, filter)
 
     if self.titleText ~= nil then
         self.titleText:setText(self.adapter.getTitle())
     end
     self.hintText:setText(self.adapter.getHint(self.slot))
+    self.emptyText:setText(g_i18n:getText(self.adapter.emptyKey or "tc_parkingSlot_nothingToPick"))
     self.emptyText:setVisible(#self.rows == 0)
 
     self.selectedIndex = 1
@@ -135,17 +140,29 @@ function TCParkingSlotDialog:onClose()
     self.rows = {}
 end
 
--- Categories by title, then machines: those standing in the slot first,
--- then by name.
-function TCParkingSlotDialog:buildRows(filter)
+-- The default getTickedKeys: kind -> list of the filter's keys.
+function TCParkingSlotDialog.getTickedKeys(filter)
+    return { category = filter.categories, vehicle = filter.vehicleIds }
+end
+
+-- The default newFilter, from the draft (kind -> list of keys).
+function TCParkingSlotDialog.newFilter(keys)
+    return PlaceableTCParkingSlot.newFilter(keys.category, keys.vehicle)
+end
+
+-- The default getRows: categories by title, then machines, those standing
+-- in the slot first, then by name. A row is { kind, key, title, isHere,
+-- chipKey (optional, the kind chip's text; tc_parkingSlot_kind_<kind> if
+-- not given) }.
+function TCParkingSlotDialog.getRows(adapter, slot, farmId, filter)
     local rows = {}
-    for _, name in ipairs(self.adapter.getCategoryChoices(self.slot, self.farmId, filter)) do
+    for _, name in ipairs(adapter.getCategoryChoices(slot, farmId, filter)) do
         table.insert(rows, { kind = "category", key = name, title = TCParkingSlotFilter.getCategoryTitle(name) })
     end
 
-    local area = self.adapter.getArea(self.slot)
+    local area = adapter.getArea(slot)
     local vehicleRows = {}
-    for _, vehicle in ipairs(self.adapter.getEligibleVehicles(self.slot, self.farmId)) do
+    for _, vehicle in ipairs(adapter.getEligibleVehicles(slot, farmId)) do
         local vehicleId = NetworkUtil.getObjectId(vehicle)
         if vehicleId ~= nil then
             local isHere = false
@@ -165,30 +182,36 @@ function TCParkingSlotDialog:buildRows(filter)
     for _, row in ipairs(vehicleRows) do
         table.insert(rows, row)
     end
-
-    self.rows = rows
+    return rows
 end
 
 function TCParkingSlotDialog:isTicked(row)
-    if row.kind == "category" then
-        return self.categories[row.key] == true
+    local set = self.ticked[row.kind]
+    return set ~= nil and set[row.key] == true
+end
+
+function TCParkingSlotDialog:hasTicked()
+    for _, set in pairs(self.ticked) do
+        if next(set) ~= nil then
+            return true
+        end
     end
-    return self.vehicleIds[row.key] == true
+    return false
 end
 
 function TCParkingSlotDialog:getDraftFilter()
-    local categories, vehicleIds = {}, {}
-    for name in pairs(self.categories) do
-        table.insert(categories, name)
+    local keys = {}
+    for kind, set in pairs(self.ticked) do
+        keys[kind] = {}
+        for key in pairs(set) do
+            table.insert(keys[kind], key)
+        end
     end
-    for vehicleId in pairs(self.vehicleIds) do
-        table.insert(vehicleIds, vehicleId)
-    end
-    return PlaceableTCParkingSlot.newFilter(categories, vehicleIds)
+    return (self.adapter.newFilter or TCParkingSlotDialog.newFilter)(keys)
 end
 
 function TCParkingSlotDialog:refresh()
-    self.headingText:setText(string.format(g_i18n:getText("tc_parkingSlot_dialogHeading"),
+    self.headingText:setText(string.format(g_i18n:getText(self.adapter.headingKey or "tc_parkingSlot_dialogHeading"),
         self.adapter.getSummary(self.slot, self:getDraftFilter())))
 
     local row = self.rows[self.selectedIndex]
@@ -196,7 +219,7 @@ function TCParkingSlotDialog:refresh()
     self.toggleButton:setText(g_i18n:getText(row ~= nil and self:isTicked(row) and "tc_parkingSlot_untick" or
         "tc_parkingSlot_tick"))
     self.saveButton:setDisabled(not self.isChanged)
-    self.clearButton:setDisabled(next(self.categories) == nil and next(self.vehicleIds) == nil)
+    self.clearButton:setDisabled(not self:hasTicked())
 end
 
 function TCParkingSlotDialog:getNumberOfItemsInSection(list, section)
@@ -214,7 +237,7 @@ function TCParkingSlotDialog:populateCellForItemInSection(list, section, index, 
 
     local kindChip, kindChipText = cell:getAttribute("kindChip"), cell:getAttribute("kindChipText")
     kindChip.color = MenuContractor.CHIP_COLORS[TCParkingSlotDialog.KIND_TONE[row.kind]]
-    kindChipText:setText(g_i18n:getText("tc_parkingSlot_kind_" .. row.kind))
+    kindChipText:setText(g_i18n:getText(row.chipKey or "tc_parkingSlot_kind_" .. row.kind))
 
     local hereChip, hereChipText = cell:getAttribute("hereChip"), cell:getAttribute("hereChipText")
     hereChip:setVisible(row.isHere == true)
@@ -238,7 +261,8 @@ function TCParkingSlotDialog:onClickOk()
     if row == nil then
         return false
     end
-    local set = row.kind == "category" and self.categories or self.vehicleIds
+    self.ticked[row.kind] = self.ticked[row.kind] or {}
+    local set = self.ticked[row.kind]
     if set[row.key] then
         set[row.key] = nil
     else
@@ -251,8 +275,7 @@ function TCParkingSlotDialog:onClickOk()
 end
 
 function TCParkingSlotDialog:onClickClear()
-    self.categories = {}
-    self.vehicleIds = {}
+    self.ticked = {}
     self.isChanged = true
     self.choiceList:reloadData()
     self:refresh()

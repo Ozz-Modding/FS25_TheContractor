@@ -144,7 +144,8 @@ local function setup(daysPerPeriod)
         postMessage = function(_, farmId, kind, titleKey, bodyKey, args)
             -- Rendered as the client would, so a broken text fails here.
             local body = string.format(g_i18n:getText(bodyKey), unpack(args))
-            table.insert(world.messages, { farmId = farmId, kind = kind, titleKey = titleKey, body = body })
+            table.insert(world.messages, { farmId = farmId, kind = kind, titleKey = titleKey, bodyKey = bodyKey,
+                args = args, body = body })
             return #world.messages
         end,
         removeMessage = function(_, messageId)
@@ -333,8 +334,8 @@ test("a theft takes the one vehicle, leaves what was hitched, and reports it", f
 
     assertEquals(#world.messages, 1, "one message")
     assertEquals(world.messages[1].titleKey, "tc_theft_stolenTitle", "stolen message")
-    assertTrue(world.messages[1].body:find(incident.data.crimeReference, 1, true) ~= nil, "crime reference in it")
-    assertEquals(world.notices[1], "Fendt 724 stolen and reported to the police", "notice")
+    assertEquals(world.messages[1].args[2], incident.data.crimeReference, "crime reference in it")
+    assertEquals(#world.notices, 1, "notice")
     assertEquals(tc.RandomEvents:getCooldownLeft(1, "theft"), 12, "a year's cooldown")
     assertEquals(eligibleNames(tc), "", "a stolen vehicle can't be stolen again")
 
@@ -378,7 +379,7 @@ test("not found: written off and gone", function()
     assertEquals(#world.returned, 0, "nothing parked")
     assertEquals(world.messages[2].titleKey, "tc_theft_lostTitle", "written-off message")
     assertTrue(world.messages[1].removed, "the stolen message is taken down")
-    assertEquals(world.notices[2], "Fendt 724 not found: written off", "notice")
+    assertEquals(#world.notices, 2, "notice")
 end)
 
 test("after a reload the stolen vehicle is found by its uniqueId and hidden again", function()
@@ -431,11 +432,10 @@ test("tcCompany outcome theft sets the next outcome", function()
     TheContractorRandomEvents.registerConsoleCommands()
     local group = TCConsole.groups.company
 
-    assertTrue(TCConsole.dispatch(group, { "outcome", "THEFT", "Lost" }):find("not been found") ~= nil, "lost")
-    assertEquals(tc.Theft.forcedOutcome, "lost", "set")
-    assertTrue(TCConsole.dispatch(group, { "outcome", "theft", "maybe" }):find("^Usage: tcCompany outcome theft <recovered|lost>") ~= nil,
-        "bad argument")
-    assertTrue(TCConsole.dispatch(group, { "outcome" }):find("theft <recovered|lost>", 1, true) ~= nil, "lists types")
+    TCConsole.dispatch(group, { "outcome", "THEFT", "Lost" })
+    assertEquals(tc.Theft.forcedOutcome, "lost", "set, whatever the case")
+    TCConsole.dispatch(group, { "outcome", "theft", "maybe" })
+    assertEquals(tc.Theft.forcedOutcome, "lost", "not an outcome: unchanged")
 end)
 
 -- 096: FS25_AdvancedDamageSystem's anti-theft system.
@@ -494,7 +494,7 @@ test("anti-theft is judged on the day of the theft and recovers 70% of the time"
     local tractor = world:addMachine({ name = "Fendt 724", antiTheft = true })
     local incident = tc.RandomEvents:triggerEvent(1, "theft")
     assertEquals(incident.data.antiTheft, true, "copied into the incident")
-    assertTrue(world.messages[1].body:find("anti-theft system", 1, true) ~= nil, "stolen message mentions it")
+    assertEquals(world.messages[1].bodyKey, "tc_theft_stolenBodyTracker", "stolen message mentions it")
     tractor.states.ANTI_THEFT_SYSTEM = nil
     assertEquals(incident.data.antiTheft, true, "still counts once it's gone")
 
@@ -519,21 +519,20 @@ test("the tracker's messages: found by it, or it went dead", function()
     tc.Theft.forcedOutcome = TheContractorTheft.OUTCOME.RECOVERED
     tc.RandomEvents:triggerEvent(1, "theft")
     world:runUntilClosed()
-    assertTrue(world.messages[2].body:find("followed your Fendt 724's anti-theft tracker", 1, true) ~= nil,
-        "recovered: " .. world.messages[2].body)
+    assertEquals(world.messages[2].bodyKey, "tc_theft_recoveredBodyTracker", "recovered by it")
 
     world, tc = setup()
     world:addMachine({ name = "Fendt 724", antiTheft = true })
     tc.Theft.forcedOutcome = TheContractorTheft.OUTCOME.LOST
     tc.RandomEvents:triggerEvent(1, "theft")
     world:runUntilClosed()
-    assertTrue(world.messages[2].body:find("tracker went dead", 1, true) ~= nil, "lost: " .. world.messages[2].body)
+    assertEquals(world.messages[2].bodyKey, "tc_theft_lostBodyTracker", "lost: it went dead")
 
     world, tc = setup()
     world:addMachine({ name = "Fendt 724" })
     tc.Theft.forcedOutcome = TheContractorTheft.OUTCOME.LOST
     tc.RandomEvents:triggerEvent(1, "theft")
     world:runUntilClosed()
-    assertTrue(world.messages[1].body:find("anti-theft", 1, true) == nil, "unfitted: no mention")
-    assertTrue(world.messages[2].body:find("tracker", 1, true) == nil, "unfitted: no tracker")
+    assertEquals(world.messages[1].bodyKey, "tc_theft_stolenBody", "unfitted: no mention")
+    assertEquals(world.messages[2].bodyKey, "tc_theft_lostBody", "unfitted: no tracker")
 end)

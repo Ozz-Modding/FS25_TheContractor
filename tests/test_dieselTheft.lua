@@ -62,7 +62,7 @@ local function setup()
                     resolved[i] = arg
                 end
             end
-            table.insert(world.messages, { farmId = farmId, kind = kind, titleKey = titleKey,
+            table.insert(world.messages, { farmId = farmId, kind = kind, titleKey = titleKey, args = args,
                 body = string.format(g_i18n:getText(bodyKey), unpack(resolved)) })
             return #world.messages
         end,
@@ -156,8 +156,7 @@ test("a drained tank loses a share of what's in it, capped", function()
 
     assertEquals(#world.messages, 1, "one message")
     assertEquals(world.messages[1].titleKey, "tc_dieselTheft_tankTitle", "tank message")
-    assertTrue(string.find(world.messages[1].body, incident.data.liters .. " l", 1, true) ~= nil,
-        "litres in the body: " .. world.messages[1].body)
+    assertEquals(world.messages[1].args[1], "$volume_" .. incident.data.liters, "the litres taken")
     assertEquals(#world.notices, 1, "a notice")
     assertEquals(next(tc.RandomEvents.incidents), nil, "over at once")
 end)
@@ -190,8 +189,7 @@ test("siphoning takes from a few eligible machines only", function()
     assertEquals(getDiesel(busy), 400, "not one 069 would take")
 
     assertEquals(world.messages[1].titleKey, "tc_dieselTheft_siphonTitle", "siphon message")
-    assertTrue(string.find(world.messages[1].body, count .. " of your parked machines", 1, true) ~= nil,
-        "count in the body: " .. world.messages[1].body)
+    assertEquals(world.messages[1].args[1], count, "how many machines")
 end)
 
 test("one parked machine is all that's siphoned if it's all there is", function()

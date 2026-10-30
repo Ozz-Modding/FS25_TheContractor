@@ -738,6 +738,13 @@ local function refreshNotices(tc)
     end
 end
 
+-- How many jobs the farm's notice for this product counts, or nil with no
+-- notice up.
+function TCJobSupplies.getNoticeCount(farmId, fillTypeName)
+    local notice = supplyNotices[farmId] ~= nil and supplyNotices[farmId][fillTypeName] or nil
+    return notice ~= nil and notice.count or nil
+end
+
 local function checkJobs()
     refreshContractVehicles()
 

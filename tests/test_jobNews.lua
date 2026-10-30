@@ -128,7 +128,8 @@ local function setup()
                     resolved[i] = arg
                 end
             end
-            table.insert(world.messages, { farmId = farmId, kind = kind, title = g_i18n:getText(titleKey),
+            table.insert(world.messages, { farmId = farmId, kind = kind, titleKey = titleKey, bodyKey = bodyKey,
+                args = args, title = g_i18n:getText(titleKey),
                 body = string.format(g_i18n:getText(bodyKey), unpack(resolved)) })
             return #world.messages
         end,
@@ -215,22 +216,19 @@ test("the kettle: morale for everyone on the job, named in the message", functio
     assertEquals(world.morale[1].delta, TheContractorJobNews.KETTLE_MORALE)
     assertEquals(world.morale[2].workerId, 2)
     assertEquals(world.messages[1].kind, "goodNews")
-    assertEquals(world.messages[1].title, "The customer put the kettle on")
-    assertTrue(string.find(world.messages[1].body, "As Dave Smith and Sam Jones were finishing up on Field 7", 1,
-        true) ~= nil, world.messages[1].body)
+    assertEquals(world.messages[1].bodyKey, "tc_jobNews_kettle_bodyTwo", "both named")
+    assertEquals(table.concat(world.messages[1].args, "|"), "Dave Smith|Sam Jones|7")
 
     local solo = world:addJob({ workerId = 1 })
     force(tc, "kettle", solo)
-    assertTrue(string.find(world.messages[2].body, "As Dave Smith was finishing up on Field 12", 1, true) ~= nil,
-        world.messages[2].body)
+    assertEquals(world.messages[2].bodyKey, "tc_jobNews_kettle_bodyOne", "the one worker")
+    assertEquals(table.concat(world.messages[2].args, "|"), "Dave Smith|12")
 end)
 
 test("the kettle needs hired workers on the job", function()
     local world, tc = setup()
     local playerJob = world:addJob({})
-    local incident, reason = force(tc, "kettle", playerJob)
-    assertEquals(incident, nil)
-    assertEquals(reason, "nothing to act on")
+    assertEquals(force(tc, "kettle", playerJob), nil)
 
     -- A worker who's left the roster since doesn't count.
     local gone = world:addJob({ workerId = 9 })
@@ -250,9 +248,9 @@ test("paid before you've asked: the job's outstanding invoice is paid now", func
     assertEquals(world.money[1].amount, 4200)
     assertEquals(world.money[1].moneyType, "tcJobPayout")
     assertEquals(tc.Finances:getYearStats(1).received, 4200)
-    assertEquals(world.messages[1].title, "Paid before you've asked")
-    assertTrue(string.find(world.messages[1].body, "on Field 3", 1, true) ~= nil, world.messages[1].body)
-    assertTrue(string.find(world.messages[1].body, "straight away: 4200.", 1, true) ~= nil, world.messages[1].body)
+    assertEquals(world.messages[1].titleKey, "tc_jobNews_paidEarly_title")
+    assertEquals(world.messages[1].args[1], 3, "the job's field")
+    assertEquals(world.messages[1].args[2], "$money_4200", "what was paid")
 end)
 
 test("paid before you've asked needs an invoice that isn't due yet", function()
@@ -279,9 +277,9 @@ test("a worker steps up: a free point on their weakest rating, and morale", func
     assertEquals(worker.growthPotential, 0, "outside their potential")
     assertEquals(world.grown[1].stat, "tillage")
     assertEquals(world.morale[1].delta, TheContractorJobNews.STEPS_UP_MORALE)
-    assertEquals(world.messages[1].title, "A worker steps up")
-    assertTrue(string.find(world.messages[1].body, "clicked for Amy Hill on Field 4. Their tillage is up to 4", 1,
-        true) ~= nil, world.messages[1].body)
+    assertEquals(world.messages[1].titleKey, "tc_jobNews_stepsUp_title")
+    assertEquals(table.concat(world.messages[1].args, "|"), "Amy Hill|4|$l10n_tc_growth_stat_tillage|4",
+        "who, where, what and to what")
 end)
 
 test("the least experienced worker steps up, and only if they're inexperienced", function()
@@ -341,5 +339,5 @@ test("tcCompany event kettle uses the latest completed job with workers", functi
     world:addJob({ fieldId = 6, completedAt = 30 })
     world:addJob({ workerId = 1, fieldId = 8, completedAt = 20 })
     assertTrue(force(tc, "kettle") ~= nil)
-    assertTrue(string.find(world.messages[1].body, "on Field 8", 1, true) ~= nil, world.messages[1].body)
+    assertEquals(world.messages[1].args[2], 8, "the latest job's field")
 end)

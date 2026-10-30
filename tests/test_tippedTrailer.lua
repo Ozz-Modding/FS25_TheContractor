@@ -247,6 +247,7 @@ local function setup()
             table.insert(world.messages, {
                 kind = kind,
                 bodyKey = bodyKey,
+                args = args,
                 title = string.format(g_i18n:getText(titleKey), unpack(resolved)),
                 body = string.format(g_i18n:getText(bodyKey), unpack(resolved)),
                 actions = actions,
@@ -537,10 +538,10 @@ test("tipping: out of the cooldown, unhitched, put down, both damaged, morale an
     assertEquals(#world.notices, 1)
 
     local message = world.messages[1]
-    assertEquals(message.title, "Trailer on its side in Field 12")
     assertEquals(message.bodyKey, "tc_tippedTrailer_bodyNoSpill", "nothing spilt")
-    assertTrue(string.find(message.body, "Worker 2", 1, true) ~= nil, message.body)
-    assertTrue(string.find(message.body, "Haul tractor", 1, true) ~= nil, message.body)
+    assertEquals(message.args[1], 12, "the field")
+    assertEquals(message.args[2], "Worker 2", "who was driving")
+    assertEquals(message.args[4], "Haul tractor", "and what")
     assertEquals(message.actions, nil, "nothing to choose: just a Dismiss")
     assertEquals(message.payload.jobId, nil)
     assertEquals(getIncident(tc).stage, "atScene")
@@ -616,9 +617,9 @@ test("the load spills once both are down, and the message tells the story and go
     assertEquals(message.bodyKey, "tc_tippedTrailer_body")
     assertEquals(message.payload.jobId, 40, "ends with the spill's job")
     assertEquals(message.actions, nil)
-    for _, part in ipairs({ "10000 l", "Wheat", "8000 l", "Grain Mill", "end of tomorrow" }) do
-        assertTrue(string.find(message.body, part, 1, true) ~= nil, part .. ": " .. message.body)
-    end
+    assertEquals(message.args[5], "$volume_10000", "how much spilt")
+    assertEquals(message.args[7], "$volume_8000", "how much to deliver")
+    assertEquals(message.args[8], "Grain Mill", "where to")
     assertEquals(world.messageKind.endsWithJob, true)
     assertEquals(world.messageKind.onAction, nil, "no choice to answer")
 end)
@@ -644,7 +645,8 @@ test("without a tractor at the scene, the spill's story says so", function()
     tc.RandomEvents:triggerEvent(1, TheContractorTippedTrailer.EVENT_TYPE, job)
     local message = world.messages[1]
     assertEquals(message.bodyKey, "tc_tippedTrailer_bodyNoTractor")
-    assertTrue(string.find(message.body, "Grain Mill", 1, true) ~= nil, message.body)
+    assertEquals(#message.args, 7, "no tractor named")
+    assertEquals(message.args[7], "Grain Mill", "where to")
 end)
 
 test("the console forces whether the next missed spill brings a claim", function()
@@ -740,7 +742,6 @@ test("the prompt: the local farm's nearest tipped trailer within reach, only on 
     g_localPlayer = player
 
     local activatable = TCTippedTrailerActivatable.new()
-    assertEquals(activatable.activateText, "Push the trailer back onto its wheels")
     assertTrue(activatable:getIsActivatable(), "in reach on foot")
     assertEquals(activatable.incidentId, incident.id)
     assertNear(activatable:getDistance(104, 0, 200), 4, 1e-9)

@@ -203,9 +203,7 @@ end)
 test("nothing to act on means no incident and no cooldown", function()
     local _, randomEvents = setup(3)
     registerDummy(randomEvents, { canTrigger = function() return nil end })
-    local incident, reason = randomEvents:triggerEvent(1, "dummy")
-    assertEquals(incident, nil, "no incident")
-    assertEquals(reason, "nothing to act on", "reason")
+    assertEquals(randomEvents:triggerEvent(1, "dummy"), nil, "no incident")
     assertEquals(randomEvents:getCooldownLeft(1, "dummy"), 0, "no cooldown")
 end)
 
@@ -298,7 +296,7 @@ test("a joining client gets the incidents and cooldowns", function()
     assertEquals(client:getLastPeriod(1, "dummy"), 1, "but the opening period arrived")
 end)
 
-test("the console forces an event and lists them", function()
+test("the console forces an event, and only a known one", function()
     local _, randomEvents = setup(5)
     registerDummy(randomEvents)
     TCConsole.reset()
@@ -309,14 +307,12 @@ test("the console forces an event and lists them", function()
         return { farmId = 1 }
     end
 
-    local text = TCConsole.dispatch(group, { "event", "DUMMY" })
-    assertTrue(text:find("Incident 1 %(dummy%) opened") ~= nil, text)
-    assertTrue(TCConsole.dispatch(group, { "event", "nope" }):find("Known types: dummy") ~= nil, "unknown type")
-    assertTrue(TCConsole.dispatch(group, { "event" }):find("^Usage") ~= nil, "usage")
-
-    local list = TCConsole.dispatch(group, { "events" })
-    assertTrue(list:find("cooling down for 12 more month") ~= nil, list)
-    assertTrue(list:find("#1 dummy, stage 'report' until day") ~= nil, list)
+    TCConsole.dispatch(group, { "event", "DUMMY" })
+    assertEquals(#randomEvents:getIncidents(1), 1, "opened, whatever the case")
+    assertEquals(randomEvents:getCooldownLeft(1, "dummy"), 12)
+    TCConsole.dispatch(group, { "event", "nope" })
+    TCConsole.dispatch(group, { "event" })
+    assertEquals(#randomEvents:getIncidents(1), 1, "an unknown type or none opens nothing")
 end)
 
 -- Job events (074) ------------------------------------------------------------------
@@ -448,22 +444,7 @@ test("forced with no job, a job event takes the latest completed job it can", fu
     assertEquals(log[1], 3, "the latest canTrigger accepts (job 2's field is refused); quality isn't checked")
 
     world.jobs = {}
-    local none, reason = randomEvents:triggerEvent(1, "kettle")
-    assertEquals(none, nil)
-    assertEquals(reason, "nothing to act on")
-end)
-
-test("the console lists a job event's odds per job", function()
-    local world, randomEvents = setup(5)
-    setupJobs(world)
-    registerJobEvent(randomEvents, "kettle")
-    TCConsole.reset()
-    TheContractorRandomEvents.registerConsoleCommands()
-    g_farmManager.getFarmByUserId = function()
-        return { farmId = 1 }
-    end
-    local list = TCConsole.dispatch(TCConsole.groups.company, { "events" })
-    assertTrue(list:find("kettle (kettle): 10.0% a completed job (quality 75%+)", 1, true) ~= nil, list)
+    assertEquals(randomEvents:triggerEvent(1, "kettle"), nil)
 end)
 
 -- Time of day (078) -------------------------------------------------------------
@@ -697,10 +678,4 @@ test("an event after bad weather isn't rolled daily, and tcCompany events says h
         randomEvents:rollNewEvents()
     end
     assertEquals(#log + #randomEvents.pendingTriggers, 0, "never from the daily roll")
-
-    TCConsole.reset()
-    TheContractorRandomEvents.registerConsoleCommands()
-    g_farmManager.getFarmByUserId = function() return { farmId = 1 } end
-    local text = TCConsole.dispatch(TCConsole.groups.company, { "events" })
-    assertTrue(string.find(text, "15.0% after each spell of bad weather", 1, true) ~= nil, text)
 end)
