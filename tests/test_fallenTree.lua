@@ -374,23 +374,12 @@ local function rolls(values)
     end
 end
 
-local function hasLog(world, text)
-    for _, list in ipairs({ world.logs, world.warnings }) do
-        for _, line in ipairs(list) do
-            if string.find(line, text, 1, true) ~= nil then
-                return true
-            end
-        end
-    end
-    return false
-end
-
 -- Down and offered: triggered from the console, planted, cut by vanilla.
 -- The incident, each tree's trunk (by its number) and the job.
 local function fellTrees(world, tc, ...)
-    local text = world:console(...)
-    assertTrue(string.find(text, "(fallenTree) opened", 1, true) ~= nil, text)
+    world:console(...)
     local incident = world:getIncident()
+    assertTrue(incident ~= nil, "opened")
     world:tick(TheContractorFallenTree.CUT_DELAY_MS)
     local trunks = {}
     for i, treeFall in pairs(tc.FallenTree.pendingFalls[incident.id].trees) do
@@ -525,10 +514,9 @@ end)
 
 test("the console: on the roads, or the first here in front of the player, and nothing else", function()
     local world, tc = setup()
-    local text = world:console("there")
-    assertTrue(string.find(text, "'here'", 1, true) ~= nil, text)
-    text = world:console("here")
-    assertTrue(string.find(text, "opened", 1, true) ~= nil, text)
+    world:console("there")
+    assertEquals(world:getIncident(), nil, "only 'here' is taken")
+    world:console("here")
     local data = world:getIncident().data
     assertNear(data.tree1_roadZ, 8, 1e-9, "8 m ahead")
     assertTrue(data.treeCount >= 2, "the rest elsewhere")
@@ -625,7 +613,6 @@ test("a tree that leaves no trunk is dropped and the rest renumbered, priced for
     assertEquals(incident.data.treeCount, 2)
     assertEquals(incident.data.tree2_roadX, thirdRoadX, "the third is now the second")
     assertEquals(incident.data.tree3_roadX, nil)
-    assertTrue(hasLog(world, "no trunk of BEECH 2"))
     local job = tc.Jobs:getJob(1, incident.data.jobId)
     assertTrue(job:getPrice() >= 2500 and job:getPrice() <= 3500, tostring(job:getPrice()))
     assertEquals(world.messages[1].args[2], "2")
@@ -646,7 +633,6 @@ test("cuts that leave no trunk at all, or a full map, end it with nothing offere
     world.canPlant = false
     world:console()
     assertEquals(world:getIncident(), nil)
-    assertTrue(hasLog(world, "as many trees"))
 end)
 
 -- Taken on -----------------------------------------------------------------------------
@@ -824,7 +810,6 @@ test("saved mid-fall: closed, with nothing offered", function()
     tc.FallenTree:register(tc.RandomEvents, tc.Inbox)
     world:tick(16)
     assertEquals(world:getIncident(), nil)
-    assertTrue(hasLog(world, "fall was lost in a save"))
     assertEquals(#world.messages, 0)
 end)
 

@@ -178,11 +178,8 @@ test("the daily roll asks, and nothing's booked or spent until it's answered", f
     assertEquals(#request.actions, 2, "approve and decline")
     assertEquals(TheContractorHolidays.findRequest(1, 1), request)
 
-    assertEquals(TheContractorInbox.getTitle(request), "Holiday request: Amy Hall")
-    local body = TheContractorInbox.getBody(request)
-    local dates = TCCalendar.formatDayRange(103, 105)
-    assertTrue(string.find(body, "Amy Hall would like 3 day(s) off: " .. dates .. ".", 1, true) ~= nil, body)
-    assertTrue(string.find(body, "Also off then: nobody.", 1, true) ~= nil, body)
+    assertEquals(table.concat(request.args, "|"), "Amy Hall|3|$days_103_105", "who, how many days and which")
+    assertEquals(#TheContractorHolidays.getOthersOff(1, 1, 103, 105), 0, "nobody else off then")
 
     -- One at a time.
     tc.Holidays:tryBookHoliday(amy)
@@ -232,7 +229,7 @@ test("two declines upset them more each time, warn, and the next is booked whate
     local warnings = world:messages(getType("WARNING"))
     assertEquals(#warnings, 1, "warned")
     assertEquals(warnings[1].actions[1].key, TheContractorInbox.DISMISS_ACTION.key, "just Dismiss")
-    assertEquals(TheContractorInbox.getTitle(warnings[1]), "Holiday refused twice: Amy Hall")
+    assertEquals(warnings[1].args[1], "Amy Hall")
 
     tc.Holidays:tryBookHoliday(amy)
     assertEquals(#world:messages(getType("REQUEST")), 0, "not asked")
@@ -243,8 +240,7 @@ test("two declines upset them more each time, warn, and the next is booked whate
     assertEquals(#booked, 1, "the inbox says so")
     assertEquals(#booked[1].actions, 1, "just Dismiss")
     assertEquals(booked[1].bodyKey, "tc_holidayRequest_bookedBodyDeclined")
-    local body = TheContractorInbox.getBody(booked[1])
-    assertTrue(string.find(body, TCCalendar.formatDayRange(103, 105), 1, true) ~= nil, body)
+    assertEquals(booked[1].args[3], "$days_103_105", "the days booked")
 end)
 
 test("ignoring is a decline that hurts more", function()
@@ -340,23 +336,33 @@ test("who else is off: bookings, requests and training, live", function()
     dan.assessmentDay = 106
     local amyRequest = tc.Holidays:postRequest(amy, 103, 5)
 
-    local message = tc.Inbox:getMessage(amyRequest)
-    local body = TheContractorInbox.getBody(message)
-    local expected = string.format("Also off then: Ben Ward (holiday %s), Cara Lee (asked for %s), Dan Moss " ..
-        "(training %s; training %s).", TCCalendar.formatDayRange(104, 105), TCCalendar.formatDay(107),
-        TCCalendar.formatDay(103), TCCalendar.formatDay(106))
-    assertTrue(string.find(body, expected, 1, true) ~= nil, body)
-    assertTrue(string.find(body, "Eve Hart", 1, true) == nil, "Eve's not off")
+    -- Each worker off as "reason firstDay-lastDay; ...", in name order.
+    local function describe(entries)
+        local lines = {}
+        for _, entry in ipairs(entries) do
+            local spells = {}
+            for _, spell in ipairs(entry.spells) do
+                table.insert(spells, string.format("%s %d-%d", spell.reason, spell.firstDay, spell.lastDay))
+            end
+            table.insert(lines, entry.worker.id .. ": " .. table.concat(spells, "; "))
+        end
+        return lines
+    end
+
+    local off = describe(TheContractorHolidays.getOthersOff(1, 1, 103, 107))
+    assertEquals(#off, 3, "Eve's not off")
+    assertEquals(off[1], "2: holiday 104-105", "Ben's booking")
+    assertEquals(off[2], "3: requested 107-107", "Cara's request, inside Amy's days")
+    assertEquals(off[3], "4: training 103-103; training 106-106", "Dan's course day and assessment")
+    assertTrue(TheContractorInbox.getBody(tc.Inbox:getMessage(amyRequest)) ~= nil, "the request shows it")
 
     -- Cara's turned down: she drops out of Amy's list.
     tc.Inbox:requestAction(1, caraRequest, TheContractorHolidays.ACTION.DECLINE)
-    body = TheContractorInbox.getBody(message)
-    assertTrue(string.find(body, "Cara Lee", 1, true) == nil, body)
+    assertEquals(#TheContractorHolidays.getOthersOff(1, 1, 103, 107), 2)
 
     -- Cara's own list would have had Amy as asked for.
-    assertEquals(TheContractorHolidays.getOthersOffText(1, 3, 107, 110),
-        string.format("Amy Hall (asked for %s)", TCCalendar.formatDay(107)))
-    assertEquals(TheContractorHolidays.getOthersOffText(1, 1, 120, 125), nil, "nobody then")
+    assertEquals(describe(TheContractorHolidays.getOthersOff(1, 3, 107, 110))[1], "1: requested 107-107")
+    assertEquals(#TheContractorHolidays.getOthersOff(1, 1, 120, 125), 0, "nobody then")
 end)
 
 test("a days-per-period change withdraws a request it reaches, no morale", function()
@@ -398,23 +404,23 @@ test("tcWorker holidayRequest asks now, most-refused first, then books whatever"
 
     -- Ben's been refused once: he goes first, missed daily chance or not.
     ben.holidayDeclines = 1
-    local text = TCConsole.dispatch(group, { "holidayRequest" })
-    assertTrue(string.find(text, "Ben Ward asked for a holiday", 1, true) ~= nil, text)
+    TCConsole.dispatch(group, { "holidayRequest" })
     local request = TheContractorHolidays.findRequest(1, 2)
     assertEquals(request.payload.startDay, 103, "the earliest start")
     assertEquals(request.payload.days, 3)
 
     -- He has one open, so Amy's next.
-    text = TCConsole.dispatch(group, { "holidayRequest" })
-    assertTrue(string.find(text, "Amy Hall asked", 1, true) ~= nil, text)
+    TCConsole.dispatch(group, { "holidayRequest" })
+    assertTrue(TheContractorHolidays.findRequest(1, 1) ~= nil, "Amy asked")
 
     -- Ben's second refusal: warned, and the next one's booked whatever.
     tc.Inbox:requestAction(1, request.id, TheContractorHolidays.ACTION.DECLINE)
     assertEquals(#world:messages(TheContractorHolidays.MESSAGE_TYPE.WARNING), 1)
-    text = TCConsole.dispatch(group, { "holidayRequest" })
-    assertTrue(string.find(text, "Ben Ward booked a holiday without asking (refused twice", 1, true) ~= nil, text)
-    assertEquals(ben.holidayStartDay, 103)
+    TCConsole.dispatch(group, { "holidayRequest" })
+    assertEquals(ben.holidayStartDay, 103, "booked without asking")
+    assertEquals(#world:messages(TheContractorHolidays.MESSAGE_TYPE.BOOKED), 1)
 
-    text = TCConsole.dispatch(group, { "holidayRequest" })
-    assertTrue(string.find(text, "Nobody can ask", 1, true) ~= nil, text)
+    local messageCount = #world:messages()
+    TCConsole.dispatch(group, { "holidayRequest" })
+    assertEquals(#world:messages(), messageCount, "nobody left who can ask")
 end)

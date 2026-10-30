@@ -178,8 +178,8 @@ local function setup()
                 payload = payload }
             local title = TheContractorInbox.getTitle(message)
             local body = TheContractorInbox.getBody(message)
-            table.insert(world.messages, { farmId = farmId, kind = kind, titleKey = titleKey, title = title,
-                body = body, payload = payload })
+            table.insert(world.messages, { farmId = farmId, kind = kind, titleKey = titleKey, bodyKey = bodyKey,
+                args = args, title = title, body = body, payload = payload })
             return #world.messages
         end,
     }
@@ -205,7 +205,6 @@ test("registered as a random event with its own inbox kind", function()
     assertTrue(definition ~= nil)
     assertEquals(definition.cooldownPeriods, 6)
     assertNear(definition.ratePerPeriod(1), 0.03, 1e-9)
-    assertEquals(g_i18n:getText(definition.l10nKey), "Joyriders")
 end)
 
 test("only grass fields of an NPC or the farm's own, with no live job, outside winter", function()
@@ -223,9 +222,7 @@ test("only grass fields of an NPC or the farm's own, with no live job, outside w
 
     world.season = Season.WINTER
     assertEquals(tc.Joyriders:pickField(1), nil, "never in winter")
-    local incident, reason = tc.RandomEvents:triggerEvent(1, "joyriders")
-    assertEquals(incident, nil)
-    assertEquals(reason, "nothing to act on")
+    assertEquals(tc.RandomEvents:triggerEvent(1, "joyriders"), nil)
 
     world.season = Season.AUTUMN
     world.fields = { world.fields[4] }
@@ -257,8 +254,8 @@ test("an NPC's field: torn up and a plow job offered that keeps the damage", fun
 
     assertEquals(#world.messages, 1)
     assertEquals(world.messages[1].kind, "joyriders")
-    assertEquals(world.messages[1].title, "Joyriders on Field 12")
-    assertTrue(world.messages[1].body:find("offered you the job", 1, true) ~= nil)
+    assertEquals(world.messages[1].bodyKey, "tc_joyriders_offerBody", "the job offer")
+    assertEquals(world.messages[1].args[1], 12, "the field")
     assertEquals(world.messages[1].payload.jobId, job.id)
 end)
 
@@ -272,7 +269,7 @@ test("the farm's own field: torn up, a message and no job", function()
     assertEquals(#world.jobs, 0, "no job on our own field")
     assertEquals(#world.messages, 1)
     assertEquals(world.messages[1].titleKey, "tc_joyriders_ownTitle")
-    assertTrue(world.messages[1].body:find("your grass on Field 7", 1, true) ~= nil)
+    assertEquals(world.messages[1].args[1], 7, "the field")
 end)
 
 test("a field that's stopped being grass by the time the stage runs is left alone", function()
@@ -328,7 +325,8 @@ test("finishing the plowing: half the time a grass sow job follows", function()
     assertEquals(field.plannedFruitTypeIndex, FruitType.GRASS, "sows grass")
     assertTrue(not sowJob.keepFieldState and not sowJob.followOnSow, "an ordinary sow job")
     assertEquals(#world.messages, 1)
-    assertEquals(world.messages[1].title, "Sow Field 12 with grass")
+    assertEquals(world.messages[1].titleKey, "tc_joyriders_sowTitle")
+    assertEquals(world.messages[1].args[1], 12, "the field")
     assertEquals(world.messages[1].payload.jobId, sowJob.id)
 end)
 

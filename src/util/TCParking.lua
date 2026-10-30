@@ -299,8 +299,9 @@ end
 -- Slots show while the construction menu is open, and outside it too while
 -- the player's showParkingSlots setting (086) is on, toggled from the
 -- settings page or TC_TOGGLE_PARKING_SLOTS (right ctrl + P). On each
--- machine by itself - never networked. Standing spots (065) share the hook
--- but only ever show in the construction menu. A slot loaded while they
+-- machine by itself - never networked. Standing spots (065) show with the
+-- slots too (since 120, when they got a prompt of their own and needed
+-- finding). A slot loaded while they
 -- should show (a preview, one just placed, a slot streaming in) sets itself
 -- in its own onLoad (areSlotsShown).
 
@@ -328,7 +329,7 @@ function TCParking.updateVisuals()
         if PlaceableTCParkingSlot.isSlot(placeable) then
             PlaceableTCParkingSlot.setVisualsVisible(placeable, showSlots)
         elseif PlaceableTCStandingSpot.isSpot(placeable) then
-            PlaceableTCStandingSpot.setVisualsVisible(placeable, TCParking.isConstructionScreenOpen)
+            PlaceableTCStandingSpot.setVisualsVisible(placeable, showSlots)
         elseif TCParking.isRepairZone(placeable) then
             -- 100: repair zones show with the slots.
             PlaceableTCRepairZone.setVisualsVisible(placeable, showSlots)

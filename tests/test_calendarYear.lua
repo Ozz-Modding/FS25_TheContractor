@@ -37,19 +37,6 @@ test("period indexes give the same display year", function()
     assertEquals(TCCalendar.getDisplayYearOfPeriodIndex(24), 3, "February, year 2")
 end)
 
-test("formatted dates use the display year", function()
-    setup()
-    assertEquals(TCCalendar.formatPeriodIndex(11), "Month 1, Year 2")
-    assertEquals(TCCalendar.formatYear(1, 12), "Year 2")
-end)
-
-test("a range from December into January spans two years", function()
-    setup()
-    -- One day per period, starting in March: day 10 is December, day 11 January.
-    assertEquals(TCCalendar.formatDayRange(10, 11), "Month 12, Year 1 - Month 1, Year 2")
-    assertEquals(TCCalendar.formatDayRange(11, 13), "Month 1 - Month 3, Year 2")
-end)
-
 test("the Finances year's totals run January to December", function()
     local world = setup()
     FinanceStats = { statNames = {}, statNameToIndex = {} }

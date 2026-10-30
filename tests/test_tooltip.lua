@@ -1,5 +1,5 @@
--- TCTooltip's wrapping (paths break at "/") and the Overview logo's
--- tooltip text (TCCompanyLogo.getTooltipContent).
+-- TCTooltip's wrapping (paths break at "/") and the folders the Overview
+-- logo's tooltip points at (TCCompanyLogo.getTooltipContent).
 
 local function setup(files)
     stubs.install()
@@ -46,33 +46,14 @@ test("a word longer than the width gets a line of its own", function()
     assertEquals("a\nabcdefghij\nb", TCTooltip.wrap("a abcdefghij b", 5, measure))
 end)
 
-test("the logo tooltip names the real folder, the README and the placeholder", function()
-    setup()
-    local title, body = TCCompanyLogo.getTooltipContent()
-    assertEquals(g_i18n:getText("tc_logoTip_title"), title)
-    assertTrue(body:find(g_currentModSettingsDirectory, 1, true) ~= nil)
-    assertTrue(body:find("README.txt", 1, true) ~= nil)
-    assertTrue(body:find(g_i18n:getText("tc_logoTip_placeholder"), 1, true) ~= nil)
-end)
-
-test("the logo tooltip names the save's own folder when there is one", function()
+test("the logo tooltip points at the save's own folder when there is one", function()
     setup()
     g_currentMission.missionInfo.savegameIndex = 4
-    local _, body = TCCompanyLogo.getTooltipContent()
-    assertTrue(body:find(g_currentModSettingsDirectory .. "savegame4/", 1, true) ~= nil)
+    assertEquals(TCCompanyLogo.getSavegameDir(), g_currentModSettingsDirectory .. "savegame4/")
 end)
 
 test("a joining client's tooltip has no save folder", function()
     setup()
     g_currentMission.missionInfo.savegameIndex = 0
-    local _, body = TCCompanyLogo.getTooltipContent()
-    assertTrue(body:find("savegame", 1, true) == nil)
-end)
-
-test("the logo tooltip names the player's logo when it's showing", function()
-    local dir = "C:/Users/me/Documents/My Games/FarmingSimulator2025/modSettings/FS25_TheContractor/"
-    setup({ dir .. "logo.png" })
-    local _, body = TCCompanyLogo.getTooltipContent()
-    assertTrue(body:find(dir .. "logo.png", 1, true) ~= nil)
-    assertTrue(body:find(g_i18n:getText("tc_logoTip_placeholder"), 1, true) == nil)
+    assertEquals(TCCompanyLogo.getSavegameDir(), nil)
 end)

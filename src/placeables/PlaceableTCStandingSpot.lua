@@ -8,8 +8,9 @@
 -- works for it too. The worker stands on standNode, facing its +Z (the
 -- arrow).
 --
--- Visuals: terrain decals, shown only while the construction menu is open
--- (here at load, then by TCParking's construction-screen hook).
+-- Visuals: terrain decals, shown with the parking slots (TCParking.
+-- areSlotsShown: the construction menu, or the player's showParkingSlots
+-- setting), here at load, then by TCParking.updateVisuals.
 --
 -- Blocker: a static box around the worker, in the PLAYER collision group
 -- with a PLAYER-only mask, so it stops players but not vehicles. It's only
@@ -17,6 +18,15 @@
 -- that for itself (TCIdleStaff), so nothing here is networked. Vanilla adds
 -- the whole placeable to physics when it's finalized, so it's taken out
 -- again straight after.
+--
+-- Filter (120): the player can keep a placed spot for some of the farm's
+-- staff (workers or office staff, by id), from TCStandingSpotActivatable's
+-- prompt. Only they stand there, and they try it before any open spot
+-- (TCIdleStaff.assign). It's the spot's own state, like 086's parking slot
+-- filter: saved in the placeable's entry in placeables.xml, streamed with
+-- the placeable to a joining client and changed through
+-- TCStandingSpotFilterEvent. Staff ids never change, so unlike a slot's
+-- machines nothing needs resolving after a load.
 --
 -- Loaded by the base game's placeable specialization manager (modDesc), not
 -- sourced by main.lua.
@@ -43,9 +53,17 @@ function PlaceableTCStandingSpot.registerXMLPaths(schema, basePath)
     schema:setXMLSpecializationType()
 end
 
+function PlaceableTCStandingSpot.registerSavegameXMLPaths(schema, basePath)
+    schema:setXMLSpecializationType("TCStandingSpot")
+    schema:register(XMLValueType.INT, basePath .. ".filter.staff(?)#id", "Worker or office member the spot is kept for (120)")
+    schema:setXMLSpecializationType()
+end
+
 function PlaceableTCStandingSpot.registerEventListeners(placeableType)
     SpecializationUtil.registerEventListener(placeableType, "onLoad", PlaceableTCStandingSpot)
     SpecializationUtil.registerEventListener(placeableType, "onFinalizePlacement", PlaceableTCStandingSpot)
+    SpecializationUtil.registerEventListener(placeableType, "onReadStream", PlaceableTCStandingSpot)
+    SpecializationUtil.registerEventListener(placeableType, "onWriteStream", PlaceableTCStandingSpot)
 end
 
 function PlaceableTCStandingSpot:onLoad(savegame)
@@ -58,10 +76,12 @@ function PlaceableTCStandingSpot:onLoad(savegame)
         standNode = xmlFile:getValue("placeable.standingSpot#standNode", nil, self.components, self.i3dMappings),
         blockerNode = xmlFile:getValue("placeable.standingSpot#blockerNode", nil, self.components, self.i3dMappings),
         isBlockerActive = true,
+        filter = PlaceableTCStandingSpot.newFilter(),
     }
     self[PlaceableTCStandingSpot.KEY] = data
 
-    PlaceableTCStandingSpot.setVisualsVisible(self, g_currentMission.lastConstructionScreenOpenTime > -1)
+    PlaceableTCStandingSpot.setVisualsVisible(self, g_currentMission.lastConstructionScreenOpenTime > -1 or
+        TCParking.getShowSlotsSetting())
 end
 
 function PlaceableTCStandingSpot:onFinalizePlacement()
@@ -107,4 +127,90 @@ function PlaceableTCStandingSpot.getStandPose(placeable)
     local x, y, z = getWorldTranslation(data.standNode)
     local dx, _, dz = localDirectionToWorld(data.standNode, 0, 0, 1)
     return x, y, z, MathUtil.getYRotationFromDirection(dx, dz)
+end
+
+-- Filter (120) ----------------------------------------------------------------
+
+-- { staffIds = sorted ids, staffSet = id -> true }. Only built here, so the
+-- two always agree.
+function PlaceableTCStandingSpot.newFilter(staffIds)
+    local filter = { staffIds = {}, staffSet = {} }
+    for _, id in ipairs(staffIds or {}) do
+        if not filter.staffSet[id] then
+            filter.staffSet[id] = true
+            table.insert(filter.staffIds, id)
+        end
+    end
+    table.sort(filter.staffIds)
+    return filter
+end
+
+function PlaceableTCStandingSpot.getFilter(placeable)
+    local data = placeable[PlaceableTCStandingSpot.KEY]
+    return data ~= nil and data.filter or PlaceableTCStandingSpot.newFilter()
+end
+
+-- Every machine, from TCStandingSpotFilterEvent (and a joining client's
+-- stream).
+function PlaceableTCStandingSpot.setFilter(placeable, filter)
+    local data = placeable[PlaceableTCStandingSpot.KEY]
+    if data ~= nil then
+        data.filter = filter
+    end
+end
+
+function PlaceableTCStandingSpot.writeFilter(streamId, filter)
+    streamWriteUInt16(streamId, #filter.staffIds)
+    for _, id in ipairs(filter.staffIds) do
+        streamWriteInt32(streamId, id)
+    end
+end
+
+function PlaceableTCStandingSpot.readFilter(streamId)
+    local staffIds = {}
+    local count = streamReadUInt16(streamId)
+    for _ = 1, count do
+        table.insert(staffIds, streamReadInt32(streamId))
+    end
+    return PlaceableTCStandingSpot.newFilter(staffIds)
+end
+
+function PlaceableTCStandingSpot:onWriteStream(streamId, connection)
+    PlaceableTCStandingSpot.writeFilter(streamId, PlaceableTCStandingSpot.getFilter(self))
+end
+
+function PlaceableTCStandingSpot:onReadStream(streamId, connection)
+    PlaceableTCStandingSpot.setFilter(self, PlaceableTCStandingSpot.readFilter(streamId))
+end
+
+-- Vanilla's placeable save (placeables.xml, through its XMLFile object, as
+-- 086's slots do). Staff who've left are kept: they're harmless (an id is
+-- never reused) and TCIdleStaff ignores them.
+function PlaceableTCStandingSpot:saveToXMLFile(xmlFile, key, usedModNames)
+    local data = self[PlaceableTCStandingSpot.KEY]
+    if data == nil then
+        return
+    end
+    for i, id in ipairs(data.filter.staffIds) do
+        xmlFile:setInt(string.format("%s.filter.staff(%d)#id", key, i - 1), id)
+    end
+end
+
+-- Server, as the placeable finishes loading from the save.
+function PlaceableTCStandingSpot:loadFromXMLFile(xmlFile, key)
+    local data = self[PlaceableTCStandingSpot.KEY]
+    if data == nil then
+        return
+    end
+    local staffIds = {}
+    local index = 0
+    while true do
+        local id = xmlFile:getInt(string.format("%s.filter.staff(%d)#id", key, index))
+        if id == nil then
+            break
+        end
+        table.insert(staffIds, id)
+        index = index + 1
+    end
+    data.filter = PlaceableTCStandingSpot.newFilter(staffIds)
 end

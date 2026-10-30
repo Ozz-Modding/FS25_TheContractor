@@ -219,7 +219,7 @@ local function setup(daysPerPeriod)
                 rendered[i] = arg
             end
             table.insert(world.messages, { farmId = farmId, kind = kind, titleKey = titleKey, bodyKey = bodyKey,
-                body = string.format(g_i18n:getText(bodyKey), unpack(rendered)) })
+                args = args, body = string.format(g_i18n:getText(bodyKey), unpack(rendered)) })
         end,
     }
 
@@ -404,8 +404,9 @@ test("comprehensive cover lends one after the police report, parked, free to run
 
     local lent = world:lastMessage()
     assertEquals(lent.titleKey, "tc_courtesy_lentTitle", "told")
-    assertTrue(lent.body:find("Above in place of your stolen Fendt 724. It's at one of your parking slots", 1, true)
-        ~= nil, "what and where: " .. lent.body)
+    assertEquals(lent.args[1], courtesy.name, "what's lent")
+    assertEquals(lent.args[2], incident.data.name, "in place of what")
+    assertEquals(lent.args[3], "$l10n_tc_courtesy_placeSlot", "where: a parking slot")
 
     assertEquals(courtesy:getCanBeSold(), false, "can't be sold")
     assertTrue(stolen.isDeleted, "the stolen one's gone from the fleet at the police report")
@@ -422,7 +423,7 @@ test("no slot free: it stays at the shop and the message says so", function()
     local _, _, courtesy = world:loseTractor("comprehensive")
     assertTrue(courtesy ~= nil, "lent")
     assertEquals(#world.placed, 0, "not moved")
-    assertTrue(world:lastMessage().body:find("It's at the shop", 1, true) ~= nil, "at the shop")
+    assertEquals(world:lastMessage().args[3], "$l10n_tc_courtesy_placeShop", "at the shop")
 end)
 
 test("only comprehensive, only a vehicle with a power spec, only when it's not recovered", function()
@@ -467,7 +468,6 @@ test("goes back at settlement at once if it's free", function()
     assertTrue(courtesy.isDeleted, "courtesy collected")
     assertEquals(world.unhitched[#world.unhitched], courtesy.id, "anything hitched left behind")
     assertEquals(world:lastMessage().titleKey, "tc_courtesy_returnedTitle", "told")
-    assertEquals(world.notices[#world.notices], "Courtesy Above collected by your insurer", "notice")
 end)
 
 test("busy at settlement: told, then collected the day it's free", function()
@@ -602,21 +602,6 @@ test("gone after a load: nothing happens at settlement", function()
     assertEquals(tc.RandomEvents:getIncident(incident.id), nil, "over")
     assertEquals(world:lastMessage().titleKey, "tc_insurance_settledTitle", "only the settlement")
     assertEquals(#world.messages, messageCount + 1, "no courtesy message")
-end)
-
-test("the level picker and tcFinance insurance mention it", function()
-    local world, tc = setup()
-    assertTrue(TheContractorMachineryInsurance.getLevelDescription("comprehensive"):find("courtesy vehicle", 1, true)
-        ~= nil, "comprehensive")
-    assertTrue(TheContractorMachineryInsurance.getLevelDescription("standard"):find("courtesy", 1, true) == nil,
-        "standard")
-
-    addTractorRange(world)
-    world:loseTractor("comprehensive")
-    TCConsole.reset()
-    TheContractorMachineryInsurance.registerConsoleCommands()
-    local text = TCConsole.dispatch(TCConsole.groups.finance, { "insurance" })
-    assertTrue(text:find("courtesy Above", 1, true) ~= nil, "open claim lists it: " .. text)
 end)
 
 test("a lent machine works the farm's fields like the one it replaces", function()

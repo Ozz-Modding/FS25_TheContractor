@@ -8,10 +8,13 @@ local function setup(withUtils)
     local world = stubs.install()
     -- ADS's environment, as getModEnv finds it. formatCondition stands in
     -- for ADS's own: a percentage only after a complete inspection.
+    -- world.formatted records what it was asked to show.
     world.adsEnv = {}
+    world.formatted = {}
     if withUtils ~= false then
         world.adsEnv.ADS_Utils = {
             formatCondition = function(value, isExact)
+                table.insert(world.formatted, { value = value, isExact = isExact })
                 if value == nil then
                     return "ADS unknown"
                 end
@@ -74,20 +77,25 @@ test("capture: only faults found are recorded", function()
     assertEquals(snapshot.faults[1].stage, nil)
 end)
 
-test("display: ADS's own text, a word before a complete inspection", function()
-    setup()
-    local partial = TCVehicleCondition.capture(adsVehicle({ known = 0.8, isExact = false }))
-    assertEquals(TCVehicleCondition.formatKnownCondition(partial), "Good")
-    local complete = TCVehicleCondition.capture(adsVehicle({ known = 0.8, isExact = true }))
-    assertEquals(TCVehicleCondition.formatKnownCondition(complete), "80%")
-    assertEquals(TCVehicleCondition.getHeadline(complete), "80%")
+test("display: ADS's own text, from the inspection's figure and whether it was complete", function()
+    local world = setup()
+    local partial = TCVehicleCondition.capture(adsVehicle({ liveCondition = 0.31, known = 0.8, isExact = false }))
+    TCVehicleCondition.formatKnownCondition(partial)
+    local complete = TCVehicleCondition.capture(adsVehicle({ liveCondition = 0.31, known = 0.8, isExact = true }))
+    assertEquals(TCVehicleCondition.getHeadline(complete), TCVehicleCondition.formatKnownCondition(complete),
+        "the chip shows the same")
+    assertEquals(world.formatted[1].value, 0.8, "the known condition, never the live one")
+    assertEquals(world.formatted[1].isExact, false)
+    assertEquals(world.formatted[2].value, 0.8)
+    assertEquals(world.formatted[2].isExact, true)
 end)
 
 test("display: never inspected is ADS's unknown, and the chip's neutral", function()
-    setup()
+    local world = setup()
     local snapshot = TCVehicleCondition.capture(adsVehicle({ known = nil }))
     assertEquals(snapshot.knownCondition, nil)
-    assertEquals(TCVehicleCondition.formatKnownCondition(snapshot), "ADS unknown")
+    TCVehicleCondition.formatKnownCondition(snapshot)
+    assertEquals(world.formatted[1].value, nil, "ADS words an unknown condition")
     assertEquals(TCVehicleCondition.getTone(snapshot), "neutral")
 
     -- An older ADS without getLastInspectedCondition reads the same.
@@ -98,18 +106,24 @@ end)
 test("display: an outdated inspection is marked", function()
     setup()
     local snapshot = TCVehicleCondition.capture(adsVehicle({ known = 0.8, isExact = true, isStale = true }))
-    assertEquals(TCVehicleCondition.formatKnownCondition(snapshot), "80% (outdated)")
-    assertEquals(TCVehicleCondition.getHeadline(snapshot), "80%", "the chip has no room for it")
+    local fresh = TCVehicleCondition.capture(adsVehicle({ known = 0.8, isExact = true }))
+    assertTrue(TCVehicleCondition.formatKnownCondition(snapshot) ~= TCVehicleCondition.formatKnownCondition(fresh),
+        "marked")
+    assertEquals(TCVehicleCondition.getHeadline(snapshot), TCVehicleCondition.getHeadline(fresh),
+        "the chip has no room for it")
 end)
 
 test("display without ADS on this machine: a percentage only if exact", function()
     local world = setup(false)
     world.adsEnv = nil
     dofile("src/util/TCVehicleCondition.lua")
-    assertEquals(TCVehicleCondition.formatKnownCondition({ model = MODEL().ADS, knownCondition = 0.8,
-        conditionExact = true }), "80%")
-    assertEquals(TCVehicleCondition.formatKnownCondition({ model = MODEL().ADS, knownCondition = 0.8,
-        conditionExact = false }), "Unknown")
+    local exact = TCVehicleCondition.formatKnownCondition({ model = MODEL().ADS, knownCondition = 0.8,
+        conditionExact = true })
+    local inexact = TCVehicleCondition.formatKnownCondition({ model = MODEL().ADS, knownCondition = 0.8,
+        conditionExact = false })
+    local never = TCVehicleCondition.formatKnownCondition({ model = MODEL().ADS })
+    assertEquals(inexact, never, "an incomplete inspection reads as unknown")
+    assertTrue(exact ~= never, "a complete one shows its figure")
 end)
 
 test("tone: by the known condition, bad with a fault found, hidden ones don't count", function()
@@ -128,17 +142,15 @@ test("change rows: one condition unless inspected in between, and faults found",
     local after = { model = MODEL().ADS, knownCondition = 0.8, conditionExact = false, wear = 0.2,
         faults = { { id = "OLD_FAULT" }, { id = "HYDRAULIC_LEAK" } } }
     local rows = TCVehicleCondition.getChangeRows(before, after)
-    assertEquals(rows[1].label, "Condition")
-    assertEquals(rows[1].value, "Good")
-    assertEquals(rows[2].label, "Paint wear")
-    assertEquals(#rows, 3)
-    assertEquals(rows[3].label, "Fault found")
-    assertEquals(rows[3].value, "Hydraulic leak")
+    assertEquals(#rows, 3, "condition, paint wear and the one new fault")
+    assertEquals(rows[1].value, TCVehicleCondition.formatKnownCondition(after), "one condition, no change")
+    assertEquals(rows[3].value, TCVehicleCondition.getFaultName("HYDRAULIC_LEAK"), "only the new fault")
     assertEquals(rows[3].tone, "bad")
 
     -- A complete inspection in between.
     after.conditionExact = true
-    assertEquals(TCVehicleCondition.getChangeRows(before, after)[1].value, "Good to 80%")
+    assertTrue(TCVehicleCondition.getChangeRows(before, after)[1].value ~= TCVehicleCondition.formatKnownCondition(after),
+        "shown as a change")
 end)
 
 test("known faults are listed by name, hidden ones left out; none for vanilla", function()
@@ -150,8 +162,8 @@ test("known faults are listed by name, hidden ones left out; none for vanilla", 
     } }))
     local names = TCVehicleCondition.getKnownFaultNames(snapshot)
     assertEquals(#names, 2)
-    assertEquals(names[1], "Engine knock")
-    assertEquals(names[2], "Hydraulic leak")
+    assertEquals(names[1], TCVehicleCondition.getFaultName("ENGINE_KNOCK"))
+    assertEquals(names[2], TCVehicleCondition.getFaultName("HYDRAULIC_LEAK"))
     assertEquals(#TCVehicleCondition.getStateRows(snapshot), 2, "condition and paint wear")
     assertEquals(TCVehicleCondition.getKnownFaultNames({ model = MODEL().VANILLA, damage = 0 }), nil)
 end)
@@ -238,7 +250,6 @@ test("a pre-099 save's live condition and hidden faults are ignored", function()
     local loaded = TCVehicleCondition.loadFromXML(xmlFile, "s")
     assertEquals(loaded.knownCondition, nil)
     assertEquals(#loaded.faults, 0)
-    assertEquals(TCVehicleCondition.formatKnownCondition(loaded), "ADS unknown")
 end)
 
 test("the logbook counts a fault found in use, not one a job caused", function()

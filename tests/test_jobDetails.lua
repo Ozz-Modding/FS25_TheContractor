@@ -137,12 +137,13 @@ test("a hired worker's job keeps no player name", function()
     assertEquals(job.allocatedPlayerName, nil)
 end)
 
-test("a job with no name recorded reads as a player", function()
+test("a job with no name recorded, or an empty one, still shows someone", function()
     local _, tc = setup()
     local job = addJob(tc)
-    assertEquals(job:getPlayerName(), "A player")
+    local unnamed = job:getPlayerName()
+    assertTrue(unnamed ~= nil and unnamed ~= "", "a stand-in")
     job.allocatedPlayerName = ""
-    assertEquals(job:getPlayerName(), "A player")
+    assertEquals(job:getPlayerName(), unnamed, "empty counts as none")
 end)
 
 -- Stream and save ----------------------------------------------------------------

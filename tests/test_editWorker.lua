@@ -217,15 +217,14 @@ test("tcWorker rename renames and keeps the look", function()
     local oldLook = worker.appearance
     local rename = TCConsole.groups.worker.subcommands.rename
 
-    local result = rename.run(1, { "7", "Jane", "Smith" })
-    assertEquals(result, "John White (#7) is now Jane Smith")
+    rename.run(1, { "7", "Jane", "Smith" })
     assertEquals(worker.name, "Jane Smith")
     assertEquals(worker.gender, "male")
     assertEquals(worker.appearance, oldLook)
     assertEquals(#world.broadcasts, 1)
 
     assertEquals(rename.run(1, { "7" }), false, "no name")
-    local tooLong = rename.run(1, { "7", string.rep("a", TheContractorStaff.NAME_MAX_LENGTH + 1) })
-    assertTrue(string.find(tooLong, "^Error") ~= nil, "too long")
-    assertEquals(worker.name, "Jane Smith")
+    rename.run(1, { "7", string.rep("a", TheContractorStaff.NAME_MAX_LENGTH + 1) })
+    assertEquals(worker.name, "Jane Smith", "too long: refused")
+    assertEquals(#world.broadcasts, 1, "nothing sent")
 end)

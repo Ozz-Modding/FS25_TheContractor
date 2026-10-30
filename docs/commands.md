@@ -204,7 +204,7 @@ tcWorker certify 2 off
 
 ### `tcWorker standing`
 
-Shows, for each of your hired workers, whether they're standing on one of your farm's standing spots, and if not, why. Only workers who are idle or in a cooldown stand. Idle workers only stand during working hours (08:00 to 18:00 game time) or while they're kept on after them (Stay late, or Call back once they're in); anyone in a cooldown stands whatever the time. Outside working hours a line under the heading says so, and every idle worker who isn't kept on shows `gone home` (or `gone home once you look away`, if they're still on a spot you can see). Otherwise each line gives the spot they're assigned today (its position in decimetres) and how far it is from the camera, then one of:
+Shows, for each of your hired workers, whether they're standing on one of your farm's standing spots, and if not, why. Only workers who are idle or in a cooldown stand. Idle workers only stand during working hours (08:00 to 18:00 game time) or while they're kept on after them (Stay late, or Call back once they're in); anyone in a cooldown stands whatever the time. Outside working hours a line under the heading says so, and every idle worker who isn't kept on shows `gone home` (or `gone home once you look away`, if they're still on a spot you can see). Otherwise each line gives the spot they're assigned today (its position in decimetres, with `(kept for them)` if it's one of the spots kept for them) and how far it is from the camera, then one of:
 - waiting until you look away (nobody appears on a spot you can see)
 - waiting for another worker to leave the spot
 - standing, model not loaded (models load within 150 m)
@@ -212,11 +212,13 @@ Shows, for each of your hired workers, whether they're standing on one of your f
 - standing, shown, or hidden (too far)
 - standing, but their look couldn't be loaded
 
+The heading counts the spots kept for named staff (set by standing by a spot and choosing who stands there); a spot kept only for staff who've since left counts as open. A worker with nowhere to go shows `no spot free`, which includes a worker shut out of a kept spot.
+
 This only shows what your own machine is displaying, so it also works on a joined client.
 
 ```
-Farm 1: 2 standing spot(s), day 104
-#3 Amy Hall - wants spot 1203:-455, 12 m away, standing, shown
+Farm 1: 2 standing spot(s), 1 kept for named staff, day 104
+#3 Amy Hall - wants spot 1203:-455 (kept for them), 12 m away, standing, shown
 #7 John Smith - not standing (assigned)
 ```
 

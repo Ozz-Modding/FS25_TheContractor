@@ -86,7 +86,7 @@ test("with no diesel the job is held, the worker paused and a notice put up", fu
 
     local notices = g_currentMission.TheContractor.Notices:getNotices(1)
     assertEquals(#notices, 1, "notices")
-    assertEquals(notices[1].text, "Out of Diesel: a job is on hold until you restock.", "notice text")
+    assertEquals(TCJobSupplies.getNoticeCount(1, "DIESEL"), 1, "for the one job")
     assertTrue(notices[1].isTransient, "notice should be transient")
 end)
 
@@ -109,12 +109,12 @@ test("the notice counts held jobs and comes down when none are left", function()
 
     poll()
     assertEquals(#notices:getNotices(1), 1, "one notice for both")
-    assertEquals(notices:getNotices(1)[1].text, "Out of Diesel: 2 jobs are on hold until you restock.", "two")
+    assertEquals(TCJobSupplies.getNoticeCount(1, "DIESEL"), 2, "two")
 
     jobA.supplyStatus = nil
     poll()
     assertEquals(#notices:getNotices(1), 1, "still one notice")
-    assertEquals(notices:getNotices(1)[1].text, "Out of Diesel: a job is on hold until you restock.", "one")
+    assertEquals(TCJobSupplies.getNoticeCount(1, "DIESEL"), 1, "one")
 
     jobB.supplyStatus = nil
     poll()

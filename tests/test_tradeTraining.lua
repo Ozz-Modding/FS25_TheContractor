@@ -427,14 +427,16 @@ test("tcWorker train books a trade course for free, even without ADS", function(
     local sam = addWorker(tc, 1, { mechanic = 1 })
     world.adsOn = false
 
-    assertEquals(train.run(1, { "1", "0", "mechanic" }),
-        "Worker 1 booked on a level 2 mechanic course: days 10-11", "booked")
+    train.run(1, { "1", "0", "mechanic" })
+    assertEquals(sam.trainingCert, "workshop_mechanic", "booked")
     assertEquals(#world.money, 0, "free")
     assertEquals(sam.status, TheContractorWorker.STATUS.TRAINING, "starts today")
-    assertEquals(train.run(1, { "1", "0", "bodyworker" }), "Worker 1 already has training booked", "one at a time")
+    train.run(1, { "1", "0", "bodyworker" })
+    assertEquals(sam.trainingCert, "workshop_mechanic", "one at a time")
 
     local amy = addWorker(tc, 2, { mechanic = 3 })
-    assertEquals(train.run(1, { "2", "0", "mechanic" }), "Worker 2 can't take a mechanic course: maxLevel", "capped")
+    train.run(1, { "2", "0", "mechanic" })
+    assertEquals(amy.trainingCert, nil, "capped")
     assertEquals(train.run(1, { "2", "0", "pilot" }), false, "bad argument")
     assertEquals(amy.trainingCert, nil, "nothing booked")
 end)

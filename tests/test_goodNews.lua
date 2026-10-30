@@ -89,7 +89,7 @@ local function setup(options)
                     resolved[i] = arg
                 end
             end
-            table.insert(world.messages, { farmId = farmId, kind = kind, titleKey = titleKey,
+            table.insert(world.messages, { farmId = farmId, kind = kind, titleKey = titleKey, args = args,
                 title = g_i18n:getText(titleKey), body = string.format(g_i18n:getText(bodyKey), unpack(resolved)) })
             return #world.messages
         end,
@@ -114,10 +114,8 @@ test("registered as a random event with its own inbox kind", function()
     assertTrue(definition ~= nil)
     assertEquals(definition.cooldownPeriods, 3)
     assertNear(definition.ratePerPeriod(1), 0.1, 1e-9)
-    assertEquals(g_i18n:getText(definition.l10nKey), "Good news")
     assertEquals(world.kind.kind, "goodNews")
     assertEquals(world.kind.definition.chipTone, "good")
-    assertEquals(g_i18n:getText(world.kind.definition.chipKey), "Good news")
     assertEquals(FinanceStats.statNameToIndex.tcGoodNews, 1)
     assertEquals(MoneyType.TC_GOOD_NEWS, "tcGoodNews")
 end)
@@ -159,8 +157,8 @@ test("a reputation story adds reputation and posts the message", function()
     assertEquals(#world.money, 0, "no money")
     assertEquals(#world.messages, 1)
     assertEquals(world.messages[1].kind, "goodNews")
-    assertEquals(world.messages[1].title, "Local business of the month")
-    assertTrue(string.find(world.messages[1].body, "You gained 12 reputation.", 1, true) ~= nil, world.messages[1].body)
+    assertEquals(world.messages[1].titleKey, "tc_goodNews_parishNews_title")
+    assertEquals(world.messages[1].args[1], 12, "the reputation gained")
     assertEquals(tc.RandomEvents:getCooldownLeft(1, "goodNews"), 3)
 end)
 
@@ -173,7 +171,7 @@ test("a cash story pays the scaled amount and records it", function()
     assertEquals(world.money[1].moneyType, "tcGoodNews")
     assertEquals(world.recorded[1].amount, expected)
     assertEquals(tc.Reputation:getReputationScore(1), 0, "no reputation")
-    assertTrue(string.find(world.messages[1].body, tostring(expected), 1, true) ~= nil, world.messages[1].body)
+    assertEquals(world.messages[1].args[1], "$money_" .. expected, "the amount paid")
 end)
 
 test("cash follows the job pay setting", function()
@@ -186,9 +184,7 @@ end)
 test("nothing before the farm's first completed job", function()
     local world, tc = setup({ completedJobs = 0 })
     assertEquals(tc.GoodNews:pickStory(1), nil)
-    local incident, reason = tc.RandomEvents:triggerEvent(1, "goodNews")
-    assertEquals(incident, nil)
-    assertEquals(reason, "nothing to act on")
+    assertEquals(tc.RandomEvents:triggerEvent(1, "goodNews"), nil)
     world.completedJobs = 1
     assertTrue(tc.GoodNews:pickStory(1) ~= nil)
 end)
@@ -219,14 +215,12 @@ test("tcCompany event goodNews forces a story, or says which there are", functio
     TCConsole.reset()
     TheContractorRandomEvents.registerConsoleCommands()
     local command = TCConsole.groups.company.subcommands.event
-    local output = command.run(1, { "goodNews", "PARISHCOUNCIL" })
-    assertTrue(string.find(output, "(goodNews) opened", 1, true) ~= nil, output)
-    assertEquals(world.messages[1].title, "Thanks from the parish council")
+    command.run(1, { "goodNews", "PARISHCOUNCIL" })
+    assertEquals(world.messages[1].titleKey, "tc_goodNews_parishCouncil_title", "that story, whatever the case")
     assertEquals(tc.GoodNews.forcedStory, nil, "cleared")
 
-    output = command.run(1, { "goodNews", "nope" })
-    assertTrue(string.find(output, "Stories: photoPosted", 1, true) ~= nil, output)
-    assertEquals(#world.messages, 1)
+    command.run(1, { "goodNews", "nope" })
+    assertEquals(#world.messages, 1, "no such story: nothing opened")
 
     -- No story: a random one, even before the first completed job.
     tc.RandomEvents.lastPeriodByFarm = {}

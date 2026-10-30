@@ -35,6 +35,13 @@ local function setup()
     dofile("src/business/Parking.lua")
 
     local parking = TheContractorParking.new()
+    -- What the farm was told: { key, names (the arg), isGood }.
+    world.told = {}
+    local notify = parking.notify
+    parking.notify = function(self, farmId, textKey, arg, isGood)
+        table.insert(world.told, { key = textKey, names = arg, isGood = isGood })
+        return notify(self, farmId, textKey, arg, isGood)
+    end
     parking:register({
         registerMessageKind = function() end,
         postMessage = function() return 1 end,
@@ -57,9 +64,9 @@ end
 
 local function returnedNotifications(world)
     local found = {}
-    for _, notification in ipairs(world.notifications) do
-        if notification.text:find("^Back and parked") then
-            table.insert(found, notification)
+    for _, told in ipairs(world.told) do
+        if told.key == "tc_parking_returnedNotification" then
+            table.insert(found, told)
         end
     end
     return found
@@ -76,8 +83,8 @@ test("the farm hears once, when the last machine of a return is parked", functio
     pass(parking)
     local found = returnedNotifications(world)
     assertEquals(#found, 1)
-    assertEquals(found[1].text, "Back and parked: Combine, Header")
-    assertEquals(found[1].type, FSBaseMission.INGAME_NOTIFICATION_OK)
+    assertEquals(found[1].names, "Combine, Header")
+    assertTrue(found[1].isGood, "good news")
 end)
 
 test("nothing is said while a machine is still waiting for a space", function()
@@ -91,7 +98,7 @@ test("nothing is said while a machine is still waiting for a space", function()
 
     world.freeSpots = 1
     pass(parking)
-    assertEquals(returnedNotifications(world)[1].text, "Back and parked: Combine, Header")
+    assertEquals(returnedNotifications(world)[1].names, "Combine, Header")
 end)
 
 test("machines sent to the shop aren't listed as parked", function()
@@ -104,7 +111,7 @@ test("machines sent to the shop aren't listed as parked", function()
     pass(parking)
     parking:sendToShop({ header })
 
-    assertEquals(returnedNotifications(world)[1].text, "Back and parked: Combine")
+    assertEquals(returnedNotifications(world)[1].names, "Combine")
 end)
 
 test("a return sent wholly to the shop says nothing", function()

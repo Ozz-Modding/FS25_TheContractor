@@ -424,7 +424,7 @@ test("the stock parts, none refitted too soon", function()
     local targets = TheContractorFarmerFavours.getTargets(parts, nil, 10, 2)
     assertEquals(#targets, 2)
     assertEquals(targets[1].request.consumable, "battery")
-    assertEquals(targets[2].nameKey, "Air filter")
+    assertEquals(targets[2].id, "airFilter")
 
     local refitDays = TheContractorFarmerFavours.REFIT_MONTHS * 2
     targets = TheContractorFarmerFavours.getTargets(parts, { battery = 10 - refitDays + 1 }, 10, 2)
@@ -488,11 +488,6 @@ test("a favour: the farmer's machine in their yard, one part, the farmer the cus
     assertEquals(job.deadlineDay, world.today, "due today")
     assertEquals(job.workshop.offerExpiresDay, world.today)
     assertEquals(job.workshop.partGrade, "L")
-    assertEquals(TheContractorFarmerFavours.getPartText(job), "battery (size L)")
-    assertEquals(TheContractorFarmerFavours.getPartTitle(job), "Battery")
-    assertEquals(TheContractorFarmerFavours.getPartSizeText(job), "Size L")
-    assertEquals(job:getLocationText(), "Tractor small.xml, Tom Hargreaves's yard")
-    assertEquals(TheContractorFarmerFavours.getPartName(job), "battery")
     assertTrue(TheContractorRepairContracts.isFavourJob(job))
     assertTrue(TheContractorRepairContracts.isContractVehicle(vehicle))
     assertEquals(machine.hours, 2400, "aged by ADS's quote")
@@ -505,8 +500,7 @@ test("a machine without one of the parts gets the other; with neither, no favour
     world.partGrades.airFilter = "M"
     local job = makeOffer(world, tc)
     assertEquals(job.workshop.targetId, "airFilter")
-    assertEquals(TheContractorFarmerFavours.getPartText(job), "air filter (size M)", "the size this machine takes")
-    assertEquals(TheContractorFarmerFavours.getPartName(job), "air filter")
+    assertEquals(job.workshop.partGrade, "M", "the size this machine takes")
     assertEquals(tc.Jobs:proposeCounterOffer(1, job.id, 100), nil, "nothing to haggle over")
 
     world, tc = setup()

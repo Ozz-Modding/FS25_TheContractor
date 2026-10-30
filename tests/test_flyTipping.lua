@@ -195,8 +195,9 @@ local function setup()
     tc.Inbox.postMessage = function(self, farmId, kind, titleKey, bodyKey, args, actions, payload, expiresInDays)
         local message = { farmId = farmId, kind = kind, titleKey = titleKey, bodyKey = bodyKey, args = args,
             payload = payload }
-        table.insert(world.messages, { farmId = farmId, kind = kind, title = TheContractorInbox.getTitle(message),
-            body = TheContractorInbox.getBody(message), payload = payload })
+        table.insert(world.messages, { farmId = farmId, kind = kind, titleKey = titleKey, bodyKey = bodyKey,
+            args = args, title = TheContractorInbox.getTitle(message), body = TheContractorInbox.getBody(message),
+            payload = payload })
         return postMessage(self, farmId, kind, titleKey, bodyKey, args, actions, payload, expiresInDays)
     end
 
@@ -234,7 +235,6 @@ test("registered as a random event with its own inbox kind", function()
     assertTrue(definition ~= nil)
     assertEquals(definition.cooldownPeriods, 4)
     assertNear(definition.ratePerPeriod(1), 0.04, 1e-9)
-    assertEquals(g_i18n:getText(definition.l10nKey), "Fly-tipping")
     assertTrue(tc.Inbox:getKind("flyTipping") ~= nil)
 end)
 
@@ -253,9 +253,8 @@ test("only NPC fields with no live job, never the farm's own or another player's
     assertEquals(table.concat(ids, ","), "1")
 
     world.fields = { world.fields[2], world.fields[3] }
-    local incident, reason = tc.RandomEvents:triggerEvent(1, "flyTipping")
-    assertEquals(incident, nil)
-    assertEquals(reason, "nothing to act on")
+    local incident = tc.RandomEvents:triggerEvent(1, "flyTipping")
+    assertEquals(incident, nil, "nowhere to tip")
 end)
 
 test("the pile lands 4-7 m in from the edge by the gate, with ruts in to it, and a job is offered", function()
@@ -296,8 +295,9 @@ test("the pile lands 4-7 m in from the edge by the gate, with ruts in to it, and
 
     assertEquals(#world.messages, 1)
     assertEquals(world.messages[1].kind, "flyTipping")
-    assertEquals(world.messages[1].title, "Fly-tipping on Field 12")
-    assertTrue(world.messages[1].body:find("8 pieces", 1, true) ~= nil)
+    assertEquals(world.messages[1].titleKey, "tc_flyTipping_offerTitle")
+    assertEquals(world.messages[1].args[1], 12, "the field")
+    assertEquals(world.messages[1].args[2], 8, "the pieces")
     assertEquals(world.messages[1].payload.jobId, job.id)
 end)
 
