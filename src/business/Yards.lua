@@ -26,7 +26,8 @@
 -- sent to the clients (initial client state, TCYardSpotsEvent).
 --
 -- tcCompany yards (and yard) is the spike's way in, with map markers on
--- this machine only.
+-- this machine only. The host or an admin can also set or unset a yard
+-- from a farmland's box on the in-game map (117, TCYardMapAction).
 
 TheContractorYards = {}
 TheContractorYards_mt = Class(TheContractorYards)
@@ -691,13 +692,50 @@ function TheContractorYards:getOverride(farmlandId)
     return self.overrides[farmlandId] or TheContractorYards.MODE.AUTO
 end
 
--- Server: sets a farmland's override and tells the clients.
+-- The override that turns a farmland's yard on (wantYard) or off, given
+-- whether detection alone makes it one: AUTO when detection already
+-- agrees, so the override is only kept where the player and the rule
+-- differ.
+function TheContractorYards.getModeFor(wantYard, isYardByRule)
+    local MODE = TheContractorYards.MODE
+    if wantYard == isYardByRule then
+        return MODE.AUTO
+    end
+    return wantYard and MODE.ON or MODE.OFF
+end
+
+-- Whether a farmland is a yard now, and the override that would turn it
+-- the other way (the map's Set/Unset as farmer yard, TCYardMapAction).
+function TheContractorYards:getToggle(farmlandId)
+    local placeableSystem = g_currentMission.placeableSystem
+    local placeables = placeableSystem ~= nil and placeableSystem.placeables or {}
+    local isYardByRule = false
+    for _, yard in ipairs((TheContractorYards.detect(placeables, {}))) do
+        if yard.farmlandId == farmlandId then
+            isYardByRule = true
+        end
+    end
+    local isYard = isYardByRule
+    local mode = self:getOverride(farmlandId)
+    if mode ~= TheContractorYards.MODE.AUTO then
+        isYard = mode == TheContractorYards.MODE.ON
+    end
+    return isYard, TheContractorYards.getModeFor(not isYard, isYardByRule)
+end
+
+-- Server: sets a farmland's override and tells the clients. The farmers'
+-- yards follow (110's reconcileLand): a new yard goes to a farmer near it
+-- with none, and a farmer whose yard is ruled out loses it.
 function TheContractorYards:setOverride(farmlandId, mode)
     self:applyOverride(farmlandId, mode)
     if g_server ~= nil then
         g_server:broadcastEvent(TCYardOverrideEvent.new(farmlandId, mode))
     end
     self:refreshSpots(farmlandId)
+    local farmers = g_currentMission.TheContractor.Farmers
+    if farmers ~= nil and farmers.isSetUp then
+        farmers:reconcileLand()
+    end
 end
 
 -- Every machine.
@@ -710,6 +748,9 @@ function TheContractorYards:applyOverride(farmlandId, mode)
     TCLog.info("TheContractor: farmland %d yard override %s", farmlandId, TheContractorYards.MODE_NAMES[mode] or "?")
     if self.markers ~= nil then
         self:showMarkers(self.markers.farmlandId)
+    end
+    if TCYardMapAction ~= nil then
+        TCYardMapAction.refresh()
     end
 end
 

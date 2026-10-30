@@ -23,7 +23,11 @@
 --      targets, until nothing improves.
 --   5. Yards: a yard that didn't start a farmer goes to the farmer whose
 --      land is nearest, if they have no yard and it's within
---      MAX_YARD_DISTANCE.
+--      MAX_YARD_DISTANCE. A yard the player declared (117) goes to the
+--      nearest farmer without one, however far.
+--
+-- A declared yard's farmland is never field land, so it's never shared
+-- out (splitLiveMap leaves it out).
 --
 -- Nothing here is saved or synced: 110's TheContractorFarmers runs the
 -- split once and keeps the result, and tcCompany farmers preview|show
@@ -273,14 +277,19 @@ local function giveYards(yards, byId, farmers)
         return a.farmlandId < b.farmlandId
     end)
     for _, yard in ipairs(sorted) do
+        -- 117: a declared yard goes to the nearest farmer without one,
+        -- however far.
         local nearest, nearestDistance = nil, math.huge
         for _, farmer in ipairs(farmers) do
-            local d = farmer.farmlandIds[yard.farmlandId] and 0 or distanceToLand(farmer, byId, yard.x, yard.z)
-            if d < nearestDistance then
-                nearest, nearestDistance = farmer, d
+            if not yard.declared or farmer.yardFarmlandId == nil then
+                local d = farmer.farmlandIds[yard.farmlandId] and 0 or distanceToLand(farmer, byId, yard.x, yard.z)
+                if nearest == nil or d < nearestDistance then
+                    nearest, nearestDistance = farmer, d
+                end
             end
         end
-        if nearest ~= nil and nearest.yardFarmlandId == nil and nearestDistance <= S.MAX_YARD_DISTANCE then
+        if nearest ~= nil and nearest.yardFarmlandId == nil and
+                (yard.declared or nearestDistance <= S.MAX_YARD_DISTANCE) then
             nearest.yardFarmlandId = yard.farmlandId
         end
     end
@@ -405,7 +414,8 @@ function TheContractorFarmerSplit.getEligibleFarmlands()
     return farmlands
 end
 
--- 108's yards on land no player owns.
+-- 108's yards on land no player owns: { farmlandId, x, z, declared (117:
+-- the player set it) }.
 function TheContractorFarmerSplit.getFreeYards()
     local yards = {}
     local tc = g_currentMission.TheContractor
@@ -414,15 +424,25 @@ function TheContractorFarmerSplit.getFreeYards()
     end
     for _, yard in ipairs((tc.Yards:getYards())) do
         if yard.ownerFarmId == FarmlandManager.NO_OWNER_FARM_ID and yard.x ~= nil then
-            table.insert(yards, { farmlandId = yard.farmlandId, x = yard.x, z = yard.z })
+            table.insert(yards, { farmlandId = yard.farmlandId, x = yard.x, z = yard.z,
+                declared = yard.how == "declared" })
         end
     end
     return yards
 end
 
 function TheContractorFarmerSplit.splitLiveMap(targetAcres, seed)
-    local farmlands = TheContractorFarmerSplit.getEligibleFarmlands()
     local yards = TheContractorFarmerSplit.getFreeYards()
+    local declared = {}
+    for _, yard in ipairs(yards) do
+        declared[yard.farmlandId] = yard.declared
+    end
+    local farmlands = {}
+    for _, farmland in ipairs(TheContractorFarmerSplit.getEligibleFarmlands()) do
+        if not declared[farmland.id] then
+            table.insert(farmlands, farmland)
+        end
+    end
     return TheContractorFarmerSplit.split(farmlands, yards, targetAcres, seed), farmlands, yards
 end
 

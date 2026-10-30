@@ -82,7 +82,7 @@ local function setup()
         getIsValidFarmlandId = function(_, farmlandId) return farmlandId >= 1 and farmlandId <= 9 end,
     }
 
-    -- 108's yards: { farmlandId, x, z }; owner from world.owners.
+    -- 108's yards: { farmlandId, x, z, how }; owner from world.owners.
     world.yards = {}
     local tc = g_currentMission.TheContractor
     tc.Yards = {
@@ -90,7 +90,7 @@ local function setup()
             local list = {}
             for _, yard in ipairs(world.yards) do
                 table.insert(list, { farmlandId = yard.farmlandId, x = yard.x, z = yard.z,
-                    ownerFarmId = world.owners[yard.farmlandId] or 0 })
+                    ownerFarmId = world.owners[yard.farmlandId] or 0, how = yard.how or "detected" })
             end
             return list
         end,
@@ -547,4 +547,65 @@ test("116: a favour's customer is the farmer whose machine it is, while they're 
     assertEquals(world.farmers:getCustomerIdForJob({ workshop = { farmerId = farmer.id } }), farmer.id)
     assertEquals(world.farmers:getCustomerIdForJob({ workshop = { farmerId = 999 } }), nil, "regenerated away")
     assertEquals(world.farmers:getCustomerIdForJob({ workshop = {} }), nil, "a repair contract")
+end)
+
+test("117: a declared yard leaves its field farmer and goes to the nearest farmer without a yard, however far", function()
+    local world = setup()
+    world.farmers:setUp()
+    local fieldFarmer = world.farmers:getHolder(6)
+    assertTrue(fieldFarmer ~= nil)
+
+    -- Farmland 6 declared a yard: nobody farms it, and a farmer without a
+    -- yard has it.
+    world.yards = { { farmlandId = 6, x = 300, z = 300, how = "declared" } }
+    world.farmers:reconcileLand()
+    assertEquals(countHeld(world.farmers)[6], nil)
+    local yardFarmer = nil
+    for _, farmer in ipairs(world.farmers:getFarmers()) do
+        if farmer.yardFarmlandId == 6 then
+            yardFarmer = farmer
+        end
+    end
+    assertTrue(yardFarmer ~= nil)
+
+    -- Far from every field: a declared yard still finds a farmer, a
+    -- detected one doesn't.
+    table.insert(world.yards, { farmlandId = 9, x = 50000, z = 0 })
+    world.farmers:reconcileLand()
+    assertEquals(world.farmers:getHolder(9), nil)
+    for _, farmer in ipairs(world.farmers:getFarmers()) do
+        assertTrue(farmer.yardFarmlandId ~= 9)
+    end
+    world.yards[2].how = "declared"
+    world.farmers:reconcileLand()
+    local farOff = nil
+    for _, farmer in ipairs(world.farmers:getFarmers()) do
+        if farmer.yardFarmlandId == 9 then
+            farOff = farmer
+        end
+    end
+    assertTrue(farOff ~= nil)
+    assertTrue(farOff ~= yardFarmer)
+
+    -- Unset again: the yard's gone and its fields go back to a farmer.
+    world.yards = {}
+    world.farmers:reconcileLand()
+    assertEquals(countHeld(world.farmers)[6], 1)
+    for _, farmer in ipairs(world.farmers:getFarmers()) do
+        assertEquals(farmer.yardFarmlandId, nil)
+    end
+end)
+
+test("117: a declared yard goes to nobody when every farmer has a yard", function()
+    setup()
+    local land = { [1] = { id = 1, x = 0, z = 0, acres = 10 } }
+    local farmers = {
+        { id = 1, farmlandIds = { 1 }, yardFarmlandId = 4 },
+        { id = 2, farmlandIds = {}, yardFarmlandId = 5 },
+    }
+    local yard = { farmlandId = 7, x = 10, z = 0, declared = true }
+    assertEquals(TheContractorFarmers.chooseYardHolder(farmers, yard, land), nil)
+    -- A farmer with no land and no yard takes it, though the nearest has one.
+    table.insert(farmers, { id = 3, farmlandIds = {} })
+    assertEquals(TheContractorFarmers.chooseYardHolder(farmers, yard, land), farmers[3])
 end)
