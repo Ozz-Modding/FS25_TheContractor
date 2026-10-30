@@ -1319,6 +1319,24 @@ test("an inspected service's consumables are listed and counted", function()
     assertEquals(progress.items[2].operation, "replace")
 end)
 
+test("a stock part on a service's checklist carries the size the machine takes", function()
+    local world, tc = setup()
+    local _, vehicle = makeOffer(world, tc)
+    world.adsEnv.ADS_PartsShop = { getPartGrade = function(_, partId)
+        return partId == "airFilter" and "M" or nil
+    end }
+    setContract(world, vehicle, "maintenance", {
+        { id = "c1", kind = "consumable", consumableId = "airFilter", nameKey = "ads_ws_consumable_air_filter",
+            procedure = "replaceConsumable", price = 160 },
+        { id = "c2", kind = "consumable", consumableId = "oilFilter", nameKey = "ads_ws_consumable_oil_filter",
+            procedure = "replaceConsumable", price = 40 },
+    }, {}, {})
+    world.inspectionDates[vehicle.id] = { day = 3 }
+    local progress = TCADSRepairContracts.getProgress(vehicle)
+    assertEquals(progress.items[1].grade, "M")
+    assertEquals(progress.items[2].grade, nil, "not a stock part")
+end)
+
 test("every operation the checklist can show has its text", function()
     setup()
     local operations = { service = true }
