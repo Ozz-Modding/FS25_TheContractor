@@ -159,6 +159,11 @@ function TheContractorWorker.new(id, farmId, name, workSpeed, tierCapability, sa
     self.hiredPeriod = nil
     self.busyDays = 0
     self.idleDays = 0
+    -- 118: their hidden temperament (TheContractorMorale.rollTemperament,
+    -- rolled when they join the pool; 0 until then and on clients) and the
+    -- months left of a rough patch (0 = none). Both server-only, saved.
+    self.temperament = 0
+    self.roughPatchPeriods = 0
 
     -- 040: holiday allowance left this year, as a fraction of a period (1 =
     -- a whole month, i.e. daysPerPeriod days - see Holidays.lua), and the

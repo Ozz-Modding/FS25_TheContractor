@@ -83,5 +83,8 @@ function TCWorkerMoraleChangedEvent.showNotification(farmId, workers, notify, am
     elseif notify == NOTIFY.NO_HARVEST_BONUS then
         g_currentMission:addIngameNotification(FSBaseMission.INGAME_NOTIFICATION_CRITICAL,
             g_i18n:getText("tc_morale_noHarvestBonusNotice"))
+    elseif notify == NOTIFY.ROUGH_PATCH then
+        g_currentMission:addIngameNotification(FSBaseMission.INGAME_NOTIFICATION_INFO,
+            string.format(g_i18n:getText("tc_morale_roughPatchNotice"), workers[1].name))
     end
 end
