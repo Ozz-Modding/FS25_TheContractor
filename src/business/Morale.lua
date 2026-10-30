@@ -13,6 +13,16 @@
 --   058: pay moves the target too. Paid below what they expect lowers it,
 --   paid above raises it a little (TheContractorPayReviews.
 --   getMoraleTargetShift).
+-- - 118: every worker has a hidden temperament, TEMPERAMENT_MIN to
+--   TEMPERAMENT_MAX (mostly near 0), rolled when they join the pool. It's
+--   added to the drift target, and knocks (negative bumps) land
+--   getKnockMultiplier times as hard: KNOCK_MULTIPLIER_LOW for the
+--   grumpiest, KNOCK_MULTIPLIER_HIGH for the most cheerful.
+-- - 118: each month a worker has ROUGH_PATCH_CHANCE of a rough patch
+--   (something at home): ROUGH_PATCH_KNOCK straight away, then
+--   ROUGH_PATCH_TARGET on the target for ROUGH_PATCH_MONTHS. The farm's
+--   told they seem out of sorts, never why. Other events can read it
+--   (isInRoughPatch).
 --
 -- What it does:
 -- - Below QUIT_MORALE a worker may quit at the month roll. They hand in a
@@ -34,7 +44,8 @@
 --
 -- Morale and hiredPeriod live on the workers and are saved and streamed
 -- with them (Staff.lua), so this subsystem's own save/sync methods are
--- stubs.
+-- stubs. temperament and roughPatchPeriods (118) live on the workers too,
+-- saved but server-only.
 
 TheContractorMorale = {}
 TheContractorMorale_mt = Class(TheContractorMorale)
@@ -92,6 +103,20 @@ TheContractorMorale.HARVEST_GENEROUS = 750
 -- August (period 1 is March).
 TheContractorMorale.HARVEST_BONUS_PERIOD = 6
 
+-- 118: temperament, a whole number rolled on a triangle from MIN to MAX
+-- peaking at 0, and how hard knocks land at either end (1 at 0, linear in
+-- between).
+TheContractorMorale.TEMPERAMENT_MIN = -15
+TheContractorMorale.TEMPERAMENT_MAX = 10
+TheContractorMorale.KNOCK_MULTIPLIER_LOW = 1.5
+TheContractorMorale.KNOCK_MULTIPLIER_HIGH = 0.75
+
+-- 118: rough patches. The chance is per worker per month.
+TheContractorMorale.ROUGH_PATCH_CHANCE = 0.02
+TheContractorMorale.ROUGH_PATCH_MONTHS = { 1, 3 }
+TheContractorMorale.ROUGH_PATCH_KNOCK = -5
+TheContractorMorale.ROUGH_PATCH_TARGET = -15
+
 -- Quitting: 0 at QUIT_MORALE, rising to QUIT_MAX_CHANCE a month at 0.
 TheContractorMorale.QUIT_MORALE = 30
 TheContractorMorale.QUIT_MAX_CHANCE = 0.25
@@ -120,6 +145,7 @@ TheContractorMorale.NOTIFY = {
     BONUS = 1,
     HARVEST_BONUS = 2,
     NO_HARVEST_BONUS = 3,
+    ROUGH_PATCH = 4,
 }
 
 function TheContractorMorale.new()
@@ -248,10 +274,41 @@ function TheContractorMorale.getQualityMultiplierFor(morale)
 end
 
 -- The month's drift target: the workload's (getWorkloadTarget), moved by
--- their pay against what they expect (058).
+-- their pay against what they expect (058), their temperament and any
+-- rough patch (118).
 function TheContractorMorale.getTarget(worker)
+    local roughPatch = TheContractorMorale.isInRoughPatch(worker) and TheContractorMorale.ROUGH_PATCH_TARGET or 0
     return TheContractorMorale.clamp(TheContractorMorale.getWorkloadTarget(worker) +
-        TheContractorPayReviews.getMoraleTargetShift(worker))
+        TheContractorPayReviews.getMoraleTargetShift(worker) + worker.temperament + roughPatch)
+end
+
+-- 118 (server). roll: 0-1, math.random() if nil.
+function TheContractorMorale.rollTemperament(roll)
+    roll = roll or math.random()
+    local low, high = TheContractorMorale.TEMPERAMENT_MIN, TheContractorMorale.TEMPERAMENT_MAX
+    local span = high - low
+    local peakShare = -low / span
+    local value
+    if roll < peakShare then
+        value = low + math.sqrt(roll * span * -low)
+    else
+        value = high - math.sqrt((1 - roll) * span * high)
+    end
+    return math.floor(value + 0.5)
+end
+
+-- 118: what a knock (a negative bump) is multiplied by for this worker.
+function TheContractorMorale.getKnockMultiplier(worker)
+    local temperament = worker.temperament
+    if temperament < 0 then
+        return 1 + (TheContractorMorale.KNOCK_MULTIPLIER_LOW - 1) * temperament / TheContractorMorale.TEMPERAMENT_MIN
+    end
+    return 1 + (TheContractorMorale.KNOCK_MULTIPLIER_HIGH - 1) * temperament / TheContractorMorale.TEMPERAMENT_MAX
+end
+
+-- 118 (server: the state isn't streamed).
+function TheContractorMorale.isInRoughPatch(worker)
+    return worker.roughPatchPeriods > 0
 end
 
 -- From busyDays/idleDays (see the TARGET_* tunables).
@@ -285,20 +342,53 @@ end
 -- Changing morale (server-authoritative) --------------------------------------
 
 -- Adds delta to each worker's morale and tells everyone in one broadcast.
--- notify and amount are only for the notification.
+-- A knock (negative delta) is scaled by each worker's temperament (118,
+-- getKnockMultiplier). notify and amount are only for the notification.
 function TheContractorMorale:adjust(farmId, workers, delta, notify, amount)
     if not g_currentMission:getIsServer() or #workers == 0 then
         return
     end
 
     for _, worker in ipairs(workers) do
+        local applied = delta
+        if delta < 0 then
+            applied = delta * TheContractorMorale.getKnockMultiplier(worker)
+        end
         local old = worker.morale
-        worker.morale = TheContractorMorale.clamp(worker.morale + delta)
-        TCLog.info("TheContractor: farm %d worker %d (%s) morale %.1f -> %.1f (%+d)", farmId, worker.id,
-            worker.name, old, worker.morale, delta)
+        worker.morale = TheContractorMorale.clamp(worker.morale + applied)
+        TCLog.info("TheContractor: farm %d worker %d (%s) morale %.1f -> %.1f (%+.1f)", farmId, worker.id,
+            worker.name, old, worker.morale, applied)
     end
 
     self:sendMoraleChanged(farmId, workers, notify, amount)
+end
+
+-- Sets one worker's morale exactly, temperament or not (the console).
+function TheContractorMorale:setMorale(farmId, worker, value)
+    if not g_currentMission:getIsServer() then
+        return
+    end
+    worker.morale = TheContractorMorale.clamp(value)
+    TCLog.info("TheContractor: farm %d worker %d (%s) morale set to %.1f", farmId, worker.id, worker.name,
+        worker.morale)
+    self:sendMoraleChanged(farmId, { worker })
+end
+
+-- 118: starts a rough patch of `months` (rolled if nil) now: the knock
+-- straight away, with the farm told, then the lower target until it's
+-- over. months 0 ends one. Server.
+function TheContractorMorale:startRoughPatch(worker, months)
+    if not g_currentMission:getIsServer() then
+        return
+    end
+    months = months or math.random(TheContractorMorale.ROUGH_PATCH_MONTHS[1], TheContractorMorale.ROUGH_PATCH_MONTHS[2])
+    worker.roughPatchPeriods = months
+    TCLog.info("TheContractor: farm %d worker %d (%s) rough patch for %d month(s)", worker.farmId, worker.id,
+        worker.name, months)
+    if months > 0 then
+        self:adjust(worker.farmId, { worker }, TheContractorMorale.ROUGH_PATCH_KNOCK,
+            TheContractorMorale.NOTIFY.ROUGH_PATCH)
+    end
 end
 
 -- 054: a training request turned down or left to expire.
@@ -366,9 +456,10 @@ end
 -- Period tick (server-only, from Staff:onPeriodChanged) ---------------------------
 
 -- Quit rolls on the morale the month ended with, then the drift toward last
--- month's target, then (in August) the harvest bonus prompt. Rolling before
--- the drift matters: the drift pulls a low morale back up by a third, so
--- after it almost nobody would still be under QUIT_MORALE.
+-- month's target (a rough patch counting for the month it covered, 118),
+-- then new rough patches, then (in August) the harvest bonus prompt.
+-- Rolling before the drift matters: the drift pulls a low morale back up by
+-- a third, so after it almost nobody would still be under QUIT_MORALE.
 function TheContractorMorale:onPeriodChanged()
     if not g_currentMission:getIsServer() then
         return
@@ -391,6 +482,9 @@ function TheContractorMorale:onPeriodChanged()
                 farmId, worker.id, worker.name, old, worker.morale, target, worker.busyDays, worker.idleDays)
             worker.busyDays = 0
             worker.idleDays = 0
+            if worker.roughPatchPeriods > 0 then
+                worker.roughPatchPeriods = worker.roughPatchPeriods - 1
+            end
             table.insert(workers, worker)
         end
         self:sendMoraleChanged(farmId, workers)
@@ -398,6 +492,16 @@ function TheContractorMorale:onPeriodChanged()
 
     for _, worker in ipairs(quitters) do
         staff:announceLeaving(worker.farmId, worker.id, TheContractorMorale.QUIT_NOTICE_MONTHS, true)
+    end
+
+    -- 118: after the quits, so nobody leaving starts one.
+    for _, farmWorkers in pairs(staff.workersByFarm) do
+        for _, worker in pairs(farmWorkers) do
+            if not worker:isLeaving() and not TheContractorMorale.isInRoughPatch(worker) and
+                    math.random() < TheContractorMorale.ROUGH_PATCH_CHANCE then
+                self:startRoughPatch(worker)
+            end
+        end
     end
 
     if g_currentMission.environment.currentPeriod == TheContractorMorale.HARVEST_BONUS_PERIOD then
@@ -540,6 +644,11 @@ function TheContractorMorale.writeXML(xmlFile, key, worker)
     if worker.idleDays > 0 then
         setXMLInt(xmlFile, key .. "#idleDays", worker.idleDays)
     end
+    -- 118.
+    setXMLInt(xmlFile, key .. "#temperament", worker.temperament)
+    if worker.roughPatchPeriods > 0 then
+        setXMLInt(xmlFile, key .. "#roughPatchPeriods", worker.roughPatchPeriods)
+    end
 end
 
 function TheContractorMorale.readXML(xmlFile, key, worker)
@@ -548,6 +657,9 @@ function TheContractorMorale.readXML(xmlFile, key, worker)
     worker.hiredPeriod = getXMLInt(xmlFile, key .. "#hiredPeriod")
     worker.busyDays = getXMLInt(xmlFile, key .. "#busyDays") or 0
     worker.idleDays = getXMLInt(xmlFile, key .. "#idleDays") or 0
+    -- 118: a worker or candidate from a save made before 118 gets one now.
+    worker.temperament = getXMLInt(xmlFile, key .. "#temperament") or TheContractorMorale.rollTemperament()
+    worker.roughPatchPeriods = getXMLInt(xmlFile, key .. "#roughPatchPeriods") or 0
 end
 
 -- Persistence (nothing of its own - see the header) ---------------------------------
@@ -581,14 +693,44 @@ function TheContractorMorale.registerConsoleCommands()
                 if value == nil or value < TheContractorMorale.MIN or value > TheContractorMorale.MAX then
                     return false
                 end
-                g_currentMission.TheContractor.Morale:adjust(farmId, { worker }, value - worker.morale)
+                g_currentMission.TheContractor.Morale:setMorale(farmId, worker, value)
             end
 
-            return string.format("%s: morale %.1f (%s), %d busy / %d idle days this month (target %.1f, pay %+.1f), quit chance %.0f%%",
+            local roughPatch = "no rough patch"
+            if TheContractorMorale.isInRoughPatch(worker) then
+                roughPatch = string.format("rough patch %d month(s) left", worker.roughPatchPeriods)
+            end
+            return string.format("%s: morale %.1f (%s), %d busy / %d idle days this month (target %.1f, pay %+.1f), quit chance %.0f%%, temperament %+d (knocks x%.2f), %s",
                 worker.name, worker.morale, TheContractorMorale.getBand(worker.morale), worker.busyDays,
                 worker.idleDays, TheContractorMorale.getTarget(worker),
                 TheContractorPayReviews.getMoraleTargetShift(worker),
-                TheContractorMorale.getQuitChance(worker.morale) * 100)
+                TheContractorMorale.getQuitChance(worker.morale) * 100, worker.temperament,
+                TheContractorMorale.getKnockMultiplier(worker), roughPatch)
+        end,
+    })
+
+    TCConsole.register("worker", "roughPatch", {
+        args = "<worker> [months=1-3 rolled, 0=end]",
+        description = "Start a rough patch for a worker now (a morale knock, then a lower target), or end one",
+        run = function(farmId, args)
+            local worker, problem = TCConsole.findWorker(farmId, args[1])
+            if worker == nil then
+                return problem or false
+            end
+            local months = nil
+            if args[2] ~= nil then
+                months = TCConsole.toCount(args[2], 0)
+                if months == nil then
+                    return false
+                end
+            end
+
+            g_currentMission.TheContractor.Morale:startRoughPatch(worker, months)
+            if worker.roughPatchPeriods == 0 then
+                return string.format("%s's rough patch is over", worker.name)
+            end
+            return string.format("%s is in a rough patch for %d month(s): morale now %.1f, target %.1f",
+                worker.name, worker.roughPatchPeriods, worker.morale, TheContractorMorale.getTarget(worker))
         end,
     })
 

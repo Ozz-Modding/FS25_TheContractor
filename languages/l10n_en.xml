@@ -1250,6 +1250,7 @@
 		<text name="tc_morale_harvestNoneButton" text="No bonus"/>
 		<text name="tc_morale_harvestBonusNotice" text="Your staff are pleased with their %s harvest bonus"/>
 		<text name="tc_morale_noHarvestBonusNotice" text="Your staff are disappointed there's no harvest bonus this year"/>
+		<text name="tc_morale_roughPatchNotice" text="%s seems out of sorts lately"/>
 		<text name="tc_morale_bonusButton" text="Give bonus"/>
 		<text name="tc_morale_bonusTitle" text="Give a bonus"/>
 		<text name="tc_morale_bonusPrompt" text="Give %s a one-off bonus? It's paid now, with their wages, and lifts their morale."/>

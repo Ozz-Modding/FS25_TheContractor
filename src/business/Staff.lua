@@ -543,6 +543,8 @@ function TheContractorStaff:addCandidateToPool()
     candidate.gender = gender
     candidate.appearance = TCWorkerAppearance.roll(gender)
     candidate.adsSkills = adsSkills
+    -- 118: hidden, server-only.
+    candidate.temperament = TheContractorMorale.rollTemperament()
     -- 054: some arrive already certified.
     TheContractorTraining.rollCandidateCertifications(candidate)
     self:applyCandidateAdded(candidate)

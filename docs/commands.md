@@ -77,7 +77,7 @@ tcWorker quit amy 0
 
 ### `tcWorker morale <worker> [value]`
 
-Shows one of your hired workers' morale, its band, this month's busy and idle days, the morale it's drifting toward at the next month roll, and their chance of quitting then. The target includes how their pay against what they expect moves it (`pay`, see `tcWorker pay`). With `value` (0-100), it sets their morale first. The change syncs to everyone.
+Shows one of your hired workers' morale, its band, this month's busy and idle days, the morale it's drifting toward at the next month roll, and their chance of quitting then. The target includes how their pay against what they expect moves it (`pay`, see `tcWorker pay`), their hidden temperament and any rough patch. It also shows the temperament (-15 to +10, never shown in the menus), how hard knocks land for them because of it, and how many months of a rough patch are left. With `value` (0-100), it sets their morale first, exactly (temperament doesn't scale it). The change syncs to everyone.
 
 ```
 tcWorker morale 2
@@ -87,7 +87,23 @@ tcWorker morale amy 20
 Prints, for example:
 
 ```
-Amy Hall: morale 20.0 (unhappy), 3 busy / 1 idle days this month (target 62.0, pay -8.0), quit chance 8%
+Amy Hall: morale 20.0 (unhappy), 3 busy / 1 idle days this month (target 54.0, pay -8.0), quit chance 8%, temperament -8 (knocks x1.27), no rough patch
+```
+
+### `tcWorker roughPatch <worker> [months]`
+
+Starts a rough patch for one of your hired workers now, as the monthly roll would: their morale takes a knock straight away (scaled by their temperament), you're told they seem out of sorts, and their morale target is lower until it's over. `months` defaults to a random 1-3. `0` ends a rough patch, with no change to their morale.
+
+```
+tcWorker roughPatch amy
+tcWorker roughPatch amy 3
+tcWorker roughPatch amy 0
+```
+
+Prints, for example:
+
+```
+Amy Hall is in a rough patch for 2 month(s): morale now 56.4, target 41.0
 ```
 
 ### `tcWorker pay <worker> [salary]`
