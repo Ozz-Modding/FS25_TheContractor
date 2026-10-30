@@ -17,7 +17,9 @@
 -- field land nobody has goes to a farmer near it: among those whose land is
 -- within NEAR_MARGIN of the nearest, the one with the fewest acres for
 -- their target. It never makes a new farmer. A yard follows the same way,
--- with 109's rule for yards. Each farmer whose holding changed goes to the
+-- with 109's rule for yards. A yard the player declared (117) isn't field
+-- land: it leaves whoever farmed it and goes to the nearest farmer without
+-- a yard, however far. Each farmer whose holding changed goes to the
 -- clients in a TCFarmerLandEvent.
 --
 -- Jobs get their customer as they're created (getCustomerIdForJob): the
@@ -415,20 +417,24 @@ function TheContractorFarmers.chooseHolder(farmers, farmland, land, yards)
     return best ~= nil and best.farmer or nil
 end
 
--- The farmer to take a free yard ({ farmlandId, x, z }), by 109's rule: the
--- farmer whose land is nearest, if they have no yard and it's within
--- MAX_YARD_DISTANCE. nil otherwise.
+-- The farmer to take a free yard ({ farmlandId, x, z, declared }), by
+-- 109's rule: the farmer whose land is nearest, if they have no yard and
+-- it's within MAX_YARD_DISTANCE. A declared yard (117): the nearest farmer
+-- without a yard, however far (the lowest id among those with no land on
+-- the map). nil otherwise.
 function TheContractorFarmers.chooseYardHolder(farmers, yard, land)
     local nearest, nearestDistance = nil, math.huge
     local point = { id = yard.farmlandId, x = yard.x, z = yard.z }
     for _, farmer in ipairs(farmers) do
-        local d = distanceToLand(farmer, land, point)
-        if d < nearestDistance then
-            nearest, nearestDistance = farmer, d
+        if not yard.declared or farmer.yardFarmlandId == nil then
+            local d = distanceToLand(farmer, land, point)
+            if nearest == nil or d < nearestDistance or (d == nearestDistance and farmer.id < nearest.id) then
+                nearest, nearestDistance = farmer, d
+            end
         end
     end
     if nearest ~= nil and nearest.yardFarmlandId == nil and
-            nearestDistance <= TheContractorFarmerSplit.MAX_YARD_DISTANCE then
+            (yard.declared or nearestDistance <= TheContractorFarmerSplit.MAX_YARD_DISTANCE) then
         return nearest
     end
     return nil
@@ -629,12 +635,18 @@ function TheContractorFarmers:reconcileWith(land, landList, yards)
     local changed = {}
     local farmers = self:getFarmers()
 
+    -- 117: a declared yard isn't field land.
+    local function isFieldLand(farmlandId)
+        local yard = yards[farmlandId]
+        return isFree(land[farmlandId]) and not (yard ~= nil and yard.declared)
+    end
+
     -- What a farmer can no longer have.
     local held = {}
     for _, farmer in ipairs(farmers) do
         local kept = {}
         for _, farmlandId in ipairs(farmer.farmlandIds) do
-            if isFree(land[farmlandId]) and not held[farmlandId] then
+            if isFieldLand(farmlandId) and not held[farmlandId] then
                 held[farmlandId] = true
                 table.insert(kept, farmlandId)
             end
@@ -651,7 +663,7 @@ function TheContractorFarmers:reconcileWith(land, landList, yards)
 
     -- Field land nobody has.
     for _, farmland in ipairs(landList) do
-        if isFree(farmland) and not held[farmland.id] then
+        if isFieldLand(farmland.id) and not held[farmland.id] then
             local holder = TheContractorFarmers.chooseHolder(farmers, farmland, land, yards)
             if holder ~= nil then
                 held[farmland.id] = true
@@ -675,7 +687,11 @@ function TheContractorFarmers:reconcileWith(land, landList, yards)
             table.insert(freeYards, yard)
         end
     end
+    -- Declared ones (117) first, so a farmer without a yard goes to them.
     table.sort(freeYards, function(a, b)
+        if (a.declared == true) ~= (b.declared == true) then
+            return a.declared == true
+        end
         return a.farmlandId < b.farmlandId
     end)
     for _, yard in ipairs(freeYards) do

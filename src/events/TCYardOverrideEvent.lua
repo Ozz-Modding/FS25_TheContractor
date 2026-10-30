@@ -1,6 +1,8 @@
--- Broadcast-only (108): the server has set a farmland's yard override
--- (tcCompany yard, server only) and the clients apply it. See
--- TheContractorYards:setOverride.
+-- A farmland's yard override (108). Client -> server (117, the map's
+-- Set/Unset as farmer yard): the server checks the sender is the host or
+-- an admin and the farmland and mode are real, then sets it as tcCompany
+-- yard does. Server -> client: the server has set it (TheContractorYards:
+-- setOverride) and the clients apply it.
 
 TCYardOverrideEvent = {}
 local TCYardOverrideEvent_mt = Class(TCYardOverrideEvent, Event)
@@ -18,6 +20,11 @@ function TCYardOverrideEvent.new(farmlandId, mode)
     return self
 end
 
+-- Client: asks the server to set a farmland's override.
+function TCYardOverrideEvent.sendRequest(farmlandId, mode)
+    g_client:getServerConnection():sendEvent(TCYardOverrideEvent.new(farmlandId, mode))
+end
+
 function TCYardOverrideEvent:writeStream(streamId, connection)
     streamWriteInt32(streamId, self.farmlandId)
     streamWriteUInt8(streamId, self.mode)
@@ -30,8 +37,21 @@ function TCYardOverrideEvent:readStream(streamId, connection)
 end
 
 function TCYardOverrideEvent:run(connection)
-    if not connection:getIsServer() then
+    local yards = g_currentMission.TheContractor.Yards
+    if connection:getIsServer() then
+        yards:applyOverride(self.farmlandId, self.mode)
         return
     end
-    g_currentMission.TheContractor.Yards:applyOverride(self.farmlandId, self.mode)
+    if not TheContractorSettings.getCanConnectionChange(connection) then
+        TCLog.warning("TheContractor: refused a yard override for farmland %s from a player who isn't an admin",
+            tostring(self.farmlandId))
+        return
+    end
+    if TheContractorYards.MODE_NAMES[self.mode] == nil or
+            not g_farmlandManager:getIsValidFarmlandId(self.farmlandId) then
+        TCLog.warning("TheContractor: refused a yard override for farmland %s (mode %s)",
+            tostring(self.farmlandId), tostring(self.mode))
+        return
+    end
+    yards:setOverride(self.farmlandId, self.mode)
 end

@@ -278,3 +278,85 @@ test("a farmhouse's spawn node is measured clockwise from its +Z, seen from abov
     assertNear(0, turn(1, 0, 6, 0), 0.001)
     assertEquals(nil, turn(0, 1, 0, 0), "a node on the root")
 end)
+
+-- 117: the map's Set/Unset as farmer yard.
+
+test("the map's button turns a farmland the other way, keeping an override only where it differs from detection", function()
+    local world = setup()
+    g_currentMission.placeableSystem = { placeables = world.placeables }
+    world:addBuilding({ farmlandId = 5, category = "SHEDS" })
+    world:addBuilding({ farmlandId = 6, category = "SHEDS" })
+    world:addBuilding({ farmlandId = 6, category = "SILOS" })
+    local MODE = TheContractorYards.MODE
+
+    -- Detected: unsetting rules it out, and setting it again goes back to
+    -- detection.
+    local isYard, mode = world.yards:getToggle(6)
+    assertTrue(isYard)
+    assertEquals(MODE.OFF, mode)
+    world.yards:applyOverride(6, mode)
+    isYard, mode = world.yards:getToggle(6)
+    assertTrue(not isYard)
+    assertEquals(MODE.AUTO, mode)
+
+    -- Not a yard by the rule (one building, or nothing at all): setting
+    -- declares it, and unsetting goes back to detection.
+    for _, farmlandId in ipairs({ 5, 8 }) do
+        isYard, mode = world.yards:getToggle(farmlandId)
+        assertTrue(not isYard)
+        assertEquals(MODE.ON, mode)
+        world.yards:applyOverride(farmlandId, mode)
+        isYard, mode = world.yards:getToggle(farmlandId)
+        assertTrue(isYard)
+        assertEquals(MODE.AUTO, mode)
+        world.yards:applyOverride(farmlandId, mode)
+        assertTrue(not (world.yards:getToggle(farmlandId)))
+    end
+end)
+
+test("a yard request is set only for the host or an admin, on a real farmland and mode", function()
+    local world = setup()
+    Event = { new = function(mt) return setmetatable({}, mt) end }
+    InitEventClass = function() end
+    world.texts.ui_on = "On"
+    world.texts.ui_off = "Off"
+    world:load("src/business/Settings.lua")
+    world:load("src/events/TCYardOverrideEvent.lua")
+    g_currentMission.TheContractor.Yards = world.yards
+    -- Standing spots need the engine's ground checks.
+    world.yards.refreshSpots = function() end
+    world.broadcasts = {}
+    g_server = { broadcastEvent = function(_, event) table.insert(world.broadcasts, event) end }
+    world.admins = {}
+    g_currentMission.userManager = {
+        getIsConnectionMasterUser = function(_, connection)
+            return world.admins[connection] == true
+        end,
+    }
+    local function newConnection()
+        return { getIsServer = function() return false end, getIsLocal = function() return false end }
+    end
+    local MODE = TheContractorYards.MODE
+
+    local player = newConnection()
+    TCYardOverrideEvent.new(4, MODE.ON):run(player)
+    assertEquals(MODE.AUTO, world.yards:getOverride(4))
+    assertEquals(0, #world.broadcasts)
+
+    local admin = newConnection()
+    world.admins[admin] = true
+    TCYardOverrideEvent.new(42, MODE.ON):run(admin)
+    TCYardOverrideEvent.new(4, 7):run(admin)
+    assertEquals(0, #world.broadcasts)
+
+    TCYardOverrideEvent.new(4, MODE.ON):run(admin)
+    assertEquals(MODE.ON, world.yards:getOverride(4))
+    assertEquals(1, #world.broadcasts)
+    assertEquals(4, world.broadcasts[1].farmlandId)
+
+    -- And a client applies what the server sends.
+    local client = TheContractorYards.new()
+    g_currentMission.TheContractor.Yards = client
+    TCYardOverrideEvent.new(4, MODE.ON):run({ getIsServer = function() return true end })
+    assertEquals(MODE.ON, client:getOverride(4))
+end)

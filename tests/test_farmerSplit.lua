@@ -253,3 +253,47 @@ test("only unowned farmlands with fields are split, in acres", function()
     assertEquals(3, farmlands[2].id)
     assertNear(500, farmlands[2].z, 0.001)
 end)
+
+test("117: a declared yard goes to a farmer without one however far, and its land isn't split", function()
+    setup()
+    -- Eight farmlands in a row, so four farmers who start spread out; one
+    -- yard far from every field, declared, and one as far, detected.
+    local farmlands = grid(8, 1, 30)
+    local yards = {
+        { farmlandId = 60, x = 0, z = 9000 },
+        { farmlandId = 61, x = 300, z = 9000, declared = true },
+    }
+    local result = TheContractorFarmerSplit.split(farmlands, yards, 60, 3)
+    local holders = {}
+    for _, farmer in ipairs(result.farmers) do
+        if farmer.yardFarmlandId ~= nil then
+            holders[farmer.yardFarmlandId] = farmer
+        end
+    end
+    assertTrue(holders[61] ~= nil)
+    assertEquals(nil, holders[60])
+
+    -- On the live map, a declared yard's farmland is left out of the split.
+    g_fieldManager = {
+        getFields = function()
+            local fields = {}
+            for id = 1, 3 do
+                table.insert(fields, {
+                    getFarmland = function() return { getId = function() return id end } end,
+                    getAreaHa = function() return 10 end,
+                    getCenterOfFieldWorldPosition = function() return id * 300, 0 end,
+                })
+            end
+            return fields
+        end,
+    }
+    g_farmlandManager = { getFarmlandOwner = function() return 0 end }
+    g_currentMission.TheContractor.Yards = {
+        getYards = function()
+            return { { farmlandId = 2, x = 600, z = 0, ownerFarmId = 0, how = "declared" } }
+        end,
+    }
+    local live, liveFarmlands = TheContractorFarmerSplit.splitLiveMap(30, 1)
+    assertEquals(2, #liveFarmlands)
+    assertEquals(nil, live.owners[2])
+end)
