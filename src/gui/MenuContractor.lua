@@ -4086,6 +4086,9 @@ function MenuContractor:addWorkshopProgressRows(vehicle, isService, add, farmPla
                     if chip == nil then
                         chip, tone, value = g_i18n:getText("tc_repair_methodChip_" .. item.operation), "info", ""
                     end
+                    if item.grade ~= nil then
+                        value = string.format(g_i18n:getText("tc_favour_partSize"), item.grade)
+                    end
                     add(name, value, chip, tone)
                 end
             end

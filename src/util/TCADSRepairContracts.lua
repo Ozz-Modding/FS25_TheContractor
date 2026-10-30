@@ -324,8 +324,11 @@ function TCADSRepairContracts.getProgress(vehicle, allKnown)
                     progress.fixed = progress.fixed + 1
                 end
                 local operation = TCADSRepairContracts.OPERATIONS[item.procedure] or "service"
+                -- 116: a stock part's size (nil for the rest), as a favour shows it.
+                local grade = item.kind == "consumable" and item.consumableId ~= nil and
+                    TCADSRepairContracts.getPartGrade(vehicle, item.consumableId) or nil
                 table.insert(progress.items, { id = tostring(item.id), kind = item.kind, nameKey = item.nameKey,
-                    operation = operation,
+                    operation = operation, grade = grade,
                     price = tonumber(item.price) or 0, done = done })
             else
                 progress.allKnown = false
