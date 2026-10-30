@@ -2727,12 +2727,9 @@ function MenuContractor:updateInboxWorkshopDetails(job)
         machineText = string.format(g_i18n:getText("tc_repair_machineHours"), machineText,
             math.floor(workshop.operatingHours + 0.5))
     end
-    -- 101: and the field it's broken down on. 116: or the farmer's yard.
-    if isBreakdown then
-        local field = g_fieldManager:getFieldById(workshop.fieldId)
-        machineText = string.format(g_i18n:getText("tc_breakdown_location"), machineText,
-            field ~= nil and field:getName() or tostring(workshop.fieldId))
-    elseif TheContractorRepairContracts.isFavourJob(job) then
+    -- 101: and the field it's broken down on. 116, 123: or the farmer's
+    -- yard.
+    if isBreakdown or TheContractorRepairContracts.isFavourJob(job) then
         local hours = workshop.operatingHours ~= nil and math.floor(workshop.operatingHours + 0.5) or nil
         machineText = job:getLocationText()
         if hours ~= nil then

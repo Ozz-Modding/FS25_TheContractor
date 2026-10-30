@@ -800,6 +800,145 @@ test("121: the farmer's machine and its attachment stream and save with the job 
     assertEquals(loaded.removals[2].machineId, 3)
 end)
 
+-- 123: in the farmer's yard ------------------------------------------------------------------
+
+-- The farmer's yard 5: one synced spot 20 m north of its middle, well off
+-- field 3; world.isOpen says which ground's open, world.yardOwner who owns it.
+local function addYard(world, tc, farmer)
+    farmer.yardFarmlandId = 5
+    world.yardOwner = 0
+    world.isOpen = function() return true end
+    tc.Yards = {
+        getSpots = function(_, farmlandId)
+            return farmlandId == 5 and { x = 0, z = 500, spots = { { x = 0, z = 520 } } } or nil
+        end,
+    }
+    TheContractorYards = { isOpenGround = function(_, x, z) return world.isOpen(x, z) end }
+    g_farmlandManager = { getFarmlandOwner = function() return world.yardOwner end }
+end
+
+-- A random() whose first roll is first, then math.random's.
+local function firstRoll(first)
+    local used = false
+    return function()
+        if not used then
+            used = true
+            return first
+        end
+        return math.random()
+    end
+end
+
+local TRACTOR = { id = 1, role = "mediumTractor", xmlFilename = "fendt942.xml", seed = 99, hours = 2000,
+    hoursDay = 10, hoursPerMonth = 30, fitted = {} }
+
+test("123: a farmer's machine breaks down in their yard YARD_SHARE of the time, facing its middle", function()
+    local world, tc = setup()
+    local farmer = addFarmer(world, tc, {})
+    addYard(world, tc, farmer)
+    local model = { width = 3, length = 6 }
+    local share = TheContractorFieldBreakdowns.YARD_SHARE
+
+    local spot = TheContractorFieldBreakdowns.pickFarmerSpot(farmer, 3, model, firstRoll(share * 0.5))
+    assertEquals(spot.yardFarmlandId, 5)
+    assertEquals(spot.fieldId, nil)
+    assertEquals(spot.x, 0)
+    assertEquals(spot.z, 520)
+    assertNear(math.abs(spot.rotY), math.pi, 0.0001, "facing the yard's middle, south")
+
+    spot = TheContractorFieldBreakdowns.pickFarmerSpot(farmer, 3, model, firstRoll(share + (1 - share) * 0.5))
+    assertEquals(spot.yardFarmlandId, nil)
+    assertEquals(spot.fieldId, 3)
+
+    -- No room for its corners, a player owns the yard, or no yard: the field.
+    world.isOpen = function(x, z) return math.abs(x) < 1 end
+    assertEquals(TheContractorFieldBreakdowns.pickFarmerSpot(farmer, 3, model, firstRoll(0)).fieldId, 3)
+    world.isOpen = function() return true end
+    world.yardOwner = 1
+    assertEquals(TheContractorFieldBreakdowns.pickFarmerSpot(farmer, 3, model, firstRoll(0)).fieldId, 3)
+    world.yardOwner = 0
+    farmer.yardFarmlandId = nil
+    assertEquals(TheContractorFieldBreakdowns.pickFarmerSpot(farmer, 3, model, firstRoll(0)).fieldId, 3)
+end)
+
+test("123: a yard breakdown is offered due today with the yard and no field, retried in the yard, and saved", function()
+    local world, tc = setup()
+    local farmer = addFarmer(world, tc, { TRACTOR })
+    addYard(world, tc, farmer)
+    TheContractorFieldBreakdowns.YARD_SHARE = 1
+    tc.FieldBreakdowns.forcedFieldService = "player"
+    world:trigger()
+
+    local entry = tc.RepairContracts.arrivals[1]
+    assertEquals(entry.yardFarmlandId, 5)
+    assertEquals(entry.fieldId, nil)
+    assertEquals(entry.kind, "breakdown")
+    assertTrue(TheContractorFieldBreakdowns.hasOpenBreakdown(1), "still one at a time")
+
+    local xmlFile = {}
+    tc.RepairContracts:saveToXmlFile(xmlFile)
+    local loaded = TheContractorRepairContracts.new()
+    loaded:loadFromXMLFile(xmlFile)
+    local copied = loaded.arrivals[1]
+    assertEquals(copied.yardFarmlandId, 5)
+    assertEquals(copied.fieldId, nil)
+    assertEquals(copied.kind, "breakdown")
+    assertEquals(copied.machineId, 1)
+    assertNear(copied.z, 520, 0.001)
+
+    -- Its spot's taken: another in the same yard.
+    entry.x, entry.z = -1, -1
+    world.spotBlocked = { true }
+    tc.RepairContracts:update(TheContractorRepairContracts.PLACE_CHECK_MS)
+    assertEquals(#world.calls.spawned, 0)
+    assertEquals(entry.yardFarmlandId, 5)
+    assertEquals(entry.z, 520)
+
+    tc.RepairContracts:update(TheContractorRepairContracts.PLACE_CHECK_MS)
+    world:finishLoad()
+    assertEquals(world.prepared.kind, "breakdown")
+    assertEquals(#world.painted, 0, "no ruts in a yard")
+    local job = tc.Jobs:getAllJobs(1)[1]
+    assertTrue(TheContractorRepairContracts.isBreakdownJob(job))
+    assertEquals(job.deadlineDay, world.today)
+    assertEquals(job.workshop.yardFarmlandId, 5)
+    assertEquals(job.workshop.fieldId, nil)
+    assertEquals(job.workshop.serviceLevel, "player")
+    assertEquals(job.customerId, 4)
+    assertEquals(job.workshop.benchmarkMargin, 0.5, "priced against the field margin, as a breakdown")
+
+    local stream = world:newStream()
+    TheContractorJobs.writeJob(stream, job)
+    local copy = TheContractorJobs.readJob(stream)
+    assertEquals(copy.workshop.yardFarmlandId, 5)
+    assertEquals(copy.workshop.fieldId, nil)
+    xmlFile = {}
+    tc.Jobs:saveToXmlFile(xmlFile)
+    local jobs = TheContractorJobs.new()
+    jobs:loadFromXMLFile(xmlFile)
+    assertEquals(jobs:getJob(1, job.id).workshop.yardFarmlandId, 5)
+end)
+
+test("123: a yard breakdown with no room left in the yard is dropped, and one not placed by midnight too", function()
+    local world, tc = setup()
+    local farmer = addFarmer(world, tc, { TRACTOR })
+    addYard(world, tc, farmer)
+    TheContractorFieldBreakdowns.YARD_SHARE = 1
+    world:trigger()
+    world.isOpen = function() return false end
+    world.spotBlocked = { true }
+    tc.RepairContracts:update(TheContractorRepairContracts.PLACE_CHECK_MS)
+    assertEquals(#tc.RepairContracts.arrivals, 0)
+
+    world.isOpen = function() return true end
+    world:trigger()
+    assertEquals(tc.RepairContracts.arrivals[1].yardFarmlandId, 5)
+    TheContractorRepairContracts.ARRIVAL_CHANCE = 0
+    g_currentMission.environment.currentMonotonicDay = world.today + 1
+    tc.RepairContracts:onDayChanged()
+    assertEquals(#tc.RepairContracts.arrivals, 0)
+end)
+
 -- The map marker --------------------------------------------------------------------------
 
 test("a marker on the machine while it's offered or taken on, gone after", function()

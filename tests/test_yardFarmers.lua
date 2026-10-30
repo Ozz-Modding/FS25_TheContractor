@@ -245,6 +245,7 @@ local function addFavour(world, yard)
     local vehicle = { rootNode = { x = 100, z = 50, dirX = 1, dirZ = 0 }, size = { width = 3, length = 6 } }
     TheContractorRepairContracts = {
         isFavourJob = function(job) return job.favour == true end,
+        isBreakdownJob = function(job) return job.breakdown == true end,
         getVehicle = function(job) return job.workshop.vehicleId == 9 and vehicle or nil end,
     }
     getWorldTranslation = function(node) return node.x, 0, node.z end
@@ -275,6 +276,29 @@ test("a farmer with a favour open waits beside its machine, facing it, day or ni
     job.state = TheContractorJob.STATE.ACCEPTED
     job.workshop.vehicleId = 0
     assertEquals(nil, TCYardFarmers.getWanted()[2])
+end)
+
+test("123: a farmer whose machine has broken down waits beside it too, the lower job's with two open", function()
+    local world = setup()
+    world.yards:applySpots(5, spotsEntry(3))
+    addFarmer(world, 2, 5)
+    local job = addFavour(world, false)
+    job.favour, job.breakdown = nil, true
+
+    setHour(23)
+    local spot = TCYardFarmers.getWanted()[2].spot
+    assertNear(101.5, spot.x, 0.0001)
+    assertEquals(spot.jobId, 7)
+
+    -- Any other job of theirs doesn't count.
+    job.breakdown = nil
+    assertEquals(nil, TCYardFarmers.getWanted()[2])
+
+    -- A favour (job 3) and a breakdown (job 7) open at once: the favour's.
+    job.breakdown = true
+    g_currentMission.TheContractor.Jobs.jobsByFarm[2] = { [3] = { id = 3, favour = true,
+        state = TheContractorJob.STATE.ACCEPTED, customerId = 2, workshop = { vehicleId = 9 } } }
+    assertEquals(TCYardFarmers.getWanted()[2].spot.jobId, 3)
 end)
 
 test("in a yard the farmer stands on the machine's side nearer the yard's middle, and moves with it", function()

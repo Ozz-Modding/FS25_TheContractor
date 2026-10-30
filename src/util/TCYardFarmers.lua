@@ -13,8 +13,9 @@
 -- In a yard with a farmhouse, a slot is spent near it (a spot marked
 -- nearHouse) NEAR_HOUSE_PERCENT of the time, and on any spot otherwise. A
 -- farmer faces the yard's middle and turns to a local player who walks up.
--- A farmer with a favour open (116) waits by its machine instead, yard or
--- field, day or night (getFavourSpot).
+-- A farmer with a favour open (116), or one of their machines broken down
+-- (101, 123), waits by the machine instead, yard or field, day or night
+-- (getMachineSpot).
 --
 -- Showing them is TCIdleStaff's: a HumanGraphicsComponent from their look,
 -- loaded within LOAD_DISTANCE and freed beyond UNLOAD_DISTANCE, so a map
@@ -137,33 +138,39 @@ end
 -- away from walls); on a field, a side by our hash. The machine's synced,
 -- so every machine has the same spot. Its key has the machine's position
 -- (to FAVOUR_KEY_GRID metres), so a moved machine moves them, out of view.
+-- 123: the same for a breakdown (101) of one of their machines, in the yard
+-- or on the field. With two open at once, the lower job id's, so every
+-- machine picks the same one.
 TCYardFarmers.FAVOUR_GAP = 1
 TCYardFarmers.FAVOUR_FORWARD = 0.25
 TCYardFarmers.FAVOUR_KEY_GRID = 2
 
-local function isFavourOpen(job)
+local function isMachineJobOpen(job)
     local state = job.state
-    return TheContractorRepairContracts.isFavourJob(job) and (state == TheContractorJob.STATE.OFFERED or
-        state == TheContractorJob.STATE.NEGOTIATING or state == TheContractorJob.STATE.ACCEPTED)
+    return (TheContractorRepairContracts.isFavourJob(job) or TheContractorRepairContracts.isBreakdownJob(job)) and
+        (state == TheContractorJob.STATE.OFFERED or state == TheContractorJob.STATE.NEGOTIATING or
+        state == TheContractorJob.STATE.ACCEPTED)
 end
 
--- The open favour this farmer asked, with its machine, or nil. The farmer's
--- the job's customer (workshop.farmerId stays on the server).
-function TCYardFarmers.getFavour(person, jobs)
+-- The open favour this farmer asked, or breakdown of their machine (123),
+-- with its machine, or nil. The farmer's the job's customer
+-- (workshop.farmerId stays on the server).
+function TCYardFarmers.getMachineJob(person, jobs)
     if TheContractorRepairContracts == nil or jobs == nil then
         return nil
     end
+    local found, foundVehicle = nil, nil
     for _, farmJobs in pairs(jobs.jobsByFarm) do
         for _, job in pairs(farmJobs) do
-            if job.customerId == person.id and isFavourOpen(job) then
+            if job.customerId == person.id and isMachineJobOpen(job) and (found == nil or job.id < found.id) then
                 local vehicle = TheContractorRepairContracts.getVehicle(job)
                 if vehicle ~= nil and vehicle.rootNode ~= nil then
-                    return job, vehicle
+                    found, foundVehicle = job, vehicle
                 end
             end
         end
     end
-    return nil
+    return found, foundVehicle
 end
 
 -- Where to stand beside a machine at (x, z) heading (dirX, dirZ), width by
@@ -181,8 +188,8 @@ function TCYardFarmers.getBesideSpot(x, z, dirX, dirZ, width, length, side, towa
     return px, pz, MathUtil.getYRotationFromDirection(x - px, z - pz)
 end
 
--- The spot by a favour's machine, in getSpot's shape.
-function TCYardFarmers.getFavourSpot(person, job, vehicle, yards)
+-- The spot by a favour's or breakdown's machine, in getSpot's shape.
+function TCYardFarmers.getMachineSpot(person, job, vehicle, yards)
     local x, _, z = getWorldTranslation(vehicle.rootNode)
     local dirX, _, dirZ = localDirectionToWorld(vehicle.rootNode, 0, 0, 1)
     local length = math.sqrt(dirX * dirX + dirZ * dirZ)
@@ -211,7 +218,7 @@ function TCYardFarmers.getFavourSpot(person, job, vehicle, yards)
 end
 
 -- personId -> { person, spot } for every farmer who should be in their
--- yard (or by their favour's machine) now.
+-- yard (or by their favour's or broken-down machine) now.
 function TCYardFarmers.getWanted()
     local wanted = {}
     local mission = g_currentMission
@@ -222,9 +229,9 @@ function TCYardFarmers.getWanted()
     local slot = TCYardFarmers.getSlot(TheContractorWorkingHours.getNow())
     local day = mission.environment.currentMonotonicDay or 0
     for _, person in ipairs(tc.Farmers:getFarmers()) do
-        local job, vehicle = TCYardFarmers.getFavour(person, tc.Jobs)
+        local job, vehicle = TCYardFarmers.getMachineJob(person, tc.Jobs)
         if job ~= nil then
-            wanted[person.id] = { person = person, spot = TCYardFarmers.getFavourSpot(person, job, vehicle, tc.Yards) }
+            wanted[person.id] = { person = person, spot = TCYardFarmers.getMachineSpot(person, job, vehicle, tc.Yards) }
         elseif slot ~= nil and TCYardFarmers.getReason(person, tc.Yards) == nil then
             wanted[person.id] = {
                 person = person,
@@ -348,11 +355,12 @@ function TCYardFarmers.describe()
     for _, person in ipairs(tc.Farmers:getFarmers()) do
         local reason = TCYardFarmers.getReason(person, tc.Yards)
         local figure = TCYardFarmers.figures[person.id]
-        local favourJob, favourVehicle = TCYardFarmers.getFavour(person, tc.Jobs)
+        local machineJob, machineVehicle = TCYardFarmers.getMachineJob(person, tc.Jobs)
         local text
-        if favourJob ~= nil then
-            local spot = TCYardFarmers.getFavourSpot(person, favourJob, favourVehicle, tc.Yards)
-            text = string.format("by their favour's machine (job %d) at %.0f, %.0f, %.0f m away", favourJob.id,
+        if machineJob ~= nil then
+            local spot = TCYardFarmers.getMachineSpot(person, machineJob, machineVehicle, tc.Yards)
+            text = string.format("by their %s machine (job %d) at %.0f, %.0f, %.0f m away",
+                TheContractorRepairContracts.isFavourJob(machineJob) and "favour's" or "broken-down", machineJob.id,
                 spot.x, spot.z, MathUtil.vector3Length(spot.x - cx, spot.y - cy, spot.z - cz))
             if figure == nil then
                 text = text .. ", not there yet"
