@@ -25,8 +25,15 @@
 -- van mostly gets jobs a tool box can do. One at a time per farm, in
 -- working hours.
 --
+-- 121: the machine is the field's farmer's own (TheContractorFarmerFleet),
+-- one ADS can take that isn't out already: their combine HARVESTER_SHARE of
+-- the time (never in winter), else a tractor or their telehandler. It has
+-- its own seed and age, brings its attachment (a combine's header), and the
+-- farmer's the customer. A field no farmer holds, or a farmer with nothing
+-- ADS can take, gets a random model with no customer, as before.
+--
 -- State: none of its own. The incident's data is { fieldId, fieldService,
--- severity }; the model and the spot are picked as it happens.
+-- severity }; the machine, the model and the spot are picked as it happens.
 
 TheContractorFieldBreakdowns = {}
 TheContractorFieldBreakdowns_mt = Class(TheContractorFieldBreakdowns)
@@ -213,6 +220,43 @@ function TheContractorFieldBreakdowns.pickModel(repairContracts, random)
     return list[math.floor(random() * #list) + 1] or list[#list]
 end
 
+-- 121: one of the farmer's machines ADS can take and isn't out ({ machine,
+-- model }), or nil: their combine HARVESTER_SHARE of the time when there's
+-- one (never in winter), else one of the rest.
+function TheContractorFieldBreakdowns.pickFarmerMachine(farmer, repairContracts, random)
+    if farmer == nil then
+        return nil
+    end
+    local isCombine = function(machine)
+        return machine.role == TheContractorFarmerFleet.ROLE.COMBINE
+    end
+    local combines = {}
+    if not TheContractorFieldBreakdowns.isWinter() then
+        combines = TheContractorFarmerFleet.getRepairableMachines(farmer, repairContracts, isCombine)
+    end
+    local others = TheContractorFarmerFleet.getRepairableMachines(farmer, repairContracts, function(machine)
+        return not isCombine(machine)
+    end)
+    local list = others
+    if #combines > 0 and (#others == 0 or random() < TheContractorFieldBreakdowns.HARVESTER_SHARE) then
+        list = combines
+    end
+    if #list == 0 then
+        return nil
+    end
+    return list[math.floor(random() * #list) + 1] or list[#list]
+end
+
+-- 121: the farmer holding a field, or nil.
+function TheContractorFieldBreakdowns.getFieldFarmer(field)
+    local farmers = g_currentMission.TheContractor.Farmers
+    local farmland = field ~= nil and field.getFarmland ~= nil and field:getFarmland() or nil
+    if farmers == nil or farmland == nil then
+        return nil
+    end
+    return farmers:getHolder(farmland:getId())
+end
+
 -- How far in from the edge the model's centre can be: { min, max }.
 function TheContractorFieldBreakdowns.getEdgeDepth(model)
     local minDepth = math.max(model.width, model.length) * 0.5 + TheContractorFieldBreakdowns.EDGE_GAP
@@ -251,6 +295,20 @@ function TheContractorFieldBreakdowns:onBreakdown(incident)
     local field = g_fieldManager:getFieldById(data.fieldId)
     if not TCADSRepairContracts.isActive() or not TheContractorFieldBreakdowns.isEligibleField(field) then
         return TheContractorRandomEvents.DONE
+    end
+
+    -- 121: the farmer's own machine, with room for it and its attachment.
+    local farmer = TheContractorFieldBreakdowns.getFieldFarmer(field)
+    local choice = TheContractorFieldBreakdowns.pickFarmerMachine(farmer, tc.RepairContracts, math.random)
+    if choice ~= nil then
+        local attachment = TheContractorFarmerFleet.getAttachmentArrival(farmer, choice.machine)
+        local x, z, rotY = TheContractorFieldBreakdowns.pickSpot(data.fieldId,
+            TheContractorFarmerFleet.getFootprint(choice.model, attachment), math.random)
+        if x ~= nil then
+            tc.RepairContracts:queueFieldArrival(incident.farmId, data.fieldId, choice.model, x, z, rotY,
+                data.fieldService, data.severity, { farmer = farmer, machine = choice.machine, attachment = attachment })
+            return TheContractorRandomEvents.DONE
+        end
     end
 
     local model = TheContractorFieldBreakdowns.pickModel(tc.RepairContracts, math.random)

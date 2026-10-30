@@ -438,6 +438,16 @@ function MenuContractor:initialize()
         end
     }
     self.menuButtonInfoStaffPerson = { self.btnBack, self.btnNextPage, self.btnPrevPage, self.btnEditPerson }
+    -- 122: and a farmer's machines.
+    self.btnPersonMachines = {
+        inputAction = InputAction.MENU_EXTRA_1,
+        text = g_i18n:getText("tc_fleet_machinesButton"),
+        callback = function()
+            self:onClickPersonMachines()
+        end
+    }
+    self.menuButtonInfoStaffFarmer = { self.btnBack, self.btnNextPage, self.btnPrevPage, self.btnEditPerson,
+        self.btnPersonMachines }
 
     -- Finances (049) - write off the highlighted invoice, only while it's
     -- overdue (see getMenuButtonInfo).
@@ -866,7 +876,11 @@ function MenuContractor:getMenuButtonInfo()
             return officeRow.member ~= nil and self.menuButtonInfoStaffOfficeEmployed or
                 self.menuButtonInfoStaffOfficeVacant
         end
-        if self:getSelectedPerson() ~= nil then
+        local person = self:getSelectedPerson()
+        if person ~= nil then
+            if not person.isOfficial and person.machines ~= nil and #person.machines > 0 then
+                return self.menuButtonInfoStaffFarmer
+            end
             return self.menuButtonInfoStaffPerson
         end
     end
@@ -2183,6 +2197,92 @@ function MenuContractor:onClickEditPerson()
         return
     end
     self:openEditPerson(person, TCEditPersonDialog.KIND.FARMER)
+end
+
+-- 122: "Role: model" for one of a farmer's machines.
+local function getMachineText(machine)
+    return string.format(g_i18n:getText("tc_fleet_machineLine"), TheContractorFarmerFleet.getRoleText(machine.role),
+        TheContractorFarmerFleet.getModelName(machine.xmlFilename))
+end
+
+-- 122: the highlighted farmer's machines, then the models for the one
+-- picked. OptionDialog closes before its callback runs, so the second can
+-- open from the first's.
+function MenuContractor:onClickPersonMachines()
+    local person = self:getSelectedPerson()
+    if person == nil or person.isOfficial or person.machines == nil or #person.machines == 0 then
+        return
+    end
+    local machines = TheContractorFarmerFleet.getSorted(person.machines)
+    local options = {}
+    for _, machine in ipairs(machines) do
+        table.insert(options, getMachineText(machine))
+    end
+    local personId = person.id
+    OptionDialog.show(function(index)
+        local machine = machines[index]
+        if machine == nil or self.selectedPersonId ~= personId then
+            return
+        end
+        self:openMachineModels(person, machine)
+    end, string.format(g_i18n:getText("tc_fleet_machinesPrompt"), person.name),
+        g_i18n:getText("tc_fleet_machinesTitle"), options)
+end
+
+function MenuContractor:openMachineModels(person, machine)
+    local models = TheContractorFarmerFleet.getModelChoices(TheContractorFarmerFleet.buildCatalog(), person, machine)
+    if #models == 0 then
+        InfoDialog.show(string.format(g_i18n:getText("tc_fleet_noModels"),
+            string.lower(TheContractorFarmerFleet.getRoleText(machine.role))))
+        return
+    end
+    local options, current = {}, 1
+    for index, model in ipairs(models) do
+        local name = TheContractorFarmerFleet.getModelName(model.xmlFilename)
+        if model.xmlFilename == machine.xmlFilename then
+            current = index
+            name = string.format(g_i18n:getText("tc_fleet_modelCurrent"), name)
+        end
+        table.insert(options, name)
+    end
+    local personId, machineId = person.id, machine.id
+    OptionDialog.show(function(index)
+        local model = models[index]
+        if model == nil or model.xmlFilename == machine.xmlFilename or self.selectedPersonId ~= personId then
+            return
+        end
+        -- Told how it went in onFarmerMachineEdited (synchronous for the
+        -- host and single player, once the result arrives for a client).
+        self.pendingMachineEdit = { personId = personId, machineId = machineId }
+        g_client:getServerConnection():sendEvent(TCEditFarmerMachineEvent.new(g_currentMission:getFarmId(),
+            personId, machineId, model.xmlFilename))
+    end, string.format(g_i18n:getText("tc_fleet_modelsPrompt"), person.name,
+        string.lower(TheContractorFarmerFleet.getRoleText(machine.role))),
+        g_i18n:getText("tc_fleet_machinesTitle"), options, current)
+end
+
+-- 122: how this farm's edit of a farmer's machine went
+-- (TheContractorFarmerFleet.onEditResult). Only the player who asked is
+-- told: a refusal and why, or the attachment that had to change with it.
+function MenuContractor:onFarmerMachineEdited(personId, machineId, problem, repickedId)
+    local pending = self.pendingMachineEdit
+    if pending == nil or pending.personId ~= personId or pending.machineId ~= machineId then
+        return
+    end
+    self.pendingMachineEdit = nil
+    if problem ~= nil then
+        InfoDialog.show(g_i18n:getText("tc_fleet_refused_" .. problem))
+        return
+    end
+    local person = g_currentMission.TheContractor.Farmers:getPerson(personId)
+    local machine = TheContractorFarmerFleet.getMachine(person, machineId)
+    local attachment = TheContractorFarmerFleet.getMachine(person, repickedId)
+    if machine ~= nil and attachment ~= nil then
+        InfoDialog.show(string.format(g_i18n:getText("tc_fleet_attachmentRepicked"),
+            TheContractorFarmerFleet.getModelName(machine.xmlFilename),
+            string.lower(TheContractorFarmerFleet.getRoleText(attachment.role)),
+            TheContractorFarmerFleet.getModelName(attachment.xmlFilename)))
+    end
 end
 
 -- kind: TCEditPersonDialog.KIND. draft: TCEditPersonDialog.show's unsaved
@@ -6133,8 +6233,28 @@ function MenuContractor:updatePersonDetails(row)
     self.staffPersonLastJob:setText(history.last ~= nil and string.format(g_i18n:getText("tc_people_lastJob"),
         history.last.title or "", TCCalendar.formatDay(history.last.day)) or g_i18n:getText("tc_people_lastJobNone"))
 
-    self.staffPersonAbout:setText(g_i18n:getText(person.isOfficial and "tc_people_about_official" or
-        "tc_people_about_farmer"))
+    -- 122: a farmer's machines take the About section's place.
+    local machines = TheContractorFarmerFleet.getSorted(person.machines)
+    local showMachines = not person.isOfficial
+    self.staffPersonSectionTitle:setText(g_i18n:getText(showMachines and "tc_fleet_detailsHeading" or
+        "tc_people_aboutHeading"))
+    self.staffPersonAbout:setVisible(not showMachines)
+    self.staffPersonMachinesLeft:setVisible(showMachines)
+    self.staffPersonMachinesRight:setVisible(showMachines)
+    if showMachines then
+        local left, right = {}, {}
+        local half = math.ceil(#machines / 2)
+        for index, machine in ipairs(machines) do
+            table.insert(index <= half and left or right, getMachineText(machine))
+        end
+        if #machines == 0 then
+            left = { g_i18n:getText("tc_fleet_none") }
+        end
+        self.staffPersonMachinesLeft:setText(table.concat(left, "\n"))
+        self.staffPersonMachinesRight:setText(table.concat(right, "\n"))
+    else
+        self.staffPersonAbout:setText(g_i18n:getText("tc_people_about_official"))
+    end
     local hasNoLand = not person.isOfficial and row.farmlandCount == 0
     local note = ""
     if tc.Relationships:refuses(farmId, person.id) then

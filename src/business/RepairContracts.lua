@@ -52,6 +52,20 @@
 -- kind, and an offer due the same day. What they need is the kit that can
 -- work in a field (getBreakdownProblem, a warning), not the workshop's tools.
 --
+-- 121: a breakdown on a farmer's field is one of that farmer's own machines
+-- (TheContractorFarmerFleet) when they have one ADS can take: its model,
+-- seed and age, the farmer as the customer (entry/workshop farmerId and
+-- machineId, as a favour's).
+--
+-- 121: a farmer's machine that has an attachment (a combine's header, a
+-- telehandler's bale fork) brings it: the spot is found for both
+-- (TheContractorFarmerFleet.getFootprint), and once ADS has prepared the
+-- machine the attachment's loaded in front of it and hitched on
+-- (TCJobSiteSetup.hitchImplement) before the offer goes up. One that won't
+-- load or hitch is left out. It's the customer's too (workshop.attachmentId,
+-- a contract vehicle, but not one a workshop works on), and the customer
+-- takes it away with the machine, wherever it's been left.
+--
 -- Farmer favours (116, TheContractorFarmerFavours) use it too: a farmer's
 -- own machine at a spot in their yard or on their field (entry.favour), with
 -- one stock part worn (a service of only that, prepareVehicle's targets),
@@ -298,6 +312,10 @@ function TheContractorRepairContracts.getContractVehicleIds()
             if workshop ~= nil and workshop.vehicleId ~= nil and workshop.vehicleId ~= 0 then
                 result[workshop.vehicleId] = job
             end
+            -- 121: the machine's attachment is the customer's too.
+            if workshop ~= nil and workshop.attachmentId ~= nil and workshop.attachmentId ~= 0 then
+                result[workshop.attachmentId] = job
+            end
         end
     end
     contractVehicleCache = result
@@ -328,8 +346,11 @@ function TheContractorRepairContracts.isWorkableVehicle(vehicle, farmId)
     if vehicle == nil or farmId == nil or farmId == FarmManager.SPECTATOR_FARM_ID then
         return false
     end
-    local job = TheContractorRepairContracts.getContractVehicleIds()[NetworkUtil.getObjectId(vehicle)]
-    return job ~= nil and not job:isTerminal() and vehicle:getOwnerFarmId() == farmId
+    local vehicleId = NetworkUtil.getObjectId(vehicle)
+    local job = TheContractorRepairContracts.getContractVehicleIds()[vehicleId]
+    -- 121: never its attachment, which ADS has nothing to do with.
+    return job ~= nil and not job:isTerminal() and job.workshop.vehicleId == vehicleId and
+        vehicle:getOwnerFarmId() == farmId
 end
 
 -- Adds the workable customer's machines among a workshop trigger's shapes
@@ -609,7 +630,9 @@ function TheContractorRepairContracts:getEligibleModels(zoneType)
     return models
 end
 
--- 101: a model of either zone type, by its xml (a field arrival's).
+-- 101: a model of either zone type, by its xml (a field arrival's). 121: or
+-- any other store vehicle ADS can take that drives (a farmer's telehandler,
+-- which no zone gets), or nil.
 function TheContractorRepairContracts:findModelByXml(xmlFilename)
     for _, zoneType in pairs(PlaceableTCRepairZone.ZONE_TYPE) do
         for _, model in ipairs(self:getEligibleModels(zoneType)) do
@@ -618,7 +641,34 @@ function TheContractorRepairContracts:findModelByXml(xmlFilename)
             end
         end
     end
-    return nil
+    self.modelCache.byXml = self.modelCache.byXml or {}
+    local cached = self.modelCache.byXml[xmlFilename]
+    if cached == nil then
+        cached = TheContractorRepairContracts.makeModel(xmlFilename) or false
+        self.modelCache.byXml[xmlFilename] = cached
+    end
+    return cached or nil
+end
+
+-- 121: a model for any store vehicle ADS can take that drives, or nil.
+function TheContractorRepairContracts.makeModel(xmlFilename)
+    local storeItem = xmlFilename ~= nil and g_storeManager:getItemByXMLFilename(xmlFilename) or nil
+    local vehicleType = storeItem ~= nil and g_vehicleTypeManager:getObjectTypeFromXML(xmlFilename) or nil
+    local specs = vehicleType ~= nil and vehicleType.specializationsByName or nil
+    if specs == nil or specs.AdvancedDamageSystem == nil or specs.drivable == nil then
+        return nil
+    end
+    local size = StoreItemUtil.getSizeValues(xmlFilename, "vehicle", storeItem.rotation or 0, {})
+    return {
+        xmlFilename = xmlFilename,
+        categoryName = storeItem.categoryName,
+        name = storeItem.name or xmlFilename,
+        width = size.width or 3,
+        length = size.length or 5,
+        height = size.height or TCParking.DEFAULT_HEIGHT,
+        widthOffset = size.widthOffset or 0,
+        lengthOffset = size.lengthOffset or 0,
+    }
 end
 
 function TheContractorRepairContracts.fitsBay(model, bayArea)
@@ -794,8 +844,12 @@ end
 
 -- 101: a customer's machine to break down on a field, at a spot
 -- TheContractorFieldBreakdowns picked for its model: placed like any
--- arrival, prepared as ADS's breakdown kind, offered due today.
-function TheContractorRepairContracts:queueFieldArrival(farmId, fieldId, model, x, z, rotY, fieldService, severity)
+-- arrival, prepared as ADS's breakdown kind, offered due today. 121: owned
+-- is { farmer, machine, attachment } when it's a farmer's own machine (its
+-- seed and age, and its attachment's getAttachmentArrival), else nil.
+function TheContractorRepairContracts:queueFieldArrival(farmId, fieldId, model, x, z, rotY, fieldService, severity,
+        owned)
+    local environment = g_currentMission.environment
     local entry = {
         farmId = farmId,
         fieldId = fieldId,
@@ -812,16 +866,26 @@ function TheContractorRepairContracts:queueFieldArrival(farmId, fieldId, model, 
         blockedDays = 0,
         isLoading = false,
     }
+    if owned ~= nil then
+        entry.farmerId = owned.farmer.id
+        entry.machineId = owned.machine.id
+        entry.seed = owned.machine.seed
+        entry.operatingHours = TheContractorFarmerFleet.getHours(owned.machine, environment.currentMonotonicDay,
+            environment.daysPerPeriod)
+        entry.attachment = owned.attachment
+    end
     table.insert(self.arrivals, entry)
-    TCLog.info("TheContractor: farm %d field %d: %s (breakdown, %s, severity %d) on its way", farmId, fieldId,
-        model.name, tostring(fieldService), severity)
+    TCLog.info("TheContractor: farm %d field %d: %s (breakdown, %s, severity %d%s) on its way", farmId, fieldId,
+        model.name, tostring(fieldService), severity,
+        owned ~= nil and string.format(", farmer #%d's", owned.farmer.id) or "")
     return entry
 end
 
 -- 116: a farmer's own machine to a spot in their yard or on their field
 -- (TheContractorFarmerFavours.pickSpot's), for a favour: the machine's own
 -- model, seed and age. What's wrong with it is picked once it's loaded.
-function TheContractorRepairContracts:queueFavourArrival(farmId, farmer, machine, model, spot)
+-- 121: attachment is its getAttachmentArrival, or nil.
+function TheContractorRepairContracts:queueFavourArrival(farmId, farmer, machine, model, spot, attachment)
     local environment = g_currentMission.environment
     local entry = {
         farmId = farmId,
@@ -836,8 +900,9 @@ function TheContractorRepairContracts:queueFavourArrival(farmId, farmer, machine
         xmlFilename = model.xmlFilename,
         severity = TheContractorFarmerFavours.SEVERITY,
         seed = machine.seed,
-        operatingHours = TheContractorFarmerFavours.getHours(machine, environment.currentMonotonicDay,
+        operatingHours = TheContractorFarmerFleet.getHours(machine, environment.currentMonotonicDay,
             environment.daysPerPeriod),
+        attachment = attachment,
         queuedDay = environment.currentMonotonicDay,
         attempts = 0,
         blockedDays = 0,
@@ -1001,11 +1066,18 @@ function TheContractorRepairContracts.getSpotArea(entry, model)
     }
 end
 
+-- 101, 116: a spot arrival's model, and with an attachment (121) the
+-- ground they take together; nil if the model's gone.
+function TheContractorRepairContracts:getArrivalModel(entry)
+    local model = self:findModelByXml(entry.xmlFilename)
+    return model ~= nil and TheContractorFarmerFleet.getFootprint(model, entry.attachment) or nil
+end
+
 -- Where a queued arrival goes and what it is: area, model (nil if its
 -- zone's been sold or shrunk, or the model's gone).
 function TheContractorRepairContracts:getArrivalPlace(entry)
     if entry.fieldId ~= nil or entry.favour then
-        local model = self:findModelByXml(entry.xmlFilename)
+        local model = self:getArrivalModel(entry)
         if model == nil or entry.x == nil or entry.z == nil then
             return nil, nil
         end
@@ -1103,6 +1175,15 @@ function TheContractorRepairContracts:retryArrival(entry, zone, reason)
         end
         return
     end
+    if entry.fieldId ~= nil and entry.machineId ~= nil then
+        -- 121: a farmer's own machine or nothing, as a favour's.
+        if entry.attempts > TheContractorRepairContracts.PREPARE_RETRIES then
+            TCLog.info("TheContractor: farm %d breakdown on field %d: farmer #%s's machine dropped (%s)",
+                entry.farmId, entry.fieldId, tostring(entry.farmerId), tostring(reason))
+            removeFrom(self.arrivals, entry)
+        end
+        return
+    end
     if entry.fieldId ~= nil then
         -- 101: another model for the field, somewhere on it that it fits.
         local model = entry.attempts <= TheContractorRepairContracts.PREPARE_RETRIES and
@@ -1180,6 +1261,8 @@ function TheContractorRepairContracts:onArrivalLoaded(vehicles, loadingState, ar
             -- 101: a breakdown's field service level (nil for the rest).
             fieldService = entry.fieldService,
             seed = entry.seed,
+            -- 121: a farmer's own machine's age (nil the first time out).
+            operatingHours = entry.operatingHours,
             ref = string.format("TheContractor:%d:%d", entry.farmId, entry.seed),
             targets = targets or nil,
         })
@@ -1207,12 +1290,55 @@ function TheContractorRepairContracts:onArrivalLoaded(vehicles, loadingState, ar
         return
     end
 
-    removeFrom(self.arrivals, entry)
-    if entry.fieldId ~= nil then
-        -- 101: only now the spot's final, so a retry leaves no ruts behind.
-        TheContractorFieldBreakdowns.clearSpot(entry, self:findModelByXml(entry.xmlFilename))
+    self:loadAttachment(entry, vehicle, function(attachment)
+        removeFrom(self.arrivals, entry)
+        if entry.fieldId ~= nil then
+            -- 101: only now the spot's final, so a retry leaves no ruts behind.
+            TheContractorFieldBreakdowns.clearSpot(entry, self:getArrivalModel(entry))
+        end
+        self:createOffer(entry, vehicle, quote, attachment)
+    end)
+end
+
+-- 121: a farmer's machine's attachment, loaded in front of it and hitched
+-- on; then done(attachment), or done(nil) without one, or when it won't
+-- load or hitch. The arrival stays queued (and loading) meanwhile.
+function TheContractorRepairContracts:loadAttachment(entry, vehicle, done)
+    local attachment = entry.attachment
+    local storeItem = attachment ~= nil and g_storeManager:getItemByXMLFilename(attachment.xmlFilename) or nil
+    local model = storeItem ~= nil and self:findModelByXml(entry.xmlFilename) or nil
+    if model == nil or vehicle.rootNode == nil then
+        done(nil)
+        return
     end
-    self:createOffer(entry, vehicle, quote)
+    local x, _, z = getWorldTranslation(vehicle.rootNode)
+    local dirX, _, dirZ = localDirectionToWorld(vehicle.rootNode, 0, 0, 1)
+    local ahead = (model.lengthOffset or 0) + model.length * 0.5 + attachment.length * 0.5 +
+        TheContractorRepairContracts.CLEARANCE
+    local loadingData = VehicleLoadingData.new()
+    loadingData:setStoreItem(storeItem)
+    loadingData:setIgnoreShopOffset(true)
+    loadingData:setPosition(x + dirX * ahead, nil, z + dirZ * ahead, TCParking.PLACE_HEIGHT_OFFSET)
+    loadingData:setRotation(0, MathUtil.getYRotationFromDirection(dirX, dirZ), 0)
+    loadingData:setPropertyState(VehiclePropertyState.MISSION)
+    loadingData:setOwnerFarmId(entry.farmId)
+    entry.isLoading = true
+    loadingData:load(self.onAttachmentLoaded, self, { entry = entry, vehicle = vehicle, done = done })
+end
+
+-- VehicleLoadingData's callback for loadAttachment.
+function TheContractorRepairContracts:onAttachmentLoaded(vehicles, loadingState, args)
+    local entry = args.entry
+    entry.isLoading = false
+    local attachment = vehicles ~= nil and vehicles[1] or nil
+    if attachment ~= nil and (loadingState ~= VehicleLoadingState.OK or args.vehicle.isDeleted or
+            not TCJobSiteSetup.hitchImplement(args.vehicle, attachment, entry.farmId)) then
+        TCLog.info("TheContractor: farm %d: %s couldn't be hitched to %s, left out", entry.farmId,
+            attachment:getFullName(), args.vehicle:getFullName())
+        attachment:delete()
+        attachment = nil
+    end
+    args.done(attachment)
 end
 
 -- 116: a favour's machine is loaded: one of the stock parts
@@ -1224,7 +1350,7 @@ function TheContractorRepairContracts:prepareFavour(entry, vehicle)
     local tc = g_currentMission.TheContractor
     local environment = g_currentMission.environment
     local farmer = tc.Farmers:getPerson(entry.farmerId)
-    local machine = TheContractorFarmerFavours.getMachine(farmer, entry.machineId)
+    local machine = TheContractorFarmerFleet.getMachine(farmer, entry.machineId)
     local targets = TheContractorFarmerFavours.getTargets(TCADSRepairContracts.getStockParts(),
         machine ~= nil and machine.fitted or nil, environment.currentMonotonicDay, environment.daysPerPeriod)
     for i = #targets, 2, -1 do
@@ -1244,11 +1370,13 @@ function TheContractorRepairContracts:prepareFavour(entry, vehicle)
         })
         local quote = ok and TCADSRepairContracts.getQuote(vehicle) or nil
         if quote ~= nil and (tonumber(quote.partsCost) or 0) > 0 then
-            removeFrom(self.arrivals, entry)
-            if entry.fieldId ~= nil then
-                TheContractorFieldBreakdowns.clearSpot(entry, self:findModelByXml(entry.xmlFilename))
-            end
-            self:createFavourOffer(entry, vehicle, quote, target)
+            self:loadAttachment(entry, vehicle, function(attachment)
+                removeFrom(self.arrivals, entry)
+                if entry.fieldId ~= nil then
+                    TheContractorFieldBreakdowns.clearSpot(entry, self:getArrivalModel(entry))
+                end
+                self:createFavourOffer(entry, vehicle, quote, target, attachment)
+            end)
             return
         end
         if ok then
@@ -1266,7 +1394,7 @@ end
 -- 116: a favour's offer: due today, as a field breakdown is, its price the part at
 -- ADS's list price (the quote's parts, without EconomyScale's factor), with
 -- the farmer as the customer. Accepted or declined as it stands.
-function TheContractorRepairContracts:createFavourOffer(entry, vehicle, quote, target)
+function TheContractorRepairContracts:createFavourOffer(entry, vehicle, quote, target, attachment)
     local environment = g_currentMission.environment
     local today = environment.currentMonotonicDay
     local partsCost = math.max(tonumber(quote.partsCost) or 0, 0)
@@ -1295,17 +1423,36 @@ function TheContractorRepairContracts:createFavourOffer(entry, vehicle, quote, t
         -- The size this machine takes, so the player brings the right one.
         partGrade = TCADSRepairContracts.getPartGrade(vehicle, target.id),
     }
+    TheContractorRepairContracts.setAttachment(workshop, entry, attachment)
     local job = g_currentMission.TheContractor.Jobs:createJob(entry.farmId, TheContractorFarmerFavours.JOB_TYPE, 0, 1,
         environment:getPeriodFromDay(deadlineDay), environment:getDayInPeriodFromDay(deadlineDay),
         math.floor(baseParts + 0.5), true, nil, deadlineDay, false, nil, nil, workshop)
     if job == nil then
         TCADSRepairContracts.release(vehicle)
         vehicle:delete()
+        TheContractorRepairContracts.deleteVehicle(attachment)
         return
     end
-    TheContractorFarmerFavours.onOffered(job, quote)
+    TheContractorFarmerFleet.onOffered(job, quote)
     TCLog.info("TheContractor: farm %d job %d: farmer #%d's %s needs a new %s, %.0f to pay back", entry.farmId,
         job.id, entry.farmerId, workshop.vehicleName, tostring(target.id), job:getPrice())
+end
+
+-- 121: the attachment on the job's record (its machine id on the farmer's
+-- too).
+function TheContractorRepairContracts.setAttachment(workshop, entry, attachment)
+    if attachment == nil then
+        return
+    end
+    workshop.attachmentId = NetworkUtil.getObjectId(attachment)
+    workshop.attachmentUniqueId = attachment.getUniqueId ~= nil and attachment:getUniqueId() or nil
+    workshop.attachmentMachineId = entry.attachment ~= nil and entry.attachment.machineId or nil
+end
+
+function TheContractorRepairContracts.deleteVehicle(vehicle)
+    if vehicle ~= nil and not vehicle.isDeleted then
+        vehicle:delete()
+    end
 end
 
 -- Pricing (102) ---------------------------------------------------------------------
@@ -1477,7 +1624,7 @@ function TheContractorRepairContracts.getDueDays(daysPerPeriod)
     return math.max(minDays, math.min(maxDays, days))
 end
 
-function TheContractorRepairContracts:createOffer(entry, vehicle, quote)
+function TheContractorRepairContracts:createOffer(entry, vehicle, quote, attachment)
     local today = g_currentMission.environment.currentMonotonicDay
     local partsCost = math.max(tonumber(quote.partsCost) or 0, 0)
     -- 102: the price isn't agreed yet. The job holds the benchmark price
@@ -1517,7 +1664,11 @@ function TheContractorRepairContracts:createOffer(entry, vehicle, quote)
         laborHours = tonumber(quote.laborHours) or 0,
         benchmarkMargin = benchmark,
         refusalMargin = TheContractorRepairContracts.rollRefusalMargin(benchmark),
+        -- 121: a farmer's own machine (the farmer's the customer).
+        farmerId = entry.farmerId,
+        machineId = entry.machineId,
     }
+    TheContractorRepairContracts.setAttachment(workshop, entry, attachment)
 
     local environment = g_currentMission.environment
     local job = g_currentMission.TheContractor.Jobs:createJob(entry.farmId, TheContractorRepairContracts.JOB_TYPES[entry.kind],
@@ -1526,8 +1677,10 @@ function TheContractorRepairContracts:createOffer(entry, vehicle, quote)
     if job == nil then
         TCADSRepairContracts.release(vehicle)
         vehicle:delete()
+        TheContractorRepairContracts.deleteVehicle(attachment)
         return
     end
+    TheContractorFarmerFleet.onOffered(job, quote)
     TCLog.info("TheContractor: farm %d job %d: %s in for %s, quoted %.0f (parts %.0f, %.1f h), %.0f at the %.0f%% benchmark, ceiling %.0f%%",
         entry.farmId, job.id, workshop.vehicleName, entry.kind, quote.price, partsCost, workshop.laborHours,
         job:getPrice(), benchmark * 100, workshop.refusalMargin * 100)
@@ -1667,7 +1820,20 @@ function TheContractorRepairContracts:queueCollection(job)
         uniqueId = workshop.vehicleUniqueId,
         zoneUniqueId = workshop.zoneUniqueId,
         bayIndex = workshop.bayIndex,
+        -- 121: a farmer's machine is theirs again once it's gone.
+        farmerId = workshop.farmerId,
+        machineId = workshop.machineId,
     })
+    -- 121: and its attachment, wherever it's been left.
+    if workshop.attachmentId ~= nil and workshop.attachmentId ~= 0 then
+        table.insert(self.removals, {
+            farmId = job.farmId,
+            vehicleId = workshop.attachmentId,
+            uniqueId = workshop.attachmentUniqueId,
+            farmerId = workshop.farmerId,
+            machineId = workshop.attachmentMachineId,
+        })
+    end
 end
 
 function TheContractorRepairContracts:tryCollect(entry)
@@ -1676,8 +1842,9 @@ function TheContractorRepairContracts:tryCollect(entry)
         removeFrom(self.removals, entry)
         return
     end
-    -- Not from under someone driving it.
-    if vehicle.getIsControlled ~= nil and vehicle:getIsControlled() then
+    -- Not from under someone driving it (121: or the machine it's hitched to).
+    local rootVehicle = vehicle.rootVehicle or vehicle
+    if rootVehicle.getIsControlled ~= nil and rootVehicle:getIsControlled() then
         return
     end
     removeFrom(self.removals, entry)
@@ -1909,6 +2076,8 @@ function TheContractorRepairContracts:loadFromXMLFile(xmlFile)
             machineId = getXMLInt(xmlFile, key .. "#machineId"),
             yardFarmlandId = getXMLInt(xmlFile, key .. "#yard"),
             operatingHours = getXMLFloat(xmlFile, key .. "#operatingHours"),
+            -- 121.
+            attachment = TheContractorRepairContracts.loadArrivalAttachment(xmlFile, key),
             isLoading = false,
         })
         index = index + 1
@@ -1925,6 +2094,9 @@ function TheContractorRepairContracts:loadFromXMLFile(xmlFile)
             uniqueId = getXMLString(xmlFile, key .. "#uniqueId"),
             zoneUniqueId = getXMLString(xmlFile, key .. "#zoneUniqueId"),
             bayIndex = getXMLInt(xmlFile, key .. "#bayIndex"),
+            -- 121.
+            farmerId = getXMLInt(xmlFile, key .. "#farmerId"),
+            machineId = getXMLInt(xmlFile, key .. "#machineId"),
         })
         index = index + 1
     end
@@ -1997,6 +2169,14 @@ function TheContractorRepairContracts:saveToXmlFile(xmlFile)
                 if entry.fieldService ~= nil then
                     setXMLString(xmlFile, key .. "#fieldService", entry.fieldService)
                 end
+                -- 121: a farmer's own machine.
+                if entry.machineId ~= nil then
+                    setXMLInt(xmlFile, key .. "#farmerId", entry.farmerId)
+                    setXMLInt(xmlFile, key .. "#machineId", entry.machineId)
+                    if entry.operatingHours ~= nil then
+                        setXMLFloat(xmlFile, key .. "#operatingHours", entry.operatingHours)
+                    end
+                end
             else
                 setXMLString(xmlFile, key .. "#zoneUniqueId", entry.zoneUniqueId)
                 setXMLInt(xmlFile, key .. "#bayIndex", entry.bayIndex)
@@ -2014,6 +2194,7 @@ function TheContractorRepairContracts:saveToXmlFile(xmlFile)
             setXMLInt(xmlFile, key .. "#queuedDay", entry.queuedDay)
             setXMLInt(xmlFile, key .. "#attempts", entry.attempts or 0)
             setXMLInt(xmlFile, key .. "#blockedDays", entry.blockedDays or 0)
+            TheContractorRepairContracts.saveArrivalAttachment(xmlFile, key, entry.attachment)
             index = index + 1
         end
     end
@@ -2033,6 +2214,10 @@ function TheContractorRepairContracts:saveToXmlFile(xmlFile)
             end
             if entry.bayIndex ~= nil then
                 setXMLInt(xmlFile, key .. "#bayIndex", entry.bayIndex)
+            end
+            if entry.machineId ~= nil then
+                setXMLInt(xmlFile, key .. "#farmerId", entry.farmerId)
+                setXMLInt(xmlFile, key .. "#machineId", entry.machineId)
             end
             index = index + 1
         end
@@ -2062,6 +2247,34 @@ function TheContractorRepairContracts:saveToXmlFile(xmlFile)
             setXMLInt(xmlFile, key .. "#noticeId", entry.noticeId)
         end
     end
+end
+
+-- 121: an arrival's attachment ({ machineId, xmlFilename, width, length,
+-- height }), or nil.
+function TheContractorRepairContracts.loadArrivalAttachment(xmlFile, key)
+    local machineId = getXMLInt(xmlFile, key .. ".attachment#machineId")
+    local xmlFilename = getXMLString(xmlFile, key .. ".attachment#xmlFilename")
+    if machineId == nil or xmlFilename == nil then
+        return nil
+    end
+    return {
+        machineId = machineId,
+        xmlFilename = xmlFilename,
+        width = getXMLFloat(xmlFile, key .. ".attachment#width") or 3,
+        length = getXMLFloat(xmlFile, key .. ".attachment#length") or 3,
+        height = getXMLFloat(xmlFile, key .. ".attachment#height") or 3,
+    }
+end
+
+function TheContractorRepairContracts.saveArrivalAttachment(xmlFile, key, attachment)
+    if attachment == nil then
+        return
+    end
+    setXMLInt(xmlFile, key .. ".attachment#machineId", attachment.machineId)
+    setXMLString(xmlFile, key .. ".attachment#xmlFilename", attachment.xmlFilename)
+    setXMLFloat(xmlFile, key .. ".attachment#width", attachment.width)
+    setXMLFloat(xmlFile, key .. ".attachment#length", attachment.length)
+    setXMLFloat(xmlFile, key .. ".attachment#height", attachment.height or 3)
 end
 
 -- Server, once vehicles exist (TheContractor:resolveSavedVehicles, after

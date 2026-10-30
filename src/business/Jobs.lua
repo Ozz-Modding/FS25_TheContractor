@@ -1492,6 +1492,8 @@ function TheContractorJobs.writeWorkshop(streamId, workshop)
     streamWriteString(streamId, workshop.targetNameKey or "")
     streamWriteString(streamId, workshop.partGrade or "")
     streamWriteInt32(streamId, workshop.yardFarmlandId or 0)
+    -- 121: the machine's attachment, so it's the customer's on every machine.
+    streamWriteInt32(streamId, workshop.attachmentId or 0)
 end
 
 -- A float that -1 stands in for nil.
@@ -1546,6 +1548,8 @@ function TheContractorJobs.readWorkshop(streamId)
     workshop.partGrade = partGrade ~= "" and partGrade or nil
     local yardFarmlandId = streamReadInt32(streamId)
     workshop.yardFarmlandId = yardFarmlandId ~= 0 and yardFarmlandId or nil
+    local attachmentId = streamReadInt32(streamId)
+    workshop.attachmentId = attachmentId ~= 0 and attachmentId or nil
     return workshop
 end
 
@@ -1827,6 +1831,9 @@ function TheContractorJobs.loadWorkshop(xmlFile, key)
         targetId = getXMLString(xmlFile, key .. "#targetId"),
         targetNameKey = getXMLString(xmlFile, key .. "#targetNameKey"),
         partGrade = getXMLString(xmlFile, key .. "#partGrade"),
+        -- 121: the machine's attachment, by uniqueId until resolveSavedVehicles.
+        attachmentUniqueId = getXMLString(xmlFile, key .. "#attachmentUniqueId"),
+        attachmentMachineId = getXMLInt(xmlFile, key .. "#attachmentMachineId"),
     }
 end
 
@@ -1874,8 +1881,17 @@ function TheContractorJobs.saveWorkshop(xmlFile, key, workshop)
     if workshop.reputationReward ~= nil then
         setXMLInt(xmlFile, key .. "#reputationReward", workshop.reputationReward)
     end
-    -- 116: a favour's farmer, machine, part and yard.
-    for _, name in ipairs({ "farmerId", "machineId", "yardFarmlandId" }) do
+    -- 121: the machine's attachment.
+    local attachmentUniqueId = workshop.attachmentUniqueId
+    if workshop.attachmentId ~= nil and workshop.attachmentId ~= 0 then
+        attachmentUniqueId = TCVehicleIds.getUniqueId(workshop.attachmentId) or attachmentUniqueId
+    end
+    if attachmentUniqueId ~= nil then
+        setXMLString(xmlFile, key .. "#attachmentUniqueId", attachmentUniqueId)
+    end
+    -- 116: a favour's farmer, machine, part and yard (121: a breakdown's
+    -- farmer and machine too, and the attachment's machine).
+    for _, name in ipairs({ "farmerId", "machineId", "yardFarmlandId", "attachmentMachineId" }) do
         if workshop[name] ~= nil then
             setXMLInt(xmlFile, key .. "#" .. name, workshop[name])
         end
@@ -1906,6 +1922,10 @@ function TheContractorJobs:resolveSavedVehicles()
             if job.workshop ~= nil and job.workshop.vehicleId == nil then
                 job.workshop.vehicleId = job.workshop.vehicleUniqueId ~= nil and
                     TCVehicleIds.getObjectId(job.workshop.vehicleUniqueId) or 0
+            end
+            -- 121: and its attachment.
+            if job.workshop ~= nil and job.workshop.attachmentId == nil and job.workshop.attachmentUniqueId ~= nil then
+                job.workshop.attachmentId = TCVehicleIds.getObjectId(job.workshop.attachmentUniqueId) or 0
             end
         end
     end

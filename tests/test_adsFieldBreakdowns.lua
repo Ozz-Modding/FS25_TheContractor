@@ -269,6 +269,7 @@ local function setup(def)
     world:load("src/business/Jobs.lua")
     world:load("src/business/CropSpill.lua")
     world:load("src/business/RepairContracts.lua")
+    world:load("src/business/FarmerFleet.lua")
     world:load("src/business/FieldBreakdowns.lua")
 
     TCADSRepairContracts.getEnv = function() return world.adsEnv end
@@ -604,6 +605,199 @@ test("a breakdown's field streams and saves with the job, and a queued one saves
     assertNear(copied.x, entry.x, 0.001)
     assertNear(copied.rotY, entry.rotY, 0.001)
     assertEquals(copied.zoneUniqueId, nil)
+end)
+
+-- 121: the farmer's own machine ------------------------------------------------------------
+
+-- Farmer 4 holding field 3 (farmland 3), with these machines, on 110's real
+-- Farmers.
+local function addFarmer(world, tc, machines)
+    world:load("src/business/Farmers.lua")
+    local field = world:addField({ id = 3 })
+    local farmland = { getId = function() return 3 end }
+    function field:getFarmland() return farmland end
+    tc.Farmers = TheContractorFarmers.new()
+    tc.Farmers.officialId = 99
+    tc.Farmers.people[99] = { id = 99, name = "The Official", isOfficial = true, farmlandIds = {} }
+    local farmer = { id = 4, name = "Tom", isOfficial = false, farmlandIds = { 3 }, targetAcres = 50,
+        machines = machines }
+    tc.Farmers.people[4] = farmer
+    return farmer
+end
+
+local COMBINE_MODELS = {
+    { xml = "fendt942.xml", category = "TRACTORSL", specs = { AdvancedDamageSystem = true, drivable = true },
+        width = 3, length = 6 },
+    { xml = "lexion.xml", category = "HARVESTERS", specs = { AdvancedDamageSystem = true, drivable = true,
+        combine = true }, width = 4, length = 9 },
+    { xml = "header.xml", category = "CUTTERS", specs = { cutter = true }, width = 9, length = 2 },
+    { xml = "trailer.xml", category = "TRAILERS", specs = { trailer = true }, width = 3, length = 8 },
+}
+
+local function combineFleet()
+    return {
+        { id = 1, role = "largeTractor", xmlFilename = "fendt942.xml", seed = 11, hours = 2000, hoursDay = 10,
+            hoursPerMonth = 30, fitted = {} },
+        { id = 2, role = "combine", xmlFilename = "lexion.xml", seed = 22, hoursPerMonth = 30, fitted = {} },
+        { id = 3, role = "header", attachedTo = 2, xmlFilename = "header.xml", seed = 33, fitted = {} },
+        { id = 4, role = "trailer", xmlFilename = "trailer.xml", seed = 44, fitted = {} },
+    }
+end
+
+test("121: a breakdown on a farmer's field is their own machine: its seed and age, the farmer the customer", function()
+    local world, tc = setup()
+    addFarmer(world, tc, {
+        { id = 1, role = "mediumTractor", xmlFilename = "fendt942.xml", seed = 99, hours = 2000, hoursDay = 10,
+            hoursPerMonth = 30, fitted = {} },
+    })
+    tc.FieldBreakdowns.forcedFieldService = "mobile"
+    world:trigger()
+    local entry = tc.RepairContracts.arrivals[1]
+    assertEquals(entry.farmerId, 4)
+    assertEquals(entry.machineId, 1)
+    assertEquals(entry.seed, 99)
+    assertNear(entry.operatingHours, 2000, 0.001)
+    tc.RepairContracts:update(TheContractorRepairContracts.PLACE_CHECK_MS)
+    world:finishLoad()
+    assertEquals(world.prepared.seed, 99)
+    assertNear(world.prepared.operatingHours, 2000, 0.001)
+
+    local job = tc.Jobs:getAllJobs(1)[1]
+    assertTrue(TheContractorRepairContracts.isBreakdownJob(job))
+    assertTrue(not TheContractorRepairContracts.isFavourJob(job))
+    assertEquals(job.workshop.farmerId, 4)
+    assertEquals(job.workshop.machineId, 1)
+    assertEquals(job.customerId, 4)
+    assertTrue(TheContractorFarmerFleet.isMachineOut(4, 1))
+    assertTrue(TheContractorFieldBreakdowns.hasOpenBreakdown(1), "still one at a time")
+end)
+
+test("121: its first time out, ADS's age becomes the machine's", function()
+    local world, tc = setup()
+    local farmer = addFarmer(world, tc, {
+        { id = 1, role = "mediumTractor", xmlFilename = "fendt942.xml", seed = 99, hoursPerMonth = 30, fitted = {} },
+    })
+    world:trigger()
+    tc.RepairContracts:update(TheContractorRepairContracts.PLACE_CHECK_MS)
+    world:finishLoad()
+    assertEquals(world.prepared.operatingHours, nil, "ADS ages it")
+    assertEquals(farmer.machines[1].hours, 3100)
+    assertEquals(farmer.machines[1].hoursDay, world.today)
+end)
+
+test("121: their combine HARVESTER_SHARE of the time, never in winter, else the rest", function()
+    local world, tc = setup({ models = COMBINE_MODELS })
+    local farmer = addFarmer(world, tc, combineFleet())
+    local low = function() return 0.1 end
+    local high = function() return 0.9 end
+    assertEquals(TheContractorFieldBreakdowns.pickFarmerMachine(farmer, tc.RepairContracts, low).machine.id, 2)
+    assertEquals(TheContractorFieldBreakdowns.pickFarmerMachine(farmer, tc.RepairContracts, high).machine.id, 1,
+        "never the trailer or the header")
+
+    Season = { WINTER = 4 }
+    g_currentMission.environment.getSeasonAtDay = function() return Season.WINTER end
+    assertEquals(TheContractorFieldBreakdowns.pickFarmerMachine(farmer, tc.RepairContracts, low).machine.id, 1)
+    g_currentMission.environment.getSeasonAtDay = nil
+
+    -- Only a combine: always it.
+    farmer.machines = { combineFleet()[2] }
+    assertEquals(TheContractorFieldBreakdowns.pickFarmerMachine(farmer, tc.RepairContracts, high).machine.id, 2)
+end)
+
+test("121: a combine comes with its header, the spot found for both", function()
+    local world, tc = setup({ models = COMBINE_MODELS })
+    local farmer = addFarmer(world, tc, { combineFleet()[2], combineFleet()[3] })
+    world:trigger()
+    local entry = tc.RepairContracts.arrivals[1]
+    assertEquals(entry.machineId, 2)
+    assertEquals(entry.attachment.machineId, 3)
+    assertEquals(entry.attachment.xmlFilename, "header.xml")
+    local footprint = tc.RepairContracts:getArrivalModel(entry)
+    assertEquals(footprint.width, 9, "as wide as the header")
+    assertEquals(footprint.length, 11, "the combine and the header")
+    assertEquals(footprint.xmlFilename, "lexion.xml")
+end)
+
+test("121: no farmer, or nothing of theirs ADS can take: a random model and no customer", function()
+    local world, tc = setup()
+    addFarmer(world, tc, { { id = 1, role = "trailer", xmlFilename = "trailer.xml", seed = 1, fitted = {} } })
+    world:trigger()
+    local entry = tc.RepairContracts.arrivals[1]
+    assertEquals(entry.machineId, nil)
+    assertEquals(entry.farmerId, nil)
+    assertEquals(entry.xmlFilename, "fendt942.xml")
+end)
+
+test("121: a farmer's machine ADS turns down is loaded again, then dropped, never swapped", function()
+    local world, tc = setup()
+    addFarmer(world, tc, {
+        { id = 1, role = "mediumTractor", xmlFilename = "fendt942.xml", seed = 99, hoursPerMonth = 30, fitted = {} },
+    })
+    world:trigger()
+    for _ = 1, TheContractorRepairContracts.PREPARE_RETRIES do
+        world.prepareResults = { false }
+        tc.RepairContracts:update(TheContractorRepairContracts.PLACE_CHECK_MS)
+        world:finishLoad()
+        local entry = tc.RepairContracts.arrivals[1]
+        assertEquals(entry.machineId, 1)
+        assertEquals(entry.seed, 99)
+    end
+    world.prepareResults = { false }
+    tc.RepairContracts:update(TheContractorRepairContracts.PLACE_CHECK_MS)
+    world:finishLoad()
+    assertEquals(#tc.RepairContracts.arrivals, 0)
+    assertEquals(#tc.Jobs:getAllJobs(1), 0)
+end)
+
+test("121: the farmer's machine and its attachment stream and save with the job and the queue", function()
+    local world, tc = setup({ models = COMBINE_MODELS })
+    addFarmer(world, tc, { combineFleet()[2], combineFleet()[3] })
+    localDirectionToWorld = function() return 0, 0, 1 end
+    TCJobSiteSetup = { hitchImplement = function() return true end }
+    world:trigger()
+
+    local xmlFile = {}
+    tc.RepairContracts:saveToXmlFile(xmlFile)
+    local loaded = TheContractorRepairContracts.new()
+    loaded:loadFromXMLFile(xmlFile)
+    local copied = loaded.arrivals[1]
+    assertEquals(copied.farmerId, 4)
+    assertEquals(copied.machineId, 2)
+    assertEquals(copied.attachment.machineId, 3)
+    assertEquals(copied.attachment.xmlFilename, "header.xml")
+    assertNear(copied.attachment.length, 2, 0.001)
+
+    tc.RepairContracts:update(TheContractorRepairContracts.PLACE_CHECK_MS)
+    world:finishLoad()
+    local header = world:finishLoad()
+    local job = tc.Jobs:getAllJobs(1)[1]
+    assertEquals(job.workshop.attachmentId, header.id)
+
+    local stream = world:newStream()
+    TheContractorJobs.writeJob(stream, job)
+    assertEquals(TheContractorJobs.readJob(stream).workshop.attachmentId, header.id)
+
+    xmlFile = {}
+    tc.Jobs:saveToXmlFile(xmlFile)
+    local jobs = TheContractorJobs.new()
+    jobs:loadFromXMLFile(xmlFile)
+    local workshop = jobs:getJob(1, job.id).workshop
+    assertEquals(workshop.farmerId, 4)
+    assertEquals(workshop.machineId, 2)
+    assertEquals(workshop.attachmentMachineId, 3)
+    assertEquals(workshop.attachmentId, nil, "until the vehicles are back")
+    jobs:resolveSavedVehicles()
+    assertEquals(workshop.attachmentId, header.id)
+
+    -- Waiting to be collected, the machine's still out.
+    tc.Jobs:transitionJobState(1, job.id, TheContractorJob.STATE.DECLINED)
+    xmlFile = {}
+    tc.RepairContracts:saveToXmlFile(xmlFile)
+    loaded = TheContractorRepairContracts.new()
+    loaded:loadFromXMLFile(xmlFile)
+    assertEquals(#loaded.removals, 2)
+    assertEquals(loaded.removals[1].machineId, 2)
+    assertEquals(loaded.removals[2].machineId, 3)
 end)
 
 -- The map marker --------------------------------------------------------------------------

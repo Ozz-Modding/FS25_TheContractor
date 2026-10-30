@@ -130,6 +130,21 @@ local function hitch(plan, implement)
     attacher:attachImplement(implement, plan.inputIndex, plan.jointIndex, false, nil, false, true)
 end
 
+-- 121, server-only: hitches a newly loaded implement to a machine (a
+-- farmer's combine and its header), at the best free joint it fits.
+-- Returns whether it hitched.
+function TCJobSiteSetup.hitchImplement(attacher, implement, farmId)
+    if implement.getInputAttacherJoints == nil then
+        return false
+    end
+    local plan = findJoint(attacher, implement, {}, {}, farmId)
+    if plan == nil or plan.occupant ~= nil then
+        return false
+    end
+    hitch(plan, implement)
+    return true
+end
+
 -- Server-only. Returns the operating vehicle on success, or nil plus a
 -- player-facing reason.
 function TCJobSiteSetup.rigAndPlace(job)

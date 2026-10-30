@@ -194,6 +194,7 @@ local function setup(def)
     world:load("src/business/Jobs.lua")
     world:load("src/business/CropSpill.lua")
     world:load("src/business/RepairContracts.lua")
+    world:load("src/business/FarmerFleet.lua")
     world:load("src/util/TCRepairZoneActivatable.lua")
 
     TCADSRepairContracts.getEnv = function() return world.adsEnv end
