@@ -99,6 +99,7 @@ Each entry is the rule and the trap, not the detail: the code and the ticket's O
   - Road accidents (079) and other non-botch liability claims go through `Claims:chargeClaim` and `Claims:addToJobLog`.
   - Spilt crop (106): check `job.spill ~= nil`. Its site is the farm's land for shovels, tipping and levelers; any new tool that works heaps needs the same hook.
   - Fly-tipping (075): a new debris prop is a copied i3d with a dynamic root collision **re-saved in GIANTS Editor** (hand-editing the export isn't enough).
+  - Bales to a yard (124): a job that borrows a farmer's machine holds it in `isMachineOut` from its offer, and brings it out as a loan arrival on 100's queue (`queueLoanArrival`: no ADS, never saved, sent for again after a load).
   - Fallen tree (107): put a felled tree down with `g_treePlantManager:plantTree`, never `loadTreeTrunk` (it sends clients nothing), and queue the cut on vanilla's `loadTreeTrunkDatas` after a delay so clients have the tree first. Keep a shape across saves with `getSaveableSplitShapeId`. Anything that leaves trees or logs on land the farm can't use needs the same cut permission hook (`SplitShapeManager.getIsShapeCutAllowed`).
 
 ## Build / test loop

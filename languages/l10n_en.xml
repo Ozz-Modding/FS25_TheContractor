@@ -201,6 +201,7 @@
 		<text name="tc_jobType_strawDelivery" text="Deliver Straw"/>
 		<text name="tc_jobType_spillRecovery" text="Clear Spilt Crop"/>
 		<text name="tc_jobType_fallenTree" text="Clear Fallen Trees"/>
+		<text name="tc_jobType_yardBales" text="Deliver Bales"/>
 		<text name="tc_jobType_flyTipping" text="Clear Fly-tipping"/>
 		<text name="tc_jobType_fertilize" text="Fertilize"/>
 		<text name="tc_jobType_herbicide" text="Spray Herbicide"/>
@@ -234,6 +235,7 @@
 		<text name="tc_inbox_chipRoadAccident" text="Accident"/>
 		<text name="tc_inbox_chipTippedTrailer" text="Overturned"/>
 		<text name="tc_inbox_chipFallenTree" text="Road blocked"/>
+		<text name="tc_inbox_chipYardBales" text="Bales wanted"/>
 		<text name="tc_inbox_chipSprayDrift" text="Complaint"/>
 		<text name="tc_inbox_chipJoyriders" text="Vandalism"/>
 		<text name="tc_inbox_chipFlyTipping" text="Fly-tipping"/>
@@ -699,6 +701,18 @@
 		<text name="tc_breakdown_missedNotification" text="Job failed: a customer's broken-down machine wasn't fixed in time, and they've had it recovered."/>
 		<text name="tc_favour_eventName" text="Farmer's favour"/>
 		<text name="tc_favour_locationYard" text="%s, %s's yard"/>
+		<text name="tc_yardBales_eventName" text="Bales for a farmer"/>
+		<text name="tc_yardBales_offerTitle" text="Short of %s"/>
+		<text name="tc_yardBales_offerBody" text="We've run short of %s, and I hear you've got some. Could you bring about %s bales (%s) over to the yard? Put them down on the ground in the area I'll mark out for you (it goes on your map once you say yes). The telehandler and bale fork will be out beside it if you want them. Thanks, %s"/>
+		<text name="tc_yardBales_fill_STRAW" text="straw"/>
+		<text name="tc_yardBales_fill_DRYGRASS_WINDROW" text="hay"/>
+		<text name="tc_yardBales_location" text="%s's yard"/>
+		<text name="tc_yardBales_deliveryValue" text="About %d bales of %s (%s)"/>
+		<text name="tc_yardBales_deliveredSuffix" text=", %d%% in"/>
+		<text name="tc_yardBales_detailOrder" text="Order"/>
+		<text name="tc_jobDetails_place" text="Place"/>
+		<text name="tc_yardBales_summaryLine" text="%s to %s"/>
+		<text name="tc_yardBales_missedNotification" text="Job failed: the bales weren't in the farmer's yard by the deadline."/>
 		<text name="tc_favour_kitRowPart" text="Part: %s"/>
 		<text name="tc_favour_chipBring" text="Bring it"/>
 		<text name="tc_favour_detailPart" text="Part"/>
@@ -1359,6 +1373,11 @@
 		<text name="tc_logbook_sectionEquipment" text="Equipment"/>
 		<text name="tc_logbook_sectionTime" text="Time"/>
 		<text name="tc_logbook_sectionSupplies" text="Supplies"/>
+		<text name="tc_logbook_sectionDelivery" text="Delivery"/>
+		<text name="tc_logbook_askedFor" text="Asked for"/>
+		<text name="tc_logbook_delivered" text="Delivered"/>
+		<text name="tc_logbook_excess" text="Over the order"/>
+		<text name="tc_logbook_excessValue" text="%s, paid %s"/>
 		<text name="tc_logbook_sectionMoney" text="Money"/>
 		<text name="tc_logbook_sectionNow" text="Now"/>
 		<text name="tc_logbook_sectionYear" text="Last 12 months"/>

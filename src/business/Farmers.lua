@@ -25,8 +25,9 @@
 -- Jobs get their customer as they're created (getCustomerIdForJob): the
 -- farmer holding the job's field, the official for an offField job or land
 -- no farmer holds, the original job's customer for a spilt crop (106), the
--- farmer whose machine it is for a favour (116), and nobody for any other
--- ADS repair contract (100-102). A loaded job without one gets one the same
+-- farmer whose machine it is for a favour (116), the farmer whose yard it
+-- is for bales taken there (124), and nobody for any other ADS repair
+-- contract (100-102). A loaded job without one gets one the same
 -- way (linkJobs).
 --
 -- 116, 121: a farmer's machines (machines, their fleet, made by
@@ -199,6 +200,11 @@ function TheContractorFarmers:getCustomerIdForJob(job)
     if job.workshop ~= nil then
         -- 116: a favour is for the farmer whose machine it is.
         local farmerId = job.workshop.farmerId
+        return farmerId ~= nil and self.people[farmerId] ~= nil and farmerId or nil
+    end
+    -- 124: bales to a farmer's yard are for that farmer.
+    if job.yardDelivery ~= nil then
+        local farmerId = job.yardDelivery.farmerId
         return farmerId ~= nil and self.people[farmerId] ~= nil and farmerId or nil
     end
     if job.spill ~= nil and job.spill.sourceJobId ~= nil then

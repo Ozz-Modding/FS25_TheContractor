@@ -105,6 +105,9 @@ TheContractorJobGeneration_mt = Class(TheContractorJobGeneration)
 --                    to fit as a favour (TheContractorFarmerFavours):
 --                    accepted as it stands, never negotiated, the farmer
 --                    its customer.
+--   yardDelivery     124: the farm's own bales taken to a farmer's yard and
+--                    put down in a marked area (job.yardDelivery,
+--                    TheContractorYardBales), the farmer its customer.
 -- A type left out of JOB_TYPE_KEYS (flyTipping, spillRecovery) is never
 -- generated, shown by the availability snapshot or created by tcJob: only
 -- its random event makes one (075 with createJobOnField, 106 with
@@ -191,6 +194,12 @@ TheContractorJobGeneration.JOB_TYPES = {
     adsBreakdown = { workshopJob = true, playerOnly = true, noEquipment = true },
     -- 116: a farmer's own machine needing a new part, fitted as a favour.
     adsFavour = { workshopJob = true, playerOnly = true, noEquipment = true, favour = true },
+    -- 124: the farm's own bales to a farmer's yard (TheContractorYardBales).
+    -- Its field is only the farmer's nearest one (offField: the marker's on
+    -- the drop area), it's the player's as soon as it's accepted
+    -- (allocateOnAccept), and it earns per bale asked for (job.workTotal).
+    yardBales = { serverMeasured = true, playerOnly = true, noEquipment = true, offField = true,
+        allocateOnAccept = true, yardDelivery = true, reputationPerItem = 1, skill = "haulage" },
 }
 TheContractorJobGeneration.JOB_TYPE_KEYS = { "harvest", "cultivate", "sow", "plow", "mow", "tedder", "bale",
     "baleWrap", "strawDelivery", "fertilize", "herbicide", "weed", "hoe", "stonePick" }

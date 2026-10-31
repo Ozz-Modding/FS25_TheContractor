@@ -296,6 +296,10 @@ function TheContractorJob.new(id, farmId, jobType, fieldId, requiredSkillLevel, 
     -- Saved and sent to clients.
     self.spill = nil
 
+    -- 124: a yard bale job's order and drop area (TheContractorYardBales),
+    -- nil for every other job. Saved and sent to clients.
+    self.yardDelivery = nil
+
     -- 110: who the job is for, a TheContractorFarmers person id (a farmer
     -- or the local official), set as it's created (TheContractorFarmers:
     -- getCustomerIdForJob). nil for an ADS repair contract. Saved and sent
@@ -327,6 +331,10 @@ function TheContractorJob:getLocationText()
                 self:getCustomerName() or "?")
         end
         return self.workshop.vehicleName or "?"
+    end
+    -- 124: "Tom's yard".
+    if self.yardDelivery ~= nil then
+        return string.format(g_i18n:getText("tc_yardBales_location"), self:getCustomerName() or "?")
     end
     local field = g_fieldManager:getFieldById(self.fieldId)
     local name = field ~= nil and field:getName() or tostring(self.fieldId)
@@ -400,6 +408,11 @@ function TheContractorJob:getSummaryText()
     if self.workshop ~= nil then
         return string.format(g_i18n:getText("tc_repair_summaryLine"), self:getTypeText(),
             self.workshop.vehicleName or "?")
+    end
+    -- 124: to a farmer's yard, no field.
+    if self.yardDelivery ~= nil then
+        return string.format(g_i18n:getText("tc_yardBales_summaryLine"), self:getDisplayTitle(),
+            self:getLocationText())
     end
     local field = g_fieldManager:getFieldById(self.fieldId)
     return string.format(g_i18n:getText("tc_summary_line"), self:getDisplayTitle(),
@@ -497,8 +510,12 @@ function TheContractorJob:getFruitTypeIndex()
     return TheContractorJobGeneration.getFruitTypeIndexByName(fruitTypeName)
 end
 
--- Localized crop name ("Spinach"), or nil if the job has no crop.
+-- Localized crop name ("Spinach"), or nil if the job has no crop. 124: a
+-- yard bale job's is its bales' ("Straw", "Hay").
 function TheContractorJob:getCropTitle()
+    if self.yardDelivery ~= nil then
+        return TheContractorYardBales.getFillTypeTitle(self.yardDelivery)
+    end
     local fruitTypeIndex = self:getFruitTypeIndex()
     if fruitTypeIndex == nil then
         return nil
@@ -551,6 +568,10 @@ function TheContractorJob:getListFieldText()
             return field ~= nil and field:getName() or tostring(self.workshop.fieldId)
         end
         return "-"
+    end
+    -- 124: the farmer's yard.
+    if self.yardDelivery ~= nil then
+        return self:getLocationText()
     end
     local jobDef = TheContractorJobGeneration ~= nil and TheContractorJobGeneration.JOB_TYPES[self.jobType] or nil
     if jobDef ~= nil and jobDef.offField then

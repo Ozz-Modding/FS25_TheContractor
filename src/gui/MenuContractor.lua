@@ -2680,6 +2680,11 @@ function MenuContractor:updateInboxDetails()
         fieldText = string.format(g_i18n:getText("tc_inbox_fieldValue"), fieldText,
             g_i18n:formatArea(field:getAreaHa(), 2))
     end
+    -- 124: a farmer's yard (its field only says where it is).
+    if job.yardDelivery ~= nil then
+        self.inboxLabelField:setText(g_i18n:getText("tc_jobDetails_place"))
+        fieldText = job:getLocationText()
+    end
     self.inboxDetailField:setText(fieldText)
     self.inboxDetailTargetDate:setText(formatTargetDate(job.targetPeriod, job.targetDayInPeriod))
     self.inboxDetailPrice:setText(g_i18n:formatMoney(job:getPrice(), 0, true, true))
@@ -2697,9 +2702,14 @@ function MenuContractor:updateInboxDetails()
         g_i18n:getText("tc_inbox_skillValue"), g_i18n:getText("tc_skill_haulage"), job.requiredSkillLevel) or nil,
         "info")
 
-    -- Harvest & haul (035): where the crop has to go.
-    self.inboxRowDelivery:setVisible(job.includesHaulage)
+    -- Harvest & haul (035): where the crop has to go. 124: what the
+    -- farmer's asked for.
+    self.inboxRowDelivery:setVisible(job.includesHaulage or job.yardDelivery ~= nil)
     self.inboxDetailDelivery:setText(job.deliveryStationName or "?")
+    if job.yardDelivery ~= nil then
+        self.inboxLabelDelivery:setText(g_i18n:getText("tc_yardBales_detailOrder"))
+        self.inboxDetailDelivery:setText(TheContractorYardBales.getDeliveryText(job))
+    end
 
     self:updateInboxSupplies(job)
     self:updateInboxEquipment(job)
@@ -3714,6 +3724,10 @@ function MenuContractor:getJobStatusChip(job)
             job.state == TheContractorJob.STATE.IN_PROGRESS) then
         -- 106: urgent, and what's left to do.
         return TheContractorCropSpill.getStatusText(job), "bad"
+    elseif job.yardDelivery ~= nil and (job.state == TheContractorJob.STATE.ALLOCATED or
+            job.state == TheContractorJob.STATE.IN_PROGRESS) then
+        -- 124: how much is in the farmer's drop area.
+        return TheContractorYardBales.getStatusText(job), "good"
     elseif TheContractorRepairContracts.isFavourJob(job) and (job.state == TheContractorJob.STATE.OFFERED or
             job.state == TheContractorJob.STATE.NEGOTIATING) then
         -- 116: asked, not to be priced.
@@ -3871,7 +3885,12 @@ function MenuContractor:getJobDetailRows(job)
 
     table.insert(rows, { section = g_i18n:getText("tc_jobDetails_sectionJob") })
     add(g_i18n:getText("tc_jobDetails_job"), job:getDisplayTitle())
-    add(g_i18n:getText(job:isWorkshop() and "tc_jobDetails_machine" or "tc_jobDetails_field"), job:getLocationText())
+    local placeKey = job:isWorkshop() and "tc_jobDetails_machine" or "tc_jobDetails_field"
+    -- 124: a farmer's yard.
+    if job.yardDelivery ~= nil then
+        placeKey = "tc_jobDetails_place"
+    end
+    add(g_i18n:getText(placeKey), job:getLocationText())
     -- 112: none for an ADS repair contract (110).
     local customer = job:getCustomer()
     if customer ~= nil then
@@ -3905,6 +3924,10 @@ function MenuContractor:getJobDetailRows(job)
                 math.floor(100 * job.deliveredLiters / job.requiredLiters))
         end
         add(g_i18n:getText("tc_jobDetails_delivery"), value)
+    end
+    -- 124: what the farmer's asked for, and how much is in.
+    if job.yardDelivery ~= nil then
+        add(g_i18n:getText("tc_jobDetails_delivery"), TheContractorYardBales.getDeliveryText(job))
     end
 
     table.insert(rows, { section = g_i18n:getText("tc_jobDetails_sectionCrew") })
@@ -6937,8 +6960,12 @@ function MenuContractor:getLogbookJobRows(entry)
     section("tc_logbook_sectionJob")
     row(text(isMissed and "tc_logbook_missedOn" or "tc_logbook_completedOn"), TCCalendar.formatDay(entry.day),
         text(isMissed and "tc_logbook_missed" or "tc_logbook_completed"), isMissed and "bad" or "good")
-    row(text(entry.location ~= nil and "tc_logbook_machine" or "tc_logbook_field"),
-        entry.location or getFieldName(entry.fieldId))
+    local placeKey = entry.location ~= nil and "tc_logbook_machine" or "tc_logbook_field"
+    -- 124: a farmer's yard.
+    if entry.delivery ~= nil then
+        placeKey = "tc_jobDetails_place"
+    end
+    row(text(placeKey), entry.location or getFieldName(entry.fieldId))
     if isMissed then
         row(text("tc_logbook_progress"), string.format("%d%%", math.floor(entry.completionPercentage or 0)))
     elseif entry.qualityScore ~= nil then
@@ -7024,6 +7051,18 @@ function MenuContractor:getLogbookJobRows(entry)
             row(text("tc_logbook_loaded"), fillTypeIndex ~= nil and
                 TCJobSupplies.formatAmount(fillTypeIndex, supply.liters) or
                 string.format("%s %.0f", supply.fillTypeName, supply.liters))
+        end
+    end
+
+    -- 124: the bales a farmer asked for, what went in and what was over.
+    if entry.delivery ~= nil then
+        local delivery = entry.delivery
+        section("tc_logbook_sectionDelivery")
+        row(text("tc_logbook_askedFor"), g_i18n:formatVolume(delivery.requiredLiters or 0, 0))
+        row(text("tc_logbook_delivered"), g_i18n:formatVolume(delivery.deliveredLiters or 0, 0))
+        if (delivery.excessLiters or 0) > 0 then
+            row(text("tc_logbook_excess"), string.format(text("tc_logbook_excessValue"),
+                g_i18n:formatVolume(delivery.excessLiters, 0), formatMoney(delivery.excessPay or 0)))
         end
     end
 
