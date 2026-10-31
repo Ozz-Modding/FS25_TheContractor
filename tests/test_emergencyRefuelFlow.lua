@@ -220,6 +220,8 @@ local function setup()
     tc.Parking = { returnVehicles = function() end, returnHiddenVehicles = function() end,
         isPending = function() return false end, sendToShop = function() return {} end }
     world:addRelationships()
+    -- 129: a miss can leave the customer poor, so they complain.
+    TCCalendar = { getPeriodIndex = function() return 1 end }
     world.reputation = {}
     tc.Reputation = {
         addReputation = function(_, farmId, delta) table.insert(world.reputation, delta) end,
@@ -258,7 +260,10 @@ local function setup()
     }
     world:load("src/business/Inbox.lua")
 
-    TheContractorFarmerSplit = { getFieldFarmlands = function() return { { id = 4, x = 200, z = 0, acres = 30 } } end }
+    TheContractorFarmerSplit = {
+        getFieldFarmlands = function() return { { id = 4, x = 200, z = 0, acres = 30 } } end,
+        getFreeYards = function() return {} end,
+    }
     tc.Farmers = TheContractorFarmers.new()
     tc.Farmers.people[4] = { id = 4, name = "Tom Hargreaves", isOfficial = false, farmlandIds = { 4 }, machines = {
         { id = 1, role = "mediumTractor", xmlFilename = "tractor.xml", seed = 9 },

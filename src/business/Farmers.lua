@@ -387,7 +387,7 @@ local function notifyMenu()
     end
 end
 
--- Choosing who gets land (pure) ---------------------------------------------------
+-- Choosing who gets land, and who's near whom (pure) --------------------------------
 
 local function distance(a, b)
     local dx, dz = a.x - b.x, a.z - b.z
@@ -436,6 +436,48 @@ function TheContractorFarmers.chooseHolder(farmers, farmland, land, yards)
         end
     end
     return best ~= nil and best.farmer or nil
+end
+
+-- A farmer's places on the map: their farmlands' and their yard's points.
+local function getPlaces(farmer, land, yards)
+    local places = {}
+    for _, farmlandId in ipairs(farmer.farmlandIds or {}) do
+        if land[farmlandId] ~= nil then
+            table.insert(places, land[farmlandId])
+        end
+    end
+    local yard = farmer.yardFarmlandId ~= nil and yards[farmer.yardFarmlandId] or nil
+    if yard ~= nil then
+        table.insert(places, yard)
+    end
+    return places
+end
+
+-- 129: the farmers (never the official, never the farmer themselves) with
+-- land or a yard within NEAR_MARGIN of the farmer's land or yard, by id.
+-- farmers: getFarmers'; land: getLand's map; yards: getFreeYards'.
+function TheContractorFarmers.getNeighbours(farmers, farmer, land, yards)
+    local neighbours = {}
+    local own = getPlaces(farmer, land, yards)
+    for _, other in ipairs(farmers) do
+        if other.id ~= farmer.id and not other.isOfficial then
+            local isNear = false
+            for _, place in ipairs(getPlaces(other, land, yards)) do
+                for _, ownPlace in ipairs(own) do
+                    if distance(place, ownPlace) <= TheContractorFarmers.NEAR_MARGIN then
+                        isNear = true
+                    end
+                end
+            end
+            if isNear then
+                table.insert(neighbours, other)
+            end
+        end
+    end
+    table.sort(neighbours, function(a, b)
+        return a.id < b.id
+    end)
+    return neighbours
 end
 
 -- The farmer to take a free yard ({ farmlandId, x, z, declared }), by

@@ -332,6 +332,8 @@ function TheContractor:loadMap()
     self.Farmers = TheContractorFarmers.new()
     -- 113: each farm's relationship with each of them.
     self.Relationships = TheContractorRelationships.new()
+    -- 129: complaints, and word getting round.
+    self.Relationships:registerMessageKinds(self.Inbox)
     -- 116: a farmer asking for a new part fitted to their own machine
     -- (ADS), through 100.
     self.FarmerFavours = TheContractorFarmerFavours.new()

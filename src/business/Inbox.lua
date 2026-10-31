@@ -13,6 +13,7 @@
 --       getArgs = function(message) ... end,                      -- optional, client: the args to
 --                                                                 -- render with, worked out live
 --       endsWithJob = true,                                       -- optional: see below
+--       fromFarmer = true,                                        -- optional: from payload.farmerId
 --   })
 --   local id = tc.Inbox:postMessage(farmId, "certRequest", titleKey, bodyKey,
 --       args, actions, payload, expiresInDays)                    -- server only
@@ -179,8 +180,14 @@ function TheContractorInbox:getMessageJob(message)
     return tc.Jobs:getJob(message.farmId, jobId)
 end
 
--- 112: who an offer is from (its job's customer, 110), or nil.
+-- 112: who an offer is from (its job's customer, 110), or nil. 129: a
+-- fromFarmer kind's message is from the person in payload.farmerId.
 function TheContractorInbox:getMessageCustomer(message)
+    local definition = self.kinds[message.kind]
+    if definition ~= nil and definition.fromFarmer then
+        local farmers = g_currentMission.TheContractor.Farmers
+        return farmers ~= nil and farmers:getPerson(message.payload.farmerId) or nil
+    end
     local job = self:getMessageJob(message)
     return job ~= nil and job:getCustomer() or nil
 end

@@ -85,6 +85,8 @@ local function setup(def)
         getADSMargin = function() return 0.4 end,
     }
     world:addRelationships()
+    -- 129: a miss can leave the customer poor, so they complain.
+    TCCalendar = { getPeriodIndex = function() return 1 end }
     tc.Reputation = {
         addReputation = function(_, farmId, delta) table.insert(world.calls.reputation, delta) end,
     }
@@ -272,7 +274,10 @@ local function setup(def)
 
     -- The farmers' land: farmland id -> acres (each with a field of that id).
     world.landList = {}
-    TheContractorFarmerSplit = { getFieldFarmlands = function() return world.landList end }
+    TheContractorFarmerSplit = {
+        getFieldFarmlands = function() return world.landList end,
+        getFreeYards = function() return {} end,
+    }
     tc.Farmers = TheContractorFarmers.new()
     tc.Farmers.officialId = 99
     tc.Farmers.people[99] = { id = 99, name = "The Official", isOfficial = true, farmlandIds = {} }

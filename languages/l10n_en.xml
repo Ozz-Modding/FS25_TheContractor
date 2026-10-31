@@ -398,12 +398,22 @@
 		<text name="tc_fleet_role_combine" text="Combine"/>
 		<text name="tc_fleet_role_header" text="Header"/>
 		<text name="tc_fleet_role_trailer" text="Trailer"/>
-		<text name="tc_people_noteFallenOut"text="They've fallen out with you, so they offer you no work for now. It mends a little each month."/>
+		<text name="tc_people_noteFallenOut" text="They've fallen out with you, so they offer you no work for now. It mends a little each month."/>
 		<text name="tc_relationship_excellent" text="Excellent"/>
 		<text name="tc_relationship_good" text="Good"/>
 		<text name="tc_relationship_neutral" text="Neutral"/>
 		<text name="tc_relationship_poor" text="Poor"/>
 		<text name="tc_relationship_fallenOut" text="Fallen out"/>
+		<text name="tc_complaint_title" text="%s has complained"/>
+		<text name="tc_complaint_body_missed_1" text="%s has been on the phone about %s. They'd been counting on you, the work never got done, and they want you to know they're not happy. One more let-down and they'll find someone else."/>
+		<text name="tc_complaint_body_missed_2" text="%s stopped by about %s, and didn't mince their words: they lost good days waiting for a job you never finished. They've put up with it this time, but they won't again."/>
+		<text name="tc_complaint_body_missed_3" text="A sharp note from %s about %s: the job you agreed to was never finished, and they've had to sort it out themselves. They're giving you one more chance, and no more."/>
+		<text name="tc_complaint_body_poorWork_1" text="%s has been on the phone about %s. They've had a look at the work and they're not impressed. They paid for a proper job, and next time they want one, or they'll go elsewhere."/>
+		<text name="tc_complaint_body_poorWork_2" text="%s stopped by about %s, and it wasn't to say thanks: they reckon it's the worst job anyone's done for them in years. Do better next time, or there won't be a next time."/>
+		<text name="tc_complaint_body_poorWork_3" text="A sharp note from %s about %s: the neighbours have been asking who made such a mess of it. They're willing to let it go once, but they're watching."/>
+		<text name="tc_wordGetsRound_title" text="%s has been talking"/>
+		<text name="tc_wordGetsRound_body" text="%s has fallen out with you, and has been telling the neighbours all about it. %s think a bit less of you now, and word has got round the trade."/>
+		<text name="tc_wordGetsRound_bodyNoNeighbours" text="%s has fallen out with you, and has been telling anyone who'll listen. Word has got round the trade."/>
 		<text name="tc_reputationTip_title" text="Reputation and relationships"/>
 		<text name="tc_reputationTip_reputation" text="Reputation is what the area thinks of your company. Good work builds it, and missed jobs, claims and accidents knock it back. It doesn't fade. It brings more offers, bigger fields and better rates, and unlocks bigger adverts."/>
 		<text name="tc_reputationTip_relationship" text="A relationship is what one customer thinks of you, from your own dealings with them. Good work builds it, and missed jobs and turned-down or ignored offers wear it down. Without repeat work it drifts back to neutral. It decides how often they offer you work and how far they'll move when you negotiate. A customer who has fallen out with you offers nothing until it mends."/>
