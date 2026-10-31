@@ -105,9 +105,12 @@ TheContractorJobGeneration_mt = Class(TheContractorJobGeneration)
 --                    to fit as a favour (TheContractorFarmerFavours):
 --                    accepted as it stands, never negotiated, the farmer
 --                    its customer.
---   yardDelivery     124: the farm's own bales taken to a farmer's yard and
---                    put down in a marked area (job.yardDelivery,
---                    TheContractorYardBales), the farmer its customer.
+--   yardDelivery     a job in a farmer's yard, the farmer its customer: 124's
+--                    bales taken there and put down in a marked area
+--                    (job.yardDelivery, TheContractorYardBales), or 126's
+--                    load of theirs sold from it (job.yardHaul,
+--                    TheContractorYardHaul). Its missed notification is
+--                    its own (tc_<type>_missedNotification).
 -- A type left out of JOB_TYPE_KEYS (flyTipping, spillRecovery) is never
 -- generated, shown by the availability snapshot or created by tcJob: only
 -- its random event makes one (075 with createJobOnField, 106 with
@@ -200,6 +203,12 @@ TheContractorJobGeneration.JOB_TYPES = {
     -- (allocateOnAccept), and it earns per bale asked for (job.workTotal).
     yardBales = { serverMeasured = true, playerOnly = true, noEquipment = true, offField = true,
         allocateOnAccept = true, yardDelivery = true, reputationPerItem = 1, skill = "haulage" },
+    -- 126: a farmer's own trailer, full, from their yard to a selling point
+    -- (TheContractorYardHaul): 035's haulage and nothing else (deliveryOnly),
+    -- offField and allocateOnAccept as 124's, and a straw delivery's sort of
+    -- reward for its one load.
+    yardHaul = { serverMeasured = true, playerOnly = true, noEquipment = true, offField = true,
+        allocateOnAccept = true, yardDelivery = true, deliveryOnly = true, reputationReward = 10, skill = "haulage" },
 }
 TheContractorJobGeneration.JOB_TYPE_KEYS = { "harvest", "cultivate", "sow", "plow", "mow", "tedder", "bale",
     "baleWrap", "strawDelivery", "fertilize", "herbicide", "weed", "hoe", "stonePick" }

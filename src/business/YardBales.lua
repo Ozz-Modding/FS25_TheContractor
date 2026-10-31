@@ -193,7 +193,8 @@ function TheContractorYardBales.isInArea(area, x, z)
     return math.abs(across) <= area.width * 0.5 and math.abs(along) <= area.length * 0.5
 end
 
--- The farm's open (not finished) yard bale jobs, and the farmers asking.
+-- The farm's open (not finished) yard bale jobs, and the farmers asking
+-- (126: or with a load of theirs to sell on: one job in a yard at a time).
 function TheContractorYardBales.getOpenJobs()
     local farms, farmers = {}, {}
     local jobs = g_currentMission.TheContractor.Jobs
@@ -202,6 +203,8 @@ function TheContractorYardBales.getOpenJobs()
             if job.yardDelivery ~= nil and not job:isTerminal() then
                 farms[farmId] = true
                 farmers[job.yardDelivery.farmerId or 0] = true
+            elseif job.yardHaul ~= nil and not job:isTerminal() then
+                farmers[job.yardHaul.farmerId or 0] = true
             end
         end
     end

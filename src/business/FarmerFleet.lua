@@ -1,9 +1,9 @@
 -- Farmer fleets (121): the machines each of the map's farmers (110) owns,
 -- kept as records on the farmer, never as vehicles left on the map. A
 -- machine is only in the world while a job needs it (a field breakdown,
--- 101, a favour, 116, or 124's telehandler lent to a yard bale job), and
--- then it's that farmer's machine, every time: the same model and seed,
--- only older.
+-- 101, a favour, 116, 124's telehandler lent to a yard bale job, or 126's
+-- trailer with a load to sell), and then it's that farmer's machine, every
+-- time: the same model and seed, only older.
 --
 -- The recipe is flat, not a scale by acres (farmers' holdings are all much
 -- the same size, 109's target, +-30%); it's there for interesting equipment
@@ -157,8 +157,8 @@ function TheContractorFarmerFleet.getHoursPerMonth(acres)
 end
 
 -- Server: whether a farmer's machine is in the world or on its way (an
--- arrival, an open workshop job or yard bale job, or waiting to be
--- collected), so it can't turn up somewhere else as well.
+-- arrival, an open workshop job, yard bale job or load to sell, or waiting
+-- to be collected), so it can't turn up somewhere else as well.
 function TheContractorFarmerFleet.isMachineOut(farmerId, machineId)
     local tc = g_currentMission.TheContractor
     local repairContracts = tc.RepairContracts
@@ -188,6 +188,12 @@ function TheContractorFarmerFleet.isMachineOut(farmerId, machineId)
                 local yard = job.yardDelivery
                 if yard ~= nil and not job:isTerminal() and yard.farmerId == farmerId and
                         (yard.machineId == machineId or yard.attachmentMachineId == machineId) then
+                    return true
+                end
+                -- 126: and a load to sell holds their trailer.
+                local haul = job.yardHaul
+                if haul ~= nil and not job:isTerminal() and haul.farmerId == farmerId and
+                        haul.machineId == machineId then
                     return true
                 end
             end
