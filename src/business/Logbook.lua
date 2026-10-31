@@ -314,11 +314,14 @@ function TheContractorLogbook:buildJobEntry(job, outcome, reputation)
         jobType = job.jobType,
         title = job:getDisplayTitle(),
         fieldId = job.fieldId,
-        -- 100: a workshop job's machine, shown in place of a field. 124: or
-        -- the farmer's yard bales went to.
-        location = (job.workshop ~= nil or job.yardDelivery ~= nil) and job:getLocationText() or nil,
-        -- 124: the bales asked for, delivered and over, or nil.
-        delivery = TheContractorYardBales ~= nil and TheContractorYardBales.getLogbookDelivery(job) or nil,
+        -- 100: a workshop job's machine, shown in place of a field. 124, 126:
+        -- or the farmer's yard.
+        location = (job.workshop ~= nil or job.yardDelivery ~= nil or job.yardHaul ~= nil) and job:getLocationText()
+            or nil,
+        -- 124: the bales asked for, delivered and over, or nil. 126: a
+        -- farmer's load and where it went.
+        delivery = TheContractorYardBales ~= nil and TheContractorYardBales.getLogbookDelivery(job) or
+            TheContractorYardHaul ~= nil and TheContractorYardHaul.getLogbookDelivery(job) or nil,
         -- 101: a breakdown's field, for the list's Field column.
         workshopFieldId = job.workshop ~= nil and job.workshop.fieldId or nil,
         -- 111: who it was for (110's farmer or the official), so the People
@@ -1113,6 +1116,8 @@ function TheContractorLogbook.writeJobEntry(streamId, entry)
         streamWriteFloat32(streamId, delivery.deliveredLiters or 0)
         streamWriteFloat32(streamId, delivery.excessLiters or 0)
         streamWriteFloat32(streamId, delivery.excessPay or 0)
+        -- 126.
+        writeString(streamId, delivery.stationName)
     end
 end
 
@@ -1191,6 +1196,7 @@ function TheContractorLogbook.readJobEntry(streamId)
             deliveredLiters = streamReadFloat32(streamId),
             excessLiters = streamReadFloat32(streamId),
             excessPay = streamReadFloat32(streamId),
+            stationName = readString(streamId),
         }
     end
     return entry
@@ -1405,6 +1411,9 @@ local function saveJobEntry(xmlFile, key, entry)
         setXMLFloat(xmlFile, key .. ".delivery#deliveredLiters", delivery.deliveredLiters or 0)
         setXMLFloat(xmlFile, key .. ".delivery#excessLiters", delivery.excessLiters or 0)
         setXMLFloat(xmlFile, key .. ".delivery#excessPay", delivery.excessPay or 0)
+        if delivery.stationName ~= nil then
+            setXMLString(xmlFile, key .. ".delivery#stationName", delivery.stationName)
+        end
     end
 end
 
@@ -1454,6 +1463,7 @@ local function loadJobEntry(xmlFile, key)
             deliveredLiters = Utils.getNoNil(getXMLFloat(xmlFile, key .. ".delivery#deliveredLiters"), 0),
             excessLiters = Utils.getNoNil(getXMLFloat(xmlFile, key .. ".delivery#excessLiters"), 0),
             excessPay = Utils.getNoNil(getXMLFloat(xmlFile, key .. ".delivery#excessPay"), 0),
+            stationName = getXMLString(xmlFile, key .. ".delivery#stationName"),
         }
     end
 

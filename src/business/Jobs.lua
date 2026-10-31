@@ -176,9 +176,11 @@ end
 -- fieldId is 0. spill (106) is a spilt crop's job.spill (TheContractorCropSpill).
 -- yardDelivery (124) is a yard bale job's job.yardDelivery
 -- (TheContractorYardBales); its litres are the job's requiredLiters.
+-- yardHaul (126) is a farmer's load to sell's job.yardHaul
+-- (TheContractorYardHaul), a haulage job to deliveryStation.
 function TheContractorJobs:createJob(farmId, jobType, fieldId, requiredSkillLevel, targetPeriod, targetDayInPeriod,
                                       price, equipmentAvailable, fruitTypeName, deadlineDay, includesHaulage,
-                                      deliveryStation, startState, workshop, spill, yardDelivery)
+                                      deliveryStation, startState, workshop, spill, yardDelivery, yardHaul)
     if not g_currentMission:getIsServer() then
         return nil
     end
@@ -207,7 +209,8 @@ function TheContractorJobs:createJob(farmId, jobType, fieldId, requiredSkillLeve
     if yardDelivery ~= nil then
         job.requiredLiters = yardDelivery.liters or 0
     end
-    -- 110: after workshop, spill and yardDelivery, which decide it.
+    job.yardHaul = yardHaul
+    -- 110: after workshop, spill and the yard jobs, which decide it.
     local farmers = g_currentMission.TheContractor.Farmers
     if farmers ~= nil then
         job.customerId = farmers:getCustomerIdForJob(job)
@@ -391,6 +394,10 @@ function TheContractorJobs:onJobAccepted(job, playerName)
     if job.yardDelivery ~= nil then
         g_currentMission.TheContractor.YardBales:onJobAccepted(job)
     end
+    -- 126: and their trailer, full.
+    if job.yardHaul ~= nil then
+        g_currentMission.TheContractor.YardHaul:onJobAccepted(job)
+    end
 end
 
 -- Server: an offer turned down, run out or walked away from in negotiation.
@@ -497,8 +504,8 @@ function TheContractorJobs:applyJobDelivery(farmId, jobId, deliveredLiters, requ
     job.requiredLiters = requiredLiters
 
     local isDelivered = requiredLiters > 0 and deliveredLiters >= requiredLiters
-    -- 124: a yard bale job completes as it's delivered, which says so.
-    if isDelivered and not wasDelivered and job.yardDelivery == nil and g_client ~= nil and
+    -- 124, 126: a yard job completes as it's delivered, which says so.
+    if isDelivered and not wasDelivered and not job:isYardJob() and g_client ~= nil and
             g_currentMission:getFarmId() == farmId then
         local field = g_fieldManager:getFieldById(job.fieldId)
         g_currentMission:addIngameNotification(FSBaseMission.INGAME_NOTIFICATION_OK,
@@ -651,6 +658,11 @@ end
 -- noPenalty (100): a workshop job whose machine ADS stopped managing ends
 -- with nothing lost.
 function TheContractorJobs:missJob(job, noPenalty)
+    -- 126: whether a farmer's load went astray, while the trailer's still
+    -- where it was left.
+    if job.yardHaul ~= nil and not noPenalty then
+        g_currentMission.TheContractor.YardHaul:judgeMiss(job)
+    end
     -- Reputation.lua's score is otherwise always an integer (tier thresholds,
     -- %d display formatting) — floor this rather than let a partial-progress
     -- job leave a fractional score behind.
@@ -666,6 +678,9 @@ function TheContractorJobs:missJob(job, noPenalty)
         -- 100: judged as the customer comes for it - worse than it arrived
         -- costs more, and maybe a claim.
         penalty = g_currentMission.TheContractor.RepairContracts:judgeTampering(job, penalty)
+    elseif job.yardHaul ~= nil then
+        -- 126: and far more if the load was taken.
+        penalty = penalty + TheContractorYardHaul.getTheftPenalty(job)
     end
     g_currentMission.TheContractor.Reputation:addReputation(job.farmId, -penalty)
     -- 113: the customer remembers (a workshop job has none).
@@ -688,6 +703,11 @@ function TheContractorJobs:missJob(job, noPenalty)
     -- entry just written).
     if job.spill ~= nil then
         g_currentMission.TheContractor.CropSpill:onJobMissed(job)
+    end
+    -- 126: a taken load's claim (on the same entry), and the farmer's
+    -- opinion of it.
+    if job.yardHaul ~= nil and not noPenalty then
+        g_currentMission.TheContractor.YardHaul:onJobMissed(job)
     end
 
     if wasAllocated then
@@ -1467,6 +1487,8 @@ function TheContractorJobs.writeJob(streamId, job)
     streamWriteInt32(streamId, job.customerId or 0)
     -- 124.
     TheContractorYardBales.writeStream(streamId, job.yardDelivery)
+    -- 126.
+    TheContractorYardHaul.writeStream(streamId, job.yardHaul)
 end
 
 -- 100: what a client needs of a workshop job (the uniqueIds stay on the
@@ -1660,6 +1682,7 @@ function TheContractorJobs.readJob(streamId)
     local customerId = streamReadInt32(streamId)
     job.customerId = customerId ~= 0 and customerId or nil
     job.yardDelivery = TheContractorYardBales.readStream(streamId)
+    job.yardHaul = TheContractorYardHaul.readStream(streamId)
 
     return job
 end
@@ -1791,6 +1814,8 @@ function TheContractorJobs:loadFromXMLFile(xmlFile)
             job.workshop = TheContractorJobs.loadWorkshop(xmlFile, jobKey .. ".workshop")
             job.spill = TheContractorCropSpill.loadFromXML(xmlFile, jobKey .. ".spill")
             job.yardDelivery = TheContractorYardBales.loadFromXML(xmlFile, jobKey .. ".yardDelivery")
+            -- 126: its litres are haulage's, loaded above.
+            job.yardHaul = TheContractorYardHaul.loadFromXML(xmlFile, jobKey .. ".yardHaul")
             -- 124: its litres are kept with the order, not as haulage's.
             if job.yardDelivery ~= nil then
                 job.requiredLiters = job.yardDelivery.liters or 0
@@ -2125,6 +2150,9 @@ function TheContractorJobs:saveToXmlFile(xmlFile)
             if job.yardDelivery ~= nil then
                 TheContractorYardBales.saveToXML(xmlFile, jobKey .. ".yardDelivery", job.yardDelivery,
                     job.deliveredLiters)
+            end
+            if job.yardHaul ~= nil then
+                TheContractorYardHaul.saveToXML(xmlFile, jobKey .. ".yardHaul", job.yardHaul)
             end
             if job.customerId ~= nil then
                 setXMLInt(xmlFile, jobKey .. "#customerId", job.customerId)

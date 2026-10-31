@@ -29,7 +29,8 @@
 --                bale tipped into a BaleUnloadTrigger reaches the station's
 --                addFillLevelFromTool like any other load. Counted in
 --                litres by fill type + farm, like the crop - the farm's own
---                straw sold there counts too.
+--                straw sold there counts too. 126 sells a farmer's
+--                trailer load the same way.
 --
 -- Server-only apart from the display state (deliveredLiters/requiredLiters/
 -- deliveryStationName), which rides on the job snapshot and
@@ -119,9 +120,10 @@ end
 -- What a job delivers: the crop on a harvest job, straw on a bale job
 -- (067).
 function TCHaulage.getDeliveryFillType(job)
-    -- 106: the crop that was spilt.
-    if job.spill ~= nil then
-        return g_fillTypeManager:getFillTypeIndexByName(job.spill.fillTypeName)
+    -- 106: the crop that was spilt. 126: a farmer's load.
+    local carried = job.spill or job.yardHaul
+    if carried ~= nil then
+        return g_fillTypeManager:getFillTypeIndexByName(carried.fillTypeName)
     end
     local jobDef = TheContractorJobGeneration.JOB_TYPES[job.jobType]
     local fruitTypeIndex = job:getFruitTypeIndex()
@@ -201,6 +203,10 @@ function TCHaulage.getRequiredLiters(job)
     -- 106: a share of the spill, with its own allowance for losses.
     if job.spill ~= nil then
         return TheContractorCropSpill.getRequiredLiters(job)
+    end
+    -- 126: a farmer's trailer load.
+    if job.yardHaul ~= nil then
+        return (job.yardHaul.liters or 0) * TCHaulage.DELIVERY_SUCCESS_FACTOR
     end
 
     local liters

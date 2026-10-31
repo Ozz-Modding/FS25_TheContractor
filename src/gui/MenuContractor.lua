@@ -2680,8 +2680,8 @@ function MenuContractor:updateInboxDetails()
         fieldText = string.format(g_i18n:getText("tc_inbox_fieldValue"), fieldText,
             g_i18n:formatArea(field:getAreaHa(), 2))
     end
-    -- 124: a farmer's yard (its field only says where it is).
-    if job.yardDelivery ~= nil then
+    -- 124, 126: a farmer's yard (its field only says where it is).
+    if job:isYardJob() then
         self.inboxLabelField:setText(g_i18n:getText("tc_jobDetails_place"))
         fieldText = job:getLocationText()
     end
@@ -2709,6 +2709,10 @@ function MenuContractor:updateInboxDetails()
     if job.yardDelivery ~= nil then
         self.inboxLabelDelivery:setText(g_i18n:getText("tc_yardBales_detailOrder"))
         self.inboxDetailDelivery:setText(TheContractorYardBales.getDeliveryText(job))
+    end
+    -- 126: the farmer's load, and where it's sold.
+    if job.yardHaul ~= nil then
+        self.inboxDetailDelivery:setText(TheContractorYardHaul.getDeliveryText(job))
     end
 
     self:updateInboxSupplies(job)
@@ -3886,8 +3890,8 @@ function MenuContractor:getJobDetailRows(job)
     table.insert(rows, { section = g_i18n:getText("tc_jobDetails_sectionJob") })
     add(g_i18n:getText("tc_jobDetails_job"), job:getDisplayTitle())
     local placeKey = job:isWorkshop() and "tc_jobDetails_machine" or "tc_jobDetails_field"
-    -- 124: a farmer's yard.
-    if job.yardDelivery ~= nil then
+    -- 124, 126: a farmer's yard.
+    if job:isYardJob() then
         placeKey = "tc_jobDetails_place"
     end
     add(g_i18n:getText(placeKey), job:getLocationText())
@@ -3917,7 +3921,10 @@ function MenuContractor:getJobDetailRows(job)
         return rows
     end
     add(g_i18n:getText("tc_jobDetails_progress"), string.format("%d%%", math.floor(job.completionPercentage)))
-    if job.includesHaulage and job.deliveryStationName ~= nil then
+    if job.yardHaul ~= nil then
+        -- 126: the farmer's load, where it's sold and how much is in.
+        add(g_i18n:getText("tc_jobDetails_delivery"), TheContractorYardHaul.getDeliveryText(job))
+    elseif job.includesHaulage and job.deliveryStationName ~= nil then
         local value = job.deliveryStationName
         if job:needsPlayerDelivery() and job.requiredLiters > 0 then
             value = string.format(g_i18n:getText("tc_jobDetails_deliveryProgress"), job.deliveryStationName,
@@ -5093,7 +5100,10 @@ end
 -- bales already lying there (067).
 function MenuContractor:getHaulYourselfKey(job)
     local jobDef = TheContractorJobGeneration.JOB_TYPES[job.jobType]
-    if jobDef ~= nil and jobDef.deliveryOnly then
+    -- 126: a farmer's trailer load.
+    if job.yardHaul ~= nil then
+        return "tc_allocation_sellLoadYourself"
+    elseif jobDef ~= nil and jobDef.deliveryOnly then
         return "tc_allocation_deliverStrawYourself"
     elseif jobDef ~= nil and jobDef.deliversBales then
         return "tc_allocation_baleAndDeliverYourself"
@@ -7060,6 +7070,10 @@ function MenuContractor:getLogbookJobRows(entry)
         section("tc_logbook_sectionDelivery")
         row(text("tc_logbook_askedFor"), g_i18n:formatVolume(delivery.requiredLiters or 0, 0))
         row(text("tc_logbook_delivered"), g_i18n:formatVolume(delivery.deliveredLiters or 0, 0))
+        -- 126: where a farmer's load went.
+        if delivery.stationName ~= nil then
+            row(text("tc_logbook_soldAt"), delivery.stationName)
+        end
         if (delivery.excessLiters or 0) > 0 then
             row(text("tc_logbook_excess"), string.format(text("tc_logbook_excessValue"),
                 g_i18n:formatVolume(delivery.excessLiters, 0), formatMoney(delivery.excessPay or 0)))
