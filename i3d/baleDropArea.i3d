@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="iso-8859-1"?>
+
+<i3D name="baleDropArea.i3d" version="1.6" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://i3d.giants.ch/schema/i3d-1.6.xsd">
+  <Asset>
+    <Export program="GIANTS Editor 64bit" version="10.0.13"/>
+  </Asset>
+
+  <Files>
+    <File fileId="4" filename="$data/shaders/placeableShader.xml"/>
+    <File fileId="1" filename="$data/shared/warningStripes_diffuse.dds"/>
+    <File fileId="2" filename="$data/shared/warningStripes_normal.dds"/>
+    <File fileId="3" filename="$data/shared/warningStripes_specular.dds"/>
+  </Files>
+
+
+  <Materials>
+    <Material name="warningStripes_mat" materialId="5" customShaderId="4">
+      <Texture fileId="1"/>
+      <Normalmap fileId="2"/>
+      <Glossmap fileId="3"/>
+      <CustomParameter name="snowScale" value="0"/>
+    </Material>
+  </Materials>
+
+
+  <Shapes externalShapesFile="baleDropArea.i3d.shapes">
+  </Shapes>
+
+  <Scene>
+    <TransformGroup name="baleDropArea" clipDistance="300" nodeId="9">
+      <TransformGroup name="visuals" nodeId="10">
+        <Shape name="borderLeft" translation="-5.85 0.02 0" shapeId="1" clipDistance="300" nodeId="11" castsShadows="false" receiveShadows="true" nonRenderable="true" terrainDecal="true" decalLayer="1" materialIds="5"/>
+        <Shape name="borderRight" translation="5.85 0.02 0" shapeId="1" clipDistance="300" nodeId="12" castsShadows="false" receiveShadows="true" nonRenderable="true" terrainDecal="true" decalLayer="1" materialIds="5"/>
+        <Shape name="borderBack" translation="0 0.02 -5.85" shapeId="2" clipDistance="300" nodeId="13" castsShadows="false" receiveShadows="true" nonRenderable="true" terrainDecal="true" decalLayer="1" materialIds="5"/>
+        <Shape name="borderFront" translation="0 0.02 5.85" shapeId="2" clipDistance="300" nodeId="14" castsShadows="false" receiveShadows="true" nonRenderable="true" terrainDecal="true" decalLayer="1" materialIds="5"/>
+      </TransformGroup>
+    </TransformGroup>
+  </Scene>
+
+</i3D>

@@ -73,6 +73,14 @@ function TCJobMissedEvent.showNotification(farmId, jobType, fieldId)
         return
     end
 
+    -- 124: bales to a farmer's yard; its field only said where it was.
+    local jobDef = TheContractorJobGeneration.JOB_TYPES[jobType]
+    if jobDef ~= nil and jobDef.yardDelivery then
+        g_currentMission:addIngameNotification(FSBaseMission.INGAME_NOTIFICATION_CRITICAL,
+            g_i18n:getText("tc_yardBales_missedNotification"))
+        return
+    end
+
     local field = g_fieldManager:getFieldById(fieldId)
     local fieldLabel = field ~= nil and field:getName() or tostring(fieldId)
 

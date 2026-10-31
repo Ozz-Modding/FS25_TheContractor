@@ -174,9 +174,11 @@ end
 -- record one (032, JOB_TYPES' startState). workshop (100) is a workshop
 -- job's customer machine and contract (TheContractorRepairContracts), whose
 -- fieldId is 0. spill (106) is a spilt crop's job.spill (TheContractorCropSpill).
+-- yardDelivery (124) is a yard bale job's job.yardDelivery
+-- (TheContractorYardBales); its litres are the job's requiredLiters.
 function TheContractorJobs:createJob(farmId, jobType, fieldId, requiredSkillLevel, targetPeriod, targetDayInPeriod,
                                       price, equipmentAvailable, fruitTypeName, deadlineDay, includesHaulage,
-                                      deliveryStation, startState, workshop, spill)
+                                      deliveryStation, startState, workshop, spill, yardDelivery)
     if not g_currentMission:getIsServer() then
         return nil
     end
@@ -201,7 +203,11 @@ function TheContractorJobs:createJob(farmId, jobType, fieldId, requiredSkillLeve
     end
     job.workshop = workshop
     job.spill = spill
-    -- 110: after workshop and spill, which decide it.
+    job.yardDelivery = yardDelivery
+    if yardDelivery ~= nil then
+        job.requiredLiters = yardDelivery.liters or 0
+    end
+    -- 110: after workshop, spill and yardDelivery, which decide it.
     local farmers = g_currentMission.TheContractor.Farmers
     if farmers ~= nil then
         job.customerId = farmers:getCustomerIdForJob(job)
@@ -381,6 +387,10 @@ function TheContractorJobs:onJobAccepted(job, playerName)
         end
         g_currentMission.TheContractor.RepairContracts:checkJob(job)
     end
+    -- 124: the farmer gets their telehandler out.
+    if job.yardDelivery ~= nil then
+        g_currentMission.TheContractor.YardBales:onJobAccepted(job)
+    end
 end
 
 -- Server: an offer turned down, run out or walked away from in negotiation.
@@ -487,7 +497,9 @@ function TheContractorJobs:applyJobDelivery(farmId, jobId, deliveredLiters, requ
     job.requiredLiters = requiredLiters
 
     local isDelivered = requiredLiters > 0 and deliveredLiters >= requiredLiters
-    if isDelivered and not wasDelivered and g_client ~= nil and g_currentMission:getFarmId() == farmId then
+    -- 124: a yard bale job completes as it's delivered, which says so.
+    if isDelivered and not wasDelivered and job.yardDelivery == nil and g_client ~= nil and
+            g_currentMission:getFarmId() == farmId then
         local field = g_fieldManager:getFieldById(job.fieldId)
         g_currentMission:addIngameNotification(FSBaseMission.INGAME_NOTIFICATION_OK,
             string.format(g_i18n:getText("tc_haulage_deliveryComplete"),
@@ -1248,7 +1260,8 @@ function TheContractorJobs:completeJob(job, isForced)
     -- 049: invoiced rather than paid, unless late/unpaid invoices are
     -- switched off - see TheContractorFinances:invoiceJob. Sets
     -- job.invoiceDueDay before the completion broadcast below carries it.
-    job.paymentAmount = job:getPrice()
+    -- 124: a yard bale job's bales over the order are paid on top.
+    job.paymentAmount = job:getPrice() + TheContractorYardBales.getExcessPay(job)
     g_currentMission.TheContractor.Finances:invoiceJob(job)
 
     -- Summary (029): computed here, alongside the payout, and sent to
@@ -1452,6 +1465,8 @@ function TheContractorJobs.writeJob(streamId, job)
     TheContractorCropSpill.writeStream(streamId, job.spill)
     -- 110. 0 stands in for "no customer".
     streamWriteInt32(streamId, job.customerId or 0)
+    -- 124.
+    TheContractorYardBales.writeStream(streamId, job.yardDelivery)
 end
 
 -- 100: what a client needs of a workshop job (the uniqueIds stay on the
@@ -1644,6 +1659,7 @@ function TheContractorJobs.readJob(streamId)
     job.spill = TheContractorCropSpill.readStream(streamId)
     local customerId = streamReadInt32(streamId)
     job.customerId = customerId ~= 0 and customerId or nil
+    job.yardDelivery = TheContractorYardBales.readStream(streamId)
 
     return job
 end
@@ -1774,6 +1790,12 @@ function TheContractorJobs:loadFromXMLFile(xmlFile)
             job.graceRemainingMs = getXMLFloat(xmlFile, jobKey .. "#graceRemainingMs")
             job.workshop = TheContractorJobs.loadWorkshop(xmlFile, jobKey .. ".workshop")
             job.spill = TheContractorCropSpill.loadFromXML(xmlFile, jobKey .. ".spill")
+            job.yardDelivery = TheContractorYardBales.loadFromXML(xmlFile, jobKey .. ".yardDelivery")
+            -- 124: its litres are kept with the order, not as haulage's.
+            if job.yardDelivery ~= nil then
+                job.requiredLiters = job.yardDelivery.liters or 0
+                job.deliveredLiters = job.yardDelivery.deliveredLiters or 0
+            end
             -- 110: nil for a job saved before it existed - TheContractorFarmers:
             -- setUp links it from its field.
             job.customerId = getXMLInt(xmlFile, jobKey .. "#customerId")
@@ -2099,6 +2121,10 @@ function TheContractorJobs:saveToXmlFile(xmlFile)
             end
             if job.spill ~= nil then
                 TheContractorCropSpill.saveToXML(xmlFile, jobKey .. ".spill", job.spill)
+            end
+            if job.yardDelivery ~= nil then
+                TheContractorYardBales.saveToXML(xmlFile, jobKey .. ".yardDelivery", job.yardDelivery,
+                    job.deliveredLiters)
             end
             if job.customerId ~= nil then
                 setXMLInt(xmlFile, jobKey .. "#customerId", job.customerId)

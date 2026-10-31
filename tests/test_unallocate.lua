@@ -24,6 +24,7 @@ local function setup()
 
     world:load("src/business/Job.lua")
     world:load("src/business/Jobs.lua")
+    world:load("src/business/YardBales.lua")
     world:load("src/business/CropSpill.lua")
     world:load("src/business/JobGeneration.lua")
     world:load("src/business/Allocation.lua")

@@ -76,6 +76,12 @@
 -- no quote, and pays the part back (createFavourOffer). The part's fitted by
 -- hand, so it needs no kit.
 --
+-- 124: a farmer's machine lent to a job (TheContractorYardBales' telehandler
+-- and bale fork) comes out the same way (entry.loan): no ADS and no offer of
+-- its own, handed to its job once it's hitched up, and collected as a
+-- customer's machine is once the job's over. It's never saved: the job sends
+-- for it again after a load.
+--
 -- State (server, saved in TheContractor.xml): the arrivals queue, the
 -- machines waiting to be collected, pending tamper claims and which farms
 -- are known for overcharging. Clients only ever see the jobs (and the
@@ -318,6 +324,12 @@ function TheContractorRepairContracts.getContractVehicleIds()
             if workshop ~= nil and workshop.attachmentId ~= nil and workshop.attachmentId ~= 0 then
                 result[workshop.attachmentId] = job
             end
+            -- 124: a farmer's telehandler and fork lent to a yard bale job.
+            if job.yardDelivery ~= nil and TheContractorYardBales ~= nil then
+                for _, vehicleId in ipairs(TheContractorYardBales.getKitIds(job.yardDelivery)) do
+                    result[vehicleId] = job
+                end
+            end
         end
     end
     contractVehicleCache = result
@@ -350,8 +362,9 @@ function TheContractorRepairContracts.isWorkableVehicle(vehicle, farmId)
     end
     local vehicleId = NetworkUtil.getObjectId(vehicle)
     local job = TheContractorRepairContracts.getContractVehicleIds()[vehicleId]
-    -- 121: never its attachment, which ADS has nothing to do with.
-    return job ~= nil and not job:isTerminal() and job.workshop.vehicleId == vehicleId and
+    -- 121: never its attachment, which ADS has nothing to do with. 124: nor
+    -- a farmer's kit lent to a job.
+    return job ~= nil and job.workshop ~= nil and not job:isTerminal() and job.workshop.vehicleId == vehicleId and
         vehicle:getOwnerFarmId() == farmId
 end
 
@@ -917,10 +930,45 @@ function TheContractorRepairContracts:queueFavourArrival(farmId, farmer, machine
     return entry
 end
 
--- 101, 116: an arrival with a spot of its own (a breakdown or a favour)
--- rather than a repair zone's bay.
+-- 124: a farmer's machine lent to a job (TheContractorYardBales' telehandler
+-- and bale fork) to a spot in their yard: a loan. No ADS, no offer of its
+-- own: once it's loaded (and its attachment hitched) it's handed to the job
+-- (onLoanArrived), and it waits for its spot as long as the job wants it
+-- (isLoanWanted). Not saved: after a load the job sends for it again.
+function TheContractorRepairContracts:queueLoanArrival(farmId, jobId, farmer, machine, model, spot, attachment)
+    local entry = {
+        farmId = farmId,
+        loan = true,
+        jobId = jobId,
+        farmerId = farmer.id,
+        machineId = machine.id,
+        yardFarmlandId = spot.yardFarmlandId,
+        x = spot.x,
+        z = spot.z,
+        rotY = spot.rotY,
+        xmlFilename = model.xmlFilename,
+        attachment = attachment,
+        queuedDay = g_currentMission.environment.currentMonotonicDay,
+        attempts = 0,
+        blockedDays = 0,
+        isLoading = false,
+    }
+    table.insert(self.arrivals, entry)
+    TCLog.info("TheContractor: farm %d job %d: farmer #%d's %s to %s on its way", farmId, jobId, farmer.id,
+        tostring(model.name), TheContractorRepairContracts.describeSpot(entry))
+    return entry
+end
+
+-- 124: whether a loan arrival's job still wants it.
+function TheContractorRepairContracts.isLoanWanted(entry)
+    local yardBales = g_currentMission.TheContractor.YardBales
+    return yardBales ~= nil and yardBales:isLoanWanted(entry)
+end
+
+-- 101, 116: an arrival with a spot of its own (a breakdown or a favour, or
+-- 124's loan) rather than a repair zone's bay.
 function TheContractorRepairContracts.isSpotArrival(entry)
-    return entry.kind == TCADSRepairContracts.KIND.BREAKDOWN or entry.favour == true
+    return entry.kind == TCADSRepairContracts.KIND.BREAKDOWN or entry.favour == true or entry.loan == true
 end
 
 -- For the log: "yard 5" or "field 3".
@@ -967,7 +1015,9 @@ function TheContractorRepairContracts:onDayChanged()
         if entry.blockedDays ~= nil and entry.blockedDays > 0 then
             entry.blockedDays = entry.blockedDays + 1
         end
-        if TheContractorRepairContracts.isSpotArrival(entry) and not entry.isLoading and entry.queuedDay < today then
+        -- 124: a loan waits for as long as its job wants it.
+        if TheContractorRepairContracts.isSpotArrival(entry) and not entry.loan and not entry.isLoading and
+                entry.queuedDay < today then
             -- 101: a breakdown not placed by midnight would be due yesterday.
             -- 116: and a favour has found someone else.
             TCLog.info("TheContractor: farm %d %s never placed, dropped", entry.farmId,
@@ -1083,10 +1133,19 @@ function TheContractorRepairContracts.getSpotArea(entry, model)
     }
 end
 
+-- An arrival's machine on its own: one ADS can take, or (124) for a loan
+-- any model, by its size.
+function TheContractorRepairContracts:getArrivalMachineModel(entry)
+    if entry.loan then
+        return TheContractorFarmerFleet.getSizeModel(entry.xmlFilename)
+    end
+    return self:findModelByXml(entry.xmlFilename)
+end
+
 -- 101, 116: a spot arrival's model, and with an attachment (121) the
 -- ground they take together; nil if the model's gone.
 function TheContractorRepairContracts:getArrivalModel(entry)
-    local model = self:findModelByXml(entry.xmlFilename)
+    local model = self:getArrivalMachineModel(entry)
     return model ~= nil and TheContractorFarmerFleet.getFootprint(model, entry.attachment) or nil
 end
 
@@ -1109,7 +1168,12 @@ end
 function TheContractorRepairContracts:tryPlaceArrival(entry)
     local bayArea, model = self:getArrivalPlace(entry)
     local storeItem = model ~= nil and g_storeManager:getItemByXMLFilename(model.xmlFilename) or nil
-    if bayArea == nil or storeItem == nil or not TCADSRepairContracts.isActive() then
+    -- 124: a loan needs no ADS, only its job.
+    local isWanted = TCADSRepairContracts.isActive()
+    if entry.loan then
+        isWanted = TheContractorRepairContracts.isLoanWanted(entry)
+    end
+    if bayArea == nil or storeItem == nil or not isWanted then
         -- The zone's been sold or shrunk, or the model's gone.
         removeFrom(self.arrivals, entry)
         return
@@ -1119,7 +1183,11 @@ function TheContractorRepairContracts:tryPlaceArrival(entry)
     local clearance = TheContractorRepairContracts.CLEARANCE
     if not TCParking.isAreaClear(centreX, centreZ, rotY, model.width + clearance, model.length + clearance,
             model.height) then
-        if entry.favour then
+        if entry.loan then
+            -- 124: its spot is beside the job's area; it waits for it to
+            -- clear.
+            return
+        elseif entry.favour then
             -- 116: somewhere else on their yard or fields.
             self:retryFavourSpot(entry, model)
             return
@@ -1189,6 +1257,15 @@ end
 -- A model ADS turned down: another one, another seed, up to PREPARE_RETRIES.
 function TheContractorRepairContracts:retryArrival(entry, zone, reason)
     entry.attempts = (entry.attempts or 0) + 1
+    if entry.loan then
+        -- 124: the farmer's own machine or nothing.
+        if entry.attempts > TheContractorRepairContracts.PREPARE_RETRIES then
+            TCLog.info("TheContractor: farm %d job %d: farmer #%s's machine wouldn't load, dropped (%s)",
+                entry.farmId, entry.jobId, tostring(entry.farmerId), tostring(reason))
+            removeFrom(self.arrivals, entry)
+        end
+        return
+    end
     if entry.favour then
         -- 116: the farmer's own machine or nothing: it's loaded again.
         if entry.attempts > TheContractorRepairContracts.PREPARE_RETRIES then
@@ -1266,6 +1343,20 @@ function TheContractorRepairContracts:onArrivalLoaded(vehicles, loadingState, ar
         self:retryArrival(entry, zone, "loadFailed")
         return
     end
+    if entry.loan then
+        -- 124: hitched up and handed to its job, nothing for ADS to do.
+        self:loadAttachment(entry, vehicle, function(attachment)
+            removeFrom(self.arrivals, entry)
+            local yardBales = g_currentMission.TheContractor.YardBales
+            if yardBales ~= nil then
+                yardBales:onLoanArrived(entry, vehicle, attachment)
+            else
+                TheContractorRepairContracts.deleteVehicle(vehicle)
+                TheContractorRepairContracts.deleteVehicle(attachment)
+            end
+        end)
+        return
+    end
     if entry.favour then
         self:prepareFavour(entry, vehicle)
         return
@@ -1332,7 +1423,7 @@ end
 function TheContractorRepairContracts:loadAttachment(entry, vehicle, done)
     local attachment = entry.attachment
     local storeItem = attachment ~= nil and g_storeManager:getItemByXMLFilename(attachment.xmlFilename) or nil
-    local model = storeItem ~= nil and self:findModelByXml(entry.xmlFilename) or nil
+    local model = storeItem ~= nil and self:getArrivalMachineModel(entry) or nil
     if model == nil or vehicle.rootNode == nil then
         done(nil)
         return
@@ -1865,6 +1956,23 @@ function TheContractorRepairContracts:queueCollection(job)
     end
 end
 
+-- 124: a farmer's machine lent to a job goes home once the job's over,
+-- wherever it's been left (tryCollect, as a customer's machine).
+function TheContractorRepairContracts:queueLoanCollection(farmId, farmerId, vehicleId, uniqueId, machineId)
+    for _, entry in ipairs(self.removals) do
+        if entry.vehicleId == vehicleId then
+            return
+        end
+    end
+    table.insert(self.removals, {
+        farmId = farmId,
+        vehicleId = vehicleId,
+        uniqueId = uniqueId,
+        farmerId = farmerId,
+        machineId = machineId,
+    })
+end
+
 function TheContractorRepairContracts:tryCollect(entry)
     local vehicle = entry.vehicleId ~= nil and entry.vehicleId ~= 0 and NetworkUtil.getObject(entry.vehicleId) or nil
     if vehicle == nil or vehicle.isDeleted then
@@ -1886,7 +1994,9 @@ end
 function TheContractorRepairContracts:getJobForVehicle(vehicle)
     local vehicleId = NetworkUtil.getObjectId(vehicle)
     local job = vehicleId ~= nil and TheContractorRepairContracts.getContractVehicleIds()[vehicleId] or nil
-    if job == nil or job:isTerminal() then
+    -- 124: a farmer's kit lent to a job is a contract vehicle, not a
+    -- workshop job's machine.
+    if job == nil or job.workshop == nil or job:isTerminal() then
         return nil
     end
     return job
@@ -2170,7 +2280,8 @@ function TheContractorRepairContracts:saveToXmlFile(xmlFile)
 
     local index = 0
     for _, entry in ipairs(self.arrivals) do
-        if (entry.zoneUniqueId ~= nil or TheContractorRepairContracts.isSpotArrival(entry)) and
+        -- 124: a loan isn't saved; its job sends for it again after a load.
+        if (entry.zoneUniqueId ~= nil or TheContractorRepairContracts.isSpotArrival(entry)) and not entry.loan and
                 entry.xmlFilename ~= nil then
             local key = string.format("%s.arrival(%d)", rootKey, index)
             setXMLInt(xmlFile, key .. "#farmId", entry.farmId)

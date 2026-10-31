@@ -124,6 +124,7 @@ source(TheContractor.dir .. "src/business/Farmers.lua")
 source(TheContractor.dir .. "src/business/FarmerFleet.lua")
 source(TheContractor.dir .. "src/business/Relationships.lua")
 source(TheContractor.dir .. "src/business/FarmerFavours.lua")
+source(TheContractor.dir .. "src/business/YardBales.lua")
 source(TheContractor.dir .. "src/events/TCInitialClientStateEvent.lua")
 source(TheContractor.dir .. "src/events/TCSettingsEvent.lua")
 source(TheContractor.dir .. "src/events/TCCreateCompanyEvent.lua")
@@ -215,6 +216,7 @@ source(TheContractor.dir .. "src/events/TCEditPersonEvent.lua")
 source(TheContractor.dir .. "src/events/TCFarmerFleetEvent.lua")
 source(TheContractor.dir .. "src/events/TCEditFarmerMachineEvent.lua")
 source(TheContractor.dir .. "src/events/TCRelationshipChangedEvent.lua")
+source(TheContractor.dir .. "src/events/TCYardBalesKitEvent.lua")
 
 -- The top-level Contractor page itself stays always-visible (see Company.lua
 -- and MenuContractor's Overview tab): "Create Company" has to live somewhere
@@ -328,6 +330,10 @@ function TheContractor:loadMap()
     -- (ADS), through 100.
     self.FarmerFavours = TheContractorFarmerFavours.new()
     self.FarmerFavours:register(self.RandomEvents)
+    -- 124: a farmer short of hay or straw asks for the farm's bales, with
+    -- their telehandler lent through 100's queue.
+    self.YardBales = TheContractorYardBales.new()
+    self.YardBales:register(self.RandomEvents, self.Inbox)
     self.InboxHUD = TCInboxHUD.new()
 
     -- Module-level caches outlive a savegame; start each load clean.
@@ -533,6 +539,8 @@ function TheContractor:resolveSavedVehicles()
     self.TippedTrailer:resolveSavedVehicles()
     -- 100: after Jobs, whose workshop jobs it checks against ADS.
     self.RepairContracts:resolveSavedVehicles()
+    -- 124: after RepairContracts, whose queue it sends a farmer's kit through.
+    self.YardBales:resolveSavedVehicles()
     TCVehicleLock.repairSavedTabbable()
     -- 110: not vehicles, but the same moment: the map's fields, farmland
     -- owners and buildings are in place. After Jobs, whose customers it links.
@@ -728,6 +736,10 @@ function TheContractor:deleteMap()
     end
     -- 109: the farmer split's markers, if shown.
     TheContractorFarmerSplit.hideMarkers()
+    -- 124: the drop areas' markings.
+    if self.YardBales ~= nil then
+        self.YardBales:delete()
+    end
 
     -- 065: frees the standing workers' models.
     TCIdleStaff.reset()
@@ -796,6 +808,12 @@ function TheContractor:update(dt)
     -- 100: customers' machines arriving and being collected (server).
     if self.RepairContracts ~= nil then
         self.RepairContracts:update(dt)
+    end
+
+    -- 124: bales delivered to farmers' drop areas and the kit going home
+    -- (server), and the drop areas' markings (every machine).
+    if self.YardBales ~= nil then
+        self.YardBales:update(dt)
     end
 
     if self.Drivers ~= nil then

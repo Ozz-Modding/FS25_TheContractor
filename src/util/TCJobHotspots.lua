@@ -23,7 +23,8 @@
 -- same circle, smaller, on the machine itself while it's on offer or taken
 -- on, following it if it's moved. One per job. 106: a spilt crop's job gets
 -- one on the spill, not its field, and 107's fallen trees one on each
--- tree's road until that road's clear.
+-- tree's road until that road's clear. 124: bales to a farmer's yard get
+-- one on the drop area.
 
 TCJobHotspots = {}
 
@@ -108,7 +109,8 @@ function TCJobHotspots.getBreakdownMachines(farmId)
 end
 
 -- jobId -> { x, z } for each circle that isn't a field's: 101's breakdowns
--- (on the machine) and 106's spills (on the spill, while it's taken on).
+-- (on the machine), 106's spills (on the spill, while it's taken on) and
+-- 124's drop areas (likewise).
 -- 107's fallen trees have one per tree still on its road, keyed
 -- "<jobId>_<n>".
 function TCJobHotspots.getSpotPositions(farmId)
@@ -124,6 +126,9 @@ function TCJobHotspots.getSpotPositions(farmId)
     for _, job in ipairs(tc.Jobs:getAllJobs(farmId)) do
         if job.spill ~= nil and isTakenOn(job.state) then
             positions[job.id] = { x = job.spill.x, z = job.spill.z }
+        elseif job.yardDelivery ~= nil then
+            -- 124: on the farmer's drop area.
+            positions[job.id] = TheContractorYardBales.getSpot(job)
         elseif isTakenOn(job.state) and TheContractorFallenTree ~= nil then
             -- 107: on each fallen tree.
             for _, spot in ipairs(TheContractorFallenTree.getJobSpots(job)) do

@@ -1,8 +1,9 @@
 -- Farmer fleets (121): the machines each of the map's farmers (110) owns,
 -- kept as records on the farmer, never as vehicles left on the map. A
 -- machine is only in the world while a job needs it (a field breakdown,
--- 101, or a favour, 116), and then it's that farmer's machine, every time:
--- the same model and seed, only older.
+-- 101, a favour, 116, or 124's telehandler lent to a yard bale job), and
+-- then it's that farmer's machine, every time: the same model and seed,
+-- only older.
 --
 -- The recipe is flat, not a scale by acres (farmers' holdings are all much
 -- the same size, 109's target, +-30%); it's there for interesting equipment
@@ -151,8 +152,8 @@ function TheContractorFarmerFleet.getHoursPerMonth(acres)
 end
 
 -- Server: whether a farmer's machine is in the world or on its way (an
--- arrival, an open workshop job, or waiting to be collected), so it can't
--- turn up somewhere else as well.
+-- arrival, an open workshop job or yard bale job, or waiting to be
+-- collected), so it can't turn up somewhere else as well.
 function TheContractorFarmerFleet.isMachineOut(farmerId, machineId)
     local tc = g_currentMission.TheContractor
     local repairContracts = tc.RepairContracts
@@ -175,6 +176,13 @@ function TheContractorFarmerFleet.isMachineOut(farmerId, machineId)
         for _, farmJobs in pairs(tc.Jobs.jobsByFarm) do
             for _, job in pairs(farmJobs) do
                 if matches(job.workshop) and not job:isTerminal() then
+                    return true
+                end
+                -- 124: a yard bale job holds the farmer's telehandler and
+                -- fork from its offer until it's over.
+                local yard = job.yardDelivery
+                if yard ~= nil and not job:isTerminal() and yard.farmerId == farmerId and
+                        (yard.machineId == machineId or yard.attachmentMachineId == machineId) then
                     return true
                 end
             end
@@ -588,6 +596,21 @@ local function getSize(xmlFilename)
         widthOffset = size.widthOffset or 0,
         lengthOffset = size.lengthOffset or 0,
     }
+end
+
+-- 124: a model as 100's queue places it ({ xmlFilename, name, width,
+-- length, height, widthOffset, lengthOffset }), for any store vehicle,
+-- ADS or not; nil if the store hasn't got it.
+function TheContractorFarmerFleet.getSizeModel(xmlFilename)
+    local storeItem = xmlFilename ~= nil and g_storeManager:getItemByXMLFilename(xmlFilename) or nil
+    if storeItem == nil then
+        return nil
+    end
+    local model = getSize(xmlFilename)
+    model.xmlFilename = xmlFilename
+    model.name = storeItem.name or xmlFilename
+    model.categoryName = storeItem.categoryName
+    return model
 end
 
 -- What an arrival needs to bring a machine's attachment along:
