@@ -26,7 +26,8 @@
 -- farmer holding the job's field, the official for an offField job or land
 -- no farmer holds, the original job's customer for a spilt crop (106), the
 -- farmer whose machine it is for a favour (116), the farmer whose yard it
--- is for bales taken there (124) or a load sold from it (126), and nobody for any other ADS repair
+-- is for bales taken there (124) or a load sold from it (126), the farmer
+-- whose machine ran dry (127), and nobody for any other ADS repair
 -- contract (100-102). A loaded job without one gets one the same
 -- way (linkJobs).
 --
@@ -42,6 +43,15 @@
 -- made and never shown or streamed: it only changes how their invoices
 -- (049) are paid, on the server. The official is always AVERAGE_PAY_HABIT.
 -- Relationships with them are TheContractorRelationships'.
+--
+-- 128: the community moves on by itself, through
+-- TheContractorFarmerLandChanges' two random events. A field sold moves one
+-- farmland between farmers (transferFarmland, the same TCFarmerLandEvent as
+-- 110's land path); open jobs there keep their customer, since linkJobs
+-- only re-links a job whose customer is gone. A retirement (retireFarmer)
+-- hands a farmer's land, yard, target and fleet to a successor, a new
+-- person with a new id, and everything else holding the old id goes over
+-- to them on every machine (applyRetirement, TCFarmerRetiredEvent).
 --
 -- 111: the People tab's Others view lists them (getPeopleRows), with what
 -- the player's farm has done for each from its logbook, whose job entries
@@ -203,8 +213,8 @@ function TheContractorFarmers:getCustomerIdForJob(job)
         return farmerId ~= nil and self.people[farmerId] ~= nil and farmerId or nil
     end
     -- 124: bales to a farmer's yard are for that farmer. 126: and their
-    -- load sold from it.
-    local yard = job.yardDelivery or job.yardHaul
+    -- load sold from it. 127: and their machine run dry.
+    local yard = job.yardDelivery or job.yardHaul or job.refuel
     if yard ~= nil then
         local farmerId = yard.farmerId
         return farmerId ~= nil and self.people[farmerId] ~= nil and farmerId or nil
@@ -787,6 +797,126 @@ function TheContractorFarmers:applyState(state, links)
     notifyMenu()
 end
 
+-- Land changing hands between farmers (128, server) --------------------------------
+
+-- Server: a farmland one farmer holds goes to another (a field sold). Both
+-- holdings go to the clients, and the buyer's fleet may grow, as on 110's
+-- land path. Returns true once done.
+function TheContractorFarmers:transferFarmland(farmlandId, buyerId)
+    local seller = self:getHolder(farmlandId)
+    local buyer = self.people[buyerId]
+    if seller == nil or buyer == nil or buyer.isOfficial or seller == buyer then
+        return false
+    end
+    local kept = {}
+    for _, id in ipairs(seller.farmlandIds) do
+        if id ~= farmlandId then
+            table.insert(kept, id)
+        end
+    end
+    seller.farmlandIds = kept
+    table.insert(buyer.farmlandIds, farmlandId)
+    table.sort(buyer.farmlandIds)
+    TCLog.info("TheContractor: farmland %d passed from farmer #%d to farmer #%d", farmlandId, seller.id, buyer.id)
+
+    if g_server ~= nil then
+        g_server:broadcastEvent(TCFarmerLandEvent.new(seller))
+        g_server:broadcastEvent(TCFarmerLandEvent.new(buyer))
+    end
+    TheContractorFarmerFleet.ensureAll()
+    notifyMenu()
+    return true
+end
+
+-- Server: a farmer retires and a successor takes over (see the file
+-- header): their farmlands, yard, target and fleet (the same records, so
+-- 122's edits stay), with a pay habit of their own. Returns the successor,
+-- or nil.
+function TheContractorFarmers:retireFarmer(farmerId)
+    local farmer = self.people[farmerId]
+    if farmer == nil or farmer.isOfficial then
+        return nil
+    end
+    local successor = self:makePerson()
+    successor.farmlandIds = farmer.farmlandIds
+    successor.yardFarmlandId = farmer.yardFarmlandId
+    successor.targetAcres = farmer.targetAcres
+    successor.machines = farmer.machines
+    successor.payHabit = TheContractorFarmers.rollPayHabit()
+    TCLog.info("TheContractor: farmer #%d (%s) retired, farmer #%d (%s) takes over", farmer.id, farmer.name,
+        successor.id, successor.name)
+
+    self:applyRetirement(farmer.id, successor, self.nextId)
+    if g_server ~= nil then
+        g_server:broadcastEvent(TCFarmerRetiredEvent.new(farmer.id, successor, self.nextId))
+    end
+    return successor
+end
+
+-- Every machine: the retirement lands. The successor replaces the old
+-- farmer, takes on half their relationships, and everything holding the
+-- old id holds theirs (replacePersonReferences). Every machine holds the
+-- same jobs, incidents and messages, so each works the changes out itself.
+function TheContractorFarmers:applyRetirement(oldId, successor, nextId)
+    local tc = g_currentMission.TheContractor
+    if tc.Relationships ~= nil then
+        tc.Relationships:inheritScores(oldId, successor.id)
+    end
+    self:replacePersonReferences(oldId, successor.id)
+    self.people[oldId] = nil
+    self.people[successor.id] = successor
+    self.nextId = math.max(self.nextId, nextId or 0, successor.id + 1)
+    notifyMenu()
+end
+
+-- Every machine: every job, incident, inbox message and arrival holding a
+-- person's id holds newId instead. Returns how many jobs' customer changed.
+function TheContractorFarmers:replacePersonReferences(oldId, newId)
+    local tc = g_currentMission.TheContractor
+    local function replace(holder)
+        if holder ~= nil and holder.farmerId == oldId then
+            holder.farmerId = newId
+        end
+    end
+    local count = 0
+    if tc.Jobs ~= nil then
+        for _, farmJobs in pairs(tc.Jobs.jobsByFarm) do
+            for _, job in pairs(farmJobs) do
+                if job.customerId == oldId then
+                    job.customerId = newId
+                    count = count + 1
+                end
+                -- 116, 123: a favour's or breakdown's machine; 124, 126,
+                -- 127: a yard job's or refuel's.
+                replace(job.workshop)
+                replace(job.yardDelivery)
+                replace(job.yardHaul)
+                replace(job.refuel)
+            end
+        end
+    end
+    if tc.RandomEvents ~= nil then
+        for _, incident in pairs(tc.RandomEvents.incidents) do
+            replace(incident.data)
+        end
+    end
+    if tc.Inbox ~= nil then
+        for _, message in pairs(tc.Inbox.messagesById) do
+            replace(message.payload)
+        end
+    end
+    -- 100's queue (the server's only).
+    if tc.RepairContracts ~= nil then
+        for _, entry in ipairs(tc.RepairContracts.arrivals or {}) do
+            replace(entry)
+        end
+        for _, entry in ipairs(tc.RepairContracts.removals or {}) do
+            replace(entry)
+        end
+    end
+    return count
+end
+
 -- Persistence ---------------------------------------------------------------------
 
 local function encodeIds(ids)
@@ -990,17 +1120,39 @@ function TheContractorFarmers:writeState(streamId)
     end
     streamWriteInt32(streamId, #people)
     for _, person in ipairs(people) do
-        streamWriteInt32(streamId, person.id)
-        streamWriteString(streamId, person.name)
-        streamWriteString(streamId, person.gender)
-        streamWriteBool(streamId, person.isOfficial)
-        TCWorkerAppearance.writeStream(streamId, person.appearance)
-        TheContractorFarmers.writeIds(streamId, person.farmlandIds)
-        streamWriteInt32(streamId, person.yardFarmlandId or 0)
-        streamWriteFloat32(streamId, person.targetAcres)
-        -- 122
-        TheContractorFarmerFleet.writeStream(streamId, person.machines)
+        TheContractorFarmers.writePerson(streamId, person)
     end
+end
+
+-- One person as clients hold them: never their pay habit (113) or their
+-- machines' server-only fields (122). 128's TCFarmerRetiredEvent too.
+function TheContractorFarmers.writePerson(streamId, person)
+    streamWriteInt32(streamId, person.id)
+    streamWriteString(streamId, person.name)
+    streamWriteString(streamId, person.gender)
+    streamWriteBool(streamId, person.isOfficial)
+    TCWorkerAppearance.writeStream(streamId, person.appearance)
+    TheContractorFarmers.writeIds(streamId, person.farmlandIds)
+    streamWriteInt32(streamId, person.yardFarmlandId or 0)
+    streamWriteFloat32(streamId, person.targetAcres)
+    -- 122
+    TheContractorFarmerFleet.writeStream(streamId, person.machines)
+end
+
+function TheContractorFarmers.readPerson(streamId)
+    local person = {
+        id = streamReadInt32(streamId),
+        name = streamReadString(streamId),
+        gender = streamReadString(streamId),
+        isOfficial = streamReadBool(streamId),
+        appearance = TCWorkerAppearance.readStream(streamId),
+        farmlandIds = TheContractorFarmers.readIds(streamId),
+    }
+    local yardFarmlandId = streamReadInt32(streamId)
+    person.yardFarmlandId = yardFarmlandId ~= 0 and yardFarmlandId or nil
+    person.targetAcres = streamReadFloat32(streamId)
+    person.machines = TheContractorFarmerFleet.readStream(streamId)
+    return person
 end
 
 function TheContractorFarmers.readState(streamId)
@@ -1010,19 +1162,7 @@ function TheContractorFarmers.readState(streamId)
     local targetAcres = streamReadFloat32(streamId)
     state.targetAcres = targetAcres >= 0 and targetAcres or nil
     for _ = 1, streamReadInt32(streamId) do
-        local person = {
-            id = streamReadInt32(streamId),
-            name = streamReadString(streamId),
-            gender = streamReadString(streamId),
-            isOfficial = streamReadBool(streamId),
-            appearance = TCWorkerAppearance.readStream(streamId),
-            farmlandIds = TheContractorFarmers.readIds(streamId),
-        }
-        local yardFarmlandId = streamReadInt32(streamId)
-        person.yardFarmlandId = yardFarmlandId ~= 0 and yardFarmlandId or nil
-        person.targetAcres = streamReadFloat32(streamId)
-        person.machines = TheContractorFarmerFleet.readStream(streamId)
-        table.insert(state.people, person)
+        table.insert(state.people, TheContractorFarmers.readPerson(streamId))
     end
     return state
 end

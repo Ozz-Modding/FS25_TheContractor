@@ -155,7 +155,7 @@ function TheContractorYardBales:register(randomEvents, inbox)
 
     inbox:registerMessageKind(TheContractorYardBales.MESSAGE_KIND, {
         endsWithJob = true,
-        chipKey = "tc_inbox_chipYardBales",
+        category = "job",
         chipTone = "info",
         getArgs = function(message)
             return TheContractorInbox.getCustomerNamedArgs(message, TheContractorYardBales.NAMED_BODY_KEYS)

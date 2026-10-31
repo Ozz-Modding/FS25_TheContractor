@@ -208,7 +208,15 @@ TheContractorJobGeneration.JOB_TYPES = {
     -- offField and allocateOnAccept as 124's, and a straw delivery's sort of
     -- reward for its one load.
     yardHaul = { serverMeasured = true, playerOnly = true, noEquipment = true, offField = true,
-        allocateOnAccept = true, yardDelivery = true, deliveryOnly = true, reputationReward = 10, skill = "haulage" },
+        allocateOnAccept = true, yardDelivery = true, deliveryOnly = true, reputationReward = 10, skill = "haulage",
+        equipmentNeed = "trailerTractor" },
+    -- 127: a farmer's machine run dry on their field, filled from the farm's
+    -- own diesel (TheContractorEmergencyRefuel). Its field only says where
+    -- the machine is (offField: the marker's on the machine), it's due the
+    -- same day (allocateOnAccept), and like a favour (116) it earns a little
+    -- reputation and more of the farmer's goodwill.
+    emergencyRefuel = { serverMeasured = true, playerOnly = true, noEquipment = true, offField = true,
+        allocateOnAccept = true, noJobEvents = true, reputationReward = 2, equipmentNeed = "diesel" },
 }
 TheContractorJobGeneration.JOB_TYPE_KEYS = { "harvest", "cultivate", "sow", "plow", "mow", "tedder", "bale",
     "baleWrap", "strawDelivery", "fertilize", "herbicide", "weed", "hoe", "stonePick" }

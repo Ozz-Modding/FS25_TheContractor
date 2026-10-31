@@ -147,7 +147,7 @@ function TheContractorRoadAccident:register(randomEvents, inbox)
     })
 
     inbox:registerMessageKind(TheContractorRoadAccident.MESSAGE_KIND, {
-        chipKey = "tc_inbox_chipRoadAccident",
+        category = "claim",
         chipTone = "bad",
     })
 end

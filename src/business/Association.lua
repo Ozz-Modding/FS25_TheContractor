@@ -89,7 +89,7 @@ function TheContractorAssociation:register(overheads, inbox)
     })
 
     inbox:registerMessageKind(TheContractorAssociation.MESSAGE_KIND, {
-        chipKey = "tc_inbox_chipLegal",
+        category = "admin",
         chipTone = "info",
     })
 end

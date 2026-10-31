@@ -654,7 +654,8 @@ function MenuContractor:initialize()
 
     self.inboxJobs = {}
     self.selectedInboxJobId = nil
-    -- 050: messages head the list, above the job offers.
+    -- 050: messages, in their own table above the job offers'. One of the
+    -- two is selected at a time: whichever table has focus.
     self.inboxMessages = {}
     self.selectedInboxMessageId = nil
     -- Client-side-only transcript of negotiation exchanges, keyed by job id —
@@ -685,6 +686,11 @@ function MenuContractor:initialize()
 
     self.inboxTable:setDataSource(self)
     self.inboxTable:setDelegate(self)
+    self.inboxMessageTable:setDataSource(self)
+    self.inboxMessageTable:setDelegate(self)
+    -- Down off the messages goes to the job offers, and back up.
+    FocusManager:linkElements(self.inboxMessageTable, FocusManager.BOTTOM, self.inboxTable)
+    FocusManager:linkElements(self.inboxTable, FocusManager.TOP, self.inboxMessageTable)
 
     self.calendarDayTable:setDataSource(self)
     self.calendarDayTable:setDelegate(self)
@@ -2479,7 +2485,7 @@ end
 -- the ticket leaves the exact ordering as a non-architectural decision) and
 -- refreshes the selected job's detail panel. Called on frame open, tab
 -- switch (updateContent), and after accept/decline locally applies.
--- Inbox messages (050) go above the jobs, newest first.
+-- Inbox messages (050) are their own table above the jobs, newest first.
 function MenuContractor:refreshInboxState(farmId, jobs)
     local inbox = g_currentMission.TheContractor.Inbox
     self.inboxMessages = inbox:getMessages(farmId)
@@ -2498,7 +2504,18 @@ function MenuContractor:refreshInboxState(farmId, jobs)
     local hasItems = #self.inboxJobs + #self.inboxMessages > 0
     self.inboxListContainer:setVisible(hasItems)
     self.inboxEmptyText:setVisible(not hasItems)
+    self.inboxMessagesEmptyText:setVisible(#self.inboxMessages == 0)
+    self.inboxJobsEmptyText:setVisible(#self.inboxJobs == 0)
+    self.inboxMessageTable:reloadData()
     self.inboxTable:reloadData()
+    -- The table with focus has emptied (the last message dismissed, the
+    -- last offer taken): over to the other.
+    local focused = FocusManager:getFocusedElement()
+    if focused == self.inboxMessageTable and #self.inboxMessages == 0 and #self.inboxJobs > 0 then
+        FocusManager:setFocus(self.inboxTable)
+    elseif focused == self.inboxTable and #self.inboxJobs == 0 and #self.inboxMessages > 0 then
+        FocusManager:setFocus(self.inboxMessageTable)
+    end
 
     -- Keep the current selection if that job is still in the list (e.g. a
     -- refresh triggered by something unrelated), otherwise drop it.
@@ -2704,7 +2721,7 @@ function MenuContractor:updateInboxDetails()
 
     -- Harvest & haul (035): where the crop has to go. 124: what the
     -- farmer's asked for.
-    self.inboxRowDelivery:setVisible(job.includesHaulage or job.yardDelivery ~= nil)
+    self.inboxRowDelivery:setVisible(job.includesHaulage or job.yardDelivery ~= nil or job.refuel ~= nil)
     self.inboxDetailDelivery:setText(job.deliveryStationName or "?")
     if job.yardDelivery ~= nil then
         self.inboxLabelDelivery:setText(g_i18n:getText("tc_yardBales_detailOrder"))
@@ -2713,6 +2730,11 @@ function MenuContractor:updateInboxDetails()
     -- 126: the farmer's load, and where it's sold.
     if job.yardHaul ~= nil then
         self.inboxDetailDelivery:setText(TheContractorYardHaul.getDeliveryText(job))
+    end
+    -- 127: the farmer's machine, and the diesel it needs.
+    if job.refuel ~= nil then
+        self.inboxLabelDelivery:setText(g_i18n:getText("tc_jobDetails_machine"))
+        self.inboxDetailDelivery:setText(TheContractorEmergencyRefuel.getDetailText(job))
     end
 
     self:updateInboxSupplies(job)
@@ -3125,8 +3147,10 @@ function MenuContractor:getNumberOfItemsInSection(list, section)
         return #self.workshopJobs
     elseif list == self.workshopDetailTable then
         return #self.workshopDetailRows
+    elseif list == self.inboxMessageTable then
+        return #self.inboxMessages
     end
-    return #self.inboxMessages + #self.inboxJobs
+    return #self.inboxJobs
 end
 
 function MenuContractor:populateCellForItemInSection(list, section, index, cell)
@@ -3177,24 +3201,18 @@ function MenuContractor:populateCellForItemInSection(list, section, index, cell)
         return
     end
 
-    -- 050: message rows first, then job rows. Cells are reused, so each
-    -- kind of row shows its own cells and hides the other's.
-    local message = self.inboxMessages[index]
-    local isMessage = message ~= nil
-    for _, name in ipairs({ "jobType", "field", "targetDate", "price" }) do
-        cell:getAttribute(name):setVisible(not isMessage)
-    end
-    cell:getAttribute("messageTitle"):setVisible(isMessage)
-    if isMessage then
-        local chipText, chipTone = g_currentMission.TheContractor.Inbox:getChip(message)
-        setChip(cell:getAttribute("kindChip"), cell:getAttribute("kindChipText"), chipText, chipTone)
-        cell:getAttribute("messageTitle"):setText(TheContractorInbox.getTitle(message))
-        setChip(cell:getAttribute("equipmentChip"), cell:getAttribute("equipmentChipText"), nil)
+    -- 050: a message's row: its category chip and title.
+    if list == self.inboxMessageTable then
+        local message = self.inboxMessages[index]
+        if message ~= nil then
+            local chipText, chipTone = g_currentMission.TheContractor.Inbox:getChip(message)
+            setChip(cell:getAttribute("kindChip"), cell:getAttribute("kindChipText"), chipText, chipTone)
+            cell:getAttribute("messageTitle"):setText(TheContractorInbox.getTitle(message))
+        end
         return
     end
-    setChip(cell:getAttribute("kindChip"), cell:getAttribute("kindChipText"), nil)
 
-    local job = self.inboxJobs[index - #self.inboxMessages]
+    local job = self.inboxJobs[index]
     if job == nil then
         return
     end
@@ -3381,14 +3399,25 @@ function MenuContractor:onListSelectionChanged(list, section, index)
         return
     end
 
-    if list ~= self.inboxTable then
+    if list ~= self.inboxTable and list ~= self.inboxMessageTable then
         return
     end
 
-    local message = self.inboxMessages[index]
-    local job = self.inboxJobs[index - #self.inboxMessages]
-    self.selectedInboxMessageId = message ~= nil and message.id or nil
-    self.selectedInboxJobId = message == nil and job ~= nil and job.id or nil
+    -- A reload re-raises this for both tables; only the focused one (or
+    -- either, while neither has focus) says what's selected.
+    local other = list == self.inboxTable and self.inboxMessageTable or self.inboxTable
+    if FocusManager:getFocusedElement() == other then
+        return
+    end
+    if list == self.inboxMessageTable then
+        local message = self.inboxMessages[index]
+        self.selectedInboxMessageId = message ~= nil and message.id or nil
+        self.selectedInboxJobId = nil
+    else
+        local job = self.inboxJobs[index]
+        self.selectedInboxJobId = job ~= nil and job.id or nil
+        self.selectedInboxMessageId = nil
+    end
     self:updateInboxDetails()
 end
 
@@ -3935,6 +3964,10 @@ function MenuContractor:getJobDetailRows(job)
     -- 124: what the farmer's asked for, and how much is in.
     if job.yardDelivery ~= nil then
         add(g_i18n:getText("tc_jobDetails_delivery"), TheContractorYardBales.getDeliveryText(job))
+    end
+    -- 127: the farmer's machine, and the diesel it needs.
+    if job.refuel ~= nil then
+        add(g_i18n:getText("tc_jobDetails_machine"), TheContractorEmergencyRefuel.getDetailText(job))
     end
 
     table.insert(rows, { section = g_i18n:getText("tc_jobDetails_sectionCrew") })
@@ -6851,7 +6884,9 @@ function MenuContractor:populateLogbookJobCell(index, cell)
             "-")
     else
         cell:getAttribute("title"):setText(entry.title or "-")
-        cell:getAttribute("field"):setText(entry.location or getFieldName(entry.fieldId))
+        -- A number or "-", never words (a yard's or a machine's place is
+        -- in the entry's details).
+        cell:getAttribute("field"):setText(entry.location ~= nil and "-" or getFieldName(entry.fieldId))
     end
     cell:getAttribute("crew"):setText(getCrewText(entry))
     local chipText, tone = getMarginChip(entry)
@@ -7073,6 +7108,10 @@ function MenuContractor:getLogbookJobRows(entry)
         -- 126: where a farmer's load went.
         if delivery.stationName ~= nil then
             row(text("tc_logbook_soldAt"), delivery.stationName)
+        end
+        -- 127: the farmer's machine that was refuelled.
+        if delivery.machineName ~= nil then
+            row(text("tc_logbook_machine"), delivery.machineName)
         end
         if (delivery.excessLiters or 0) > 0 then
             row(text("tc_logbook_excess"), string.format(text("tc_logbook_excessValue"),

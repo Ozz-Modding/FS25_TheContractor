@@ -99,7 +99,7 @@ function TheContractorPayReviews:register(inbox)
         onExpire = function(farmId, message)
             self:onMessageAnswered(farmId, message, TheContractorPayReviews.ACTION.REFUSE)
         end,
-        chipKey = "tc_inbox_chipStaff",
+        category = "staff",
         chipTone = "info",
     })
 end

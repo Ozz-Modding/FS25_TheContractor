@@ -140,7 +140,7 @@ function TheContractorTippedTrailer:register(randomEvents, inbox)
     -- 106: a spill's message names its job, and goes with it.
     inbox:registerMessageKind(TheContractorTippedTrailer.MESSAGE_KIND, {
         endsWithJob = true,
-        chipKey = "tc_inbox_chipTippedTrailer",
+        category = "job",
         chipTone = "bad",
     })
 end

@@ -82,7 +82,7 @@ end
 -- Every machine, at load.
 function TheContractorCropSpill:register(inbox)
     inbox:registerMessageKind(TheContractorCropSpill.MESSAGE_KIND, {
-        chipKey = "tc_inbox_chipClaim",
+        category = "claim",
         chipTone = "bad",
     })
 end

@@ -81,7 +81,7 @@ function TheContractorParking:register(inbox)
         onAction = function(farmId, message, actionKey)
             self:onMessageAction(farmId, message, actionKey)
         end,
-        chipKey = "tc_inbox_chipParking",
+        category = "parking",
         chipTone = "warn",
     })
 end

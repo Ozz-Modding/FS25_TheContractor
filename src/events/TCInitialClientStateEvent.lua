@@ -44,6 +44,8 @@ function TCInitialClientStateEvent:writeStream(streamId, connection)
     tc.Relationships:writeInitialClientState(streamId, connection)
     tc.YardBales:writeInitialClientState(streamId, connection)
     tc.YardHaul:writeInitialClientState(streamId, connection)
+    tc.EmergencyRefuel:writeInitialClientState(streamId, connection)
+    tc.FarmerLandChanges:writeInitialClientState(streamId, connection)
     TCEquipmentVisibility.writeInitialClientState(streamId, connection)
 end
 
@@ -80,6 +82,8 @@ function TCInitialClientStateEvent:readStream(streamId, connection)
     tc.Relationships:readInitialClientState(streamId, connection)
     tc.YardBales:readInitialClientState(streamId, connection)
     tc.YardHaul:readInitialClientState(streamId, connection)
+    tc.EmergencyRefuel:readInitialClientState(streamId, connection)
+    tc.FarmerLandChanges:readInitialClientState(streamId, connection)
     TCEquipmentVisibility.readInitialClientState(streamId, connection)
 
     self:run(connection)

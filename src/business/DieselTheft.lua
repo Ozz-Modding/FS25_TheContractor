@@ -77,7 +77,7 @@ function TheContractorDieselTheft:register(randomEvents, inbox, theft)
     })
 
     inbox:registerMessageKind(TheContractorDieselTheft.MESSAGE_KIND, {
-        chipKey = "tc_inbox_chipDieselTheft",
+        category = "crime",
         chipTone = "bad",
     })
 end

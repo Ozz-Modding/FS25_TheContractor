@@ -86,7 +86,7 @@ function TheContractorGoodNews:register(randomEvents, inbox)
     })
 
     inbox:registerMessageKind(TheContractorGoodNews.MESSAGE_KIND, {
-        chipKey = "tc_inbox_chipGoodNews",
+        category = "feedback",
         chipTone = "good",
     })
 end

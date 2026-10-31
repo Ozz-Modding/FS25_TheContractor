@@ -145,7 +145,7 @@ function TheContractorOverheads:registerMessageKinds(inbox)
         onAction = function(farmId, message, actionKey)
             self:onRenewalAnswered(farmId, message, actionKey)
         end,
-        chipKey = "tc_inbox_chipAdmin",
+        category = "admin",
         chipTone = "info",
     })
 end

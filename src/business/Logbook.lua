@@ -319,9 +319,12 @@ function TheContractorLogbook:buildJobEntry(job, outcome, reputation)
         location = (job.workshop ~= nil or job.yardDelivery ~= nil or job.yardHaul ~= nil) and job:getLocationText()
             or nil,
         -- 124: the bales asked for, delivered and over, or nil. 126: a
-        -- farmer's load and where it went.
+        -- farmer's load and where it went. 127: the diesel a farmer's
+        -- machine was asked to have, what it had as it ended, and the
+        -- machine.
         delivery = TheContractorYardBales ~= nil and TheContractorYardBales.getLogbookDelivery(job) or
-            TheContractorYardHaul ~= nil and TheContractorYardHaul.getLogbookDelivery(job) or nil,
+            TheContractorYardHaul ~= nil and TheContractorYardHaul.getLogbookDelivery(job) or
+            TheContractorEmergencyRefuel ~= nil and TheContractorEmergencyRefuel.getLogbookDelivery(job) or nil,
         -- 101: a breakdown's field, for the list's Field column.
         workshopFieldId = job.workshop ~= nil and job.workshop.fieldId or nil,
         -- 111: who it was for (110's farmer or the official), so the People
@@ -1118,6 +1121,8 @@ function TheContractorLogbook.writeJobEntry(streamId, entry)
         streamWriteFloat32(streamId, delivery.excessPay or 0)
         -- 126.
         writeString(streamId, delivery.stationName)
+        -- 127.
+        writeString(streamId, delivery.machineName)
     end
 end
 
@@ -1197,6 +1202,7 @@ function TheContractorLogbook.readJobEntry(streamId)
             excessLiters = streamReadFloat32(streamId),
             excessPay = streamReadFloat32(streamId),
             stationName = readString(streamId),
+            machineName = readString(streamId),
         }
     end
     return entry
@@ -1414,6 +1420,9 @@ local function saveJobEntry(xmlFile, key, entry)
         if delivery.stationName ~= nil then
             setXMLString(xmlFile, key .. ".delivery#stationName", delivery.stationName)
         end
+        if delivery.machineName ~= nil then
+            setXMLString(xmlFile, key .. ".delivery#machineName", delivery.machineName)
+        end
     end
 end
 
@@ -1464,6 +1473,7 @@ local function loadJobEntry(xmlFile, key)
             excessLiters = Utils.getNoNil(getXMLFloat(xmlFile, key .. ".delivery#excessLiters"), 0),
             excessPay = Utils.getNoNil(getXMLFloat(xmlFile, key .. ".delivery#excessPay"), 0),
             stationName = getXMLString(xmlFile, key .. ".delivery#stationName"),
+            machineName = getXMLString(xmlFile, key .. ".delivery#machineName"),
         }
     end
 

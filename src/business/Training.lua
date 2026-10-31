@@ -132,7 +132,7 @@ function TheContractorTraining:register(inbox)
         onExpire = function(farmId, message)
             self:onMessageExpired(farmId, message)
         end,
-        chipKey = "tc_inbox_chipTraining",
+        category = "staff",
         chipTone = "info",
     })
 end

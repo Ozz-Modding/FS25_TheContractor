@@ -99,8 +99,17 @@ end
 TheContractorSettings.DEFINITIONS.adsWorkshopMargin = adsMarginDefinition(40)
 TheContractorSettings.DEFINITIONS.adsFieldMargin = adsMarginDefinition(50)
 
+-- 128: whether farmers retire and hand their farm to a successor on their
+-- own (TheContractorFarmerLandChanges). Off by default: players curate
+-- their farmers (111, 122). The console can retire one either way.
+TheContractorSettings.DEFINITIONS.farmerRetirements = {
+    values = { true, false },
+    strings = { g_i18n:getText("ui_on"), g_i18n:getText("ui_off") },
+    default = 2
+}
+
 TheContractorSettings.ITEMS = { "jobPayRate", "lateInvoices", "randomEvents", "nameStyle", "adsWorkshopMargin",
-    "adsFieldMargin" }
+    "adsFieldMargin", "farmerRetirements" }
 
 -- 086: whether parking slots show outside the construction menu too. A
 -- display preference, so it's a local item (below). onChanged runs on this

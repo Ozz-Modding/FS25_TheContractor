@@ -120,17 +120,42 @@
             <Text profile="tc_emptyStateText" id="placeholderInbox" text="$l10n_tc_placeholder_locked" position="40px -250px" size="1440px 60px" textMaxNumLines="2"/>
             <Text profile="tc_emptyStateText" id="inboxEmptyText" text="$l10n_tc_inbox_empty" position="40px -250px" size="1440px 60px" textMaxNumLines="2"/>
 
+            <!-- Two tables: messages above, job offers below, each with its own
+                 heading and columns. Only the focused one shows its selection
+                 (selectedWithoutFocus off), and the details panel follows
+                 whichever has focus. -->
             <GuiElement id="inboxListContainer" position="40px -20px">
-                <GuiElement profile="tc_tableHeaderRow" position="0px 0px" size="600px 30px">
+                <Text profile="tc_sectionTitle" text="$l10n_tc_inbox_messagesHeading" position="0px 0px" size="616px 24px"/>
+                <Text profile="tc_panelNote" id="inboxMessagesEmptyText" text="$l10n_tc_inbox_noMessages" position="14px -64px" size="580px 32px"/>
+                <GuiElement profile="tc_tableHeaderRow" position="0px -28px" size="600px 30px">
                     <Button profile="tc_tableHeader" position="14px 0px" text="$l10n_tc_inbox_columnType" handleFocus="false"/>
+                    <Button profile="tc_tableHeader" position="114px 0px" text="$l10n_tc_inbox_columnMessage" handleFocus="false"/>
+                    <Bitmap profile="tc_tableHeaderDivider"/>
+                </GuiElement>
+                <SmoothList id="inboxMessageTable" profile="tc_table" position="0px -64px" size="600px 172px" selectedWithoutFocus="false">
+                    <ListItem profile="tc_tableListItem">
+                        <RoundCorner profile="tc_tableRowSurface"/>
+                        <Bitmap profile="tc_tableRowAccent"/>
+                        <RoundCorner profile="tc_rowChip" position="14px 0px" size="90px 20px" name="kindChip"/>
+                        <Text profile="tc_rowChipText" position="14px 0px" size="90px 20px" name="kindChipText"/>
+                        <Text profile="tc_listRowCellLeft" position="114px 0px" size="480px 32px" name="messageTitle"/>
+                    </ListItem>
+                </SmoothList>
+                <ThreePartBitmap profile="tc_slider_box" position="610px -64px" size="6px 172px">
+                    <Slider profile="fs25_listSlider" dataElementId="inboxMessageTable"/>
+                </ThreePartBitmap>
+
+                <Text profile="tc_sectionTitle" text="$l10n_tc_inbox_jobsHeading" position="0px -254px" size="616px 24px"/>
+                <Text profile="tc_panelNote" id="inboxJobsEmptyText" text="$l10n_tc_inbox_noJobs" position="14px -318px" size="580px 32px"/>
+                <GuiElement profile="tc_tableHeaderRow" position="0px -282px" size="600px 30px">
+                    <Button profile="tc_tableHeader" position="14px 0px" text="$l10n_tc_inbox_columnJob" handleFocus="false"/>
                     <Button profile="tc_tableHeader" position="210px 0px" text="$l10n_tc_inbox_columnField" handleFocus="false"/>
                     <Button profile="tc_tableHeader" position="310px 0px" text="$l10n_tc_inbox_columnTargetDate" handleFocus="false"/>
                     <Button profile="tc_tableHeader" position="450px 0px" text="$l10n_tc_inbox_columnPrice" handleFocus="false"/>
                     <Button profile="tc_tableHeader" position="546px 0px" text="$l10n_tc_inbox_columnEquipment" handleFocus="false"/>
                     <Bitmap profile="tc_tableHeaderDivider"/>
                 </GuiElement>
-
-                <SmoothList id="inboxTable" profile="tc_table" position="0px -36px" size="600px 570px">
+                <SmoothList id="inboxTable" profile="tc_table" position="0px -318px" size="600px 288px" selectedWithoutFocus="false">
                     <ListItem profile="tc_tableListItem">
                         <RoundCorner profile="tc_tableRowSurface"/>
                         <Bitmap profile="tc_tableRowAccent"/>
@@ -140,13 +165,9 @@
                         <Text profile="tc_listRowCellLeft" position="450px 0px" size="92px 32px" name="price"/>
                         <RoundCorner profile="tc_rowChip" position="546px 0px" size="48px 20px" name="equipmentChip"/>
                         <Text profile="tc_rowChipText" position="546px 0px" size="48px 20px" name="equipmentChipText"/>
-                        <!-- 050: message rows - type chip and title, in place of the job cells. -->
-                        <RoundCorner profile="tc_rowChip" position="14px 0px" size="80px 20px" name="kindChip"/>
-                        <Text profile="tc_rowChipText" position="14px 0px" size="80px 20px" name="kindChipText"/>
-                        <Text profile="tc_listRowCellLeft" position="104px 0px" size="490px 32px" name="messageTitle"/>
                     </ListItem>
                 </SmoothList>
-                <ThreePartBitmap profile="tc_slider_box" position="610px -36px" size="6px 570px">
+                <ThreePartBitmap profile="tc_slider_box" position="610px -318px" size="6px 288px">
                     <Slider profile="fs25_listSlider" dataElementId="inboxTable"/>
                 </ThreePartBitmap>
             </GuiElement>

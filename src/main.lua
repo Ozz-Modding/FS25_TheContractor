@@ -126,6 +126,8 @@ source(TheContractor.dir .. "src/business/Relationships.lua")
 source(TheContractor.dir .. "src/business/FarmerFavours.lua")
 source(TheContractor.dir .. "src/business/YardBales.lua")
 source(TheContractor.dir .. "src/business/YardHaul.lua")
+source(TheContractor.dir .. "src/business/EmergencyRefuel.lua")
+source(TheContractor.dir .. "src/business/FarmerLandChanges.lua")
 source(TheContractor.dir .. "src/events/TCInitialClientStateEvent.lua")
 source(TheContractor.dir .. "src/events/TCSettingsEvent.lua")
 source(TheContractor.dir .. "src/events/TCCreateCompanyEvent.lua")
@@ -213,12 +215,14 @@ source(TheContractor.dir .. "src/events/TCYardOverrideEvent.lua")
 source(TheContractor.dir .. "src/events/TCYardSpotsEvent.lua")
 source(TheContractor.dir .. "src/events/TCFarmersEvent.lua")
 source(TheContractor.dir .. "src/events/TCFarmerLandEvent.lua")
+source(TheContractor.dir .. "src/events/TCFarmerRetiredEvent.lua")
 source(TheContractor.dir .. "src/events/TCEditPersonEvent.lua")
 source(TheContractor.dir .. "src/events/TCFarmerFleetEvent.lua")
 source(TheContractor.dir .. "src/events/TCEditFarmerMachineEvent.lua")
 source(TheContractor.dir .. "src/events/TCRelationshipChangedEvent.lua")
 source(TheContractor.dir .. "src/events/TCYardBalesKitEvent.lua")
 source(TheContractor.dir .. "src/events/TCYardHaulTrailerEvent.lua")
+source(TheContractor.dir .. "src/events/TCRefuelMachineEvent.lua")
 
 -- The top-level Contractor page itself stays always-visible (see Company.lua
 -- and MenuContractor's Overview tab): "Create Company" has to live somewhere
@@ -340,6 +344,13 @@ function TheContractor:loadMap()
     -- sold, the trailer lent through 100's queue.
     self.YardHaul = TheContractorYardHaul.new()
     self.YardHaul:register(self.RandomEvents, self.Inbox)
+    -- 127: a farmer's machine run dry on their field, brought out through
+    -- 100's queue for the player to fill.
+    self.EmergencyRefuel = TheContractorEmergencyRefuel.new()
+    self.EmergencyRefuel:register(self.RandomEvents, self.Inbox)
+    -- 128: land changing hands between farmers, and retirements.
+    self.FarmerLandChanges = TheContractorFarmerLandChanges.new()
+    self.FarmerLandChanges:register(self.RandomEvents, self.Inbox)
     self.InboxHUD = TCInboxHUD.new()
 
     -- Module-level caches outlive a savegame; start each load clean.
@@ -519,6 +530,7 @@ function TheContractor:loadFromXMLFile()
     self.Yards:loadFromXMLFile(xmlFile)
     self.Farmers:loadFromXMLFile(xmlFile)
     self.Relationships:loadFromXMLFile(xmlFile)
+    self.FarmerLandChanges:loadFromXMLFile(xmlFile)
 
     delete(xmlFile)
 end
@@ -549,6 +561,8 @@ function TheContractor:resolveSavedVehicles()
     self.YardBales:resolveSavedVehicles()
     -- 126: likewise, a farmer's trailer.
     self.YardHaul:resolveSavedVehicles()
+    -- 127: likewise, a farmer's machine run dry.
+    self.EmergencyRefuel:resolveSavedVehicles()
     TCVehicleLock.repairSavedTabbable()
     -- 110: not vehicles, but the same moment: the map's fields, farmland
     -- owners and buildings are in place. After Jobs, whose customers it links.
@@ -602,6 +616,7 @@ function TheContractor:saveToXmlFile()
     tc.Yards:saveToXmlFile(xmlFile)
     tc.Farmers:saveToXmlFile(xmlFile)
     tc.Relationships:saveToXmlFile(xmlFile)
+    tc.FarmerLandChanges:saveToXmlFile(xmlFile)
 
     saveXMLFile(xmlFile)
     delete(xmlFile)
@@ -752,6 +767,10 @@ function TheContractor:deleteMap()
     if TheContractorYardHaul ~= nil then
         TheContractorYardHaul.clearSpecCache()
     end
+    -- 127: tank sizes read for this session.
+    if TheContractorEmergencyRefuel ~= nil then
+        TheContractorEmergencyRefuel.clearTankCache()
+    end
 
     -- 065: frees the standing workers' models.
     TCIdleStaff.reset()
@@ -830,6 +849,10 @@ function TheContractor:update(dt)
     -- 126: finished jobs' trailers going home (server).
     if self.YardHaul ~= nil then
         self.YardHaul:update(dt)
+    end
+    -- 127: finished refuels' machines going home (server).
+    if self.EmergencyRefuel ~= nil then
+        self.EmergencyRefuel:update(dt)
     end
 
     if self.Drivers ~= nil then

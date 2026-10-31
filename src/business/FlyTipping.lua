@@ -78,7 +78,7 @@ function TheContractorFlyTipping:register(randomEvents, inbox)
     })
 
     inbox:registerMessageKind(TheContractorFlyTipping.MESSAGE_KIND, {
-        chipKey = "tc_inbox_chipFlyTipping",
+        category = "job",
         endsWithJob = true,
         chipTone = "bad",
         -- 112: the offer names the farmer.

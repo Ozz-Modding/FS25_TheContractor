@@ -164,7 +164,7 @@ function TheContractorMorale:register(inbox)
         onExpire = function(farmId, message)
             self:onHarvestBonusAnswered(farmId, TheContractorMorale.ACTION.NONE)
         end,
-        chipKey = "tc_inbox_chipStaff",
+        category = "staff",
         chipTone = "info",
     })
 end
