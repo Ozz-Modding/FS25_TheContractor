@@ -710,8 +710,10 @@ Local official: #1 Alan Price (male)
 
 Your farm's relationship with each farmer and the local official (113), from -100 to 100. Everyone starts at 0. Completed jobs raise it (more for better quality, and poor work lowers it). Missed, declined and lapsed offers, a counter-offer they walked away from, and an invoice you pursue all lower it. Every month it drifts 5 back towards 0. Good relationships bring more of that customer's offers and more room to haggle. Below -40 they offer you no work at all.
 
+When it goes bad (129): a missed job, or one done under 50% quality, that leaves a customer at `poor` (-40 to -15) gets a complaint from them in your Inbox, at most once a month each. A customer dropping below -40 tells the neighbours: every farmer with land or a yard within 500 m of theirs drops 5 with you, your reputation drops 15, and a notice names them. Their drops never spread word further.
+
 - With no argument: one line per person (the official first) with their id, name, score and band (`excellent`, `good`, `neutral`, `poor`, `fallenOut`). Read-only, so it also works on a joined client.
-- `<person> <amount>`: changes the relationship with that person (their id or full name) by `amount`, which can be negative. The result is kept within -100 to 100. Server only.
+- `<person> <amount>`: changes the relationship with that person (their id or full name) by `amount`, which can be negative. The result is kept within -100 to 100. It goes through the same path as the game's own changes, so taking someone from -40 or above to below it spreads word to their neighbours as above (a complaint only comes from a job). Server only.
 
 ```
 tcCompany relationship

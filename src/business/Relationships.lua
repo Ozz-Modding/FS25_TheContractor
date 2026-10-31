@@ -30,6 +30,19 @@
 --                      (getToleranceFactor)
 -- The People tab's Others view and an offer's From and Customer rows show
 -- the band (getBand) as a chip.
+--
+-- 129: when it goes bad (server):
+--   a complaint       a missed job, or one completed under COMPLAINT_QUALITY,
+--                     that leaves the customer in the poor band posts a
+--                     message from them (COMPLAINT_KIND), no more than one a
+--                     customer per COMPLAINT_COOLDOWN months for each farm
+--                     (lastComplaints, saved, never streamed). A warning
+--                     only: it does nothing else.
+--   word gets round   a customer falling out (crossing REFUSES_BELOW, for
+--                     any reason but word itself, so it never cascades)
+--                     costs each of their neighbours (Farmers.getNeighbours)
+--                     WORD_RELATIONSHIP and the farm WORD_REPUTATION, and
+--                     posts a notice naming them (WORD_KIND).
 
 TheContractorRelationships = {}
 TheContractorRelationships_mt = Class(TheContractorRelationships)
@@ -58,6 +71,25 @@ TheContractorRelationships.MAX_OFFER_WEIGHT = 3
 -- Negotiation tolerance (014) is scaled by 1 +/- this at MAX/MIN_SCORE.
 TheContractorRelationships.TOLERANCE_SWING = 0.5
 
+-- 129: a job completed under this quality score (080) can bring a complaint.
+TheContractorRelationships.COMPLAINT_QUALITY = 50
+-- Months before the same customer complains to the same farm again.
+TheContractorRelationships.COMPLAINT_COOLDOWN = 1
+-- Each complaint body's variants (tc_complaint_body_<cause>_<n>).
+TheContractorRelationships.COMPLAINT_VARIANTS = 3
+TheContractorRelationships.COMPLAINT_CAUSE = {
+    MISSED = "missed",
+    POOR_WORK = "poorWork",
+}
+TheContractorRelationships.COMPLAINT_KIND = "complaint"
+
+-- 129: what a customer falling out costs with each neighbour, and in
+-- overall reputation (007).
+TheContractorRelationships.WORD_RELATIONSHIP = 5
+TheContractorRelationships.WORD_REPUTATION = 15
+TheContractorRelationships.WORD_REASON = "word"
+TheContractorRelationships.WORD_KIND = "wordGetsRound"
+
 -- How an offer ended without being taken (Jobs:onJobDeclined).
 TheContractorRelationships.DECLINE_REASON = {
     DECLINED = "declined",
@@ -81,8 +113,35 @@ function TheContractorRelationships.new()
 
     -- farmId -> customerId -> score (never 0: a neutral score isn't kept).
     self.scores = {}
+    -- 129, server: farmId -> customerId -> the period index of their last
+    -- complaint.
+    self.lastComplaints = {}
 
     return self
+end
+
+-- Every machine, at load (129).
+function TheContractorRelationships:registerMessageKinds(inbox)
+    inbox:registerMessageKind(TheContractorRelationships.COMPLAINT_KIND, {
+        category = "feedback",
+        chipTone = "warn",
+        fromFarmer = true,
+        getArgs = function(message)
+            return TheContractorRelationships.getComplaintArgs(message)
+        end,
+    })
+    inbox:registerMessageKind(TheContractorRelationships.WORD_KIND, {
+        category = "feedback",
+        chipTone = "warn",
+    })
+end
+
+-- A complaint's args (client): the customer's name as it is now, then the
+-- job's place.
+function TheContractorRelationships.getComplaintArgs(message)
+    local farmers = g_currentMission.TheContractor.Farmers
+    local person = farmers ~= nil and farmers:getPerson(message.payload.farmerId) or nil
+    return { person ~= nil and person.name or g_i18n:getText("tc_inbox_customerUnknown"), message.args[1] or "" }
 end
 
 -- Queries (every machine) -------------------------------------------------------
@@ -152,6 +211,10 @@ function TheContractorRelationships:adjust(farmId, customerId, delta, reason)
     if g_server ~= nil then
         g_server:broadcastEvent(TCRelationshipChangedEvent.new(farmId, customerId, newScore))
     end
+    -- 129: they've fallen out, and tell the neighbours.
+    if reason ~= T.WORD_REASON and score >= T.REFUSES_BELOW and newScore < T.REFUSES_BELOW then
+        self:spreadWord(farmId, customerId)
+    end
     return newScore
 end
 
@@ -175,6 +238,9 @@ end
 function TheContractorRelationships:onJobCompleted(job)
     local factor = TheContractorJobs.getQualityReputationFactor(job.qualityScore or 100)
     self:adjust(job.farmId, job.customerId, TheContractorRelationships.COMPLETED_GAIN * factor, "completed")
+    if (job.qualityScore or 100) < TheContractorRelationships.COMPLAINT_QUALITY then
+        self:checkComplaint(job, TheContractorRelationships.COMPLAINT_CAUSE.POOR_WORK)
+    end
 end
 
 -- Server, from Jobs:missJob: less the share of the work already done.
@@ -182,6 +248,7 @@ function TheContractorRelationships:onJobMissed(job)
     local T = TheContractorRelationships
     local loss = math.max(T.MIN_MISSED_LOSS, T.MISSED_LOSS * (1 - (job.completionPercentage or 0) / 100))
     self:adjust(job.farmId, job.customerId, -loss, "missed")
+    self:checkComplaint(job, T.COMPLAINT_CAUSE.MISSED)
 end
 
 -- Server, from Jobs:onJobDeclined. reason: a DECLINE_REASON (nil: declined).
@@ -201,6 +268,64 @@ function TheContractorRelationships:onInvoicePursued(farmId, job)
     if job ~= nil then
         self:adjust(farmId, job.customerId, -TheContractorRelationships.PURSUED_LOSS, "pursued")
     end
+end
+
+-- When it goes bad (129, server) ---------------------------------------------------
+
+function TheContractorRelationships:getLastComplaintPeriod(farmId, customerId)
+    local farmComplaints = self.lastComplaints[farmId]
+    return farmComplaints ~= nil and farmComplaints[customerId] or nil
+end
+
+-- Whether a farm's customer, at their score now, may complain this month.
+function TheContractorRelationships:canComplain(farmId, customerId)
+    if customerId == nil or TheContractorRelationships.getBand(self:getScore(farmId, customerId)).key ~= "poor" then
+        return false
+    end
+    local last = self:getLastComplaintPeriod(farmId, customerId)
+    return last == nil or TCCalendar.getPeriodIndex() >= last + TheContractorRelationships.COMPLAINT_COOLDOWN
+end
+
+-- After a job's change has landed: the customer complains if they're now
+-- in the poor band and haven't lately. cause: a COMPLAINT_CAUSE.
+function TheContractorRelationships:checkComplaint(job, cause)
+    local T = TheContractorRelationships
+    if not g_currentMission:getIsServer() or not self:canComplain(job.farmId, job.customerId) then
+        return
+    end
+    local periodIndex = TCCalendar.getPeriodIndex()
+    self.lastComplaints[job.farmId] = self.lastComplaints[job.farmId] or {}
+    self.lastComplaints[job.farmId][job.customerId] = periodIndex
+    local bodyKey = string.format("tc_complaint_body_%s_%d", cause, math.random(1, T.COMPLAINT_VARIANTS))
+    TCLog.info("TheContractor: farm %d: person %d complains about job %d (%s)", job.farmId, job.customerId, job.id,
+        cause)
+    g_currentMission.TheContractor.Inbox:postMessage(job.farmId, T.COMPLAINT_KIND, "tc_complaint_title", bodyKey,
+        { job:getLocationText() }, nil, { farmerId = job.customerId })
+end
+
+-- A customer has just fallen out with a farm: each of their neighbours
+-- thinks less of it, so does the trade, and the farm hears about it.
+function TheContractorRelationships:spreadWord(farmId, customerId)
+    local T = TheContractorRelationships
+    local tc = g_currentMission.TheContractor
+    local person = tc.Farmers ~= nil and tc.Farmers:getPerson(customerId) or nil
+    if person == nil then
+        return
+    end
+    local neighbours = TheContractorFarmers.getNeighbours(tc.Farmers:getFarmers(), person,
+        TheContractorFarmers.getLand(), TheContractorFarmers.getFreeYards())
+    local names = {}
+    for _, neighbour in ipairs(neighbours) do
+        self:adjust(farmId, neighbour.id, -T.WORD_RELATIONSHIP, T.WORD_REASON)
+        table.insert(names, neighbour.name)
+    end
+    tc.Reputation:addReputation(farmId, -T.WORD_REPUTATION)
+    TCLog.info("TheContractor: farm %d: person %d has fallen out and told %d neighbours", farmId, customerId,
+        #neighbours)
+
+    local bodyKey = #names > 0 and "tc_wordGetsRound_body" or "tc_wordGetsRound_bodyNoNeighbours"
+    tc.Inbox:postMessage(farmId, T.WORD_KIND, "tc_wordGetsRound_title", bodyKey,
+        { person.name, table.concat(names, ", ") })
 end
 
 -- Server: every score a step nearer 0.
@@ -232,6 +357,7 @@ end
 -- with nobody's opinion.
 function TheContractorRelationships:reset(farmId)
     self.scores[farmId] = nil
+    self.lastComplaints[farmId] = nil
 end
 
 -- Every machine, when the farmers are made again (110's regenerate): the
@@ -241,6 +367,13 @@ function TheContractorRelationships:forgetMissing(people)
         for customerId in pairs(farmScores) do
             if people[customerId] == nil then
                 farmScores[customerId] = nil
+            end
+        end
+    end
+    for _, farmComplaints in pairs(self.lastComplaints) do
+        for customerId in pairs(farmComplaints) do
+            if people[customerId] == nil then
+                farmComplaints[customerId] = nil
             end
         end
     end
@@ -267,6 +400,10 @@ function TheContractorRelationships:inheritScores(oldId, newId)
             farmScores[newId] = inherited ~= 0 and inherited or nil
         end
     end
+    -- 129: a successor hasn't complained yet.
+    for _, farmComplaints in pairs(self.lastComplaints) do
+        farmComplaints[oldId] = nil
+    end
 end
 
 -- Persistence -------------------------------------------------------------------
@@ -290,6 +427,23 @@ function TheContractorRelationships:loadFromXMLFile(xmlFile)
         end
         i = i + 1
     end
+
+    self.lastComplaints = {}
+    i = 0
+    while true do
+        local key = string.format("%s.relationships.complaint(%d)", TheContractor.SaveKey, i)
+        if not hasXMLProperty(xmlFile, key) then
+            break
+        end
+        local farmId = getXMLInt(xmlFile, key .. "#farmId")
+        local customerId = getXMLInt(xmlFile, key .. "#personId")
+        local period = getXMLInt(xmlFile, key .. "#period")
+        if farmId ~= nil and customerId ~= nil and period ~= nil then
+            self.lastComplaints[farmId] = self.lastComplaints[farmId] or {}
+            self.lastComplaints[farmId][customerId] = period
+        end
+        i = i + 1
+    end
 end
 
 -- In farm then person order, so the file doesn't reshuffle every save.
@@ -309,6 +463,23 @@ function TheContractorRelationships:getSortedEntries()
     return entries
 end
 
+-- 129: the last complaints, in the same order.
+function TheContractorRelationships:getSortedComplaints()
+    local entries = {}
+    for farmId, farmComplaints in pairs(self.lastComplaints) do
+        for customerId, period in pairs(farmComplaints) do
+            table.insert(entries, { farmId = farmId, customerId = customerId, period = period })
+        end
+    end
+    table.sort(entries, function(a, b)
+        if a.farmId ~= b.farmId then
+            return a.farmId < b.farmId
+        end
+        return a.customerId < b.customerId
+    end)
+    return entries
+end
+
 function TheContractorRelationships:saveToXmlFile(xmlFile)
     if not g_currentMission:getIsServer() then return end
 
@@ -317,6 +488,12 @@ function TheContractorRelationships:saveToXmlFile(xmlFile)
         setXMLInt(xmlFile, key .. "#farmId", entry.farmId)
         setXMLInt(xmlFile, key .. "#personId", entry.customerId)
         setXMLInt(xmlFile, key .. "#score", entry.score)
+    end
+    for i, entry in ipairs(self:getSortedComplaints()) do
+        local key = string.format("%s.relationships.complaint(%d)", TheContractor.SaveKey, i - 1)
+        setXMLInt(xmlFile, key .. "#farmId", entry.farmId)
+        setXMLInt(xmlFile, key .. "#personId", entry.customerId)
+        setXMLInt(xmlFile, key .. "#period", entry.period)
     end
 end
 

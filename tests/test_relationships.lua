@@ -31,7 +31,10 @@ local function setup()
     local tc = g_currentMission.TheContractor
     world.standing = 0
     tc.Reputation = { getStanding = function() return world.standing end }
-    tc.Inbox = { removeMessagesForJob = function() end }
+    -- 129: a miss can leave the customer poor, so they complain.
+    TCCalendar = { getPeriodIndex = function() return 1 end }
+    g_fieldManager = { getFieldById = function() return nil end }
+    tc.Inbox = { removeMessagesForJob = function() end, postMessage = function() end }
     tc.Jobs = TheContractorJobs.new()
     local relationships = world:addRelationships()
 
@@ -237,7 +240,10 @@ test("generation leaves out a field whose customer has fallen out", function()
         return { getId = function() return id end, getOwner = function() return 0 end }
     end
     g_fieldManager = { getFields = function() return { field(1), field(2) } end }
-    tc.Farmers = { getCustomerIdForField = function(_, fieldId) return fieldId == 1 and 5 or 6 end }
+    tc.Farmers = {
+        getCustomerIdForField = function(_, fieldId) return fieldId == 1 and 5 or 6 end,
+        getPerson = function() return nil end,
+    }
     tc.Jobs.isFieldProtected = function() return false end
 
     relationships:adjust(1, 5, TheContractorRelationships.REFUSES_BELOW - 1)
