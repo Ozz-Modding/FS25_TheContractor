@@ -55,7 +55,7 @@ end
 function TheContractorCourtesyVehicle:register(randomEvents, inbox)
     self.randomEvents = randomEvents
     inbox:registerMessageKind(TheContractorCourtesyVehicle.MESSAGE_KIND, {
-        chipKey = "tc_inbox_chipInsurance",
+        category = "insurance",
         chipTone = "info",
     })
 end

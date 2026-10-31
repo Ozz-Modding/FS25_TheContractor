@@ -305,6 +305,11 @@ function TheContractorJob.new(id, farmId, jobType, fieldId, requiredSkillLevel, 
     -- clients.
     self.yardHaul = nil
 
+    -- 127: a farmer's machine run dry on their field, and why
+    -- (TheContractorEmergencyRefuel), nil for every other job. Saved and
+    -- sent to clients.
+    self.refuel = nil
+
     -- 110: who the job is for, a TheContractorFarmers person id (a farmer
     -- or the local official), set as it's created (TheContractorFarmers:
     -- getCustomerIdForJob). nil for an ADS repair contract. Saved and sent
@@ -571,26 +576,33 @@ function TheContractorJob:getListTitle()
     return self:getDisplayTitle()
 end
 
--- A table row's Field cell: the field's name, a breakdown's field, or "-"
+-- A table row's Field cell: a number or "-", never words. The field's name
+-- (a breakdown's field for a workshop job), the yard's farmland id for a
+-- job in a farmer's yard (124, 126, and 116/123's machines in one), and "-"
 -- for a machine in one of our repair zones or (107) a job whose field only
--- says where it is (offField).
+-- says where it is (offField; 127's refuel is on its field).
 function TheContractorJob:getListFieldText()
+    local function fieldName(fieldId)
+        local field = g_fieldManager:getFieldById(fieldId)
+        return field ~= nil and field:getName() or tostring(fieldId)
+    end
+    local function farmlandText(farmlandId)
+        return farmlandId ~= nil and farmlandId ~= 0 and tostring(farmlandId) or "-"
+    end
     if self.workshop ~= nil then
         if self.workshop.fieldId ~= nil then
-            local field = g_fieldManager:getFieldById(self.workshop.fieldId)
-            return field ~= nil and field:getName() or tostring(self.workshop.fieldId)
+            return fieldName(self.workshop.fieldId)
         end
-        return "-"
+        return farmlandText(self.workshop.yardFarmlandId)
     end
-    -- 124, 126: the farmer's yard.
     if self:isYardJob() then
-        return self:getLocationText()
+        return farmlandText((self.yardDelivery or self.yardHaul).yardFarmlandId)
     end
     local jobDef = TheContractorJobGeneration ~= nil and TheContractorJobGeneration.JOB_TYPES[self.jobType] or nil
-    if jobDef ~= nil and jobDef.offField then
+    if jobDef ~= nil and jobDef.offField and self.refuel == nil then
         return "-"
     end
-    return self:getLocationText()
+    return fieldName(self.fieldId)
 end
 
 -- 110: the person the job is for (a farmer or the local official), or nil

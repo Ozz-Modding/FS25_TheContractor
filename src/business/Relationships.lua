@@ -246,6 +246,29 @@ function TheContractorRelationships:forgetMissing(people)
     end
 end
 
+-- Half a score, rounded towards 0.
+function TheContractorRelationships.getInheritedScore(score)
+    if score >= 0 then
+        return math.floor(score / 2)
+    end
+    return -math.floor(-score / 2)
+end
+
+-- Every machine, from 128's retirement: a successor starts at half the old
+-- farmer's score with each farm (they know the family's contractor, but
+-- not as well), and the old farmer's scores go. Every machine holds the
+-- same scores, so nothing needs sending.
+function TheContractorRelationships:inheritScores(oldId, newId)
+    for _, farmScores in pairs(self.scores) do
+        local score = farmScores[oldId]
+        if score ~= nil then
+            farmScores[oldId] = nil
+            local inherited = TheContractorRelationships.getInheritedScore(score)
+            farmScores[newId] = inherited ~= 0 and inherited or nil
+        end
+    end
+end
+
 -- Persistence -------------------------------------------------------------------
 
 function TheContractorRelationships:loadFromXMLFile(xmlFile)

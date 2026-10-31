@@ -26,6 +26,7 @@ local function setup()
     world:load("src/business/Jobs.lua")
     world:load("src/business/YardBales.lua")
     world:load("src/business/YardHaul.lua")
+    world:load("src/business/EmergencyRefuel.lua")
     world:load("src/business/CropSpill.lua")
     world:load("src/business/JobGeneration.lua")
     world:load("src/business/Allocation.lua")
@@ -78,6 +79,7 @@ local function setup()
     tc.Allocation.isVehicleFree = function() return true end
     tc.Allocation.previewWorkerCapability = function() return TheContractorAllocation.CAPABILITY.CAPABLE end
     tc.Logbook = TheContractorLogbook.new()
+    tc.Inbox = { removeMessagesForJob = function() end }
 
     world.workers = {}
     world.statuses = {}

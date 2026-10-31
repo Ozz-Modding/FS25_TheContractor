@@ -212,7 +212,7 @@ function TheContractorFallenTree:register(randomEvents, inbox)
 
     inbox:registerMessageKind(TheContractorFallenTree.MESSAGE_KIND, {
         endsWithJob = true,
-        chipKey = "tc_inbox_chipFallenTree",
+        category = "job",
         chipTone = "bad",
     })
 end

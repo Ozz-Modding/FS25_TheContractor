@@ -148,7 +148,7 @@ function TheContractorPoaching:register(randomEvents, inbox)
             return string.format(g_i18n:getText("tc_poaching_matchConfirm"), tostring(message.args[1]),
                 g_i18n:formatMoney(TheContractorStaff.scalePay(message.payload.offer or 0), 0, true, true))
         end,
-        chipKey = "tc_inbox_chipPoaching",
+        category = "staff",
         chipTone = "warn",
     })
 end

@@ -122,7 +122,7 @@ function TheContractorClaims:register(overheads, inbox)
     })
 
     inbox:registerMessageKind(TheContractorClaims.MESSAGE_KIND, {
-        chipKey = "tc_inbox_chipClaim",
+        category = "claim",
         chipTone = "bad",
     })
 end

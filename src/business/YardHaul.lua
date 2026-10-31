@@ -145,7 +145,7 @@ function TheContractorYardHaul:register(randomEvents, inbox)
 
     inbox:registerMessageKind(TheContractorYardHaul.MESSAGE_KIND, {
         endsWithJob = true,
-        chipKey = "tc_inbox_chipYardHaul",
+        category = "job",
         chipTone = "info",
         getArgs = function(message)
             return TheContractorInbox.getCustomerNamedArgs(message, TheContractorYardHaul.NAMED_BODY_KEYS)
@@ -153,7 +153,7 @@ function TheContractorYardHaul:register(randomEvents, inbox)
     })
     -- The claim outlives the job, so the farmer's named from the payload.
     inbox:registerMessageKind(TheContractorYardHaul.CLAIM_KIND, {
-        chipKey = "tc_inbox_chipClaim",
+        category = "claim",
         chipTone = "bad",
         getArgs = function(message)
             return TheContractorYardHaul.getClaimArgs(message)

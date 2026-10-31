@@ -6,7 +6,7 @@
 --   tc.Inbox:registerMessageKind("certRequest", {
 --       onAction = function(farmId, message, actionKey) ... end,  -- server
 --       onExpire = function(farmId, message) ... end,             -- optional, server
---       chipKey = "tc_inbox_chipStaff",                           -- optional
+--       category = "staff",                                       -- optional: a CATEGORIES key
 --       chipTone = "info",                                        -- optional
 --       getConfirmText = function(message, actionKey) ... end,    -- optional, client:
 --                                                                 -- text for a Yes/No first, or nil
@@ -18,7 +18,9 @@
 --       args, actions, payload, expiresInDays)                    -- server only
 --
 -- Register on every machine (not just the server), at load: clients need
--- the chip, the server needs the handlers.
+-- the chip, the server needs the handlers. The chip says what sort of
+-- message it is (CATEGORIES: Job, Staff, Claim...), never what it's about,
+-- and a kind with endsWithJob is a Job unless it says otherwise.
 --
 -- Message: { id, farmId, kind, createdDay, expiresDay, titleKey, bodyKey,
 -- args, actions = { { key, textKey }, ... }, payload } - days are
@@ -36,8 +38,8 @@
 --
 -- A kind with endsWithJob (072's joyriders, 075's fly-tipping) posts offers
 -- of a job, named by payload.jobId: such a message expires with the job's
--- deadline, and goes as soon as the job's over (declined or lapsed,
--- completed, missed, or gone).
+-- deadline, and goes as soon as the job's no longer on offer (accepted,
+-- declined or lapsed, completed, missed, or gone).
 
 TheContractorInbox = {}
 TheContractorInbox_mt = Class(TheContractorInbox)
@@ -47,7 +49,21 @@ TheContractorInbox.MAX_ACTIONS = 3
 
 TheContractorInbox.DISMISS_ACTION = { key = "dismiss", textKey = "tc_inbox_dismissButton" }
 
-TheContractorInbox.DEFAULT_CHIP_KEY = "tc_inbox_chipMessage"
+-- Message categories, each its chip's text (tc_inbox_chip_<category>).
+TheContractorInbox.CATEGORIES = {
+    message = true,
+    job = true,
+    feedback = true,
+    staff = true,
+    holiday = true,
+    parking = true,
+    claim = true,
+    insurance = true,
+    crime = true,
+    workshop = true,
+    admin = true,
+}
+TheContractorInbox.DEFAULT_CATEGORY = "message"
 TheContractorInbox.DEFAULT_CHIP_TONE = "info"
 
 function TheContractorInbox.new()
@@ -58,7 +74,7 @@ function TheContractorInbox.new()
     self.messagesById = {}
     self.nextMessageId = 1
 
-    -- kinds[kind] = { onAction, onExpire, chipKey, chipTone }
+    -- kinds[kind] = { onAction, onExpire, category, chipTone, ... }
     self.kinds = {}
 
     return self
@@ -186,10 +202,23 @@ function TheContractorInbox.getCustomerNamedArgs(message, namedBodyKeys)
     return args
 end
 
--- The type chip's label and tone; unregistered kinds get the default.
+-- A message's category (CATEGORIES): its kind's, else job for one that
+-- offers a job, else DEFAULT_CATEGORY. Unregistered kinds get the default.
+function TheContractorInbox:getCategory(message)
+    local definition = self.kinds[message.kind] or {}
+    local category = definition.category
+    if category == nil and definition.endsWithJob then
+        category = "job"
+    end
+    if category == nil or not TheContractorInbox.CATEGORIES[category] then
+        category = TheContractorInbox.DEFAULT_CATEGORY
+    end
+    return category
+end
+
 function TheContractorInbox:getChip(message)
     local definition = self.kinds[message.kind] or {}
-    return g_i18n:getText(definition.chipKey or TheContractorInbox.DEFAULT_CHIP_KEY),
+    return g_i18n:getText("tc_inbox_chip_" .. self:getCategory(message)),
         definition.chipTone or TheContractorInbox.DEFAULT_CHIP_TONE
 end
 
@@ -248,9 +277,10 @@ end
 
 -- Job-linked messages (endsWithJob, server) -------------------------------------
 
-local function isJobOver(job)
-    return job == nil or job.state == TheContractorJob.STATE.DECLINED or
-        job.state == TheContractorJob.STATE.COMPLETED or job.state == TheContractorJob.STATE.MISSED
+-- Whether a job's no longer on offer: taken on, or over.
+local function isOfferOver(job)
+    return job == nil or (job.state ~= TheContractorJob.STATE.OFFERED and
+        job.state ~= TheContractorJob.STATE.NEGOTIATING)
 end
 
 -- The job an endsWithJob message offers, or nil (another kind, or none named).
@@ -275,7 +305,7 @@ function TheContractorInbox:getJobExpiryDay(farmId, kind, payload)
     return job.deadlineDay + 1
 end
 
--- Server: the job's over, so its offer messages go.
+-- Server: the job's been taken on or is over, so its offer messages go.
 function TheContractorInbox:removeMessagesForJob(farmId, jobId)
     for _, message in ipairs(self:getMessages(farmId)) do
         if self:getMessageJobId(message.kind, message.payload) == jobId then
@@ -284,20 +314,21 @@ function TheContractorInbox:removeMessagesForJob(farmId, jobId)
     end
 end
 
--- Server, daily: catches any whose job ended without telling us (an older
--- save's, from before endsWithJob).
+-- Server, daily: catches any whose job was taken on or ended without
+-- telling us (an older save's, from before endsWithJob or from before an
+-- accepted offer's message went).
 function TheContractorInbox:removeEndedJobMessages()
     local jobs = g_currentMission.TheContractor.Jobs
     local ended = {}
     for _, message in pairs(self.messagesById) do
         local jobId = self:getMessageJobId(message.kind, message.payload)
-        if jobId ~= nil and isJobOver(jobs:getJob(message.farmId, jobId)) then
+        if jobId ~= nil and isOfferOver(jobs:getJob(message.farmId, jobId)) then
             table.insert(ended, message.id)
         end
     end
     table.sort(ended)
     for _, messageId in ipairs(ended) do
-        TCLog.info("TheContractor: inbox message %d's job is over, removed", messageId)
+        TCLog.info("TheContractor: inbox message %d's job is no longer on offer, removed", messageId)
         self:removeMessage(messageId)
     end
 end

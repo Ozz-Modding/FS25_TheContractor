@@ -177,10 +177,11 @@ end
 -- yardDelivery (124) is a yard bale job's job.yardDelivery
 -- (TheContractorYardBales); its litres are the job's requiredLiters.
 -- yardHaul (126) is a farmer's load to sell's job.yardHaul
--- (TheContractorYardHaul), a haulage job to deliveryStation.
+-- (TheContractorYardHaul), a haulage job to deliveryStation. refuel (127)
+-- is a farmer's machine run dry's job.refuel (TheContractorEmergencyRefuel).
 function TheContractorJobs:createJob(farmId, jobType, fieldId, requiredSkillLevel, targetPeriod, targetDayInPeriod,
                                       price, equipmentAvailable, fruitTypeName, deadlineDay, includesHaulage,
-                                      deliveryStation, startState, workshop, spill, yardDelivery, yardHaul)
+                                      deliveryStation, startState, workshop, spill, yardDelivery, yardHaul, refuel)
     if not g_currentMission:getIsServer() then
         return nil
     end
@@ -210,7 +211,9 @@ function TheContractorJobs:createJob(farmId, jobType, fieldId, requiredSkillLeve
         job.requiredLiters = yardDelivery.liters or 0
     end
     job.yardHaul = yardHaul
-    -- 110: after workshop, spill and the yard jobs, which decide it.
+    job.refuel = refuel
+    -- 110: after workshop, spill, the yard jobs and a refuel, which decide
+    -- it.
     local farmers = g_currentMission.TheContractor.Farmers
     if farmers ~= nil then
         job.customerId = farmers:getCustomerIdForJob(job)
@@ -377,6 +380,8 @@ end
 -- the farm's players as it's taken on (allocateOnAccept) is, under the
 -- name of whoever accepted it (nil: "A player").
 function TheContractorJobs:onJobAccepted(job, playerName)
+    -- The offer's message (a fallen tree's, a farmer's call) has done its job.
+    g_currentMission.TheContractor.Inbox:removeMessagesForJob(job.farmId, job.id)
     local jobDef = TheContractorJobGeneration.JOB_TYPES[job.jobType]
     if jobDef ~= nil and jobDef.allocateOnAccept and
             not g_currentMission.TheContractor.Allocation:allocateJob(job.farmId, job.id, {}, {}, {}, nil, playerName) then
@@ -397,6 +402,10 @@ function TheContractorJobs:onJobAccepted(job, playerName)
     -- 126: and their trailer, full.
     if job.yardHaul ~= nil then
         g_currentMission.TheContractor.YardHaul:onJobAccepted(job)
+    end
+    -- 127: and their machine, run dry on the field.
+    if job.refuel ~= nil then
+        g_currentMission.TheContractor.EmergencyRefuel:onJobAccepted(job)
     end
 end
 
@@ -1294,6 +1303,10 @@ function TheContractorJobs:completeJob(job, isForced)
     g_currentMission.TheContractor.Reputation:addReputation(job.farmId, reputationReward)
     -- 113: and the customer's opinion, by the same quality.
     g_currentMission.TheContractor.Relationships:onJobCompleted(job)
+    -- 127: a farmer helped out of a hole thinks more of the farm still.
+    if job.refuel ~= nil then
+        g_currentMission.TheContractor.EmergencyRefuel:onJobCompleted(job)
+    end
 
     -- 045: extra wear from skill gaps, dirt, and whether the workers wash
     -- the equipment - before the cooldown (it adds the washing time) and
@@ -1489,6 +1502,8 @@ function TheContractorJobs.writeJob(streamId, job)
     TheContractorYardBales.writeStream(streamId, job.yardDelivery)
     -- 126.
     TheContractorYardHaul.writeStream(streamId, job.yardHaul)
+    -- 127.
+    TheContractorEmergencyRefuel.writeStream(streamId, job.refuel)
 end
 
 -- 100: what a client needs of a workshop job (the uniqueIds stay on the
@@ -1683,6 +1698,7 @@ function TheContractorJobs.readJob(streamId)
     job.customerId = customerId ~= 0 and customerId or nil
     job.yardDelivery = TheContractorYardBales.readStream(streamId)
     job.yardHaul = TheContractorYardHaul.readStream(streamId)
+    job.refuel = TheContractorEmergencyRefuel.readStream(streamId)
 
     return job
 end
@@ -1816,6 +1832,8 @@ function TheContractorJobs:loadFromXMLFile(xmlFile)
             job.yardDelivery = TheContractorYardBales.loadFromXML(xmlFile, jobKey .. ".yardDelivery")
             -- 126: its litres are haulage's, loaded above.
             job.yardHaul = TheContractorYardHaul.loadFromXML(xmlFile, jobKey .. ".yardHaul")
+            -- 127.
+            job.refuel = TheContractorEmergencyRefuel.loadFromXML(xmlFile, jobKey .. ".refuel")
             -- 124: its litres are kept with the order, not as haulage's.
             if job.yardDelivery ~= nil then
                 job.requiredLiters = job.yardDelivery.liters or 0
@@ -2153,6 +2171,9 @@ function TheContractorJobs:saveToXmlFile(xmlFile)
             end
             if job.yardHaul ~= nil then
                 TheContractorYardHaul.saveToXML(xmlFile, jobKey .. ".yardHaul", job.yardHaul)
+            end
+            if job.refuel ~= nil then
+                TheContractorEmergencyRefuel.saveToXML(xmlFile, jobKey .. ".refuel", job.refuel)
             end
             if job.customerId ~= nil then
                 setXMLInt(xmlFile, jobKey .. "#customerId", job.customerId)

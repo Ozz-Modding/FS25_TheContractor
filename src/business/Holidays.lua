@@ -103,7 +103,7 @@ function TheContractorHolidays:register(inbox)
             self:onMessageExpired(farmId, message)
         end,
         getArgs = TheContractorHolidays.getMessageArgs,
-        chipKey = "tc_inbox_chipHoliday",
+        category = "holiday",
         chipTone = "info",
     })
 end

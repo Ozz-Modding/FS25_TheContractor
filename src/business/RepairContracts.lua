@@ -83,6 +83,10 @@
 -- for it again after a load. 126's trailer (TheContractorYardHaul) is a
 -- loan too: entry.loanOwner names the subsystem it's handed to, and it's
 -- collected only once it's unhitched and no player's near (whenUnseen).
+-- 127's machine run dry (TheContractorEmergencyRefuel) is a loan to a spot
+-- on a field (entry.fieldId): a spot that's taken gives way to another on
+-- the same field, and it's collected whenUnseen with its attachment (whose
+-- hitch to it doesn't count as being towed).
 --
 -- State (server, saved in TheContractor.xml): the arrivals queue, the
 -- machines waiting to be collected, pending tamper claims and which farms
@@ -230,7 +234,7 @@ end
 -- Every machine, at load.
 function TheContractorRepairContracts:register(inbox)
     inbox:registerMessageKind(TheContractorRepairContracts.MESSAGE_KIND, {
-        chipKey = "tc_inbox_chipRepair",
+        category = "workshop",
         chipTone = "warn",
     })
 end
@@ -340,6 +344,12 @@ function TheContractorRepairContracts.getContractVehicleIds()
             -- 126: and their trailer with a load to sell.
             if job.yardHaul ~= nil and TheContractorYardHaul ~= nil then
                 for _, vehicleId in ipairs(TheContractorYardHaul.getTrailerIds(job.yardHaul)) do
+                    result[vehicleId] = job
+                end
+            end
+            -- 127: and their machine run dry, with its attachment.
+            if job.refuel ~= nil and TheContractorEmergencyRefuel ~= nil then
+                for _, vehicleId in ipairs(TheContractorEmergencyRefuel.getMachineIds(job.refuel)) do
                     result[vehicleId] = job
                 end
             end
@@ -949,6 +959,7 @@ end
 -- (onLoanArrived), and it waits for its spot as long as the job wants it
 -- (isLoanWanted). Not saved: after a load the job sends for it again.
 -- owner (126): the TheContractor field it's handed to, YardBales if nil.
+-- spot: { x, z, rotY, yardFarmlandId or (127) fieldId }.
 function TheContractorRepairContracts:queueLoanArrival(farmId, jobId, farmer, machine, model, spot, attachment, owner)
     local entry = {
         farmId = farmId,
@@ -958,6 +969,7 @@ function TheContractorRepairContracts:queueLoanArrival(farmId, jobId, farmer, ma
         farmerId = farmer.id,
         machineId = machine.id,
         yardFarmlandId = spot.yardFarmlandId,
+        fieldId = spot.fieldId,
         x = spot.x,
         z = spot.z,
         rotY = spot.rotY,
@@ -1204,7 +1216,11 @@ function TheContractorRepairContracts:tryPlaceArrival(entry)
     local clearance = TheContractorRepairContracts.CLEARANCE
     if not TCParking.isAreaClear(centreX, centreZ, rotY, model.width + clearance, model.length + clearance,
             model.height) then
-        if entry.loan then
+        if entry.loan and entry.fieldId ~= nil then
+            -- 127: somewhere else on the field's headland, else it waits.
+            self:retryLoanFieldSpot(entry, model)
+            return
+        elseif entry.loan then
             -- 124: its spot is beside the job's area; it waits for it to
             -- clear.
             return
@@ -1254,6 +1270,16 @@ function TheContractorRepairContracts:retryBreakdownSpot(entry, model)
         return
     end
     entry.x, entry.z, entry.rotY = x, z, rotY
+end
+
+-- 127: a loan's spot on a field was taken: another on the same field's
+-- headland. With none it keeps its spot and waits, as long as its job wants
+-- it.
+function TheContractorRepairContracts:retryLoanFieldSpot(entry, model)
+    local x, z, rotY = TheContractorFieldBreakdowns.pickSpot(entry.fieldId, model, math.random)
+    if x ~= nil then
+        entry.x, entry.z, entry.rotY = x, z, rotY
+    end
 end
 
 -- 116: a favour's spot was taken: another of the farmer's, up to
@@ -1368,6 +1394,10 @@ function TheContractorRepairContracts:onArrivalLoaded(vehicles, loadingState, ar
         -- 124: hitched up and handed to its job, nothing for ADS to do.
         self:loadAttachment(entry, vehicle, function(attachment)
             removeFrom(self.arrivals, entry)
+            if entry.fieldId ~= nil then
+                -- 127: on a field, its ruts in and the crop round it cleared.
+                TheContractorFieldBreakdowns.clearSpot(entry, self:getArrivalModel(entry))
+            end
             local owner = TheContractorRepairContracts.getLoanOwner(entry)
             if owner ~= nil then
                 owner:onLoanArrived(entry, vehicle, attachment)
@@ -1998,9 +2028,12 @@ function TheContractorRepairContracts:queueLoanCollection(farmId, farmerId, vehi
 end
 
 -- 126: whether a whenUnseen collection has to wait: the machine's hitched
--- to something, or a player is within UNSEEN_DISTANCE of it.
-function TheContractorRepairContracts.isWatched(vehicle)
-    if vehicle.getAttacherVehicle ~= nil and vehicle:getAttacherVehicle() ~= nil then
+-- to something, or a player is within UNSEEN_DISTANCE of it. 127: hitched
+-- to a machine that's being collected too (a combine's header) doesn't
+-- count: they go together.
+function TheContractorRepairContracts:isWatched(vehicle)
+    local attacher = vehicle.getAttacherVehicle ~= nil and vehicle:getAttacherVehicle() or nil
+    if attacher ~= nil and not attacher.isDeleted and not self:isCollecting(attacher) then
         return true
     end
     if vehicle.rootNode == nil or TheContractorFallenTree == nil then
@@ -2010,6 +2043,17 @@ function TheContractorRepairContracts.isWatched(vehicle)
     local distance = TheContractorRepairContracts.UNSEEN_DISTANCE
     for _, position in ipairs(TheContractorFallenTree.getPlayerPositions()) do
         if (position.x - x) ^ 2 + (position.z - z) ^ 2 < distance * distance then
+            return true
+        end
+    end
+    return false
+end
+
+-- 127: whether a vehicle's waiting to be collected.
+function TheContractorRepairContracts:isCollecting(vehicle)
+    local vehicleId = NetworkUtil.getObjectId(vehicle)
+    for _, entry in ipairs(self.removals) do
+        if vehicleId ~= nil and entry.vehicleId == vehicleId then
             return true
         end
     end
@@ -2027,7 +2071,7 @@ function TheContractorRepairContracts:tryCollect(entry)
     if rootVehicle.getIsControlled ~= nil and rootVehicle:getIsControlled() then
         return
     end
-    if entry.whenUnseen and TheContractorRepairContracts.isWatched(vehicle) then
+    if entry.whenUnseen and self:isWatched(vehicle) then
         return
     end
     removeFrom(self.removals, entry)

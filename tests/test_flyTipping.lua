@@ -111,6 +111,7 @@ local function setup()
     world:load("src/business/Jobs.lua")
     world:load("src/business/YardBales.lua")
     world:load("src/business/YardHaul.lua")
+    world:load("src/business/EmergencyRefuel.lua")
     world:load("src/business/CropSpill.lua")
     world:load("src/business/Inbox.lua")
     world:load("src/business/JobGeneration.lua")
@@ -551,7 +552,7 @@ test("turning the offer down, or letting it run out, takes the pile away", funct
     end
 end)
 
-test("the offer message expires with the job, and goes once the job's over", function()
+test("the offer message expires with the job, and goes once the job's taken on or over", function()
     local world, tc = setup()
     local _, job = dump(world, tc)
     local message = tc.Inbox:getMessages(1)[1]
@@ -561,14 +562,12 @@ test("the offer message expires with the job, and goes once the job's over", fun
     tc.Jobs:transitionJobState(1, job.id, TheContractorJob.STATE.DECLINED)
     assertEquals(#tc.Inbox:getMessages(1), 0)
 
-    -- Completed or missed: gone too.
+    -- Accepted: the offer's done its job, so it goes too.
     world.fields = {}
     dump(world, tc)
     local second = tc.Jobs:getJob(1, tc.Inbox:getMessages(1)[1].payload.jobId)
     tc.Jobs:transitionJobState(1, second.id, TheContractorJob.STATE.ACCEPTED)
-    assertEquals(#tc.Inbox:getMessages(1), 1, "an accepted job keeps it")
-    tc.Inbox:removeMessagesForJob(1, second.id)
-    assertEquals(#tc.Inbox:getMessages(1), 0)
+    assertEquals(#tc.Inbox:getMessages(1), 0, "an accepted job's offer goes")
     second.state = TheContractorJob.STATE.COMPLETED
 
     -- An older save's, from before: no expiry, its job long over. The
@@ -579,6 +578,14 @@ test("the offer message expires with the job, and goes once the job's over", fun
     local third = tc.Jobs:getJob(1, old.payload.jobId)
     old.expiresDay = nil
     third.state = TheContractorJob.STATE.DECLINED
+    tc.Inbox:onDayChanged()
+    assertEquals(#tc.Inbox:getMessages(1), 0)
+
+    -- And one whose job was taken on before accepting cleared it.
+    world.fields = {}
+    dump(world, tc)
+    local taken = tc.Inbox:getMessages(1)[1]
+    tc.Jobs:getJob(1, taken.payload.jobId).state = TheContractorJob.STATE.ALLOCATED
     tc.Inbox:onDayChanged()
     assertEquals(#tc.Inbox:getMessages(1), 0)
 

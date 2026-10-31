@@ -164,7 +164,7 @@ function TheContractorMachineryInsurance:register(overheads, inbox, randomEvents
             end
             return string.format(g_i18n:getText("tc_insurance_submitConfirm"), tostring(message.args[1]))
         end,
-        chipKey = "tc_inbox_chipInsurance",
+        category = "insurance",
         chipTone = "info",
     })
 end

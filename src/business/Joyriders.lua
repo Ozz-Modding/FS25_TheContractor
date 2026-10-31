@@ -61,7 +61,7 @@ function TheContractorJoyriders:register(randomEvents, inbox)
     })
 
     inbox:registerMessageKind(TheContractorJoyriders.MESSAGE_KIND, {
-        chipKey = "tc_inbox_chipJoyriders",
+        category = "job",
         endsWithJob = true,
         chipTone = "bad",
         -- 112: the offers name the farmer.

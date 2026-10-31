@@ -124,7 +124,7 @@ function TheContractorSprayDrift:register(randomEvents, inbox)
     })
 
     inbox:registerMessageKind(TheContractorSprayDrift.MESSAGE_KIND, {
-        chipKey = "tc_inbox_chipSprayDrift",
+        category = "feedback",
         chipTone = "bad",
     })
 end

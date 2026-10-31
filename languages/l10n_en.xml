@@ -17,6 +17,8 @@
 		<text name="tc_toolTip_nameStyle" text="Where the names of new job candidates and office administrators come from. European mix and Mixed pick a different style for each person. Staff you already have keep their names."/>
 		<text name="tc_toolTip_adsWorkshopMargin" text="Your usual margin on Advanced Damage System repairs and services in your repair zones, on top of what the cheapest fix costs (parts and labour). The Negotiate dialog starts here, and customers judge your price against it: less earns more reputation, well over it costs reputation."/>
 		<text name="tc_toolTip_adsFieldMargin" text="Your usual margin on Advanced Damage System breakdowns out in the field, on top of what the cheapest fix costs (parts and labour). The Negotiate dialog starts here, and customers judge your price against it: less earns more reputation, well over it costs reputation."/>
+		<text name="tc_setting_farmerRetirements" text="Farmer retirements"/>
+		<text name="tc_toolTip_farmerRetirements" text="On: now and then a farmer retires and a new person takes over their farm, with its land, yard, machines and your open jobs for them, at half your relationship with the old farmer. Farmers you've renamed or edited can retire too, and are replaced for good. Off: farmers never retire on their own."/>
 		<text name="tc_setting_showParkingSlots" text="Show parking slots"/>
 		<text name="tc_toolTip_showParkingSlots" text="Show your parking slots', repair zones' and standing spots' markings outside the construction menu too. Just for you: other players choose their own. Right Ctrl+P switches it by default."/>
 		<text name="tc_nameStyle_british" text="British"/>
@@ -102,6 +104,8 @@
 		<text name="tc_equipment_need_baleTransport" text="Whatever you move bales with (bale loader, trailer, front loader)"/>
 		<text name="tc_equipment_need_disposalSkip" text="A disposal skip to carry the pieces to (Contractor tab of the construction menu)"/>
 		<text name="tc_equipment_need_chainsaw" text="Chainsaw"/>
+		<text name="tc_equipment_need_trailerTractor" text="A tractor to pull the farmer's trailer (it waits full in their yard)"/>
+		<text name="tc_equipment_need_diesel" text="Diesel from your own stock, in whatever carries it (fuel trailer, diesel tank pallet)"/>
 		<text name="tc_detail_age" text="Age"/>
 		<text name="tc_detail_workSpeed" text="Work speed"/>
 		<text name="tc_detail_tiers" text="Tractors"/>
@@ -203,6 +207,7 @@
 		<text name="tc_jobType_fallenTree" text="Clear Fallen Trees"/>
 		<text name="tc_jobType_yardBales" text="Deliver Bales"/>
 		<text name="tc_jobType_yardHaul" text="Sell a Load"/>
+		<text name="tc_jobType_emergencyRefuel" text="Emergency Refuel"/>
 		<text name="tc_jobType_flyTipping" text="Clear Fly-tipping"/>
 		<text name="tc_jobType_fertilize" text="Fertilize"/>
 		<text name="tc_jobType_herbicide" text="Spray Herbicide"/>
@@ -211,12 +216,29 @@
 		<text name="tc_jobType_stonePick" text="Pick Stones"/>
 		<text name="tc_inbox_empty" text="Nothing in your inbox right now — check back later, or buy some advertising to bring more in."/>
 		<text name="tc_inbox_columnType" text="Type"/>
+		<text name="tc_inbox_columnMessage" text="Message"/>
+		<text name="tc_inbox_columnJob" text="Job"/>
+		<text name="tc_inbox_messagesHeading" text="Messages"/>
+		<text name="tc_inbox_jobsHeading" text="Job offers"/>
+		<text name="tc_inbox_noMessages" text="No messages."/>
+		<text name="tc_inbox_noJobs" text="No job offers right now."/>
 		<text name="tc_inbox_columnField" text="Field"/>
 		<text name="tc_inbox_columnTargetDate" text="Due By"/>
 		<text name="tc_inbox_columnPrice" text="Price"/>
 		<text name="tc_inbox_columnEquipment" text="Equip."/>
 		<text name="tc_inbox_acceptButton" text="Accept"/>
 		<text name="tc_inbox_declineButton" text="Decline"/>
+		<text name="tc_inbox_chip_message" text="Message"/>
+		<text name="tc_inbox_chip_job" text="Job"/>
+		<text name="tc_inbox_chip_feedback" text="Feedback"/>
+		<text name="tc_inbox_chip_staff" text="Staff"/>
+		<text name="tc_inbox_chip_holiday" text="Holiday"/>
+		<text name="tc_inbox_chip_parking" text="Parking"/>
+		<text name="tc_inbox_chip_claim" text="Claim"/>
+		<text name="tc_inbox_chip_insurance" text="Insurance"/>
+		<text name="tc_inbox_chip_crime" text="Crime"/>
+		<text name="tc_inbox_chip_workshop" text="Workshop"/>
+		<text name="tc_inbox_chip_admin" text="Admin"/>
 		<text name="tc_inbox_equipmentYes" text="Yes"/>
 		<text name="tc_inbox_equipmentNo" text="No"/>
 		<text name="tc_inbox_counterButton" text="Counter Offer"/>
@@ -229,22 +251,6 @@
 		<text name="tc_inbox_jobAcceptedInfo" text="Job accepted: %s on Field %s for %s."/>
 		<text name="tc_inbox_jobRejectedInfo" text="Negotiation failed: they walked away from %s on Field %s."/>
 		<text name="tc_inbox_dismissButton" text="Dismiss"/>
-		<text name="tc_inbox_chipMessage" text="Message"/>
-		<text name="tc_inbox_chipAdmin" text="Admin"/>
-		<text name="tc_inbox_chipClaim" text="Claim"/>
-		<text name="tc_inbox_chipTheft" text="Theft"/>
-		<text name="tc_inbox_chipRoadAccident" text="Accident"/>
-		<text name="tc_inbox_chipTippedTrailer" text="Overturned"/>
-		<text name="tc_inbox_chipFallenTree" text="Road blocked"/>
-		<text name="tc_inbox_chipYardBales" text="Bales wanted"/>
-		<text name="tc_inbox_chipYardHaul" text="Load to sell"/>
-		<text name="tc_inbox_chipSprayDrift" text="Complaint"/>
-		<text name="tc_inbox_chipJoyriders" text="Vandalism"/>
-		<text name="tc_inbox_chipFlyTipping" text="Fly-tipping"/>
-		<text name="tc_inbox_chipGoodNews" text="Good news"/>
-		<text name="tc_inbox_chipDieselTheft" text="Theft"/>
-		<text name="tc_inbox_chipLegal" text="Legal"/>
-		<text name="tc_inbox_chipTraining" text="Training"/>
 		<text name="tc_calendar_yearLabel" text="Year %d"/>
 		<text name="tc_calendar_columnDay" text="Day"/>
 		<text name="tc_calendar_columnJobs" text="Jobs"/>
@@ -532,7 +538,6 @@
 		<text name="tc_jobType_adsMaintenance" text="Workshop Service"/>
 		<text name="tc_jobType_adsBreakdown" text="Field Breakdown"/>
 		<text name="tc_jobType_adsFavour" text="Farmer's Favour"/>
-		<text name="tc_inbox_chipRepair" text="Workshop"/>
 		<text name="tc_jobDetails_machine" text="Machine"/>
 		<text name="tc_repair_problemGone" text="The customer's machine isn't there any more."/>
 		<text name="tc_repair_problemNoADS" text="Advanced Damage System isn't loaded, so this job can't be taken on."/>
@@ -725,6 +730,23 @@
 		<text name="tc_yardHaul_missedNotification" text="Job failed: the farmer's load wasn't sold by the deadline."/>
 		<text name="tc_yardHaul_claimTitle" text="Claim: a load that never arrived"/>
 		<text name="tc_yardHaul_claimBody" text="You were to sell my load for me, and %s of %s never reached the selling point. I've claimed for what it was worth, and you've paid %s. I won't be forgetting this. %s"/>
+		<text name="tc_refuel_eventName" text="A farmer's machine out of diesel"/>
+		<text name="tc_refuel_offerTitle" text="Can you bring me some diesel?"/>
+		<text name="tc_refuel_offerBody_headland" text="My %s has run dry on Field %s. I was trying to finish the headland before I filled up, and it coughed and stopped with one pass to go. Could you bring me some diesel today? %s will get me home. I'll pay for the diesel and your trouble. Thanks, %s"/>
+		<text name="tc_refuel_offerBody_gauge" text="My %s has run dry on Field %s. The fuel gauge has been stuck for weeks and I've been guessing, and today I guessed wrong. Could you bring me some diesel today? %s will get me home. I'll pay for the diesel and your trouble. Thanks, %s"/>
+		<text name="tc_refuel_offerBody_forgot" text="My %s has run dry on Field %s. I clean forgot to fill it up last night, and I've no way of getting diesel out here myself. Could you bring me some today? %s will get me home. I'll pay for the diesel and your trouble. Thanks, %s"/>
+		<text name="tc_refuel_machineUnknown" text="machine"/>
+		<text name="tc_refuel_detailValue" text="%s, %s of diesel"/>
+		<text name="tc_fieldSold_eventName" text="A farmer lets land go"/>
+		<text name="tc_fieldSold_title" text="%s has let %s go"/>
+		<text name="tc_fieldSold_body_retiring" text="%s is cutting back as the years catch up, and %s has gone to %s. New work there will come from them; anything you've already agreed for it is still for the old owner."/>
+		<text name="tc_fieldSold_body_selling" text="%s has sold %s to %s, a neighbour who's wanted more ground for years. New work there will come from them; anything you've already agreed for it is still for the old owner."/>
+		<text name="tc_fieldSold_body_bereavement" text="After a death in the family, %s has let %s go to %s. New work there will come from them; anything you've already agreed for it is still for the old owner."/>
+		<text name="tc_fieldSold_placeField" text="Field %s"/>
+		<text name="tc_fieldSold_placeFarmland" text="farmland %s"/>
+		<text name="tc_farmerRetirement_eventName" text="A farmer retires"/>
+		<text name="tc_farmerRetirement_title" text="%s is retiring"/>
+		<text name="tc_farmerRetirement_body" text="%s is retiring after a lifetime on the land, and %s is taking over the farm: the land, the yard and the machines. Any work you've agreed carries on as it was, now for the new owner. They know the family's contractor, but you'll have to earn their trust all over again."/>
 		<text name="tc_favour_kitRowPart" text="Part: %s"/>
 		<text name="tc_favour_chipBring" text="Bring it"/>
 		<text name="tc_favour_detailPart" text="Part"/>
@@ -788,7 +810,6 @@
 		<text name="tc_wallSign_function" text="A flat sign for a wall (1.5 m square, or 3 m for the large one), its bottom edge at the height shown, with your company logo or (single-player) one of your own designs, like the Company Sign. Place it from just in front of the wall; free mode helps against a building."/>
 		<text name="tc_config_signDesign" text="Design"/>
 		<text name="tc_signDesign_logo" text="Company logo"/>
-		<text name="tc_inbox_chipParking" text="Parking"/>
 		<text name="tc_parking_sendToShopButton" text="Send to shop"/>
 		<text name="tc_parking_messageTitle" text="Machines waiting for parking"/>
 		<text name="tc_parking_messageBody" text="These machines are back from a job, but none of your parking slots of the right kind has room for them: %s. They'll be parked as soon as a slot is free. Harvesters go in harvester parking slots, other vehicles in vehicle parking slots, implements and trailers in implement parking slots. Place more from the construction menu, clear the ones you have, or send them to the shop."/>
@@ -894,7 +915,6 @@
 		<!-- Holiday requests (089) -->
 		<text name="tc_staff_detailHolidayRequested" text="Asked for: %s"/>
 		<text name="tc_holiday_requestWithdrawn" text="%s has withdrawn their holiday request because the days per month setting changed. They'll ask again."/>
-		<text name="tc_inbox_chipHoliday" text="Holiday"/>
 		<text name="tc_holidayRequest_approveButton" text="Approve"/>
 		<text name="tc_holidayRequest_declineButton" text="Decline"/>
 		<text name="tc_holidayRequest_title" text="Holiday request: %s"/>
@@ -1112,7 +1132,6 @@
 		<text name="tc_sprayDrift_upheldBodyUninsured" text="The complaint about spraying on Field %s has been upheld: %s carried on spraying when the conditions said stop, and it drifted. They're claiming %s for %s. You don't have public liability insurance, so the whole %s has been charged, and word has got around: your reputation has taken a knock."/>
 		<text name="tc_sprayDrift_upheldNotice" text="Spray drift complaint about Field %s upheld: %s paid"/>
 		<text name="tc_poaching_eventName" text="Worker poached by a rival"/>
-		<text name="tc_inbox_chipPoaching" text="Staff"/>
 		<text name="tc_poaching_rival1" text="%s Agri Services"/>
 		<text name="tc_poaching_rival2" text="%s &amp; Sons Contracting"/>
 		<text name="tc_poaching_rival3" text="%s Agricultural Contractors"/>
@@ -1130,7 +1149,6 @@
 		<text name="tc_poaching_stayedBody" text="%s has turned down the offer from %s and is staying with you, on the same pay."/>
 		<text name="tc_poaching_leftTitle" text="%s has taken the offer"/>
 		<text name="tc_poaching_leftBody" text="%s has accepted the offer from %s and handed in their notice. They leave at the start of %s."/>
-		<text name="tc_inbox_chipInjury" text="Injury"/>
 		<text name="tc_injury_eventName" text="Workplace injury"/>
 		<text name="tc_fallenTree_eventName" text="Fallen tree"/>
 		<text name="tc_fallenTree_location" text="Roads around Field %s"/>
@@ -1166,7 +1184,6 @@
 		<text name="tc_insurance_level_comprehensive" text="Comprehensive"/>
 		<text name="tc_insurance_levelDescription" text="Pays %d%% of a lost vehicle's value, less a %s excess."/>
 		<text name="tc_insurance_levelDescriptionCourtesy" text="Pays %d%% of a lost vehicle's value, less a %s excess, and lends you a courtesy vehicle until the claim settles."/>
-		<text name="tc_inbox_chipInsurance" text="Insurance"/>
 		<text name="tc_insurance_claimTitle" text="Insurance claim: %s"/>
 		<text name="tc_insurance_claimBody" text="Your %s is insured (%s cover), so you can claim for it. Once the claim's in, the insurer takes 1-2 months to settle. If you don't submit it within the month, it goes in anyway. An office administrator would have sent it straight off and had it settled sooner."/>
 		<text name="tc_insurance_claimByAdminBody" text="Your administrator has submitted the insurance claim for your %s (%s cover). The insurer should settle it within the month."/>
@@ -1302,7 +1319,6 @@
 		<text name="tc_morale_band_content" text="Content"/>
 		<text name="tc_morale_band_unsettled" text="Unsettled"/>
 		<text name="tc_morale_band_unhappy" text="Unhappy"/>
-		<text name="tc_inbox_chipStaff" text="Staff"/>
 		<text name="tc_morale_harvestTitle" text="Harvest bonus"/>
 		<text name="tc_morale_harvestBody" text="Harvest is nearly here, and your staff are asking whether there'll be a bonus this year. A small bonus is %s each and a generous one %s each. With %d staff on the roster, that's %s or %s in total. Saying no, or not answering, will go down badly."/>
 		<text name="tc_morale_harvestSmallButton" text="Small bonus"/>

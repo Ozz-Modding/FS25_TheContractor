@@ -94,7 +94,7 @@ function TheContractorInjury:register(randomEvents, inbox)
     })
 
     inbox:registerMessageKind(TheContractorInjury.MESSAGE_KIND, {
-        chipKey = "tc_inbox_chipInjury",
+        category = "staff",
         chipTone = "bad",
     })
 end

@@ -22,8 +22,9 @@
 -- allocation), bale wrap (the spawned bales' wrapping), straw delivery
 -- (what's been delivered, 067), fly-tipping (pieces taken to a skip,
 -- 075), spilt crop (delivered and the road clear, 106), bales to a
--- farmer's yard (the bales in the drop area, 124) and a farmer's load sold
--- (what's delivered, 126) are measured against a baseline only the server has
+-- farmer's yard (the bales in the drop area, 124), a farmer's load sold
+-- (what's delivered, 126) and a farmer's machine refuelled (its tank, 127)
+-- are measured against a baseline only the server has
 -- (job.workTotal/spawnedBaleIds/requiredLiters/debrisIds),
 -- so only the server measures them, and sends the result to clients
 -- (TCJobProgressEvent) whenever it moves by a whole percent.
@@ -349,6 +350,10 @@ local JOB_TYPE_HANDLERS = {
     -- 126: a farmer's load, at the selling point.
     yardHaul = { getCompletion = function(job)
         return TheContractorYardHaul.getCompletion(job)
+    end },
+    -- 127: a farmer's machine, filled to the target share of its tank.
+    emergencyRefuel = { getCompletion = function(job)
+        return TheContractorEmergencyRefuel.getCompletion(job)
     end },
     fertilize = { createModifier = createFertilizeModifier },
     herbicide = { createModifier = createHerbicideModifier },
