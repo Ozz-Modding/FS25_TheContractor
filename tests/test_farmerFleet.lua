@@ -133,15 +133,117 @@ test("the store's models by role, and only what fits a combine or telehandler go
     assertEquals(TheContractorFarmerFleet.pickModel(catalog, "combine", always(0)).xmlFilename, "combine.xml")
 end)
 
-test("a bale grab is a bale fork, and a corn header does when there's no grain header", function()
+test("a corn header does when there's no grain header", function()
     local world = setup()
-    world:addItem("teli.xml", "TELELOADERVEHICLES", DRIVES, { "grab.xml" })
-    world:addItem("grab.xml", "TELELOADERTOOLS", { baleGrab = true })
     world:addItem("combine.xml", "HARVESTERS", { drivable = true, combine = true }, { "cornHeader.xml" })
     world:addItem("cornHeader.xml", "CORNHEADERS", { cutter = true })
     local catalog = TheContractorFarmerFleet.buildCatalog()
-    assertEquals(catalog.attachments["teli.xml"][1].xmlFilename, "grab.xml")
     assertEquals(catalog.attachments["combine.xml"][1].xmlFilename, "cornHeader.xml")
+end)
+
+-- The manifest (125) --------------------------------------------------------------------------
+
+test("125: of the base game's telehandler bale tools, only the spike meets the bale fork's manifest", function()
+    setup()
+    local F = TheContractorFarmerFleet
+    local tools = {
+        ["data/vehicles/magsi/telehandlerBaleFork/telehandlerBaleFork.xml"] = { dynamicMountAttacher = true },
+        ["data/vehicles/magsi/telehandlerBaleGrab/telehandlerBaleGrab.xml"] = { baleGrab = true },
+        ["data/vehicles/goeweil/rbg/rbg.xml"] = { baleGrab = true },
+        ["data/vehicles/goeweil/btgqu/btgqu.xml"] = { baleGrab = true },
+    }
+    local spikes = {}
+    for xml, specs in pairs(tools) do
+        assertEquals(F.getAttachmentRoleForItem(xml, specs), "baleFork", xml .. " is a bale tool")
+        if F.meetsManifest("baleFork", xml, specs) then
+            table.insert(spikes, xml)
+        end
+    end
+    assertEquals(table.concat(spikes, ","), "data/vehicles/magsi/telehandlerBaleFork/telehandlerBaleFork.xml")
+    -- A grab that also mounts what it carries is still a grab.
+    assertTrue(not F.meetsManifest("baleFork", "baleGrab.xml", { baleGrab = true, dynamicMountAttacher = true }))
+    -- Unknown specs never meet a manifest; a role without one takes anything.
+    assertTrue(not F.meetsManifest("baleFork", "telehandlerBaleFork.xml", nil))
+    assertTrue(F.meetsManifest("smallTractor", "small.xml", { drivable = true }))
+end)
+
+test("125: a farmer is only ever given a spike, and no fork at all when there's no spike", function()
+    local world = setup()
+    world:addItem("teli.xml", "TELELOADERVEHICLES", DRIVES, { "grab.xml", "telehandlerBaleFork.xml" })
+    world:addItem("grab.xml", "TELELOADERTOOLS", { baleGrab = true })
+    world:addItem("telehandlerBaleFork.xml", "TELELOADERTOOLS", { dynamicMountAttacher = true })
+    local catalog = TheContractorFarmerFleet.buildCatalog()
+    assertEquals(#catalog.attachments["teli.xml"], 1)
+    for _, roll in ipairs({ 0, 0.5, 0.99 }) do
+        local farmer = world:addFarmer(1, 40, 77)
+        TheContractorFarmerFleet.ensureFleets({ farmer }, world.land, catalog, always(roll))
+        local telehandler = TheContractorFarmerFleet.getMachinesByRole(farmer, "telehandler")[1]
+        assertEquals(TheContractorFarmerFleet.getAttachment(farmer, telehandler).xmlFilename,
+            "telehandlerBaleFork.xml")
+    end
+
+    -- Only grabs on the map's store: the telehandler, but no fork.
+    world = setup()
+    world:addItem("teli.xml", "TELELOADERVEHICLES", DRIVES, { "grab.xml" })
+    world:addItem("grab.xml", "TELELOADERTOOLS", { baleGrab = true })
+    local farmer = world:addFarmer(1, 40, 77)
+    TheContractorFarmerFleet.ensureFleets({ farmer }, world.land, TheContractorFarmerFleet.buildCatalog(),
+        always(0.5))
+    local counts = countRoles(farmer)
+    assertEquals(counts.telehandler, 1)
+    assertEquals(counts.baleFork, nil)
+end)
+
+-- A fleet from before 125: a small tractor the player changed (1), a
+-- telehandler (2) with a grab (3), and a store with a spike and a grab.
+local function addOldYardFleet(world)
+    world:addItem("teli.xml", "TELELOADERVEHICLES", DRIVES, { "grab.xml", "telehandlerBaleFork.xml" })
+    world:addItem("grab.xml", "TELELOADERTOOLS", { baleGrab = true })
+    world:addItem("telehandlerBaleFork.xml", "TELELOADERTOOLS", { dynamicMountAttacher = true })
+    world:addItem("small.xml", "TRACTORSS", DRIVES)
+    world:addItem("small2.xml", "TRACTORSS", DRIVES)
+    return world:addFarmer(1, 40, 77, {
+        { id = 1, role = "smallTractor", xmlFilename = "small2.xml", seed = 4, hoursPerMonth = 30, fitted = {} },
+        { id = 2, role = "telehandler", xmlFilename = "teli.xml", seed = 5, hours = 900, hoursDay = 2,
+            hoursPerMonth = 30, fitted = {} },
+        { id = 3, role = "baleFork", attachedTo = 2, xmlFilename = "grab.xml", seed = 6, hours = 900, hoursDay = 2,
+            hoursPerMonth = 0, fitted = { hydraulics = 1 } },
+    })
+end
+
+test("125: a grab from before becomes a spike under the same id; the telehandler and a tractor stay", function()
+    local world = setup()
+    local farmer = addOldYardFleet(world)
+    local catalog = TheContractorFarmerFleet.buildCatalog()
+    assertEquals(TheContractorFarmerFleet.enforceManifest(farmer, catalog, always(0.5)), 1)
+    local fork = TheContractorFarmerFleet.getMachine(farmer, 3)
+    assertEquals(fork.xmlFilename, "telehandlerBaleFork.xml")
+    assertEquals(fork.attachedTo, 2)
+    assertEquals(fork.role, "baleFork")
+    assertTrue(fork.seed ~= 6, "a new seed")
+    assertEquals(fork.hours, nil, "no age")
+    assertEquals(next(fork.fitted), nil, "nothing fitted")
+    local telehandler = TheContractorFarmerFleet.getMachine(farmer, 2)
+    assertEquals(telehandler.seed, 5)
+    assertEquals(telehandler.hours, 900)
+    assertEquals(TheContractorFarmerFleet.getMachine(farmer, 1).xmlFilename, "small2.xml",
+        "a tractor has no manifest, so the player's pick stays")
+    assertEquals(#farmer.machines, 3, "nothing added or taken away")
+    assertEquals(TheContractorFarmerFleet.enforceManifest(farmer, catalog, always(0.5)), 0, "once")
+end)
+
+test("125: a machine that's out, or one the store hasn't got, is left until next time", function()
+    local world = setup()
+    local farmer = addOldYardFleet(world)
+    local catalog = TheContractorFarmerFleet.buildCatalog()
+    local out = function(_, machine) return machine.id == 3 end
+    assertEquals(TheContractorFarmerFleet.enforceManifest(farmer, catalog, always(0.5), out), 0)
+    assertEquals(TheContractorFarmerFleet.getMachine(farmer, 3).xmlFilename, "grab.xml")
+    assertEquals(TheContractorFarmerFleet.getMachine(farmer, 3).seed, 6)
+
+    TheContractorFarmerFleet.getMachine(farmer, 3).xmlFilename = "modGrab.xml"
+    assertEquals(TheContractorFarmerFleet.enforceManifest(farmer, catalog, always(0.5)), 0)
+    assertEquals(TheContractorFarmerFleet.getMachine(farmer, 3).xmlFilename, "modGrab.xml")
 end)
 
 -- The recipe ---------------------------------------------------------------------------------
@@ -336,7 +438,7 @@ end)
 
 -- A store to edit in: two combines a grain header fits, one that only takes
 -- its own header, one with none, two small tractors of other brands, and a
--- telehandler with its fork.
+-- telehandler that takes a spike or a grab.
 local function addEditStore(world)
     world:addItem("small.xml", "TRACTORSS", DRIVES).brandIndex = 2
     world:addItem("small2.xml", "TRACTORSS", DRIVES).brandIndex = 1
@@ -350,8 +452,9 @@ local function addEditStore(world)
     world:addItem("grainHeader.xml", "CUTTERS", { cutter = true })
     world:addItem("wideHeader.xml", "CUTTERS", { cutter = true })
     world:addItem("ownHeader.xml", "CUTTERS", { cutter = true })
-    world:addItem("teli.xml", "TELELOADERVEHICLES", DRIVES, { "baleGrab.xml" })
+    world:addItem("teli.xml", "TELELOADERVEHICLES", DRIVES, { "baleGrab.xml", "telehandlerBaleFork.xml" })
     world:addItem("baleGrab.xml", "TELELOADERTOOLS", { baleGrab = true })
+    world:addItem("telehandlerBaleFork.xml", "TELELOADERTOOLS", { dynamicMountAttacher = true })
     g_brandManager = {
         getBrandByIndex = function(_, index) return ({ { title = "Alpha" }, { title = "Zulu" } })[index] end,
     }
@@ -616,4 +719,49 @@ test("122: a fleet that grows on the live map goes to the clients", function()
     assertEquals(#world.events, 1)
     assertEquals(world.events[1].personId, 1)
     assertEquals(#world.events[1].machines, #world.farmer.machines)
+end)
+
+test("125: the fork's edit list only offers spikes, and the server refuses a grab", function()
+    local world = setupEdit()
+    local F = TheContractorFarmerFleet
+    world:load("src/business/FarmerSplit.lua")
+    TheContractorFarmerSplit.getFieldFarmlands = function()
+        return { world.land[1] }
+    end
+    world.farmer.yardFarmlandId = 77
+    F.ensureAll()
+    local telehandler = F.getMachinesByRole(world.farmer, "telehandler")[1]
+    local fork = F.getAttachment(world.farmer, telehandler)
+    local catalog = F.buildCatalog()
+    assertEquals(xmlList(F.getModelChoices(catalog, world.farmer, fork)), "telehandlerBaleFork.xml")
+    assertEquals(F.editMachine(1, 1, fork.id, "baleGrab.xml"), F.EDIT_PROBLEM.BAD_MODEL)
+    assertEquals(fork.xmlFilename, "telehandlerBaleFork.xml")
+end)
+
+test("125: on the live map, a grab out on a job is left, then changed once it's back, and clients are told", function()
+    local world = setupEdit()
+    local F = TheContractorFarmerFleet
+    world:load("src/business/FarmerSplit.lua")
+    TheContractorFarmerSplit.getFieldFarmlands = function()
+        return { world.land[1] }
+    end
+    world.farmer.yardFarmlandId = 77
+    F.ensureAll()
+    local telehandler = F.getMachinesByRole(world.farmer, "telehandler")[1]
+    local fork = F.getAttachment(world.farmer, telehandler)
+    fork.xmlFilename = "baleGrab.xml"
+
+    -- The telehandler's out, so its fork is too.
+    local repairContracts = g_currentMission.TheContractor.RepairContracts
+    table.insert(repairContracts.arrivals, { farmerId = 1, machineId = telehandler.id })
+    world.events = {}
+    assertEquals(F.ensureAll(), 0)
+    assertEquals(fork.xmlFilename, "baleGrab.xml")
+    assertEquals(#world.events, 0)
+
+    table.remove(repairContracts.arrivals)
+    assertEquals(F.ensureAll(), 1)
+    assertEquals(fork.xmlFilename, "telehandlerBaleFork.xml")
+    assertEquals(#world.events, 1)
+    assertEquals(world.events[1].personId, 1)
 end)

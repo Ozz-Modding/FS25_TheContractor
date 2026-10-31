@@ -32,10 +32,15 @@
 -- so fleets are made without it. An attachment must fit its machine: it
 -- comes from the machine's own store combinations (what the shop offers
 -- with it), a header for a combine (a grain header, CUTTERS, when there's
--- one) and a bale fork or grab for a telehandler. A combine or telehandler
+-- one) and a bale fork for a telehandler. A combine or telehandler
 -- is picked among those with something that fits, and an attachment with
 -- nothing to fit is left out. Whether ADS can take a machine is checked
 -- where ADS is used (RepairContracts:findModelByXml).
+--
+-- 125: the manifest (MANIFEST) holds each role to what it must be (a bale
+-- fork is a spike, not a grab). Only models that meet it are picked or
+-- offered in an edit, and a machine that fails it is changed at setup
+-- (enforceManifest), under the same id.
 --
 -- Saved on the farmer's record (TheContractorFarmers). 122: each machine's
 -- id, role, model and attachedTo go to clients (writeStream: in the
@@ -234,7 +239,8 @@ end
 -- The attachment role a store vehicle can take, or nil: a header (cuts, but
 -- no harvester of its own), or a bale fork (a bale grab, or a fork that
 -- carries what it's given whose file says it's for bales: vanilla's pallet
--- fork is the same type, so the name's all that tells them apart).
+-- fork is the same type, so the name's all that tells them apart). Whether
+-- it's one a farmer may have is the manifest's say (meetsManifest).
 function TheContractorFarmerFleet.getAttachmentRoleForItem(xmlFilename, specs)
     if specs == nil or specs.drivable ~= nil then
         return nil
@@ -250,6 +256,41 @@ function TheContractorFarmerFleet.getAttachmentRoleForItem(xmlFilename, specs)
         return ROLE.BALE_FORK
     end
     return nil
+end
+
+-- The manifest (125): what each role's model must be, beyond being that
+-- role. Every requirement is hard: a model that fails one is never picked,
+-- never offered in an edit, and a machine that is one is changed at setup
+-- (enforceManifest), the player's own pick too. A role with no entry takes
+-- any of its models, so a player's tractor always stays.
+TheContractorFarmerFleet.REQUIREMENT = {
+    -- A spike takes any bale (124's yard job needs one). A bale grab, the
+    -- other kind, often takes only round bales.
+    SPIKE = "spike",
+}
+local REQUIREMENT = TheContractorFarmerFleet.REQUIREMENT
+
+TheContractorFarmerFleet.MANIFEST = {
+    [ROLE.BALE_FORK] = { REQUIREMENT.SPIKE },
+}
+
+-- Whether a model meets one requirement: (xmlFilename, specs).
+TheContractorFarmerFleet.REQUIREMENT_CHECKS = {
+    [REQUIREMENT.SPIKE] = function(xmlFilename, specs)
+        return specs.dynamicMountAttacher ~= nil and specs.baleGrab == nil and specs.shovel == nil and
+            specs.logGrab == nil and string.find(string.lower(xmlFilename or ""), "bale", 1, true) ~= nil
+    end,
+}
+
+-- Whether a model (its file and its type's specializations) meets every
+-- requirement of the role's manifest.
+function TheContractorFarmerFleet.meetsManifest(role, xmlFilename, specs)
+    for _, requirement in ipairs(TheContractorFarmerFleet.MANIFEST[role] or {}) do
+        if specs == nil or not TheContractorFarmerFleet.REQUIREMENT_CHECKS[requirement](xmlFilename, specs) then
+            return false
+        end
+    end
+    return true
 end
 
 local function isCandidateItem(storeItem)
@@ -314,8 +355,9 @@ end
 local function getAttachmentModels(parentItem, role)
     local models, preferred = {}, {}
     for _, item in ipairs(getCombinationItems(parentItem)) do
-        if isCandidateItem(item) and
-                TheContractorFarmerFleet.getAttachmentRoleForItem(item.xmlFilename, getSpecs(item.xmlFilename)) == role then
+        local specs = isCandidateItem(item) and getSpecs(item.xmlFilename) or nil
+        if specs ~= nil and TheContractorFarmerFleet.getAttachmentRoleForItem(item.xmlFilename, specs) == role and
+                TheContractorFarmerFleet.meetsManifest(role, item.xmlFilename, specs) then
             table.insert(models, toModel(item))
             if role == ROLE.HEADER and item.categoryName == TheContractorFarmerFleet.GRAIN_HEADER_CATEGORY then
                 table.insert(preferred, toModel(item))
@@ -329,7 +371,8 @@ local catalogCache = nil
 
 -- The store's models by role, and what fits each machine with an attachment:
 -- { byRole = { [role] = { model, ... } }, attachments = { [parentXml] =
--- { model, ... } } }. Built once per session.
+-- { model, ... } } }, only those that meet their role's manifest. Built once
+-- per session.
 function TheContractorFarmerFleet.buildCatalog()
     if catalogCache ~= nil then
         return catalogCache
@@ -343,9 +386,9 @@ function TheContractorFarmerFleet.buildCatalog()
     end
     for _, storeItem in ipairs(g_storeManager:getItems()) do
         if isCandidateItem(storeItem) then
-            local role = TheContractorFarmerFleet.getRoleForItem(storeItem.categoryName,
-                getSpecs(storeItem.xmlFilename))
-            if role ~= nil then
+            local specs = getSpecs(storeItem.xmlFilename)
+            local role = TheContractorFarmerFleet.getRoleForItem(storeItem.categoryName, specs)
+            if role ~= nil and TheContractorFarmerFleet.meetsManifest(role, storeItem.xmlFilename, specs) then
                 table.insert(catalog.byRole[role], toModel(storeItem))
                 local attachmentRole = TheContractorFarmerFleet.ATTACHMENT_ROLE[role]
                 if attachmentRole ~= nil then
@@ -490,11 +533,49 @@ local function addMachine(farmer, role, model, hoursPerMonth, random, attachedTo
     return machine
 end
 
--- Brings one farmer's fleet up to the recipe, adding only what's missing.
--- Returns how many machines were added.
-function TheContractorFarmerFleet.ensureFleet(farmer, catalog, isLarge, acres, random)
+-- 125: each machine whose model fails its role's manifest becomes one that
+-- meets it, under the same id, as 122's edit makes it (a new seed, no age,
+-- nothing fitted; a machine whose attachment no longer fits gets one that
+-- does). Left as it is: a machine that's out (isOut(farmer, machine), until
+-- next time), one whose model the store hasn't got (a mod that may come
+-- back; it can't come out meanwhile), and one with nothing to become.
+-- Returns how many were changed.
+function TheContractorFarmerFleet.enforceManifest(farmer, catalog, random, isOut)
+    local F = TheContractorFarmerFleet
+    local changed = 0
+    for _, machine in ipairs(farmer.machines or {}) do
+        local storeItem = g_storeManager:getItemByXMLFilename(machine.xmlFilename)
+        local specs = storeItem ~= nil and getSpecs(machine.xmlFilename) or nil
+        if specs ~= nil and not F.meetsManifest(machine.role, machine.xmlFilename, specs) and
+                (isOut == nil or not isOut(farmer, machine)) then
+            local model
+            if machine.attachedTo ~= nil then
+                local parent = F.getMachine(farmer, machine.attachedTo)
+                model = parent ~= nil and F.pickAttachmentModel(catalog, parent.xmlFilename, random) or nil
+            else
+                model = F.pickModel(catalog, machine.role, random)
+            end
+            if model ~= nil then
+                TCLog.info("TheContractor: farmer #%d's %s (machine %d) doesn't meet the manifest: %s -> %s",
+                    farmer.id, tostring(machine.role), machine.id, machine.xmlFilename, model.xmlFilename)
+                if machine.attachedTo ~= nil then
+                    F.renew(machine, model.xmlFilename, random)
+                else
+                    F.applyEdit(farmer, machine, model.xmlFilename, catalog, random)
+                end
+                changed = changed + 1
+            end
+        end
+    end
+    return changed
+end
+
+-- Brings one farmer's fleet up to the recipe and the manifest, adding only
+-- what's missing. Returns how many machines were added or changed.
+function TheContractorFarmerFleet.ensureFleet(farmer, catalog, isLarge, acres, random, isOut)
     farmer.machines = farmer.machines or {}
     TheContractorFarmerFleet.assignOldRoles(farmer)
+    local changed = TheContractorFarmerFleet.enforceManifest(farmer, catalog, random, isOut)
     local hoursPerMonth = TheContractorFarmerFleet.getHoursPerMonth(acres)
     local added = 0
     local wanted = TheContractorFarmerFleet.getWantedCounts(farmer, isLarge, random)
@@ -522,7 +603,7 @@ function TheContractorFarmerFleet.ensureFleet(farmer, catalog, isLarge, acres, r
             end
         end
     end
-    return added
+    return added + changed
 end
 
 function TheContractorFarmerFleet.copy(list)
@@ -533,17 +614,18 @@ function TheContractorFarmerFleet.copy(list)
     return result
 end
 
--- Every farmer's fleet up to the recipe, given the land (getLand's map).
--- Returns how many machines were added, and the farmers who gained any.
-function TheContractorFarmerFleet.ensureFleets(farmers, land, catalog, random)
+-- Every farmer's fleet up to the recipe and the manifest, given the land
+-- (getLand's map); isOut as enforceManifest's, optional. Returns how many
+-- machines were added or changed, and the farmers whose fleet changed.
+function TheContractorFarmerFleet.ensureFleets(farmers, land, catalog, random, isOut)
     local largeIds = TheContractorFarmerFleet.getLargeTractorFarmerIds(farmers, land)
     local added, changed = 0, {}
     for _, farmer in ipairs(farmers) do
         local count = TheContractorFarmerFleet.ensureFleet(farmer, catalog, largeIds[farmer.id] == true,
-            TheContractorFarmers.getAcres(farmer, land), random)
+            TheContractorFarmers.getAcres(farmer, land), random, isOut)
         if count > 0 then
-            TCLog.info("TheContractor: farmer #%d (%s) has %d new machine(s), %d in all", farmer.id, farmer.name,
-                count, #farmer.machines)
+            TCLog.info("TheContractor: farmer #%d (%s) has %d new or changed machine(s), %d in all", farmer.id,
+                farmer.name, count, #farmer.machines)
             table.insert(changed, farmer)
         end
         added = added + count
@@ -552,14 +634,15 @@ function TheContractorFarmerFleet.ensureFleets(farmers, land, catalog, random)
 end
 
 -- Server: everyone's fleet on the live map. 122: clients are told of each
--- fleet that grew.
+-- fleet that grew or changed (125's manifest).
 function TheContractorFarmerFleet.ensureAll()
     local tc = g_currentMission.TheContractor
     if tc.Farmers == nil or not tc.Farmers:hasGenerated() or not g_currentMission:getIsServer() then
         return 0
     end
     local added, changed = TheContractorFarmerFleet.ensureFleets(tc.Farmers:getFarmers(),
-        TheContractorFarmers.getLand(), TheContractorFarmerFleet.buildCatalog(), math.random)
+        TheContractorFarmers.getLand(), TheContractorFarmerFleet.buildCatalog(), math.random,
+        TheContractorFarmerFleet.isAnyOut)
     if g_server ~= nil then
         for _, farmer in ipairs(changed) do
             g_server:broadcastEvent(TCFarmerFleetEvent.new(farmer))
