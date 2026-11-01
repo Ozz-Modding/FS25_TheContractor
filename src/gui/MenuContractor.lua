@@ -5102,6 +5102,11 @@ function MenuContractor:updateAllocationWarning()
         self.allocationWarningText:setText(string.format(g_i18n:getText(self:getHaulYourselfKey(job)),
             job.deliveryStationName or "?"))
         self.allocationWarningText:setTextColor(1, 1, 1, 1)
+    elseif #self.allocationSelectedWorkerIds == 0 and TCHaulage.isCustomerCropJob(job) then
+        -- Player alone on a harvest without haulage: the crop's the
+        -- customer's, taken off their combine (TCHaulage's unloading lock).
+        self.allocationWarningText:setText(g_i18n:getText("tc_allocation_customerCrop"))
+        self.allocationWarningText:setTextColor(1, 1, 1, 1)
     elseif workshopNote ~= nil then
         self.allocationWarningText:setText(workshopNote)
         self.allocationWarningText:setTextColor(1, 1, 1, 1)
