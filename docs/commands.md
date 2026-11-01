@@ -224,12 +224,20 @@ Farm 1: 2 standing spot(s), 1 kept for named staff, day 104
 
 ### `tcWorker hours`
 
-Shows the game time and whether it's working hours (08:00 to 18:00), then each of your hired workers: their status (an idle worker shows `atHome`, `comingIn` or `stayingLate` instead of `idle` when that's where they are), the time they're on duty until if they've been kept on (and when they'll be in, if they've been called back and aren't there yet), their overtime so far this month in minutes and money, and what an hour of overtime costs them now. Read-only, so it also works on a joined client.
+Shows the game time and whether it's working hours (08:00 to 18:00), then each of your hired workers: their status (an idle worker shows `atHome`, `comingIn`, `stayingLate` or `onBreak` instead of `idle` when that's where they are), the time they're on duty until if they've been kept on (and when they'll be in, if they've been called back and aren't there yet), their overtime so far this month in minutes and money, and what an hour of overtime costs them now. On the server it also lists today's breaks (`morning`, `lunch`, `afternoon`), each `taken`, `missed`, `excused` (away, or not hired yet, when its time passed) or `-` (still to come), and when the break they're on ends. Read-only, so it also works on a joined client, which shows only the break they're on.
 
 ```
-Farm 1, 19:10: working hours 08:00-18:00, outside them
-#3 Amy Hall - stayingLate, on duty until 22:00, overtime 70 min this month (12 owed), 10.71 an hour
-#7 John Smith - atHome, overtime 0 min this month (0 owed), 10.71 an hour
+Farm 1, 12:20: working hours 08:00-18:00, at work
+#3 Amy Hall - onBreak, overtime 70 min this month (12 owed), 10.71 an hour, breaks: morning missed, lunch taken, afternoon -, on break until 12:50
+#7 John Smith - assigned, overtime 0 min this month (0 owed), 10.71 an hour, breaks: morning taken, lunch -, afternoon -
+```
+
+### `tcWorker break <worker>`
+
+Sends a worker on their next break of the day (morning, lunch or afternoon, whichever they haven't had yet) straight away, whatever the time, for its full length (15, 30 or 15 minutes). They have to be free: idle and at work, not already on a break. `<worker>` is their id or name. Prints when the break ends, or why it couldn't.
+
+```
+tcWorker break Amy
 ```
 
 ### `tcWorker duty <worker> <hour|home>`

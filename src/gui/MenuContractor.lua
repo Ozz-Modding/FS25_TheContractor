@@ -162,6 +162,8 @@ local STATUS_CHIP_TONES = {
     atHome = "neutral",
     comingIn = "info",
     stayingLate = "info",
+    -- 131.
+    onBreak = "info",
 }
 
 local function getWorkerStatusTone(status)
@@ -1676,6 +1678,11 @@ function MenuContractor:updateStaffDetails()
 
         local farmId = g_currentMission:getFarmId()
         local jobLine = self:getAssignedJobLine(farmId, g_currentMission.TheContractor.Jobs, worker.id)
+        -- 131: until when a worker's on their break.
+        if jobLine == nil and status == "onBreak" then
+            jobLine = string.format(g_i18n:getText("tc_staff_detailOnBreak"),
+                TheContractorWorkingHours.formatTime(worker.breakUntil))
+        end
         self.staffDetailJob:setText(jobLine or g_i18n:getText("tc_staff_detailJobNone"))
         self.staffDetailRetirementLabel:setText(g_i18n:getText(worker.isQuitting and "tc_detail_quitting" or
             "tc_detail_retiring"))

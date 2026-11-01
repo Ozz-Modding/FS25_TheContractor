@@ -1761,7 +1761,8 @@ function TheContractorStaff.readWorker(streamId)
     local morale, hiredPeriod = TheContractorMorale.readState(streamId)
     local expectedSalary = TheContractorPayReviews.readState(streamId)
     local adsSkills, workshopRole = TheContractorWorkshop.readState(streamId)
-    local dutyFrom, dutyArrive, dutyUntil, overtimeMinutes, overtimeOwed = TheContractorWorkingHours.readState(streamId)
+    local dutyFrom, dutyArrive, dutyUntil, overtimeMinutes, overtimeOwed, breakUntil =
+        TheContractorWorkingHours.readState(streamId)
 
     local worker = TheContractorWorker.new(id, farmId, name, workSpeed, tierCapability, salary, age, nil, nil, nil,
         skills, cleanliness)
@@ -1779,6 +1780,8 @@ function TheContractorStaff.readWorker(streamId)
     worker.workshopRole = workshopRole
     worker.dutyFrom, worker.dutyArrive, worker.dutyUntil = dutyFrom, dutyArrive, dutyUntil
     worker.overtimeMinutes, worker.overtimeOwed = overtimeMinutes, overtimeOwed
+    -- 131.
+    worker.breakUntil = breakUntil
     TheContractorHolidays.applyHolidayChanged(worker, holidayAllowance,
         holidayStartDay > 0 and holidayStartDay or nil, holidayDays)
     TheContractorTraining.applyState(worker, trainingState)

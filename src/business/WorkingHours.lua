@@ -35,6 +35,11 @@
 -- TCWorkerDutyEvent. The server sends the overtime figures to clients
 -- every game hour (TCWorkerOvertimeEvent). Whether someone's at home is
 -- worked out from the time on every machine, so nothing is sent for that.
+--
+-- 131: a worker on a break (Breaks.lua) is ON_BREAK until breakUntil: not
+-- on site, so not available for anything. breakUntil is streamed and saved
+-- with the worker here; the day's record of breaks (server-only) is saved
+-- here too.
 
 TheContractorWorkingHours = {}
 TheContractorWorkingHours_mt = Class(TheContractorWorkingHours)
@@ -60,6 +65,8 @@ TheContractorWorkingHours.STATE = {
     AT_HOME = "atHome",
     COMING_IN = "comingIn",
     STAYING = "staying",
+    -- 131.
+    ON_BREAK = "onBreak",
 }
 
 TheContractorWorkingHours.ACTION = {
@@ -162,6 +169,11 @@ function TheContractorWorkingHours.hasDuty(worker, now)
     return worker.dutyUntil ~= nil and now < worker.dutyUntil
 end
 
+-- 131: on a break (Breaks.lua) until breakUntil.
+function TheContractorWorkingHours.isOnBreak(worker, now)
+    return worker.breakUntil ~= nil and now < worker.breakUntil
+end
+
 -- Where they are as far as the hours go. Only means anything while they're
 -- idle: a worker on a job is on it, whatever the time.
 function TheContractorWorkingHours.getState(worker, now)
@@ -171,6 +183,9 @@ function TheContractorWorkingHours.getState(worker, now)
         return STATE.COMING_IN
     end
     if TheContractorWorkingHours.isWorkingTime(now) then
+        if TheContractorWorkingHours.isOnBreak(worker, now) then
+            return STATE.ON_BREAK
+        end
         return STATE.AT_WORK
     end
     if hasDuty then
@@ -205,6 +220,8 @@ function TheContractorWorkingHours.getDisplayStatus(worker, now)
         return "comingIn"
     elseif state == STATE.STAYING then
         return "stayingLate"
+    elseif state == STATE.ON_BREAK then
+        return "onBreak"
     end
     return worker.status
 end
@@ -227,10 +244,12 @@ function TheContractorWorkingHours.getDutyCost(worker, now, untilMinutes)
         TheContractorWorkingHours.getHourlyRate(worker)
 end
 
-local function isAway(worker)
+-- Sick, on holiday or training.
+function TheContractorWorkingHours.isAway(worker)
     local STATUS = TheContractorWorker.STATUS
     return worker.status == STATUS.SICK or worker.status == STATUS.HOLIDAY or worker.status == STATUS.TRAINING
 end
+local isAway = TheContractorWorkingHours.isAway
 
 -- Which way they'd be kept on: Call back if they've gone home, else Stay
 -- late. nil while they're away (sick, on holiday or training).
@@ -512,9 +531,15 @@ function TheContractorWorkingHours.writeState(streamId, worker)
     end
     streamWriteInt32(streamId, worker.overtimeMinutes or 0)
     streamWriteFloat32(streamId, worker.overtimeOwed or 0)
+    -- 131.
+    streamWriteBool(streamId, worker.breakUntil ~= nil)
+    if worker.breakUntil ~= nil then
+        streamWriteInt32(streamId, worker.breakUntil)
+    end
 end
 
--- Returns dutyFrom, dutyArrive, dutyUntil, overtimeMinutes, overtimeOwed.
+-- Returns dutyFrom, dutyArrive, dutyUntil, overtimeMinutes, overtimeOwed,
+-- breakUntil.
 function TheContractorWorkingHours.readState(streamId)
     local dutyFrom, dutyArrive, dutyUntil
     if streamReadBool(streamId) then
@@ -522,7 +547,13 @@ function TheContractorWorkingHours.readState(streamId)
         dutyArrive = streamReadInt32(streamId)
         dutyUntil = streamReadInt32(streamId)
     end
-    return dutyFrom, dutyArrive, dutyUntil, streamReadInt32(streamId), streamReadFloat32(streamId)
+    local overtimeMinutes = streamReadInt32(streamId)
+    local overtimeOwed = streamReadFloat32(streamId)
+    local breakUntil
+    if streamReadBool(streamId) then
+        breakUntil = streamReadInt32(streamId)
+    end
+    return dutyFrom, dutyArrive, dutyUntil, overtimeMinutes, overtimeOwed, breakUntil
 end
 
 function TheContractorWorkingHours.writeXML(xmlFile, key, worker)
@@ -535,6 +566,19 @@ function TheContractorWorkingHours.writeXML(xmlFile, key, worker)
         setXMLInt(xmlFile, key .. "#overtimeMinutes", worker.overtimeMinutes)
         setXMLFloat(xmlFile, key .. "#overtimeOwed", worker.overtimeOwed or 0)
     end
+    -- 131: the break they're on, and the day's record (Breaks.lua).
+    if worker.breakUntil ~= nil then
+        setXMLInt(xmlFile, key .. "#breakUntil", worker.breakUntil)
+    end
+    if worker.breakDay ~= nil then
+        setXMLInt(xmlFile, key .. ".breaks#day", worker.breakDay)
+        if worker.breakJudgedDay ~= nil then
+            setXMLInt(xmlFile, key .. ".breaks#judgedDay", worker.breakJudgedDay)
+        end
+        for breakKey, result in pairs(worker.breakResults or {}) do
+            setXMLString(xmlFile, key .. ".breaks#" .. breakKey, result)
+        end
+    end
 end
 
 function TheContractorWorkingHours.readXML(xmlFile, key, worker)
@@ -545,6 +589,16 @@ function TheContractorWorkingHours.readXML(xmlFile, key, worker)
     end
     worker.overtimeMinutes = getXMLInt(xmlFile, key .. "#overtimeMinutes") or 0
     worker.overtimeOwed = getXMLFloat(xmlFile, key .. "#overtimeOwed") or 0
+    -- 131.
+    worker.breakUntil = getXMLInt(xmlFile, key .. "#breakUntil")
+    worker.breakDay = getXMLInt(xmlFile, key .. ".breaks#day")
+    worker.breakJudgedDay = getXMLInt(xmlFile, key .. ".breaks#judgedDay")
+    worker.breakResults = {}
+    if worker.breakDay ~= nil and TheContractorBreaks ~= nil then
+        for _, definition in ipairs(TheContractorBreaks.BREAKS) do
+            worker.breakResults[definition.key] = getXMLString(xmlFile, key .. ".breaks#" .. definition.key)
+        end
+    end
 end
 
 -- Console ---------------------------------------------------------------------------
@@ -558,8 +612,13 @@ function TheContractorWorkingHours.describeWorker(worker, now)
             duty = duty .. string.format(" (in at %s)", TheContractorWorkingHours.formatTime(worker.dutyArrive))
         end
     end
-    return string.format("#%d %s - %s%s, overtime %d min this month (%.0f owed), %.2f an hour", worker.id, worker.name,
-        state, duty, worker.overtimeMinutes or 0, worker.overtimeOwed or 0, TheContractorWorkingHours.getHourlyRate(worker))
+    local breaks = ""
+    if TheContractorBreaks ~= nil then
+        breaks = TheContractorBreaks.describe(worker, now)
+    end
+    return string.format("#%d %s - %s%s, overtime %d min this month (%.0f owed), %.2f an hour%s", worker.id, worker.name,
+        state, duty, worker.overtimeMinutes or 0, worker.overtimeOwed or 0, TheContractorWorkingHours.getHourlyRate(worker),
+        breaks)
 end
 
 function TheContractorWorkingHours.registerConsoleCommands()
