@@ -21,6 +21,7 @@ local function setup()
     world.straw = world:addFillType("STRAW", "Straw")
     world.hay = world:addFillType("DRYGRASS_WINDROW", "Hay")
     world.silage = world:addFillType("SILAGE", "Silage")
+    world.grass = world:addFillType("GRASS_WINDROW", "Grass")
 
     -- Bales: plain tables that say they're one.
     Bale = {}
@@ -164,7 +165,7 @@ end
 
 -- What the farm holds ------------------------------------------------------------
 
-test("held bales: loose and stored (abstract or live), by fill type and size, only the farm's straw and hay", function()
+test("held bales: loose and stored (abstract or live), by fill type and size, only the farm's straw, hay and silage", function()
     local world, tc = setup()
     world:addBale({ fillLevel = 4000 })
     world:addBale({ fillLevel = 3999.6 })
@@ -173,7 +174,10 @@ test("held bales: loose and stored (abstract or live), by fill type and size, on
     world:addBale({ fillLevel = 4000, isFermenting = true })
     world:addBale({ fillLevel = 4000, farmId = 2 })
     world:addBale({ fillType = world.silage, fillLevel = 4000 })
+    -- A wrapped grass bale still fermenting isn't silage yet.
+    world:addBale({ fillType = world.grass, fillLevel = 4000, isFermenting = true })
     world:addBaleStorage({ objects = {
+        { fillType = world.silage, fillLevel = 4000, isLive = true },
         { fillType = world.straw, fillLevel = 4000 },
         { fillType = world.straw, fillLevel = 4000, isLive = true },
         { fillType = world.straw, fillLevel = 4000, isLive = true, isFermenting = true },
@@ -190,7 +194,8 @@ test("held bales: loose and stored (abstract or live), by fill type and size, on
     assertEquals(holdings[world.straw][4000], 4, "straw 4000s: two loose, one stored, one stored live")
     assertEquals(holdings[world.straw][2400], 1)
     assertEquals(holdings[world.hay][2000], 2, "hay: one loose, one stored")
-    assertEquals(holdings[world.silage], nil, "no silage")
+    assertEquals(holdings[world.silage][4000], 2, "silage: one loose, one stored live")
+    assertEquals(holdings[world.grass], nil, "no grass")
 end)
 
 test("asked for: the commonest size, a share of those held, between 6 and 24 and never more than held", function()
@@ -292,6 +297,12 @@ test("the roll: nothing with too few bales; the console picks the fill type and 
     assertEquals(data.fillTypeName, "DRYGRASS_WINDROW")
     assertEquals(data.farmerId, 2)
     assertTrue(yardBales:prepareTrigger({ "nobody" }) ~= nil, "an unknown farmer is refused")
+
+    for _ = 1, 6 do
+        world:addBale({ fillType = world.silage, fillLevel = 4000 })
+    end
+    assertEquals(yardBales:prepareTrigger({ "silage" }), nil)
+    assertEquals(yardBales:pickRequest(1).fillTypeName, "SILAGE")
 end)
 
 -- The drop area ------------------------------------------------------------------------
@@ -332,6 +343,18 @@ test("counting: only the farm's bales of the fill type, put down and still, insi
     local bales, liters = TheContractorYardBales.getAreaBales(job)
     assertEquals(#bales, 2)
     assertEquals(liters, 6400)
+end)
+
+test("counting a silage order: fermented silage bales count, a wrapped bale still fermenting doesn't", function()
+    local world = setup()
+    local job = world:addYardJob({ x = 100, z = 100, fillType = world.silage })
+    world:addBale({ x = 101, z = 99, fillType = world.silage })
+    world:addBale({ x = 100, z = 100, fillType = world.grass, isFermenting = true })
+    world:addBale({ x = 100, z = 100 })
+
+    local bales, liters = TheContractorYardBales.getAreaBales(job)
+    assertEquals(#bales, 1)
+    assertEquals(liters, 4000)
 end)
 
 test("the area turns with its heading", function()
