@@ -121,14 +121,28 @@ function TCFieldAccess.isJobSiteAt(farmId, x, z, workAreaType)
 end
 
 -- Class-level patch, same as DisableVanillaContracts' - MissionManager
--- outlives any one savegame, so guard against wrapping it twice.
-if MissionManager.tcOriginalGetIsMissionWorkAllowed == nil then
-    MissionManager.tcOriginalGetIsMissionWorkAllowed = MissionManager.getIsMissionWorkAllowed
+-- outlives any one savegame. Installed as the scripts are sourced and again
+-- at every mission start (TheContractor:onStartMission), once every mod has
+-- loaded: FS25_ContractBoost replaces this method in loadMapFinished without
+-- calling the one it replaced, which threw ours away and left the AI with
+-- "field not owned". Re-wrapping whatever is there by then puts ours back on
+-- top; nothing asks the check anything before the mission starts. Each
+-- install is its own closure over the function it wrapped, so a mod that
+-- wrapped ours and calls through to it never loops back into itself.
+function TCFieldAccess.install()
+    local current = MissionManager.getIsMissionWorkAllowed
+    if current ~= nil and current == TCFieldAccess.installedCheck then
+        return
+    end
 
-    function MissionManager:getIsMissionWorkAllowed(farmId, x, z, workAreaType, vehicle)
-        if MissionManager.tcOriginalGetIsMissionWorkAllowed(self, farmId, x, z, workAreaType, vehicle) then
+    local function getIsMissionWorkAllowed(self, farmId, x, z, workAreaType, vehicle)
+        if current ~= nil and current(self, farmId, x, z, workAreaType, vehicle) then
             return true
         end
         return TCFieldAccess.isJobSiteAt(farmId, x, z, workAreaType)
     end
+    TCFieldAccess.installedCheck = getIsMissionWorkAllowed
+    MissionManager.getIsMissionWorkAllowed = getIsMissionWorkAllowed
 end
+
+TCFieldAccess.install()

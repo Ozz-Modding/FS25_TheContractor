@@ -124,6 +124,42 @@ test("a completed job's field is workable only while it's in its grace period", 
     assertTrue(not canWork(1, 50, 50, WorkAreaType.SOWINGMACHINE), "still its own work only")
 end)
 
+-- Other mods patching the same check ----------------------------------------
+
+test("a mod that replaces the check without calling ours is wrapped again at mission start", function()
+    local world, tc = setup()
+    addJob(tc, { jobType = "cultivate" })
+    TCFieldAccess.refresh()
+
+    -- FS25_ContractBoost's overwrite, which never calls the function it replaced.
+    MissionManager.getIsMissionWorkAllowed = function() return false end
+    assertTrue(not canWork(1, 50, 50, WorkAreaType.CULTIVATOR), "ours thrown away")
+
+    TCFieldAccess.install()
+    assertTrue(canWork(1, 50, 50, WorkAreaType.CULTIVATOR), "ours back on top")
+    assertTrue(not canWork(1, 50, 50, WorkAreaType.SOWINGMACHINE), "still its own work only")
+end)
+
+test("installing again over a mod that calls through to ours neither loops nor stacks", function()
+    local world, tc = setup()
+    addJob(tc, { jobType = "cultivate" })
+    TCFieldAccess.refresh()
+
+    local calls = 0
+    local ours = MissionManager.getIsMissionWorkAllowed
+    MissionManager.getIsMissionWorkAllowed = function(...)
+        calls = calls + 1
+        return ours(...)
+    end
+    TCFieldAccess.install()
+    local installed = MissionManager.getIsMissionWorkAllowed
+    TCFieldAccess.install()
+    assertEquals(MissionManager.getIsMissionWorkAllowed, installed, "a second install with ours on top is a no-op")
+
+    assertTrue(canWork(1, 50, 50, WorkAreaType.CULTIVATOR))
+    assertEquals(calls, 1)
+end)
+
 -- Who gets one --------------------------------------------------------------
 
 test("only a player-driven job with equipment gets a grace period", function()
