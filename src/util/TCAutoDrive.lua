@@ -1,6 +1,7 @@
 -- AutoDrive hooks for 037's staff drivers (see TheContractorDrivers).
 -- Installed only if FS25_AutoDrive is loaded, and the only place this mod
--- touches AutoDrive's globals. Against AutoDrive 3.0.1.2 (refs/).
+-- touches AutoDrive's globals. Against AutoDrive 3.0.1.2 and 3.0.1.4
+-- (refs/FS25_AutoDrive, refs/FS25_AutoDrive3014).
 --
 -- AD has no "hire a driver" dialog: its HUD button, keybind and the HUD
 -- drawn over the map all go through ADInputManager:onInputCall on the
@@ -87,20 +88,39 @@ function TCAutoDrive.isStartingInput(vehicle, input)
     return true
 end
 
--- Client gate. sendEvent == false is the server running an input a client
--- already sent - that client's gate has been and gone.
-function TCAutoDrive.onInputCall(manager, superFunc, vehicle, input, farmId, sendEvent)
+-- Whether an onInputCall is the server running an input a client already
+-- sent (sendEvent == false) - that client's gate has been and gone. Read
+-- from the arguments after `input`, since AD's signature changed: 3.0.1.2
+-- has (farmId, sendEvent), 3.0.1.4 (farmId, uniqueUserId, sendEvent). No
+-- other argument is ever false (farmId is a number, uniqueUserId a string).
+function TCAutoDrive.isServerRerun(...)
+    for i = 1, select("#", ...) do
+        if select(i, ...) == false then
+            return true
+        end
+    end
+    return false
+end
+
+-- Client gate. The arguments after `input` go through untouched, whatever
+-- AD's version: dropping or shifting one (as happened with 3.0.1.4's
+-- uniqueUserId) turns the server's rerun into another send, which in
+-- single player runs straight back in here until the stack overflows.
+function TCAutoDrive.onInputCall(manager, superFunc, vehicle, input, ...)
     local drivers = TheContractorDrivers.getInstance()
-    if drivers ~= nil and sendEvent ~= false and vehicle ~= nil and TCAutoDrive.isStartingInput(vehicle, input) then
+    if drivers ~= nil and vehicle ~= nil and not TCAutoDrive.isServerRerun(...)
+        and TCAutoDrive.isStartingInput(vehicle, input) then
+        local n = select("#", ...)
+        local args = { ... }
         local handled = drivers:gateClientStart(vehicle, function()
-            superFunc(manager, vehicle, input, farmId, sendEvent)
+            superFunc(manager, vehicle, input, unpack(args, 1, n))
         end)
         if handled then
             return
         end
     end
 
-    return superFunc(manager, vehicle, input, farmId, sendEvent)
+    return superFunc(manager, vehicle, input, ...)
 end
 
 -- Server safety net + wage skip, per vehicle per tick.
