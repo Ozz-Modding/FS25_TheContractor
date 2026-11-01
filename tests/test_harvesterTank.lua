@@ -1,7 +1,8 @@
 -- A combine with crop in its tank (TheContractorAllocation.getFilledHarvester)
 -- can't be allocated: a different crop stops the AI Helper, and the job's
--- own crop is the farm's to sell. So a hired worker's harvest job empties
--- the last part-load on its way out (TCHaulage.emptyHarvestersAfterJob).
+-- own crop is the farm's to sell. So a harvest job whose crop is the
+-- customer's (all but a player-driven haulage job) empties the last
+-- part-load on its way out (TCHaulage.emptyHarvestersAfterJob).
 
 local function setup()
     local world = stubs.install()
@@ -46,13 +47,17 @@ local function addCombine(world, level, fillType, capacity)
     return combine
 end
 
-local function harvestJob(combine, workerId)
+local function harvestJob(combine, workerId, includesHaulage)
     return {
         id = 1,
         jobType = "harvest",
         fieldId = 1,
         assignedWorkerId = workerId,
+        includesHaulage = includesHaulage == true,
         assignedEquipmentIds = { combine.id },
+        needsPlayerDelivery = function(self)
+            return self.includesHaulage and self.assignedWorkerId == nil
+        end,
         getFruitTypeIndex = function()
             return FillType.WHEAT
         end,
@@ -93,10 +98,10 @@ test("a hired worker's harvest job empties the combine at the end, however littl
     assertEquals(TheContractorAllocation.getFilledHarvester({ combine.id }), nil, "free to go out again")
 end)
 
-test("a player-driven job's combine is left for the player", function()
+test("a player-driven haulage job's combine is left for the player to deliver", function()
     local world = setup()
     local combine = addCombine(world, 500, FillType.WHEAT)
-    TCHaulage.emptyHarvestersAfterJob(harvestJob(combine, nil))
+    TCHaulage.emptyHarvestersAfterJob(harvestJob(combine, nil, true))
     assertEquals(combine:getFillUnitFillLevel(1), 500)
 end)
 

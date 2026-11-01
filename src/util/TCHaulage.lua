@@ -13,7 +13,10 @@
 --                (TCJobFuel.burnCartingFuel).
 --                A player-driven combine is only emptied while it's on the
 --                job's farmland and holding the job's crop, so it's never
---                touched working the player's own fields.
+--                touched working the player's own fields. While the job's
+--                under way it can't unload the job's crop anywhere (the
+--                unloading lock below), and whatever's left goes when the
+--                job ends: the crop is the customer's, not the player's.
 --
 --   Delivery     a player-driven haulage job has to get the crop to its
 --                selling point (picked at generation, like vanilla's
@@ -425,29 +428,101 @@ local function autoEmptyJobHarvesters(job, isFinal)
     end
 end
 
+-- Whether a harvest job's crop is the customer's, taken off the combine
+-- (auto-empty), rather than the player's to deliver: every harvest job but
+-- a player-driven haulage one. A player-driven harvest without haulage
+-- included is the customer's crop too - the player only combines it.
+function TCHaulage.isCustomerCropJob(job)
+    local jobDef = TheContractorJobGeneration.JOB_TYPES[job.jobType]
+    return jobDef ~= nil and jobDef.cropDependent == true and not job:needsPlayerDelivery()
+end
+
+local function isActiveJob(job)
+    return job.state == TheContractorJob.STATE.ALLOCATED or job.state == TheContractorJob.STATE.IN_PROGRESS
+end
+
 local function autoEmptyHarvesters()
     local jobs = g_currentMission.TheContractor.Jobs
     for _, farm in ipairs(g_farmManager:getFarms()) do
         for _, job in ipairs(jobs:getAllJobs(farm.farmId)) do
-            local jobDef = TheContractorJobGeneration.JOB_TYPES[job.jobType]
-            if jobDef ~= nil and jobDef.cropDependent and not job:needsPlayerDelivery() and
-                (job.state == TheContractorJob.STATE.ALLOCATED or job.state == TheContractorJob.STATE.IN_PROGRESS) then
+            if TCHaulage.isCustomerCropJob(job) and isActiveJob(job) then
                 autoEmptyJobHarvesters(job)
             end
         end
     end
 end
 
--- A hired worker's harvest job that's finished (or missed part-way): the
--- last part-load in the combine goes with the hauler too, so the machine
--- comes home empty. Left in, it would stop the combine being allocated
--- again (TheContractorAllocation.getFilledHarvester). A player-driven
--- job's combine is the player's to empty. Server-only.
+-- A harvest job that's finished (or missed, or unallocated part-way) whose
+-- crop is the customer's: the last part-load in the combine goes too, so
+-- the machine comes home empty and nobody keeps the customer's crop. Left
+-- in, it would also stop the combine being allocated again
+-- (TheContractorAllocation.getFilledHarvester). A player-driven haulage
+-- job's combine is the player's to empty: that crop is theirs to deliver.
+-- Server-only.
 function TCHaulage.emptyHarvestersAfterJob(job)
-    local jobDef = TheContractorJobGeneration.JOB_TYPES[job.jobType]
-    if job.assignedWorkerId ~= nil and jobDef ~= nil and jobDef.cropDependent then
+    if TCHaulage.isCustomerCropJob(job) then
         autoEmptyJobHarvesters(job, true)
     end
+end
+
+-- Unloading lock ---------------------------------------------------------------
+--
+-- A combine on a harvest job whose crop is the customer's can't unload the
+-- job's crop into anything (a trailer, a silo, a selling point) while the
+-- job's under way: auto-empty takes it. Without this a player driving the
+-- job themselves could overload it into their own trailer and sell it. A
+-- buffer combine (forage harvester) is left alone: it has no tank, so it
+-- can't harvest at all without unloading. Every machine: the jobs, their
+-- equipment and crop are synced, and clients use the check for the
+-- unload action.
+
+-- The allocated or under-way job whose crop this combine mustn't unload,
+-- or nil. fillTypeIndex is what it's unloading.
+function TCHaulage.getUnloadLockJob(vehicle, fillTypeIndex)
+    local spec = vehicle.spec_combine
+    local tc = g_currentMission.TheContractor
+    if spec == nil or tc == nil or tc.Jobs == nil then
+        return nil
+    end
+    local capacity = vehicle:getFillUnitCapacity(spec.fillUnitIndex)
+    if capacity == nil or capacity == math.huge then
+        return nil
+    end
+
+    local vehicleId = NetworkUtil.getObjectId(vehicle)
+    for _, farm in ipairs(g_farmManager:getFarms()) do
+        for _, job in ipairs(tc.Jobs:getAllJobs(farm.farmId)) do
+            if isActiveJob(job) and TCHaulage.isCustomerCropJob(job) and
+                table.hasElement(job.assignedEquipmentIds, vehicleId) and
+                TCHaulage.getDeliveryFillType(job) == fillTypeIndex then
+                return job
+            end
+        end
+    end
+    return nil
+end
+
+function TCHaulage.getCanDischargeToObject(vehicle, superFunc, dischargeNode)
+    if not superFunc(vehicle, dischargeNode) then
+        return false
+    end
+    if TCHaulage.getUnloadLockJob(vehicle, vehicle:getDischargeFillType(dischargeNode)) == nil then
+        return true
+    end
+    -- Tell the player in the cab why the pipe won't unload.
+    if g_client ~= nil and vehicle.getIsActiveForInput ~= nil and vehicle:getIsActiveForInput(true) then
+        g_currentMission:showBlinkingWarning(g_i18n:getText("tc_haulage_unloadLocked"), 2000)
+    end
+    return false
+end
+
+-- Patched before vehicle types are finalized, as CropSpill's
+-- Dischargeable hook is.
+if Dischargeable ~= nil and Dischargeable.getCanDischargeToObject ~= nil and
+        not Dischargeable.tcUnloadLockInstalled then
+    Dischargeable.getCanDischargeToObject = Utils.overwrittenFunction(Dischargeable.getCanDischargeToObject,
+        TCHaulage.getCanDischargeToObject)
+    Dischargeable.tcUnloadLockInstalled = true
 end
 
 -- Update ----------------------------------------------------------------------

@@ -840,6 +840,7 @@
 		<text name="tc_allocation_needsSecondWorker" text="Harvest &amp; haul needs two workers - one harvesting, one hauling. Or pick Myself on your own to harvest and haul it all yourself."/>
 		<text name="tc_allocation_tooManyWorkers" text="This job only takes one worker."/>
 		<text name="tc_allocation_haulYourself" text="You will harvest the crop and haul it yourself - deliver it to %s."/>
+		<text name="tc_allocation_customerCrop" text="The crop belongs to the customer - it's collected from your combine as it fills, and what's left when the job is done. It can't be unloaded."/>
 		<text name="tc_allocation_baleAndDeliverYourself" text="You will bale the straw and deliver the bales yourself - take them to %s."/>
 		<text name="tc_allocation_deliverStrawYourself" text="Collect the straw bales from the field and deliver them to %s."/>
 		<text name="tc_allocation_sellLoadYourself" text="Take the farmer's trailer from their yard and tip the load at %s."/>
@@ -856,6 +857,7 @@
 		<text name="tc_equipment_missing_trailer" text="a trailer that takes %s"/>
 		<text name="tc_equipment_missing_trailerHitch" text="a trailer that hitches to the haulage tractor"/>
 		<text name="tc_haulage_deliveryComplete" text="Delivery done for %s - any more crop you deliver sells as normal."/>
+		<text name="tc_haulage_unloadLocked" text="This crop belongs to the customer - it's collected from the combine, so it can't be unloaded."/>
 		<text name="tc_equipment_anyCrop" text="this crop"/>
 		<text name="tc_equipment_missing_harvester" text="a harvester"/>
 		<text name="tc_equipment_missing_tractor" text="a tractor"/>
