@@ -98,6 +98,7 @@ source(TheContractor.dir .. "src/business/PayReviews.lua")
 source(TheContractor.dir .. "src/business/Office.lua")
 source(TheContractor.dir .. "src/business/Workshop.lua")
 source(TheContractor.dir .. "src/business/WorkingHours.lua")
+source(TheContractor.dir .. "src/business/Breaks.lua")
 source(TheContractor.dir .. "src/business/Logbook.lua")
 source(TheContractor.dir .. "src/business/Parking.lua")
 source(TheContractor.dir .. "src/business/RandomEvents.lua")
@@ -199,6 +200,7 @@ source(TheContractor.dir .. "src/events/TCOfficeRequestEvent.lua")
 source(TheContractor.dir .. "src/events/TCOfficeChangedEvent.lua")
 source(TheContractor.dir .. "src/events/TCWorkerWorkshopEvent.lua")
 source(TheContractor.dir .. "src/events/TCWorkerDutyEvent.lua")
+source(TheContractor.dir .. "src/events/TCWorkerBreakEvent.lua")
 source(TheContractor.dir .. "src/events/TCWorkerOvertimeEvent.lua")
 source(TheContractor.dir .. "src/events/TCLogJobRecordedEvent.lua")
 source(TheContractor.dir .. "src/events/TCLogVehicleEntryEvent.lua")
@@ -276,6 +278,8 @@ function TheContractor:loadMap()
     self.Office = TheContractorOffice.new()
     -- 097: working hours and overtime.
     self.WorkingHours = TheContractorWorkingHours.new()
+    -- 131: breaks in the working day.
+    self.Breaks = TheContractorBreaks.new()
     self.Logbook = TheContractorLogbook.new()
     self.Parking = TheContractorParking.new()
     self.Parking:register(self.Inbox)
@@ -457,6 +461,7 @@ function TheContractor:loadMap()
     TheContractorOffice.registerConsoleCommands()
     TheContractorWorkshop.registerConsoleCommands()
     TheContractorWorkingHours.registerConsoleCommands()
+    TheContractorBreaks.registerConsoleCommands()
     TheContractorJobGeneration.registerConsoleCommands()
     TheContractorJobs.registerConsoleCommands()
     TheContractorFinances.registerConsoleCommands()
@@ -867,6 +872,10 @@ function TheContractor:update(dt)
     -- 097: overtime (server).
     if self.WorkingHours ~= nil then
         self.WorkingHours:update(dt)
+    end
+    -- 131: breaks (server).
+    if self.Breaks ~= nil then
+        self.Breaks:update(dt)
     end
 
     -- After Drivers: its first update relinks saved bindings, which the

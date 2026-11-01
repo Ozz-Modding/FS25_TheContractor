@@ -452,6 +452,7 @@
 		<text name="tc_staff_status_sick" text="Off sick"/>
 		<text name="tc_staff_detailSalary" text="%s per month"/>
 		<text name="tc_staff_detailJobNone" text="None"/>
+		<text name="tc_staff_detailOnBreak" text="On break until %s"/>
 		<text name="tc_growth_improved" text="%s improved: %s %d to %d"/>
 		<text name="tc_growth_certified" text="%s is now certified on %s"/>
 		<text name="tc_growth_stat_workSpeed" text="work speed"/>
@@ -904,6 +905,7 @@
 		<text name="tc_staff_status_atHome" text="At home"/>
 		<text name="tc_staff_status_comingIn" text="On the way in"/>
 		<text name="tc_staff_status_stayingLate" text="Staying late"/>
+		<text name="tc_staff_status_onBreak" text="On break"/>
 		<text name="tc_hours_driversAllHome" text="Everyone free has gone home for the day. Ask someone to stay late, or call them back in, from Manage on the Staff tab."/>
 		<text name="tc_hours_detailOvertime" text="%s (+%s overtime this month)"/>
 		<text name="tc_hours_stayLateButton" text="Stay late"/>
