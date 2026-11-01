@@ -723,6 +723,7 @@
 		<text name="tc_yardBales_offerBody" text="We've run short of %s, and I hear you've got some. Could you bring about %s bales (%s) over to the yard? Put them down on the ground in the area I'll mark out for you (it goes on your map once you say yes). The telehandler and bale fork will be out beside it if you want them. Thanks, %s"/>
 		<text name="tc_yardBales_fill_STRAW" text="straw"/>
 		<text name="tc_yardBales_fill_DRYGRASS_WINDROW" text="hay"/>
+		<text name="tc_yardBales_fill_SILAGE" text="silage"/>
 		<text name="tc_yardBales_location" text="%s's yard"/>
 		<text name="tc_yardBales_deliveryValue" text="About %d bales of %s (%s)"/>
 		<text name="tc_yardBales_deliveredSuffix" text=", %d%% in"/>

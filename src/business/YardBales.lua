@@ -1,5 +1,5 @@
 -- Bales to a farmer's yard (124), a random event (068): a farmer with a
--- yard (108) is short of hay or straw, has heard the farm has some, and
+-- yard (108) is short of hay, straw or silage, has heard the farm has some, and
 -- rings up: can the player bring their own bales over? The job is putting
 -- them on the ground in a marked area of the yard. The farmer's telehandler
 -- and bale fork (121) are waiting beside it, for the player to use or not.
@@ -8,7 +8,8 @@
 -- (itemSystem items that are a Bale of the farm's, not fermenting, and not
 -- a job's own spawned bales) and its bales in a bale storage it owns
 -- (PlaceableObjectStorage's storedObjects: a baleAttributes, or a
--- baleObject for one kept live), of STRAW and hay (DRYGRASS_WINDROW), by
+-- baleObject for one kept live), of STRAW, hay (DRYGRASS_WINDROW) and
+-- SILAGE (a wrapped bale once it's fermented: until then it's grass), by
 -- fill type and size (a bale's litres, to SIZE_STEP). Other mods replace
 -- these objects, so every field is nil-checked.
 --
@@ -67,8 +68,13 @@ TheContractorYardBales.MESSAGE_KIND = "yardBales"
 -- 112: the offer is signed by the farmer (getCustomerNamedArgs).
 TheContractorYardBales.NAMED_BODY_KEYS = { tc_yardBales_offerBody = true }
 
--- Straw and hay, never silage.
-TheContractorYardBales.FILL_TYPE_NAMES = { "STRAW", "DRYGRASS_WINDROW" }
+-- Straw, hay and silage. A wrapped grass bale is only silage once it's
+-- fermented (vanilla changes its fill type then), so one still fermenting
+-- is neither held nor delivered.
+TheContractorYardBales.FILL_TYPE_NAMES = { "STRAW", "DRYGRASS_WINDROW", "SILAGE" }
+
+-- The console's names for them.
+TheContractorYardBales.CONSOLE_FILL_TYPES = { straw = "STRAW", hay = "DRYGRASS_WINDROW", silage = "SILAGE" }
 
 -- About one every two months, twice that in winter.
 TheContractorYardBales.RATE_PER_PERIOD = 0.5
@@ -112,7 +118,7 @@ function TheContractorYardBales.new()
     local self = {}
     setmetatable(self, TheContractorYardBales_mt)
 
-    -- Server: tcCompany event yardBales [straw|hay] [farmer], for one trigger.
+    -- Server: tcCompany event yardBales [straw|hay|silage] [farmer], for one trigger.
     self.forcedFillTypeName = nil
     self.forcedFarmerId = nil
     -- Every machine with a player: jobId -> { node, sharedLoadRequestId, x,
@@ -287,7 +293,7 @@ function TheContractorYardBales.getSize(fillLevel)
 end
 
 -- Counts one bale into holdings (fillTypeIndex -> size -> count), if it's
--- straw or hay, has something in it and isn't fermenting.
+-- straw, hay or silage, has something in it and isn't fermenting.
 function TheContractorYardBales.addBale(holdings, fillTypeIndex, fillLevel, isFermenting)
     if fillTypeIndex == nil or holdings[fillTypeIndex] == nil or isFermenting == true then
         return
@@ -369,7 +375,7 @@ function TheContractorYardBales.addStoredBales(holdings, farmId)
     end
 end
 
--- fillTypeIndex -> size -> count, for straw and hay.
+-- fillTypeIndex -> size -> count, for straw, hay and silage.
 function TheContractorYardBales.getHoldings(farmId)
     local holdings = TheContractorYardBales.newHoldings()
     TheContractorYardBales.addLooseBales(holdings, farmId)
@@ -513,15 +519,14 @@ function TheContractorYardBales:pickRequest(farmId)
     }
 end
 
--- The console's details: [straw|hay] [farmer id or full name].
+-- The console's details: [straw|hay|silage] [farmer id or full name].
 function TheContractorYardBales:prepareTrigger(details)
     local rest = {}
     for i, detail in ipairs(details) do
         local lower = string.lower(detail)
-        if i == 1 and lower == "straw" then
-            self.forcedFillTypeName = "STRAW"
-        elseif i == 1 and lower == "hay" then
-            self.forcedFillTypeName = "DRYGRASS_WINDROW"
+        local fillTypeName = TheContractorYardBales.CONSOLE_FILL_TYPES[lower]
+        if i == 1 and fillTypeName ~= nil then
+            self.forcedFillTypeName = fillTypeName
         else
             table.insert(rest, detail)
         end
@@ -537,7 +542,7 @@ function TheContractorYardBales:prepareTrigger(details)
         end
     end
     self.forcedFillTypeName = nil
-    return "Usage: tcCompany event yardBales [straw|hay] [farmer id or name] (tcCompany farmers lists them)"
+    return "Usage: tcCompany event yardBales [straw|hay|silage] [farmer id or name] (tcCompany farmers lists them)"
 end
 
 -- The drop area (server) -----------------------------------------------------------------

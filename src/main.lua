@@ -338,7 +338,7 @@ function TheContractor:loadMap()
     -- (ADS), through 100.
     self.FarmerFavours = TheContractorFarmerFavours.new()
     self.FarmerFavours:register(self.RandomEvents)
-    -- 124: a farmer short of hay or straw asks for the farm's bales, with
+    -- 124: a farmer short of hay, straw or silage asks for the farm's bales, with
     -- their telehandler lent through 100's queue.
     self.YardBales = TheContractorYardBales.new()
     self.YardBales:register(self.RandomEvents, self.Inbox)
