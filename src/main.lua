@@ -665,6 +665,9 @@ end
 -- once every mod's loadMap is done, for anything that needs another mod's
 -- additions in place (see Staff:restoreLooks).
 function TheContractor:onStartMission()
+    -- Over any other mod's patch of the same check (TCFieldAccess).
+    TCFieldAccess.install()
+
     local tc = g_currentMission.TheContractor
     if tc == nil then return end
 
