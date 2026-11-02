@@ -236,7 +236,7 @@ function TheContractorDispatch:startJobForWorker(job, skipTransport)
     TCEquipmentVisibility.setVisibleEverywhere(job.assignedEquipmentIds, false)
     TCVehicleLock.refresh()
 
-    -- Shown as "Travelling" in the Calendar until the AI starts (or staging
+    -- Shown as "Travelling" in the Jobs tab until the AI starts (or staging
     -- is called off) - cleared in cancelPending.
     if job.transportRemainingMs > 0 then
         g_currentMission.TheContractor.Jobs:setJobTravelling(job.farmId, job.id, true)

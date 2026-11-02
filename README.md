@@ -6,7 +6,7 @@ Run your farm as an agricultural contracting business in Farming Simulator 25. T
 
 1. Open the in-game menu and go to the new **Contractor** page.
 2. On the **Overview** tab, create your company and give it a name.
-3. Job offers arrive in the **Inbox**. Accept or negotiate them, then book who does each job and with which machines on the **Calendar**.
+3. Job offers arrive in the **Inbox**. Accept or negotiate them, then book who does each job and with which machines on the **Jobs** tab, where what can be done now and is due soonest is at the top.
 4. Hire workers on the **Staff** tab, or do the work yourself.
 5. Place **parking slots** and **standing spots** from the construction menu (Buildings, Contractor tab), so machines coming back from jobs and idle staff have somewhere to go.
 
@@ -24,7 +24,7 @@ Run your farm as an agricultural contracting business in Farming Simulator 25. T
 - **Harvest & haul** and **straw bale delivery** jobs, where the crop or bales have to reach a selling point
 - Offers are matched to the machines you own, and some are booked ahead for crops that aren't ready yet
 - **Price negotiation**: counter-offer, but push too hard and the client walks away
-- **Calendar** of booked jobs, and a choice of who does each job and with which machines (a worker or you)
+- **Jobs** list of taken-on jobs, ready now first by due date and upcoming harvests by the day they ripen, and a choice of who does each job and with which machines (a worker or you)
 - Progress is read from the field itself, whoever's driving
 - Missed deadlines have consequences
 - Every job gets a **quality score**. 100% is rare: it takes a crew with skill to spare, in good spirits, with well-kept machines, a clean run and a good day

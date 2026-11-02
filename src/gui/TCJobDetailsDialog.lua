@@ -1,4 +1,4 @@
--- Job details (093): opened from the Calendar's Job details button for the
+-- Job details (093): opened from the Jobs tab's Job details button for the
 -- highlighted job. Read-only: who's on it (the player who took it on, or
 -- the hired crew), its equipment, status and progress, as label/value rows
 -- under section titles, the same shape as the Logbook's detail list. The

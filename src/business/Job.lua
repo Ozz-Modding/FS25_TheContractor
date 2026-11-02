@@ -136,6 +136,12 @@ function TheContractorJob.new(id, farmId, jobType, fieldId, requiredSkillLevel, 
     -- display and calendar grouping.
     self.deadlineDay = nil
 
+    -- 132: absolute (monotonic) day the job's work can start, never after
+    -- deadlineDay - a future harvest's predicted ready day. nil means ready
+    -- now. Fixed at creation; allocation (018) is refused before it, so a
+    -- crop can't be forced ripe (TCFieldPreparation) ahead of its time.
+    self.readyDay = nil
+
     -- Hired-worker jobs only (020): true while the worker and equipment are
     -- on the road to the field (Dispatch's transport wait), still `allocated`
     -- until the AI starts and flips it to `in_progress`. Display-only, synced
@@ -323,6 +329,19 @@ end
 -- work.
 function TheContractorJob:isWorkshop()
     return self.workshop ~= nil
+end
+
+-- 132: whether the job's work can start today (its ready day has come).
+function TheContractorJob:isReady()
+    return self.readyDay == nil or g_currentMission.environment.currentMonotonicDay >= self.readyDay
+end
+
+-- 132: the ready day while it's still to come, else nil.
+function TheContractorJob:getFutureReadyDay()
+    if self:isReady() then
+        return nil
+    end
+    return self.readyDay
 end
 
 -- Where the job is, for lines that would name its field: the field's name,

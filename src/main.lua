@@ -57,6 +57,7 @@ source(TheContractor.dir .. "src/util/TCYardMapAction.lua")
 source(TheContractor.dir .. "src/util/TCJoyriderRuts.lua")
 source(TheContractor.dir .. "src/util/TCDebris.lua")
 source(TheContractor.dir .. "src/util/TCJobHotspots.lua")
+source(TheContractor.dir .. "src/util/TCJobList.lua")
 source(TheContractor.dir .. "src/gui/TCWorkerPortrait.lua")
 source(TheContractor.dir .. "src/gui/TCTooltip.lua")
 source(TheContractor.dir .. "src/gui/MenuContractor.lua")
@@ -397,7 +398,7 @@ function TheContractor:loadMap()
     TCEditPersonDialog.register()
     -- 086: parking slot filters, set from a prompt standing in the slot.
     TCParkingSlotDialog.register()
-    -- 093: the Calendar's Job details.
+    -- 093: the Jobs tab's Job details.
     TCJobDetailsDialog.register()
     -- 102: pricing an inspected ADS repair contract.
     TCRepairQuoteDialog.register()

@@ -136,16 +136,6 @@ function TheContractorJobs:getJobsByState(farmId, state)
     return result
 end
 
-function TheContractorJobs:getJobsByTargetDate(farmId, targetPeriod, targetDayInPeriod)
-    local result = {}
-    for _, job in ipairs(self:getAllJobs(farmId)) do
-        if job.targetPeriod == targetPeriod and job.targetDayInPeriod == targetDayInPeriod then
-            table.insert(result, job)
-        end
-    end
-    return result
-end
-
 function TheContractorJobs:getJobsForField(farmId, fieldId)
     local result = {}
     for _, job in ipairs(self:getAllJobs(farmId)) do
@@ -179,9 +169,12 @@ end
 -- yardHaul (126) is a farmer's load to sell's job.yardHaul
 -- (TheContractorYardHaul), a haulage job to deliveryStation. refuel (127)
 -- is a farmer's machine run dry's job.refuel (TheContractorEmergencyRefuel).
+-- readyDay (132) is the first day the job can be worked (Job.readyDay), nil
+-- for ready now.
 function TheContractorJobs:createJob(farmId, jobType, fieldId, requiredSkillLevel, targetPeriod, targetDayInPeriod,
                                       price, equipmentAvailable, fruitTypeName, deadlineDay, includesHaulage,
-                                      deliveryStation, startState, workshop, spill, yardDelivery, yardHaul, refuel)
+                                      deliveryStation, startState, workshop, spill, yardDelivery, yardHaul, refuel,
+                                      readyDay)
     if not g_currentMission:getIsServer() then
         return nil
     end
@@ -200,6 +193,7 @@ function TheContractorJobs:createJob(farmId, jobType, fieldId, requiredSkillLeve
     job.startState = startState
     job.operationSkill = TheContractorJobGeneration.getOperationSkill(jobType, fieldId)
     job.deadlineDay = deadlineDay or TheContractorJobs.getNextOccurrenceDay(targetPeriod, targetDayInPeriod)
+    job.readyDay = readyDay
     if includesHaulage and deliveryStation ~= nil then
         job.includesHaulage = true
         TCHaulage.setDeliveryStation(job, deliveryStation)
@@ -888,6 +882,52 @@ function TheContractorJobs:resolveLegacyDeadlines()
     end
 end
 
+-- 132: a harvest taken on before jobs had a ready day, its crop not ready
+-- yet, gets the day it's predicted to be (no later than its deadline), so
+-- it can't be allocated - and its crop forced ripe - early. Every other job
+-- is ready now. Same first-update timing as resolveLegacyDeadlines (after
+-- it, so the deadline's there), with the fields loaded too.
+function TheContractorJobs:resolveLegacyReadyDays()
+    self.hasLegacyReadyDays = false
+    for _, farmJobs in pairs(self.jobsByFarm) do
+        for _, job in pairs(farmJobs) do
+            if job.readyDay == nil and job.state == TheContractorJob.STATE.ACCEPTED then
+                job.readyDay = TheContractorJobs.getLegacyReadyDay(job)
+            end
+        end
+    end
+end
+
+-- The ready day an older save's job gets (resolveLegacyReadyDays), or nil
+-- for ready now.
+function TheContractorJobs.getLegacyReadyDay(job)
+    local jobDef = TheContractorJobGeneration.JOB_TYPES[job.jobType]
+    if jobDef == nil or not jobDef.cropDependent or g_fieldManager == nil then
+        return nil
+    end
+    local field = g_fieldManager:getFieldById(job.fieldId)
+    if field == nil then
+        return nil
+    end
+    local fieldState = field:getFieldState()
+    local fruitType = fieldState ~= nil and g_fruitTypeManager:getFruitTypeByIndex(fieldState.fruitTypeIndex) or nil
+    if fruitType ~= nil and fruitType:getIsHarvestReady(fieldState.growthState) then
+        return nil
+    end
+    local prediction = TCCropPrediction.getEstimatedHarvestReadyDate(field)
+    if prediction == nil then
+        return nil
+    end
+    local readyDay = prediction.absoluteDay
+    if job.deadlineDay ~= nil then
+        readyDay = math.min(readyDay, job.deadlineDay)
+    end
+    if readyDay <= g_currentMission.environment.currentMonotonicDay then
+        return nil
+    end
+    return readyDay
+end
+
 function TheContractorJobs:update(dt)
     self:updateGracePeriods(dt)
 
@@ -897,6 +937,9 @@ function TheContractorJobs:update(dt)
 
     if self.hasLegacyDeadlines then
         self:resolveLegacyDeadlines()
+    end
+    if self.hasLegacyReadyDays then
+        self:resolveLegacyReadyDays()
     end
 
     self.completionCheckAccumulatedMs = self.completionCheckAccumulatedMs + dt
@@ -1504,6 +1547,8 @@ function TheContractorJobs.writeJob(streamId, job)
     TheContractorYardHaul.writeStream(streamId, job.yardHaul)
     -- 127.
     TheContractorEmergencyRefuel.writeStream(streamId, job.refuel)
+    -- 132. -1 stands in for "ready now".
+    streamWriteInt32(streamId, job.readyDay or -1)
 end
 
 -- 100: what a client needs of a workshop job (the uniqueIds stay on the
@@ -1699,6 +1744,8 @@ function TheContractorJobs.readJob(streamId)
     job.yardDelivery = TheContractorYardBales.readStream(streamId)
     job.yardHaul = TheContractorYardHaul.readStream(streamId)
     job.refuel = TheContractorEmergencyRefuel.readStream(streamId)
+    local readyDay = streamReadInt32(streamId)
+    job.readyDay = readyDay >= 0 and readyDay or nil
 
     return job
 end
@@ -1776,6 +1823,12 @@ function TheContractorJobs:loadFromXMLFile(xmlFile)
             job.deadlineDay = getXMLInt(xmlFile, jobKey .. "#deadlineDay")
             if job.deadlineDay == nil then
                 self.hasLegacyDeadlines = true
+            end
+            -- 132: nil for saves from before it - resolveLegacyReadyDays
+            -- gives an unready harvest one on the first update.
+            job.readyDay = getXMLInt(xmlFile, jobKey .. "#readyDay")
+            if job.readyDay == nil then
+                self.hasLegacyReadyDays = true
             end
             job.assignedWorkerId = getXMLInt(xmlFile, jobKey .. "#assignedWorkerId")
             job.allocatedPlayerName = getXMLString(xmlFile, jobKey .. "#allocatedPlayerName")
@@ -2000,7 +2053,7 @@ end
 -- declined job (an offer turned down or left to lapse) is never saved:
 -- nothing shows it, and the only things naming one, its offer's inbox
 -- messages, already go once it's over or gone. Completed and missed jobs
--- are the farm's history (the Calendar's Completed list, the Workshop tab's
+-- are the farm's history (the Jobs tab's Completed list, the Workshop tab's
 -- Completed view), so each farm keeps its newest KEEP_FINISHED_JOBS of each
 -- kind, workshop jobs (100) and the rest, newest by when they finished
 -- (getFinishedAt). An older one is kept anyway while something still names
@@ -2127,6 +2180,9 @@ function TheContractorJobs:saveToXmlFile(xmlFile)
             end
             if job.deadlineDay ~= nil then
                 setXMLInt(xmlFile, jobKey .. "#deadlineDay", job.deadlineDay)
+            end
+            if job.readyDay ~= nil then
+                setXMLInt(xmlFile, jobKey .. "#readyDay", job.readyDay)
             end
             if job.startState ~= nil then
                 setXMLInt(xmlFile, jobKey .. "#startState", job.startState)
@@ -2301,6 +2357,11 @@ function TheContractorJobs.registerConsoleCommands()
                 local details = {}
                 if job.state == TheContractorJob.STATE.IN_PROGRESS or job.completionPercentage > 0 then
                     table.insert(details, string.format("%.0f%% done", job.completionPercentage))
+                end
+                local readyDay = job:getFutureReadyDay()
+                if readyDay ~= nil then
+                    table.insert(details, string.format("ready from %s (day %d)", TCCalendar.formatDay(readyDay),
+                        readyDay))
                 end
                 if job.deadlineDay ~= nil then
                     table.insert(details, string.format("due %s (day %d)", TCCalendar.formatDay(job.deadlineDay),

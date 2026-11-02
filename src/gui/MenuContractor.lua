@@ -1,5 +1,5 @@
 -- Top-level "Contractor" in-game menu page: eight sub-tabs (Overview, Inbox,
--- Calendar, Staff, Finances, Logbook, Supplies, and Workshop while
+-- Jobs, Staff, Finances, Logbook, Supplies, and Workshop while
 -- FS25_AdvancedDamageSystem is loaded). Structure mirrors FS25_RedTape/src/gui/MenuRedTape.lua's own
 -- top-level page + subCategory-tab pattern.
 
@@ -15,7 +15,8 @@ MenuContractor._mt = Class(MenuContractor, TabbedMenuFrameElement)
 MenuContractor.SUB_CATEGORY = {
     OVERVIEW = 1,
     INBOX = 2,
-    CALENDAR = 3,
+    -- 133: the Calendar until then.
+    JOBS = 3,
     STAFF = 4,
     FINANCES = 5,
     LOGBOOK = 6,
@@ -27,7 +28,7 @@ MenuContractor.SUB_CATEGORY = {
 
 MenuContractor.HEADER_SLICES = {
     [MenuContractor.SUB_CATEGORY.INBOX] = "gui.icon_ingameMenu_contracts",
-    [MenuContractor.SUB_CATEGORY.CALENDAR] = "gui.icon_ingameMenu_calendar",
+    [MenuContractor.SUB_CATEGORY.JOBS] = "gui.icon_ingameMenu_calendar",
     [MenuContractor.SUB_CATEGORY.STAFF] = "gui.icon_ingameMenu_animals",
     [MenuContractor.SUB_CATEGORY.OVERVIEW] = "gui.icon_ingameMenu_finances",
     [MenuContractor.SUB_CATEGORY.FINANCES] = "gui.icon_ingameMenu_prices",
@@ -38,7 +39,7 @@ MenuContractor.HEADER_SLICES = {
 
 MenuContractor.HEADER_TITLES = {
     [MenuContractor.SUB_CATEGORY.INBOX] = "tc_header_inbox",
-    [MenuContractor.SUB_CATEGORY.CALENDAR] = "tc_header_calendar",
+    [MenuContractor.SUB_CATEGORY.JOBS] = "tc_header_jobs",
     [MenuContractor.SUB_CATEGORY.STAFF] = "tc_header_staff",
     [MenuContractor.SUB_CATEGORY.OVERVIEW] = "tc_header_overview",
     [MenuContractor.SUB_CATEGORY.FINANCES] = "tc_header_finances",
@@ -63,16 +64,16 @@ local function formatTargetDate(period, dayInPeriod)
     return string.format("%s %d", g_i18n:getText("ui_month" .. periodToMonth(period)), dayInPeriod)
 end
 
--- Calendar-view-only variant that also shows the year — a Job's own
--- targetPeriod/targetDayInPeriod (used by formatTargetDate above, for the
--- Inbox and calendar-day-job lists) deliberately doesn't carry a year (008's
--- Q23 decision: "period N next year" and "period N now" aren't distinguished
--- in the data model). The Calendar tab's own navigation, though, pages
--- forward from environment.currentYear/currentPeriod by a known offset, so
--- the year here is always locally computable — worth showing since paging
--- from December to January was otherwise ambiguous about which year you'd
--- landed on. year is the game year (environment.currentYear's count), and
--- TCCalendar.formatYear shows January and February as the next one.
+-- An absolute (monotonic) day, as formatTargetDate shows a job's due date.
+local function formatMonotonicDay(day)
+    local environment = g_currentMission.environment
+    return formatTargetDate(environment:getPeriodFromDay(day), environment:getDayInPeriodFromDay(day))
+end
+
+-- A date with its year, for a day whose year is known (a completed job's,
+-- worked out from its absolute day). year is the game year
+-- (environment.currentYear's count), and TCCalendar.formatYear shows
+-- January and February as the next one.
 local function formatCalendarDate(period, dayInPeriod, year)
     return string.format("%s %d, %s", g_i18n:getText("ui_month" .. periodToMonth(period)), dayInPeriod,
         TCCalendar.formatYear(year, period))
@@ -210,17 +211,6 @@ local function getQualityChipTone(qualityScore)
     return "bad"
 end
 
--- Calendar (015): jobs whose state means "on the calendar, worth showing
--- against a date" — accepted/allocated/in_progress (still committed to it)
--- plus missed (committed to it and then blew the deadline — worth keeping
--- visible on that day as a clear "Failed" marker, not disappearing once
--- Jobs:missJob flips the state, which would just look like the job's own
--- record of the day silently forgot it ever existed). Declined jobs never
--- reached that commitment; completed jobs are done and no longer
--- forward-looking. A function rather than a module-scope table, since
--- MenuContractor.lua is sourced before Job.lua (see main.lua's source
--- order) — TheContractorJob.STATE wouldn't exist yet if this ran at load
--- time instead of lazily per call.
 -- Inbox message (050) action buttons, in the order of the message's
 -- actions - TheContractorInbox.MAX_ACTIONS of them.
 MenuContractor.MESSAGE_ACTION_INPUTS = {
@@ -231,11 +221,6 @@ MenuContractor.MESSAGE_ACTION_INPUTS = {
 
 -- 054: the certificate the Staff tab shows and books - the only one so far.
 MenuContractor.TRAINING_CERT = "spraying"
-
-local function isCalendarVisibleState(state)
-    return state == TheContractorJob.STATE.ACCEPTED or state == TheContractorJob.STATE.ALLOCATED or
-        state == TheContractorJob.STATE.IN_PROGRESS or state == TheContractorJob.STATE.MISSED
-end
 
 function MenuContractor.new(i18n)
     local self = MenuContractor:superClass().new(nil, MenuContractor._mt)
@@ -530,33 +515,14 @@ function MenuContractor:initialize()
         self.btnKeepOverhead }
 
 
--- Jumps straight back to the current in-game month regardless of how far
-    -- forward the player paged via the in-page "< Month Year >" selector
-    -- (see calendarPeriodSelector in MenuContractor.xml, which replaced the
-    -- old Prev/Next Period bottom-bar buttons for month navigation) —
-    -- disabled (see refreshCalendarState) while already there, same
-    -- ".disabled mutated in place, then dirty the button bar" pattern as
-    -- everywhere else in this file.
-    self.btnCalendarToday = {
-        inputAction = InputAction.MENU_ACTIVATE,
-        text = g_i18n:getText("tc_calendar_jumpToToday"),
-        callback = function()
-            self:onClickCalendarToday()
-        end
-    }
-
-    -- Calendar tab always gets the Jump to Today button (no selection-gated
-    -- variant needed — day selection is just a list click, no bottom-bar
-    -- action attached to it, unlike Inbox's accept/decline/counter).
-    self.menuButtonInfo[MenuContractor.SUB_CATEGORY.CALENDAR] = { self.btnBack, self.btnNextPage, self.btnPrevPage,
-        self.btnCalendarToday }
+    -- Jobs tab (133): nothing of its own until a job's highlighted.
+    self.menuButtonInfo[MenuContractor.SUB_CATEGORY.JOBS] = { self.btnBack, self.btnNextPage, self.btnPrevPage }
 
     -- Allocation (018) — opens the allocation panel for whichever job is
-    -- selected in calendarDayJobsTable, only shown while that job is still
-    -- `accepted` (an allocated/in_progress/missed job has nothing left to
-    -- allocate). Confirm/Cancel replace the whole button set while the panel
-    -- itself is open (see getMenuButtonInfo) — Jump to Today doesn't make
-    -- sense mid-flow, so it's dropped rather than kept alongside.
+    -- highlighted in jobsTable, only shown while that job is still
+    -- `accepted` and ready (132) - an allocated or in-progress job has
+    -- nothing left to allocate. Confirm/Cancel replace the whole button set
+    -- while the panel itself is open (see getMenuButtonInfo).
     self.btnAllocateJob = {
         inputAction = InputAction.MENU_EXTRA_1,
         text = g_i18n:getText("tc_allocation_allocateButton"),
@@ -591,11 +557,11 @@ function MenuContractor:initialize()
             self:onClickToggleAllocationEquipment()
         end
     }
-    self.menuButtonInfoCalendarWithAllocatableJob = { self.btnBack, self.btnNextPage, self.btnPrevPage,
-        self.btnCalendarToday, self.btnAllocateJob }
+    self.menuButtonInfoJobsWithAllocatableJob = { self.btnBack, self.btnNextPage, self.btnPrevPage,
+        self.btnAllocateJob }
     -- 093: who's on the highlighted job and how it's going. Shares Allocate's
-    -- key: Allocate only shows for an `accepted` job, Job details for any
-    -- other on the list (allocated, in progress, missed).
+    -- key: Allocate only shows for an `accepted` job, Job details for an
+    -- allocated or in-progress one.
     self.btnJobDetails = {
         inputAction = InputAction.MENU_EXTRA_1,
         text = g_i18n:getText("tc_jobDetails_button"),
@@ -603,8 +569,8 @@ function MenuContractor:initialize()
             self:onClickJobDetails()
         end
     }
-    self.menuButtonInfoCalendarWithJob = { self.btnBack, self.btnNextPage, self.btnPrevPage,
-        self.btnCalendarToday, self.btnJobDetails }
+    self.menuButtonInfoJobsWithJob = { self.btnBack, self.btnNextPage, self.btnPrevPage,
+        self.btnJobDetails }
     -- Same idea for allocationWorkerTable's highlighted row (035): workers
     -- are picked with a button rather than by highlighting, since a
     -- haulage job takes two of them. See onClickToggleAllocationWorker.
@@ -615,18 +581,18 @@ function MenuContractor:initialize()
             self:onClickToggleAllocationWorker()
         end
     }
-    self.menuButtonInfoCalendarAllocating = { self.btnBack, self.btnNextPage, self.btnPrevPage,
+    self.menuButtonInfoJobsAllocating = { self.btnBack, self.btnNextPage, self.btnPrevPage,
         self.btnAllocateConfirm, self.btnAllocateCancel, self.btnAllocateToggleWorker }
-    self.menuButtonInfoCalendarAllocatingEquipment = { self.btnBack, self.btnNextPage, self.btnPrevPage,
+    self.menuButtonInfoJobsAllocatingEquipment = { self.btnBack, self.btnNextPage, self.btnPrevPage,
         self.btnAllocateConfirm, self.btnAllocateCancel, self.btnAllocateToggleEquipment }
 
-    self.calendarPeriodOffset = 0
-    self.selectedCalendarDay = nil
-    self.calendarDayRows = {}
-    self.calendarDayJobs = {}
-    self.selectedCalendarDayJobId = nil
+    -- Jobs tab (133): the listed jobs (TCJobList), which view of them
+    -- (jobsViewSelector) and the highlighted one's id.
+    self.jobsView = "all"
+    self.listedJobs = {}
+    self.selectedJobId = nil
 
-    -- Completed-jobs history under the day panel (029 follow-up): every
+    -- Completed-jobs history under the job's details (029 follow-up): every
     -- completed job, most recent first. The highlighted row's report shows
     -- straight away (no button), so moving through the list on a gamepad is
     -- all it takes.
@@ -634,9 +600,9 @@ function MenuContractor:initialize()
     self.selectedCompletedJobId = nil
 
     -- Allocation (018): opened via btnAllocateJob against whichever job is
-    -- selected in calendarDayJobsTable, closed via confirm/cancel. nil
-    -- allocatingJobId means the day-detail panel shows the plain job list
-    -- (calendarDayJobsContainer); non-nil swaps it for allocationContainer
+    -- highlighted in jobsTable, closed via confirm/cancel. nil
+    -- allocatingJobId means the right-hand panel shows the job's details
+    -- (jobsDetailContainer); non-nil swaps it for allocationContainer
     -- (see refreshAllocationState/onClickCancelAllocation). Worker selection
     -- is an ordered list of worker ids (035 - a haulage job takes two), empty
     -- meaning "do it myself" (row 1 of allocationWorkerTable, workerId nil,
@@ -668,10 +634,7 @@ function MenuContractor:initialize()
 
     -- Staff (017): staffTable is reused for both the Roster and Candidates
     -- views (see onClickStaffView/refreshStaffState) rather than two
-    -- separate SmoothLists, since only one view is ever visible at a time —
-    -- same "one widget, branch on which logical list is active" approach as
-    -- calendarDayTable/calendarDayJobsTable already use for two genuinely
-    -- simultaneous lists.
+    -- separate SmoothLists, since only one view is ever visible at a time.
     self.staffView = "roster"
     self.rosterWorkers = {}
     self.candidateList = {}
@@ -694,12 +657,10 @@ function MenuContractor:initialize()
     FocusManager:linkElements(self.inboxMessageTable, FocusManager.BOTTOM, self.inboxTable)
     FocusManager:linkElements(self.inboxTable, FocusManager.TOP, self.inboxMessageTable)
 
-    self.calendarDayTable:setDataSource(self)
-    self.calendarDayTable:setDelegate(self)
-    self.calendarDayJobsTable:setDataSource(self)
-    self.calendarDayJobsTable:setDelegate(self)
-    self.calendarCompletedTable:setDataSource(self)
-    self.calendarCompletedTable:setDelegate(self)
+    self.jobsTable:setDataSource(self)
+    self.jobsTable:setDelegate(self)
+    self.jobsCompletedTable:setDataSource(self)
+    self.jobsCompletedTable:setDelegate(self)
 
     self.allocationWorkerTable:setDataSource(self)
     self.allocationWorkerTable:setDelegate(self)
@@ -708,8 +669,8 @@ function MenuContractor:initialize()
 
     -- The two allocation pickers only lead to each other (vanilla's
     -- Production tab does the same). Left to itself FocusManager goes to
-    -- whatever lies nearest, which is the day list, and moving onto that
-    -- picks a day and closes the panel. Leaving is the Cancel button.
+    -- whatever lies nearest, which is the jobs list, and moving onto that
+    -- picks another job and closes the panel. Leaving is the Cancel button.
     FocusManager:linkElements(self.allocationWorkerTable, FocusManager.LEFT, nil)
     FocusManager:linkElements(self.allocationWorkerTable, FocusManager.RIGHT, self.allocationEquipmentTable)
     FocusManager:linkElements(self.allocationWorkerTable, FocusManager.TOP, nil)
@@ -847,28 +808,30 @@ function MenuContractor:getMenuButtonInfo()
         return self.menuButtonInfoInboxWithSelection
     end
 
-    -- No period-nav buttons while the tab is showing the "locked" prompt
-    -- instead of real calendar content (see refreshCompanyState).
-    if state == MenuContractor.SUB_CATEGORY.CALENDAR and not self:hasCompany() then
+    if state == MenuContractor.SUB_CATEGORY.JOBS and not self:hasCompany() then
         return self.menuButtonInfoDefault
     end
 
-    if state == MenuContractor.SUB_CATEGORY.CALENDAR and self:hasCompany() then
+    if state == MenuContractor.SUB_CATEGORY.JOBS and self:hasCompany() then
         if self.allocatingJobId ~= nil then
             if FocusManager:getFocusedElement() == self.allocationEquipmentTable and
                     self.allocationEquipmentRows[self.allocationHighlightedEquipmentIndex] ~= nil then
-                return self.menuButtonInfoCalendarAllocatingEquipment
+                return self.menuButtonInfoJobsAllocatingEquipment
             end
-            return self.menuButtonInfoCalendarAllocating
+            return self.menuButtonInfoJobsAllocating
         end
 
-        local selectedJob = self:getSelectedCalendarDayJob()
+        local selectedJob = self:getSelectedJob()
         -- 100: a workshop job has no crew to allocate, only its details.
-        if selectedJob ~= nil and selectedJob.state == TheContractorJob.STATE.ACCEPTED and
-                not selectedJob:isWorkshop() then
-            return self.menuButtonInfoCalendarWithAllocatableJob
+        -- 132: nor one whose ready day hasn't come (it has neither).
+        if selectedJob ~= nil and selectedJob.state == TheContractorJob.STATE.ACCEPTED then
+            if not selectedJob:isWorkshop() and selectedJob:isReady() then
+                return self.menuButtonInfoJobsWithAllocatableJob
+            elseif selectedJob:isWorkshop() then
+                return self.menuButtonInfoJobsWithJob
+            end
         elseif selectedJob ~= nil then
-            return self.menuButtonInfoCalendarWithJob
+            return self.menuButtonInfoJobsWithJob
         end
     end
 
@@ -1104,7 +1067,7 @@ function MenuContractor:refreshCompanyLogo()
     self.companyLogo:setImageUVs(nil, unpack(Overlay.DEFAULT_UVS))
 end
 
--- Inbox/Calendar/Staff stay visible as tabs (see main.lua's note on the
+-- Inbox/Jobs/Staff stay visible as tabs (see main.lua's note on the
 -- always-visible top-level predicate) but their content is gated on the
 -- farm having a company, until the real per-tab content lands in later
 -- tickets. The Overview tab itself swaps between a "no company yet" prompt
@@ -1124,12 +1087,11 @@ function MenuContractor:refreshCompanyState()
         self.selectedInboxJobId = nil
         self.selectedInboxMessageId = nil
 
-        self.calendarContainer:setVisible(false)
-        self.calendarDayDetailsBox:setVisible(false)
-        self.calendarCompletedContainer:setVisible(false)
+        self.jobsContainer:setVisible(false)
+        self.jobsDetailsBox:setVisible(false)
+        self.jobsCompletedContainer:setVisible(false)
         self.selectedCompletedJobId = nil
-        self.selectedCalendarDay = nil
-        self.selectedCalendarDayJobId = nil
+        self.selectedJobId = nil
         self.allocatingJobId = nil
 
         self.staffViewSelector:setVisible(false)
@@ -1185,7 +1147,7 @@ function MenuContractor:refreshCompanyState()
 
         self:refreshAdvertisingState(farmId, tc.Advertising)
         self:refreshInboxState(farmId, tc.Jobs)
-        self:refreshCalendarState(farmId, tc.Jobs)
+        self:refreshJobsState(farmId, tc.Jobs)
         self:refreshCurrentJobsState(farmId, tc.Jobs)
         self:refreshLastCompletedJobState(farmId, tc.Jobs)
         self:refreshSalaryBillState(farmId, tc.Staff)
@@ -1203,11 +1165,11 @@ function MenuContractor:refreshCompanyState()
     end
 
     self.placeholderInbox:setVisible(not hasCompany)
-    self.calendarContainer:setVisible(hasCompany)
+    self.jobsContainer:setVisible(hasCompany)
 
     local lockedText = g_i18n:getText("tc_placeholder_locked")
-    self.placeholderCalendar:setVisible(not hasCompany)
-    self.placeholderCalendar:setText(lockedText)
+    self.placeholderJobs:setVisible(not hasCompany)
+    self.placeholderJobs:setText(lockedText)
     self.placeholderStaff:setVisible(not hasCompany)
     self.placeholderStaff:setText(lockedText)
     self.placeholderFinances:setVisible(not hasCompany)
@@ -1255,7 +1217,7 @@ end
 
 -- Overview tab's at-a-glance work list, next to the reputation progress
 -- panel: allocated/in_progress jobs (accepted-but-unallocated isn't "current
--- work" yet, that's what the Calendar's unallocated-count warning is for),
+-- work" yet, that's what the Jobs tab's Not yet allocated chip is for),
 -- one line each as "Field <n>: <type> - <percent>%". completionPercentage is
 -- kept live by TCJobProgress's background poll (019).
 function MenuContractor:refreshCurrentJobsState(farmId, jobs)
@@ -1424,7 +1386,7 @@ function MenuContractor:refreshStaffState(farmId, staff, jobs)
 
     -- Keep each view's own selection if it's still present (e.g. a refresh
     -- triggered by something unrelated), otherwise drop it — same pattern as
-    -- refreshInboxState/refreshCalendarState's selection handling.
+    -- refreshInboxState/refreshJobsState's selection handling.
     local rosterStillPresent = false
     for _, worker in ipairs(self.rosterWorkers) do
         if worker.id == self.selectedRosterWorkerId then
@@ -1835,7 +1797,7 @@ end
 
 -- The only way to switch between Roster, Candidates and (111) Others —
 -- same "in-page MultiTextOption, not a bottom-bar button" pattern as
--- calendarPeriodSelector. Switching views clears the *other* views'
+-- jobsViewSelector. Switching views clears the *other* views'
 -- selections' relevance (kept in memory, just no longer driving the details
 -- box/button bar) by virtue of updateStaffDetails/getMenuButtonInfo both
 -- keying off self.staffView, not by actually discarding
@@ -2710,6 +2672,10 @@ function MenuContractor:updateInboxDetails()
         fieldText = job:getLocationText()
     end
     self.inboxDetailField:setText(fieldText)
+    -- 132: a future harvest's ready day.
+    local readyDay = job:getFutureReadyDay()
+    self.inboxRowReady:setVisible(readyDay ~= nil)
+    self.inboxDetailReadyDate:setText(readyDay ~= nil and formatMonotonicDay(readyDay) or "")
     self.inboxDetailTargetDate:setText(formatTargetDate(job.targetPeriod, job.targetDayInPeriod))
     self.inboxDetailPrice:setText(g_i18n:formatMoney(job:getPrice(), 0, true, true))
     self.inboxDetailCrew:setText(self:getJobCrewText(job))
@@ -2780,6 +2746,7 @@ function MenuContractor:updateInboxWorkshopDetails(job)
         end
     end
     self.inboxDetailField:setText(machineText)
+    self.inboxRowReady:setVisible(false)
     self.inboxDetailTargetDate:setText(formatTargetDate(job.targetPeriod, job.targetDayInPeriod))
     self.inboxDetailPrice:setText(MenuContractor.getJobPriceText(job))
     self.inboxDetailCrew:setText(MenuContractor.getWorkshopWorkText(job))
@@ -3114,8 +3081,8 @@ function MenuContractor:updateInboxEquipment(job)
     end
 end
 
--- SmoothList dataSource/delegate, shared across inboxTable, calendarDayTable,
--- and calendarDayJobsTable (see initialize's setDataSource/setDelegate) —
+-- SmoothList dataSource/delegate, shared across every table on the page
+-- (see initialize's setDataSource/setDelegate) —
 -- one flat section each, no section headers, same shape as FS25_RedTape's
 -- table renderers just implemented directly on the frame since there's only
 -- ever the one list per table.
@@ -3124,11 +3091,9 @@ function MenuContractor:getNumberOfSections(list)
 end
 
 function MenuContractor:getNumberOfItemsInSection(list, section)
-    if list == self.calendarDayTable then
-        return #self.calendarDayRows
-    elseif list == self.calendarDayJobsTable then
-        return #self.calendarDayJobs
-    elseif list == self.calendarCompletedTable then
+    if list == self.jobsTable then
+        return #self.listedJobs
+    elseif list == self.jobsCompletedTable then
         return #self.completedJobs
     elseif list == self.allocationWorkerTable then
         return #self.allocationWorkerRows
@@ -3161,13 +3126,10 @@ function MenuContractor:getNumberOfItemsInSection(list, section)
 end
 
 function MenuContractor:populateCellForItemInSection(list, section, index, cell)
-    if list == self.calendarDayTable then
-        self:populateCalendarDayCell(index, cell)
+    if list == self.jobsTable then
+        self:populateJobCell(index, cell)
         return
-    elseif list == self.calendarDayJobsTable then
-        self:populateCalendarDayJobCell(index, cell)
-        return
-    elseif list == self.calendarCompletedTable then
+    elseif list == self.jobsCompletedTable then
         self:populateCompletedJobCell(index, cell)
         return
     elseif list == self.allocationWorkerTable then
@@ -3266,36 +3228,28 @@ function MenuContractor:populateCellForItemInSection(list, section, index, cell)
 end
 
 function MenuContractor:onListSelectionChanged(list, section, index)
-    if list == self.calendarDayTable then
-        local row = self.calendarDayRows[index]
+    if list == self.jobsTable then
+        local job = self.listedJobs[index]
         -- The pickers' focus links keep a gamepad off this list while
-        -- allocating, but a mouse can still pick a day. Another day closes
-        -- the allocation properly; the same day (a reload re-raising this)
+        -- allocating, but a mouse can still pick a job. Another job closes
+        -- the allocation properly; the same one (a reload re-raising this)
         -- leaves it alone.
         if self.allocatingJobId ~= nil then
-            if row ~= nil and row.day == self.selectedCalendarDay then
+            if job ~= nil and job.id == self.allocatingJobId then
                 return
             end
             self.allocatingJobId = nil
-            self.calendarCompletedContainer:setVisible(true)
+            self.jobsCompletedContainer:setVisible(true)
         end
-        self.selectedCalendarDay = row ~= nil and row.day or nil
-        self:updateCalendarDayDetails()
-        return
-    end
-
-    if list == self.calendarDayJobsTable then
-        local job = self.calendarDayJobs[index]
-        self.selectedCalendarDayJobId = job ~= nil and job.id or nil
-        self:updateCalendarDayJobNote()
-        self:setMenuButtonInfoDirty()
+        self.selectedJobId = job ~= nil and job.id or nil
+        self:updateJobDetails()
         return
     end
 
     -- Just tracks the highlight and redraws the report text - must not
     -- reload the list (reloadData re-raises this, see the equipment picker
     -- note below).
-    if list == self.calendarCompletedTable then
+    if list == self.jobsCompletedTable then
         local job = self.completedJobs[index]
         self.selectedCompletedJobId = job ~= nil and job.id or nil
         self:updateCompletedJobReport()
@@ -3428,110 +3382,68 @@ function MenuContractor:onListSelectionChanged(list, section, index)
     self:updateInboxDetails()
 end
 
--- Calendar (015) — a real date grid, one period ("month") visible at a
--- time, paged forward/back via the in-page "< Month Year >" selector (see
--- onClickCalendarPeriodSelector). Acceptance and allocation are
--- decoupled (Q25): a day's row shows how many of that day's jobs are still
--- unallocated (accepted but no worker/equipment yet, per 018) so the player
--- notices overbooking before it becomes a problem, without gating anything
--- here — allocation itself is 018's flow.
---
--- Offset is bounded to [0, PERIODS_IN_YEAR - 1]: Job (008) only stores
--- targetPeriod/targetDayInPeriod, not a year, so period N next year is
--- indistinguishable from period N right now in the data we have to render —
--- paging a further year around would just repeat the same view.
-function MenuContractor:getCalendarViewPeriod()
-    local environment = g_currentMission.environment
-    return (environment.currentPeriod - 1 + self.calendarPeriodOffset) % Environment.PERIODS_IN_YEAR + 1
-end
-
--- Companion to getCalendarViewPeriod: whether paging calendarPeriodOffset
--- periods forward from the current one crossed a year boundary (e.g.
--- December -> January), so the two always agree on which "January" is
--- meant. See formatCalendarDate's comment for why this is safe to compute
--- here but not for a stored Job's targetPeriod.
-function MenuContractor:getCalendarViewYear()
-    local environment = g_currentMission.environment
-    local yearsForward = math.floor((environment.currentPeriod - 1 + self.calendarPeriodOffset) / Environment.PERIODS_IN_YEAR)
-    return environment.currentYear + yearsForward
-end
-
-function MenuContractor:refreshCalendarState(farmId, jobs)
-    -- Day/period navigation always drops any in-progress allocation (018) —
-    -- the panel is scoped to one specific day's job, so paging away from it
-    -- no longer makes sense. onClickConfirmAllocation/onClickCancelAllocation
-    -- already set this nil themselves before calling refreshCalendarState, so
-    -- this is a harmless re-assignment on that path.
+-- Jobs (133) — every taken-on job in one list (TCJobList): those that can
+-- be worked now first, soonest due on top, then the ones still to come by
+-- the day they're ready (132). jobsViewSelector narrows it to either part.
+-- Replaced 015's month grid. Acceptance and allocation are still decoupled
+-- (Q25): an accepted job is listed whether or not it's allocated yet.
+function MenuContractor:refreshJobsState(farmId, jobs)
+    -- Any refresh drops an allocation in progress (018).
+    -- onClickConfirmAllocation/onClickCancelAllocation already set this nil
+    -- themselves before calling refreshJobsState, so this is a harmless
+    -- re-assignment on that path.
     self.allocatingJobId = nil
 
-    local environment = g_currentMission.environment
-    local viewPeriod = self:getCalendarViewPeriod()
-    local isCurrentPeriod = self.calendarPeriodOffset == 0
-
-    -- Texts only actually need rebuilding once per frame open (the current
-    -- in-game period doesn't change while the menu's open), but rebuilding
-    -- them on every refresh is cheap and keeps this correct if that ever
-    -- stops being true. setState with no forceEvent just moves the display,
-    -- it doesn't re-fire onClickCalendarPeriodSelector.
-    local periodTexts = {}
-    for offset = 0, Environment.PERIODS_IN_YEAR - 1 do
-        local rawPeriod = environment.currentPeriod - 1 + offset
-        local period = rawPeriod % Environment.PERIODS_IN_YEAR + 1
-        local year = environment.currentYear + math.floor(rawPeriod / Environment.PERIODS_IN_YEAR)
-        table.insert(periodTexts, string.format("%s, %s", g_i18n:getText("ui_month" .. periodToMonth(period)),
-            TCCalendar.formatYear(year, period)))
+    local viewIndex = 1
+    local viewTexts = {}
+    for i, view in ipairs(TCJobList.VIEWS) do
+        if view == self.jobsView then
+            viewIndex = i
+        end
+        table.insert(viewTexts, g_i18n:getText("tc_jobs_view_" .. view))
     end
-    self.calendarPeriodSelector:setTexts(periodTexts)
-    self.calendarPeriodSelector:setState(self.calendarPeriodOffset + 1)
+    self.jobsView = TCJobList.VIEWS[viewIndex]
+    self.jobsViewSelector:setTexts(viewTexts)
+    self.jobsViewSelector:setState(viewIndex)
 
-    self.calendarDayRows = {}
-    for day = 1, environment.daysPerPeriod do
-        local dayJobs = {}
-        for _, job in ipairs(jobs:getJobsByTargetDate(farmId, viewPeriod, day)) do
-            if isCalendarVisibleState(job.state) then
-                table.insert(dayJobs, job)
+    -- reloadData re-raises the selection callback with the old index, so
+    -- the wanted job is held on to first (as the Workshop tab does).
+    local wantedJobId = self.selectedJobId
+    self.listedJobs = TCJobList.build(jobs:getAllJobs(farmId), self.jobsView)
+    self.jobsTable:reloadData()
+
+    -- Same shape as refreshInboxState/FS25_RedTape's onSwitchSchemeDisplay:
+    -- reload first, then show/hide a plain wrapping container rather than
+    -- the SmoothList itself (a hidden SmoothList keeps a stale selected
+    -- index and crashes the base game's update/mouseEvent).
+    local hasJobs = #self.listedJobs > 0
+    self.jobsListContainer:setVisible(hasJobs)
+    self.jobsEmptyText:setVisible(not hasJobs)
+    self.jobsEmptyText:setText(g_i18n:getText("tc_jobs_empty_" .. self.jobsView))
+
+    if hasJobs then
+        local selectedIndex = 1
+        for i, job in ipairs(self.listedJobs) do
+            if job.id == wantedJobId then
+                selectedIndex = i
             end
         end
-
-        local unallocatedCount = 0
-        local missedCount = 0
-        for _, job in ipairs(dayJobs) do
-            if job.state == TheContractorJob.STATE.ACCEPTED and not job:isWorkshop() then
-                unallocatedCount = unallocatedCount + 1
-            elseif job.state == TheContractorJob.STATE.MISSED then
-                missedCount = missedCount + 1
-            end
+        if self.jobsTable:getSelectedIndexInSection() ~= selectedIndex then
+            self.jobsTable:setSelectedIndex(selectedIndex)
         end
-
-        table.insert(self.calendarDayRows, {
-            day = day,
-            jobs = dayJobs,
-            unallocatedCount = unallocatedCount,
-            missedCount = missedCount,
-            isToday = isCurrentPeriod and day == environment.currentDayInPeriod,
-        })
+        self.selectedJobId = self.listedJobs[selectedIndex].id
+    else
+        self.selectedJobId = nil
     end
 
-    self.calendarDayTable:reloadData()
-
-    self.btnCalendarToday.disabled = self.calendarPeriodOffset == 0
-    self:setMenuButtonInfoDirty()
-
-    -- Keep the current day selection if it's still in range (e.g. a refresh
-    -- triggered by something unrelated), otherwise drop it — same pattern
-    -- as refreshInboxState's selection handling.
-    local stillValid = false
-    for _, row in ipairs(self.calendarDayRows) do
-        if row.day == self.selectedCalendarDay then
-            stillValid = true
-        end
-    end
-    if not stillValid then
-        self.selectedCalendarDay = nil
-    end
-
-    self:updateCalendarDayDetails()
+    self:updateJobDetails()
     self:refreshCompletedJobsState(farmId, jobs)
+end
+
+function MenuContractor:onClickJobsView()
+    self.jobsView = TCJobList.VIEWS[self.jobsViewSelector:getState()] or "all"
+    self.selectedJobId = nil
+    self:refreshJobsState(g_currentMission:getFarmId(), g_currentMission.TheContractor.Jobs)
 end
 
 -- Completed jobs (029 follow-up) -----------------------------------------
@@ -3560,7 +3472,7 @@ local function formatCompletedAt(completedAt)
 end
 
 -- Same reload-then-show-the-wrapping-container shape as
--- updateCalendarDayDetails (never toggle the SmoothList itself). Keeps the
+-- refreshJobsState (never toggle the SmoothList itself). Keeps the
 -- highlighted job if it's still listed, otherwise re-picks the newest.
 function MenuContractor:refreshCompletedJobsState(farmId, jobs)
     self.completedJobs = jobs:getJobsByState(farmId, TheContractorJob.STATE.COMPLETED)
@@ -3571,12 +3483,12 @@ function MenuContractor:refreshCompletedJobsState(farmId, jobs)
         return a.id > b.id
     end)
 
-    self.calendarCompletedTable:reloadData()
+    self.jobsCompletedTable:reloadData()
 
     local hasJobs = #self.completedJobs > 0
-    self.calendarCompletedContainer:setVisible(self.allocatingJobId == nil)
-    self.calendarCompletedEmptyText:setVisible(not hasJobs)
-    self.calendarCompletedListContainer:setVisible(hasJobs)
+    self.jobsCompletedContainer:setVisible(self.allocatingJobId == nil)
+    self.jobsCompletedEmptyText:setVisible(not hasJobs)
+    self.jobsCompletedListContainer:setVisible(hasJobs)
 
     local selectedIndex = nil
     for i, job in ipairs(self.completedJobs) do
@@ -3586,7 +3498,7 @@ function MenuContractor:refreshCompletedJobsState(farmId, jobs)
     end
     if hasJobs then
         selectedIndex = selectedIndex or 1
-        self.calendarCompletedTable:setSelectedIndex(selectedIndex)
+        self.jobsCompletedTable:setSelectedIndex(selectedIndex)
         self.selectedCompletedJobId = self.completedJobs[selectedIndex].id
     else
         self.selectedCompletedJobId = nil
@@ -3642,11 +3554,11 @@ function MenuContractor:updateCompletedJobReport()
     end
 
     if job == nil then
-        self.calendarCompletedReport:setText("")
+        self.jobsCompletedReport:setText("")
         return
     end
 
-    self.calendarCompletedReport:setText(string.format(g_i18n:getText("tc_calendar_completedReport"),
+    self.jobsCompletedReport:setText(string.format(g_i18n:getText("tc_calendar_completedReport"),
         self:getCompletedJobCrewText(job),
         job:getPaymentText(),
         TheContractorJob.formatMinutes(job:getTimeTakenMinutes()),
@@ -3655,75 +3567,66 @@ function MenuContractor:updateCompletedJobReport()
         job.stuckInterventions))
 end
 
-function MenuContractor:getSelectedCalendarDayRow()
-    for _, row in ipairs(self.calendarDayRows) do
-        if row.day == self.selectedCalendarDay then
-            return row
-        end
-    end
-    return nil
-end
-
-function MenuContractor:getSelectedCalendarDayJob()
-    for _, job in ipairs(self.calendarDayJobs) do
-        if job.id == self.selectedCalendarDayJobId then
+function MenuContractor:getSelectedJob()
+    for _, job in ipairs(self.listedJobs) do
+        if job.id == self.selectedJobId then
             return job
         end
     end
     return nil
 end
 
-function MenuContractor:populateCalendarDayCell(index, cell)
-    local row = self.calendarDayRows[index]
-    if row == nil then
-        return
+-- A job's due date with how long's left: "today", "tomorrow" or "N days".
+local function formatDueWithDaysLeft(job)
+    local dateText = formatTargetDate(job.targetPeriod, job.targetDayInPeriod)
+    local daysLeft = TCJobList.getDaysLeft(job, g_currentMission.environment.currentMonotonicDay)
+    if daysLeft == nil then
+        return dateText
     end
-
-    local dayText = tostring(row.day)
-    if row.isToday then
-        dayText = string.format(g_i18n:getText("tc_calendar_todayMarker"), dayText)
-    end
-    cell:getAttribute("day"):setText(dayText)
-    cell:getAttribute("jobCount"):setText(tostring(#row.jobs))
-
-    -- Missed takes priority over the unallocated warning — a job that
-    -- already blew its deadline is a bigger deal than one still merely
-    -- waiting on allocation, and they're mutually exclusive states anyway
-    -- (see Job.lua's transition table) so a day is never both at once.
-    local chip, chipText = cell:getAttribute("statusChip"), cell:getAttribute("statusChipText")
-    if #row.jobs == 0 then
-        setChip(chip, chipText, nil)
-    elseif row.missedCount > 0 then
-        setChip(chip, chipText, string.format(g_i18n:getText("tc_calendar_missedCount"), row.missedCount), "bad")
-    elseif row.unallocatedCount > 0 then
-        setChip(chip, chipText, string.format(g_i18n:getText("tc_calendar_unallocatedCount"), row.unallocatedCount),
-            "warn")
+    local leftText
+    if daysLeft == 0 then
+        leftText = g_i18n:getText("tc_jobs_dueToday")
+    elseif daysLeft == 1 then
+        leftText = g_i18n:getText("tc_jobs_dueTomorrow")
     else
-        setChip(chip, chipText, g_i18n:getText("tc_calendar_allAllocated"), "good")
+        leftText = string.format(g_i18n:getText("tc_jobs_dueInDays"), daysLeft)
     end
+    return string.format(g_i18n:getText("tc_jobs_dueWithDaysLeft"), dateText, leftText)
 end
 
-function MenuContractor:populateCalendarDayJobCell(index, cell)
-    local job = self.calendarDayJobs[index]
+-- The list's chip: a job still to come says when it's ready from (132),
+-- anything else its status.
+function MenuContractor:getJobListChip(job)
+    local readyDay = job.state == TheContractorJob.STATE.ACCEPTED and job:getFutureReadyDay() or nil
+    if readyDay ~= nil then
+        return string.format(g_i18n:getText("tc_jobs_readyChip"), formatMonotonicDay(readyDay)), "neutral"
+    end
+    return self:getJobStatusChip(job)
+end
+
+-- The list's Due column: "Today", "Tomorrow", or just the date (the
+-- details panel has the date with how long's left).
+local function formatListDue(job)
+    local daysLeft = TCJobList.getDaysLeft(job, g_currentMission.environment.currentMonotonicDay)
+    if daysLeft == 0 then
+        return g_i18n:getText("tc_jobs_listDueToday")
+    elseif daysLeft == 1 then
+        return g_i18n:getText("tc_jobs_listDueTomorrow")
+    end
+    return formatTargetDate(job.targetPeriod, job.targetDayInPeriod)
+end
+
+function MenuContractor:populateJobCell(index, cell)
+    local job = self.listedJobs[index]
     if job == nil then
         return
     end
 
     cell:getAttribute("jobType"):setText(job:getListTitle())
-
-    -- How many people the job takes: 2 for harvest & haul (035), "Player"
-    -- for work only a player can do. getJobCrewText has the long form.
-    if TheContractorJobGeneration.isPlayerOnly(job) then
-        cell:getAttribute("crew"):setText(g_i18n:getText("tc_calendar_crewPlayer"))
-    else
-        cell:getAttribute("crew"):setText(tostring(TheContractorAllocation.getRequiredWorkerCount(job)))
-    end
-
     cell:getAttribute("field"):setText(job:getListFieldText())
+    cell:getAttribute("due"):setText(formatListDue(job))
 
-    cell:getAttribute("price"):setText(g_i18n:formatMoney(job:getPrice(), 0, true, true))
-
-    local chipText, chipTone = self:getJobStatusChip(job)
+    local chipText, chipTone = self:getJobListChip(job)
     setChip(cell:getAttribute("statusChip"), cell:getAttribute("statusChipText"), chipText, chipTone)
 end
 
@@ -3737,9 +3640,9 @@ local function shortenName(name)
     return utf8Substr(name, 0, CHIP_NAME_MAX_CHARS - 1) .. "..."
 end
 
--- A calendar job's status chip text and tone (also 093's Job details).
--- Allocated vs not-yet-allocated (Q25) — selecting a row in the day's job
--- list just moves selectedCalendarDayJobId (see onListSelectionChanged);
+-- A listed job's status chip text and tone (also 093's Job details).
+-- Allocated vs not-yet-allocated (Q25) — selecting a row in the jobs list
+-- just moves selectedJobId (see onListSelectionChanged);
 -- the actual allocation flow (018) is reached via the Allocate bottom-bar
 -- button that appears whenever the selected job is still `accepted` (see
 -- getMenuButtonInfo/onClickOpenAllocation), not a button in this list.
@@ -3787,7 +3690,7 @@ function MenuContractor:getJobStatusChip(job)
         if status ~= nil and status.state == TCADSRepairContracts.STATE.TAMPERED then
             return g_i18n:getText("tc_repair_chipTampered"), "bad"
         end
-        -- How far it's got ("2 of 5 serviced"), so the Calendar and the
+        -- How far it's got ("2 of 5 serviced"), so the Jobs tab and the
         -- Overview say what's left.
         local progressText = vehicle ~= nil and MenuContractor.getWorkshopProgressText(job, vehicle) or nil
         if progressText ~= nil then
@@ -3840,7 +3743,7 @@ local function getCrewNames(job)
 end
 
 function MenuContractor:onClickJobDetails()
-    local job = self:getSelectedCalendarDayJob()
+    local job = self:getSelectedJob()
     if job == nil or (job.state == TheContractorJob.STATE.ACCEPTED and not job:isWorkshop()) then
         return
     end
@@ -3860,8 +3763,8 @@ function MenuContractor:onClickJobDetails()
         -- Same "synchronous for host/SP, catches up on the next refresh for
         -- a remote client" caveat as sendAllocation.
         onUnallocated = function()
-            self:refreshCalendarState(g_currentMission:getFarmId(), g_currentMission.TheContractor.Jobs)
-            self:focusCalendarDayJobs()
+            self:refreshJobsState(g_currentMission:getFarmId(), g_currentMission.TheContractor.Jobs)
+            self:focusJobsList()
         end,
     })
 end
@@ -3938,6 +3841,11 @@ function MenuContractor:getJobDetailRows(job)
         -- 113: its own row, since a chip sits where the value would.
         local chipText, chipTone = MenuContractor.getRelationshipChip(customer)
         add(g_i18n:getText("tc_people_detailRelationship"), "", chipText, chipTone)
+    end
+    -- 132: a future harvest's ready day.
+    local readyDay = job:getFutureReadyDay()
+    if readyDay ~= nil then
+        add(g_i18n:getText("tc_jobDetails_readyFrom"), formatMonotonicDay(readyDay))
     end
     add(g_i18n:getText("tc_jobDetails_due"), formatTargetDate(job.targetPeriod, job.targetDayInPeriod))
     if MenuContractor.isPriceToAgree(job) then
@@ -4395,7 +4303,7 @@ function MenuContractor:onClickWorkshopView()
     self:refreshWorkshopState(g_currentMission:getFarmId())
 end
 
--- From the Calendar's Job details: the Workshop tab with the job picked.
+-- From the Jobs tab's Job details: the Workshop tab with the job picked.
 function MenuContractor:showWorkshopJob(jobId)
     self.workshopView = "current"
     self.selectedWorkshopJobId = jobId
@@ -4600,16 +4508,16 @@ end
 
 -- Allocation flow (018) ---------------------------------------------------
 --
--- Opened from the Calendar day view against whichever job is currently
--- selected in calendarDayJobsTable (must still be `accepted` — see
--- getMenuButtonInfo). Swaps calendarDayJobsContainer for allocationContainer
--- inside the same calendarDayDetailsBox rather than opening a separate
+-- Opened from the Jobs tab against whichever job is highlighted in
+-- jobsTable (must still be `accepted`, and ready - see getMenuButtonInfo).
+-- Swaps jobsDetailContainer for allocationContainer inside the same
+-- jobsDetailsBox rather than opening a separate
 -- dialog, following this codebase's own "no custom dialog classes beyond
 -- TextInputDialog/YesNoDialog/InfoDialog" precedent.
 
 function MenuContractor:onClickOpenAllocation()
-    local job = self:getSelectedCalendarDayJob()
-    if job == nil or job.state ~= TheContractorJob.STATE.ACCEPTED then
+    local job = self:getSelectedJob()
+    if job == nil or job.state ~= TheContractorJob.STATE.ACCEPTED or not job:isReady() then
         return
     end
 
@@ -4625,19 +4533,18 @@ end
 function MenuContractor:onClickCancelAllocation()
     self.allocatingJobId = nil
     self.allocationContainer:setVisible(false)
-    self.calendarCompletedContainer:setVisible(true)
-    self:updateCalendarDayDetails()
-    self:setMenuButtonInfoDirty()
-    self:focusCalendarDayJobs()
+    self.jobsCompletedContainer:setVisible(true)
+    self:updateJobDetails()
+    self:focusJobsList()
 end
 
--- Once allocation closes: back on the day's job list, or the day list if
--- the day has no jobs to show.
-function MenuContractor:focusCalendarDayJobs()
-    if self.calendarDayJobsContainer:getIsVisible() then
-        FocusManager:setFocus(self.calendarDayJobsTable)
+-- Once allocation closes: back on the jobs list, or the view selector if
+-- there's nothing listed.
+function MenuContractor:focusJobsList()
+    if self.jobsListContainer:getIsVisible() then
+        FocusManager:setFocus(self.jobsTable)
     else
-        FocusManager:setFocus(self.calendarDayTable)
+        FocusManager:setFocus(self.jobsViewSelector)
     end
 end
 
@@ -4652,10 +4559,10 @@ function MenuContractor:refreshAllocationState()
     local jobs = g_currentMission.TheContractor.Jobs
     local job = jobs:getJob(farmId, self.allocatingJobId)
 
-    self.calendarDayJobsContainer:setVisible(false)
+    self.jobsDetailContainer:setVisible(false)
     self.allocationContainer:setVisible(job ~= nil)
     -- The allocation panel runs down over the completed-jobs section.
-    self.calendarCompletedContainer:setVisible(false)
+    self.jobsCompletedContainer:setVisible(false)
     self:setMenuButtonInfoDirty()
 
     if job == nil then
@@ -5264,91 +5171,81 @@ function MenuContractor:sendAllocation(job, workerIds, equipmentIds, haulageIds,
     self.allocatingJobId = nil
     -- Same "synchronous for host/SP, catches up on next refresh for a remote
     -- client" caveat as respondToSelectedInboxJob/sendCounterOffer.
-    self:refreshCalendarState(farmId, g_currentMission.TheContractor.Jobs)
-    self:focusCalendarDayJobs()
+    self:refreshJobsState(farmId, g_currentMission.TheContractor.Jobs)
+    self:focusJobsList()
 end
 
-function MenuContractor:updateCalendarDayDetails()
-    local row = self:getSelectedCalendarDayRow()
+-- The highlighted job's details in the right-hand panel: what the list's
+-- row has no room for. Allocation (018) is always closed by the time this
+-- runs (see refreshJobsState); this mirrors that back onto the two
+-- containers that swap places inside jobsDetailsBox.
+function MenuContractor:updateJobDetails()
+    local job = self:getSelectedJob()
 
-    self.calendarDayDetailsBox:setVisible(row ~= nil)
-
-    self.calendarDayJobs = row ~= nil and row.jobs or {}
-    self.calendarDayJobsTable:reloadData()
-
-    -- Same shape as refreshInboxState/FS25_RedTape's onSwitchSchemeDisplay:
-    -- reload first, then show/hide a plain wrapping container
-    -- (calendarDayJobsContainer) rather than the SmoothList itself — never
-    -- toggle a SmoothList's own visibility directly, that's what was leaving
-    -- it with a stale selected index into a now-empty list and crashing on
-    -- the next update()/mouseEvent (base game SmoothListElement bug). When
-    -- there's something to show, explicitly reselect index 1, matching
-    -- RedTape's own "always re-pick a fresh selection on reload" habit.
-    -- Allocation (018) is always closed by the time this runs (see
-    -- refreshCalendarState) — this just mirrors that back onto the two
-    -- containers that swap places inside calendarDayDetailsBox.
+    self.jobsDetailsBox:setVisible(job ~= nil)
     self.allocationContainer:setVisible(false)
-
-    local hasJobs = row ~= nil and #row.jobs > 0
-    self.calendarDayEmptyText:setVisible(row ~= nil and not hasJobs)
-    self.calendarDayJobsContainer:setVisible(hasJobs)
-    if hasJobs then
-        self.calendarDayJobsTable:setSelectedIndex(1)
-        self.selectedCalendarDayJobId = self.calendarDayJobs[1].id
-    else
-        self.selectedCalendarDayJobId = nil
-    end
-    self:updateCalendarDayJobNote()
+    self.jobsDetailContainer:setVisible(job ~= nil)
     self:setMenuButtonInfoDirty()
 
-    if row == nil then
+    if job == nil then
         return
     end
 
-    self.calendarDayDetailTitle:setText(string.format(g_i18n:getText("tc_calendar_dayDetailTitle"),
-        formatCalendarDate(self:getCalendarViewPeriod(), row.day, self:getCalendarViewYear())))
+    self.jobsDetailTitle:setText(job:getDisplayTitle())
+
+    local placeKey = "tc_jobDetails_field"
+    if job:isWorkshop() then
+        placeKey = "tc_jobDetails_machine"
+    elseif job:isYardJob() then
+        -- 124, 126: a farmer's yard.
+        placeKey = "tc_jobDetails_place"
+    end
+    self.jobsLabelPlace:setText(g_i18n:getText(placeKey))
+    self.jobsDetailPlace:setText(job:getLocationText())
+
+    -- Who's on it once it's allocated, who it needs until then; a workshop
+    -- job's work instead (100).
+    if job:isWorkshop() then
+        self.jobsLabelCrew:setText(g_i18n:getText("tc_repair_detailWork"))
+        self.jobsDetailCrew:setText(MenuContractor.getWorkshopWorkText(job))
+    elseif job.state == TheContractorJob.STATE.ACCEPTED then
+        self.jobsLabelCrew:setText(g_i18n:getText("tc_jobDetails_sectionCrew"))
+        self.jobsDetailCrew:setText(self:getJobCrewText(job))
+    else
+        self.jobsLabelCrew:setText(g_i18n:getText("tc_jobDetails_sectionCrew"))
+        self.jobsDetailCrew:setText(self:getCompletedJobCrewText(job))
+    end
+
+    self.jobsDetailPrice:setText(MenuContractor.getJobPriceText(job))
+
+    -- 132: a future harvest's ready day.
+    local readyDay = job:getFutureReadyDay()
+    self.jobsRowReady:setVisible(readyDay ~= nil)
+    self.jobsDetailReady:setText(readyDay ~= nil and formatMonotonicDay(readyDay) or "")
+    self.jobsDetailDue:setText(formatDueWithDaysLeft(job))
+    self.jobsDetailRows:invalidateLayout()
+
+    self:updateJobNote(job)
 end
 
--- Harvest & haul (035): the highlighted job's selling point, with how much
--- has gone in while the player is doing the carting. Blank otherwise.
-function MenuContractor:updateCalendarDayJobNote()
-    local job = self:getSelectedCalendarDayJob()
-    if job == nil or not job.includesHaulage or job.deliveryStationName == nil then
-        self.calendarDayJobNote:setText("")
+-- Why there's no Allocate yet (132), and a harvest & haul's selling point
+-- (035) with how much has gone in while the player is doing the carting.
+function MenuContractor:updateJobNote(job)
+    local notes = {}
+    local readyDay = job.state == TheContractorJob.STATE.ACCEPTED and job:getFutureReadyDay() or nil
+    if readyDay ~= nil then
+        table.insert(notes, string.format(g_i18n:getText("tc_calendar_readyNote"), formatMonotonicDay(readyDay)))
+    end
+    if not job.includesHaulage or job.deliveryStationName == nil then
+        -- No delivery to mention.
     elseif job:needsPlayerDelivery() and job.requiredLiters > 0 and
             (job.state == TheContractorJob.STATE.ALLOCATED or job.state == TheContractorJob.STATE.IN_PROGRESS) then
-        self.calendarDayJobNote:setText(string.format(g_i18n:getText("tc_calendar_deliveryProgressNote"),
+        table.insert(notes, string.format(g_i18n:getText("tc_calendar_deliveryProgressNote"),
             job.deliveryStationName, math.floor(100 * job.deliveredLiters / job.requiredLiters)))
     else
-        self.calendarDayJobNote:setText(string.format(g_i18n:getText("tc_calendar_deliveryNote"),
-            job.deliveryStationName))
+        table.insert(notes, string.format(g_i18n:getText("tc_calendar_deliveryNote"), job.deliveryStationName))
     end
-end
-
-function MenuContractor:onClickCalendarToday()
-    if self.calendarPeriodOffset == 0 then
-        return
-    end
-
-    self.calendarPeriodOffset = 0
-    -- Auto-select today's day rather than clearing the selection outright —
-    -- landing on "today" and then showing an unselected/empty right-hand
-    -- panel just reads as "nothing's due" even when something clearly is
-    -- (see the day list's own unallocated count), which was confusing.
-    self.selectedCalendarDay = g_currentMission.environment.currentDayInPeriod
-    self:refreshCalendarState(g_currentMission:getFarmId(), g_currentMission.TheContractor.Jobs)
-end
-
--- The only way to page months now — see MenuContractor.xml's
--- calendarPeriodSelector, the same fs25_subCategorySelector widget
--- FS25_RedTape uses for its scheme switcher, with wrap="false" so the right
--- arrow stops dead at the last bounded period instead of looping back to
--- the first. The widget already clamps its own state against the texts list
--- set in refreshCalendarState, so getState() - 1 is always a valid offset.
-function MenuContractor:onClickCalendarPeriodSelector()
-    self.calendarPeriodOffset = self.calendarPeriodSelector:getState() - 1
-    self.selectedCalendarDay = nil
-    self:refreshCalendarState(g_currentMission:getFarmId(), g_currentMission.TheContractor.Jobs)
+    self.jobsDetailNote:setText(table.concat(notes, " "))
 end
 
 function MenuContractor:onClickAcceptJob()
@@ -7940,8 +7837,8 @@ function MenuContractor:markInboxSeen()
     end
 end
 
-function MenuContractor:onClickCalendar()
-    self.subCategoryPaging:setState(MenuContractor.SUB_CATEGORY.CALENDAR, true)
+function MenuContractor:onClickJobs()
+    self.subCategoryPaging:setState(MenuContractor.SUB_CATEGORY.JOBS, true)
     self:setMenuButtonInfoDirty()
 end
 
@@ -7990,19 +7887,12 @@ function MenuContractor:updateContent()
         v:setVisible(k == state)
     end
 
-    -- Always land on today's month/day when (re-)entering the Calendar tab —
-    -- otherwise it silently reopened wherever the player last paged to,
-    -- which reads as "the calendar forgot what day it is" rather than a
-    -- deliberate browsing position worth remembering. Auto-selecting today's
-    -- day (not just the month) matters too: leaving the right-hand panel
-    -- unselected/empty right after accepting a job due today, while the
-    -- day list clearly shows it as unallocated, read as a contradiction —
-    -- "no jobs due" vs. "1 unallocated" for what's visibly the same day.
-    -- This only fires on tab switches (this method), not on every refresh,
-    -- so paging around once inside the tab still works normally.
-    if state == MenuContractor.SUB_CATEGORY.CALENDAR then
-        self.calendarPeriodOffset = 0
-        self.selectedCalendarDay = g_currentMission.environment.currentDayInPeriod
+    -- 133: entering the Jobs tab starts on All, at the top of the list
+    -- (what's most urgent). Only on tab switches, not every refresh, so
+    -- moving around inside the tab keeps its place.
+    if state == MenuContractor.SUB_CATEGORY.JOBS then
+        self.jobsView = "all"
+        self.selectedJobId = nil
     end
 
     self:refreshCompanyState()

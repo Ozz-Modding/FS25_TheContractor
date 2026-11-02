@@ -448,7 +448,7 @@ function TheContractorJobGeneration:tryGenerateJob(farmId, onlyJobType)
     local options = self:getJobTypeOptions(farmId, onlyJobType)
     local preferFulfillable = onlyJobType ~= nil or
         math.random() < TheContractorJobGeneration.FULFILLABLE_TYPE_SHARE
-    local field, deadlineDay, option
+    local field, deadlineDay, readyDay, option
     while deadlineDay == nil do
         local candidates
         option, candidates = self:pickJobType(options, preferFulfillable)
@@ -460,7 +460,7 @@ function TheContractorJobGeneration:tryGenerateJob(farmId, onlyJobType)
         -- with many undatable fields is as likely as any other.
         while deadlineDay == nil and #candidates > 0 do
             field = self:pickField(farmId, candidates)
-            deadlineDay = self:getDeadlineDay(field, option.jobDef)
+            deadlineDay, readyDay = self:getDeadlineDay(field, option.jobDef)
             if deadlineDay == nil then
                 TheContractorJobGeneration.removeCandidate(option, field)
             end
@@ -508,7 +508,7 @@ function TheContractorJobGeneration:tryGenerateJob(farmId, onlyJobType)
     return g_currentMission.TheContractor.Jobs:createJob(farmId, jobType, field:getId(), requiredSkillLevel,
         environment:getPeriodFromDay(deadlineDay), environment:getDayInPeriodFromDay(deadlineDay), price,
         equipmentAvailable, fruitTypeName, deadlineDay, deliveryStation ~= nil, deliveryStation,
-        TheContractorJobGeneration.getFieldStartState(field, jobDef))
+        TheContractorJobGeneration.getFieldStartState(field, jobDef), nil, nil, nil, nil, nil, readyDay)
 end
 
 -- 072: a job of this type on this field, offered now, for work something
@@ -524,7 +524,7 @@ function TheContractorJobGeneration:createJobOnField(farmId, jobType, field, sam
     if jobDef == nil or field == nil then
         return nil
     end
-    local deadlineDay = self:getDeadlineDay(field, jobDef, sameMonth)
+    local deadlineDay, readyDay = self:getDeadlineDay(field, jobDef, sameMonth)
     if deadlineDay == nil then
         return nil
     end
@@ -539,7 +539,7 @@ function TheContractorJobGeneration:createJobOnField(farmId, jobType, field, sam
     return g_currentMission.TheContractor.Jobs:createJob(farmId, jobType, field:getId(), requiredSkillLevel,
         environment:getPeriodFromDay(deadlineDay), environment:getDayInPeriodFromDay(deadlineDay), price,
         equipmentAvailable, fruitTypeName, deadlineDay, false, nil,
-        TheContractorJobGeneration.getFieldStartState(field, jobDef))
+        TheContractorJobGeneration.getFieldStartState(field, jobDef), nil, nil, nil, nil, nil, readyDay)
 end
 
 -- The field state a job starts from (see JOB_TYPES' startState), or nil
@@ -922,9 +922,10 @@ function TheContractorJobGeneration.isVanillaAvailable(field, jobDef)
 end
 
 -- The job's deadline as an absolute (monotonic) day — it's due by the end
--- of that day (024's miss check). Work can start as soon as the job's
--- accepted and allocated, or for a not-yet-ready harvest once the crop's
--- predicted ready date (010) arrives.
+-- of that day (024's miss check) — and, second, its ready day (132): the
+-- first day work can start, which is when allocation's allowed. That's
+-- today, or for a not-yet-ready harvest the crop's predicted ready date
+-- (010).
 --
 --   earliest  today, or tomorrow if fewer than MIN_HOURS_LEFT_TODAY hours
 --             remain; for a future harvest, its predicted ready day
@@ -937,7 +938,9 @@ end
 --             and stopping at the first day it isn't (isDoableOnDay)
 --
 -- Returns nil if the job isn't doable through `earliest` — better no offer
--- than one that expires a few hours after it arrives.
+-- than one that expires a few hours after it arrives. The ready day is the
+-- start of the work window, not `earliest`: that's only the offer's
+-- courtesy of a full day, not a limit on when work can begin.
 function TheContractorJobGeneration:getDeadlineDay(field, jobDef, sameMonth)
     local environment = g_currentMission.environment
     local today = environment.currentMonotonicDay
@@ -978,7 +981,7 @@ function TheContractorJobGeneration:getDeadlineDay(field, jobDef, sameMonth)
     if lastDoable == nil or lastDoable < earliest then
         return nil
     end
-    return lastDoable
+    return lastDoable, workStartDay
 end
 
 -- Whether the job could still be carried out on a given absolute day, as
