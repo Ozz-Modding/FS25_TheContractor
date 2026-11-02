@@ -1,5 +1,5 @@
 -- Client requests taking the crew and equipment off one of its farm's
--- allocated or in-progress jobs (094, from the Calendar's Job details).
+-- allocated or in-progress jobs (094, from the Jobs tab's Job details).
 -- The server re-checks (TheContractorJobs.getUnallocateProblem) and applies
 -- it with TheContractorJobs:unallocateJob, which sends every client the
 -- job's new snapshot (TCJobAllocatedEvent) - so this has no apply side of

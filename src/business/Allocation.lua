@@ -1,7 +1,7 @@
 -- Job allocation flow (018): assigns a worker (or the player themselves) plus
 -- equipment to an `accepted` job, flipping it to `allocated` (008's state
 -- machine). Acceptance and allocation are decoupled (Q25) — this is the
--- subsystem that bridges the gap, reached from the Calendar's day view (015).
+-- subsystem that bridges the gap, reached from the Jobs tab (133; 015's day view before it).
 --
 -- No state of its own to persist: every mutation lands on TheContractorJob
 -- (via Jobs.lua, already server-authoritative + persisted) or
@@ -573,6 +573,13 @@ function TheContractorAllocation:allocateJob(farmId, jobId, workerIds, equipment
     local job = jobs:getJob(farmId, jobId)
     -- 100: a workshop job has no crew or kit to allocate.
     if job == nil or job.state ~= TheContractorJob.STATE.ACCEPTED or job.workshop ~= nil then
+        return false
+    end
+    -- 132: not before its ready day - preparing the field below would force
+    -- a crop months from ripe straight to harvestable.
+    if not job:isReady() then
+        TCLog.info("TheContractor: farm %d job %d refused allocation, not ready until day %d", farmId, jobId,
+            job.readyDay)
         return false
     end
 

@@ -35,7 +35,7 @@
 		<text name="tc_nameStyle_all" text="Mixed"/>
 		<text name="tc_toolTip_jobPayRate" text="Scales what new contract offers pay. 100% is half of base-game contract pay. Jobs already offered or accepted keep their price. Business costs (insurance, memberships, training, claims and fines) scale with it; staff pay doesn't."/>
 		<text name="tc_header_inbox" text="Inbox"/>
-		<text name="tc_header_calendar" text="Calendar"/>
+		<text name="tc_header_jobs" text="Jobs"/>
 		<text name="tc_header_staff" text="People"/>
 		<text name="tc_header_overview" text="Overview"/>
 		<text name="tc_header_finances" text="Finances"/>
@@ -56,6 +56,7 @@
 		<text name="tc_detail_salaryBill" text="Salary bill"/>
 		<text name="tc_detail_lastJob" text="Last job"/>
 		<text name="tc_detail_field" text="Field"/>
+		<text name="tc_detail_readyFrom" text="Ready from"/>
 		<text name="tc_detail_dueBy" text="Due by end of"/>
 		<text name="tc_detail_skill" text="Expected skill"/>
 		<text name="tc_detail_price" text="Offered price"/>
@@ -252,37 +253,39 @@
 		<text name="tc_inbox_jobRejectedInfo" text="Negotiation failed: they walked away from %s on Field %s."/>
 		<text name="tc_inbox_dismissButton" text="Dismiss"/>
 		<text name="tc_calendar_yearLabel" text="Year %d"/>
-		<text name="tc_calendar_columnDay" text="Day"/>
-		<text name="tc_calendar_columnJobs" text="Jobs"/>
-		<text name="tc_calendar_columnStatus" text="Status"/>
 		<text name="tc_calendar_columnJobType" text="Type"/>
-		<text name="tc_calendar_columnCrew" text="Crew"/>
 		<text name="tc_calendar_deliveryNote" text="Delivery: %s"/>
+		<text name="tc_jobs_view_all" text="All jobs"/>
+		<text name="tc_jobs_view_ready" text="Ready now"/>
+		<text name="tc_jobs_view_upcoming" text="Upcoming"/>
+		<text name="tc_jobs_empty_all" text="No jobs taken on. Accept an offer in the Inbox and it's listed here."/>
+		<text name="tc_jobs_empty_ready" text="Nothing that can be worked now."/>
+		<text name="tc_jobs_empty_upcoming" text="Nothing still to come."/>
+		<text name="tc_jobs_columnDue" text="Due"/>
+		<text name="tc_jobs_columnAllocation" text="Allocation"/>
+		<text name="tc_jobs_dueWithDaysLeft" text="%s (%s)"/>
+		<text name="tc_jobs_dueToday" text="today"/>
+		<text name="tc_jobs_dueTomorrow" text="tomorrow"/>
+		<text name="tc_jobs_listDueToday" text="Today"/>
+		<text name="tc_jobs_listDueTomorrow" text="Tomorrow"/>
+		<text name="tc_jobs_dueInDays" text="%d days"/>
+		<text name="tc_jobs_readyChip" text="From %s"/>
+		<text name="tc_calendar_readyNote" text="Ready from %s: it can't be allocated before then."/>
 		<text name="tc_calendar_deliveryProgressNote" text="Delivery: %s - %d%% delivered so far"/>
-		<text name="tc_calendar_crewPlayer" text="Player"/>
 		<text name="tc_calendar_columnFarmland" text="Farmland"/>
-		<text name="tc_calendar_columnPrice" text="Price"/>
-		<text name="tc_calendar_columnAllocation" text="Allocation"/>
 		<text name="tc_calendar_completedHeading" text="Completed jobs"/>
 		<text name="tc_calendar_columnCompleted" text="Completed"/>
 		<text name="tc_calendar_columnQuality" text="Quality"/>
 		<text name="tc_calendar_formerWorker" text="Former employee"/>
 		<text name="tc_calendar_completedReport" text="Done by: %s. %s. Time taken %s. Fuel %s (%.0f l). Quality %s, stuck resets %d."/>
-		<text name="tc_calendar_todayMarker" text="%s (Today)"/>
-		<text name="tc_calendar_unallocatedCount" text="%d unallocated"/>
-		<text name="tc_calendar_missedCount" text="%d failed"/>
-		<text name="tc_calendar_allAllocated" text="Fully allocated"/>
-		<text name="tc_calendar_dayDetailTitle" text="Jobs due %s"/>
-		<text name="tc_calendar_dayEmpty" text="No jobs due this day."/>
 		<text name="tc_calendar_jobAllocated" text="Allocated"/>
 		<text name="tc_calendar_jobTravelling" text="Travelling"/>
 		<text name="tc_calendar_jobInProgress" text="In progress - %d%%"/>
 		<text name="tc_calendar_jobDelivering" text="%d%% cut, %d%% delivered"/>
 		<text name="tc_calendar_jobBalingDelivering" text="%d%% baled, %d%% delivered"/>
 		<text name="tc_calendar_jobDeliveringOnly" text="%d%% delivered"/>
-		<text name="tc_calendar_jobUnallocated" text="Not yet allocated"/>
+		<text name="tc_calendar_jobUnallocated" text="Not allocated"/>
 		<text name="tc_calendar_jobMissed" text="Failed"/>
-		<text name="tc_calendar_jumpToToday" text="Jump to Today"/>
 		<text name="tc_jobDetails_button" text="Job Details"/>
 		<text name="tc_jobDetails_title" text="Job Details"/>
 		<text name="tc_jobDetails_sectionJob" text="Job"/>
@@ -292,6 +295,7 @@
 		<text name="tc_jobDetails_job" text="Job"/>
 		<text name="tc_jobDetails_field" text="Field"/>
 		<text name="tc_jobDetails_customer" text="Customer"/>
+		<text name="tc_jobDetails_readyFrom" text="Ready from"/>
 		<text name="tc_jobDetails_due" text="Due"/>
 		<text name="tc_jobDetails_price" text="Price"/>
 		<text name="tc_jobDetails_status" text="Status"/>

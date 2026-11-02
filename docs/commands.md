@@ -263,7 +263,7 @@ tcWorker adsSkill 7 storekeeper 1
 
 ### `tcJob list [state|all]`
 
-Lists your farm's jobs with their ids, for the other job commands. Each line shows the job, its field, state and price. Where they apply, it adds how far along it is, when it's due (date and monotonic day) and who's on it: worker names, or "you" for a job you're doing yourself. Read-only, so it also works on a joined client.
+Lists your farm's jobs with their ids, for the other job commands. Each line shows the job, its field, state and price. Where they apply, it adds how far along it is, when it's ready from for a job that can't be worked yet (a future harvest), when it's due (date and monotonic day) and who's on it: worker names, or "you" for a job you're doing yourself. Read-only, so it also works on a joined client.
 
 | Argument | Meaning |
 |---|---|
@@ -278,6 +278,7 @@ tcJob list accepted
 Farm 1 jobs (open, today is day 212):
 #12 Harvest & Haul (Canola), field 37 - in_progress, 4,267 €, 45% done, due August 1, Year 1 (day 213), crew John White, Grace Hughes
 #14 Cultivate, field 12 - accepted, 1,180 €, due September 1, Year 1 (day 244)
+#15 Harvest (Wheat), field 8 - accepted, 6,920 €, ready from October 2, Year 1 (day 275), due October 4, Year 1 (day 277)
 ```
 
 ### `tcJob offer <jobType> [severity]`
@@ -354,7 +355,7 @@ Forces a job into another state. Only legal transitions are allowed:
 - **`completed`:** a hired worker's AI is stopped where it is, even mid-field or on the road. The job's invoiced and earns reputation. The crew and machines go through the usual trip back and parking, and the logbook records it.
 - **`missed`:** the usual missed-deadline reputation penalty (less whatever progress was made), and the crew and machines are released the same way.
 - A workshop job (a customer's machine in a repair zone, needs FS25_AdvancedDamageSystem) goes straight from `accepted` to `completed`: invoiced and rewarded as if ADS said the work was done. `missed` judges it as the deadline would: a machine that's worse than it came in costs double the reputation and may bring a claim. Either way the customer comes for the machine.
-- **`accepted`** (from `allocated` or `in_progress`): unallocates the job, the same as the Unallocate button in the Calendar's Job Details. The crew and machines come back (into cooldown if any work was done), and the job keeps its progress for whoever's allocated next. No reputation is lost.
+- **`accepted`** (from `allocated` or `in_progress`): unallocates the job, the same as the Unallocate button in the Jobs tab's Job Details. The crew and machines come back (into cooldown if any work was done), and the job keeps its progress for whoever's allocated next. No reputation is lost.
 
 Other states only change the job's state.
 

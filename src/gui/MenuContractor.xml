@@ -20,7 +20,7 @@
             <Button profile="fs25_subCategorySelectorTabbedTab" id="subCategoryTabs[2]" text="$l10n_tc_header_inbox" onClick="onClickInbox">
                 <ThreePartBitmap profile="fs25_subCategorySelectorTabbedTabBg" name="background"/>
             </Button>
-            <Button profile="fs25_subCategorySelectorTabbedTab" id="subCategoryTabs[3]" text="$l10n_tc_header_calendar" onClick="onClickCalendar">
+            <Button profile="fs25_subCategorySelectorTabbedTab" id="subCategoryTabs[3]" text="$l10n_tc_header_jobs" onClick="onClickJobs">
                 <ThreePartBitmap profile="fs25_subCategorySelectorTabbedTabBg" name="background"/>
             </Button>
             <Button profile="fs25_subCategorySelectorTabbedTab" id="subCategoryTabs[4]" text="$l10n_tc_header_staff" onClick="onClickStaff">
@@ -196,6 +196,12 @@
                         <Text profile="tc_detailValue" id="inboxDetailField" text="" position="220px 0px" size="410px 34px"/>
                         <Bitmap profile="tc_detailRowDivider"/>
                     </GuiElement>
+                    <!-- 132: only while the job's ready day is still to come. -->
+                    <GuiElement profile="tc_detailRow" id="inboxRowReady" size="752px 34px">
+                        <Text profile="tc_detailLabel" text="$l10n_tc_detail_readyFrom" position="0px 0px"/>
+                        <Text profile="tc_detailValue" id="inboxDetailReadyDate" text="" position="220px 0px" size="410px 34px"/>
+                        <Bitmap profile="tc_detailRowDivider"/>
+                    </GuiElement>
                     <GuiElement profile="tc_detailRow" size="752px 34px">
                         <Text profile="tc_detailLabel" text="$l10n_tc_detail_dueBy" position="0px 0px"/>
                         <Text profile="tc_detailValue" id="inboxDetailTargetDate" text="" position="220px 0px" size="410px 34px"/>
@@ -351,69 +357,84 @@
 
         <!-- Calendar ======================================================= -->
         <GuiElement profile="fs25_subCategorySelectorTabbedContainer" id="subCategoryPages[3]">
-            <Text profile="tc_emptyStateText" id="placeholderCalendar" text="$l10n_tc_placeholder_locked" position="40px -250px" size="1440px 60px" textMaxNumLines="2"/>
+            <Text profile="tc_emptyStateText" id="placeholderJobs" text="$l10n_tc_placeholder_locked" position="40px -250px" size="1440px 60px" textMaxNumLines="2"/>
 
-            <GuiElement id="calendarContainer" position="40px -20px">
-                <!-- The right-hand panel behind both the day details and the
-                     completed-jobs list; it lives here so it shows whenever
-                     the calendar does, selected day or not. -->
+            <!-- Jobs (133): every taken-on job, ready now first by deadline,
+                 then the ones still to come by ready day (TCJobList). -->
+            <GuiElement id="jobsContainer" position="40px -20px">
+                <!-- The right-hand panel behind both the selected job's
+                     details and the completed-jobs list. -->
                 <RoundCorner profile="tc_panel" position="640px 0px" size="800px 615px"/>
 
-                <MultiTextOption profile="tc_calendarPeriodSwitcher" id="calendarPeriodSelector" onClick="onClickCalendarPeriodSelector" wrap="false" size="380px 32px" position="0px 0px"/>
+                <MultiTextOption profile="tc_calendarPeriodSwitcher" id="jobsViewSelector" onClick="onClickJobsView" wrap="true" size="380px 32px" position="0px 0px"/>
 
-                <GuiElement profile="tc_tableHeaderRow" position="0px -50px" size="600px 30px">
-                    <Button profile="tc_tableHeader" position="14px 0px" text="$l10n_tc_calendar_columnDay" handleFocus="false"/>
-                    <Button profile="tc_tableHeader" position="150px 0px" text="$l10n_tc_calendar_columnJobs" handleFocus="false"/>
-                    <Button profile="tc_tableHeader" position="300px 0px" text="$l10n_tc_calendar_columnStatus" handleFocus="false"/>
-                    <Bitmap profile="tc_tableHeaderDivider"/>
-                </GuiElement>
+                <Text profile="tc_panelNote" id="jobsEmptyText" text="" position="0px -50px" size="600px 30px"/>
 
-                <SmoothList id="calendarDayTable" profile="tc_table" position="0px -86px" size="600px 520px">
-                    <ListItem profile="tc_tableListItem">
-                        <RoundCorner profile="tc_tableRowSurface"/>
-                        <Bitmap profile="tc_tableRowAccent"/>
-                        <Text profile="tc_listRowCellLeft" position="14px 0px" size="130px 32px" name="day"/>
-                        <Text profile="tc_listRowCellLeft" position="150px 0px" size="140px 32px" name="jobCount"/>
-                        <RoundCorner profile="tc_rowChip" position="300px 0px" size="170px 20px" name="statusChip"/>
-                        <Text profile="tc_rowChipText" position="300px 0px" size="170px 20px" name="statusChipText"/>
-                    </ListItem>
-                </SmoothList>
-                <ThreePartBitmap profile="tc_slider_box" position="610px -86px" size="6px 520px">
-                    <Slider profile="fs25_listSlider" dataElementId="calendarDayTable"/>
-                </ThreePartBitmap>
-            </GuiElement>
-
-            <GuiElement id="calendarDayDetailsBox" position="680px -20px">
-                <Text profile="tc_panelHeading" id="calendarDayDetailTitle" text="" position="24px -16px" size="752px 32px"/>
-                <Bitmap profile="tc_divider" position="24px -56px" size="752px 1px"/>
-                <Text profile="tc_panelNote" id="calendarDayEmptyText" text="$l10n_tc_calendar_dayEmpty" position="24px -68px" size="752px 30px"/>
-
-                <GuiElement id="calendarDayJobsContainer" position="24px -68px">
-                    <GuiElement profile="tc_tableHeaderRow" position="0px 0px" size="752px 30px">
+                <GuiElement id="jobsListContainer" position="0px -50px">
+                    <GuiElement profile="tc_tableHeaderRow" position="0px 0px" size="600px 30px">
                         <Button profile="tc_tableHeader" position="14px 0px" text="$l10n_tc_calendar_columnJobType" handleFocus="false"/>
-                        <Button profile="tc_tableHeader" position="246px 0px" text="$l10n_tc_calendar_columnCrew" handleFocus="false"/>
-                        <Button profile="tc_tableHeader" position="312px 0px" text="$l10n_tc_calendar_columnFarmland" handleFocus="false"/>
-                        <Button profile="tc_tableHeader" position="424px 0px" text="$l10n_tc_calendar_columnPrice" handleFocus="false"/>
-                        <Button profile="tc_tableHeader" position="540px 0px" text="$l10n_tc_calendar_columnAllocation" handleFocus="false"/>
+                        <Button profile="tc_tableHeader" position="200px 0px" text="$l10n_tc_calendar_columnFarmland" handleFocus="false"/>
+                        <Button profile="tc_tableHeader" position="316px 0px" text="$l10n_tc_jobs_columnDue" handleFocus="false"/>
+                        <Button profile="tc_tableHeader" position="446px 0px" text="$l10n_tc_jobs_columnAllocation" handleFocus="false"/>
                         <Bitmap profile="tc_tableHeaderDivider"/>
                     </GuiElement>
-                    <SmoothList id="calendarDayJobsTable" profile="tc_table" position="0px -36px" size="752px 160px">
+
+                    <SmoothList id="jobsTable" profile="tc_table" position="0px -36px" size="600px 520px">
                         <ListItem profile="tc_tableListItem">
                             <RoundCorner profile="tc_tableRowSurface"/>
                             <Bitmap profile="tc_tableRowAccent"/>
-                            <Text profile="tc_listRowCellLeft" position="14px 0px" size="226px 32px" name="jobType"/>
-                            <Text profile="tc_listRowCellLeft" position="246px 0px" size="50px 32px" name="crew"/>
-                            <Text profile="tc_listRowCellLeft" position="312px 0px" size="106px 32px" name="field"/>
-                            <Text profile="tc_listRowCellLeft" position="424px 0px" size="110px 32px" name="price"/>
-                            <RoundCorner profile="tc_rowChip" position="540px 0px" size="200px 20px" name="statusChip"/>
-                            <Text profile="tc_rowChipText" position="540px 0px" size="200px 20px" name="statusChipText"/>
+                            <Text profile="tc_listRowCellLeft" position="14px 0px" size="180px 32px" name="jobType"/>
+                            <Text profile="tc_listRowCellLeft" position="200px 0px" size="110px 32px" name="field"/>
+                            <Text profile="tc_listRowCellLeft" position="316px 0px" size="124px 32px" name="due"/>
+                            <RoundCorner profile="tc_rowChip" position="446px 0px" size="146px 20px" name="statusChip"/>
+                            <Text profile="tc_rowChipText" position="446px 0px" size="146px 20px" name="statusChipText"/>
                         </ListItem>
                     </SmoothList>
-                    <!-- Harvest & haul (035): where the highlighted job's crop goes. -->
-                    <Text profile="tc_panelNote" id="calendarDayJobNote" text="" position="0px -202px" size="752px 24px"/>
+                    <ThreePartBitmap profile="tc_slider_box" position="610px -36px" size="6px 520px">
+                        <Slider profile="fs25_listSlider" dataElementId="jobsTable"/>
+                    </ThreePartBitmap>
+                </GuiElement>
+            </GuiElement>
+
+            <GuiElement id="jobsDetailsBox" position="680px -20px">
+                <Text profile="tc_panelHeading" id="jobsDetailTitle" text="" position="24px -16px" size="752px 32px"/>
+                <Bitmap profile="tc_divider" position="24px -56px" size="752px 1px"/>
+
+                <!-- The highlighted job: what the list's row has no room for. -->
+                <GuiElement id="jobsDetailContainer" position="24px -68px">
+                    <BoxLayout profile="tc_detailRows" id="jobsDetailRows" position="0px 0px" size="752px 180px">
+                        <GuiElement profile="tc_detailRow" size="752px 34px">
+                            <Text profile="tc_detailLabel" id="jobsLabelPlace" text="$l10n_tc_jobDetails_field" position="0px 0px"/>
+                            <Text profile="tc_detailValue" id="jobsDetailPlace" text="" position="220px 0px" size="532px 34px"/>
+                            <Bitmap profile="tc_detailRowDivider"/>
+                        </GuiElement>
+                        <GuiElement profile="tc_detailRow" size="752px 34px">
+                            <Text profile="tc_detailLabel" id="jobsLabelCrew" text="$l10n_tc_jobDetails_sectionCrew" position="0px 0px"/>
+                            <Text profile="tc_detailValue" id="jobsDetailCrew" text="" position="220px 0px" size="532px 34px"/>
+                            <Bitmap profile="tc_detailRowDivider"/>
+                        </GuiElement>
+                        <GuiElement profile="tc_detailRow" size="752px 34px">
+                            <Text profile="tc_detailLabel" text="$l10n_tc_jobDetails_price" position="0px 0px"/>
+                            <Text profile="tc_detailValue" id="jobsDetailPrice" text="" position="220px 0px" size="532px 34px"/>
+                            <Bitmap profile="tc_detailRowDivider"/>
+                        </GuiElement>
+                        <!-- 132: only while the job's ready day is still to come. -->
+                        <GuiElement profile="tc_detailRow" id="jobsRowReady" size="752px 34px">
+                            <Text profile="tc_detailLabel" text="$l10n_tc_jobDetails_readyFrom" position="0px 0px"/>
+                            <Text profile="tc_detailValue" id="jobsDetailReady" text="" position="220px 0px" size="532px 34px"/>
+                            <Bitmap profile="tc_detailRowDivider"/>
+                        </GuiElement>
+                        <GuiElement profile="tc_detailRow" size="752px 34px">
+                            <Text profile="tc_detailLabel" text="$l10n_tc_jobDetails_due" position="0px 0px"/>
+                            <Text profile="tc_detailValue" id="jobsDetailDue" text="" position="220px 0px" size="532px 34px"/>
+                        </GuiElement>
+                    </BoxLayout>
+                    <!-- Why it can't be allocated yet (132), and a harvest and
+                         haul's selling point (035). -->
+                    <Text profile="tc_panelNote" id="jobsDetailNote" text="" position="0px -188px" size="752px 48px" textMaxNumLines="2"/>
                 </GuiElement>
 
-                <!-- Allocation (018): swapped in for calendarDayJobsContainer while
+                <!-- Allocation (018): swapped in for jobsDetailContainer while
                      self.allocatingJobId is set (see refreshAllocationState/
                      onClickCancelAllocation) -->
                 <GuiElement id="allocationContainer" position="24px -68px">
@@ -458,16 +479,15 @@
             </GuiElement>
 
             <!-- Completed jobs (029 follow-up): every completed job, most
-                 recent first, independent of the month selector (the
-                 calendar only pages forward). The highlighted row's summary
-                 shows in calendarCompletedReport. Hidden while allocating,
-                 since the allocation panel overlaps it. -->
-            <GuiElement id="calendarCompletedContainer" position="704px -340px">
+                 recent first. The highlighted row's summary shows in
+                 jobsCompletedReport. Hidden while allocating, since the
+                 allocation panel overlaps it. -->
+            <GuiElement id="jobsCompletedContainer" position="704px -340px">
                 <Text profile="tc_sectionTitle" text="$l10n_tc_calendar_completedHeading" position="0px 0px" size="752px 24px"/>
                 <Bitmap profile="tc_divider" position="0px -28px" size="752px 1px"/>
-                <Text profile="tc_panelNote" id="calendarCompletedEmptyText" text="$l10n_tc_overview_noCompletedJobs" position="0px -38px" size="752px 30px"/>
+                <Text profile="tc_panelNote" id="jobsCompletedEmptyText" text="$l10n_tc_overview_noCompletedJobs" position="0px -38px" size="752px 30px"/>
 
-                <GuiElement id="calendarCompletedListContainer" position="0px -38px">
+                <GuiElement id="jobsCompletedListContainer" position="0px -38px">
                     <GuiElement profile="tc_tableHeaderRow" position="0px 0px" size="752px 30px">
                         <Button profile="tc_tableHeader" position="14px 0px" text="$l10n_tc_calendar_columnJobType" handleFocus="false"/>
                         <Button profile="tc_tableHeader" position="260px 0px" text="$l10n_tc_calendar_columnFarmland" handleFocus="false"/>
@@ -475,7 +495,7 @@
                         <Button profile="tc_tableHeader" position="640px 0px" text="$l10n_tc_calendar_columnQuality" handleFocus="false"/>
                         <Bitmap profile="tc_tableHeaderDivider"/>
                     </GuiElement>
-                    <SmoothList id="calendarCompletedTable" profile="tc_table" position="0px -36px" size="740px 150px">
+                    <SmoothList id="jobsCompletedTable" profile="tc_table" position="0px -36px" size="740px 150px">
                         <ListItem profile="tc_tableListItem">
                             <RoundCorner profile="tc_tableRowSurface"/>
                             <Bitmap profile="tc_tableRowAccent"/>
@@ -487,10 +507,10 @@
                         </ListItem>
                     </SmoothList>
                     <ThreePartBitmap profile="tc_slider_box" position="746px -36px" size="6px 150px">
-                        <Slider profile="fs25_listSlider" dataElementId="calendarCompletedTable"/>
+                        <Slider profile="fs25_listSlider" dataElementId="jobsCompletedTable"/>
                     </ThreePartBitmap>
 
-                    <Text profile="tc_panelNote" id="calendarCompletedReport" text="" position="0px -194px" size="752px 60px" textMaxNumLines="3"/>
+                    <Text profile="tc_panelNote" id="jobsCompletedReport" text="" position="0px -194px" size="752px 60px" textMaxNumLines="3"/>
                 </GuiElement>
             </GuiElement>
         </GuiElement>
