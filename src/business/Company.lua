@@ -92,6 +92,11 @@ function TheContractorCompany:applyCompanyCreation(farmId, name)
     end
 end
 
+-- A farm deleted in multiplayer (TCFarmDeletion), on every machine.
+function TheContractorCompany:forgetFarm(farmId)
+    self.companyNames[farmId] = nil
+end
+
 function TheContractorCompany:loadFromXMLFile(xmlFile)
     if not g_currentMission:getIsServer() then return end
 

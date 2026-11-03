@@ -166,6 +166,15 @@ end
 
 -- Persistence -------------------------------------------------------------
 
+-- A farm deleted in multiplayer (TCFarmDeletion), on every machine.
+function TheContractorNotices:forgetFarm(farmId)
+    for id, notice in pairs(self.noticesById) do
+        if notice.farmId == farmId then
+            self.noticesById[id] = nil
+        end
+    end
+end
+
 function TheContractorNotices:loadFromXMLFile(xmlFile)
     if not g_currentMission:getIsServer() then return end
 

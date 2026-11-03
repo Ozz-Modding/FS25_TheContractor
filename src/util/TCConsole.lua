@@ -12,17 +12,30 @@
 --       args = "<worker> [inspect]",
 --       description = "Make a worker fall sick now",
 --       serverOnly = true,          -- default true; false for read-only ones
---       run = function(farmId, args) ... end,
+--       run = function(farmId, args, context) ... end,
 --   })
 --
--- run gets the current player's farm and the arguments as strings, and
--- returns the text to print, or false for bad arguments (the subcommand's
--- usage is printed instead). Help, usage and "unknown subcommand" messages
--- are all built from these entries.
+-- run(farmId, args, context) gets the typing player's farm, the arguments
+-- as strings and the context (below), and returns the text to print, or
+-- false for bad arguments (the subcommand's usage is printed instead). Help,
+-- usage and "unknown subcommand" messages are all built from these entries.
 --
 -- Commands aren't cheat-gated: they're there for players to shape their
--- game. Anything that changes state is server-only (single player or the
--- host), since the subsystems broadcast their own changes from there.
+-- game. Anything that changes state is server-only, since the subsystems
+-- broadcast their own changes from there. Typed on the server (single
+-- player, the host) it runs there and then. Typed by an admin on a client
+-- (a dedicated server has nobody at its own console) it's sent to the
+-- server (TCConsoleEvent), run there, and the answer comes back to print.
+-- Either way run is on the server, so it calls the subsystems directly,
+-- never sends an event of its own.
+--
+-- The context is the typing player, taken where they typed it:
+--   { farmId, userId, x, y, z, dirX, dirZ, vehicleId }
+-- x/y/z where they stand, dirX/dirZ the way they're looking (both nil with
+-- no player in the game), vehicleId the vehicle they're in (nil on foot).
+-- So a command about "here" or "this vehicle" reads the context, never
+-- g_localPlayer, which on the server isn't the admin who typed it. Its
+-- helpers: TCConsole.hasPosition, getVehicle, getPlayer.
 
 TCConsole = {}
 
@@ -169,11 +182,22 @@ function TCConsole.dispatch(group, args)
     end
 
     if def.serverOnly and not g_currentMission:getIsServer() then
-        return string.format("%s %s only works on the server (single player or the host).", group.command, def.name)
+        if not TheContractorSettings.getCanLocalPlayerChange() then
+            return string.format("%s %s changes the game, so only the host or an admin can use it.", group.command,
+                def.name)
+        end
+        g_client:getServerConnection():sendEvent(TCConsoleEvent.newRequest(group.key, args,
+            TCConsole.getLocalContext()))
+        return nil
     end
 
-    local farmId = TCConsole.getFarmId()
-    if farmId == nil then
+    return TCConsole.execute(group, def, args, TCConsole.getLocalContext())
+end
+
+-- Runs a subcommand (args[1] its name) for the context's player, wherever
+-- the dispatch decided it runs. Returns the text to print.
+function TCConsole.execute(group, def, args, context)
+    if context.farmId == nil then
         return "Error: no farm found for the current player"
     end
 
@@ -184,11 +208,115 @@ function TCConsole.dispatch(group, args)
         end
     end
 
-    local result = def.run(farmId, subArgs)
+    local result = def.run(context.farmId, subArgs, context)
     if result == false then
         return string.format("Usage: %s\n%s", TCConsole.getUsage(group, def), def.description)
     end
     return result
+end
+
+-- Server: a command an admin typed on a client (TCConsoleEvent). Returns
+-- the text to send back.
+function TCConsole.runRequest(groupKey, args, context, connection)
+    local group = TCConsole.groups[groupKey]
+    local name = args[1]
+    local def = group ~= nil and name ~= nil and group.subcommands[string.lower(name)] or nil
+    if def == nil then
+        return "Error: the server doesn't know that command"
+    end
+    if not TheContractorSettings.getCanConnectionChange(connection) then
+        TCLog.warning("TheContractor: refused %s %s from a player who isn't an admin", group.command, def.name)
+        return string.format("%s %s changes the game, so only the host or an admin can use it.", group.command,
+            def.name)
+    end
+    TCLog.info("TheContractor: running %s %s for an admin", group.command, table.concat(args, " "))
+    return TCConsole.execute(group, def, args, context)
+end
+
+-- Context ---------------------------------------------------------------------------
+
+-- The player typing on this machine (see the header).
+function TCConsole.getLocalContext()
+    local context = { farmId = TCConsole.getFarmId(), userId = g_currentMission.playerUserId }
+    local player = g_localPlayer
+    if player == nil or player.getPosition == nil then
+        return context
+    end
+
+    context.x, context.y, context.z = player:getPosition()
+    local dirX, dirZ
+    local camera = g_cameraManager ~= nil and g_cameraManager:getActiveCamera() or nil
+    if camera ~= nil and camera ~= 0 then
+        local dx, _, dz = localDirectionToWorld(camera, 0, 0, -1)
+        dirX, dirZ = dx, dz
+    elseif player.getCurrentFacingDirection ~= nil then
+        dirX, dirZ = player:getCurrentFacingDirection()
+    end
+    local length = dirX ~= nil and math.sqrt(dirX * dirX + dirZ * dirZ) or 0
+    if length > 0.001 then
+        context.dirX, context.dirZ = dirX / length, dirZ / length
+    else
+        context.dirX, context.dirZ = 0, 1
+    end
+
+    local vehicle = player.getCurrentVehicle ~= nil and player:getCurrentVehicle() or nil
+    if vehicle ~= nil then
+        context.vehicleId = NetworkUtil.getObjectId(vehicle)
+    end
+    return context
+end
+
+function TCConsole.hasPosition(context)
+    return context ~= nil and context.x ~= nil and context.z ~= nil
+end
+
+-- The vehicle the typing player is in, or nil.
+function TCConsole.getVehicle(context)
+    if context == nil or context.vehicleId == nil then
+        return nil
+    end
+    return NetworkUtil.getObject(context.vehicleId)
+end
+
+-- The typing player (on the server, as it knows them), or nil.
+function TCConsole.getPlayer(context)
+    local playerSystem = g_currentMission.playerSystem
+    if context == nil or context.userId == nil or playerSystem == nil then
+        return nil
+    end
+    return playerSystem:getPlayerByUserId(context.userId)
+end
+
+-- Wire (TCConsoleEvent).
+function TCConsole.writeContext(streamId, context)
+    streamWriteInt32(streamId, context.farmId or 0)
+    streamWriteInt32(streamId, context.userId or -1)
+    if streamWriteBool(streamId, TCConsole.hasPosition(context)) then
+        streamWriteFloat32(streamId, context.x)
+        streamWriteFloat32(streamId, context.y or 0)
+        streamWriteFloat32(streamId, context.z)
+        streamWriteFloat32(streamId, context.dirX or 0)
+        streamWriteFloat32(streamId, context.dirZ or 1)
+    end
+    streamWriteInt32(streamId, context.vehicleId or 0)
+end
+
+function TCConsole.readContext(streamId)
+    local context = {}
+    local farmId = streamReadInt32(streamId)
+    context.farmId = farmId ~= 0 and farmId or nil
+    local userId = streamReadInt32(streamId)
+    context.userId = userId >= 0 and userId or nil
+    if streamReadBool(streamId) then
+        context.x = streamReadFloat32(streamId)
+        context.y = streamReadFloat32(streamId)
+        context.z = streamReadFloat32(streamId)
+        context.dirX = streamReadFloat32(streamId)
+        context.dirZ = streamReadFloat32(streamId)
+    end
+    local vehicleId = streamReadInt32(streamId)
+    context.vehicleId = vehicleId ~= 0 and vehicleId or nil
+    return context
 end
 
 function TCConsole.getFarmId()

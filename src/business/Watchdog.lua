@@ -58,6 +58,13 @@ end
 -- once accumulatedMs crosses CHECK_INTERVAL_MS. Server-only: intervening
 -- (stopping/repositioning/retriggering an AI job) is only ever legal
 -- server-side, same restriction 020's Dispatch itself has.
+-- A farm deleted in multiplayer (TCFarmDeletion), on every machine.
+function TheContractorWatchdog:forgetFarm(farmId, jobIds)
+    for _, jobId in ipairs(jobIds) do
+        self.trackedByJobId[jobId] = nil
+    end
+end
+
 function TheContractorWatchdog:update(dt)
     if not g_currentMission:getIsServer() then
         return

@@ -268,6 +268,12 @@ end
 
 -- Persistence -------------------------------------------------------------
 
+-- A farm deleted in multiplayer (TCFarmDeletion), on every machine.
+function TheContractorAdvertising:forgetFarm(farmId)
+    self.activeLevel[farmId] = nil
+    self.expiresOnDay[farmId] = nil
+end
+
 function TheContractorAdvertising:loadFromXMLFile(xmlFile)
     if not g_currentMission:getIsServer() then return end
 

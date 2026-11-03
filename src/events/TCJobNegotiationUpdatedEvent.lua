@@ -2,7 +2,7 @@
 -- TheContractorJobs:proposeCounterOffer) and sends the resulting job
 -- snapshot to other clients. Reuses TheContractorJobs.writeJob/readJob (full
 -- snapshot, same as TCJobCreatedEvent) rather than just the changed fields —
--- price/state/eagerness/negotiationRounds can all move in one round, and
+-- price/state/negotiationRounds can all move in one round, and
 -- there's no existing partial-update wire helper to build on. Applied via
 -- the existing registerJob (isNewArrival=false, same as initial-client-state
 -- replay) since a negotiation update is never a "new offer" for HUD

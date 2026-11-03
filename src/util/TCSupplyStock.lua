@@ -331,13 +331,14 @@ end
 
 local COMPASS = { "east", "north-east", "north", "north-west", "west", "south-west", "south", "south-east" }
 
--- "1.2 km north-east of you" from the local player to a world position, or
--- the bare coordinates when there's no player to measure from.
-local function describeWhere(x, z)
-    if g_localPlayer == nil or g_localPlayer.getPosition == nil then
+-- "1.2 km north-east of you" from the typing player (TCConsole's context) to
+-- a world position, or the bare coordinates when there's no player to
+-- measure from.
+local function describeWhere(x, z, context)
+    if not TCConsole.hasPosition(context) then
         return string.format("at x %.0f, z %.0f", x, z)
     end
-    local px, _, pz = g_localPlayer:getPosition()
+    local px, pz = context.x, context.z
     local dx, dz = x - px, z - pz
     local distance = math.sqrt(dx * dx + dz * dz)
     if distance < 50 then
@@ -367,7 +368,7 @@ function TCSupplyStock.registerConsoleCommands()
         args = "[fillType]",
         description = "Your storages the Supplies tab counts, with where they are",
         serverOnly = false,
-        run = function(farmId, args)
+        run = function(farmId, args, context)
             local fillTypes
             if args[1] ~= nil then
                 local fillTypeIndex = g_fillTypeManager:getFillTypeIndexByName(string.upper(args[1]))
@@ -392,7 +393,7 @@ function TCSupplyStock.registerConsoleCommands()
                         local mod = placeable ~= nil and placeable.customEnvironment or nil
                         table.insert(lines, string.format("  %s%s - %.0f of %.0f, %s", getStorageName(entry.storage,
                             placeable), mod ~= nil and (" [" .. mod .. "]") or "", entry.level, entry.level + entry.room,
-                            x ~= nil and describeWhere(x, z) or "position unknown"))
+                            x ~= nil and describeWhere(x, z, context) or "position unknown"))
                     end
                 end
             end

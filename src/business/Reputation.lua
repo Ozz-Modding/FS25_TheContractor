@@ -126,6 +126,11 @@ function TheContractorReputation:applyReputationScore(farmId, score)
     TCLog.info("TheContractor: farm %d reputation is now %d", farmId, score)
 end
 
+-- A farm deleted in multiplayer (TCFarmDeletion), on every machine.
+function TheContractorReputation:forgetFarm(farmId)
+    self.scores[farmId] = nil
+end
+
 function TheContractorReputation:loadFromXMLFile(xmlFile)
     if not g_currentMission:getIsServer() then return end
 
@@ -199,8 +204,8 @@ function TheContractorReputation.registerConsoleCommands()
                 return false
             end
 
-            g_client:getServerConnection():sendEvent(TCDebugAddReputationEvent.new(farmId, amount))
-            return string.format("Applied %d reputation to farm %d", amount, farmId)
+            local score = g_currentMission.TheContractor.Reputation:addReputation(farmId, amount)
+            return string.format("Applied %d reputation to farm %d (now %d)", amount, farmId, score)
         end,
     })
 end

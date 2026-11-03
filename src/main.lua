@@ -2,6 +2,12 @@ TheContractor = {}
 TheContractor.dir = g_currentModDirectory
 TheContractor.SaveKey = "TheContractor"
 
+-- Published on every machine whenever one of our events is received or the
+-- server broadcasts one: something the menu shows may have changed, so an
+-- open menu redraws (MenuContractor:onDataUpdated). See
+-- TheContractor.installDataUpdatedHooks.
+MessageType.TC_DATA_UPDATED = nextMessageTypeId()
+
 source(TheContractor.dir .. "src/util/TCLog.lua")
 -- First, so the switch is read before anything logs.
 TCLog.load()
@@ -57,6 +63,7 @@ source(TheContractor.dir .. "src/util/TCYardMapAction.lua")
 source(TheContractor.dir .. "src/util/TCJoyriderRuts.lua")
 source(TheContractor.dir .. "src/util/TCDebris.lua")
 source(TheContractor.dir .. "src/util/TCJobHotspots.lua")
+source(TheContractor.dir .. "src/util/TCFarmDeletion.lua")
 source(TheContractor.dir .. "src/util/TCJobList.lua")
 source(TheContractor.dir .. "src/gui/TCWorkerPortrait.lua")
 source(TheContractor.dir .. "src/gui/TCTooltip.lua")
@@ -134,7 +141,6 @@ source(TheContractor.dir .. "src/events/TCInitialClientStateEvent.lua")
 source(TheContractor.dir .. "src/events/TCSettingsEvent.lua")
 source(TheContractor.dir .. "src/events/TCCreateCompanyEvent.lua")
 source(TheContractor.dir .. "src/events/TCReputationChangedEvent.lua")
-source(TheContractor.dir .. "src/events/TCDebugAddReputationEvent.lua")
 source(TheContractor.dir .. "src/events/TCJobCreatedEvent.lua")
 source(TheContractor.dir .. "src/events/TCJobStateChangedEvent.lua")
 source(TheContractor.dir .. "src/events/TCJobTravellingEvent.lua")
@@ -142,8 +148,7 @@ source(TheContractor.dir .. "src/events/TCJobDeliveryEvent.lua")
 source(TheContractor.dir .. "src/events/TCJobProgressEvent.lua")
 source(TheContractor.dir .. "src/events/TCJobSupplyStatusEvent.lua")
 source(TheContractor.dir .. "src/events/TCJobMissedEvent.lua")
-source(TheContractor.dir .. "src/events/TCDebugCreateJobEvent.lua")
-source(TheContractor.dir .. "src/events/TCDebugSetJobStateEvent.lua")
+source(TheContractor.dir .. "src/events/TCConsoleEvent.lua")
 source(TheContractor.dir .. "src/events/TCRespondToJobOfferEvent.lua")
 source(TheContractor.dir .. "src/events/TCCounterOfferEvent.lua")
 source(TheContractor.dir .. "src/events/TCJobNegotiationUpdatedEvent.lua")
@@ -226,6 +231,7 @@ source(TheContractor.dir .. "src/events/TCRelationshipChangedEvent.lua")
 source(TheContractor.dir .. "src/events/TCYardBalesKitEvent.lua")
 source(TheContractor.dir .. "src/events/TCYardHaulTrailerEvent.lua")
 source(TheContractor.dir .. "src/events/TCRefuelMachineEvent.lua")
+source(TheContractor.dir .. "src/events/TCFarmDeletedEvent.lua")
 
 -- The top-level Contractor page itself stays always-visible (see Company.lua
 -- and MenuContractor's Overview tab): "Create Company" has to live somewhere
@@ -482,6 +488,9 @@ function TheContractor:loadMap()
     TheContractorFarmers.registerConsoleCommands()
     TheContractorRelationships.registerConsoleCommands()
     TCConsole.install()
+
+    -- A farm deleted in multiplayer takes its company with it (server).
+    TCFarmDeletion.install()
 
     TCLog.info("TheContractor: loadMap")
 end
@@ -790,6 +799,7 @@ function TheContractor:deleteMap()
     TCJobHotspots.reset()
 
     TCConsole.uninstall()
+    TCFarmDeletion.uninstall()
 
     if g_currentMission ~= nil and g_currentMission.TheContractor == self then
         g_currentMission.TheContractor = nil
@@ -900,6 +910,36 @@ function TheContractor:draw()
     end
 end
 
+-- Every one of our events tells the menu its data may have changed
+-- (TC_DATA_UPDATED): on the machine that receives it (after its readStream
+-- has run it), and on the server as it broadcasts one, since a broadcast
+-- doesn't loop back to the host (src/events/README.md). So a remote client's
+-- menu catches up when the server's answer lands, and the host's when the
+-- server changes something on its own. Our events are the ones registered
+-- with a TC name; each is marked so the broadcast hook can tell them apart.
+function TheContractor.publishDataUpdated()
+    g_messageCenter:publish(MessageType.TC_DATA_UPDATED)
+end
+
+function TheContractor.installDataUpdatedHooks()
+    for className, eventClass in pairs(EventIds.eventClasses) do
+        if string.sub(className, 1, 2) == "TC" and rawget(eventClass, "tcPublishesDataUpdated") == nil then
+            eventClass.readStream = Utils.appendedFunction(eventClass.readStream, TheContractor.publishDataUpdated)
+            eventClass.tcPublishesDataUpdated = true
+        end
+    end
+
+    if not Server.tcDataUpdatedHookInstalled then
+        Server.broadcastEvent = Utils.appendedFunction(Server.broadcastEvent, function(_, event)
+            if event ~= nil and event.tcPublishesDataUpdated then
+                TheContractor.publishDataUpdated()
+            end
+        end)
+        Server.tcDataUpdatedHookInstalled = true
+    end
+end
+
+TheContractor.installDataUpdatedHooks()
 TheContractor.installSaveHook()
 TheContractor.installInitialClientStateHook()
 TheContractor.installStartMissionHook()

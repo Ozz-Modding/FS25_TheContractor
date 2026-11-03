@@ -348,6 +348,18 @@ end
 
 -- Persistence -------------------------------------------------------------------------
 
+-- A farm deleted in multiplayer (TCFarmDeletion), on every machine.
+function TheContractorClaims:forgetFarm(farmId)
+    self.historyByFarm[farmId] = nil
+    local kept = {}
+    for _, claim in ipairs(self.pendingClaims) do
+        if claim.farmId ~= farmId then
+            table.insert(kept, claim)
+        end
+    end
+    self.pendingClaims = kept
+end
+
 function TheContractorClaims:loadFromXMLFile(xmlFile)
     if not g_currentMission:getIsServer() then return end
 

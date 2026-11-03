@@ -193,8 +193,8 @@ function TheContractorFallenTree:register(randomEvents, inbox)
         end,
         -- tcCompany event fallenTree [here]
         console = {
-            prepareTrigger = function(farmId, details)
-                return self:prepareConsole(details)
+            prepareTrigger = function(farmId, details, context)
+                return self:prepareConsole(details, context)
             end,
             clearTrigger = function()
                 self.consoleHere = false
@@ -520,16 +520,17 @@ function TheContractorFallenTree:hasOpenTree(farmId)
     return false
 end
 
--- tcCompany event fallenTree [here]. Returns nil, or an error.
-function TheContractorFallenTree:prepareConsole(details)
+-- tcCompany event fallenTree [here]. Returns nil, or an error. "here" keeps
+-- where the typing player stands and looks (TCConsole's context).
+function TheContractorFallenTree:prepareConsole(details, context)
     if #details > 1 or (details[1] ~= nil and string.lower(details[1]) ~= "here") then
         return "Error: fallenTree takes nothing, or 'here' for a tree in front of you"
     end
     if details[1] ~= nil then
-        if g_localPlayer == nil then
+        if not TCConsole.hasPosition(context) then
             return "Error: fallenTree here comes down in front of you, so it needs a player in the game"
         end
-        self.consoleHere = true
+        self.consoleHere = { x = context.x, z = context.z, dirX = context.dirX, dirZ = context.dirZ }
     end
     return nil
 end
@@ -550,9 +551,8 @@ function TheContractorFallenTree:pickSpot(farmId, random)
     local placements = {}
     local fewest = T.TREES_MIN
     if self.consoleHere then
-        local px, _, pz = g_localPlayer:getPosition()
-        local faceX, faceZ = g_localPlayer:getCurrentFacingDirection()
-        local placement = T.getHerePlacement(px, pz, faceX, faceZ)
+        local here = self.consoleHere
+        local placement = T.getHerePlacement(here.x, here.z, here.dirX, here.dirZ)
         local field = T.findNearestField(placement.roadX, placement.roadZ)
         if field == nil then
             return nil

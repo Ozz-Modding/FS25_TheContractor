@@ -3,7 +3,7 @@
 -- a job offer. FS25_AdvancedDamageSystem does the vehicle side through
 -- TCADSRepairContracts: it ages and breaks the machine, prices the work,
 -- says what tools it takes and whether the farm has them, and reports when
--- it's done or tampered with. See tickets/100 and docs/ads-repair-contracts.md.
+-- it's done or tampered with. See tickets/100.
 --
 -- Arrivals (server): every day each empty bay of a farm's zones may get a
 -- customer (ARRIVAL_CHANCE), queued with its model, kind, severity and seed.
@@ -2267,6 +2267,25 @@ function TheContractorRepairContracts:deliverClaim(claim)
 end
 
 -- Persistence (server) -------------------------------------------------------------------
+
+-- A farm deleted in multiplayer (TCFarmDeletion), on every machine.
+-- Its customers' machines still to come and claims still to land go. Ones
+-- waiting to be collected stay: a machine that's still out there (not the
+-- farm's, so vanilla left it) is still taken home.
+function TheContractorRepairContracts:forgetFarm(farmId)
+    local function others(list)
+        local kept = {}
+        for _, entry in ipairs(list) do
+            if entry.farmId ~= farmId then
+                table.insert(kept, entry)
+            end
+        end
+        return kept
+    end
+    self.arrivals = others(self.arrivals)
+    self.pendingClaims = others(self.pendingClaims)
+    self.overcharged[farmId] = nil
+end
 
 function TheContractorRepairContracts:loadFromXMLFile(xmlFile)
     if not g_currentMission:getIsServer() then

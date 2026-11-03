@@ -321,18 +321,15 @@ function TCDebris.spawnPileAt(cx, cz, count, farmId, propKey)
     return pieces
 end
 
--- The console's pile, a few metres in front of the local player. Returns
--- how many pieces it dropped, or nil with no local player.
-function TCDebris.spawnPile(propKey, count, farmId)
-    local player = g_localPlayer
-    if player == nil then
+-- The console's pile, a few metres in front of the typing player
+-- (TCConsole's context). Returns how many pieces it dropped, or nil with no
+-- player in the game.
+function TCDebris.spawnPile(propKey, count, farmId, context)
+    if not TCConsole.hasPosition(context) then
         return nil
     end
-    local px, _, pz = player:getPosition()
-    local camera = g_cameraManager:getActiveCamera()
-    local dx, _, dz = localDirectionToWorld(camera, 0, 0, -1)
-    dx, _, dz = MathUtil.vector3Normalize(dx, 0, dz)
-    return #TCDebris.spawnPileAt(px + dx * 4, pz + dz * 4, count, farmId, propKey)
+    local x, z = context.x + context.dirX * 4, context.z + context.dirZ * 4
+    return #TCDebris.spawnPileAt(x, z, count, farmId, propKey)
 end
 
 function TCDebris.isDebris(object)
@@ -375,7 +372,7 @@ function TCDebris.registerConsoleCommands()
     TCConsole.register("company", "debris", {
         args = "[count] [prop]",
         description = "Drop a pile of hand-movable debris in front of you (random props unless one is named)",
-        run = function(farmId, args)
+        run = function(farmId, args, context)
             local count = tonumber(args[1] or "8")
             local propKey = args[2]
             if count == nil or count < 1 then
@@ -389,9 +386,9 @@ function TCDebris.registerConsoleCommands()
                 table.sort(keys)
                 return string.format("Unknown prop '%s'. Props: %s", propKey, table.concat(keys, ", "))
             end
-            local spawned = TCDebris.spawnPile(propKey, math.min(math.floor(count), 50), farmId)
+            local spawned = TCDebris.spawnPile(propKey, math.min(math.floor(count), 50), farmId, context)
             if spawned == nil then
-                return "No local player to spawn in front of"
+                return "No player to spawn in front of"
             end
             return string.format("Spawned %d %s debris", spawned, propKey or "random")
         end,

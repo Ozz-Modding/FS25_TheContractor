@@ -138,7 +138,7 @@ end
 -- Whether wear between two snapshots (or on one) has a cost to show.
 -- Never for an ADS one: what its wear costs to put right isn't something
 -- the player knows, and pricing it would give hidden faults away
--- (docs/ads-repair-contracts.md, G4), so the Logbook leaves it out.
+-- (099), so the Logbook leaves it out.
 function TCVehicleCondition.hasWearCost(before, after)
     local ads = TCVehicleCondition.MODEL.ADS
     return (before == nil or before.model ~= ads) and (after == nil or after.model ~= ads)

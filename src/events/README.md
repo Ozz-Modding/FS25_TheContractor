@@ -53,6 +53,12 @@ FSBaseMission.sendInitialClientState = Utils.appendedFunction(FSBaseMission.send
 
 `TheContractor:sendInitialClientState(connection, user, farm)` just sends the event — it does not need the `Mission00`-fallback dance that `installSaveHook` uses, since RedTape's own equivalent hook doesn't need it either.
 
+## The menu catching up
+
+Every one of our events publishes `MessageType.TC_DATA_UPDATED` on the machine that receives it (after its `readStream` has run it), and the server publishes it as it broadcasts one (`TheContractor.installDataUpdatedHooks` in `main.lua`, which finds them by their `TC` class name: nothing to add per event). An open `MenuContractor` redraws the visible tab on the next free frame (`onDataUpdated`, `refreshOpenTab`), keeping its view and selection.
+
+So a menu action sends its request and draws what it has; it never has to read the answer straight after `sendEvent` (on a remote client the answer hasn't arrived). An answer it has to react to (an InfoDialog, a transcript line) is kept as a pending request and checked in `checkPendingResponses` (the repair quote, accept and counter-offer are the pattern).
+
 ## Gotchas
 
 - **`g_server:broadcastEvent()` does not loop back to the local client in single-player.** Server-side `run()` code must apply state directly (e.g. call into the subsystem), not rely on the broadcast round-trip to update the host's own state.

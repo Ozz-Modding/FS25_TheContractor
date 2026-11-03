@@ -145,12 +145,12 @@ function TCJobSiteSetup.hitchImplement(attacher, implement, farmId)
     return true
 end
 
--- Server-only. Returns the operating vehicle on success, or nil plus a
--- player-facing reason.
+-- Server-only. Returns the operating vehicle on success, or nil plus the
+-- reason's l10n key and its args (TCDispatchFailedEvent.REASON_KEYS).
 function TCJobSiteSetup.rigAndPlace(job)
     local field = g_fieldManager:getFieldById(job.fieldId)
     if field == nil then
-        return nil, g_i18n:getText("tc_dispatch_noVehicleReady")
+        return nil, "tc_dispatch_noVehicleReady", {}
     end
 
     local vehicles = {}
@@ -165,7 +165,7 @@ function TCJobSiteSetup.rigAndPlace(job)
 
     local operatingVehicle = pickOperatingVehicle(vehicles)
     if operatingVehicle == nil then
-        return nil, g_i18n:getText("tc_dispatch_noVehicleReady")
+        return nil, "tc_dispatch_noVehicleReady", {}
     end
 
     -- Hidden equipment is out of physics; teleporting and hitching both
@@ -229,8 +229,7 @@ function TCJobSiteSetup.rigAndPlace(job)
             for _, implement in ipairs(unplanned) do
                 table.insert(names, implement:getName())
             end
-            return nil, string.format(g_i18n:getText("tc_dispatch_noAttachPoint"), table.concat(names, ", "),
-                operatingVehicle:getName())
+            return nil, "tc_dispatch_noAttachPoint", { table.concat(names, ", "), operatingVehicle:getName() }
         end
         remaining = unplanned
     end

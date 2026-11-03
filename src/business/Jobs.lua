@@ -1477,7 +1477,8 @@ function TheContractorJobs.writeJob(streamId, job)
     streamWriteString(streamId, job.state)
     streamWriteFloat32(streamId, job.completionPercentage)
     streamWriteBool(streamId, job.equipmentAvailable)
-    streamWriteInt32(streamId, job.eagerness)
+    -- eagerness (014) isn't sent: it's hidden and only the server
+    -- negotiates with it.
     streamWriteInt32(streamId, job.negotiationRounds)
     streamWriteString(streamId, job.fruitTypeName or "")
     streamWriteInt32(streamId, job.deadlineDay or -1)
@@ -1662,7 +1663,6 @@ function TheContractorJobs.readJob(streamId)
     local state = streamReadString(streamId)
     local completionPercentage = streamReadFloat32(streamId)
     local equipmentAvailable = streamReadBool(streamId)
-    local eagerness = streamReadInt32(streamId)
     local negotiationRounds = streamReadInt32(streamId)
     local fruitTypeName = streamReadString(streamId)
     local deadlineDay = streamReadInt32(streamId)
@@ -1672,7 +1672,6 @@ function TheContractorJobs.readJob(streamId)
     job.state = state
     job.completionPercentage = completionPercentage
     job.equipmentAvailable = equipmentAvailable
-    job.eagerness = eagerness
     job.negotiationRounds = negotiationRounds
     if fruitTypeName ~= "" then
         job.fruitTypeName = fruitTypeName
@@ -1769,6 +1768,18 @@ function TheContractorJobs.decodeIdList(str)
 end
 
 -- Persistence -----------------------------------------------------------
+
+-- A farm deleted in multiplayer (TCFarmDeletion), on every machine.
+function TheContractorJobs:forgetFarm(farmId, jobIds)
+    for _, jobId in ipairs(jobIds) do
+        self.graceJobs[jobId] = nil
+    end
+    self.jobsByFarm[farmId] = nil
+    -- 100: its customers' machines leave the ones kept out of our lists.
+    if TheContractorRepairContracts ~= nil then
+        TheContractorRepairContracts.clearCache()
+    end
+end
 
 function TheContractorJobs:loadFromXMLFile(xmlFile)
     if not g_currentMission:getIsServer() then return end
@@ -2398,10 +2409,22 @@ function TheContractorJobs.registerConsoleCommands()
             end
 
             -- Typed at the current price level; jobs store it without
-            -- FS25_EconomyScale's factor (TheContractorJob:getPrice).
-            g_client:getServerConnection():sendEvent(TCDebugCreateJobEvent.new(farmId, jobType, fieldId, skill,
-                targetPeriod, targetDay, price / TCEconomyScale.getFactor()))
-            return string.format("Requested job creation for farm %d", farmId)
+            -- FS25_EconomyScale's factor (TheContractorJob:getPrice). The
+            -- crop, start state and equipment check are read from the field
+            -- as generation would.
+            local jobDef = TheContractorJobGeneration.JOB_TYPES[jobType]
+            local field = g_fieldManager:getFieldById(fieldId)
+            local equipmentAvailable, fruitTypeName, startState = nil, nil, nil
+            if jobDef ~= nil then
+                fruitTypeName = TheContractorJobGeneration.getRecordedFruitTypeName(field, jobDef)
+                startState = TheContractorJobGeneration.getFieldStartState(field, jobDef)
+                equipmentAvailable = g_currentMission.TheContractor.JobGeneration:canFulfill(farmId, jobDef,
+                    TheContractorJobGeneration.getFruitTypeIndexByName(fruitTypeName))
+            end
+            local job = g_currentMission.TheContractor.Jobs:createJob(farmId, jobType, fieldId, skill, targetPeriod,
+                targetDay, price / TCEconomyScale.getFactor(), equipmentAvailable, fruitTypeName, nil, nil, nil,
+                startState)
+            return string.format("Created job %d for farm %d", job.id, farmId)
         end,
     })
 
@@ -2434,8 +2457,10 @@ function TheContractorJobs.registerConsoleCommands()
                     table.concat(nextStates, ", "))
             end
 
-            g_client:getServerConnection():sendEvent(TCDebugSetJobStateEvent.new(farmId, jobId, state))
-            return string.format("Requested job %d -> %s for farm %d", jobId, state, farmId)
+            if not g_currentMission.TheContractor.Jobs:forceJobState(farmId, jobId, state) then
+                return string.format("Job %d couldn't go to %s.", jobId, state)
+            end
+            return string.format("Job %d is now %s.", jobId, job.state)
         end,
     })
 end
