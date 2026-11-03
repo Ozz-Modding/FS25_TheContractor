@@ -198,6 +198,11 @@ end
 
 -- Persistence (server) -----------------------------------------------------------
 
+-- A farm deleted in multiplayer (TCFarmDeletion), on every machine.
+function TheContractorGoodNews:forgetFarm(farmId)
+    self.lastStoryByFarm[farmId] = nil
+end
+
 function TheContractorGoodNews:loadFromXMLFile(xmlFile)
     self.lastStoryByFarm = {}
     local index = 0

@@ -3,8 +3,8 @@
 -- and is still in a respondable state, then drives the transition through
 -- TheContractorJobs:transitionJobState — which already owns the state-machine
 -- check, local apply, and TCJobStateChangedEvent broadcast to other clients
--- (see TCDebugSetJobStateEvent.lua for the closest sibling of this
--- request/validate shape). No negotiation here (014's territory) — accept
+-- (TCCreateCompanyEvent has the same request/validate shape). No
+-- negotiation here (014's territory) — accept
 -- always requests STATE.ACCEPTED directly, per Job.lua's offered->accepted
 -- shortcut transition. See src/events/README.md for the general event
 -- conventions.

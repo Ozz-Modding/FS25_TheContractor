@@ -2,8 +2,8 @@
 -- customer's vehicle (age, wear, hidden faults or worn consumables), prices
 -- the work, tells us the tools it needs and whether a farm has them, and
 -- reports when it's done or tampered with. Everything else is ours
--- (TheContractorRepairContracts). See docs/ads-repair-contracts.md and
--- ADS's own guide, docs/ADS_RepairContracts_API_1.md.
+-- (TheContractorRepairContracts). See tickets/100-102 and ADS's
+-- ADS_RepairContracts.lua.
 --
 -- The entry points are looked up once per loadMap (detect), the TCADSStock
 -- way: anything missing, or an older API version, leaves the feature off

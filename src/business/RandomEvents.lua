@@ -63,9 +63,12 @@
 --
 -- Console (083): an optional console = { ... } on the definition, all
 -- server-side:
---   prepareTrigger(farmId, details)  tcCompany event <type> [details]: sets up
---                                    what the next trigger acts on (a worker, a
---                                    story) and returns nil, or an error to print
+--   prepareTrigger(farmId, details, context)  tcCompany event <type>
+--                                    [details]: sets up what the next trigger
+--                                    acts on (a worker, a story, the spot in
+--                                    front of the typing player: TCConsole's
+--                                    context) and returns nil, or an error to
+--                                    print
 --   clearTrigger()                   after that trigger, whatever happened
 --   outcomes = { "yes", "no" }       tcCompany outcome <type> <outcome>: the
 --   setOutcome(outcome)              outcomes there are, and forcing one for the
@@ -805,6 +808,23 @@ end
 
 -- Persistence -------------------------------------------------------------------------
 
+-- A farm deleted in multiplayer (TCFarmDeletion), on every machine.
+function TheContractorRandomEvents:forgetFarm(farmId)
+    for id, incident in pairs(self.incidents) do
+        if incident.farmId == farmId then
+            self.incidents[id] = nil
+        end
+    end
+    self.lastPeriodByFarm[farmId] = nil
+    local kept = {}
+    for _, trigger in ipairs(self.pendingTriggers) do
+        if trigger.farmId ~= farmId then
+            table.insert(kept, trigger)
+        end
+    end
+    self.pendingTriggers = kept
+end
+
 function TheContractorRandomEvents:loadFromXMLFile(xmlFile)
     if not g_currentMission:getIsServer() then return end
 
@@ -1044,7 +1064,7 @@ function TheContractorRandomEvents.registerConsoleCommands()
     TCConsole.register("company", "event", {
         args = "<type> [details]",
         description = "Make a random event happen to your farm now (ignores the odds, the cooldown and the time of day)",
-        run = function(farmId, args)
+        run = function(farmId, args, context)
             local randomEvents = g_currentMission.TheContractor.RandomEvents
             local wanted = args[1]
             local keys = randomEvents:getEventTypeKeys()
@@ -1067,7 +1087,7 @@ function TheContractorRandomEvents.registerConsoleCommands()
                 table.insert(details, args[i])
             end
             if console ~= nil and console.prepareTrigger ~= nil then
-                local problem = console.prepareTrigger(farmId, details)
+                local problem = console.prepareTrigger(farmId, details, context)
                 if problem ~= nil then
                     return problem
                 end

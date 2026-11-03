@@ -363,6 +363,16 @@ end
 -- onFinishedLoading in the base game), so resolveSavedVehicles hides
 -- everything still in cooldown again.
 
+-- A farm deleted in multiplayer (TCFarmDeletion), on every machine.
+function TheContractorCooldown:forgetFarm(farmId)
+    for _, entry in pairs(self.entriesByFarm[farmId] or {}) do
+        for _, vehicleId in ipairs(entry.vehicleIds) do
+            self.vehicleIdsInCooldown[vehicleId] = nil
+        end
+    end
+    self.entriesByFarm[farmId] = nil
+end
+
 function TheContractorCooldown:loadFromXMLFile(xmlFile)
     if not g_currentMission:getIsServer() then return end
 

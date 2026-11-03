@@ -64,6 +64,85 @@ test("a vanilla helper on a player's job keeps the 1.5x surcharge", function()
     assertNear(job.fuelCost, 2 * 1.5 * 1.5, 0.0001, "cost")
 end)
 
+-- A player's own job on field 7, a 100 m square at the origin, and a
+-- tractor of theirs at (x, z).
+local function setupPlayerJob(x, z, def)
+    local world = setup()
+    world:load("src/util/TCJoyriderRuts.lua")
+    TCJoyriderRuts.getFieldBoundary = function(field)
+        return field.boundary
+    end
+    local fields = { [7] = { boundary = { { 0, 0 }, { 100, 0 }, { 100, 100 }, { 0, 100 } } } }
+    g_fieldManager = {
+        getFieldById = function(_, fieldId)
+            return fields[fieldId]
+        end,
+    }
+    getWorldTranslation = function(node)
+        return node.x, 0, node.z
+    end
+
+    def = def or {}
+    local tractor = world:addVehicle({ dieselUsagePerHour = 40, fuelStep = 2, farmId = def.vehicleFarmId,
+        isAIActive = def.isAIActive })
+    tractor.rootNode = { x = x, z = z }
+    local job = world:addJob({ jobType = "plough", workerId = def.workerId })
+    job.fieldId = 7
+    if not def.notStarted then
+        job.workStartedAt = 100
+    end
+    return world, tractor, job
+end
+
+test("a player's machine on their own job's field burns the job's fuel", function()
+    local _, tractor, job = setupPlayerJob(50, 50)
+
+    Motorized.updateConsumers(tractor, 16, 1)
+
+    assertNear(job.fuelUsedLiters, 2, 0.0001, "liters")
+    assertNear(job.fuelCost, 2 * 1.5, 0.0001, "cost at the pump price")
+end)
+
+test("a vanilla helper the player starts on their job's field pays the helper surcharge", function()
+    local _, tractor, job = setupPlayerJob(50, 50, { isAIActive = true })
+
+    Motorized.updateConsumers(tractor, 16, 1)
+
+    assertNear(job.fuelCost, 2 * 1.5 * 1.5, 0.0001, "cost")
+end)
+
+test("a player's machine off the job's field burns nothing of the job's", function()
+    local _, tractor, job = setupPlayerJob(150, 50)
+
+    Motorized.updateConsumers(tractor, 16, 1)
+
+    assertEquals(job.fuelUsedLiters, 0, "liters")
+end)
+
+test("a player's machine counts nothing before the job's work has started", function()
+    local _, tractor, job = setupPlayerJob(50, 50, { notStarted = true })
+
+    Motorized.updateConsumers(tractor, 16, 1)
+
+    assertEquals(job.fuelUsedLiters, 0, "liters")
+end)
+
+test("another farm's machine on the field burns nothing of the job's", function()
+    local _, tractor, job = setupPlayerJob(50, 50, { vehicleFarmId = 2 })
+
+    Motorized.updateConsumers(tractor, 16, 1)
+
+    assertEquals(job.fuelUsedLiters, 0, "liters")
+end)
+
+test("a player's own machine on a hired worker's job field isn't charged to it", function()
+    local _, tractor, job = setupPlayerJob(50, 50, { workerId = 3 })
+
+    Motorized.updateConsumers(tractor, 16, 1)
+
+    assertEquals(job.fuelUsedLiters, 0, "liters")
+end)
+
 test("setting off burns 3 miles of diesel, counted as the job's fuel", function()
     local world = setup()
     local tractor = world:addVehicle({ dieselUsagePerHour = 40, dieselLevel = 400 })

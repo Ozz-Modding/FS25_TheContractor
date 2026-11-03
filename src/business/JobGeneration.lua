@@ -363,6 +363,11 @@ end
 -- Server-only (Q9/MP requirement): clients never roll for or create jobs
 -- themselves, they just receive TCJobCreatedEvent broadcasts like any other
 -- client-side Jobs consumer.
+-- A farm deleted in multiplayer (TCFarmDeletion), on every machine.
+function TheContractorJobGeneration:forgetFarm(farmId)
+    self.lastOfferDayByFarm[farmId] = nil
+end
+
 function TheContractorJobGeneration:startHourlyTick()
     if not g_currentMission:getIsServer() then
         return

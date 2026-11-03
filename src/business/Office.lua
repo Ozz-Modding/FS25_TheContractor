@@ -524,6 +524,11 @@ end
 -- Persistence ------------------------------------------------------------------------
 
 -- After Staff, whose worker id counter office ids come from.
+-- A farm deleted in multiplayer (TCFarmDeletion), on every machine.
+function TheContractorOffice:forgetFarm(farmId)
+    self.membersByFarm[farmId] = nil
+end
+
 function TheContractorOffice:loadFromXMLFile(xmlFile)
     if not g_currentMission:getIsServer() then return end
 

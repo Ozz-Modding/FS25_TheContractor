@@ -9,22 +9,50 @@
 -- so every affected client needs telling separately, including the host:
 -- g_server:broadcastEvent doesn't loop back to the local client in
 -- single-player (see src/events/README.md).
+--
+-- The reason travels as its l10n key's place in REASON_KEYS, with plain
+-- string args (machine names), and is put into words on each machine, in
+-- its own language. Index 0 is a reason with no key: its one arg is the text
+-- as it came (another mod's AI validation, say).
 
 TCDispatchFailedEvent = {}
 local TCDispatchFailedEvent_mt = Class(TCDispatchFailedEvent, Event)
 
 InitEventClass(TCDispatchFailedEvent, "TCDispatchFailedEvent")
 
+-- Append only: the index is what's sent.
+TCDispatchFailedEvent.REASON_KEYS = {
+    "tc_dispatch_noVehicleReady",
+    -- args: the implements, the vehicle.
+    "tc_dispatch_noAttachPoint",
+    -- Vanilla's AI job validation (AIParameterVehicle:validate).
+    "ai_validationErrorNoVehicle",
+    "ai_validationErrorVehicleDoesNotExistAnymore",
+    "ai_validationErrorVehicleDoesNotSupportAI",
+    -- And its startability (AIJobFieldWork.getIsStartErrorText).
+    "ai_startStateLimitReached",
+    "ai_startStateVehicleDeleted",
+    "ai_startStateNoPermission",
+    "ai_startStateVehicleInUse",
+}
+
+TCDispatchFailedEvent.REASON_INDEX = {}
+for index, key in ipairs(TCDispatchFailedEvent.REASON_KEYS) do
+    TCDispatchFailedEvent.REASON_INDEX[key] = index
+end
+
 function TCDispatchFailedEvent.emptyNew()
     return Event.new(TCDispatchFailedEvent_mt)
 end
 
-function TCDispatchFailedEvent.new(farmId, jobType, fieldId, reasonText)
+-- reasonKey: one of REASON_KEYS, or nil with the text as args[1].
+function TCDispatchFailedEvent.new(farmId, jobType, fieldId, reasonKey, reasonArgs)
     local self = TCDispatchFailedEvent.emptyNew()
     self.farmId = farmId
     self.jobType = jobType
     self.fieldId = fieldId
-    self.reasonText = reasonText
+    self.reasonKey = reasonKey
+    self.reasonArgs = reasonArgs or {}
     return self
 end
 
@@ -32,33 +60,55 @@ function TCDispatchFailedEvent:writeStream(streamId, connection)
     streamWriteInt32(streamId, self.farmId)
     streamWriteString(streamId, self.jobType)
     streamWriteInt32(streamId, self.fieldId)
-    streamWriteString(streamId, self.reasonText)
+    streamWriteUInt8(streamId, TCDispatchFailedEvent.REASON_INDEX[self.reasonKey] or 0)
+    streamWriteUInt8(streamId, #self.reasonArgs)
+    for _, arg in ipairs(self.reasonArgs) do
+        streamWriteString(streamId, tostring(arg))
+    end
 end
 
 function TCDispatchFailedEvent:readStream(streamId, connection)
     self.farmId = streamReadInt32(streamId)
     self.jobType = streamReadString(streamId)
     self.fieldId = streamReadInt32(streamId)
-    self.reasonText = streamReadString(streamId)
+    self.reasonKey = TCDispatchFailedEvent.REASON_KEYS[streamReadUInt8(streamId)]
+    self.reasonArgs = {}
+    for i = 1, streamReadUInt8(streamId) do
+        self.reasonArgs[i] = streamReadString(streamId)
+    end
     self:run(connection)
 end
 
 function TCDispatchFailedEvent:run(connection)
-    TCDispatchFailedEvent.showNotification(self.farmId, self.jobType, self.fieldId, self.reasonText)
+    TCDispatchFailedEvent.showNotification(self.farmId, self.jobType, self.fieldId, self.reasonKey, self.reasonArgs)
 end
 
--- Shared by run() (remote clients) and TheContractorDispatch's own
--- server/host local notification — see this file's header comment on why
--- that can't just rely on the broadcast.
-function TCDispatchFailedEvent.showNotification(farmId, jobType, fieldId, reasonText)
+-- The reason in this machine's language.
+function TCDispatchFailedEvent.getReasonText(reasonKey, reasonArgs)
+    if reasonKey == nil then
+        return reasonArgs[1] or ""
+    end
+    return string.format(g_i18n:getText(reasonKey), unpack(reasonArgs))
+end
+
+-- The REASON_KEYS key whose text this machine renders as text, or nil:
+-- vanilla's validation only gives the words.
+function TCDispatchFailedEvent.findReasonKey(text)
+    for _, key in ipairs(TCDispatchFailedEvent.REASON_KEYS) do
+        if g_i18n:getText(key) == text then
+            return key
+        end
+    end
+    return nil
+end
+
+function TCDispatchFailedEvent.showNotification(farmId, jobType, fieldId, reasonKey, reasonArgs)
     if farmId ~= g_currentMission:getFarmId() then
         return
     end
-
     local field = g_fieldManager:getFieldById(fieldId)
     local fieldLabel = field ~= nil and field:getName() or tostring(fieldId)
-
     g_currentMission:addIngameNotification(FSBaseMission.INGAME_NOTIFICATION_CRITICAL,
         string.format(g_i18n:getText("tc_dispatch_failedNotification"), g_i18n:getText("tc_jobType_" .. jobType),
-            fieldLabel, reasonText))
+            fieldLabel, TCDispatchFailedEvent.getReasonText(reasonKey, reasonArgs or {})))
 end

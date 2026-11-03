@@ -4,7 +4,7 @@
 -- fault at its critical stage, two at severity 3, the engine dead about a
 -- third of the time) with a field service level: "player" (the player can
 -- fix it with ADS's tool box) or "mobile" (it takes a mobile workshop van).
--- See tickets/101 and docs/ads-repair-contracts.md.
+-- See tickets/101.
 --
 -- Everything after the roll is 100's (TheContractorRepairContracts): the
 -- machine goes on its arrivals queue with a spot on the field instead of a

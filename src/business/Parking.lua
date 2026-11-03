@@ -495,6 +495,26 @@ end
 -- turned back into object ids in resolveSavedVehicles. The notice and
 -- message ids are kept so a reload doesn't post them twice.
 
+-- A farm deleted in multiplayer (TCFarmDeletion), on every machine.
+function TheContractorParking:forgetFarm(farmId)
+    local kept = {}
+    for _, entry in ipairs(self.queue) do
+        if entry.farmId == farmId then
+            self.entryByVehicleId[entry.vehicleId] = nil
+        else
+            table.insert(kept, entry)
+        end
+    end
+    self.queue = kept
+    for batchId, parked in pairs(self.parkedByBatch) do
+        if parked.farmId == farmId then
+            self.parkedByBatch[batchId] = nil
+            self.messageIdByBatch[batchId] = nil
+        end
+    end
+    self.noticeByFarm[farmId] = nil
+end
+
 function TheContractorParking:loadFromXMLFile(xmlFile)
     if not g_currentMission:getIsServer() then return end
 
@@ -629,8 +649,8 @@ end
 function TheContractorParking.registerConsoleCommands()
     TCConsole.register("job", "park", {
         description = "Park the vehicle you're in: a random free parking slot, or the parking queue if none is free",
-        run = function(farmId, args)
-            local vehicle = g_localPlayer ~= nil and g_localPlayer:getCurrentVehicle() or nil
+        run = function(farmId, args, context)
+            local vehicle = TCConsole.getVehicle(context)
             if vehicle == nil then
                 return "Error: get in the vehicle you want parked first."
             end
@@ -641,7 +661,12 @@ function TheContractorParking.registerConsoleCommands()
                 return "Error: that vehicle is out on a job."
             end
 
-            g_localPlayer:leaveVehicle()
+            -- Out first, wherever they typed it (the server's leave reaches
+            -- their machine).
+            local player = TCConsole.getPlayer(context)
+            if player ~= nil and player.getCurrentVehicle ~= nil and player:getCurrentVehicle() == vehicle then
+                player:leaveVehicle(vehicle)
+            end
             local name = vehicle:getFullName()
             local vehicleId = NetworkUtil.getObjectId(vehicle)
             TCJobSiteSetup.unhitchVehicles({ vehicleId })

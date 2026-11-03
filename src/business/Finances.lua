@@ -665,6 +665,16 @@ end
 
 -- Persistence ------------------------------------------------------------------
 
+-- A farm deleted in multiplayer (TCFarmDeletion), on every machine.
+function TheContractorFinances:forgetFarm(farmId)
+    for id, invoice in pairs(self.invoicesById) do
+        if invoice.farmId == farmId then
+            self.invoicesById[id] = nil
+        end
+    end
+    self.yearStatsByFarm[farmId] = nil
+end
+
 function TheContractorFinances:loadFromXMLFile(xmlFile)
     if not g_currentMission:getIsServer() then return end
 

@@ -11,7 +11,8 @@
 -- that's set to the vehicle's job. Reading fill-level deltas instead
 -- wouldn't work: a hired helper with "helper buys fuel" on pays cash and
 -- never draws the tank down, and refuelling mid-job would read as negative
--- use.
+-- use. A player-driven job has no machines of ours, so a machine on no job
+-- is charged to a player-driven job whose field it's on (getPlayerJobAt).
 --
 -- Priced as the base game charges it: diesel's current cost per litre,
 -- times 1.5 while the AI is driving with "helper buys fuel" on (the
@@ -127,6 +128,32 @@ function TCJobFuel.updateFarmStats(farmManager, superFunc, farmId, statName, del
     return superFunc(farmManager, farmId, statName, delta)
 end
 
+-- A player doing a job themselves has none of the job's machines listed on
+-- it, so the machine burning the fuel is charged to its farm's
+-- player-driven job (no hired worker, work started) whose field it's on -
+-- driven by the player or a vanilla helper they started. Off the field
+-- (the drive out, carting away) isn't counted, as the job's clock doesn't
+-- count the drive out (029). A job with no field gets none.
+function TCJobFuel.getPlayerJobAt(vehicle)
+    local jobs = g_currentMission.TheContractor.Jobs
+    if vehicle.rootNode == nil or vehicle.getOwnerFarmId == nil or jobs.getAllJobs == nil or
+        (TheContractorRepairContracts ~= nil and TheContractorRepairContracts.isContractVehicle(vehicle)) then
+        return nil
+    end
+
+    local x, _, z = getWorldTranslation(vehicle.rootNode)
+    for _, job in ipairs(jobs:getAllJobs(vehicle:getOwnerFarmId())) do
+        if job.assignedWorkerId == nil and job.workStartedAt ~= nil and
+            (job.state == TheContractorJob.STATE.ALLOCATED or job.state == TheContractorJob.STATE.IN_PROGRESS) then
+            local field = job.fieldId ~= nil and g_fieldManager:getFieldById(job.fieldId) or nil
+            if field ~= nil and TCJoyriderRuts.isPointInside(x, z, TCJoyriderRuts.getFieldBoundary(field)) then
+                return job
+            end
+        end
+    end
+    return nil
+end
+
 function TCJobFuel.recordUsage(vehicle, liters)
     local mission = g_currentMission
     if mission == nil or mission.TheContractor == nil or mission.TheContractor.Jobs == nil or
@@ -140,6 +167,9 @@ function TCJobFuel.recordUsage(vehicle, liters)
     end
 
     local job = mission.TheContractor.Jobs:getWorkingJobForVehicle(vehicleId)
+    if job == nil then
+        job = TCJobFuel.getPlayerJobAt(vehicle)
+    end
     if job == nil then
         return
     end

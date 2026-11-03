@@ -787,6 +787,11 @@ end
 -- Just which notices are ours; the bookings are saved with the workers.
 -- Loaded after Notices, so ids that are no longer on the board are dropped.
 
+-- A farm deleted in multiplayer (TCFarmDeletion), on every machine.
+function TheContractorHolidays:forgetFarm(farmId)
+    self.noticeIdsByFarm[farmId] = nil
+end
+
 function TheContractorHolidays:loadFromXMLFile(xmlFile)
     if not g_currentMission:getIsServer() then return end
 

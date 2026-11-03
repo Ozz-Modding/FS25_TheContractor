@@ -168,7 +168,7 @@ test("known faults are listed by name, hidden ones left out; none for vanilla", 
     assertEquals(TCVehicleCondition.getKnownFaultNames({ model = MODEL().VANILLA, damage = 0 }), nil)
 end)
 
--- G4 (docs/ads-repair-contracts.md): the player can't know what an ADS
+-- 099: the player can't know what an ADS
 -- vehicle's wear costs, so it has none and the Logbook shows none.
 test("an ADS vehicle's wear has no cost and isn't shown", function()
     setup()

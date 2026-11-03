@@ -276,15 +276,15 @@ function TheContractorDispatch:update(dt)
 
             if pending.stage == TheContractorDispatch.STAGE.HIDDEN and job.transportRemainingMs <= 0 and
                 pending.elapsedMs >= TheContractorDispatch.HIDDEN_MS then
-                local operatingVehicle, errorText = TCJobSiteSetup.rigAndPlace(job)
+                local operatingVehicle, reasonKey, reasonArgs = TCJobSiteSetup.rigAndPlace(job)
                 if operatingVehicle == nil then
                     TCLog.warning("TheContractor: farm %d job %d equipment couldn't be rigged: %s", job.farmId,
-                        job.id, tostring(errorText))
+                        job.id, tostring(reasonKey))
                     self:cancelPending(jobId, job)
                     -- 062: it never got going, so it's parked. The haulage
                     -- rig stays hidden with the job, as it always has.
                     g_currentMission.TheContractor.Parking:returnVehicles(job.farmId, job.assignedEquipmentIds)
-                    self:notifyDispatchFailed(job, errorText)
+                    self:notifyDispatchFailed(job, reasonKey, reasonArgs)
                 else
                     pending.stage = TheContractorDispatch.STAGE.RIGGED
                     pending.elapsedMs = 0
@@ -363,7 +363,7 @@ function TheContractorDispatch:startAIJob(job)
         TCLog.warning(
             "TheContractor: farm %d job %d has no allocated equipment ready for AI dispatch after rigging",
             job.farmId, job.id)
-        self:notifyDispatchFailed(job, g_i18n:getText("tc_dispatch_noVehicleReady"))
+        self:notifyDispatchFailed(job, "tc_dispatch_noVehicleReady")
         return
     end
 
@@ -374,7 +374,11 @@ function TheContractorDispatch:startAIJob(job)
     if not isValid then
         TCLog.warning("TheContractor: farm %d job %d AI job failed validation: %s", job.farmId, job.id,
             tostring(validationError))
-        self:notifyDispatchFailed(job, tostring(validationError))
+        -- Vanilla's validation gives the words; sent by key where it's one of
+        -- its own, so each machine reads it in its language.
+        local text = tostring(validationError)
+        local reasonKey = TCDispatchFailedEvent.findReasonKey(text)
+        self:notifyDispatchFailed(job, reasonKey, reasonKey == nil and { text } or nil)
         return
     end
 
@@ -389,9 +393,11 @@ function TheContractorDispatch:startAIJob(job)
     -- looking at this vehicle).
     local isStartable, startError = aiJob:getIsStartable(nil)
     if not isStartable then
-        local errorText = AIJobFieldWork.getIsStartErrorText(startError)
-        TCLog.warning("TheContractor: farm %d job %d AI job not startable: %s", job.farmId, job.id, errorText)
-        self:notifyDispatchFailed(job, errorText)
+        local reasonKey = TheContractorDispatch.getStartErrorKey(startError)
+        TCLog.warning("TheContractor: farm %d job %d AI job not startable: %s", job.farmId, job.id,
+            tostring(reasonKey))
+        self:notifyDispatchFailed(job, reasonKey,
+            reasonKey == nil and { AIJobFieldWork.getIsStartErrorText(startError) } or nil)
         return
     end
 
@@ -556,6 +562,26 @@ end
 
 -- Whether a job has a worker out: its equipment on the road/being staged,
 -- or its AI Helper running.
+-- A farm deleted in multiplayer (TCFarmDeletion), on every machine.
+-- Its jobs' AI and staging are dropped, not stopped: vanilla has already
+-- deleted the farm's vehicles, and their AI with them.
+function TheContractorDispatch:forgetFarm(farmId, jobIds)
+    for _, jobId in ipairs(jobIds) do
+        self.pendingByJobId[jobId] = nil
+        local aiJob = self.aiJobByOurJobId[jobId]
+        if aiJob ~= nil then
+            self.ourJobIdByAIJob[aiJob] = nil
+        end
+        self.aiJobByOurJobId[jobId] = nil
+        self.ranOutOfFillJobIds[jobId] = nil
+        for aiSystemJobId, ourJobId in pairs(self.ourJobIdByAISystemJobId) do
+            if ourJobId == jobId then
+                self.ourJobIdByAISystemJobId[aiSystemJobId] = nil
+            end
+        end
+    end
+end
+
 function TheContractorDispatch:isJobActive(job)
     return self.pendingByJobId[job.id] ~= nil or self.aiJobByOurJobId[job.id] ~= nil
 end
@@ -590,10 +616,30 @@ end
 -- broadcast via TCDispatchFailedEvent for any other client on the farm —
 -- same "no SP loopback" shape TCJobMissedEvent already uses (see
 -- src/events/README.md).
-function TheContractorDispatch:notifyDispatchFailed(job, reasonText)
-    TCDispatchFailedEvent.showNotification(job.farmId, job.jobType, job.fieldId, reasonText)
+-- reasonKey: one of TCDispatchFailedEvent.REASON_KEYS (nil: args[1] is the
+-- text as it is), reasonArgs its plain args.
+function TheContractorDispatch:notifyDispatchFailed(job, reasonKey, reasonArgs)
+    reasonArgs = reasonArgs or {}
+    TCDispatchFailedEvent.showNotification(job.farmId, job.jobType, job.fieldId, reasonKey, reasonArgs)
 
     if g_server ~= nil then
-        g_server:broadcastEvent(TCDispatchFailedEvent.new(job.farmId, job.jobType, job.fieldId, reasonText))
+        g_server:broadcastEvent(TCDispatchFailedEvent.new(job.farmId, job.jobType, job.fieldId, reasonKey,
+            reasonArgs))
     end
+end
+
+-- AIJob:getIsStartable's error as its TCDispatchFailedEvent.REASON_KEYS key
+-- (the ones vanilla's getIsStartErrorText reads), or nil.
+function TheContractorDispatch.getStartErrorKey(startError)
+    local W = AIJobFieldWork
+    if startError == W.START_ERROR_LIMIT_REACHED then
+        return "ai_startStateLimitReached"
+    elseif startError == W.START_ERROR_VEHICLE_DELETED then
+        return "ai_startStateVehicleDeleted"
+    elseif startError == W.START_ERROR_NO_PERMISSION then
+        return "ai_startStateNoPermission"
+    elseif startError == W.START_ERROR_VEHICLE_IN_USE then
+        return "ai_startStateVehicleInUse"
+    end
+    return nil
 end

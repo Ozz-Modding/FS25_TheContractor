@@ -26,6 +26,10 @@ MenuContractor.SUB_CATEGORY = {
     WORKSHOP = 8,
 }
 
+-- How often, at most, the open tab redraws for data from the server
+-- (refreshOpenTab).
+MenuContractor.DATA_REFRESH_MS = 500
+
 MenuContractor.HEADER_SLICES = {
     [MenuContractor.SUB_CATEGORY.INBOX] = "gui.icon_ingameMenu_contracts",
     [MenuContractor.SUB_CATEGORY.JOBS] = "gui.icon_ingameMenu_calendar",
@@ -898,6 +902,12 @@ function MenuContractor:onFrameOpen()
     self.isFrameOpen = true
     self:updateContent()
     self:setMenuButtonInfoDirty()
+
+    -- Everything's just been drawn; later changes mark it for a redraw.
+    self.isDataDirty = false
+    g_messageCenter:subscribe(MessageType.TC_DATA_UPDATED, self.onDataUpdated, self)
+    -- An answer that came in while the menu was shut.
+    self:checkPendingResponses()
 end
 
 -- 042: the portrait's scene and character only live while the menu's open.
@@ -905,6 +915,7 @@ function MenuContractor:onFrameClose()
     MenuContractor:superClass().onFrameClose(self)
 
     self.isFrameOpen = false
+    g_messageCenter:unsubscribe(MessageType.TC_DATA_UPDATED, self)
     if self.workerPortrait ~= nil then
         self.workerPortrait:destroy()
     end
@@ -956,11 +967,69 @@ function MenuContractor:update(dt)
                 self:hasCompany() then
             self:refreshWorkshopState(g_currentMission:getFarmId())
         end
-        -- 102: a repair quote's answer reaching a remote client.
-        if self.pendingRepairQuoteJobId ~= nil then
-            self:checkPendingRepairQuote()
+    end
+
+    -- Data from the server (TC_DATA_UPDATED): answers to this player's own
+    -- requests at once, then the open tab redrawn, at most once every
+    -- DATA_REFRESH_MS. Never under a dialog, while an allocation's open (a
+    -- Jobs refresh closes it) or while a look's being edited: it waits.
+    self.dataRefreshMs = (self.dataRefreshMs or 0) + dt
+    if self.isDataDirty and self.isFrameOpen and not g_gui:getIsDialogVisible() then
+        self:checkPendingResponses()
+        if self.dataRefreshMs >= MenuContractor.DATA_REFRESH_MS and self.allocatingJobId == nil and
+                not self.isEditingWorker and not g_gui:getIsDialogVisible() then
+            self.isDataDirty = false
+            self.dataRefreshMs = 0
+            self:refreshOpenTab()
         end
     end
+end
+
+-- TC_DATA_UPDATED, while the menu's open (see TheContractor.publishDataUpdated).
+function MenuContractor:onDataUpdated()
+    self.isDataDirty = true
+end
+
+-- Answers to this player's own requests: at once on the host, a moment later
+-- on a remote client, so each is kept until it's in.
+function MenuContractor:checkPendingResponses()
+    self:checkPendingRepairQuote()
+    self:checkPendingAccept()
+    self:checkPendingCounterOffer()
+end
+
+-- Redraws the tab that's showing from the current data, keeping its view and
+-- selection (every refresh holds on to the selected row by id). The Overview
+-- shows a bit of everything, and the company appearing or going changes
+-- every tab, so those redraw the lot.
+function MenuContractor:refreshOpenTab()
+    local S = MenuContractor.SUB_CATEGORY
+    local state = self.subCategoryPaging:getState()
+    local hasCompany = self:hasCompany()
+    if state == S.OVERVIEW or not hasCompany or hasCompany ~= self.shownHasCompany then
+        self:refreshCompanyState()
+    else
+        local farmId = g_currentMission:getFarmId()
+        local tc = g_currentMission.TheContractor
+        if state == S.INBOX then
+            self:refreshInboxState(farmId, tc.Jobs)
+            self:markInboxSeen()
+        elseif state == S.JOBS then
+            self:refreshJobsState(farmId, tc.Jobs)
+        elseif state == S.STAFF then
+            self:refreshStaffState(farmId, tc.Staff, tc.Jobs)
+        elseif state == S.FINANCES then
+            self:refreshFinancesState(farmId, tc.Finances)
+        elseif state == S.LOGBOOK then
+            self:refreshLogbookState(farmId, tc.Logbook)
+        elseif state == S.SUPPLIES then
+            self:refreshSuppliesState(farmId)
+        elseif state == S.WORKSHOP then
+            self:refreshWorkshopState(farmId)
+        end
+    end
+    self:updateWorkerPortrait()
+    self:setMenuButtonInfoDirty()
 end
 
 -- 097: everyone's place in the day, the office included, in one string.
@@ -1074,6 +1143,8 @@ end
 -- and the company name/reputation-rank status once one exists.
 function MenuContractor:refreshCompanyState()
     local hasCompany = self:hasCompany()
+    -- What the tabs were last drawn for (refreshOpenTab).
+    self.shownHasCompany = hasCompany
 
     self.textNoCompany:setVisible(not hasCompany)
     self.overviewContent:setVisible(hasCompany)
@@ -1838,8 +1909,8 @@ function MenuContractor:onClickHireWorker()
 
         g_client:getServerConnection():sendEvent(TCHireWorkerEvent.new(farmId, candidate.id))
 
-        -- Same "synchronous for host/SP, catches up on next refresh for a
-        -- remote client" caveat as respondToSelectedInboxJob/sendCounterOffer.
+        -- Already applied on the host; a remote client redraws when the
+        -- server's answer lands (onDataUpdated).
         target.selectedCandidateId = nil
         target:refreshStaffState(farmId, g_currentMission.TheContractor.Staff, g_currentMission.TheContractor.Jobs)
     end, self, dialogPrompt)
@@ -1931,8 +2002,8 @@ function MenuContractor:onClickGiveBonus()
 
         g_client:getServerConnection():sendEvent(TCGiveBonusEvent.new(farmId, worker.id, amount))
 
-        -- Same "synchronous for host/SP, catches up on next refresh for a
-        -- remote client" caveat as onClickHireWorker.
+        -- Already applied on the host; a remote client redraws when the
+        -- server's answer lands (onDataUpdated).
         self:refreshStaffState(farmId, g_currentMission.TheContractor.Staff, g_currentMission.TheContractor.Jobs)
 
         -- A blocking confirmation as well as the notification. Worded
@@ -1985,8 +2056,8 @@ function MenuContractor:onClickPayRise()
 
         g_client:getServerConnection():sendEvent(TCPayRiseEvent.new(farmId, worker.id, option.key))
 
-        -- Same "synchronous for host/SP, catches up on next refresh for a
-        -- remote client" caveat as onClickHireWorker.
+        -- Already applied on the host; a remote client redraws when the
+        -- server's answer lands (onDataUpdated).
         self:refreshStaffState(farmId, g_currentMission.TheContractor.Staff, g_currentMission.TheContractor.Jobs)
     end, prompt, g_i18n:getText("tc_pay_riseTitle"), options)
 end
@@ -2267,8 +2338,8 @@ function MenuContractor:openEditPerson(person, kind, draft)
     self:updateWorkerPortrait()
     TCEditPersonDialog.show(person, kind, function(target)
         target.isEditingWorker = false
-        -- Same "synchronous for host/SP, catches up when the edit arrives
-        -- for a remote client" as the other Staff actions.
+        -- Already applied on the host; a remote client redraws when the
+        -- server's answer lands (onDataUpdated).
         target:refreshStaffState(g_currentMission:getFarmId(), g_currentMission.TheContractor.Staff,
             g_currentMission.TheContractor.Jobs)
     end, self, draft)
@@ -2370,8 +2441,8 @@ function MenuContractor:onClickBookTraining()
 
         g_client:getServerConnection():sendEvent(TCBookTrainingEvent.new(farmId, worker.id, cert))
 
-        -- Same "synchronous for host/SP, catches up on next refresh for a
-        -- remote client" caveat as onClickHireWorker.
+        -- Already applied on the host; a remote client redraws when the
+        -- server's answer lands (onDataUpdated).
         target:refreshStaffState(farmId, g_currentMission.TheContractor.Staff, g_currentMission.TheContractor.Jobs)
     end, self, dialogPrompt)
 end
@@ -2580,8 +2651,8 @@ function MenuContractor:sendMessageAction(messageId, actionKey)
     local farmId = g_currentMission:getFarmId()
     g_client:getServerConnection():sendEvent(TCMessageActionEvent.new(farmId, messageId, actionKey))
 
-    -- Same "already applied on the server, catches up next visit on a
-    -- remote client" caveat as respondToSelectedInboxJob.
+    -- Already applied on the host; a remote client redraws when the
+    -- server's answer lands (onDataUpdated).
     self.selectedInboxMessageId = nil
     self:refreshInboxState(farmId, g_currentMission.TheContractor.Jobs)
 end
@@ -3760,8 +3831,8 @@ function MenuContractor:onClickJobDetails()
         getUnallocateText = function(detailJob)
             return self:getUnallocateText(detailJob)
         end,
-        -- Same "synchronous for host/SP, catches up on the next refresh for
-        -- a remote client" caveat as sendAllocation.
+        -- Already applied on the host; a remote client redraws when the
+        -- server's answer lands (onDataUpdated).
         onUnallocated = function()
             self:refreshJobsState(g_currentMission:getFarmId(), g_currentMission.TheContractor.Jobs)
             self:focusJobsList()
@@ -5169,8 +5240,8 @@ function MenuContractor:sendAllocation(job, workerIds, equipmentIds, haulageIds,
         haulageIds, fixedRoles))
 
     self.allocatingJobId = nil
-    -- Same "synchronous for host/SP, catches up on next refresh for a remote
-    -- client" caveat as respondToSelectedInboxJob/sendCounterOffer.
+    -- Already applied on the host; a remote client redraws when the
+    -- server's answer lands (onDataUpdated).
     self:refreshJobsState(farmId, g_currentMission.TheContractor.Jobs)
     self:focusJobsList()
 end
@@ -5285,7 +5356,7 @@ end
 
 -- The customer's answer comes back as the job's state (accepted or
 -- declined), at once on the host and a moment later on a remote client, so
--- the menu watches for it (update, checkPendingRepairQuote).
+-- the menu watches for it (onDataUpdated, checkPendingRepairQuote).
 function MenuContractor:onRepairQuoteSent(jobId)
     self.pendingRepairQuoteJobId = jobId
     self.selectedInboxJobId = nil
@@ -5318,23 +5389,33 @@ function MenuContractor:respondToSelectedInboxJob(accept)
 
     local farmId = g_currentMission:getFarmId()
     local jobId = job.id
+    if accept then
+        self.pendingAcceptJobId = jobId
+    end
     g_client:getServerConnection():sendEvent(TCRespondToJobOfferEvent.new(farmId, jobId, accept))
 
-    -- Refresh immediately: on the server (incl. single-player, and the host
-    -- in a listen server) TheContractorJobs applies the transition
-    -- synchronously before sendEvent returns, so this already reflects it.
-    -- On a remote client the authoritative change only lands once
-    -- TCJobStateChangedEvent's broadcast arrives; this refresh is then a
-    -- harmless no-op and the list catches up next time the tab is
-    -- reopened/switched, same refresh cadence as the rest of this frame.
+    -- On the host the transition has already happened by now. On a remote
+    -- client it lands with TCJobStateChangedEvent, and the menu redraws
+    -- then (onDataUpdated), when the pending accept is answered too.
     self.selectedInboxJobId = nil
     self:refreshInboxState(farmId, g_currentMission.TheContractor.Jobs)
+    self:checkPendingAccept()
+end
 
-    if accept then
-        local updatedJob = g_currentMission.TheContractor.Jobs:getJob(farmId, jobId)
-        if updatedJob ~= nil and updatedJob.state == TheContractorJob.STATE.ACCEPTED then
-            self:showJobAcceptedNotification(updatedJob)
-        end
+-- An accept this player sent, answered once the offer's no longer open.
+function MenuContractor:checkPendingAccept()
+    local jobId = self.pendingAcceptJobId
+    if jobId == nil then
+        return
+    end
+    local job = g_currentMission.TheContractor.Jobs:getJob(g_currentMission:getFarmId(), jobId)
+    if job ~= nil and (job.state == TheContractorJob.STATE.OFFERED or
+            job.state == TheContractorJob.STATE.NEGOTIATING) then
+        return
+    end
+    self.pendingAcceptJobId = nil
+    if job ~= nil and job.state == TheContractorJob.STATE.ACCEPTED then
+        self:showJobAcceptedNotification(job)
     end
 end
 
@@ -5435,39 +5516,62 @@ function MenuContractor:showCounterOfferDialog(jobId, defaultText)
     end, self, defaultText, dialogPrompt, dialogPrompt, 10, g_i18n:getText("tc_inbox_counterButton"))
 end
 
--- Sends the counter offer, then diffs the job's price/state before and after
--- to derive a flavor-text response for the transcript (see
--- negotiationHistory) — there's no separate response payload coming back
--- from the server, just the updated job snapshot (TCJobNegotiationUpdatedEvent),
--- so comparing old vs new is how the client infers what happened. Same
--- "synchronous for host/SP, catches up next visit for a remote client"
--- caveat as respondToSelectedInboxJob.
+-- Sends the counter offer, keeping the job's price, rounds and state as
+-- they were, then diffs the job against them once the answer's in to derive
+-- a flavor-text response for the transcript (see negotiationHistory) —
+-- there's no separate response payload coming back from the server, just
+-- the updated job snapshot (TCJobNegotiationUpdatedEvent). On the host
+-- that's already happened as sendEvent returns; on a remote client it's
+-- when the snapshot lands (onDataUpdated).
 function MenuContractor:sendCounterOffer(jobId, counterPrice)
     local farmId = g_currentMission:getFarmId()
     local jobs = g_currentMission.TheContractor.Jobs
 
     local previousJob = jobs:getJob(farmId, jobId)
-    local previousPrice = previousJob ~= nil and previousJob:getPrice() or nil
-    local previousRounds = previousJob ~= nil and previousJob.negotiationRounds or nil
+    if previousJob == nil then
+        return
+    end
+    self.pendingCounterOffer = {
+        jobId = jobId,
+        price = previousJob:getPrice(),
+        rounds = previousJob.negotiationRounds,
+        state = previousJob.state,
+        counterPrice = counterPrice,
+    }
 
     g_client:getServerConnection():sendEvent(TCCounterOfferEvent.new(farmId, jobId, counterPrice))
 
     self:refreshInboxState(farmId, jobs)
+    self:checkPendingCounterOffer()
+end
 
-    local updatedJob = jobs:getJob(farmId, jobId)
-    if updatedJob ~= nil and previousPrice ~= nil then
-        local message = self:describeNegotiationOutcome(previousPrice, previousRounds, updatedJob, counterPrice)
-        if message ~= nil then
-            self.negotiationHistory[jobId] = self.negotiationHistory[jobId] or {}
-            table.insert(self.negotiationHistory[jobId], message)
-            self:updateInboxDetails()
-        end
+-- A counter offer this player sent, answered once the server has counted
+-- the round (or the offer's moved on another way).
+function MenuContractor:checkPendingCounterOffer()
+    local pending = self.pendingCounterOffer
+    if pending == nil then
+        return
+    end
+    local job = g_currentMission.TheContractor.Jobs:getJob(g_currentMission:getFarmId(), pending.jobId)
+    if job ~= nil and job.negotiationRounds <= pending.rounds and job.state == pending.state then
+        return
+    end
+    self.pendingCounterOffer = nil
+    if job == nil then
+        return
+    end
 
-        if updatedJob.state == TheContractorJob.STATE.ACCEPTED then
-            self:showJobAcceptedNotification(updatedJob)
-        elseif updatedJob.state == TheContractorJob.STATE.DECLINED then
-            self:showJobRejectedNotification(updatedJob)
-        end
+    local message = self:describeNegotiationOutcome(pending.price, pending.rounds, job, pending.counterPrice)
+    if message ~= nil then
+        self.negotiationHistory[job.id] = self.negotiationHistory[job.id] or {}
+        table.insert(self.negotiationHistory[job.id], message)
+        self:updateInboxDetails()
+    end
+
+    if job.state == TheContractorJob.STATE.ACCEPTED then
+        self:showJobAcceptedNotification(job)
+    elseif job.state == TheContractorJob.STATE.DECLINED then
+        self:showJobRejectedNotification(job)
     end
 end
 
@@ -5730,8 +5834,8 @@ function MenuContractor:onClickWriteOffInvoice()
 
         g_client:getServerConnection():sendEvent(TCWriteOffInvoiceEvent.new(farmId, invoice.id))
 
-        -- Same "synchronous for host/SP, catches up on next refresh for a
-        -- remote client" caveat as onClickHireWorker.
+        -- Already applied on the host; a remote client redraws when the
+        -- server's answer lands (onDataUpdated).
         target:refreshFinancesState(farmId, g_currentMission.TheContractor.Finances)
     end, self, dialogPrompt)
 end
@@ -5770,8 +5874,8 @@ function MenuContractor:onClickPursueInvoice()
 
         g_client:getServerConnection():sendEvent(TCPursueInvoiceEvent.new(farmId, invoice.id))
 
-        -- Same "synchronous for host/SP, catches up on next refresh for a
-        -- remote client" caveat as onClickHireWorker.
+        -- Already applied on the host; a remote client redraws when the
+        -- server's answer lands (onDataUpdated).
         target:refreshFinancesState(farmId, g_currentMission.TheContractor.Finances)
     end, self, dialogPrompt)
 end

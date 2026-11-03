@@ -1969,6 +1969,11 @@ function TheContractorStaff.readWorkerXML(xmlFile, key, farmId)
     return worker
 end
 
+-- A farm deleted in multiplayer (TCFarmDeletion), on every machine.
+function TheContractorStaff:forgetFarm(farmId)
+    self.workersByFarm[farmId] = nil
+end
+
 function TheContractorStaff:loadFromXMLFile(xmlFile)
     if not g_currentMission:getIsServer() then return end
 
@@ -2206,7 +2211,7 @@ function TheContractorStaff.registerConsoleCommands()
                 return problem or false
             end
 
-            g_client:getServerConnection():sendEvent(TCHireWorkerEvent.new(farmId, candidate.id))
+            g_currentMission.TheContractor.Staff:hireWorker(farmId, candidate.id)
             return string.format("Hiring %s (#%d) for farm %d", candidate.name, candidate.id, farmId)
         end,
     })

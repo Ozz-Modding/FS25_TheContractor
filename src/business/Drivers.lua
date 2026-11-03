@@ -567,6 +567,15 @@ end
 -- (CP/AI jobs don't survive a save) the release tick frees them after
 -- LOAD_RELEASE_GRACE_MS.
 
+-- A farm deleted in multiplayer (TCFarmDeletion), on every machine.
+function TheContractorDrivers:forgetFarm(farmId)
+    for vehicleId, binding in pairs(self.bindingsByVehicleId) do
+        if binding.farmId == farmId then
+            self.bindingsByVehicleId[vehicleId] = nil
+        end
+    end
+end
+
 function TheContractorDrivers:loadFromXMLFile(xmlFile)
     if not g_currentMission:getIsServer() then return end
 

@@ -14,7 +14,7 @@ You type these into the developer console. You don't need cheats on. There are f
 Type a group on its own (or with `help`) to list its subcommands and their arguments. Subcommand names aren't case-sensitive. If you get the arguments wrong, the command prints that subcommand's usage.
 
 - **Your farm:** every command acts on your current farm. Most need that farm to have created a company first.
-- **Server only:** commands that change something only work on the server, which means single player or the host of a multiplayer game. The read-only lists `tcWorker list`, `tcWorker pool`, `tcJob list`, `tcJob log`, `tcCompany storages`, `tcCompany yards`, `tcCompany farmers`, `tcCompany notices`, `tcCompany vehicleLog`, `tcCompany events`, `tcWorker standing` and `tcWorker hours` also work on a joined client.
+- **Server only:** commands that change something run on the server. In single player, or as the host, they run as you type them. As an admin on a joined client (a dedicated server's admins included) they're sent to the server and run there for your farm, where you're standing and the vehicle you're in, and the answer is printed when it comes back. Other players can't use them. The read-only lists `tcWorker list`, `tcWorker pool`, `tcJob list`, `tcJob log`, `tcCompany storages`, `tcCompany yards`, `tcCompany farmers`, `tcCompany notices`, `tcCompany vehicleLog`, `tcCompany events`, `tcWorker standing` and `tcWorker hours` also work on a joined client.
 - **`<worker>`:** a hired worker's id, or the start of their first or last name. `amy`, `Hall` and `3` could all mean Amy Hall (#3). If a name matches more than one worker, the command lists them and asks for the id. `tcWorker list` shows ids and names.
 
 ## Workers — `tcWorker`
@@ -322,7 +322,7 @@ A dry run of job generation for your farm. It changes nothing. It shows the curr
 
 ### `tcJob create <jobType> <fieldId> <skill> <price> <period> <day>`
 
-Creates a job with every detail set by hand. Unlike `tcJob offer`, nothing is checked: the field doesn't have to suit the job type and the date doesn't have to be workable. Use it to test specific edge cases.
+Creates a job with every detail set by hand. Unlike `tcJob offer`, nothing is checked: the field doesn't have to suit the job type and the date doesn't have to be workable. Use it to test specific edge cases. It prints the new job's id.
 
 | Argument | Meaning |
 |---|---|
@@ -359,7 +359,7 @@ Forces a job into another state. Only legal transitions are allowed:
 
 Other states only change the job's state.
 
-Leave the state out, or give one the job can't go to, and it tells you the job's current state and the states it can go to instead, without changing anything. Get job ids from `tcJob list`.
+Leave the state out, or give one the job can't go to, and it tells you the job's current state and the states it can go to instead, without changing anything. Otherwise it prints the state the job ended up in. Get job ids from `tcJob list`.
 
 ```
 tcJob state 7 accepted
@@ -484,7 +484,7 @@ Open claims: 1
 
 ### `tcCompany rep <amount>`
 
-Adds reputation points to your farm, or removes them with a negative amount.
+Adds reputation points to your farm, or removes them with a negative amount, and prints the new score.
 
 ```
 tcCompany rep 100
@@ -543,7 +543,7 @@ Makes a random event happen to your farm now, ignoring the odds, the Random even
 
 - `goodNews [story]`: that story, or a random one other than the last you had, even before your first completed job. The story's reward is applied and its inbox message posted. `[story]` is case-insensitive; an unknown one lists them: `photoPosted`, `parishNews`, `parishCouncil`, `youngFarmers` (reputation, scaled to your tier), `supplierRefund`, `loyaltyRebate`, `ratesRefund` (cash, scaled by the job pay setting).
 - `poaching [worker]`: the rival goes after that worker (a `<worker>` as for `tcWorker`: an id or the start of a name), however long they've been with you. Without one it picks as the real event does: someone with at least 3 months' service, nearly always one of your most valuable. Not someone who's leaving or already has an offer.
-- `fallenTree [here]`: 2 to 4 fully grown beeches come down across roads and the council's job to clear them all goes up in your Inbox, due today, with a map marker on each tree once you take it on. Without `here` the roads are picked as the real event does (on AI road splines, with room for each tree, no player within 150 m, a field within 2 km to name each by, every tree at least 200 m from any other and the rest within 1 km of the first), and it says there's nothing to act on if fewer than 2 will do or you've one already. With `here` the first falls across the way you're facing, about 8 m ahead, which needs you in the game (not a dedicated server's console), and the rest are picked as usual (it goes ahead with just that one if there's nowhere else). The trees are cut and laid down 3 seconds after they're planted.
+- `fallenTree [here]`: 2 to 4 fully grown beeches come down across roads and the council's job to clear them all goes up in your Inbox, due today, with a map marker on each tree once you take it on. Without `here` the roads are picked as the real event does (on AI road splines, with room for each tree, no player within 150 m, a field within 2 km to name each by, every tree at least 200 m from any other and the rest within 1 km of the first), and it says there's nothing to act on if fewer than 2 will do or you've one already. With `here` the first falls across the way you're facing, about 8 m ahead, which needs you in the game (an admin on a joined client counts), and the rest are picked as usual (it goes ahead with just that one if there's nowhere else). The trees are cut and laid down 3 seconds after they're planted.
 - `fieldBreakdown [player|mobile]`: a customer's machine breaks down on an NPC's field, fixable on the spot with ADS's tool box (`player`) or only with a mobile workshop (`mobile`). Without one it picks as the real event does: even odds, or mostly `player` if you've a tool box and no mobile workshop. The machine is the field's farmer's own (one of their machines ADS can take that isn't out already, their combine one time in five outside winter, with its header on), and the farmer's the customer. About a third of the time a farmer with a yard has it break down there instead, on a yard spot where it fits on open ground (on the field if there's no room); a field no farmer holds, or a farmer with nothing ADS can take, gets a random customer's tractor or harvester. The machine is placed like a repair zone arrival (within a couple of seconds) and the offer, due today, goes up in your Inbox.
 - `farmerFavour [farmer]`: one of the map's farmers asks you to fit a new battery or air filter to their own machine (needs FS25_AdvancedDamageSystem with its repair contract targets). The farmer is an id or full name from `tcCompany farmers`; without one it picks as the real event does, weighted by your relationships, never someone you've fallen out with, and never one who's already asked any farm. The machine is one of theirs that ADS can take and isn't out already (`tcCompany farmers fleet` lists them; a telehandler comes with its bale fork on), placed in their yard if it has room, or on the headland of one of their fields, within a couple of seconds; the part is the battery or the air filter (whichever the machine has, and not one fitted to it within a year), and the offer goes up in your Inbox to accept or decline. It says there's nothing to act on if you've a favour on already, or the farmer has no land.
 
@@ -638,7 +638,7 @@ tcCompany officeLevel administrator 3
 
 ### `tcCompany debris [count] [prop]`
 
-Drops a pile of loose debris about 4 m in front of you, the same props fly-tipping (075) dumps, for testing props the player can pick up and carry by hand. Debris from here belongs to no job: a disposal skip takes it away free. Every piece weighs 10 kg. `[count]` defaults to 8 (at most 50). Without `[prop]` each piece is a random prop; name one to spawn only that: `barrel`, `pipe`, `bicycle`, `board`, `cardboard`, `sawhorse`, `trashCan`, `trashCan2`, `wheelBarrow`, `chair`, `ladder`, `grill`, `stool`, `pitchFork`, `crate`, `crate2`, `crate3`, or `bakeryBox` (a vanilla prop already built to move, never picked at random, used to check whether a prop's collision is the problem). An unknown prop lists them. The pieces are saved with the savegame. Needs a local player, so it doesn't work from a dedicated server's console.
+Drops a pile of loose debris about 4 m in front of you, the same props fly-tipping (075) dumps, for testing props the player can pick up and carry by hand. Debris from here belongs to no job: a disposal skip takes it away free. Every piece weighs 10 kg. `[count]` defaults to 8 (at most 50). Without `[prop]` each piece is a random prop; name one to spawn only that: `barrel`, `pipe`, `bicycle`, `board`, `cardboard`, `sawhorse`, `trashCan`, `trashCan2`, `wheelBarrow`, `chair`, `ladder`, `grill`, `stool`, `pitchFork`, `crate`, `crate2`, `crate3`, or `bakeryBox` (a vanilla prop already built to move, never picked at random, used to check whether a prop's collision is the problem). An unknown prop lists them. The pieces are saved with the savegame. Needs you in the game (an admin on a joined client counts).
 
 ```
 tcCompany debris

@@ -1580,6 +1580,24 @@ local function loadVehicleEntry(xmlFile, key)
     }
 end
 
+-- A farm deleted in multiplayer (TCFarmDeletion), on every machine.
+function TheContractorLogbook:forgetFarm(farmId, jobIds)
+    self.jobEntriesByFarm[farmId] = nil
+    for _, jobId in ipairs(jobIds) do
+        self.pendingByJobId[jobId] = nil
+    end
+    for vehicleId, session in pairs(self.driverSessions) do
+        if session.farmId == farmId then
+            self.driverSessions[vehicleId] = nil
+        end
+    end
+    for vehicleId, session in pairs(self.playerSessions) do
+        if session.farmId == farmId then
+            self.playerSessions[vehicleId] = nil
+        end
+    end
+end
+
 function TheContractorLogbook:loadFromXMLFile(xmlFile)
     if not g_currentMission:getIsServer() then return end
 

@@ -580,6 +580,15 @@ end
 
 -- Persistence ---------------------------------------------------------------------
 
+-- A farm deleted in multiplayer (TCFarmDeletion), on every machine.
+function TheContractorInbox:forgetFarm(farmId)
+    for id, message in pairs(self.messagesById) do
+        if message.farmId == farmId then
+            self.messagesById[id] = nil
+        end
+    end
+end
+
 function TheContractorInbox:loadFromXMLFile(xmlFile)
     if not g_currentMission:getIsServer() then return end
 
