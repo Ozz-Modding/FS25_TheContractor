@@ -1381,12 +1381,13 @@ function TheContractorJobs:completeJob(job, isForced)
     TCJobProgress.clearJob(job.id)
     TCHaulage.stopDelivery(job)
     TCHaulage.emptyHarvestersAfterJob(job)
-    -- 076: the field stays workable for a while, and its bales stay with
-    -- it (endGracePeriod clears up). Set before the completion broadcast,
-    -- which carries it.
+    -- 076: the field stays workable for a while (endGracePeriod clears
+    -- up). A bale job's bales so far go now, any baled in the grace period
+    -- at its end. Set before the completion broadcast, which carries it.
     if TheContractorJobs.getsGracePeriod(job) then
         job.graceRemainingMs = TheContractorJobs.GRACE_PERIOD_MS
         self.graceJobs[job.id] = job
+        TCFieldPreparation.clearUpAtCompletion(job)
     else
         TCFieldPreparation.clearUpAfterJob(job)
     end

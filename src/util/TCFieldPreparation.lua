@@ -59,10 +59,16 @@ TCFieldPreparation.STRAW_BALE = { isRoundbale = true, width = 1.2, diameter = 1.
 -- jobId -> token of the spawn running for that job (see startSpawn)
 local spawningJobIds = {}
 local hasResumedAfterLoad = false
+-- Server-only: bale -> baler for a job's bales that were still inside a
+-- baler when its crop was cleared up, deleted as soon as the baler drops
+-- them (removeBaledCrop). Not saved: a bale held through a save and a
+-- load is the player's.
+local balesToDeleteOnDrop = {}
 
 function TCFieldPreparation.reset()
     spawningJobIds = {}
     hasResumedAfterLoad = false
+    balesToDeleteOnDrop = {}
 end
 
 local function getJobDef(job)
@@ -139,6 +145,39 @@ local function measureWeedArea(field)
     field:getDensityMapPolygon():applyToModifier(modifier)
     local _, area = modifier:executeGet(filter)
     return area or 0
+end
+
+-- The weed state a weed/hoe job lays its field out at. Vanilla's weed
+-- missions take any state the tool clears to nothing, including the
+-- just-germinated ones that aren't drawn or on the map (maps_weed.xml's
+-- "invisible" states, which have no map colour) - a job that progresses on
+-- a field that looks clean. So an invisible state is raised to the first
+-- visible one at or above it that the tool still clears (any visible one
+-- if none is above it); nil if there's no such state (keep the field's).
+function TCFieldPreparation.getVisibleWeedState(weedSystem, weedState, isHoe)
+    local visible = {}
+    for _, entry in ipairs(weedSystem:getColors()) do
+        for _, state in ipairs(entry.states) do
+            visible[state] = true
+        end
+    end
+    if visible[weedState] then
+        return weedState
+    end
+
+    local replacements = weedSystem:getWeederReplacements(isHoe).weed.replacements
+    local best, lowest = nil, nil
+    for state in pairs(visible) do
+        if replacements[state] == 0 then
+            if state >= weedState and (best == nil or state < best) then
+                best = state
+            end
+            if lowest == nil or state < lowest then
+                lowest = state
+            end
+        end
+    end
+    return best or lowest
 end
 
 -- Windrow the job's crop leaves once cut: straw, or for grass hay-to-be
@@ -437,7 +476,8 @@ function TCFieldPreparation.prepareFieldForJob(job)
         applyFieldState(field, fieldState)
     elseif jobType == "weed" or jobType == "hoe" then
         if job.startState ~= nil and job.startState > 0 then
-            fieldState.weedState = job.startState
+            fieldState.weedState = TCFieldPreparation.getVisibleWeedState(g_currentMission.weedSystem,
+                job.startState, jobType == "hoe") or job.startState
         end
         applyFieldState(field, fieldState)
         job.workTotal = measureWeedArea(field)
@@ -482,6 +522,71 @@ function TCFieldPreparation.clearUpAfterJob(job)
     end
 end
 
+-- bale -> baler for every finished bale a baler still holds (a square
+-- baler's chute, a round baler's chamber), wherever the baler is. A square
+-- one's is on a joint, not mounted, so it would otherwise pass for a bale
+-- on the ground, and deleting it under the baler breaks the baler.
+function TCFieldPreparation.getBalesInBalers()
+    local held = {}
+    for _, vehicle in ipairs(g_currentMission.vehicleSystem.vehicles) do
+        local spec = vehicle.spec_baler
+        if spec ~= nil and spec.bales ~= nil then
+            for _, entry in ipairs(spec.bales) do
+                if entry.baleObject ~= nil then
+                    held[entry.baleObject] = vehicle
+                end
+            end
+        end
+    end
+    return held
+end
+
+local function isInBaler(baler, bale)
+    local spec = baler.spec_baler
+    if baler.isDeleted or spec == nil or spec.bales == nil then
+        return false
+    end
+    for _, entry in ipairs(spec.bales) do
+        if entry.baleObject == bale then
+            return true
+        end
+    end
+    return false
+end
+
+-- Server-only: the job's bales held in our farm's balers on its farmland
+-- are left in place, so the baler keeps working, and deleted once dropped.
+local function markHeldBales(job, farmland, fillTypeIndex, held)
+    local count = 0
+    for bale, baler in pairs(held) do
+        if baler.rootNode ~= nil and baler:getOwnerFarmId() == job.farmId and
+                bale:getFillType() == fillTypeIndex then
+            local x, _, z = getWorldTranslation(baler.rootNode)
+            if g_farmlandManager:getFarmlandIdAtWorldPosition(x, z) == farmland.id then
+                balesToDeleteOnDrop[bale] = baler
+                count = count + 1
+            end
+        end
+    end
+    return count
+end
+
+-- Server-only, every frame: deletes each marked bale its baler has let go.
+local function deleteDroppedBales()
+    for bale, baler in pairs(balesToDeleteOnDrop) do
+        if not isInBaler(baler, bale) then
+            balesToDeleteOnDrop[bale] = nil
+            if not bale.isDeleted then
+                bale:delete()
+            end
+        end
+    end
+end
+
+-- Server-only. Run when a bale job completes and again when it's cleared
+-- up (the end of a player's grace period, 076), so bales baled during the
+-- grace period go at its end. The player can still bale what's left on
+-- the ground in between, and those bales go when the grace period ends.
 function TCFieldPreparation.removeBaledCrop(job)
     local field = g_fieldManager:getFieldById(job.fieldId)
     local farmland = field ~= nil and field:getFarmland() or nil
@@ -490,10 +595,13 @@ function TCFieldPreparation.removeBaledCrop(job)
         return
     end
 
+    local held = TCFieldPreparation.getBalesInBalers()
+    local heldCount = markHeldBales(job, farmland, fillTypeIndex, held)
+
     local toDelete = {}
     for _, entry in pairs(g_currentMission.itemSystem.itemsToSave) do
         local bale = entry.item
-        if bale.isa ~= nil and bale:isa(Bale) and bale:getOwnerFarmId() == job.farmId and
+        if held[bale] == nil and bale.isa ~= nil and bale:isa(Bale) and bale:getOwnerFarmId() == job.farmId and
             bale:getFillType() == fillTypeIndex and not bale:getIsMounted() then
             local x, _, z = getWorldTranslation(bale.nodeId)
             if g_farmlandManager:getFarmlandIdAtWorldPosition(x, z) == farmland.id then
@@ -504,8 +612,20 @@ function TCFieldPreparation.removeBaledCrop(job)
     for _, bale in ipairs(toDelete) do
         bale:delete()
     end
-    if #toDelete > 0 then
-        TCLog.info("TheContractor: job %d handed over %d bales on field %d", job.id, #toDelete, job.fieldId)
+    if #toDelete > 0 or heldCount > 0 then
+        TCLog.info("TheContractor: job %d handed over %d bales on field %d, and %d still in a baler", job.id,
+            #toDelete, job.fieldId, heldCount)
+    end
+end
+
+-- Server-only. 076: a player-driven job's grace period is starting. A bale
+-- job's bales so far go now, the rest at the end (clearUpAfterJob).
+function TCFieldPreparation.clearUpAtCompletion(job)
+    if not g_currentMission:getIsServer() then
+        return
+    end
+    if job.jobType == "bale" then
+        TCFieldPreparation.removeBaledCrop(job)
     end
 end
 
@@ -530,7 +650,11 @@ end
 
 -- Server-only, called every frame from TheContractor:update.
 function TCFieldPreparation.update(dt)
-    if not g_currentMission:getIsServer() or hasResumedAfterLoad then
+    if not g_currentMission:getIsServer() then
+        return
+    end
+    deleteDroppedBales()
+    if hasResumedAfterLoad then
         return
     end
     hasResumedAfterLoad = true
