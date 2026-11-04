@@ -10,7 +10,7 @@
     <File fileId="1" filename="$data/shared/detailLibrary/nonMetallic/wood/wood2Oak_diffuse.dds"/>
     <File fileId="2" filename="$data/shared/detailLibrary/nonMetallic/wood/wood2_normal.dds"/>
     <File fileId="3" filename="$data/shared/detailLibrary/nonMetallic/wood/wood2_specular.dds"/>
-    <File fileId="7" filename="../images/defaultLogo.dds"/>
+    <File fileId="7" filename="../My FS 25 Mods/FS25_TheContractor/images/defaultLogo.dds"/>
   </Files>
 
 
@@ -20,13 +20,73 @@
       <Normalmap fileId="2"/>
       <Glossmap fileId="3"/>
     </Material>
-    <Material name="signLogo_mat" materialId="7">
+    <Material name="signLogo_mat" materialId="7" alphaBlending="true">
       <Texture fileId="7"/>
     </Material>
   </Materials>
 
 
-  <Shapes externalShapesFile="wallSign3m.i3d.shapes">
+  <Shapes>
+    <IndexedTriangleSet name="board" shapeId="1" meshUsage="0" bvCenter="0 0.75 0.015" bvRadius="1.0608" isOptimized="true">
+      <Vertices count="24" normal="true" uv0="true">
+        <v p="-0.75 0 0" n="0 -1 0" t0="9.25 0"/>
+        <v p="0.75 0 0.03" n="0 -1 0" t0="10.75 0.03"/>
+        <v p="-0.75 0 0.03" n="0 -1 0" t0="9.25 0.03"/>
+        <v p="-0.75 1.5 0.03" n="0 1 0" t0="9.25 0.03"/>
+        <v p="0.75 1.5 0" n="0 1 0" t0="10.75 0"/>
+        <v p="-0.75 1.5 0" n="0 1 0" t0="9.25 0"/>
+        <v p="-0.75 0 0" n="-1 0 0" t0="10 0"/>
+        <v p="-0.75 1.5 0.03" n="-1 0 0" t0="10.03 1.5"/>
+        <v p="-0.75 1.5 0" n="-1 0 0" t0="10 1.5"/>
+        <v p="0.75 0 0.03" n="1 0 0" t0="10.03 0"/>
+        <v p="0.75 1.5 0" n="1 0 0" t0="10 1.5"/>
+        <v p="0.75 1.5 0.03" n="1 0 0" t0="10.03 1.5"/>
+        <v p="0.75 0 0" n="0 0 -1" t0="10.75 0"/>
+        <v p="-0.75 1.5 0" n="0 0 -1" t0="9.25 1.5"/>
+        <v p="0.75 1.5 0" n="0 0 -1" t0="10.75 1.5"/>
+        <v p="-0.75 0 0.03" n="0 0 1" t0="9.25 0"/>
+        <v p="0.75 1.5 0.03" n="0 0 1" t0="10.75 1.5"/>
+        <v p="-0.75 1.5 0.03" n="0 0 1" t0="9.25 1.5"/>
+        <v p="0.75 0 0" n="0 -1 0" t0="10.75 0"/>
+        <v p="0.75 1.5 0.03" n="0 1 0" t0="10.75 0.03"/>
+        <v p="-0.75 0 0.03" n="-1 0 0" t0="10.03 0"/>
+        <v p="0.75 0 0" n="1 0 0" t0="10 0"/>
+        <v p="-0.75 0 0" n="0 0 -1" t0="9.25 0"/>
+        <v p="0.75 0 0.03" n="0 0 1" t0="10.75 0"/>
+      </Vertices>
+      <Triangles count="12">
+        <t vi="0 1 2"/>
+        <t vi="3 4 5"/>
+        <t vi="6 7 8"/>
+        <t vi="9 10 11"/>
+        <t vi="12 13 14"/>
+        <t vi="15 16 17"/>
+        <t vi="0 18 1"/>
+        <t vi="3 19 4"/>
+        <t vi="6 20 7"/>
+        <t vi="9 21 10"/>
+        <t vi="12 22 13"/>
+        <t vi="15 23 16"/>
+      </Triangles>
+      <Subsets count="1">
+        <Subset firstVertex="0" numVertices="24" firstIndex="0" numIndices="36" uvDensity0="0.999996"/>
+      </Subsets>
+    </IndexedTriangleSet>
+    <IndexedTriangleSet name="logoFront" shapeId="2" meshUsage="0" bvCenter="0 0.75 0.035" bvRadius="1.0607" isOptimized="true">
+      <Vertices count="4" normal="true" uv0="true">
+        <v p="-0.75 0 0.035" n="0 0 1" t0="0 0"/>
+        <v p="0.75 1.5 0.035" n="0 0 1" t0="1 1"/>
+        <v p="-0.75 1.5 0.035" n="0 0 1" t0="0 1"/>
+        <v p="0.75 0 0.035" n="0 0 1" t0="1 0"/>
+      </Vertices>
+      <Triangles count="2">
+        <t vi="0 1 2"/>
+        <t vi="0 3 1"/>
+      </Triangles>
+      <Subsets count="1">
+        <Subset firstVertex="0" numVertices="4" firstIndex="0" numIndices="6" uvDensity0="0.666667"/>
+      </Subsets>
+    </IndexedTriangleSet>
   </Shapes>
 
   <Scene>

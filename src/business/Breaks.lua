@@ -242,6 +242,19 @@ function TheContractorBreaks.applyBreak(worker, breakUntil)
     end
 end
 
+-- Every machine: of these idle workers, the one on a break who's back
+-- soonest, or nil if none is (the driver picker's "all on a break").
+function TheContractorBreaks.getFirstBack(workers, now)
+    local first = nil
+    for _, worker in ipairs(workers) do
+        if TheContractorWorkingHours.getState(worker, now) == TheContractorWorkingHours.STATE.ON_BREAK and
+            (first == nil or worker.breakUntil < first.breakUntil) then
+            first = worker
+        end
+    end
+    return first
+end
+
 -- Console --------------------------------------------------------------------------
 
 -- ", breaks: morning taken, lunch -, afternoon -" (results are server-only, so

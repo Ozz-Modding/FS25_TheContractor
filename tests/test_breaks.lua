@@ -151,6 +151,23 @@ test("an idle worker takes each break as its window opens, and is away for it", 
     assertEquals(world.knocks[1], nil, "all three taken: no knock")
 end)
 
+test("the driver picker's 'all on a break' names whoever is back soonest", function()
+    local world, tc = setup()
+    local early = addWorker(tc, 1)
+    local late = addWorker(tc, 2)
+    local now = world:at(1, 10, 5)
+    early.breakUntil = now + 5
+    late.breakUntil = now + 20
+    assertEquals(TheContractorBreaks.getFirstBack({ late, early }, now), early, "back first")
+
+    early.breakUntil = nil
+    assertEquals(TheContractorBreaks.getFirstBack({ late, early }, now), late, "only one on a break")
+
+    -- Gone home for the day: nobody's on a break, whatever breakUntil says.
+    late.breakUntil = world:at(1, 19, 0) + 20
+    assertEquals(TheContractorBreaks.getFirstBack({ late, early }, world:at(1, 19, 0)), nil, "all home")
+end)
+
 test("out on a job: the morning break's missed, lunch taken late, the afternoon on time", function()
     local world, tc = setup()
     local worker = addWorker(tc, 1, TheContractorWorker.STATUS.ASSIGNED)
