@@ -28,8 +28,15 @@ function TCDriverPickerDialog.show(vehicle, onPicked)
     local staff = g_currentMission.TheContractor.Staff
     local workers = staff:getAvailableWorkers(farmId)
     if #workers == 0 then
-        InfoDialog.show(g_i18n:getText(#staff:getIdleWorkers(farmId) > 0 and "tc_hours_driversAllHome" or
-            "tc_drivers_noIdleStaff"))
+        local idle = staff:getIdleWorkers(farmId)
+        local backFirst = TheContractorBreaks.getFirstBack(idle, TheContractorWorkingHours.getNow())
+        if backFirst ~= nil then
+            -- 131: a break can't be cut short, so say when the first is back.
+            InfoDialog.show(string.format(g_i18n:getText("tc_hours_driversAllOnBreak"), backFirst.name,
+                TheContractorWorkingHours.formatTime(backFirst.breakUntil)))
+        else
+            InfoDialog.show(g_i18n:getText(#idle > 0 and "tc_hours_driversAllHome" or "tc_drivers_noIdleStaff"))
+        end
         return
     end
     table.sort(workers, function(a, b)

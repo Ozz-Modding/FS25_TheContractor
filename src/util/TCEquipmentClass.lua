@@ -100,6 +100,42 @@ function TCEquipmentClass.isHarvester(vehicle)
     return vehicle.spec_combine ~= nil
 end
 
+-- Whether a harvester can take this crop. One with its own cutter can if
+-- the cutter cuts it (canCutFruit); a combine without one cuts nothing
+-- itself, so what it can harvest is what its tank takes, which is what
+-- Cutter:isAttachAllowed checks (Combine:getIsCutterCompatible) before
+-- letting a header hitch on. A header puts out the crop's own fill type, or
+-- what a fruit type converter makes of it (a forage header's chaff), so the
+-- tank has to take one of those: a grain combine takes wheat and maize but
+-- not cotton. Anything we can't read counts as taking it - better a
+-- harvester shown that can't do the job than one hidden that can.
+function TCEquipmentClass.canHarvestFruit(vehicle, fruitTypeIndex)
+    if not TCEquipmentClass.isHarvester(vehicle) then
+        return false
+    end
+    if vehicle.spec_cutter ~= nil then
+        return TCEquipmentClass.canCutFruit(vehicle, fruitTypeIndex)
+    end
+    local fillUnitIndex = vehicle.spec_combine.fillUnitIndex
+    if fruitTypeIndex == nil or fillUnitIndex == nil or vehicle.getFillUnitSupportsFillType == nil or
+        g_fruitTypeManager == nil or g_fruitTypeManager.getFillTypeIndexByFruitTypeIndex == nil then
+        return true
+    end
+
+    local fillTypeIndex = g_fruitTypeManager:getFillTypeIndexByFruitTypeIndex(fruitTypeIndex)
+    if fillTypeIndex ~= nil and vehicle:getFillUnitSupportsFillType(fillUnitIndex, fillTypeIndex) then
+        return true
+    end
+    for _, converter in pairs(g_fruitTypeManager.fruitTypeConverters or {}) do
+        local conversion = converter[fruitTypeIndex]
+        if conversion ~= nil and conversion.fillTypeIndex ~= nil and
+            vehicle:getFillUnitSupportsFillType(fillUnitIndex, conversion.fillTypeIndex) then
+            return true
+        end
+    end
+    return false
+end
+
 function TCEquipmentClass.isSelfPropelled(vehicle)
     return vehicle.spec_motorized ~= nil
 end
@@ -219,8 +255,7 @@ end
 -- a TheContractorJobGeneration.JOB_TYPES entry.
 function TCEquipmentClass.getJobRole(vehicle, jobDef, fruitTypeIndex)
     if jobDef.cropDependent then
-        if TCEquipmentClass.isHarvester(vehicle) and
-            (vehicle.spec_cutter == nil or TCEquipmentClass.canCutFruit(vehicle, fruitTypeIndex)) then
+        if TCEquipmentClass.canHarvestFruit(vehicle, fruitTypeIndex) then
             return "harvester"
         end
         if TCEquipmentClass.canCutFruit(vehicle, fruitTypeIndex) then
@@ -242,7 +277,7 @@ end
 -- type/crop. Returns a list of requirement keys, in display order — empty
 -- means the set covers the job:
 --   "cutter"    harvest: nothing that can cut this crop
---   "harvester" harvest: nothing that can harvest (no spec_combine)
+--   "harvester" harvest: nothing that can harvest this crop (canHarvestFruit)
 --   "cutterMismatch" harvest: headers and harvesters both there, but no
 --               header fits any of the harvesters (isCutterCompatible)
 --   "implement" non-harvest: no plow/cultivator/seeder/... (isJobImplement)
@@ -275,8 +310,7 @@ function TCEquipmentClass.getMissingEquipment(vehicles, jobDef, fruitTypeIndex)
             if TCEquipmentClass.isStandaloneCutter(vehicle, fruitTypeIndex) then
                 table.insert(cutters, vehicle)
             end
-            if TCEquipmentClass.isHarvester(vehicle) and
-                (vehicle.spec_cutter == nil or TCEquipmentClass.canCutFruit(vehicle, fruitTypeIndex)) then
+            if TCEquipmentClass.canHarvestFruit(vehicle, fruitTypeIndex) then
                 hasHarvester = true
                 table.insert(harvesters, vehicle)
                 -- Its own cutter already takes the crop.

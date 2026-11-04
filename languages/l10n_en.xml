@@ -911,6 +911,7 @@
 		<text name="tc_staff_status_stayingLate" text="Staying late"/>
 		<text name="tc_staff_status_onBreak" text="On break"/>
 		<text name="tc_hours_driversAllHome" text="Everyone free has gone home for the day. Ask someone to stay late, or call them back in, from Manage on the Staff tab."/>
+		<text name="tc_hours_driversAllOnBreak" text="Everyone free is on a break. %s is back first, at %s."/>
 		<text name="tc_hours_detailOvertime" text="%s (+%s overtime this month)"/>
 		<text name="tc_hours_stayLateButton" text="Stay late"/>
 		<text name="tc_hours_stayLongerButton" text="Stay longer"/>
