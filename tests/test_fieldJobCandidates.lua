@@ -24,12 +24,18 @@ local function setup()
     }
 
     world.fields = {}
+    -- What's really on each field's ground (Field:updateState reads it into
+    -- the cached field state); wheat unless set.
+    world.groundFruit = {}
     function world:addField(id, owner)
         local fieldState = { isValid = true, fruitTypeIndex = FruitType.WHEAT }
         local field = {
             getId = function() return id end,
             getOwner = function() return owner or 0 end,
             getFieldState = function() return fieldState end,
+            updateState = function()
+                fieldState.fruitTypeIndex = world.groundFruit[id] or FruitType.WHEAT
+            end,
         }
         table.insert(self.fields, field)
         return field
@@ -104,4 +110,41 @@ test("the farm's own fields are still left out", function()
     world:addField(2, 2)
 
     assertEquals(candidateIds(), "2")
+end)
+
+-- Vanilla only re-reads a field's cached state once a period (or when its
+-- own NPC work there ends), so a field our job had just worked still read
+-- as needing the work, and was offered again the same day.
+local function offeredHarvestIds()
+    TCEquipmentClass = { getMissingEquipment = function() return {} end }
+    local ids = {}
+    for _, option in ipairs(TheContractorJobGeneration:getJobTypeOptions(1, "harvest")) do
+        for _, field in ipairs(option.candidates) do
+            table.insert(ids, field:getId())
+        end
+    end
+    table.sort(ids)
+    return table.concat(ids, ",")
+end
+
+test("a field worked since vanilla last read it is read afresh before an offer", function()
+    local world = setup()
+    world:addField(1)
+    world:addField(2)
+    world:addJob(1, 1, 1, TheContractorJob.STATE.COMPLETED)
+    -- Field 1 was harvested and cultivated; the cache still says wheat.
+    world.groundFruit[1] = FruitType.UNKNOWN
+
+    assertEquals(offeredHarvestIds(), "2")
+end)
+
+test("a field with a live job keeps the state its job is measured against", function()
+    local world = setup()
+    local field = world:addField(1)
+    world:addJob(1, 1, 1, TheContractorJob.STATE.IN_PROGRESS)
+    world.groundFruit[1] = FruitType.UNKNOWN
+
+    offeredHarvestIds()
+
+    assertEquals(field:getFieldState().fruitTypeIndex, FruitType.WHEAT)
 end)
