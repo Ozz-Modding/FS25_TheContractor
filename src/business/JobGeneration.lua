@@ -706,6 +706,7 @@ end
 -- the offer rate to a fraction of 026's tuning. onlyJobType limits it to
 -- that one type (see tryGenerateJob).
 function TheContractorJobGeneration:getJobTypeOptions(farmId, onlyJobType)
+    TheContractorJobGeneration.refreshFieldStates()
     local vehicles = TheContractorJobGeneration.getFarmVehicles(farmId)
     local options = {}
     for _, jobType in ipairs(TheContractorJobGeneration.JOB_TYPE_KEYS) do
@@ -863,6 +864,26 @@ function TheContractorJobGeneration:getCandidateFields(farmId, jobDef)
     end
 
     return candidates
+end
+
+-- Re-reads every field's state from the map before the generator checks
+-- them. Vanilla's cached field state (field:getFieldState(), one sample at
+-- the field's centre) is only refreshed by its own once-per-period pass
+-- (unowned fields only) or when one of its NPC tasks ends on the field -
+-- never when anyone else works it. Left alone, a field our job had just
+-- mowed (or harvested, plowed, ...) still read as needing it, and was
+-- offered again the moment the job ended and its protection lifted. A field
+-- with a live job is skipped: its job's progress reads that state while the
+-- work goes on (TCJobProgress), and it isn't a candidate anyway. Once per
+-- roll, not per job type (getCandidateFields runs once for each).
+function TheContractorJobGeneration.refreshFieldStates()
+    local jobs = g_currentMission.TheContractor.Jobs
+    for _, field in ipairs(g_fieldManager:getFields()) do
+        local fieldId = field:getId()
+        if field.updateState ~= nil and fieldId ~= nil and not jobs:isFieldProtected(fieldId) then
+            field:updateState()
+        end
+    end
 end
 
 -- Vanilla's weed missions only run with weeds switched on for the save and
@@ -1149,6 +1170,7 @@ end
 -- with a fulfillable datable one. Drives the tcJob availability console
 -- command.
 function TheContractorJobGeneration:getAvailabilitySnapshot(farmId)
+    TheContractorJobGeneration.refreshFieldStates()
     local snapshot = {}
     local vehicles = TheContractorJobGeneration.getFarmVehicles(farmId)
 
