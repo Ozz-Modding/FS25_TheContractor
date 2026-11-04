@@ -13,7 +13,7 @@
     <File fileId="7" filename="$data/shared/detailLibrary/nonMetallic/wood/wood2Oak_diffuse.dds"/>
     <File fileId="8" filename="$data/shared/detailLibrary/nonMetallic/wood/wood2_normal.dds"/>
     <File fileId="9" filename="$data/shared/detailLibrary/nonMetallic/wood/wood2_specular.dds"/>
-    <File fileId="10" filename="../My FS 25 Mods/FS25_TheContractor/images/defaultLogo.dds"/>
+    <File fileId="10" filename="../images/defaultLogo.dds"/>
   </Files>
 
 
