@@ -1,7 +1,7 @@
 -- Job map markers (088): the field of every job the local player's farm
--- has taken on and that's due this month gets vanilla's flashing contract
--- circle on the map, as an accepted vanilla contract does. "Taken on" is
--- accepted, allocated or in progress; "due this month" is a deadlineDay
+-- has allocated or has in progress, and of every accepted one that's due
+-- this month, gets vanilla's flashing contract circle on the map, as an
+-- accepted vanilla contract does. "Due this month" is a deadlineDay
 -- (absolute, so a job due in the same month next year doesn't count) no
 -- later than the month's last day. Anything past its deadline has already
 -- been missed at the day change, so that's everything due between today
@@ -49,8 +49,14 @@ function TCJobHotspots.getLastDayOfMonth()
     return environment.currentMonotonicDay + environment.daysPerPeriod - environment.currentDayInPeriod
 end
 
+-- Allocated or in progress is always marked, whenever it's due: someone's
+-- on it. Just accepted is marked once it's due this month.
 function TCJobHotspots.isMarked(job, lastDayOfMonth)
-    return isTakenOn(job.state) and job.deadlineDay ~= nil and job.deadlineDay <= lastDayOfMonth
+    if job.state == TheContractorJob.STATE.ALLOCATED or job.state == TheContractorJob.STATE.IN_PROGRESS then
+        return true
+    end
+    return job.state == TheContractorJob.STATE.ACCEPTED and job.deadlineDay ~= nil and
+        job.deadlineDay <= lastDayOfMonth
 end
 
 -- fieldId -> true for every field with a marked job of the farm's.

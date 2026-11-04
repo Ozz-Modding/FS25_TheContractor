@@ -52,9 +52,13 @@ local function setup()
     world:load("src/util/TCFieldAccess.lua")
 
     world.clearedUp = {}
+    world.clearedAtCompletion = {}
     TCFieldPreparation = {
         clearUpAfterJob = function(job)
             table.insert(world.clearedUp, job.id)
+        end,
+        clearUpAtCompletion = function(job)
+            table.insert(world.clearedAtCompletion, job.id)
         end,
     }
 
@@ -196,7 +200,7 @@ local function fakeCompletion(world, tc)
     tc.Jobs.calculateQualityScore = function() return 100 end
 end
 
-test("a player-driven job's bales wait for its grace period to end", function()
+test("a player-driven job's bales go at completion and again when its grace period ends", function()
     local world, tc = setup()
     fakeCompletion(world, tc)
     local job = addJob(tc, { jobType = "bale" })
@@ -205,7 +209,8 @@ test("a player-driven job's bales wait for its grace period to end", function()
     tc.Jobs:completeJob(job)
     assertEquals(job.state, TheContractorJob.STATE.COMPLETED)
     assertEquals(job.graceRemainingMs, TheContractorJobs.GRACE_PERIOD_MS)
-    assertEquals(#world.clearedUp, 0, "nothing cleared up yet")
+    assertEquals(world.clearedAtCompletion[1], job.id, "the bales so far, at completion")
+    assertEquals(#world.clearedUp, 0, "the full clear-up waits")
 
     tc.Jobs:updateGracePeriods(TheContractorJobs.GRACE_PERIOD_MS - 1)
     assertEquals(#world.clearedUp, 0, "a moment left")
@@ -229,6 +234,7 @@ test("a hired worker's job is cleared up straight away, with no grace period", f
     tc.Jobs:completeJob(job)
     assertEquals(job.graceRemainingMs, nil)
     assertEquals(#world.clearedUp, 1)
+    assertEquals(#world.clearedAtCompletion, 0, "the full clear-up covers it")
 end)
 
 test("a client counts down its own copy but never clears up", function()

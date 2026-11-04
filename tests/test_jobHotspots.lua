@@ -1,5 +1,5 @@
 -- 088: the flashing map marker on the field of every job the local farm has
--- taken on and that's due this month - which jobs get one, one per field,
+-- allocated or in progress, or accepted and due this month - which jobs get one, one per field,
 -- markers coming and going as jobs move on and the month turns, and
 -- nothing for other farms or a spectator.
 
@@ -93,7 +93,19 @@ test("a taken-on job due this month is marked, offers and finished jobs aren't",
     assertEquals(count, 3, "markers")
 end)
 
-test("due on the month's last day is marked, due next month isn't", function()
+test("an allocated or in-progress job is marked whenever it's due", function()
+    local world = setup()
+    world:addJob({ fieldId = 1, deadlineDay = 28, state = TheContractorJob.STATE.ALLOCATED })
+    world:addJob({ fieldId = 2, deadlineDay = 22 + 120, state = TheContractorJob.STATE.IN_PROGRESS })
+    world:addJob({ fieldId = 3, deadlineDay = 28, state = TheContractorJob.STATE.ACCEPTED })
+    TCJobHotspots.refresh()
+
+    local marked, count = world:markedFields()
+    assertTrue(marked[1] and marked[2], "allocated and in progress, due later")
+    assertEquals(count, 2, "markers")
+end)
+
+test("an accepted job due on the month's last day is marked, due next month isn't", function()
     local world = setup()
     world:addJob({ fieldId = 1, deadlineDay = 22 })
     world:addJob({ fieldId = 2, deadlineDay = 27 })
