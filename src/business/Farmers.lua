@@ -753,10 +753,13 @@ function TheContractorFarmers:reconcileWith(land, landList, yards)
             table.insert(freeYards, yard)
         end
     end
-    -- Declared ones (117) first, so a farmer without a yard goes to them.
+    -- Declared ones (117) first, so a farmer without a yard goes to them,
+    -- then the most yard-like, so a big farm isn't left empty for a house
+    -- and a shed.
     table.sort(freeYards, function(a, b)
-        if (a.declared == true) ~= (b.declared == true) then
-            return a.declared == true
+        local better = TheContractorFarmerSplit.isMoreYardLike(a, b)
+        if better ~= nil then
+            return better
         end
         return a.farmlandId < b.farmlandId
     end)
@@ -1257,11 +1260,106 @@ function TheContractorFarmers:getListText()
     return table.concat(lines, "\n")
 end
 
+-- The farmers' yards on the map (tcCompany farmers yards) ---------------------------
+
+-- A test aid, on this machine's map only: a pulsing circle on every
+-- farmer's yard, labelled with the farmer, and one in another colour,
+-- labelled "free", on each yard nobody holds.
+TheContractorFarmers.HELD_YARD_COLOR = { 0.90, 0.20, 0.20, 1 }
+TheContractorFarmers.FREE_YARD_COLOR = { 0.20, 0.55, 0.95, 1 }
+-- nil when off, else the markers shown.
+TheContractorFarmers.yardHotspots = nil
+
+-- Pure: what to mark, from the farmers and the live map's yards (108's
+-- getYards): { farmlandId, x, z, buildings (its yard buildings), farmer
+-- (nil for a free yard) }, the held
+-- ones first, each list by farmland. A farmer whose yard isn't a yard any
+-- more (or has no position) isn't marked.
+function TheContractorFarmers.getYardMarks(farmers, yards)
+    local byId = {}
+    for _, yard in ipairs(yards) do
+        if yard.x ~= nil then
+            byId[yard.farmlandId] = yard
+        end
+    end
+    local held, free, holders = {}, {}, {}
+    local function getBuildings(yard)
+        return yard.group ~= nil and yard.group.yardBuildingCount or 0
+    end
+    for _, farmer in ipairs(farmers) do
+        local yard = farmer.yardFarmlandId ~= nil and byId[farmer.yardFarmlandId] or nil
+        if yard ~= nil then
+            holders[yard.farmlandId] = true
+            table.insert(held, { farmlandId = yard.farmlandId, x = yard.x, z = yard.z, buildings = getBuildings(yard),
+                farmer = farmer })
+        end
+    end
+    for _, yard in ipairs(yards) do
+        if yard.x ~= nil and not holders[yard.farmlandId] then
+            table.insert(free, { farmlandId = yard.farmlandId, x = yard.x, z = yard.z, buildings = getBuildings(yard) })
+        end
+    end
+    local function byFarmland(a, b)
+        return a.farmlandId < b.farmlandId
+    end
+    table.sort(held, byFarmland)
+    table.sort(free, byFarmland)
+    for _, mark in ipairs(free) do
+        table.insert(held, mark)
+    end
+    return held
+end
+
+function TheContractorFarmers.hideYardMarkers()
+    local hotspots = TheContractorFarmers.yardHotspots
+    if hotspots == nil then
+        return
+    end
+    for _, hotspot in ipairs(hotspots) do
+        if g_currentMission ~= nil and g_currentMission.removeMapHotspot ~= nil and g_currentMission.hud ~= nil then
+            g_currentMission:removeMapHotspot(hotspot)
+        end
+        hotspot:delete()
+    end
+    TheContractorFarmers.yardHotspots = nil
+end
+
+-- Marks every yard (see above). Returns how many held and free yards.
+function TheContractorFarmers:showYardMarkers()
+    TheContractorFarmers.hideYardMarkers()
+    local tc = g_currentMission.TheContractor
+    if AbstractFieldMissionHotspot == nil or FarmlandHotspot == nil or g_currentMission.addMapHotspot == nil or
+            tc.Yards == nil then
+        return 0, 0
+    end
+    local hotspots = {}
+    TheContractorFarmers.yardHotspots = hotspots
+    local heldCount, freeCount = 0, 0
+    for _, mark in ipairs(TheContractorFarmers.getYardMarks(self:getFarmers(), (tc.Yards:getYards()))) do
+        local color, label
+        if mark.farmer ~= nil then
+            color, label = TheContractorFarmers.HELD_YARD_COLOR, string.format("#%d %s (%d)", mark.farmer.id,
+                mark.farmer.name, mark.buildings)
+            heldCount = heldCount + 1
+        else
+            color, label = TheContractorFarmers.FREE_YARD_COLOR, string.format("free #%d (%d)", mark.farmlandId,
+                mark.buildings)
+            freeCount = freeCount + 1
+        end
+        local circle = TheContractorYards.addMarker(hotspots, mark.x, mark.z, TheContractorYards.YARD_MARKER_RADIUS)
+        if circle.circle ~= nil then
+            circle.circle:setColor(color[1], color[2], color[3], color[4])
+        end
+        TheContractorFarmerSplit.addLabel(hotspots, mark.x, mark.z, label, color)
+    end
+    return heldCount, freeCount
+end
+
 function TheContractorFarmers.registerConsoleCommands()
     TCConsole.register("company", "farmers", {
-        args = "[preview|show|hide|standing|fleet|regenerate] [targetAcres|farmer] [seed]",
+        args = "[preview|show|hide|standing|yards|fleet|regenerate] [targetAcres|farmer] [seed]",
         description = "List the farmers and the local official, preview a land split, show who's in their yard, " ..
-            "list the farmers' machines, or generate the farmers again",
+            "mark the farmers' yards on this machine's map, list the farmers' machines, or generate the farmers again",
         serverOnly = false,
         run = function(farmId, args)
             local tc = g_currentMission.TheContractor
@@ -1272,6 +1370,14 @@ function TheContractorFarmers.registerConsoleCommands()
                 return TheContractorFarmerSplit.runPreview(mode, args)
             elseif mode == "standing" then
                 return TCYardFarmers.describe()
+            elseif mode == "yards" then
+                if TheContractorFarmers.yardHotspots ~= nil then
+                    TheContractorFarmers.hideYardMarkers()
+                    return "Farmers' yard markers cleared."
+                end
+                local held, free = tc.Farmers:showYardMarkers()
+                return string.format("Marked %d farmer's yard(s) (red, with the farmer) and %d free yard(s) (blue). " ..
+                    "tcCompany farmers yards again to clear.", held, free)
             elseif mode == "fleet" then
                 -- 121: the machines are the server's.
                 if not g_currentMission:getIsServer() then

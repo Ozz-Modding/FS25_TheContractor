@@ -649,18 +649,19 @@ tcCompany debris 20 ladder
 
 Removes every piece of debris from the map.
 
-### `tcCompany yards [farmlandId|show [farmlandId]|hide]`
+### `tcCompany yards [farmlandId|here|show [farmlandId]|hide]`
 
-A spike for finding the map's farm yards (108), where the generated farmers will live. A yard is a farmland with at least 2 of the map's own buildings that change hands with the land (sheds, silos, animal pens, farmhouses, ...), at least one of them a shed or a farmhouse. Detection runs on the live map each time; only your overrides (`tcCompany yard`) are saved. Read-only, so it also works on a joined client.
+A spike for finding the map's farm yards (108), where the generated farmers will live. A yard is a farmland with at least 2 buildings that change hands with the land (sheds, silos, animal pens, farmhouses, ...; the map's own, preplaced or from its default placeables), at least one of them a shed or a farmhouse and one not a farmhouse (a working building), and no more than 5 farmhouses (more is a village). Detection runs on the live map each time; only your overrides (`tcCompany yard`) are saved. Read-only, so it also works on a joined client.
 
 - With no argument: one line per yard with its farmland id, owner farm (0 for nobody), how it became a yard (`detected`, or `declared` with `tcCompany yard`), its buildings by store category, whether any has a sell point or unloading station, its standing spots (how many it keeps, spread over the yard, of how many open ones it found) and where its middle is. Then the farmlands that have such buildings but aren't yards (the near misses, including any you ruled out), and every store category seen, so the rule's categories can be set from real maps. Spots are worked out as you ask (it can take a moment); on a joined client the navigation map check is skipped, so the count can be higher than the server's.
-- `<farmlandId>`: that farmland's buildings, one per line, with name, store category, whether it counts towards a yard, stations and position.
+- `<farmlandId>`, or `here` for the farmland you're standing on: why that farmland is or isn't a yard. First whether it's a yard and how (with its override), then what detection alone makes of it and, if it fails, every reason (too few yard buildings, no shed or farmhouse, no yard building that isn't a farmhouse, more than 5 farmhouses, no buildings that count). Then the buildings it counts, one per line, with name, store category, whether that category counts towards a yard (`(yard)`), stations and position. Then every other placeable standing on the farmland, with whether it's preplaced (built into the map's i3d) or placed (the map's default placeables, or the player's), its owner farm, and every reason it isn't counted: its store item isn't sold with the farmland, the map or savegame says it isn't, or it's being deleted. With nothing at all on the farmland it says so: buildings built into the map's own scene aren't placeables, so detection can't see them, and `tcCompany yard <id> on` is the way to make it a yard. For a yard, last comes how its standing spots came out, worked out again as you ask: how many it keeps of how many open ones, from how many candidate points; the server's list (what its farmer stands on); how many candidates each check ruled out (too close to a kept spot, inside a building's footprint, off the farmland, indoors by the indoor mask, too steep, on a field, off the AI navigation map, or something solid in the way); and what was in the way, most first: for a footprint, its building's name; for something solid, the placeable or vehicle, then the node it hit. Use it when a map's farm isn't picked up, or its farmer has no spots to stand on.
 - `show`: a red circle on the map at every yard, on this machine only. `show <farmlandId>`: just that yard, with a small circle on each of its standing spots: the server's list, the one its farmer stands on (114), worked out once a load and again when the yard's override changes. Each farmhouse in the yard also gets a big circle 10 m out along its own +Z (the direction the model faces in its file), and a small one on its spawn node (where a player appears on their farm) if it has one. The command lists each farmhouse with its +Z direction and how far, and how many degrees clockwise from +Z, its spawn node is, to check which side of a house is its front.
 - `hide`: clears the circles.
 
 ```
 tcCompany yards
 tcCompany yards 12
+tcCompany yards here
 tcCompany yards show
 tcCompany yards show 12
 tcCompany yards hide
@@ -674,6 +675,26 @@ Farmlands with buildings but no yard (1):
 Categories seen: ANIMALPENS 1, SHEDS 3, SILOS 1
 ```
 
+```
+Farmland 5: not a yard (override auto)
+  Detection alone: not a yard: 1 yard building(s), needs 2
+Counted (1):
+  Machine Shed [SHEDS] (yard) at 980, 214
+Not counted (1):
+  Grain Silo [SILOS] at 1002, 230 (placed, owner 0): its store item isn't sold with the farmland
+```
+
+```
+Spots: 0 kept of 0 open, from 214 candidates
+  The server's list for the farmer: 0
+  22 inside a building's footprint
+  18 off the farmland
+  174 something solid in the way
+  In the way:
+    Concrete Slab (collision): 120
+    Machine Shed (wall): 30
+```
+
 ### `tcCompany yard <farmlandId> <on|off|auto>`
 
 Overrides yard detection for a farmland, for every farm (it's saved and sent to everyone): `on` makes it a yard whatever's on it (with no buildings it sits at the farmland's middle), `off` rules it out, and `auto` goes back to detection. The farmers' yards follow straight away. A yard you declare (`on`) isn't field land: whoever farmed it loses it, and it goes to the nearest farmer without a yard, however far. A farmer whose yard is ruled out loses it. Land a player owns is never a farmer's yard. Server only. The in-game map does the same from a farmland's box ("Set as farmer yard" / "Unset as farmer yard", for the host or an admin, on land no player owns).
@@ -684,15 +705,16 @@ tcCompany yard 30 on
 tcCompany yard 30 auto
 ```
 
-### `tcCompany farmers [preview|show|hide|standing|fleet|regenerate] [targetAcres|farmer] [seed]`
+### `tcCompany farmers [preview|show|hide|standing|yards|fleet|regenerate] [targetAcres|farmer] [seed]`
 
 The map's farmers and the local official (110), who the jobs come from. The farmers are made the first time the mod runs on a save, by sharing out every farmland with a field that no player owns (see `preview` below), and they're the same for every farm. A farmer can lose all their land to players and still be on the list; land a player sells goes to a farmer near it. Jobs on a farmer's land are for that farmer, and anything else (jobs on land no farmer has, a fallen tree) is for the local official.
 
 - With no argument: one line per farmer with their id, name and gender, their acres (and the target they were made with), their farmlands, and their yard (or "yard off the map"), then the local official. Read-only, so it also works on a joined client.
-- `preview`: how the land would be split now, without changing anything. The total acres and number of farmers, then one line per farmer with their acres (and target), how many farmlands and which, and their yard (`(start)` if the farmer started there). Last, the largest and smallest holdings, how many yards were used and how many balancing moves were made. The split: only farmlands with at least one field and no player owner, every one of them to a farmer, a farmland's size its fields' area in acres; one farmer per `targetAcres` (default 50), at least 4, each aiming for that size give or take up to 30%; farm yards (`tcCompany yards`) on or near field land start a farmer, and any yard left over goes to a nearby farmer who has none (a declared one, `tcCompany yard <id> on`, to the nearest farmer without one however far, and its land isn't shared out as fields). Read-only.
+- `preview`: how the land would be split now, without changing anything. The total acres and number of farmers, then one line per farmer with their acres (and target), how many farmlands and which, and their yard (`(start)` if the farmer started there). Last, the largest and smallest holdings, how many yards were used and how many balancing moves were made. The split: only farmlands with at least one field and no player owner, every one of them to a farmer, a farmland's size its fields' area in acres; one farmer per `targetAcres` (default 50), at least 4, each aiming for that size give or take up to 30%; farm yards (`tcCompany yards`) on or near field land start a farmer, the most yard-like first (a declared one, then one that isn't small, then one without a sell point, then the most yard buildings, then the most sheds and farmhouses), and any yard left over, in the same order, goes to a nearby farmer who has none. A small yard (4 yard buildings or fewer) never starts a farmer: it's only ever a leftover, for a farmer who ended up without a yard (a declared one, `tcCompany yard <id> on`, to the nearest farmer without one however far, and its land isn't shared out as fields). Read-only.
 - `show`: the same, and a label on the map at the middle of each farmland's fields with its farmer's number, and `Y` and the number on each farmer's yard, one colour per farmer, on this machine only.
 - `hide`: clears the labels.
 - `standing`: where each farmer stands in their yard now (114). It shows the yard, which of its spots (`farmland:spot`, and "by the house" for one within 15 m of a farmhouse), how many spots it has and how many are near the house, how far the spot is from you, and whether they're there, shown or waiting until you look away. Otherwise it says why they're not in a yard (none on the map, a player owns it, no open spots). Farmers are about from 07:00 to 19:00, and may move to another spot every 3 hours (out of view), spending about half that time near the farmhouse if the yard has one. A farmer with a favour on offer or taken on (116) is shown "by their favour's machine" instead, and one whose machine has broken down (101, 123) "by their broken-down machine", with the job and where they stand: beside the machine and facing it, at any time of day, whether it's in their yard or on a field. Read-only.
+- `yards`: turns markers on this machine's map on or off: a pulsing red circle on every farmer's yard, labelled with the farmer's id and name, and a pulsing blue one, labelled `free` and its farmland id, on every yard (each label ends with the yard's number of yard buildings in brackets) (`tcCompany yards`) no farmer holds. They're as the farmers and yards were when you turned them on, so turn them off and on again to see a change. Read-only, so it also works on a joined client.
 - `fleet [farmer]`: each farmer's machines (121), or one farmer's (an id or full name): a line per farmer with their acres and yard, then one per machine with its id, role (`smallTractor`, `mediumTractor`, `largeTractor`, `combine`, `header`, `trailer`, `telehandler`, `baleFork`), model, what it's hitched to (`on <id>`, for a header or a bale fork), its operating hours once it's been out, and `out now` while it's on a job or on its way. Every farmer has a small and a medium tractor, a combine with a header and a trailer; about half a second small tractor; one with a yard a telehandler and a bale fork; and the biggest 10% of farmers by land, if they're over 50 acres, a large tractor as well. Machines are only ever added (a new yard brings a telehandler), never taken away. A bale fork is always a spike (125): one that isn't, such as a bale grab from an older save, is changed to a spike on loading, under the same id (unless it's out, then on a later load). Server only.
 - `seed` (`preview` and `show`): the same seed always gives the same split. Without one a random one is used, and the first line says which, so a split you like can be shown again.
 - `regenerate [targetAcres]`: throws the farmers away and makes new ones from a fresh split at `targetAcres` (default 50), with new names, looks and ids. The local official stays. Every job loses its link to the old farmers, and every farm its relationships with them (`tcCompany relationship`; the official's are kept): jobs are linked again from their fields, and the command says how many changed. Server only.
@@ -706,6 +728,7 @@ tcCompany farmers standing
 tcCompany farmers fleet
 tcCompany farmers fleet Tom Hargreaves
 tcCompany farmers regenerate 60
+tcCompany farmers yards
 ```
 
 ```

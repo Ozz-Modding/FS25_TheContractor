@@ -12,8 +12,10 @@
 --   1. Count: max(MIN_FARMERS, round(total / target)), no more than there
 --      are farmlands. Each farmer's target is the average scaled by up to
 --      +-SIZE_SPREAD, normalised so the targets add up to the total.
---   2. Starts: yards on or within MAX_YARD_DISTANCE of field land, nearest
---      first, each start a farmer. The rest start on the farmland furthest
+--   2. Starts: yards on or within MAX_YARD_DISTANCE of field land, the
+--      most yard-like first (isMoreYardLike), each start a farmer; a small
+--      yard (isSmallYard) never does. The rest start on the farmland
+--      furthest
 --      from every start so far (a random one when there's none yet).
 --   3. Sharing out: a farmer with no land takes the farmland nearest their
 --      start; then, until none is left, the farmer furthest below target
@@ -21,8 +23,9 @@
 --   4. Balancing: a farmland moves to another farmer whose land is within
 --      MAX_SWAP_DISTANCE of it whenever that brings both nearer their
 --      targets, until nothing improves.
---   5. Yards: a yard that didn't start a farmer goes to the farmer whose
---      land is nearest, if they have no yard and it's within
+--   5. Yards: a yard that didn't start a farmer (a small one's only way
+--      in, a last resort), the most yard-like first, goes to the farmer
+--      whose land is nearest, if they have no yard and it's within
 --      MAX_YARD_DISTANCE. A yard the player declared (117) goes to the
 --      nearest farmer without one, however far.
 --
@@ -74,6 +77,42 @@ function TheContractorFarmerSplit.newRandom(seed)
         state = (state * 16807) % 2147483647
         return (state - 1) / 2147483646
     end
+end
+
+-- A yard with this many yard buildings (108's YARD_CATEGORIES) or fewer is
+-- small: a house and a shed or two. It never starts a farmer, and is handed
+-- out after every bigger one.
+TheContractorFarmerSplit.SMALL_YARD_BUILDINGS = 4
+
+-- Whether a yard is small (see SMALL_YARD_BUILDINGS). One the player
+-- declared (117) never is.
+function TheContractorFarmerSplit.isSmallYard(yard)
+    return not yard.declared and (yard.buildings or 0) <= TheContractorFarmerSplit.SMALL_YARD_BUILDINGS
+end
+
+-- Whether yard a is more yard-like than b, so it's handed out first: one
+-- the player declared (117); then one that isn't small; then one without a
+-- sell point (a farm shop or a buyer is less of a farm); then the more
+-- yard buildings; then the more sheds and farmhouses (its anchors). nil
+-- when they're level, for the caller's own tie-break.
+function TheContractorFarmerSplit.isMoreYardLike(a, b)
+    if (a.declared == true) ~= (b.declared == true) then
+        return a.declared == true
+    end
+    local aSmall, bSmall = TheContractorFarmerSplit.isSmallYard(a), TheContractorFarmerSplit.isSmallYard(b)
+    if aSmall ~= bSmall then
+        return not aSmall
+    end
+    if (a.sells == true) ~= (b.sells == true) then
+        return b.sells == true
+    end
+    if (a.buildings or 0) ~= (b.buildings or 0) then
+        return (a.buildings or 0) > (b.buildings or 0)
+    end
+    if (a.anchors or 0) ~= (b.anchors or 0) then
+        return (a.anchors or 0) > (b.anchors or 0)
+    end
+    return nil
 end
 
 local function distance(ax, az, bx, bz)
@@ -158,7 +197,8 @@ local function makeStarts(farmlands, byId, yards, targets, random, owners)
         return farmer
     end
 
-    -- Yards on or near field land, nearest first.
+    -- Yards on or near field land, the most yard-like first, then the
+    -- nearest.
     local candidates = {}
     for _, yard in ipairs(yards) do
         local d = 0
@@ -168,11 +208,15 @@ local function makeStarts(farmlands, byId, yards, targets, random, owners)
                 d = math.min(d, distance(farmland.x, farmland.z, yard.x, yard.z))
             end
         end
-        if d <= S.MAX_YARD_DISTANCE then
+        if d <= S.MAX_YARD_DISTANCE and not S.isSmallYard(yard) then
             table.insert(candidates, { yard = yard, distance = d })
         end
     end
     table.sort(candidates, function(a, b)
+        local better = S.isMoreYardLike(a.yard, b.yard)
+        if better ~= nil then
+            return better
+        end
         if a.distance ~= b.distance then
             return a.distance < b.distance
         end
@@ -274,6 +318,10 @@ local function giveYards(yards, byId, farmers)
         end
     end
     table.sort(sorted, function(a, b)
+        local better = S.isMoreYardLike(a, b)
+        if better ~= nil then
+            return better
+        end
         return a.farmlandId < b.farmlandId
     end)
     for _, yard in ipairs(sorted) do
@@ -415,7 +463,8 @@ function TheContractorFarmerSplit.getEligibleFarmlands()
 end
 
 -- 108's yards on land no player owns: { farmlandId, x, z, declared (117:
--- the player set it) }.
+-- the player set it), buildings (in YARD_CATEGORIES), anchors (sheds and
+-- farmhouses), sells (any of its buildings is a sell point) }.
 function TheContractorFarmerSplit.getFreeYards()
     local yards = {}
     local tc = g_currentMission.TheContractor
@@ -424,8 +473,14 @@ function TheContractorFarmerSplit.getFreeYards()
     end
     for _, yard in ipairs((tc.Yards:getYards())) do
         if yard.ownerFarmId == FarmlandManager.NO_OWNER_FARM_ID and yard.x ~= nil then
+            local group = yard.group
+            local sells = false
+            for _, building in ipairs(group ~= nil and group.buildings or {}) do
+                sells = sells or building.hasSellingStation == true
+            end
             table.insert(yards, { farmlandId = yard.farmlandId, x = yard.x, z = yard.z,
-                declared = yard.how == "declared" })
+                declared = yard.how == "declared", buildings = group ~= nil and group.yardBuildingCount or 0,
+                anchors = group ~= nil and group.anchorCount or 0, sells = sells })
         end
     end
     return yards
@@ -448,7 +503,8 @@ end
 
 -- Map markers --------------------------------------------------------------------------
 
-local function addLabel(hotspots, x, z, text, color)
+-- A text label on the map, coloured, added to hotspots.
+function TheContractorFarmerSplit.addLabel(hotspots, x, z, text, color)
     local hotspot = FarmlandHotspot.new()
     hotspot:setWorldPosition(x, z)
     hotspot.name = text
@@ -462,6 +518,8 @@ local function addLabel(hotspots, x, z, text, color)
     g_currentMission:addMapHotspot(hotspot)
     table.insert(hotspots, hotspot)
 end
+
+local addLabel = TheContractorFarmerSplit.addLabel
 
 -- A label on each farmland's middle with its farmer's number, and "Y" and
 -- the number on each farmer's yard, coloured by farmer. Returns how many.
