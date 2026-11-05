@@ -134,7 +134,7 @@ end)
 test("the same seed gives the same split, another seed can differ", function()
     setup()
     local farmlands = grid(8, 6, function(id) return 5 + (id * 7) % 23 end)
-    local yards = { { farmlandId = 10, x = 300, z = 300 } }
+    local yards = { { farmlandId = 10, x = 300, z = 300, buildings = 6 } }
     local a = TheContractorFarmerSplit.split(farmlands, yards, 60, 1234)
     local b = TheContractorFarmerSplit.split(farmlands, yards, 60, 1234)
     for _, farmland in ipairs(farmlands) do
@@ -163,11 +163,11 @@ test("yards on or near field land start farmers, nearest first", function()
     local S = TheContractorFarmerSplit
     local yards = {
         -- On an eligible farmland.
-        { farmlandId = 8, x = 300, z = 300 },
+        { farmlandId = 8, x = 300, z = 300, buildings = 6 },
         -- A farmland with no fields, just off farmland 36's middle.
-        { farmlandId = 90, x = 1500 + 100, z = 1500 },
+        { farmlandId = 90, x = 1500 + 100, z = 1500, buildings = 6 },
         -- Too far from any field land to start anyone.
-        { farmlandId = 91, x = 1500 + S.MAX_YARD_DISTANCE + 500, z = 0 },
+        { farmlandId = 91, x = 1500 + S.MAX_YARD_DISTANCE + 500, z = 0, buildings = 6 },
     }
     local result = S.split(farmlands, yards, 120, 5)
 
@@ -191,9 +191,9 @@ test("more yards than farmers: the rest go to a nearby farmer without one", func
     local yards = {}
     -- A yard on each of the four farmlands, plus one more beside farmland 1.
     for id = 1, 4 do
-        table.insert(yards, { farmlandId = id, x = (id - 1) * 300, z = 0 })
+        table.insert(yards, { farmlandId = id, x = (id - 1) * 300, z = 0, buildings = 6 })
     end
-    table.insert(yards, { farmlandId = 50, x = 0, z = 150 })
+    table.insert(yards, { farmlandId = 50, x = 0, z = 150, buildings = 6 })
     local result = TheContractorFarmerSplit.split(farmlands, yards, 1000, 9)
 
     assertEquals(4, #result.farmers)
@@ -206,6 +206,50 @@ test("more yards than farmers: the rest go to a nearby farmer without one", func
     -- The fifth is left over: farmer 1, nearest it, has a yard already.
     assertTrue(not used[50])
     assertEquals(1, findFarmer(result, 1).yardFarmlandId)
+end)
+
+test("the most yard-like yards start farmers; a small one never does, and is only handed out as a last resort", function()
+    setup()
+    local S = TheContractorFarmerSplit
+    local farmlands = grid(4, 1, 30)
+    local yards = {
+        -- A house and a shed or two on field farmland 1: small.
+        { farmlandId = 1, x = 0, z = 0, buildings = 3, anchors = 2 },
+        -- A big farm, but a sell point too, on field farmland 2.
+        { farmlandId = 2, x = 300, z = 0, buildings = 9, anchors = 4, sells = true },
+        -- A big farm on a farmland of its own, beside farmland 4.
+        { farmlandId = 50, x = 900, z = 150, buildings = 9, anchors = 5 },
+        -- A smaller farm, but not small, on field farmland 3.
+        { farmlandId = 3, x = 600, z = 0, buildings = 5, anchors = 1 },
+    }
+    local result = S.split(farmlands, yards, 1000, 9)
+
+    assertEquals(4, #result.farmers)
+    -- Starts in order: the big farm, the smaller one, then the one that sells.
+    assertEquals(50, result.farmers[1].yardFarmlandId)
+    assertEquals(3, result.farmers[2].yardFarmlandId)
+    assertEquals(2, result.farmers[3].yardFarmlandId)
+    assertTrue(result.farmers[3].startedAtYard)
+    -- The fourth starts on land, and is the only one left without a yard,
+    -- so the small one goes to them if it's near enough, never as a start.
+    assertTrue(not result.farmers[4].startedAtYard)
+    for _, farmer in ipairs(result.farmers) do
+        if farmer.yardFarmlandId == 1 then
+            assertTrue(not farmer.startedAtYard)
+        end
+    end
+
+    -- Declared beats everything; then not small; then no sell point; then
+    -- buildings, then anchors; level is nil.
+    assertEquals(true, S.isMoreYardLike({ declared = true }, { buildings = 9 }))
+    assertEquals(true, S.isSmallYard({ buildings = 4 }))
+    assertEquals(false, S.isSmallYard({ buildings = 5 }))
+    assertEquals(false, S.isSmallYard({ declared = true }))
+    assertEquals(true, S.isMoreYardLike({ buildings = 5, sells = true }, { buildings = 4 }))
+    assertEquals(true, S.isMoreYardLike({ buildings = 5 }, { buildings = 9, sells = true }))
+    assertEquals(false, S.isMoreYardLike({ buildings = 5, anchors = 2 }, { buildings = 6, anchors = 1 }))
+    assertEquals(true, S.isMoreYardLike({ buildings = 6, anchors = 2 }, { buildings = 6, anchors = 1 }))
+    assertEquals(nil, S.isMoreYardLike({ buildings = 6, anchors = 1 }, { buildings = 6, anchors = 1 }))
 end)
 
 test("a farmer can have land and no yard", function()

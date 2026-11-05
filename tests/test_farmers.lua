@@ -628,3 +628,35 @@ test("117: a declared yard goes to nobody when every farmer has a yard", functio
     table.insert(farmers, { id = 3, farmlandIds = {} })
     assertEquals(TheContractorFarmers.chooseYardHolder(farmers, yard, land), farmers[3])
 end)
+
+test("the yard markers: every farmer's yard with its farmer first, then the yards nobody holds", function()
+    setup()
+    local farmers = {
+        { id = 3, name = "B", yardFarmlandId = 20 },
+        { id = 2, name = "A", yardFarmlandId = 10 },
+        -- No yard.
+        { id = 4, name = "C" },
+        -- Their yard was ruled out since.
+        { id = 5, name = "D", yardFarmlandId = 99 },
+    }
+    local yards = {
+        { farmlandId = 30, x = 3, z = 3, group = { yardBuildingCount = 7 } },
+        { farmlandId = 20, x = 2, z = 2 },
+        { farmlandId = 10, x = 1, z = 1 },
+        -- No position: never marked.
+        { farmlandId = 40 },
+        { farmlandId = 15, x = 5, z = 5 },
+    }
+    local marks = TheContractorFarmers.getYardMarks(farmers, yards)
+    assertEquals(4, #marks)
+    assertEquals(10, marks[1].farmlandId)
+    assertEquals(2, marks[1].farmer.id)
+    assertEquals(20, marks[2].farmlandId)
+    assertEquals(3, marks[2].farmer.id)
+    assertEquals(15, marks[3].farmlandId)
+    assertEquals(nil, marks[3].farmer)
+    assertEquals(30, marks[4].farmlandId)
+    assertEquals(3, marks[4].x)
+    assertEquals(7, marks[4].buildings)
+    assertEquals(0, marks[1].buildings)
+end)

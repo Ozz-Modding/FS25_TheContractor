@@ -1,12 +1,18 @@
 -- Farm yards (108, a spike): where the map's unbought farms are, so the
 -- generated farmers (109, 110) can be given one.
 --
--- Vanilla ties a map's buildings to land through placeables: a preplaced
--- placeable that's bought with its farmland changes hands with the
--- farmland under its root node. So an unbought farm on the map is a
--- farmland with preplaced, bought-with-farmland buildings on it. A
+-- Vanilla ties a map's buildings to land through placeables: a placeable
+-- that's bought with its farmland changes hands with the farmland under
+-- its root node. A map's buildings are either preplaced (nodes in its i3d)
+-- or default placeables (its placeables XML, loaded into a new savegame
+-- like any other placeable, so not flagged preplaced); both count. So an
+-- unbought farm on the map is a farmland with bought-with-farmland
+-- buildings on it. A
 -- farmland is a yard when at least MIN_BUILDINGS of those are in
--- YARD_CATEGORIES (store categories). The yard sits in the middle of its
+-- YARD_CATEGORIES (store categories), at least one of them a shed or a
+-- farmhouse (ANCHOR_CATEGORIES) and one not a farmhouse (a working
+-- building), with no more than MAX_FARMHOUSES farmhouses (more is a
+-- village). The yard sits in the middle of its
 -- yard buildings.
 --
 -- Detection runs on the live map every time it's asked for, on every
@@ -48,6 +54,10 @@ TheContractorYards.YARD_CATEGORIES = {
     STORAGES = true,
     WORKSHOPS = true,
 }
+
+-- More farmhouses than this on a farmland is a village or a town, not a
+-- farm.
+TheContractorYards.MAX_FARMHOUSES = 5
 
 -- A yard needs at least one of these among them: a farm has a shed or a
 -- farmhouse, where a few silos on their own are just a store.
@@ -168,32 +178,63 @@ local function getFootprints(placeable)
     return footprints
 end
 
--- What detection needs to know about a placeable, or nil if it isn't a
--- preplaced building bought with a valid farmland.
-function TheContractorYards.describePlaceable(placeable)
-    if not placeable.isPreplaced or placeable.isDeleted or placeable.isDeleting or
-            not isBoughtWithFarmland(placeable) or placeable.getFarmlandId == nil then
-        return nil
-    end
-    local farmlandId = placeable:getFarmlandId()
-    if not g_farmlandManager:getIsValidFarmlandId(farmlandId) then
-        return nil
-    end
+-- Why detection leaves a placeable out (EXCLUSION). A map's buildings can
+-- be preplaced (nodes in the map's i3d) or default placeables (the map's
+-- placeables XML, loaded into a new savegame like any other): either way
+-- what makes one part of a farm is that it changes hands with its land.
+TheContractorYards.EXCLUSION = {
+    DELETED = "deleted",
+    -- Its store item's setting: it stays put whoever owns the land.
+    NOT_BOUGHT = "notBoughtWithFarmland",
+    -- The map's placeables XML, or the savegame, overrides it to not bought.
+    SAVE_NOT_BOUGHT = "saveNotBoughtWithFarmland",
+    NO_FARMLAND = "noFarmland",
+}
 
+-- Every reason detection leaves the placeable out (EXCLUSIONs), empty if
+-- it's a building bought with a valid farmland.
+function TheContractorYards.getExclusions(placeable)
+    local exclusion = TheContractorYards.EXCLUSION
+    local exclusions = {}
+    if placeable.isDeleted or placeable.isDeleting then
+        table.insert(exclusions, exclusion.DELETED)
+    end
+    if not isBoughtWithFarmland(placeable) then
+        table.insert(exclusions, placeable.boughtWithFarmlandSavegameOverwrite == false and
+            exclusion.SAVE_NOT_BOUGHT or exclusion.NOT_BOUGHT)
+    end
+    if placeable.getFarmlandId == nil or not g_farmlandManager:getIsValidFarmlandId(placeable:getFarmlandId()) then
+        table.insert(exclusions, exclusion.NO_FARMLAND)
+    end
+    return exclusions
+end
+
+local function getNameAndCategory(placeable)
     local storeItem = placeable.storeItem
     local category = storeItem ~= nil and storeItem.categoryName or nil
     local name = placeable.getName ~= nil and placeable:getName() or nil
     if name == nil and storeItem ~= nil then
         name = storeItem.name
     end
+    return name or "?", string.upper(category or "UNKNOWN")
+end
+
+-- What detection needs to know about a placeable, or nil if it isn't a
+-- building bought with a valid farmland.
+function TheContractorYards.describePlaceable(placeable)
+    if #TheContractorYards.getExclusions(placeable) > 0 then
+        return nil
+    end
+    local farmlandId = placeable:getFarmlandId()
+    local name, category = getNameAndCategory(placeable)
     local x, _, z = placeable:getPosition()
     local sells, unloads = getStations(placeable)
 
     return {
         placeable = placeable,
         farmlandId = farmlandId,
-        category = string.upper(category or "UNKNOWN"),
-        name = name or "?",
+        category = category,
+        name = name,
         x = x,
         z = z,
         hasSellingStation = sells,
@@ -207,6 +248,7 @@ function TheContractorYards.isYardCategory(category)
 end
 
 -- farmlandId -> { farmlandId, buildings, yardBuildingCount, anchorCount,
+-- houseCount, workingCount (yard buildings that aren't farmhouses),
 -- categories = { [category] = count } } for every farmland with candidate
 -- buildings.
 function TheContractorYards.groupByFarmland(buildings)
@@ -215,13 +257,18 @@ function TheContractorYards.groupByFarmland(buildings)
         local group = groups[building.farmlandId]
         if group == nil then
             group = { farmlandId = building.farmlandId, buildings = {}, yardBuildingCount = 0, anchorCount = 0,
-                categories = {} }
+                houseCount = 0, workingCount = 0, categories = {} }
             groups[building.farmlandId] = group
         end
         table.insert(group.buildings, building)
         group.categories[building.category] = (group.categories[building.category] or 0) + 1
         if TheContractorYards.isYardCategory(building.category) then
             group.yardBuildingCount = group.yardBuildingCount + 1
+            if building.category == TheContractorYards.HOUSE_CATEGORY then
+                group.houseCount = group.houseCount + 1
+            else
+                group.workingCount = group.workingCount + 1
+            end
         end
         if TheContractorYards.ANCHOR_CATEGORIES[building.category] then
             group.anchorCount = group.anchorCount + 1
@@ -231,7 +278,57 @@ function TheContractorYards.groupByFarmland(buildings)
 end
 
 function TheContractorYards.isYardByRule(group)
-    return group ~= nil and group.yardBuildingCount >= TheContractorYards.MIN_BUILDINGS and group.anchorCount > 0
+    return #TheContractorYards.getRuleFailures(group) == 0
+end
+
+-- Why the group fails the yard rule: a list of RULE_FAILURE, empty if it
+-- passes.
+TheContractorYards.RULE_FAILURE = {
+    NO_BUILDINGS = "noBuildings",
+    TOO_FEW_YARD_BUILDINGS = "tooFewYardBuildings",
+    NO_ANCHOR = "noAnchor",
+    NO_WORKING_BUILDING = "noWorkingBuilding",
+    TOO_MANY_HOUSES = "tooManyHouses",
+}
+
+function TheContractorYards.getRuleFailures(group)
+    local failure = TheContractorYards.RULE_FAILURE
+    if group == nil then
+        return { failure.NO_BUILDINGS }
+    end
+    local failures = {}
+    if group.yardBuildingCount < TheContractorYards.MIN_BUILDINGS then
+        table.insert(failures, failure.TOO_FEW_YARD_BUILDINGS)
+    end
+    if group.anchorCount == 0 then
+        table.insert(failures, failure.NO_ANCHOR)
+    end
+    if group.workingCount == 0 then
+        table.insert(failures, failure.NO_WORKING_BUILDING)
+    end
+    if group.houseCount > TheContractorYards.MAX_FARMHOUSES then
+        table.insert(failures, failure.TOO_MANY_HOUSES)
+    end
+    return failures
+end
+
+-- The placeables standing on the farmland that detection leaves out:
+-- { name, category, exclusions, isPreplaced, ownerFarmId, x, z }, in the
+-- placeables' order.
+function TheContractorYards.getExcludedOn(placeables, farmlandId)
+    local excluded = {}
+    for _, placeable in ipairs(placeables) do
+        if placeable.getFarmlandId ~= nil and placeable:getFarmlandId() == farmlandId then
+            local exclusions = TheContractorYards.getExclusions(placeable)
+            if #exclusions > 0 then
+                local name, category = getNameAndCategory(placeable)
+                local x, _, z = placeable:getPosition()
+                table.insert(excluded, { name = name, category = category, exclusions = exclusions,
+                    isPreplaced = placeable.isPreplaced == true, ownerFarmId = placeable.ownerFarmId, x = x, z = z })
+            end
+        end
+    end
+    return excluded
 end
 
 -- The middle of the group's yard buildings, or of all of them if none are
@@ -337,10 +434,19 @@ function TheContractorYards.detect(placeables, overrides)
 end
 
 -- The live map's yards (see detect).
-function TheContractorYards:getYards()
+local function getMapPlaceables()
     local placeableSystem = g_currentMission.placeableSystem
-    local placeables = placeableSystem ~= nil and placeableSystem.placeables or {}
-    return TheContractorYards.detect(placeables, self.overrides)
+    return placeableSystem ~= nil and placeableSystem.placeables or {}
+end
+
+function TheContractorYards:getYards()
+    return TheContractorYards.detect(getMapPlaceables(), self.overrides)
+end
+
+-- The live map's placeables on the farmland that detection leaves out (see
+-- getExcludedOn).
+function TheContractorYards:getMapExcludedOn(farmlandId)
+    return TheContractorYards.getExcludedOn(getMapPlaceables(), farmlandId)
 end
 
 function TheContractorYards:getYard(farmlandId)
@@ -400,7 +506,9 @@ function TheContractorYards.getRingCandidates(x, z, radii)
     return candidates
 end
 
--- Whether x, z is inside a convex footprint (corners in order).
+-- Whether x, z is inside a convex footprint (corners in order). A
+-- footprint with no area (a test area of no size, its corners on one point
+-- or one line) has nothing inside it.
 function TheContractorYards.isInside(corners, x, z)
     local sign = 0
     for i, a in ipairs(corners) do
@@ -415,7 +523,7 @@ function TheContractorYards.isInside(corners, x, z)
             end
         end
     end
-    return true
+    return sign ~= 0
 end
 
 -- Every candidate point for a yard, edges first, then the rings.
@@ -482,57 +590,106 @@ function TheContractorYards.spreadSpots(yard, open)
     return spots
 end
 
+-- Why a candidate isn't a spot (SPOT_REJECTION): pickSpots' own checks,
+-- then isOpenGround's, in the order they're made.
+TheContractorYards.SPOT_REJECTION = {
+    SEPARATION = "separation",
+    FOOTPRINT = "footprint",
+    FARMLAND = "farmland",
+    INDOOR = "indoor",
+    SLOPE = "slope",
+    FIELD = "field",
+    NAVIGATION = "navigation",
+    BLOCKED = "blocked",
+}
+
 -- The ground checks on every candidate (see the header); isOpen does the
--- engine's part. Returns the spread-out spots kept and how many were open.
--- Pure apart from isOpen, for the tests.
-function TheContractorYards.pickSpots(yard, candidates, isOpen)
+-- engine's part, returning whether the point's open and, if not, a
+-- SPOT_REJECTION and what blocked it (a name, or nil); a footprint's
+-- blocker is its building's name. Returns the
+-- spread-out spots kept and how many were open. With tally given
+-- ({}), it's filled in as { candidates, rejected = { [rejection] = count },
+-- blockers = { [name] = count } }. Pure apart from isOpen, for the tests.
+function TheContractorYards.pickSpots(yard, candidates, isOpen, tally)
     local Y = TheContractorYards
     local spots = {}
     local separationSq = Y.SPOT_SEPARATION * Y.SPOT_SEPARATION
     local buildings = yard.group ~= nil and yard.group.buildings or {}
+    if tally ~= nil then
+        tally.candidates, tally.rejected, tally.blockers = #candidates, {}, {}
+    end
+    local function reject(rejection, blocker)
+        if tally ~= nil then
+            tally.rejected[rejection] = (tally.rejected[rejection] or 0) + 1
+            if blocker ~= nil then
+                tally.blockers[blocker] = (tally.blockers[blocker] or 0) + 1
+            end
+        end
+    end
     for _, point in ipairs(candidates) do
-        local free = true
+        local rejection, blocker = nil, nil
         for _, spot in ipairs(spots) do
             if (spot.x - point.x) ^ 2 + (spot.z - point.z) ^ 2 < separationSq then
-                free = false
+                rejection = Y.SPOT_REJECTION.SEPARATION
                 break
             end
         end
-        if free then
+        if rejection == nil then
             for _, building in ipairs(buildings) do
                 for _, corners in ipairs(building.footprints) do
                     if Y.isInside(corners, point.x, point.z) then
-                        free = false
+                        rejection, blocker = Y.SPOT_REJECTION.FOOTPRINT, building.name
                         break
                     end
                 end
-                if not free then
+                if rejection ~= nil then
                     break
                 end
             end
         end
-        if free and isOpen(point.x, point.z) then
-            table.insert(spots, point)
+        if rejection == nil then
+            local open, openRejection, blocker = isOpen(point.x, point.z)
+            if open then
+                table.insert(spots, point)
+            else
+                reject(openRejection, blocker)
+            end
+        else
+            reject(rejection, blocker)
         end
     end
     return TheContractorYards.spreadSpots(yard, spots), #spots
 end
 
-local overlapHit = false
+local overlapHit = nil
 local overlapTarget = {}
 function overlapTarget.onOverlap(_, node)
     if node == g_terrainNode then
         return true
     end
-    overlapHit = true
+    overlapHit = node
     return false
 end
 
--- The engine's checks on a point, for a yard on farmlandId.
+-- What an overlap hit, for tcCompany yards: its object's name (a
+-- placeable's or vehicle's) and the node's.
+local function describeHit(node)
+    local name = getName ~= nil and getName(node) or tostring(node)
+    local object = g_currentMission.getNodeObject ~= nil and g_currentMission:getNodeObject(node) or nil
+    if object ~= nil and object.getName ~= nil then
+        return string.format("%s (%s)", tostring(object:getName()), name)
+    end
+    return name
+end
+
+-- The engine's checks on a point, for a yard on farmlandId: whether it's
+-- open, and if not, why (a SPOT_REJECTION) and, if something solid's in
+-- the way, what (describeHit).
 function TheContractorYards.isOpenGround(farmlandId, x, z)
     local Y = TheContractorYards
+    local rejection = Y.SPOT_REJECTION
     if g_farmlandManager:getFarmlandIdAtWorldPosition(x, z) ~= farmlandId then
-        return false
+        return false, rejection.FARMLAND
     end
 
     -- Vanilla's indoor mask (what keeps rain out of buildings): placeables'
@@ -540,7 +697,7 @@ function TheContractorYards.isOpenGround(farmlandId, x, z)
     local indoorMask = g_currentMission.indoorMask
     if indoorMask ~= nil and indoorMask.getIsIndoorAtWorldPosition ~= nil and
             indoorMask:getIsIndoorAtWorldPosition(x, z) then
-        return false
+        return false, rejection.INDOOR
     end
 
     local y = getTerrainHeightAtWorldPos(g_terrainNode, x, 0, z)
@@ -550,36 +707,39 @@ function TheContractorYards.isOpenGround(farmlandId, x, z)
     local dz = getTerrainHeightAtWorldPos(g_terrainNode, x, 0, z + s) -
         getTerrainHeightAtWorldPos(g_terrainNode, x, 0, z - s)
     if math.abs(dx) > Y.MAX_SLOPE * 2 * s or math.abs(dz) > Y.MAX_SLOPE * 2 * s then
-        return false
+        return false, rejection.SLOPE
     end
 
     if FSDensityMapUtil ~= nil and FSDensityMapUtil.getFieldDataAtWorldPosition ~= nil and
             g_currentMission.fieldGroundSystem ~= nil then
         local isField = FSDensityMapUtil.getFieldDataAtWorldPosition(x, y, z)
         if isField then
-            return false
+            return false, rejection.FIELD
         end
     end
 
     -- Server only: a client has no navigation map, and vanilla answers true.
     local aiSystem = g_currentMission.aiSystem
     if aiSystem ~= nil and aiSystem.getIsPositionReachable ~= nil and not aiSystem:getIsPositionReachable(x, y, z) then
-        return false
+        return false, rejection.NAVIGATION
     end
 
     local halfHeight = Y.SPOT_HEIGHT * 0.5
-    overlapHit = false
+    overlapHit = nil
     overlapBox(x, y + Y.SPOT_GROUND_GAP + halfHeight, z, 0, 0, 0, Y.SPOT_HALF_SIZE, halfHeight, Y.SPOT_HALF_SIZE,
         "onOverlap", overlapTarget, SPOT_MASK, true, true, true, true)
-    return not overlapHit
+    if overlapHit ~= nil then
+        return false, rejection.BLOCKED, describeHit(overlapHit)
+    end
+    return true
 end
 
 -- A yard's standing spots, as { x, z }, worked out now, and how many open
--- ones there were to pick from.
-function TheContractorYards.findSpots(yard)
+-- ones there were to pick from. tally: see pickSpots.
+function TheContractorYards.findSpots(yard, tally)
     return TheContractorYards.pickSpots(yard, TheContractorYards.getCandidates(yard), function(x, z)
         return TheContractorYards.isOpenGround(yard.farmlandId, x, z)
-    end)
+    end, tally)
 end
 
 -- Synced spots (114) ---------------------------------------------------------------
@@ -844,13 +1004,17 @@ end
 
 -- Map markers ---------------------------------------------------------------------
 
-local function addMarker(hotspots, x, z, radius)
+-- A circle of radius (metres) on the map, added to hotspots and returned.
+-- Vanilla's field mission circle, which pulses.
+function TheContractorYards.addMarker(hotspots, x, z, radius)
     local hotspot = AbstractFieldMissionHotspot.new()
     hotspot:setWorldRadius(radius)
     hotspot:setWorldPosition(x, z)
     g_currentMission:addMapHotspot(hotspot)
     table.insert(hotspots, hotspot)
+    return hotspot
 end
+local addMarker = TheContractorYards.addMarker
 
 -- The angle (degrees, -180 to 180, positive clockwise seen from above)
 -- from a house's +Z direction (fx, fz) to the direction (dx, dz) of its
@@ -1006,8 +1170,89 @@ function TheContractorYards.getListText(yards, nearMisses, categories, isServer)
     return table.concat(lines, "\n")
 end
 
--- One farmland's candidate buildings, one per line.
-function TheContractorYards.getFarmlandText(farmlandId, yards, nearMisses)
+local RULE_FAILURE_TEXTS = {
+    [TheContractorYards.RULE_FAILURE.NO_BUILDINGS] = function()
+        return "no buildings that count"
+    end,
+    [TheContractorYards.RULE_FAILURE.TOO_FEW_YARD_BUILDINGS] = function(group)
+        return string.format("%d yard building(s), needs %d", group.yardBuildingCount, TheContractorYards.MIN_BUILDINGS)
+    end,
+    [TheContractorYards.RULE_FAILURE.NO_ANCHOR] = function()
+        return "no shed or farmhouse among them"
+    end,
+    [TheContractorYards.RULE_FAILURE.NO_WORKING_BUILDING] = function()
+        return "no yard building that isn't a farmhouse"
+    end,
+    [TheContractorYards.RULE_FAILURE.TOO_MANY_HOUSES] = function(group)
+        return string.format("%d farmhouses, more than %d (a village)", group.houseCount,
+            TheContractorYards.MAX_FARMHOUSES)
+    end,
+}
+
+local EXCLUSION_TEXTS = {
+    [TheContractorYards.EXCLUSION.DELETED] = "being deleted",
+    [TheContractorYards.EXCLUSION.NOT_BOUGHT] = "its store item isn't sold with the farmland",
+    [TheContractorYards.EXCLUSION.SAVE_NOT_BOUGHT] = "the map or savegame says it isn't sold with the farmland",
+    [TheContractorYards.EXCLUSION.NO_FARMLAND] = "not on a valid farmland",
+}
+
+local SPOT_REJECTION_ORDER = { "SEPARATION", "FOOTPRINT", "FARMLAND", "INDOOR", "SLOPE", "FIELD", "NAVIGATION",
+    "BLOCKED" }
+local SPOT_REJECTION_TEXTS = {
+    separation = "too close to a kept spot",
+    footprint = "inside a building's footprint",
+    farmland = "off the farmland",
+    indoor = "indoors (indoor mask)",
+    slope = "too steep",
+    field = "on a field",
+    navigation = "off the AI navigation map",
+    blocked = "something solid in the way",
+}
+-- Most blockers listed by name.
+local MAX_BLOCKERS_LISTED = 8
+
+-- spots: { kept, open, synced (the server's count, or nil), tally
+-- (pickSpots') } for a yard's spots worked out now.
+local function getSpotLines(spots, isServer)
+    local tally = spots.tally
+    local lines = { string.format("Spots: %d kept of %d open, from %d candidates%s", spots.kept, spots.open,
+        tally.candidates, isServer and "" or " (no navigation check on a client)") }
+    if spots.synced ~= nil then
+        table.insert(lines, string.format("  The server's list for the farmer: %d", spots.synced))
+    end
+    for _, key in ipairs(SPOT_REJECTION_ORDER) do
+        local rejection = TheContractorYards.SPOT_REJECTION[key]
+        local count = tally.rejected[rejection]
+        if count ~= nil then
+            table.insert(lines, string.format("  %d %s", count, SPOT_REJECTION_TEXTS[rejection]))
+        end
+    end
+    local names = {}
+    for name in pairs(tally.blockers) do
+        table.insert(names, name)
+    end
+    table.sort(names, function(a, b)
+        if tally.blockers[a] ~= tally.blockers[b] then
+            return tally.blockers[a] > tally.blockers[b]
+        end
+        return a < b
+    end)
+    if #names > 0 then
+        table.insert(lines, "  In the way:")
+        for i = 1, math.min(#names, MAX_BLOCKERS_LISTED) do
+            table.insert(lines, string.format("    %s: %d", names[i], tally.blockers[names[i]]))
+        end
+        if #names > MAX_BLOCKERS_LISTED then
+            table.insert(lines, string.format("    and %d more", #names - MAX_BLOCKERS_LISTED))
+        end
+    end
+    return lines
+end
+
+-- One farmland's verdict and why, its candidate buildings, one per line,
+-- the placeables on it that detection leaves out (getExcludedOn) and, for
+-- a yard, how its standing spots came out (spots: see getSpotLines).
+function TheContractorYards.getFarmlandText(farmlandId, yards, nearMisses, excluded, spots, isServer)
     local entry
     for _, list in ipairs({ yards, nearMisses }) do
         for _, candidate in ipairs(list) do
@@ -1016,12 +1261,26 @@ function TheContractorYards.getFarmlandText(farmlandId, yards, nearMisses)
             end
         end
     end
-    if entry == nil then
-        return string.format("Farmland %d has no preplaced buildings bought with it and no override.", farmlandId)
+    local group = entry ~= nil and entry.group or nil
+    local mode = g_currentMission.TheContractor.Yards:getOverride(farmlandId)
+
+    local failures = TheContractorYards.getRuleFailures(group)
+    local detection
+    if #failures == 0 then
+        detection = "a yard"
+    else
+        local reasons = {}
+        for _, failure in ipairs(failures) do
+            table.insert(reasons, RULE_FAILURE_TEXTS[failure](group))
+        end
+        detection = "not a yard: " .. table.concat(reasons, "; ")
     end
-    local lines = { string.format("Farmland %d: %s (%s)", farmlandId, entry.how ~= nil and entry.how or "not a yard",
-        TheContractorYards.MODE_NAMES[g_currentMission.TheContractor.Yards:getOverride(farmlandId)]) }
-    for _, building in ipairs(entry.group ~= nil and entry.group.buildings or {}) do
+    local lines = { string.format("Farmland %d: %s (override %s)", farmlandId,
+        entry ~= nil and entry.how ~= nil and entry.how or "not a yard", TheContractorYards.MODE_NAMES[mode]),
+        "  Detection alone: " .. detection }
+
+    table.insert(lines, string.format("Counted (%d):", group ~= nil and #group.buildings or 0))
+    for _, building in ipairs(group ~= nil and group.buildings or {}) do
         local stations = {}
         if building.hasSellingStation then
             table.insert(stations, "sell point")
@@ -1033,15 +1292,35 @@ function TheContractorYards.getFarmlandText(farmlandId, yards, nearMisses)
             TheContractorYards.isYardCategory(building.category) and " (yard)" or "",
             #stations > 0 and (" " .. table.concat(stations, ", ")) or "", building.x, building.z))
     end
+
+    table.insert(lines, string.format("Not counted (%d):", #excluded))
+    for _, placeable in ipairs(excluded) do
+        local reasons = {}
+        for _, exclusion in ipairs(placeable.exclusions) do
+            table.insert(reasons, EXCLUSION_TEXTS[exclusion] or exclusion)
+        end
+        table.insert(lines, string.format("  %s [%s] at %.0f, %.0f (%s, owner %s): %s", placeable.name,
+            placeable.category, placeable.x, placeable.z, placeable.isPreplaced and "preplaced" or "placed",
+            tostring(placeable.ownerFarmId), table.concat(reasons, "; ")))
+    end
+    if group == nil and #excluded == 0 then
+        table.insert(lines, "No placeables stand on this farmland. Buildings built into the map's own scene " ..
+            "aren't placeables, so detection can't see them: declare it with tcCompany yard " .. farmlandId .. " on.")
+    end
+    if spots ~= nil then
+        for _, line in ipairs(getSpotLines(spots, isServer)) do
+            table.insert(lines, line)
+        end
+    end
     return table.concat(lines, "\n")
 end
 
 function TheContractorYards.registerConsoleCommands()
     TCConsole.register("company", "yards", {
-        args = "[farmlandId|show [farmlandId]|hide]",
-        description = "List the map's farm yards, one farmland's buildings, or mark yards on this machine's map",
+        args = "[farmlandId|here|show [farmlandId]|hide]",
+        description = "List the map's farm yards, check why a farmland is or isn't one, or mark yards on this machine's map",
         serverOnly = false,
-        run = function(farmId, args)
+        run = function(farmId, args, context)
             local yardsSystem = g_currentMission.TheContractor.Yards
             local first = args[1] ~= nil and string.lower(args[1]) or nil
             if first == "show" then
@@ -1070,11 +1349,33 @@ function TheContractorYards.registerConsoleCommands()
 
             local yards, nearMisses, categories = yardsSystem:getYards()
             if first ~= nil then
-                local farmlandId = tonumber(first)
-                if farmlandId == nil then
-                    return false
+                local farmlandId
+                if first == "here" then
+                    if not TCConsole.hasPosition(context) then
+                        return "Error: no position for the current player"
+                    end
+                    farmlandId = g_farmlandManager:getFarmlandIdAtWorldPosition(context.x, context.z)
+                    if not g_farmlandManager:getIsValidFarmlandId(farmlandId) then
+                        return "You're not standing on a farmland."
+                    end
+                else
+                    farmlandId = tonumber(first)
+                    if farmlandId == nil then
+                        return false
+                    end
                 end
-                return TheContractorYards.getFarmlandText(farmlandId, yards, nearMisses)
+                local spots = nil
+                for _, yard in ipairs(yards) do
+                    if yard.farmlandId == farmlandId then
+                        local tally = {}
+                        local kept, open = TheContractorYards.findSpots(yard, tally)
+                        local synced = yardsSystem:getSpots(farmlandId)
+                        spots = { kept = #kept, open = open, tally = tally,
+                            synced = synced ~= nil and #synced.spots or nil }
+                    end
+                end
+                return TheContractorYards.getFarmlandText(farmlandId, yards, nearMisses,
+                    yardsSystem:getMapExcludedOn(farmlandId), spots, g_currentMission:getIsServer())
             end
             return TheContractorYards.getListText(yards, nearMisses, categories, g_currentMission:getIsServer())
         end,

@@ -106,10 +106,8 @@ test("yard buildings without a shed or farmhouse aren't a yard", function()
     assertEquals(1, #yards)
 end)
 
-test("only preplaced buildings bought with their farmland count, the save's overwrite first", function()
+test("only buildings bought with their farmland count, the save's overwrite first", function()
     local world = setup()
-    -- Placed by a player, not the map.
-    world:addBuilding({ farmlandId = 4, category = "SHEDS", preplaced = false })
     -- Stays with the map whoever owns the land.
     world:addBuilding({ farmlandId = 4, category = "SHEDS", bought = false })
     -- The save says it isn't bought with the land after all.
@@ -129,6 +127,120 @@ test("only preplaced buildings bought with their farmland count, the save's over
     yards = world:detect()
     assertEquals(1, #yards)
     assertEquals(2, yards[1].group.yardBuildingCount)
+end)
+
+test("a map's default placeables count as well as its preplaced ones", function()
+    local world = setup()
+    -- From the map's placeables XML: not preplaced, bought with the land
+    -- by the map's overwrite.
+    world:addBuilding({ farmlandId = 6, category = "SHEDS", preplaced = false, bought = false, overwrite = true })
+    world:addBuilding({ farmlandId = 6, category = "FARMHOUSES", preplaced = false, bought = false, overwrite = true })
+    -- Scenery the map doesn't sell with the land.
+    world:addBuilding({ farmlandId = 7, category = "SHEDS", preplaced = false, bought = false })
+    world:addBuilding({ farmlandId = 7, category = "FARMHOUSES", preplaced = false, bought = false })
+
+    local yards = world:detect()
+    assertEquals(1, #yards)
+    assertEquals(6, yards[1].farmlandId)
+    assertEquals(2, yards[1].group.yardBuildingCount)
+end)
+
+test("each placeable left out on a farmland says every reason, and only that farmland's", function()
+    local world = setup()
+    local exclusion = TheContractorYards.EXCLUSION
+    world:addBuilding({ farmlandId = 4, category = "sheds", bought = false, preplaced = false })
+    world:addBuilding({ farmlandId = 4, category = "SHEDS", overwrite = false })
+    world:addBuilding({ farmlandId = 4, category = "SHEDS", deleted = true, bought = false })
+    -- Counted, so not listed.
+    world:addBuilding({ farmlandId = 4, category = "SILOS", x = 7, z = 8 })
+    -- Another farmland's.
+    world:addBuilding({ farmlandId = 5, category = "SHEDS", bought = false })
+
+    local excluded = TheContractorYards.getExcludedOn(world.placeables, 4)
+    assertEquals(3, #excluded)
+    assertEquals(1, #excluded[1].exclusions)
+    assertEquals(exclusion.NOT_BOUGHT, excluded[1].exclusions[1])
+    assertEquals("SHEDS", excluded[1].category)
+    assertEquals(false, excluded[1].isPreplaced)
+    assertEquals(exclusion.SAVE_NOT_BOUGHT, excluded[2].exclusions[1])
+    assertTrue(excluded[2].isPreplaced)
+    assertEquals(2, #excluded[3].exclusions)
+    assertEquals(exclusion.DELETED, excluded[3].exclusions[1])
+    assertEquals(exclusion.NOT_BOUGHT, excluded[3].exclusions[2])
+
+    local offFarmland = TheContractorYards.getExclusions(world:addBuilding({ farmlandId = 0, category = "SHEDS" }))
+    assertEquals(1, #offFarmland)
+    assertEquals(exclusion.NO_FARMLAND, offFarmland[1])
+    assertEquals(0, #TheContractorYards.getExclusions(world.placeables[4]))
+end)
+
+test("a farmland that fails the rule says every way it fails", function()
+    local world = setup()
+    local failure = TheContractorYards.RULE_FAILURE
+    local function failuresOn(farmlandId)
+        local groups = TheContractorYards.groupByFarmland((function()
+            local buildings = {}
+            for _, placeable in ipairs(world.placeables) do
+                table.insert(buildings, TheContractorYards.describePlaceable(placeable))
+            end
+            return buildings
+        end)())
+        return TheContractorYards.getRuleFailures(groups[farmlandId])
+    end
+
+    local none = failuresOn(1)
+    assertEquals(1, #none)
+    assertEquals(failure.NO_BUILDINGS, none[1])
+
+    world:addBuilding({ farmlandId = 1, category = "SILOS" })
+    local both = failuresOn(1)
+    assertEquals(2, #both)
+    assertEquals(failure.TOO_FEW_YARD_BUILDINGS, both[1])
+    assertEquals(failure.NO_ANCHOR, both[2])
+
+    world:addBuilding({ farmlandId = 1, category = "SILOS" })
+    local anchor = failuresOn(1)
+    assertEquals(1, #anchor)
+    assertEquals(failure.NO_ANCHOR, anchor[1])
+
+    world:addBuilding({ farmlandId = 1, category = "FARMHOUSES" })
+    assertEquals(0, #failuresOn(1))
+end)
+
+test("a yard needs a working building, and a village of farmhouses isn't one", function()
+    local world = setup()
+    local failure = TheContractorYards.RULE_FAILURE
+    -- Two cottages: no working building.
+    world:addBuilding({ farmlandId = 1, category = "FARMHOUSES" })
+    world:addBuilding({ farmlandId = 1, category = "FARMHOUSES" })
+    -- A village: more farmhouses than MAX_FARMHOUSES, with a shed.
+    for _ = 1, TheContractorYards.MAX_FARMHOUSES + 1 do
+        world:addBuilding({ farmlandId = 2, category = "FARMHOUSES" })
+    end
+    world:addBuilding({ farmlandId = 2, category = "SHEDS" })
+    -- A farm at the limit: MAX_FARMHOUSES houses and a shed.
+    for _ = 1, TheContractorYards.MAX_FARMHOUSES do
+        world:addBuilding({ farmlandId = 3, category = "FARMHOUSES" })
+    end
+    world:addBuilding({ farmlandId = 3, category = "SHEDS" })
+    -- A house and a silo: the silo's the working building.
+    world:addBuilding({ farmlandId = 4, category = "FARMHOUSES" })
+    world:addBuilding({ farmlandId = 4, category = "SILOS" })
+
+    local yards, nearMisses = world:detect()
+    assertEquals(2, #yards)
+    assertEquals(3, yards[1].farmlandId)
+    assertEquals(4, yards[2].farmlandId)
+    assertEquals(2, #nearMisses)
+
+    local cottages = TheContractorYards.getRuleFailures(findEntry(nearMisses, 1).group)
+    assertEquals(1, #cottages)
+    assertEquals(failure.NO_WORKING_BUILDING, cottages[1])
+    local village = TheContractorYards.getRuleFailures(findEntry(nearMisses, 2).group)
+    assertEquals(1, #village)
+    assertEquals(failure.TOO_MANY_HOUSES, village[1])
+    assertEquals(TheContractorYards.MAX_FARMHOUSES + 1, findEntry(nearMisses, 2).group.houseCount)
+    assertEquals(1, findEntry(nearMisses, 2).group.workingCount)
 end)
 
 test("overrides: on makes a yard, off rules one out, auto goes back to detection", function()
@@ -226,6 +338,67 @@ test("spots go round a building's footprint, outside it, apart, and only where o
         if spot.x > 10 then sides.east = true end
     end
     assertTrue(sides.south and sides.north and sides.east)
+end)
+
+test("a spot tally counts each candidate once, by the check that ruled it out, and names what's in the way", function()
+    setup()
+    local rejection = TheContractorYards.SPOT_REJECTION
+    local footprint = { { x = 0, z = 0 }, { x = 10, z = 0 }, { x = 10, z = 10 }, { x = 0, z = 10 } }
+    local yard = { farmlandId = 1, x = 5, z = 5,
+        group = { buildings = { { name = "Shed", x = 5, z = 5, footprints = { footprint } } } } }
+    local candidates = {
+        { x = 5, z = 5 },      -- inside the shed
+        { x = 20, z = 0 },     -- open
+        { x = 21, z = 0 },     -- too close to the one before
+        { x = -20, z = 0 },    -- a pad in the way
+        { x = -30, z = 0 },    -- the same pad
+        { x = 0, z = -20 },    -- a fence
+        { x = 0, z = 30 },     -- indoors
+    }
+    local tally = {}
+    local spots, openCount = TheContractorYards.pickSpots(yard, candidates, function(x, z)
+        if x < 0 then
+            return false, rejection.BLOCKED, "Concrete Pad"
+        elseif z < 0 then
+            return false, rejection.BLOCKED, "Fence"
+        elseif z > 20 then
+            return false, rejection.INDOOR
+        end
+        return true
+    end, tally)
+
+    assertEquals(1, #spots)
+    assertEquals(1, openCount)
+    assertEquals(7, tally.candidates)
+    assertEquals(1, tally.rejected[rejection.FOOTPRINT])
+    assertEquals(1, tally.rejected[rejection.SEPARATION])
+    assertEquals(3, tally.rejected[rejection.BLOCKED])
+    assertEquals(1, tally.rejected[rejection.INDOOR])
+    assertEquals(2, tally.blockers["Concrete Pad"])
+    assertEquals(1, tally.blockers["Fence"])
+    assertEquals(1, tally.blockers["Shed"])
+end)
+
+test("a footprint with no area has nothing inside it", function()
+    setup()
+    local point = { { x = 3, z = 4 }, { x = 3, z = 4 }, { x = 3, z = 4 }, { x = 3, z = 4 } }
+    local line = { { x = 0, z = 0 }, { x = 10, z = 0 }, { x = 10, z = 0 }, { x = 0, z = 0 } }
+    assertEquals(false, TheContractorYards.isInside(point, 3, 4))
+    assertEquals(false, TheContractorYards.isInside(point, 100, -50))
+    assertEquals(false, TheContractorYards.isInside(line, 5, 0))
+    assertEquals(false, TheContractorYards.isInside(line, 5, 20))
+
+    -- A yard with one such building still finds its spots round the rest.
+    local square = { { x = 0, z = 0 }, { x = 10, z = 0 }, { x = 10, z = 10 }, { x = 0, z = 10 } }
+    assertTrue(TheContractorYards.isInside(square, 5, 5))
+    local yard = { farmlandId = 1, x = 5, z = 5, group = { buildings = {
+        { name = "Ground Texture", x = 3, z = 4, footprints = { point } },
+        { name = "Shed", x = 5, z = 5, footprints = { square } },
+    } } }
+    local spots = TheContractorYards.pickSpots(yard, TheContractorYards.getCandidates(yard), function()
+        return true
+    end)
+    assertTrue(#spots > 0)
 end)
 
 test("a building without a footprint gets a ring of its own", function()

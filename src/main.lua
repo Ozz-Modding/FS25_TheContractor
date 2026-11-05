@@ -779,6 +779,8 @@ function TheContractor:deleteMap()
     end
     -- 109: the farmer split's markers, if shown.
     TheContractorFarmerSplit.hideMarkers()
+    -- The farmers' yard markers, if shown.
+    TheContractorFarmers.hideYardMarkers()
     -- 124: the drop areas' markings.
     if self.YardBales ~= nil then
         self.YardBales:delete()
