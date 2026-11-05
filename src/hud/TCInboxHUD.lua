@@ -36,6 +36,12 @@ TCInboxHUD_mt = Class(TCInboxHUD)
 -- Sizes are in reference (1080p) pixels.
 TCInboxHUD.BADGE_SIZE = 32
 TCInboxHUD.VEHICLE_OFFSET_X = -70
+-- FS25_AdvancedDamageSystem widens the speedometer panel to the left for its
+-- vehicles (a dashboard band over where the badge would be), leaving speedBg
+-- where it was. Then the badge sits this far left of the widened panel's own
+-- left edge (ADS_Hud.getSpeedMeterLeftEdge) instead: its width plus a gap.
+TCInboxHUD.ADS_OFFSET_X = -40
+TCInboxHUD.ADS_MOD_NAME = "FS25_AdvancedDamageSystem"
 TCInboxHUD.TEXT_SIZE = 18
 -- Middle-aligned text sits slightly low; ToolInclinationHelper nudges its own
 -- up by the same 2 px (text at 18 of a 32 px circle).
@@ -135,6 +141,22 @@ function TCInboxHUD:update(dt)
     end
 end
 
+-- The left edge of ADS's widened speedometer panel, or nil when ADS isn't
+-- loaded, lacks the functions, or hasn't widened it for this vehicle (an ADS
+-- excluded vehicle keeps the vanilla panel).
+function TCInboxHUD.getADSExtendedLeftEdge(speedMeter)
+    local env = TheContractorDrivers.getModEnv(TCInboxHUD.ADS_MOD_NAME)
+    local adsHud = env ~= nil and env.ADS_Hud or nil
+    if adsHud == nil or type(adsHud.getIsSpeedMeterExtended) ~= "function"
+        or type(adsHud.getSpeedMeterLeftEdge) ~= "function" then
+        return nil
+    end
+    if not adsHud.getIsSpeedMeterExtended(speedMeter.vehicle) then
+        return nil
+    end
+    return adsHud.getSpeedMeterLeftEdge(speedMeter)
+end
+
 function TCInboxHUD:draw()
     if self.unreadCount <= 0 then
         return
@@ -156,8 +178,14 @@ function TCInboxHUD:draw()
     local width, height = speedMeter:scalePixelValuesToScreenVector(TCInboxHUD.BADGE_SIZE, TCInboxHUD.BADGE_SIZE)
     local x, y
     if hud.controlledVehicle ~= nil and speedMeter.vehicle ~= nil then
-        local offsetX = speedMeter:scalePixelToScreenWidth(TCInboxHUD.VEHICLE_OFFSET_X)
-        x, y = speedMeter.speedBg.x + offsetX, speedMeter.speedBg.y
+        local adsLeftEdge = TCInboxHUD.getADSExtendedLeftEdge(speedMeter)
+        if adsLeftEdge ~= nil then
+            local offsetX = speedMeter:scalePixelToScreenWidth(TCInboxHUD.ADS_OFFSET_X)
+            x, y = adsLeftEdge + offsetX, speedMeter.speedBg.y
+        else
+            local offsetX = speedMeter:scalePixelToScreenWidth(TCInboxHUD.VEHICLE_OFFSET_X)
+            x, y = speedMeter.speedBg.x + offsetX, speedMeter.speedBg.y
+        end
     else
         local anchorX, anchorY = speedMeter:getPosition()
         x, y = anchorX - width, anchorY
