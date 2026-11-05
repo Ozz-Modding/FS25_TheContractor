@@ -5,8 +5,9 @@
 -- says what tools it takes and whether the farm has them, and reports when
 -- it's done or tampered with. See tickets/100.
 --
--- Arrivals (server): every day each empty bay of a farm's zones may get a
--- customer (ARRIVAL_CHANCE), queued with its model, kind, severity and seed.
+-- Arrivals (server): each hour of ARRIVAL_HOURS every empty bay of a farm's
+-- zones may get a customer (ARRIVAL_CHANCE, a day's chance split over those
+-- hours), queued with its model, kind, severity and seed.
 -- A queued arrival is spawned on the next look at the queue
 -- (PLACE_CHECK_MS), seen or not. Then ADS prepares it and the offer goes
 -- up. Nothing runs while the queue is empty. Of the arrivals, KIND_WEIGHTS'
@@ -103,8 +104,11 @@ TheContractorRepairContracts.JOB_TYPES = {
     breakdown = "adsBreakdown",
 }
 
--- The chance an empty bay gets a customer each day, and what they want.
-TheContractorRepairContracts.ARRIVAL_CHANCE = 0.5
+-- The chance an empty bay gets a customer over a day, rolled hourly in
+-- ARRIVAL_HOURS (from startHour to the start of endHour, game time), and
+-- what they want.
+TheContractorRepairContracts.ARRIVAL_CHANCE = 0.25
+TheContractorRepairContracts.ARRIVAL_HOURS = { 8, 15 }
 -- "parts" is a service of only ADS's stock parts (the battery and/or the
 -- air filter, as 116's favours are), but an ordinary service job otherwise:
 -- inspected to find which, negotiated, labour charged. Without ADS's
@@ -752,17 +756,19 @@ function TheContractorRepairContracts:getCategoryChoices(zone, filter)
     return names
 end
 
--- The daily roll (server) -------------------------------------------------------------
+-- The daily and hourly ticks (server) -----------------------------------------------------
 
 function TheContractorRepairContracts:startDailyTick()
     if not g_currentMission:getIsServer() then
         return
     end
     g_messageCenter:subscribe(MessageType.DAY_CHANGED, self.onDayChanged, self)
+    g_messageCenter:subscribe(MessageType.HOUR_CHANGED, self.onHourChanged, self)
 end
 
 function TheContractorRepairContracts:stopDailyTick()
     g_messageCenter:unsubscribe(MessageType.DAY_CHANGED, self)
+    g_messageCenter:unsubscribe(MessageType.HOUR_CHANGED, self)
 end
 
 -- Server, after the save's loaded: ADS calls us on every status change.
@@ -1025,8 +1031,23 @@ function TheContractorRepairContracts:findFreeBay(farmId)
     return nil
 end
 
+-- An empty bay's chance of a customer in one hour of ARRIVAL_HOURS, so that
+-- over them all it's dailyChance.
+function TheContractorRepairContracts.getHourlyChance(dailyChance)
+    local hours = math.max(1, TheContractorRepairContracts.ARRIVAL_HOURS[2] -
+        TheContractorRepairContracts.ARRIVAL_HOURS[1] + 1)
+    return 1 - (1 - math.min(math.max(dailyChance, 0), 1)) ^ (1 / hours)
+end
+
+-- Whether customers come in at this hour (ARRIVAL_HOURS, both ends in).
+function TheContractorRepairContracts.isArrivalHour(hour)
+    return hour ~= nil and hour >= TheContractorRepairContracts.ARRIVAL_HOURS[1] and
+        hour <= TheContractorRepairContracts.ARRIVAL_HOURS[2]
+end
+
 function TheContractorRepairContracts:rollArrivals(farmId)
-    local chance = TheContractorRepairContracts.ARRIVAL_CHANCE * self:getArrivalFactor(farmId)
+    local chance = TheContractorRepairContracts.getHourlyChance(TheContractorRepairContracts.ARRIVAL_CHANCE *
+        self:getArrivalFactor(farmId))
     for _, zone in ipairs(TheContractorRepairContracts.getZones(farmId)) do
         local zoneUniqueId = TheContractorRepairContracts.getZoneUniqueId(zone)
         if zoneUniqueId ~= nil then
@@ -1067,12 +1088,6 @@ function TheContractorRepairContracts:onDayChanged()
     self:expireOvercharging(today)
 
     if TCADSRepairContracts.isActive() then
-        local tc = g_currentMission.TheContractor
-        for _, farm in ipairs(g_farmManager:getFarms()) do
-            if tc.Company:hasCompany(farm.farmId) then
-                self:rollArrivals(farm.farmId)
-            end
-        end
         self:checkAllStatuses()
     end
 
@@ -1085,6 +1100,20 @@ function TheContractorRepairContracts:onDayChanged()
         end
     end
     self.pendingClaims = remaining
+end
+
+-- Customers come in through the day, never at midnight.
+function TheContractorRepairContracts:onHourChanged()
+    if not TCADSRepairContracts.isActive() or
+            not TheContractorRepairContracts.isArrivalHour(g_currentMission.environment.currentHour) then
+        return
+    end
+    local tc = g_currentMission.TheContractor
+    for _, farm in ipairs(g_farmManager:getFarms()) do
+        if tc.Company:hasCompany(farm.farmId) then
+            self:rollArrivals(farm.farmId)
+        end
+    end
 end
 
 -- Placing and collecting (server) ---------------------------------------------------------

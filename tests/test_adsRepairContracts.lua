@@ -668,14 +668,40 @@ test("the margin settings: 40% in zones, 50% in the field, on the menu only with
     end
 end)
 
-test("the daily roll only fills free bays", function()
+test("the hourly roll only fills free bays", function()
     local world, tc = setup()
     world:addZone()
     TheContractorRepairContracts.ARRIVAL_CHANCE = 1
-    tc.RepairContracts:onDayChanged()
+    g_currentMission.environment.currentHour = TheContractorRepairContracts.ARRIVAL_HOURS[1]
+    tc.RepairContracts:onHourChanged()
     assertEquals(#tc.RepairContracts.arrivals, 3)
-    tc.RepairContracts:onDayChanged()
+    tc.RepairContracts:onHourChanged()
     assertEquals(#tc.RepairContracts.arrivals, 3, "every bay's taken now")
+end)
+
+test("customers only come in ARRIVAL_HOURS, never at the day change", function()
+    local world, tc = setup()
+    world:addZone()
+    TheContractorRepairContracts.ARRIVAL_CHANCE = 1
+    g_currentMission.environment.currentHour = 0
+    tc.RepairContracts:onDayChanged()
+    tc.RepairContracts:onHourChanged()
+    g_currentMission.environment.currentHour = TheContractorRepairContracts.ARRIVAL_HOURS[1] - 1
+    tc.RepairContracts:onHourChanged()
+    g_currentMission.environment.currentHour = TheContractorRepairContracts.ARRIVAL_HOURS[2] + 1
+    tc.RepairContracts:onHourChanged()
+    assertEquals(#tc.RepairContracts.arrivals, 0)
+    g_currentMission.environment.currentHour = TheContractorRepairContracts.ARRIVAL_HOURS[2]
+    tc.RepairContracts:onHourChanged()
+    assertEquals(#tc.RepairContracts.arrivals, 3, "the last hour still rolls")
+end)
+
+test("the hourly chances add up to the day's", function()
+    local hours = TheContractorRepairContracts.ARRIVAL_HOURS[2] - TheContractorRepairContracts.ARRIVAL_HOURS[1] + 1
+    for _, daily in ipairs({ 0, 0.1, 0.25, 0.5, 1 }) do
+        local hourly = TheContractorRepairContracts.getHourlyChance(daily)
+        assertNear(1 - (1 - hourly) ^ hours, daily, 0.0001)
+    end
 end)
 
 -- Accepting -----------------------------------------------------------------------------
