@@ -191,14 +191,16 @@ test("the month on the signs is vanilla's: period 1 is March, six months on for 
     assertEquals(TheContractorAuctions.getMonth(1, true), 9)
 end)
 
-test("over many years: about two a year, one at a time, every sale in spring or autumn", function()
+test("over many years: about one a year, sometimes two, one at a time, every sale in spring or autumn", function()
     -- One day a month, so each month's roll is that day's.
     local world = setup(1)
     world:addField(5, 7)
     world.candidates = { { fieldId = 5, problems = {}, entrance = { x = 1, z = 2 } } }
     math.randomseed(137)
-    local years = 400
+    local years = 600
     local announced, lastId = 0, nil
+    -- Sales in each year (12 days, from day 1).
+    local salesInYear = {}
     for _ = 1, years * 12 do
         local before = world.auctions:getAuction()
         nextDay(world)
@@ -212,10 +214,57 @@ test("over many years: about two a year, one at a time, every sale in spring or 
             assertTrue(TheContractorAuctions.SALE_PERIODS[period], "sale in period " .. period)
             local months = periodIndex - TCCalendar.getPeriodIndex()
             assertTrue(months >= 2 and months <= 4, "announced " .. months .. " months ahead")
+            local year = math.floor((auction.saleDay - 1) / 12) + 1
+            salesInYear[year] = (salesInYear[year] or 0) + 1
         end
     end
     local perYear = announced / years
-    assertTrue(perYear > 1.6 and perYear < 2.2, "per year: " .. perYear)
+    assertTrue(perYear > 0.95 and perYear < 1.3, "per year: " .. perYear)
+    -- The years before the last (whose sales may be after the run).
+    local counts = { [0] = 0, [1] = 0, [2] = 0 }
+    for year = 2, years - 1 do
+        local count = math.min(2, salesInYear[year] or 0)
+        counts[count] = counts[count] + 1
+    end
+    local share = function(count) return counts[count] / (years - 2) end
+    assertTrue(share(1) > 0.65, "most years one: " .. share(1))
+    assertTrue(share(2) > 0.08 and share(2) < 0.3, "now and then two: " .. share(2))
+    assertTrue(share(0) < 0.12, "rarely none: " .. share(0))
+end)
+
+test("the chance: none for a while after the last one, then growing each month", function()
+    setup()
+    local A = TheContractorAuctions
+    assertEquals(A.getAnnounceChance(A.MIN_GAP_MONTHS - 1), 0)
+    assertNear(A.getAnnounceChance(A.MIN_GAP_MONTHS), A.ANNOUNCE_CHANCE_BASE, 0.0001)
+    assertNear(A.getAnnounceChance(A.MIN_GAP_MONTHS + 2), A.ANNOUNCE_CHANCE_BASE + 2 * A.ANNOUNCE_CHANCE_STEP, 0.0001)
+    assertEquals(A.getAnnounceChance(100), 1)
+end)
+
+test("an auction ending or called off starts the wait again, and the wait's saved", function()
+    local world = setup(1)
+    world:addField(5, 7)
+    world.candidates = { { fieldId = 5, problems = {} } }
+    world.auctions:consoleStart(5, 2)
+    nextDay(world)
+    nextDay(world)
+    nextDay(world)
+    assertEquals(world.auctions:getAuction(), nil)
+    local ended = TCCalendar.getPeriodIndex()
+    assertEquals(world.auctions.lastEndedPeriodIndex, ended)
+    -- In the wait, even a sure roll announces nothing.
+    assertEquals(world.auctions:rollAnnouncement(function() return 0 end), nil)
+
+    local xmlFile = {}
+    world.auctions:saveToXmlFile(xmlFile)
+    local loaded = TheContractorAuctions.new()
+    loaded:loadFromXMLFile(xmlFile)
+    assertEquals(loaded.lastEndedPeriodIndex, ended)
+
+    world.auctions:consoleStart(5, 20)
+    nextDay(world)
+    world.auctions:cancel(false)
+    assertEquals(world.auctions.lastEndedPeriodIndex, TCCalendar.getPeriodIndex())
 end)
 
 test("a month's roll that misses, or with an auction on, announces nothing", function()
