@@ -36,6 +36,17 @@ TheContractorAuctionSigns.MAX_GROUND_STEP = 0.5
 TheContractorAuctionSigns.MAX_VERGE_HEIGHT = 1.5
 TheContractorAuctionSigns.MAX_ROAD_HEIGHT_GAP = 1.5
 
+-- The posts' feet in the model's own x and z (genAuctionSignI3d.py's POST_X,
+-- POST_Z and POST): each post's four corners. The sign stands at the lowest
+-- ground under them, so on a slope neither post hangs in the air (the uphill
+-- one goes a little into the ground instead).
+TheContractorAuctionSigns.POST_FEET = {}
+for _, postX in ipairs({ -0.6, 0.6 }) do
+    for _, corner in ipairs({ { 1, 1 }, { 1, -1 }, { -1, 1 }, { -1, -1 } }) do
+        table.insert(TheContractorAuctionSigns.POST_FEET, { postX + 0.045 * corner[1], -0.065 + 0.045 * corner[2] })
+    end
+end
+
 -- Why isSpotClear turned a spot down (the console's counts).
 TheContractorAuctionSigns.REJECT = {
     BRIDGE = "bridge",
@@ -115,6 +126,22 @@ function TheContractorAuctionSigns.setMonth(node, month)
     end
 end
 
+-- The height a sign stands at: the lowest ground under its posts' feet.
+function TheContractorAuctionSigns.getBaseHeight(sign)
+    local acrossX, acrossZ = math.cos(sign.yaw), -math.sin(sign.yaw)
+    local depthX, depthZ = math.sin(sign.yaw), math.cos(sign.yaw)
+    local lowest = nil
+    for _, foot in ipairs(TheContractorAuctionSigns.POST_FEET) do
+        local x = sign.x + acrossX * foot[1] + depthX * foot[2]
+        local z = sign.z + acrossZ * foot[1] + depthZ * foot[2]
+        local y = getTerrainHeightAtWorldPos(g_terrainNode, x, 0, z)
+        if lowest == nil or y < lowest then
+            lowest = y
+        end
+    end
+    return lowest
+end
+
 -- A sign's model at its spot, or nil if it won't load.
 function TheContractorAuctionSigns.loadModel(sign, month)
     local filename = Utils.getFilename(TheContractorAuctionSigns.FILENAME, TheContractor.dir)
@@ -126,8 +153,7 @@ function TheContractorAuctionSigns.loadModel(sign, month)
     local node = getChildAt(root, 0)
     link(getRootNode(), node)
     delete(root)
-    local y = getTerrainHeightAtWorldPos(g_terrainNode, sign.x, 0, sign.z)
-    setTranslation(node, sign.x, y, sign.z)
+    setTranslation(node, sign.x, TheContractorAuctionSigns.getBaseHeight(sign), sign.z)
     setRotation(node, 0, sign.yaw, 0)
     TheContractorAuctionSigns.setMonth(node, month)
     return { node = node, sharedLoadRequestId = sharedLoadRequestId }

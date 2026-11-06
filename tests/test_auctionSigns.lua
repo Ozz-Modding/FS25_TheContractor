@@ -320,6 +320,21 @@ test("each sign is a model on the ground at its spot, showing only its month", f
     assertEquals("month7", shown(world.loaded[2].children[1].children[4]))
 end)
 
+test("on a slope a sign stands at the lowest ground under its posts, so no post hangs in the air", function()
+    local world = setupGame()
+    -- Ground rising along world z; a sign turned a quarter has its board
+    -- across z, so one post is downhill of the other.
+    getTerrainHeightAtWorldPos = function(_, x, _, z) return 10 + z end
+    world.signs:applySync(7, { { x = 0, z = 0, yaw = math.pi / 2 } })
+    world.signs:update(16)
+    assertNear(10 - 0.645, world.loaded[1].translation[2], 0.001)
+
+    -- Turned the other way round, it's the other post that's downhill.
+    world.signs:applySync(7, { { x = 0, z = 0, yaw = -math.pi / 2 } })
+    world.signs:update(16)
+    assertNear(10 - 0.645, world.loaded[2].translation[2], 0.001)
+end)
+
 test("taking the signs down deletes the models and frees the shared file", function()
     local world = setupGame()
     world.signs.month, world.signs.signs = 7, SIGNS
