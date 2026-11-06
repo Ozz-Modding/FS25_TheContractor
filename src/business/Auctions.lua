@@ -9,7 +9,9 @@
 -- most one is announced or running at a time.
 --
 --   The schedule (server): on the first day of each month, a roll
---     (ANNOUNCE_CHANCE). A hit announces one 2 to 4 months ahead (LEAD_MONTHS,
+--     (getAnnounceChance): none for MIN_GAP_MONTHS after the last auction
+--     ended, then a chance that grows each month it's been, so there's about
+--     one a year and now and then two. A hit announces one 2 to 4 months ahead (LEAD_MONTHS,
 --     in months so it scales with days per period), on a day in a sale
 --     month: spring or autumn (SALE_PERIODS, the game's seasonal periods,
 --     so a southern map's spring too), never winter or summer. A month with
@@ -55,10 +57,15 @@ local TheContractorAuctions_mt = Class(TheContractorAuctions)
 TheContractorAuctions.KIND = "auction"
 TheContractorAuctions.SHOW_ON_MAP_ACTION = { key = "showOnMap", textKey = "tc_auction_showOnMap" }
 
--- The chance of an announcement each month that can have one. With one at
--- a time, each running 2 to 4 months, this comes to about two a year (1.9;
--- tests/test_auctions.lua simulates it). One at a time caps it near 2.4.
-TheContractorAuctions.ANNOUNCE_CHANCE = 0.5
+-- The chance of an announcement in a month that can have one: none for
+-- MIN_GAP_MONTHS after the last auction ended (or was called off), then
+-- ANNOUNCE_CHANCE_BASE, growing by ANNOUNCE_CHANCE_STEP each month after.
+-- That comes to about 1.1 a year: one in most years, two in about one in
+-- six, none in about one in twenty, usually 11 months or so between sales
+-- (tests/test_auctions.lua simulates it).
+TheContractorAuctions.MIN_GAP_MONTHS = 3
+TheContractorAuctions.ANNOUNCE_CHANCE_BASE = 0.05
+TheContractorAuctions.ANNOUNCE_CHANCE_STEP = 0.05
 -- Months ahead a sale's announced.
 TheContractorAuctions.LEAD_MONTHS = { 2, 4 }
 -- The seasonal periods a sale can be in (period 1 is the first of spring):
@@ -109,8 +116,10 @@ function TheContractorAuctions.new()
     -- fieldId, hostFarmerId, announcedDay, signsDay, reminderDay (nil for
     -- none), saleDay, state, entrance = { x, z } or nil }.
     self.auction = nil
-    -- Server: the next auction's id.
+    -- Server: the next auction's id, and the month (absolute period index)
+    -- the last one ended or was called off (nil: none yet on this save).
     self.nextId = 1
+    self.lastEndedPeriodIndex = nil
     -- Every machine with a map: the site's marker, rebuilt on the next
     -- update after the auction changes; and the field this machine put a
     -- crowd on.
@@ -283,13 +292,31 @@ function TheContractorAuctions:onFarmlandOwnerChanged(farmlandId, farmId, loadFr
     end
 end
 
+-- The chance of an announcement this month, months after the last auction
+-- ended (pure).
+function TheContractorAuctions.getAnnounceChance(monthsSince)
+    local A = TheContractorAuctions
+    if monthsSince < A.MIN_GAP_MONTHS then
+        return 0
+    end
+    return math.min(1, A.ANNOUNCE_CHANCE_BASE + A.ANNOUNCE_CHANCE_STEP * (monthsSince - A.MIN_GAP_MONTHS))
+end
+
 -- Server: the month's roll. Returns the auction announced, or nil.
 function TheContractorAuctions:rollAnnouncement(random)
-    if self.auction ~= nil or random() >= TheContractorAuctions.ANNOUNCE_CHANCE then
+    if self.auction ~= nil then
         return nil
+    end
+    local periodIndex = TCCalendar.getPeriodIndex()
+    -- A save's first: counted as if one had ended just long enough ago.
+    if self.lastEndedPeriodIndex == nil then
+        self.lastEndedPeriodIndex = periodIndex - TheContractorAuctions.MIN_GAP_MONTHS
     end
     local leads = TheContractorAuctions.getLeadChoices(g_currentMission.environment.currentPeriod)
     if #leads == 0 then
+        return nil
+    end
+    if random() >= TheContractorAuctions.getAnnounceChance(periodIndex - self.lastEndedPeriodIndex) then
         return nil
     end
     local lead = leads[math.min(#leads, math.floor(random() * #leads) + 1)]
@@ -540,6 +567,7 @@ function TheContractorAuctions:finish()
     local auction = self.auction
     self:clearAway()
     self.auction = nil
+    self.lastEndedPeriodIndex = TCCalendar.getPeriodIndex()
     TCLog.info("TheContractor: auction %d over, field %d released", auction.id, auction.fieldId)
     self:sync()
 end
@@ -556,6 +584,7 @@ function TheContractorAuctions:cancel(tellFarms)
         self:postMessages("cancelled", false)
     end
     self.auction = nil
+    self.lastEndedPeriodIndex = TCCalendar.getPeriodIndex()
     TCLog.info("TheContractor: auction %d cancelled", auction.id)
     self:sync()
     return true
@@ -717,6 +746,9 @@ function TheContractorAuctions:saveToXmlFile(xmlFile)
     end
     local key = TheContractor.SaveKey .. ".auctions"
     setXMLInt(xmlFile, key .. "#nextId", self.nextId)
+    if self.lastEndedPeriodIndex ~= nil then
+        setXMLInt(xmlFile, key .. "#lastEndedPeriodIndex", self.lastEndedPeriodIndex)
+    end
     local auction = self.auction
     if auction == nil then
         return
@@ -744,6 +776,7 @@ function TheContractorAuctions:loadFromXMLFile(xmlFile)
     end
     local key = TheContractor.SaveKey .. ".auctions"
     self.nextId = getXMLInt(xmlFile, key .. "#nextId") or 1
+    self.lastEndedPeriodIndex = getXMLInt(xmlFile, key .. "#lastEndedPeriodIndex")
     local auctionKey = key .. ".auction"
     local id = getXMLInt(xmlFile, auctionKey .. "#id")
     if id == nil then

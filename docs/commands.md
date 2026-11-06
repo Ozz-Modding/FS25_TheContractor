@@ -720,7 +720,7 @@ Auction signs for July: 10 up, of 58 junction(s) on 212 road spline(s), in 140 m
 
 ### `tcCompany auction [start [fieldId|auto] [days]|day|cancel]`
 
-The machinery auction (137). One is announced now and then by itself (about two a year, for a sale in spring or autumn, 2 to 4 months ahead); this shows it or makes one happen.
+The machinery auction (137). One is announced now and then by itself (about one a year, now and then two, never within 3 months of the last one ending, for a sale in spring or autumn, 2 to 4 months ahead); this shows it or makes one happen. One started here counts as the last one when it ends.
 
 - With no argument: the auction, if there's one: its id, field, host farmer and state (`announced`, `signsUp`, `setOut`, `onSale` or `collection`), the day it was announced, the day its signs go up, its reminder day and its sale day, and its entrance.
 - `start`: announces one now, ignoring the season and the monthly roll. Its field is picked as a real one is (a grass field nobody's farm owns, held by a farmer, with no live job, that can hold a sale; at random among the best 3), its sale 2 to 4 months ahead. The signs go up 3 months before the sale, or at once if it's nearer. Every company farm gets the message, and every player the map marker.
