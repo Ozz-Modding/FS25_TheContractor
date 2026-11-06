@@ -143,6 +143,9 @@ end
 --   rows = { { corners, facing (1 or -1), lotCount } },
 --   aisles = { { points } } (along the rows, then the two cross aisles),
 --   aisleStrips = { { vFrom, vTo } } (the rows' aisles, in the rect's frame),
+--   walkways = { { x1, z1, x2, z2, halfWidth } } (each row aisle's middle
+--     line, end to end, and half its width: the crowd's walks, 137; no lot
+--     stands within halfWidth of the line),
 --   reserve = { corners, uFrom, uTo, vFrom, vTo } (as wide as the rows,
 --     which are centred across the rectangle), nearSign (1: the entrance is at +u),
 --   lotsFrom, lotsTo (the u range lots stand in),
@@ -177,6 +180,7 @@ function TCAuctionLayout.layOut(polygon, entrance, lots, options)
             rows = {},
             aisles = {},
             aisleStrips = {},
+            walkways = {},
             nearSign = nearSign,
             lotsFrom = lotsFrom,
             lotsTo = lotsTo,
@@ -258,10 +262,13 @@ function TCAuctionLayout.layOut(polygon, entrance, lots, options)
             vEnd = aisleTo
             table.insert(result.aisleStrips, { vFrom = aisleFrom, vTo = aisleTo })
             local aisleV = (aisleFrom + aisleTo) * 0.5
+            local aisleEnd = farEdge - nearSign * layout.endAisle * 0.5
             table.insert(result.aisles, {
-                points = polyline(rect, nearEdge, aisleV, farEdge - nearSign * layout.endAisle * 0.5, aisleV,
-                    layout.pointSpacing),
+                points = polyline(rect, nearEdge, aisleV, aisleEnd, aisleV, layout.pointSpacing),
             })
+            local x1, z1 = toWorld(rect, nearEdge, aisleV)
+            local x2, z2 = toWorld(rect, aisleEnd, aisleV)
+            table.insert(result.walkways, { x1 = x1, z1 = z1, x2 = x2, z2 = z2, halfWidth = layout.aisleWidth * 0.5 })
             cursor = aisleTo
             -- The row facing down into it, if there's room and anything left.
             if next <= #order then

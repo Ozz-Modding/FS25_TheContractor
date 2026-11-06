@@ -329,6 +329,65 @@ function TCAuctionCrowd.buildLoops(rect, layout)
     return loops
 end
 
+-- An auction's walks (137): one long loop down each aisle between the rows
+-- of lots (135's walkways: a middle line and half the aisle's width), up
+-- one side of the aisle and back down the other, so walkers never leave
+-- it and never meet a lot. Its outer lane keeps AISLE_CLEARANCE from the
+-- aisle's edge, where the lots' fronts are. Returns buildLoops' shape, a
+-- walkway too narrow or short for a loop left out.
+TCAuctionCrowd.AISLE_CLEARANCE = 1.2
+
+function TCAuctionCrowd.buildWalkwayLoops(walkways, layout)
+    layout = layout or TCAuctionCrowd.LAYOUT
+    local loops = {}
+    for _, walkway in ipairs(walkways or {}) do
+        local dx, dz = walkway.x2 - walkway.x1, walkway.z2 - walkway.z1
+        local length = math.sqrt(dx * dx + dz * dz)
+        local hv = walkway.halfWidth - TCAuctionCrowd.LANE_OFFSET - TCAuctionCrowd.AISLE_CLEARANCE
+        -- The lanes swing LANE_OFFSET out round the ends too.
+        local hu = length * 0.5 - TCAuctionCrowd.LANE_OFFSET
+        if hv > 0.25 and hu > hv then
+            -- u along the walkway: toWorld's u axis is (cos, sin).
+            local rect = { cx = (walkway.x1 + walkway.x2) * 0.5, cz = (walkway.z1 + walkway.z2) * 0.5,
+                angle = math.atan2(dz, dx), halfU = hu, halfV = hv }
+            table.insert(loops, { points = roundedRect(rect, hu, hv, layout), halfU = hu, halfV = hv, rect = rect })
+        end
+    end
+    return loops
+end
+
+-- The standing groups on an auction's walks: down the middle of each
+-- aisle's loop, between its two sides' lanes, spaced clusterSpacing apart.
+-- Up to maxCount spots, as buildStandingSpots.
+function TCAuctionCrowd.buildWalkwaySpots(loops, maxCount, layout)
+    layout = layout or TCAuctionCrowd.LAYOUT
+    local spots = {}
+    local groupIndex = 0
+    for _, loop in ipairs(loops) do
+        local rect = loop.rect
+        local reach = math.max(0, loop.halfU - loop.halfV - layout.clusterRadius * 2)
+        local count = math.floor(2 * reach / layout.clusterSpacing) + 1
+        local cosA, sinA = math.cos(rect.angle), math.sin(rect.angle)
+        for i = 0, count - 1 do
+            groupIndex = groupIndex + 1
+            local u = count == 1 and 0 or -reach + 2 * reach * i / (count - 1)
+            local mx, mz = toWorld(u, 0, cosA, sinA)
+            mx, mz = rect.cx + mx, rect.cz + mz
+            local size = TCAuctionCrowd.CLUSTER_SIZES[(groupIndex - 1) % #TCAuctionCrowd.CLUSTER_SIZES + 1]
+            for p = 1, size do
+                if #spots >= maxCount then
+                    return spots
+                end
+                local a = 2 * math.pi * (p - 1) / size + groupIndex
+                local x = mx + layout.clusterRadius * math.cos(a)
+                local z = mz + layout.clusterRadius * math.sin(a)
+                table.insert(spots, { x = x, z = z, yaw = math.atan2(mx - x, mz - z) })
+            end
+        end
+    end
+    return spots
+end
+
 -- Where the standing people go: small groups facing their middle, in the
 -- lanes between loops (along the long sides), or down the middle of a
 -- single loop. Up to maxCount spots: a list of { x, z, yaw }, yaw so the
@@ -630,7 +689,8 @@ function TCAuctionCrowd.getUnavailableReason()
     return nil
 end
 
--- Puts a crowd of people on the field. Returns the text to print.
+-- Puts a crowd of people on the field (the spike's loops, over the whole
+-- field). Returns the text to print.
 function TCAuctionCrowd.start(fieldId, people, laneGap)
     local reason = TCAuctionCrowd.getUnavailableReason()
     if reason ~= nil then
@@ -653,7 +713,32 @@ function TCAuctionCrowd.start(fieldId, people, laneGap)
     end
     local spots = TCAuctionCrowd.buildStandingSpots(rect, loops, math.floor(people * TCAuctionCrowd.STANDING_SHARE),
         layout)
+    local text = TCAuctionCrowd.putUp(fieldId, loops, spots, people)
+    if TCAuctionCrowd.active ~= nil then
+        text = text .. "\n" .. string.format("Area used: %.0f x %.0f m at %.0f degrees, %.0f m between loops",
+            rect.halfU * 2, rect.halfV * 2, math.deg(rect.angle), layout.laneGap)
+    end
+    return text
+end
 
+-- 137: puts a crowd on an auction's walks (135's walkways, buildWalkwayLoops),
+-- never among its lots. Returns the text to print.
+function TCAuctionCrowd.startOnWalkways(fieldId, walkways, people)
+    local reason = TCAuctionCrowd.getUnavailableReason()
+    if reason ~= nil then
+        return reason
+    end
+    local loops = TCAuctionCrowd.buildWalkwayLoops(walkways)
+    if #loops == 0 then
+        return "The auction has no aisles wide enough to walk."
+    end
+    local spots = TCAuctionCrowd.buildWalkwaySpots(loops, math.floor(people * TCAuctionCrowd.STANDING_SHARE))
+    return TCAuctionCrowd.putUp(fieldId, loops, spots, people)
+end
+
+-- Puts the people on the loops and spots, replacing any crowd. Returns the
+-- text to print.
+function TCAuctionCrowd.putUp(fieldId, loops, spots, people)
     local templates = TCAuctionCrowd.readTemplates()
     if #templates == 0 then
         return "None of the base maps' pedestrian XMLs could be read."
@@ -696,8 +781,6 @@ function TCAuctionCrowd.start(fieldId, people, laneGap)
 
     local lines = { string.format("Crowd on field %d: %d people (%d standing, %d walking in %d lanes on %d loops)",
         fieldId, #figures, plan.standers, #plan.walkers, plan.lanes, #paths) }
-    table.insert(lines, string.format("Area used: %.0f x %.0f m at %.0f degrees, %.0f m between loops",
-        rect.halfU * 2, rect.halfV * 2, math.deg(rect.angle), layout.laneGap))
     for i, path in ipairs(paths) do
         table.insert(lines, string.format("  loop %d: %.0f m", i, path.length))
     end
@@ -886,6 +969,11 @@ function TCAuctionCrowd.registerConsoleCommands()
                 return false
             end
             people = math.min(math.floor(people), TCAuctionCrowd.MAX_PEOPLE)
+            -- 137: on an auction site's field, its aisles (laneGap doesn't apply).
+            local site = g_currentMission.TheContractor ~= nil and g_currentMission.TheContractor.AuctionSite or nil
+            if site ~= nil and site.fieldId == fieldId and #site:getWalkways() > 0 then
+                return TCAuctionCrowd.startOnWalkways(fieldId, site:getWalkways(), people)
+            end
             return TCAuctionCrowd.start(fieldId, people, laneGap)
         end,
     })

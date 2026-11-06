@@ -2631,8 +2631,14 @@ function MenuContractor:onClickMessageAction(index)
         return
     end
 
-    -- A kind can ask for a confirm first (070's Submit claim).
     local definition = g_currentMission.TheContractor.Inbox:getKind(message.kind)
+    -- 137: an action this machine handles itself (Show on map) sends nothing
+    -- and keeps the message.
+    if definition ~= nil and definition.onClientAction ~= nil and definition.onClientAction(message, action.key) then
+        return
+    end
+
+    -- A kind can ask for a confirm first (070's Submit claim).
     local confirmText = definition ~= nil and definition.getConfirmText ~= nil and
         definition.getConfirmText(message, action.key) or nil
     if confirmText ~= nil then

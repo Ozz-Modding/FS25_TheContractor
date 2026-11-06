@@ -143,6 +143,7 @@ source(TheContractor.dir .. "src/business/EmergencyRefuel.lua")
 source(TheContractor.dir .. "src/business/FarmerLandChanges.lua")
 source(TheContractor.dir .. "src/business/AuctionSite.lua")
 source(TheContractor.dir .. "src/business/AuctionSigns.lua")
+source(TheContractor.dir .. "src/business/Auctions.lua")
 source(TheContractor.dir .. "src/events/TCInitialClientStateEvent.lua")
 source(TheContractor.dir .. "src/events/TCSettingsEvent.lua")
 source(TheContractor.dir .. "src/events/TCCreateCompanyEvent.lua")
@@ -240,6 +241,7 @@ source(TheContractor.dir .. "src/events/TCRefuelMachineEvent.lua")
 source(TheContractor.dir .. "src/events/TCFarmDeletedEvent.lua")
 source(TheContractor.dir .. "src/events/TCAuctionSiteEvent.lua")
 source(TheContractor.dir .. "src/events/TCAuctionSignsEvent.lua")
+source(TheContractor.dir .. "src/events/TCAuctionEvent.lua")
 
 -- The top-level Contractor page itself stays always-visible (see Company.lua
 -- and MenuContractor's Overview tab): "Create Company" has to live somewhere
@@ -376,6 +378,9 @@ function TheContractor:loadMap()
     self.AuctionSite = TheContractorAuctionSite.new()
     -- 136: its roadside signs (spike).
     self.AuctionSigns = TheContractorAuctionSigns.new()
+    -- 137: the machinery auction, server-wide.
+    self.Auctions = TheContractorAuctions.new()
+    self.Auctions:register(self.Inbox)
     self.InboxHUD = TCInboxHUD.new()
 
     -- Module-level caches outlive a savegame; start each load clean.
@@ -469,6 +474,8 @@ function TheContractor:loadMap()
     self.RepairContracts:startDailyTick()
     -- 110: land changing hands (server).
     self.Farmers:startListening()
+    -- 137: the auction's schedule and days (server).
+    self.Auctions:startListening()
     -- 113: relationships drift back towards neutral (server).
     self.Relationships:startPeriodTick()
 
@@ -499,6 +506,7 @@ function TheContractor:loadMap()
     TCAuctionCrowd.registerConsoleCommands()
     TheContractorAuctionSite.registerConsoleCommands()
     TheContractorAuctionSigns.registerConsoleCommands()
+    TheContractorAuctions.registerConsoleCommands()
     TheContractorRepairContracts.registerConsoleCommands()
     TheContractorYards.registerConsoleCommands()
     -- 110: tcCompany farmers, with 109's preview.
@@ -567,6 +575,7 @@ function TheContractor:loadFromXMLFile()
     self.FarmerLandChanges:loadFromXMLFile(xmlFile)
     self.AuctionSite:loadFromXMLFile(xmlFile)
     self.AuctionSigns:loadFromXMLFile(xmlFile)
+    self.Auctions:loadFromXMLFile(xmlFile)
 
     delete(xmlFile)
 end
@@ -657,6 +666,7 @@ function TheContractor:saveToXmlFile()
     tc.FarmerLandChanges:saveToXmlFile(xmlFile)
     tc.AuctionSite:saveToXmlFile(xmlFile)
     tc.AuctionSigns:saveToXmlFile(xmlFile)
+    tc.Auctions:saveToXmlFile(xmlFile)
 
     saveXMLFile(xmlFile)
     delete(xmlFile)
@@ -812,6 +822,11 @@ function TheContractor:deleteMap()
     if self.AuctionSigns ~= nil then
         self.AuctionSigns:delete()
     end
+    -- 137: the auction's marker and crowd.
+    if self.Auctions ~= nil then
+        self.Auctions:stopListening()
+        self.Auctions:delete()
+    end
     -- 126: trailer models read for this session.
     if TheContractorYardHaul ~= nil then
         TheContractorYardHaul.clearSpecCache()
@@ -914,6 +929,11 @@ function TheContractor:update(dt)
     -- machine).
     if self.AuctionSigns ~= nil then
         self.AuctionSigns:update(dt)
+    end
+    -- 137: the auction's marker and crowd, once it's changed (every
+    -- machine).
+    if self.Auctions ~= nil then
+        self.Auctions:update(dt)
     end
 
     if self.Drivers ~= nil then

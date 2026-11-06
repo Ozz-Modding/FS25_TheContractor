@@ -535,6 +535,16 @@
 		<text name="tc_allocation_cancelButton" text="Cancel"/>
 		<text name="tc_vehicleLock_busy" text="This vehicle is out on a contract job."/>
 		<text name="tc_vehicleLock_auctionLot" text="This machine is a lot in an auction."/>
+		<text name="tc_auction_mapName" text="Machinery auction"/>
+		<text name="tc_auction_showOnMap" text="Show on map"/>
+		<text name="tc_auction_announced_title" text="Machinery auction announced"/>
+		<text name="tc_auction_announced_body" text="%s is holding a machinery auction on Field %s on %s. Used tractors and machinery of every kind will be laid out on the field, with viewing from 08:00 and the sale from 10:00. Anyone may come and bid. Look out for the signs round the area."/>
+		<text name="tc_auction_reminder_title" text="Machinery auction coming up"/>
+		<text name="tc_auction_reminder_body" text="A reminder: %s's machinery auction on Field %s is on %s. Viewing from 08:00, the sale from 10:00."/>
+		<text name="tc_auction_today_title" text="Machinery auction today"/>
+		<text name="tc_auction_today_body" text="%s's machinery auction on Field %s is today, %s. The lots are out on the field: viewing from 08:00, the sale from 10:00."/>
+		<text name="tc_auction_cancelled_title" text="Machinery auction cancelled"/>
+		<text name="tc_auction_cancelled_body" text="%s's machinery auction on Field %s, due on %s, has been called off."/>
 		<text name="tc_construction_tab" text="Contractor"/>
 		<text name="tc_parkingSlot_name" text="Vehicle Parking Slot"/>
 		<text name="tc_parkingSlotMedium_name" text="Vehicle Parking Slot (Medium)"/>

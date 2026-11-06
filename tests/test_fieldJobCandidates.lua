@@ -148,3 +148,21 @@ test("a field with a live job keeps the state its job is measured against", func
 
     assertEquals(field:getFieldState().fruitTypeIndex, FruitType.WHEAT)
 end)
+
+test("137: an announced auction's field gets no job from the announcement until it's over", function()
+    local world = setup()
+    for id = 1, 3 do
+        world:addField(id)
+    end
+    local tc = g_currentMission.TheContractor
+    local auction = { fieldId = 2 }
+    tc.Auctions = {
+        isFieldInUse = function(_, fieldId) return auction ~= nil and auction.fieldId == fieldId end,
+    }
+    assertEquals(candidateIds(), "1,3")
+    assertTrue(tc.Jobs:isFieldProtected(2))
+    assertTrue(not tc.Jobs:hasLiveJob(2), "protected by the auction, not by a job")
+
+    auction = nil
+    assertEquals(candidateIds(), "1,2,3")
+end)

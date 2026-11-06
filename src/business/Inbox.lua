@@ -14,6 +14,10 @@
 --                                                                 -- render with, worked out live
 --       endsWithJob = true,                                       -- optional: see below
 --       fromFarmer = true,                                        -- optional: from payload.farmerId
+--       onClientAction = function(message, actionKey) ... end,    -- optional, client: true if it
+--                                                                 -- handled the action on this
+--                                                                 -- machine (137's Show on map):
+--                                                                 -- nothing's sent, the message stays
 --   })
 --   local id = tc.Inbox:postMessage(farmId, "certRequest", titleKey, bodyKey,
 --       args, actions, payload, expiresInDays)                    -- server only
