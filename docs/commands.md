@@ -649,6 +649,25 @@ tcCompany debris 20 ladder
 
 Removes every piece of debris from the map.
 
+### `tcCompany crowd [fieldId|off] [people] [laneGap]`
+
+The auction crowd spike (134). Puts a crowd of people on a field. Some stand in small talking groups; the rest walk loops (rounded rectangles, one inside the next) in the largest rectangle that fits in the field. Each loop has a lane each way, and walkers keep to their side, so nobody walks through anybody. The people's looks are copied from the base maps' pedestrians. The map's own pedestrians aren't touched.
+
+- `[fieldId]`: the field to put the crowd on.
+- `[people]`: how many people, 60 by default, at most 300. About 40% stand, as far as the field's standing spots go, and the rest walk.
+- `[laneGap]`: metres between one loop and the next, 14 by default (at least 3). A smaller gap fits more loops on a field.
+- `off`: removes the crowd.
+- With no argument: how many people are in the crowd, how many models are loaded and shown now, and what the crowd's own update costs a frame. Drawing the people shows in the game's frame rate, not in that figure.
+
+Models load within 150 m of the camera and show within 100 m. It works on this machine only: nothing is saved or sent to other players, and there's nothing on a dedicated server. The crowd is gone after reloading the save.
+
+```
+tcCompany crowd 4
+tcCompany crowd 4 120 6
+tcCompany crowd
+tcCompany crowd off
+```
+
 ### `tcCompany yards [farmlandId|here|show [farmlandId]|hide]`
 
 A spike for finding the map's farm yards (108), where the generated farmers will live. A yard is a farmland with at least 2 buildings that change hands with the land (sheds, silos, animal pens, farmhouses, ...; the map's own, preplaced or from its default placeables), at least one of them a shed or a farmhouse and one not a farmhouse (a working building), and no more than 5 farmhouses (more is a village). Detection runs on the live map each time; only your overrides (`tcCompany yard`) are saved. Read-only, so it also works on a joined client.
