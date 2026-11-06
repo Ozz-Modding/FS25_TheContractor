@@ -178,6 +178,33 @@ test("a hired worker's tractor drops out of Tab without touching the saved flag"
     assertEquals(tractor:getIsTabbable(), true, "tabbable again")
 end)
 
+test("135: an auction lot is out of Tab and can't be driven, for being a lot", function()
+    local world = setup()
+    local lot = addEnterable(world, "Lot", { farmId = 0 })
+    local control = nil
+    function lot:registerPlayerVehicleControlAllowedFunction(_, func) control = func end
+    local busy = addEnterable(world, "Busy")
+    function busy:registerPlayerVehicleControlAllowedFunction(_, func) busy.control = func end
+    addJob(world, STATE.ALLOCATED, 7, { busy })
+    local lots = { [lot.id] = true }
+    g_currentMission.TheContractor.AuctionSite = { getLotVehicleIds = function() return lots end }
+    TCVehicleLock.refresh()
+
+    assertEquals(lot:getIsTabbable(), false, "out of Tab")
+    assertEquals(lot.spec_enterable.isTabbable, true, "vanilla's saved flag untouched")
+    local allowed, text = control(lot)
+    assertEquals(allowed, false)
+    assertEquals(text, g_i18n:getText(TCVehicleLock.REASON_AUCTION_LOT), "the lot's own reason")
+    local _, busyText = busy.control(busy)
+    assertEquals(busyText, g_i18n:getText(TCVehicleLock.REASON_BUSY), "a job's machine keeps its own")
+
+    -- Cleared away: unlocked.
+    lots[lot.id] = nil
+    TCVehicleLock.refresh()
+    assertEquals(lot:getIsTabbable(), true)
+    assertEquals(control(lot), true)
+end)
+
 test("a player's own job's tractor stays tabbable", function()
     local world = setup()
     local tractor = addEnterable(world, "Tractor")

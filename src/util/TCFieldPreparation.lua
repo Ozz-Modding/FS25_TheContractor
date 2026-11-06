@@ -135,6 +135,22 @@ local function prepareCutCrop(field, fruitTypeIndex)
     applyFieldState(field, fieldState)
 end
 
+-- 135: a grass field cut short for an auction's lots: its own crop at its
+-- cut state, as prepareCutCrop leaves a field, with nothing lying. Server.
+-- Returns whether it was cut (false for a field with no crop that's cut).
+function TCFieldPreparation.cutGrass(field)
+    local fieldState = field ~= nil and field:getFieldState() or nil
+    if fieldState == nil or not fieldState.isValid or fieldState.fruitTypeIndex == nil then
+        return false
+    end
+    local fruitType = g_fruitTypeManager:getFruitTypeByIndex(fieldState.fruitTypeIndex)
+    if fruitType == nil or fruitType.cutState == nil then
+        return false
+    end
+    prepareCutCrop(field, fieldState.fruitTypeIndex)
+    return true
+end
+
 -- Weed area on the field right now, in density-map pixels - WeedMission/
 -- HoeMission's totalWeedArea (finishedPreparing).
 local function measureWeedArea(field)

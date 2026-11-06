@@ -35,6 +35,7 @@ source(TheContractor.dir .. "src/util/TCSupplyStock.lua")
 source(TheContractor.dir .. "src/util/TCADSStock.lua")
 source(TheContractor.dir .. "src/util/TCADSWorkshop.lua")
 source(TheContractor.dir .. "src/util/TCADSRepairContracts.lua")
+source(TheContractor.dir .. "src/util/TCADSUsedLots.lua")
 source(TheContractor.dir .. "src/util/TCServiceVehicleMods.lua")
 source(TheContractor.dir .. "src/util/TCRepairZoneActivatable.lua")
 source(TheContractor.dir .. "src/util/TCStandingSpotActivatable.lua")
@@ -63,6 +64,8 @@ source(TheContractor.dir .. "src/util/TCYardMapAction.lua")
 source(TheContractor.dir .. "src/util/TCJoyriderRuts.lua")
 source(TheContractor.dir .. "src/util/TCDebris.lua")
 source(TheContractor.dir .. "src/util/TCAuctionCrowd.lua")
+source(TheContractor.dir .. "src/util/TCAuctionLayout.lua")
+source(TheContractor.dir .. "src/util/TCAuctionSigns.lua")
 source(TheContractor.dir .. "src/util/TCJobHotspots.lua")
 source(TheContractor.dir .. "src/util/TCFarmDeletion.lua")
 source(TheContractor.dir .. "src/util/TCJobList.lua")
@@ -138,6 +141,8 @@ source(TheContractor.dir .. "src/business/YardBales.lua")
 source(TheContractor.dir .. "src/business/YardHaul.lua")
 source(TheContractor.dir .. "src/business/EmergencyRefuel.lua")
 source(TheContractor.dir .. "src/business/FarmerLandChanges.lua")
+source(TheContractor.dir .. "src/business/AuctionSite.lua")
+source(TheContractor.dir .. "src/business/AuctionSigns.lua")
 source(TheContractor.dir .. "src/events/TCInitialClientStateEvent.lua")
 source(TheContractor.dir .. "src/events/TCSettingsEvent.lua")
 source(TheContractor.dir .. "src/events/TCCreateCompanyEvent.lua")
@@ -233,6 +238,8 @@ source(TheContractor.dir .. "src/events/TCYardBalesKitEvent.lua")
 source(TheContractor.dir .. "src/events/TCYardHaulTrailerEvent.lua")
 source(TheContractor.dir .. "src/events/TCRefuelMachineEvent.lua")
 source(TheContractor.dir .. "src/events/TCFarmDeletedEvent.lua")
+source(TheContractor.dir .. "src/events/TCAuctionSiteEvent.lua")
+source(TheContractor.dir .. "src/events/TCAuctionSignsEvent.lua")
 
 -- The top-level Contractor page itself stays always-visible (see Company.lua
 -- and MenuContractor's Overview tab): "Create Company" has to live somewhere
@@ -365,6 +372,10 @@ function TheContractor:loadMap()
     -- 128: land changing hands between farmers, and retirements.
     self.FarmerLandChanges = TheContractorFarmerLandChanges.new()
     self.FarmerLandChanges:register(self.RandomEvents, self.Inbox)
+    -- 135: a machinery auction's site and lots (spike).
+    self.AuctionSite = TheContractorAuctionSite.new()
+    -- 136: its roadside signs (spike).
+    self.AuctionSigns = TheContractorAuctionSigns.new()
     self.InboxHUD = TCInboxHUD.new()
 
     -- Module-level caches outlive a savegame; start each load clean.
@@ -387,6 +398,8 @@ function TheContractor:loadMap()
     TCADSWorkshop.detect()
     -- 100: whether ADS can prepare customers' machines for repair zones.
     TCADSRepairContracts.detect()
+    -- 135: whether ADS can give auction lots a history.
+    TCADSUsedLots.detect()
     -- 100/101: service vehicle mods' workshops list customers' machines.
     TCServiceVehicleMods.install()
 
@@ -484,6 +497,8 @@ function TheContractor:loadMap()
     TCIdleStaff.registerConsoleCommands()
     TCDebris.registerConsoleCommands()
     TCAuctionCrowd.registerConsoleCommands()
+    TheContractorAuctionSite.registerConsoleCommands()
+    TheContractorAuctionSigns.registerConsoleCommands()
     TheContractorRepairContracts.registerConsoleCommands()
     TheContractorYards.registerConsoleCommands()
     -- 110: tcCompany farmers, with 109's preview.
@@ -550,6 +565,8 @@ function TheContractor:loadFromXMLFile()
     self.Farmers:loadFromXMLFile(xmlFile)
     self.Relationships:loadFromXMLFile(xmlFile)
     self.FarmerLandChanges:loadFromXMLFile(xmlFile)
+    self.AuctionSite:loadFromXMLFile(xmlFile)
+    self.AuctionSigns:loadFromXMLFile(xmlFile)
 
     delete(xmlFile)
 end
@@ -582,6 +599,8 @@ function TheContractor:resolveSavedVehicles()
     self.YardHaul:resolveSavedVehicles()
     -- 127: likewise, a farmer's machine run dry.
     self.EmergencyRefuel:resolveSavedVehicles()
+    -- 135: an auction site's lots.
+    self.AuctionSite:resolveSavedVehicles()
     TCVehicleLock.repairSavedTabbable()
     -- 110: not vehicles, but the same moment: the map's fields, farmland
     -- owners and buildings are in place. After Jobs, whose customers it links.
@@ -636,6 +655,8 @@ function TheContractor:saveToXmlFile()
     tc.Farmers:saveToXmlFile(xmlFile)
     tc.Relationships:saveToXmlFile(xmlFile)
     tc.FarmerLandChanges:saveToXmlFile(xmlFile)
+    tc.AuctionSite:saveToXmlFile(xmlFile)
+    tc.AuctionSigns:saveToXmlFile(xmlFile)
 
     saveXMLFile(xmlFile)
     delete(xmlFile)
@@ -787,6 +808,10 @@ function TheContractor:deleteMap()
     if self.YardBales ~= nil then
         self.YardBales:delete()
     end
+    -- 136: the auction signs' models and markers.
+    if self.AuctionSigns ~= nil then
+        self.AuctionSigns:delete()
+    end
     -- 126: trailer models read for this session.
     if TheContractorYardHaul ~= nil then
         TheContractorYardHaul.clearSpecCache()
@@ -881,6 +906,15 @@ function TheContractor:update(dt)
     if self.EmergencyRefuel ~= nil then
         self.EmergencyRefuel:update(dt)
     end
+    -- 135: an auction site's spawning costs (server).
+    if self.AuctionSite ~= nil and g_currentMission:getIsServer() then
+        self.AuctionSite:update(dt)
+    end
+    -- 136: auction signs' models and markers, once they've changed (every
+    -- machine).
+    if self.AuctionSigns ~= nil then
+        self.AuctionSigns:update(dt)
+    end
 
     if self.Drivers ~= nil then
         self.Drivers:update(dt)
@@ -915,6 +949,10 @@ end
 function TheContractor:draw()
     if self.InboxHUD ~= nil then
         self.InboxHUD:draw()
+    end
+    -- 135: an auction site's layout, as debug lines (the server's own).
+    if self.AuctionSite ~= nil then
+        self.AuctionSite:draw()
     end
 end
 

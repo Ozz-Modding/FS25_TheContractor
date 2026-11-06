@@ -402,6 +402,13 @@
 		<text name="tc_fleet_role_combine" text="Combine"/>
 		<text name="tc_fleet_role_header" text="Header"/>
 		<text name="tc_fleet_role_trailer" text="Trailer"/>
+		<text name="tc_fleet_role_mower" text="Mower"/>
+		<text name="tc_fleet_role_tedder" text="Tedder"/>
+		<text name="tc_fleet_role_rake" text="Rake"/>
+		<text name="tc_fleet_role_baler" text="Baler"/>
+		<text name="tc_fleet_role_plough" text="Plough"/>
+		<text name="tc_fleet_role_cultivator" text="Cultivator"/>
+		<text name="tc_fleet_role_seedDrill" text="Seed drill"/>
 		<text name="tc_people_noteFallenOut" text="They've fallen out with you, so they offer you no work for now. It mends a little each month."/>
 		<text name="tc_relationship_excellent" text="Excellent"/>
 		<text name="tc_relationship_good" text="Good"/>
@@ -527,6 +534,7 @@
 		<text name="tc_allocation_confirmButton" text="Confirm"/>
 		<text name="tc_allocation_cancelButton" text="Cancel"/>
 		<text name="tc_vehicleLock_busy" text="This vehicle is out on a contract job."/>
+		<text name="tc_vehicleLock_auctionLot" text="This machine is a lot in an auction."/>
 		<text name="tc_construction_tab" text="Contractor"/>
 		<text name="tc_parkingSlot_name" text="Vehicle Parking Slot"/>
 		<text name="tc_parkingSlotMedium_name" text="Vehicle Parking Slot (Medium)"/>

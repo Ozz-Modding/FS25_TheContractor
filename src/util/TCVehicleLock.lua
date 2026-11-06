@@ -1,7 +1,7 @@
 -- Keeps the player out of equipment that's away with a hired worker: every
 -- vehicle on an allocated/in_progress hired-worker job (020), sitting in a
--- post-job buffer (023), still hidden waiting for a parking space (062), or
--- stolen (069), can't be tabbed to or driven. A player
+-- post-job buffer (023), still hidden waiting for a parking space (062),
+-- stolen (069), or a lot at an auction (135), can't be tabbed to or driven. A player
 -- self-allocated job is never locked - the player is the one driving it.
 --
 -- Adapted from the user's FS25_UsedEquipmentYards mod
@@ -25,8 +25,11 @@ TCVehicleLock = {}
 
 TCVehicleLock.REFRESH_INTERVAL_MS = 1000
 
--- vehicleId -> true
+-- vehicleId -> the l10n key of why it's locked
 local lockedVehicleIds = {}
+
+TCVehicleLock.REASON_BUSY = "tc_vehicleLock_busy"
+TCVehicleLock.REASON_AUCTION_LOT = "tc_vehicleLock_auctionLot"
 local controlFunctionRegistered = setmetatable({}, { __mode = "k" })
 local tabbableWrapped = setmetatable({}, { __mode = "k" })
 local accumulatedMs = 0
@@ -38,12 +41,14 @@ end
 
 function TCVehicleLock.isLocked(vehicle)
     local vehicleId = NetworkUtil.getObjectId(vehicle)
-    return vehicleId ~= nil and lockedVehicleIds[vehicleId] == true
+    return vehicleId ~= nil and lockedVehicleIds[vehicleId] ~= nil
 end
 
 local function isPlayerControlAllowed(vehicle)
-    if TCVehicleLock.isLocked(vehicle) then
-        return false, g_i18n:getText("tc_vehicleLock_busy")
+    local vehicleId = NetworkUtil.getObjectId(vehicle)
+    local reason = vehicleId ~= nil and lockedVehicleIds[vehicleId] or nil
+    if reason ~= nil then
+        return false, g_i18n:getText(reason)
     end
     return true
 end
@@ -92,8 +97,8 @@ function TCVehicleLock.repairSavedTabbable()
     end
 end
 
--- vehicleId -> true for everything that should be locked right now, or nil
--- before the subsystems exist.
+-- vehicleId -> the reason's l10n key for everything that should be locked
+-- right now, or nil before the subsystems exist.
 local function collectLockedVehicleIds()
     local tc = g_currentMission.TheContractor
     if tc == nil or tc.Jobs == nil or tc.Cooldown == nil then
@@ -106,23 +111,29 @@ local function collectLockedVehicleIds()
             if job.assignedWorkerId ~= nil and (job.state == TheContractorJob.STATE.ALLOCATED or
                     job.state == TheContractorJob.STATE.IN_PROGRESS) then
                 for _, vehicleId in ipairs(job:getAllEquipmentIds()) do
-                    shouldLock[vehicleId] = true
+                    shouldLock[vehicleId] = TCVehicleLock.REASON_BUSY
                 end
             end
         end
     end
     for vehicleId in pairs(tc.Cooldown.vehicleIdsInCooldown) do
-        shouldLock[vehicleId] = true
+        shouldLock[vehicleId] = TCVehicleLock.REASON_BUSY
     end
     if tc.Parking ~= nil then
         for vehicleId in pairs(tc.Parking.entryByVehicleId) do
-            shouldLock[vehicleId] = true
+            shouldLock[vehicleId] = TCVehicleLock.REASON_BUSY
         end
     end
     -- 069: stolen, hidden until the police report.
     if tc.Theft ~= nil then
         for vehicleId in pairs(tc.Theft:getStolenVehicleIds()) do
-            shouldLock[vehicleId] = true
+            shouldLock[vehicleId] = TCVehicleLock.REASON_BUSY
+        end
+    end
+    -- 135: an auction's lots, until they're sold (139).
+    if tc.AuctionSite ~= nil then
+        for vehicleId in pairs(tc.AuctionSite:getLotVehicleIds()) do
+            shouldLock[vehicleId] = TCVehicleLock.REASON_AUCTION_LOT
         end
     end
     return shouldLock
