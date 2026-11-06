@@ -1107,11 +1107,23 @@ end
 -- A plain scan rather than a cached set: it only runs once per field per
 -- period, plus once per queued NPC task.
 function TheContractorJobs:isFieldProtected(fieldId)
+    local tc = g_currentMission.TheContractor
     -- 135: an auction site's field too, while it's up.
-    local auctionSite = g_currentMission.TheContractor ~= nil and g_currentMission.TheContractor.AuctionSite or nil
+    local auctionSite = tc ~= nil and tc.AuctionSite or nil
     if auctionSite ~= nil and auctionSite:isFieldInUse(fieldId) then
         return true
     end
+    -- 137: and an auction's, from its announcement until it's over.
+    local auctions = tc ~= nil and tc.Auctions or nil
+    if auctions ~= nil and auctions:isFieldInUse(fieldId) then
+        return true
+    end
+    return self:hasLiveJob(fieldId)
+end
+
+-- Whether any farm has a job on the field that isn't over (on offer, taken
+-- on or under way), whatever else protects it.
+function TheContractorJobs:hasLiveJob(fieldId)
     for _, farmJobs in pairs(self.jobsByFarm) do
         for _, job in pairs(farmJobs) do
             if job.fieldId == fieldId and not job:isTerminal() then

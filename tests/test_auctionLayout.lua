@@ -516,3 +516,101 @@ test("no model more than its duplicates limit, and a role held to what its model
     local extra = TCAuctionLayout.pickLots(catalog, { "mower", "mower", "mower", "mower" }, math.random, 3)
     assertEquals(#extra, 3)
 end)
+
+-- The crowd's walks (137) ----------------------------------------------------------------------
+
+-- How far a point is from a convex quad (0 inside it).
+local function distanceToQuad(x, z, quad)
+    local positive, negative = false, false
+    local best = math.huge
+    for i = 1, 4 do
+        local a, b = quad[i], quad[i % 4 + 1]
+        local ex, ez = b.x - a.x, b.z - a.z
+        local cross = ex * (z - a.z) - ez * (x - a.x)
+        positive = positive or cross > 0
+        negative = negative or cross < 0
+        local t = math.max(0, math.min(1, ((x - a.x) * ex + (z - a.z) * ez) / (ex * ex + ez * ez)))
+        best = math.min(best, math.sqrt((x - a.x - ex * t) ^ 2 + (z - a.z - ez * t) ^ 2))
+    end
+    if not (positive and negative) then
+        return 0
+    end
+    return best
+end
+
+-- Every point a walker can be at: both lanes of every loop, every 0.5 m.
+local function lanePoints(loops)
+    local points = {}
+    for _, loop in ipairs(loops) do
+        local path = TCAuctionCrowd.buildPath(loop.points)
+        for d = 0, path.length, 0.5 do
+            local x, z, dx, dz = TCAuctionCrowd.getPathPoint(path, d)
+            for _, direction in ipairs({ 1, -1 }) do
+                local lx, lz = TCAuctionCrowd.getLanePosition(x, z, dx, dz, direction)
+                table.insert(points, { x = lx, z = lz })
+            end
+        end
+    end
+    return points
+end
+
+local function nearestLot(layout, lots, x, z)
+    local nearest = math.huge
+    for index in pairs(layout.placed) do
+        nearest = math.min(nearest, distanceToQuad(x, z, lotCorners(layout, lots, index)))
+    end
+    return nearest
+end
+
+test("the crowd walks the aisles: no lane or standing group comes within a metre of a lot", function()
+    setup()
+    for _, case in ipairs({
+        { polygon = rectPolygon(0, 0, 300, 160), lots = 60 },
+        { polygon = lPolygon(), lots = 40 },
+    }) do
+        local lots = makeLots(case.lots)
+        local layout = TCAuctionLayout.layOut(case.polygon, { x = 310, z = 80 }, lots)
+        assertEquals(#layout.walkways, #layout.aisleStrips, "a walkway per row aisle")
+        local loops = TCAuctionCrowd.buildWalkwayLoops(layout.walkways)
+        assertEquals(#loops, #layout.walkways)
+        local points = lanePoints(loops)
+        assertTrue(#points > 100)
+        for _, point in ipairs(points) do
+            assertTrue(nearestLot(layout, lots, point.x, point.z) >= 1.0,
+                string.format("a lane at %.1f, %.1f is in among the lots", point.x, point.z))
+            assertTrue(TCAuctionCrowd.pointInPolygon(point.x, point.z, case.polygon), "a lane off the field")
+        end
+        local spots = TCAuctionCrowd.buildWalkwaySpots(loops, 200)
+        assertTrue(#spots > 0)
+        for _, spot in ipairs(spots) do
+            assertTrue(nearestLot(layout, lots, spot.x, spot.z) >= 1.0, "a group in among the lots")
+        end
+    end
+end)
+
+test("standing groups keep clear of the lanes either side of them", function()
+    setup()
+    local lots = makeLots(30)
+    local layout = TCAuctionLayout.layOut(rectPolygon(0, 0, 300, 160), nil, lots)
+    local loops = TCAuctionCrowd.buildWalkwayLoops(layout.walkways)
+    local points = lanePoints(loops)
+    for _, spot in ipairs(TCAuctionCrowd.buildWalkwaySpots(loops, 200)) do
+        for _, point in ipairs(points) do
+            assertTrue(math.sqrt((spot.x - point.x) ^ 2 + (spot.z - point.z) ^ 2) >= 0.5,
+                "a stander on a walker's lane")
+        end
+    end
+end)
+
+test("an aisle too narrow for both lanes and their clearance gets no loop", function()
+    setup()
+    local narrow = { { x1 = 0, z1 = 0, x2 = 100, z2 = 0, halfWidth = 1.5 } }
+    assertEquals(#TCAuctionCrowd.buildWalkwayLoops(narrow), 0)
+    local wide = { { x1 = 0, z1 = 0, x2 = 100, z2 = 0, halfWidth = 5 } }
+    local loops = TCAuctionCrowd.buildWalkwayLoops(wide)
+    assertEquals(#loops, 1)
+    for _, point in ipairs(lanePoints(loops)) do
+        assertTrue(math.abs(point.z) <= 5 - TCAuctionCrowd.AISLE_CLEARANCE + 0.01, "inside the aisle")
+        assertTrue(point.x >= -0.01 and point.x <= 100.01, "not past its ends")
+    end
+end)

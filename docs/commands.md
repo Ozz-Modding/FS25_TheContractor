@@ -656,6 +656,7 @@ The auction crowd spike (134). Puts a crowd of people on a field. Some stand in 
 - `[fieldId]`: the field to put the crowd on.
 - `[people]`: how many people, 60 by default, at most 300. About 40% stand, as far as the field's standing spots go, and the rest walk.
 - `[laneGap]`: metres between one loop and the next, 14 by default (at least 3). A smaller gap fits more loops on a field.
+- On a field with an auction site up (`tcCompany auctionSite`, or a real auction's lots), the crowd walks the site's aisles instead, as an auction's does: one long loop down each aisle between the rows, with the talking groups down its middle, never among the lots. `[laneGap]` doesn't apply there.
 - `off`: removes the crowd.
 - With no argument: how many people are in the crowd, how many models are loaded and shown now, and what the crowd's own update costs a frame. Drawing the people shows in the game's frame rate, not in that figure.
 
@@ -673,7 +674,7 @@ tcCompany crowd off
 The auction site spike (135). Finds fields that could hold a machinery auction, or lays one out on a field and spawns its lots: used equipment in rows facing aisles, with space kept at the end nearest the road for the car park and the auctioneer's stand.
 
 - With no argument: the site, if there's one up (see below), then the best candidate fields, best first. A candidate is a grass field no farm owns, with no live job, of 1 ha or more. A sale takes as many lots as its field fits, up to 120, so each field is measured against a typical 120-lot sale. Each line has the field's id and the farmer who holds it, its area, how many of the 120 fit, its slope (the steepest rise between ground samples 8 m apart, the average, and the whole rise in metres), how far the nearest road is from its edge, and whether it can hold a sale. It can't if fewer than 30 lots fit, the steepest slope is over 8%, or there's no road within 60 m. Those that can come first, the most lots first, then the biggest. The last line says how many can, and how long the check took.
-- `<fieldId> [lots]`: lays out and spawns a sale on the field, which no farm may own and which can't have a live job. It doesn't have to be a candidate. With no `[lots]` the sale is as many lots as the field fits, up to 120; `[lots]` asks for that many instead (at most 200), and the field still takes only what fits. When fewer fit than were asked for, the sale is drawn again at the size that fits, so the mix of roles suits it. The lots' roles are drawn by weight, each with a minimum and maximum per sale (tractors of each size, telehandler, combine with a header, mower, tedder, rake, baler, trailer, plough, cultivator, seed drill), and their models come from the store, no model more than 3 times in a sale. Each lot is given its store size plus 1 m on width and 2 m on length, since store sizes often leave out drawbars and hitches. A grass field is cut short first. Each lot is set down with the store's own offset, as the shop does; one found tipped over a few seconds later is stood back up as it was set down, once, and removed if it tips again (a combine with its header on is removed straight away, as moving it would leave the header behind). Lots spawn one after another, owned by nobody, locked for driving and out of the Tab cycle; with FS25_AdvancedDamageSystem each gets a history from its hours. The field is kept free of jobs and NPC fieldwork while the site's up. Rows are drawn in red, aisles in green, the entrance's space in blue and the entrance (the nearest road point) in yellow, on this machine and only until the save's reloaded.
+- `<fieldId> [lots]`: lays out and spawns a sale on the field, which no farm may own and which can't have a live job or an auction announced on it (137). It doesn't have to be a candidate. With no `[lots]` the sale is as many lots as the field fits, up to 120; `[lots]` asks for that many instead (at most 200), and the field still takes only what fits. When fewer fit than were asked for, the sale is drawn again at the size that fits, so the mix of roles suits it. The lots' roles are drawn by weight, each with a minimum and maximum per sale (tractors of each size, telehandler, combine with a header, mower, tedder, rake, baler, trailer, plough, cultivator, seed drill), and their models come from the store, no model more than 3 times in a sale. Each lot is given its store size plus 1 m on width and 2 m on length, since store sizes often leave out drawbars and hitches. A grass field is cut short first. Each lot is set down with the store's own offset, as the shop does; one found tipped over a few seconds later is stood back up as it was set down, once, and removed if it tips again (a combine with its header on is removed straight away, as moving it would leave the header behind). Lots spawn one after another, owned by nobody, locked for driving and out of the Tab cycle; with FS25_AdvancedDamageSystem each gets a history from its hours. The field is kept free of jobs and NPC fieldwork while the site's up. Rows are drawn in red, aisles in green, the entrance's space in blue and the entrance (the nearest road point) in yellow, on this machine and only until the save's reloaded.
 - `clear`: deletes every lot and frees the field.
 
 With a site up, the command with no argument starts with it: how many lots are out, failed (with why: not in the store, something in the way, didn't load, tipped over) or didn't fit; how long spawning took, the average and longest load a lot, and the frame time while spawning (average and worst) and now; which lots tipped over and were stood back up; how many lots are still within 1 m of where they were put, the one that moved most and the one that tilts most; what ADS made of the lots; and each lot's model, hours, age in months and guide price (vanilla's sell price for that age, hours, damage and wear). The site and its lots are saved.
@@ -715,6 +716,36 @@ Auction signs for July: 10 up, of 58 junction(s) on 212 road spline(s), in 140 m
   2. -401.0, 12.6, left verge 4.25 m out, 1960 m of road round its junction
   ...
   Spots passed over: blocked 7, field 2, tooClose 31
+```
+
+### `tcCompany auction [start [fieldId|auto] [days]|day|cancel]`
+
+The machinery auction (137). One is announced now and then by itself (about two a year, for a sale in spring or autumn, 2 to 4 months ahead); this shows it or makes one happen.
+
+- With no argument: the auction, if there's one: its id, field, host farmer and state (`announced`, `signsUp`, `setOut`, `onSale` or `collection`), the day it was announced, the day its signs go up, its reminder day and its sale day, and its entrance.
+- `start`: announces one now, ignoring the season and the monthly roll. Its field is picked as a real one is (a grass field nobody's farm owns, held by a farmer, with no live job, that can hold a sale; at random among the best 3), its sale 2 to 4 months ahead. The signs go up 3 months before the sale, or at once if it's nearer. Every company farm gets the message, and every player the map marker.
+  - `<fieldId>`: on that field instead. No farm may own it, a farmer must hold it, and it can't have a live job; it doesn't have to be grass or a candidate.
+  - `auto`: the field picked as above, so `[days]` can be given without a field.
+  - `[days]`: the sale that many days from today (at least 1), not 2 to 4 months. The signs go up 3 months before the sale, or at once if the sale's nearer than that.
+- `day`: makes today the sale day: the lots are set out now (and the signs put up if they weren't), every company farm gets the morning's message, and the sale starts at 10:00 as usual (collection from 16:00 until 139 sells the lots). Everything's cleared away at midnight.
+- `cancel`: calls it off: anything on the field is deleted, the signs come down, the field's free again, and every company farm is told.
+
+There's only ever one auction: `start` refuses while one's on. The auction is saved, and a player joining gets it.
+
+```
+tcCompany auction
+tcCompany auction start
+tcCompany auction start 12
+tcCompany auction start 12 3
+tcCompany auction start auto 3
+tcCompany auction day
+tcCompany auction cancel
+```
+
+```
+Auction 1 on field 12, held by Tom Hughes: signsUp.
+  Announced March 4, Year 2; signs up April 10, Year 2; reminder May 3, Year 2; sale May 10, Year 2 (viewing from 08:00, selling from 10:00).
+  Entrance at 512, -88.
 ```
 
 ### `tcCompany yards [farmlandId|here|show [farmlandId]|hide]`

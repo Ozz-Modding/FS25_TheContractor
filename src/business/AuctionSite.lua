@@ -26,6 +26,9 @@
 --     isLot for anything that lists every vehicle). The grass is cut short
 --     first, and the field is protected while the site's up (Jobs:
 --     isFieldProtected, so 034's freeze and job generation leave it be).
+--   The crowd's walks (137): each row aisle's middle line and width
+--     (TCAuctionLayout's walkways), sent to every machine and saved, so the
+--     crowd walks the aisles and never through a lot.
 --   Saving: vanilla saves the vehicles; we save each lot's uniqueId
 --     (TCVehicleIds) with its rolls and guide price. Lots still to spawn
 --     when the game saves are dropped. The layout's debug lines are this
@@ -109,11 +112,13 @@ function TheContractorAuctionSite.new()
     -- Server: lots still to spawn, and the one loading.
     self.queue = {}
     self.loading = nil
-    -- Every machine: the site's field (0: none) and its lots' vehicle ids
-    -- (lots and their attachments), as the server sent them.
+    -- Every machine: the site's field (0: none), its lots' vehicle ids
+    -- (lots and their attachments) and its walkways (137), as the server
+    -- sent them.
     self.fieldId = 0
     self.vehicleIds = {}
     self.vehicleIdSet = {}
+    self.walkways = {}
     -- Server: the frame time, smoothed (ms).
     self.frameMs = nil
     -- Server: lots to check for tipping over, { lot, dueMs }, and the clock
@@ -148,9 +153,15 @@ function TheContractorAuctionSite:isLot(vehicle)
     return vehicleId ~= nil and self.vehicleIdSet[vehicleId] == true
 end
 
+-- 137: the crowd's walks, { { x1, z1, x2, z2, halfWidth } }.
+function TheContractorAuctionSite:getWalkways()
+    return self.walkways
+end
+
 -- Every machine: the site as the server sent it (TCAuctionSiteEvent).
-function TheContractorAuctionSite:applySync(fieldId, vehicleIds)
+function TheContractorAuctionSite:applySync(fieldId, vehicleIds, walkways)
     self.fieldId = fieldId or 0
+    self.walkways = walkways or {}
     self.vehicleIds = vehicleIds or {}
     self.vehicleIdSet = {}
     for _, vehicleId in ipairs(self.vehicleIds) do
@@ -173,9 +184,10 @@ function TheContractorAuctionSite:sync()
             end
         end
     end
-    self:applySync(site ~= nil and site.fieldId or 0, ids)
+    local walkways = site ~= nil and site.walkways or {}
+    self:applySync(site ~= nil and site.fieldId or 0, ids, walkways)
     if g_server ~= nil then
-        g_server:broadcastEvent(TCAuctionSiteEvent.new(self.fieldId, ids))
+        g_server:broadcastEvent(TCAuctionSiteEvent.new(self.fieldId, ids, walkways))
     end
 end
 
@@ -256,12 +268,21 @@ local function measureSlope(rect)
 end
 
 -- Why a field can't be a site at all (nil if it can): the console's words.
-function TheContractorAuctionSite.getFieldRefusal(field)
+-- A field with any live job is refused, whatever its dates (137: an
+-- auction's field must be free of work from its announcement, so no job
+-- can run into its sale day). forAuctionId: the auction (137) the site's
+-- for, whose own field it may be; any other auction's field is refused.
+function TheContractorAuctionSite.getFieldRefusal(field, forAuctionId)
     if field:getOwner() ~= FarmlandManager.NO_OWNER_FARM_ID then
         return "a farm owns it"
     end
-    if g_currentMission.TheContractor.Jobs:isFieldProtected(field:getId()) then
+    local tc = g_currentMission.TheContractor
+    if tc.Jobs:hasLiveJob(field:getId()) then
         return "it has a live job"
+    end
+    local auction = tc.Auctions ~= nil and tc.Auctions:getAuction() or nil
+    if auction ~= nil and auction.fieldId == field:getId() and auction.id ~= forAuctionId then
+        return "an auction's announced on it"
     end
     return nil
 end
@@ -342,8 +363,10 @@ end
 
 -- Puts a site on a field: lays it out, cuts the grass and starts spawning
 -- its lots one after another. lotCount: nil for as many as fit, up to the
--- preferred number. Returns the text to print.
-function TheContractorAuctionSite:start(fieldId, lotCount)
+-- preferred number. auctionId: the auction (137) it's for, whose protected
+-- field it is; without one (the console's spike), the layout's debug lines
+-- are drawn. Returns the text to print; self.site is set if it went up.
+function TheContractorAuctionSite:start(fieldId, lotCount, auctionId)
     if self.site ~= nil then
         return string.format("There's a site on field %d already: 'tcCompany auctionSite clear' first.",
             self.site.fieldId)
@@ -352,7 +375,7 @@ function TheContractorAuctionSite:start(fieldId, lotCount)
     if field == nil then
         return string.format("No field %d.", fieldId)
     end
-    local refusal = TheContractorAuctionSite.getFieldRefusal(field)
+    local refusal = TheContractorAuctionSite.getFieldRefusal(field, auctionId)
     if refusal ~= nil then
         return string.format("Field %d can't be a site: %s.", fieldId, refusal)
     end
@@ -374,6 +397,7 @@ function TheContractorAuctionSite:start(fieldId, lotCount)
         planned = #lots,
         unplaced = #layout.unplaced,
         layout = layout,
+        walkways = layout.walkways or {},
         isSpawning = true,
         startedAt = getTimeSec(),
         frames = 0,
@@ -397,7 +421,7 @@ function TheContractorAuctionSite:start(fieldId, lotCount)
     end
     self.site = site
     self.queue = TheContractorFarmerFleet.copy(site.lots)
-    self.debugVisible = true
+    self.debugVisible = auctionId == nil
 
     -- The lots aren't to stand in long grass.
     local wasCut = TheContractorJoyriders.isGrassField(field) and TCFieldPreparation.cutGrass(field)
@@ -956,6 +980,14 @@ function TheContractorAuctionSite:saveToXmlFile(xmlFile)
             index = index + 1
         end
     end
+    for i, walkway in ipairs(site.walkways or {}) do
+        local walkwayKey = string.format("%s.walkway(%d)", key, i - 1)
+        setXMLFloat(xmlFile, walkwayKey .. "#x1", walkway.x1)
+        setXMLFloat(xmlFile, walkwayKey .. "#z1", walkway.z1)
+        setXMLFloat(xmlFile, walkwayKey .. "#x2", walkway.x2)
+        setXMLFloat(xmlFile, walkwayKey .. "#z2", walkway.z2)
+        setXMLFloat(xmlFile, walkwayKey .. "#halfWidth", walkway.halfWidth)
+    end
 end
 
 function TheContractorAuctionSite:loadFromXMLFile(xmlFile)
@@ -1015,9 +1047,29 @@ function TheContractorAuctionSite:loadFromXMLFile(xmlFile)
         end
         i = i + 1
     end
+    site.walkways = {}
+    i = 0
+    while true do
+        local walkwayKey = string.format("%s.walkway(%d)", key, i)
+        if not hasXMLProperty(xmlFile, walkwayKey) then
+            break
+        end
+        local walkway = {
+            x1 = getXMLFloat(xmlFile, walkwayKey .. "#x1"),
+            z1 = getXMLFloat(xmlFile, walkwayKey .. "#z1"),
+            x2 = getXMLFloat(xmlFile, walkwayKey .. "#x2"),
+            z2 = getXMLFloat(xmlFile, walkwayKey .. "#z2"),
+            halfWidth = getXMLFloat(xmlFile, walkwayKey .. "#halfWidth"),
+        }
+        if walkway.x1 ~= nil and walkway.z1 ~= nil and walkway.x2 ~= nil and walkway.z2 ~= nil and
+                walkway.halfWidth ~= nil then
+            table.insert(site.walkways, walkway)
+        end
+        i = i + 1
+    end
     self.site = site
     -- Protected from the start; the vehicles follow in resolveSavedVehicles.
-    self:applySync(fieldId, {})
+    self:applySync(fieldId, {}, site.walkways)
 end
 
 -- Server, once vehicles exist: each lot's vehicle again, a lot whose
@@ -1043,12 +1095,11 @@ function TheContractorAuctionSite:resolveSavedVehicles()
 end
 
 function TheContractorAuctionSite:writeInitialClientState(streamId, connection)
-    TCAuctionSiteEvent.writeSite(streamId, self.fieldId, self.vehicleIds)
+    TCAuctionSiteEvent.writeSite(streamId, self.fieldId, self.vehicleIds, self.walkways)
 end
 
 function TheContractorAuctionSite:readInitialClientState(streamId, connection)
-    local fieldId, vehicleIds = TCAuctionSiteEvent.readSite(streamId)
-    self:applySync(fieldId, vehicleIds)
+    self:applySync(TCAuctionSiteEvent.readSite(streamId))
 end
 
 -- Console ---------------------------------------------------------------------------------

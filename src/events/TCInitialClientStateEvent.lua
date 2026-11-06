@@ -48,6 +48,7 @@ function TCInitialClientStateEvent:writeStream(streamId, connection)
     tc.FarmerLandChanges:writeInitialClientState(streamId, connection)
     tc.AuctionSite:writeInitialClientState(streamId, connection)
     tc.AuctionSigns:writeInitialClientState(streamId, connection)
+    tc.Auctions:writeInitialClientState(streamId, connection)
     TCEquipmentVisibility.writeInitialClientState(streamId, connection)
 end
 
@@ -88,6 +89,7 @@ function TCInitialClientStateEvent:readStream(streamId, connection)
     tc.FarmerLandChanges:readInitialClientState(streamId, connection)
     tc.AuctionSite:readInitialClientState(streamId, connection)
     tc.AuctionSigns:readInitialClientState(streamId, connection)
+    tc.Auctions:readInitialClientState(streamId, connection)
     TCEquipmentVisibility.readInitialClientState(streamId, connection)
 
     self:run(connection)

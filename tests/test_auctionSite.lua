@@ -88,8 +88,17 @@ end
 -- A site with lots out, as start() leaves one once they're spawned.
 local function addSite(world, fieldId, lots)
     world.site.site = { fieldId = fieldId, lots = lots, planned = #lots, unplaced = 2, isSpawning = false,
-        entrance = { x = 1, z = 2, edgeX = 3, edgeZ = 4, distance = 12 } }
+        entrance = { x = 1, z = 2, edgeX = 3, edgeZ = 4, distance = 12 },
+        walkways = { { x1 = 1, z1 = 2, x2 = 101, z2 = 2, halfWidth = 5 },
+            { x1 = 1, z1 = 30, x2 = 101, z2 = 30, halfWidth = 5 } } }
     world.site:sync()
+end
+
+local function assertWalkways(walkways)
+    assertEquals(#walkways, 2)
+    assertEquals(walkways[2].z1, 30)
+    assertEquals(walkways[2].x2, 101)
+    assertEquals(walkways[1].halfWidth, 5)
 end
 
 -- Condition, price, ADS --------------------------------------------------------------------
@@ -215,6 +224,7 @@ test("the site's field is protected and its lots are sent to every machine", fun
     local event = world.events[#world.events]
     assertEquals(event.fieldId, 7)
     assertEquals(#event.vehicleIds, 3)
+    assertWalkways(event.walkways)
 
     -- A client hears it from the server only.
     local client = TheContractorAuctionSite.new()
@@ -226,6 +236,15 @@ test("the site's field is protected and its lots are sent to every machine", fun
     event:run(fromServer)
     assertTrue(client:isFieldInUse(7))
     assertTrue(client:isLot(combine))
+    assertWalkways(client:getWalkways())
+
+    -- Over the wire.
+    local stream = world:newStream()
+    event:writeStream(stream)
+    local received = TCAuctionSiteEvent.emptyNew()
+    client.walkways = {}
+    received:readStream(stream, fromServer)
+    assertWalkways(client:getWalkways())
 end)
 
 test("a joining client gets the site in its initial state", function()
@@ -240,6 +259,7 @@ test("a joining client gets the site in its initial state", function()
     client:readInitialClientState(stream)
     assertTrue(client:isFieldInUse(4))
     assertTrue(client:isLot(tractor))
+    assertWalkways(client:getWalkways())
 end)
 
 test("the site survives a save: rolls, prices and vehicles by uniqueId; a lot whose vehicle's gone drops out", function()
@@ -271,6 +291,7 @@ test("the site survives a save: rolls, prices and vehicles by uniqueId; a lot wh
     g_currentMission.TheContractor.AuctionSite = loaded
     loaded:loadFromXMLFile(xmlFile)
     assertTrue(loaded:isFieldInUse(9), "protected before the vehicles are back")
+    assertWalkways(loaded:getWalkways())
     assertTrue(not loaded:isLot(tractor), "no vehicles until they're resolved")
 
     loaded:resolveSavedVehicles()
@@ -309,6 +330,7 @@ test("no site, nothing saved; clearing deletes every lot and frees the field", f
     assertTrue(combine.isDeleted and header.isDeleted)
     assertTrue(tractor.isDeleted, "a lot with no attachment too")
     assertTrue(not world.site:isFieldInUse(3))
+    assertEquals(#world.site:getWalkways(), 0)
     assertEquals(world.site.site, nil)
     assertEquals(world.events[#world.events].fieldId, 0)
     assertEquals(#world.events[#world.events].vehicleIds, 0)
@@ -478,4 +500,38 @@ test("a lot's footprint is its store size with a margin round it, centred on it"
     assertNear(fitted.length, 9 + 2 + gap + margin.length, 0.0001, "the header and its gap in front")
 
     assertEquals(TheContractorAuctionSite.setFootprint({ xmlFilename = "gone.xml" }), false)
+end)
+
+-- Which fields can be a site (137) -------------------------------------------------------------
+
+-- A field for getFieldRefusal, and the live jobs and auction it's checked against.
+local function refusalWorld(world)
+    world.liveJobs = {}
+    world.auction = nil
+    local tc = g_currentMission.TheContractor
+    tc.Jobs = { hasLiveJob = function(_, fieldId) return world.liveJobs[fieldId] == true end }
+    tc.Auctions = { getAuction = function() return world.auction end }
+    local function field(id, owner)
+        return { getId = function() return id end, getOwner = function() return owner or 0 end }
+    end
+    return field
+end
+
+test("a field with any live job can't be a site, whatever its dates, nor one a farm owns", function()
+    local world = setup()
+    local field = refusalWorld(world)
+    assertEquals(TheContractorAuctionSite.getFieldRefusal(field(4)), nil)
+    world.liveJobs[4] = true
+    assertTrue(TheContractorAuctionSite.getFieldRefusal(field(4)) ~= nil, "a job on offer or taken on")
+    assertTrue(TheContractorAuctionSite.getFieldRefusal(field(5, 1)) ~= nil, "farm 1's")
+end)
+
+test("an auction's field is its own site, and no other's", function()
+    local world = setup()
+    local field = refusalWorld(world)
+    world.auction = { id = 3, fieldId = 4 }
+    assertEquals(TheContractorAuctionSite.getFieldRefusal(field(4), 3), nil)
+    assertTrue(TheContractorAuctionSite.getFieldRefusal(field(4)) ~= nil, "the console's spike")
+    assertTrue(TheContractorAuctionSite.getFieldRefusal(field(4), 2) ~= nil)
+    assertEquals(TheContractorAuctionSite.getFieldRefusal(field(6)), nil)
 end)
