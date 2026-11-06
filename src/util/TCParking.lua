@@ -330,6 +330,9 @@ function TCParking.updateVisuals()
             PlaceableTCParkingSlot.setVisualsVisible(placeable, showSlots)
         elseif PlaceableTCStandingSpot.isSpot(placeable) then
             PlaceableTCStandingSpot.setVisualsVisible(placeable, showSlots)
+        elseif PlaceableTCYardCentre.isMarker(placeable) then
+            -- 146: yard centre markers too.
+            PlaceableTCYardCentre.setVisualsVisible(placeable, showSlots)
         elseif TCParking.isRepairZone(placeable) then
             -- 100: repair zones show with the slots.
             PlaceableTCRepairZone.setVisualsVisible(placeable, showSlots)
@@ -384,7 +387,8 @@ function TCParking.installConstructionScreenHook()
     end
 end
 
--- The slot, standing spot (065) or repair zone (100) (any farm's) whose
+-- The slot, standing spot (065), repair zone (100) or yard centre marker
+-- (146) (any farm's) whose
 -- rectangle holds x, z, or nil.
 function TCParking.getSlotAt(x, z)
     local placeableSystem = g_currentMission ~= nil and g_currentMission.placeableSystem or nil
@@ -398,6 +402,8 @@ function TCParking.getSlotAt(x, z)
                 area = PlaceableTCParkingSlot.getArea(placeable)
             elseif PlaceableTCStandingSpot.isSpot(placeable) then
                 area = PlaceableTCStandingSpot.getArea(placeable)
+            elseif PlaceableTCYardCentre.isMarker(placeable) then
+                area = PlaceableTCYardCentre.getArea(placeable)
             elseif TCParking.isRepairZone(placeable) then
                 area = PlaceableTCRepairZone.getArea(placeable)
             end

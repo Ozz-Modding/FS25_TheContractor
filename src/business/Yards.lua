@@ -13,7 +13,8 @@
 -- farmhouse (ANCHOR_CATEGORIES) and one not a farmhouse (a working
 -- building), with no more than MAX_FARMHOUSES farmhouses (more is a
 -- village). The yard sits in the middle of its
--- yard buildings.
+-- yard buildings, or on its yard centre marker (146,
+-- PlaceableTCYardCentre) when one's been placed there.
 --
 -- Detection runs on the live map every time it's asked for, on every
 -- machine (preplaced placeables are the same everywhere), and nothing
@@ -123,6 +124,8 @@ function TheContractorYards.new()
     -- 114: farmlandId -> { x, z (the yard's middle), spots = { { x, z, nearHouse }, ... } }
     -- for every yard, the server's, synced in this order.
     self.spots = {}
+    -- Server: whether setUp has run this load (146).
+    self.isSetUp = false
 
     -- Map markers: nil when off, else { farmlandId = shown yard or nil,
     -- hotspots = { ... } }.
@@ -219,10 +222,31 @@ local function getNameAndCategory(placeable)
     return name or "?", string.upper(category or "UNKNOWN")
 end
 
+-- 146: whether the placeable is a yard centre marker, which is never one of
+-- the yard's buildings.
+local function isCentreMarker(placeable)
+    return PlaceableTCYardCentre ~= nil and PlaceableTCYardCentre.isMarker(placeable)
+end
+
+-- 146: the yard centre marker that counts on the farmland (any farm's, but
+-- not except, the one being placed), or nil.
+function TheContractorYards.findCentreMarker(placeables, farmlandId, except)
+    if PlaceableTCYardCentre == nil then
+        return nil
+    end
+    for _, placeable in ipairs(placeables) do
+        if placeable ~= except and PlaceableTCYardCentre.isActiveMarker(placeable) and
+                placeable:getFarmlandId() == farmlandId then
+            return placeable
+        end
+    end
+    return nil
+end
+
 -- What detection needs to know about a placeable, or nil if it isn't a
 -- building bought with a valid farmland.
 function TheContractorYards.describePlaceable(placeable)
-    if #TheContractorYards.getExclusions(placeable) > 0 then
+    if isCentreMarker(placeable) or #TheContractorYards.getExclusions(placeable) > 0 then
         return nil
     end
     local farmlandId = placeable:getFarmlandId()
@@ -318,7 +342,8 @@ end
 function TheContractorYards.getExcludedOn(placeables, farmlandId)
     local excluded = {}
     for _, placeable in ipairs(placeables) do
-        if placeable.getFarmlandId ~= nil and placeable:getFarmlandId() == farmlandId then
+        if not isCentreMarker(placeable) and placeable.getFarmlandId ~= nil and
+                placeable:getFarmlandId() == farmlandId then
             local exclusions = TheContractorYards.getExclusions(placeable)
             if #exclusions > 0 then
                 local name, category = getNameAndCategory(placeable)
@@ -369,6 +394,13 @@ function TheContractorYards.decide(group, mode)
     return false, nil
 end
 
+-- Where a yard's middle came from (detect).
+TheContractorYards.MIDDLE_FROM = {
+    MARKER = "marker",
+    BUILDINGS = "buildings",
+    LABEL = "label",
+}
+
 local function sortByFarmland(list)
     table.sort(list, function(a, b)
         return a.farmlandId < b.farmlandId
@@ -378,7 +410,9 @@ end
 
 -- The yards and near misses from a list of placeables and the overrides
 -- (farmlandId -> MODE). A yard: { farmlandId, ownerFarmId, how, group (nil
--- for a declared yard with no buildings), x, z }. A near miss: a farmland
+-- for a declared yard with no buildings), x, z, middleFrom (MIDDLE_FROM) }.
+-- A yard's middle is its centre marker (146) if it has one, else its
+-- buildings' middle, else its farmland's label. A near miss: a farmland
 -- with candidate buildings that isn't a yard, { farmlandId, ownerFarmId,
 -- how, group }. Both sorted by farmland. categories: every category seen,
 -- category -> count.
@@ -417,11 +451,19 @@ function TheContractorYards.detect(placeables, overrides)
             group = group,
         }
         if isYard then
-            entry.x, entry.z = TheContractorYards.getMiddle(group)
+            local marker = TheContractorYards.findCentreMarker(placeables, farmlandId)
+            if marker ~= nil then
+                local x, _, z = marker:getPosition()
+                entry.x, entry.z, entry.middleFrom = x, z, TheContractorYards.MIDDLE_FROM.MARKER
+            else
+                entry.x, entry.z = TheContractorYards.getMiddle(group)
+                entry.middleFrom = TheContractorYards.MIDDLE_FROM.BUILDINGS
+            end
             if entry.x == nil then
                 local farmland = g_farmlandManager:getFarmlandById(farmlandId)
                 if farmland ~= nil then
                     entry.x, entry.z = farmland.xWorldPos, farmland.zWorldPos
+                    entry.middleFrom = TheContractorYards.MIDDLE_FROM.LABEL
                 end
             end
             table.insert(yards, entry)
@@ -754,6 +796,9 @@ function TheContractorYards:setUp()
     for _, yard in ipairs((self:getYards())) do
         self.spots[yard.farmlandId] = TheContractorYards.makeSpotsEntry(yard)
     end
+    -- 146: from now on a yard centre marker placed or removed redoes its
+    -- yard's spots (PlaceableTCYardCentre.refreshYard).
+    self.isSetUp = true
 end
 
 local function distanceToSegment(x, z, a, b)
@@ -1158,6 +1203,9 @@ function TheContractorYards.getListText(yards, nearMisses, categories, isServer)
             spots = spots .. " (no navigation check on a client)"
         end
         local position = yard.x ~= nil and string.format("%.0f, %.0f", yard.x, yard.z) or "unknown"
+        if yard.middleFrom == TheContractorYards.MIDDLE_FROM.MARKER then
+            position = position .. " (centre marker)"
+        end
         table.insert(lines, string.format("  #%d owner %d, %s, %s%s, spots %s, at %s", yard.farmlandId,
             yard.ownerFarmId, yard.how, formatBuildings(yard.group), formatStations(yard.group), spots, position))
     end
@@ -1208,6 +1256,12 @@ local SPOT_REJECTION_TEXTS = {
     navigation = "off the AI navigation map",
     blocked = "something solid in the way",
 }
+local MIDDLE_FROM_TEXTS = {
+    marker = "from its yard centre marker",
+    buildings = "the middle of its buildings (a yard centre marker would move it)",
+    label = "the farmland's label on the map (a yard centre marker would move it)",
+}
+
 -- Most blockers listed by name.
 local MAX_BLOCKERS_LISTED = 8
 
@@ -1278,6 +1332,10 @@ function TheContractorYards.getFarmlandText(farmlandId, yards, nearMisses, exclu
     local lines = { string.format("Farmland %d: %s (override %s)", farmlandId,
         entry ~= nil and entry.how ~= nil and entry.how or "not a yard", TheContractorYards.MODE_NAMES[mode]),
         "  Detection alone: " .. detection }
+    if entry ~= nil and entry.x ~= nil and entry.middleFrom ~= nil then
+        table.insert(lines, string.format("  Middle at %.0f, %.0f, %s", entry.x, entry.z,
+            MIDDLE_FROM_TEXTS[entry.middleFrom] or entry.middleFrom))
+    end
 
     table.insert(lines, string.format("Counted (%d):", group ~= nil and #group.buildings or 0))
     for _, building in ipairs(group ~= nil and group.buildings or {}) do

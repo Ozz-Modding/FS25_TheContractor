@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8" standalone="no" ?>
+<!--
+    146 yard centre marker: where a farmer's yard really is
+    (src/placeables/PlaceableTCYardCentre.lua). Only placeable on a yard no
+    player owns, one per yard, by the host or an admin. A marker only: it
+    shares the standing spot's i3d (065), its stripes shown with the
+    parking slots. Nobody stands on it, so the code keeps the i3d's blocker
+    out of physics. Its store image is its own (images/store/yardCentre.dds).
+-->
+<placeable type="FS25_TheContractor.tcYardCentre">
+    <storeData>
+        <name>$l10n_tc_yardCentre_name</name>
+        <functions>
+            <function>$l10n_tc_yardCentre_function</function>
+        </functions>
+        <image>images/store/yardCentre.dds</image>
+        <price>0</price>
+        <dailyUpkeep>0</dailyUpkeep>
+        <lifetime>1000</lifetime>
+        <rotation>0</rotation>
+        <brand>NONE</brand>
+        <species>PLACEABLE</species>
+        <category>misc</category>
+        <canBeSold>true</canBeSold>
+        <showInStore>true</showInStore>
+
+        <brush>
+            <type>placeable</type>
+            <category>buildings</category>
+            <tab>contractor</tab>
+        </brush>
+    </storeData>
+
+    <base>
+        <filename>i3d/standingSpot.i3d</filename>
+        <canBeRenamed>false</canBeRenamed>
+        <boughtWithFarmland>false</boughtWithFarmland>
+    </base>
+
+    <placement useRandomYRotation="false" useManualYRotation="true">
+        <testAreas>
+            <testArea startNode="testAreaStart" endNode="testAreaEnd" />
+        </testAreas>
+        <sounds>
+            <place template="smallImp" />
+        </sounds>
+    </placement>
+
+    <yardCentre startNode="areaStart" widthNode="areaWidth" heightNode="areaHeight" visualsNode="visuals"
+        blockerNode="blocker" />
+
+    <i3dMappings>
+        <i3dMapping id="yardCentre" node="0>" />
+        <i3dMapping id="areaStart" node="0>0" />
+        <i3dMapping id="areaWidth" node="0>1" />
+        <i3dMapping id="areaHeight" node="0>2" />
+        <i3dMapping id="testAreaStart" node="0>3|0" />
+        <i3dMapping id="testAreaEnd" node="0>3|0|0" />
+        <i3dMapping id="pickCollision" node="0>4" />
+        <i3dMapping id="visuals" node="0>5" />
+        <i3dMapping id="blocker" node="0>7" />
+    </i3dMappings>
+</placeable>
