@@ -62,6 +62,7 @@ source(TheContractor.dir .. "src/util/TCYardFarmers.lua")
 source(TheContractor.dir .. "src/util/TCYardMapAction.lua")
 source(TheContractor.dir .. "src/util/TCJoyriderRuts.lua")
 source(TheContractor.dir .. "src/util/TCDebris.lua")
+source(TheContractor.dir .. "src/util/TCAuctionCrowd.lua")
 source(TheContractor.dir .. "src/util/TCJobHotspots.lua")
 source(TheContractor.dir .. "src/util/TCFarmDeletion.lua")
 source(TheContractor.dir .. "src/util/TCJobList.lua")
@@ -482,6 +483,7 @@ function TheContractor:loadMap()
     TCSupplyStock.registerConsoleCommands()
     TCIdleStaff.registerConsoleCommands()
     TCDebris.registerConsoleCommands()
+    TCAuctionCrowd.registerConsoleCommands()
     TheContractorRepairContracts.registerConsoleCommands()
     TheContractorYards.registerConsoleCommands()
     -- 110: tcCompany farmers, with 109's preview.
@@ -799,6 +801,8 @@ function TheContractor:deleteMap()
     TCYardFarmers.reset()
     -- 088: the due jobs' map markers.
     TCJobHotspots.reset()
+    -- 134: an auction crowd goes with the map.
+    TCAuctionCrowd.reset()
 
     TCConsole.uninstall()
     TCFarmDeletion.uninstall()
@@ -901,6 +905,8 @@ function TheContractor:update(dt)
     TCIdleStaff.update(dt)
     -- 114: farmers in their yards (clients only).
     TCYardFarmers.update(dt)
+    -- 134: an auction crowd, if one's up (clients only).
+    TCAuctionCrowd.update(dt)
 
     -- 088: map markers on the fields of jobs due this month.
     TCJobHotspots.update(dt)
