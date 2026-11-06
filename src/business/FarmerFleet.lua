@@ -64,13 +64,23 @@ TheContractorFarmerFleet.ROLE = {
     COMBINE = "combine",
     HEADER = "header",
     TRAILER = "trailer",
+    -- 135: implements only an auction's lots are (no farmer's recipe has
+    -- them), by their specializations (IMPLEMENT_ROLES).
+    MOWER = "mower",
+    TEDDER = "tedder",
+    RAKE = "rake",
+    BALER = "baler",
+    PLOUGH = "plough",
+    CULTIVATOR = "cultivator",
+    SEED_DRILL = "seedDrill",
 }
 local ROLE = TheContractorFarmerFleet.ROLE
 
 -- The order a fleet is listed and made in.
 TheContractorFarmerFleet.ROLE_ORDER = {
     ROLE.SMALL_TRACTOR, ROLE.MEDIUM_TRACTOR, ROLE.LARGE_TRACTOR, ROLE.COMBINE, ROLE.HEADER, ROLE.TRAILER,
-    ROLE.TELEHANDLER, ROLE.BALE_FORK,
+    ROLE.TELEHANDLER, ROLE.BALE_FORK, ROLE.MOWER, ROLE.TEDDER, ROLE.RAKE, ROLE.BALER, ROLE.PLOUGH,
+    ROLE.CULTIVATOR, ROLE.SEED_DRILL,
 }
 
 -- Machines that drive, so a breakdown or favour can be about them.
@@ -99,6 +109,23 @@ TheContractorFarmerFleet.COMBINE_CATEGORY = "HARVESTERS"
 TheContractorFarmerFleet.TRAILER_CATEGORY = "TRAILERS"
 -- A grain header's category: preferred over corn and special headers.
 TheContractorFarmerFleet.GRAIN_HEADER_CATEGORY = "CUTTERS"
+
+-- 135: implements that stand alone (not drivable), by the specialization
+-- that makes them one, the first that matches: a seed drill before a
+-- cultivator (a drill with a cultivator on the front is a drill) and a
+-- baler before the rest.
+TheContractorFarmerFleet.IMPLEMENT_ROLES = {
+    { spec = "baler", role = ROLE.BALER },
+    { spec = "sowingMachine", role = ROLE.SEED_DRILL },
+    { spec = "plow", role = ROLE.PLOUGH },
+    { spec = "cultivator", role = ROLE.CULTIVATOR },
+    { spec = "mower", role = ROLE.MOWER },
+    { spec = "tedder", role = ROLE.TEDDER },
+    { spec = "windrower", role = ROLE.RAKE },
+}
+-- A sowing machine whose store category has one of these in its name
+-- plants (potatoes, beet, cane) rather than drills.
+TheContractorFarmerFleet.NOT_SEED_DRILL_WORDS = { "PLANTER", "POTATO", "BEET", "CANE" }
 
 TheContractorFarmerFleet.SECOND_SMALL_SHARE = 0.5
 TheContractorFarmerFleet.LARGE_TRACTOR_ACRES = 50
@@ -229,7 +256,8 @@ end
 -- The store ------------------------------------------------------------------------------
 
 -- The role a store vehicle stands alone in (by its primary category and its
--- type's specializations), or nil.
+-- type's specializations), or nil. A header has a cutter and no other
+-- role's specialization, so it never stands alone.
 function TheContractorFarmerFleet.getRoleForItem(categoryName, specs)
     if specs == nil then
         return nil
@@ -245,8 +273,28 @@ function TheContractorFarmerFleet.getRoleForItem(categoryName, specs)
         end
     elseif categoryName == F.TRAILER_CATEGORY and specs.trailer ~= nil then
         return ROLE.TRAILER
+    else
+        for _, rule in ipairs(F.IMPLEMENT_ROLES) do
+            if specs[rule.spec] ~= nil then
+                if rule.role == ROLE.SEED_DRILL and not F.isSeedDrillCategory(categoryName) then
+                    return nil
+                end
+                return rule.role
+            end
+        end
     end
     return nil
+end
+
+-- 135: whether a sowing machine's category is a drill's, not a planter's.
+function TheContractorFarmerFleet.isSeedDrillCategory(categoryName)
+    local name = string.upper(categoryName or "")
+    for _, word in ipairs(TheContractorFarmerFleet.NOT_SEED_DRILL_WORDS) do
+        if string.find(name, word, 1, true) ~= nil then
+            return false
+        end
+    end
+    return true
 end
 
 -- The attachment role a store vehicle can take, or nil: a header (cuts, but

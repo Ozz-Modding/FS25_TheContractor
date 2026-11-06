@@ -1,0 +1,1076 @@
+-- Auction site and lots (135, spike): a machinery auction's field, laid out
+-- with rows of used equipment, driven from the console (tcCompany
+-- auctionSite) with no auction around it yet (137 owns the auction).
+--
+--   Picking the field (getCandidates): a grass field nobody's farm owns (a
+--     farmer's, 110), with no live job, ranked by TCAuctionLayout: the ones
+--     that can hold the sale first (enough lots fit, gentle enough, a road
+--     near), then by area. The entrance is the road point nearest the
+--     field's edge (FallenTree's road samples), where buyers drive out and
+--     136's gate sign goes.
+--   Laying it out: TCAuctionLayout.layOut (pure, tested), from each lot's
+--     footprint (its model's size, and its attachment's in front).
+--   The lots: roles drawn by LOT_ROLES' weights and count ranges, a model
+--     for each from 121's catalog (the fleet's roles, plus the implements
+--     135 adds there), a combine with a header that fits. Each gets Used
+--     Equipment Yards' MEDIUM condition (CONDITION: hours, damage, wear; the
+--     age from the hours), light dirt and a low tank. With ADS, ADS builds
+--     its history from those (TCADSUsedLots). Its guide price is vanilla's
+--     sell price for that age, hours, damage and wear (Vehicle.
+--     calculateSellPrice, as UEY works it out): a vanilla price, never
+--     scaled again for EconomyScale. Nothing shows ADS's condition (099).
+--   Spawning: on the server, one lot after another (as UEY does), owned by
+--     nobody (farm 0), locked for driving and out of the Tab cycle
+--     (TCVehicleLock, from the lot ids this sends every machine), and kept
+--     out of our lists (farm 0 is nobody's, so the farm lists skip them;
+--     isLot for anything that lists every vehicle). The grass is cut short
+--     first, and the field is protected while the site's up (Jobs:
+--     isFieldProtected, so 034's freeze and job generation leave it be).
+--   Saving: vanilla saves the vehicles; we save each lot's uniqueId
+--     (TCVehicleIds) with its rolls and guide price. Lots still to spawn
+--     when the game saves are dropped. The layout's debug lines are this
+--     session's only (not saved).
+--
+-- Server-wide, not a farm's: nothing to forget when a farm is deleted.
+
+TheContractorAuctionSite = {}
+local TheContractorAuctionSite_mt = Class(TheContractorAuctionSite)
+
+-- A sale's size comes from its field: as many lots as fit, up to the
+-- preferred number (145's size setting will set it). A field that fits
+-- fewer than MIN_LOTS can't hold a sale. MAX_LOTS caps the console's own.
+TheContractorAuctionSite.PREFERRED_LOTS = 120
+TheContractorAuctionSite.MIN_LOTS = 30
+TheContractorAuctionSite.MAX_LOTS = 200
+-- Plans tried to size a sale to its field (sizeSale).
+TheContractorAuctionSite.SIZING_ATTEMPTS = 3
+-- The most lots of one model in a sale.
+TheContractorAuctionSite.MAX_DUPLICATES = 3
+-- Added to every lot's store size (metres), centred on it: a store's size
+-- often leaves out drawbars, hitches and folded parts, and lots strayed
+-- into their neighbours' space without it (UEY adds a buffer for the same).
+TheContractorAuctionSite.FOOTPRINT_MARGIN = { width = 1, length = 2 }
+-- The candidates listed.
+TheContractorAuctionSite.TOP_CANDIDATES = 8
+-- A field smaller than this isn't laid out at all when ranking.
+TheContractorAuctionSite.MIN_AREA_HA = 1
+-- Metres between the terrain samples the slope is measured from.
+TheContractorAuctionSite.SLOPE_STEP = 8
+-- The fixed seed of the typical sale the candidates are measured against,
+-- so the list is the same each time it's asked for.
+TheContractorAuctionSite.CANDIDATE_SEED = 135
+
+-- Used Equipment Yards' MEDIUM preset, and its hours a year for the age.
+TheContractorAuctionSite.CONDITION = {
+    hoursMin = 17, hoursMax = 28, damageMin = 0.15, damageMax = 0.45, wearMin = 0.2, wearMax = 0.65,
+}
+TheContractorAuctionSite.HOURS_PER_YEAR = 800
+-- Light dirt, and a low tank: above the 10% Motorized charges a farm to
+-- fill on load (UEY's FUEL_MIN).
+TheContractorAuctionSite.DIRT = { 0.05, 0.25 }
+TheContractorAuctionSite.FUEL = { 0.12, 0.25 }
+
+-- How far a lot may have moved from where it was put and still count as
+-- settled (metres).
+TheContractorAuctionSite.SETTLE_DISTANCE = 1
+-- A lot tilted past this a while after it's out has tipped over: it's put
+-- back where it was spawned, upright, once (UPRIGHT_ATTEMPTS), then checked
+-- again.
+TheContractorAuctionSite.TIP_DEGREES = 25
+TheContractorAuctionSite.UPRIGHT_CHECK_MS = 3000
+TheContractorAuctionSite.UPRIGHT_ATTEMPTS = 1
+
+local ROLE = TheContractorFarmerFleet.ROLE
+
+-- The roles a sale's lots are, in the order they're listed: weight and
+-- count range per sale (TCAuctionLayout.pickRoles). Grows over time.
+TheContractorAuctionSite.LOT_ROLES = {
+    { role = ROLE.SMALL_TRACTOR, weight = 4, min = 1, max = 25 },
+    { role = ROLE.MEDIUM_TRACTOR, weight = 4, min = 1, max = 25 },
+    { role = ROLE.LARGE_TRACTOR, weight = 2, min = 0, max = 10 },
+    { role = ROLE.TELEHANDLER, weight = 2, min = 1, max = 10 },
+    { role = ROLE.COMBINE, weight = 1, min = 1, max = 6 },
+    { role = ROLE.MOWER, weight = 2, min = 1, max = 10 },
+    { role = ROLE.TEDDER, weight = 2, min = 1, max = 10 },
+    { role = ROLE.RAKE, weight = 2, min = 1, max = 10 },
+    { role = ROLE.BALER, weight = 2, min = 1, max = 10 },
+    { role = ROLE.TRAILER, weight = 3, min = 1, max = 15 },
+    { role = ROLE.PLOUGH, weight = 2, min = 1, max = 10 },
+    { role = ROLE.CULTIVATOR, weight = 2, min = 1, max = 10 },
+    { role = ROLE.SEED_DRILL, weight = 2, min = 1, max = 10 },
+}
+
+function TheContractorAuctionSite.new()
+    local self = setmetatable({}, TheContractorAuctionSite_mt)
+    -- Server: the site, or nil. { fieldId, entrance = { x, z, distance },
+    -- lots, planned, unplaced, layout (this session's, for the debug
+    -- lines), isSpawning, timings }.
+    self.site = nil
+    -- Server: lots still to spawn, and the one loading.
+    self.queue = {}
+    self.loading = nil
+    -- Every machine: the site's field (0: none) and its lots' vehicle ids
+    -- (lots and their attachments), as the server sent them.
+    self.fieldId = 0
+    self.vehicleIds = {}
+    self.vehicleIdSet = {}
+    -- Server: the frame time, smoothed (ms).
+    self.frameMs = nil
+    -- Server: lots to check for tipping over, { lot, dueMs }, and the clock
+    -- they're due by (ms since load).
+    self.uprightChecks = {}
+    self.clockMs = 0
+    return self
+end
+
+-- A live vehicle by its object id, or nil.
+local function getVehicle(vehicleId)
+    local vehicle = vehicleId ~= nil and NetworkUtil.getObject(vehicleId) or nil
+    if vehicle == nil or vehicle.isDeleted then
+        return nil
+    end
+    return vehicle
+end
+
+-- Every machine ------------------------------------------------------------------------
+
+function TheContractorAuctionSite:isFieldInUse(fieldId)
+    return fieldId ~= nil and self.fieldId ~= 0 and self.fieldId == fieldId
+end
+
+-- vehicleId -> true for every lot and attachment (TCVehicleLock).
+function TheContractorAuctionSite:getLotVehicleIds()
+    return self.vehicleIdSet
+end
+
+function TheContractorAuctionSite:isLot(vehicle)
+    local vehicleId = vehicle ~= nil and NetworkUtil.getObjectId(vehicle) or nil
+    return vehicleId ~= nil and self.vehicleIdSet[vehicleId] == true
+end
+
+-- Every machine: the site as the server sent it (TCAuctionSiteEvent).
+function TheContractorAuctionSite:applySync(fieldId, vehicleIds)
+    self.fieldId = fieldId or 0
+    self.vehicleIds = vehicleIds or {}
+    self.vehicleIdSet = {}
+    for _, vehicleId in ipairs(self.vehicleIds) do
+        self.vehicleIdSet[vehicleId] = true
+    end
+end
+
+-- Server: the site's field and live lot ids, to this machine and every
+-- client.
+function TheContractorAuctionSite:sync()
+    local site = self.site
+    local ids = {}
+    if site ~= nil then
+        for _, lot in ipairs(site.lots) do
+            if getVehicle(lot.vehicleId) ~= nil then
+                table.insert(ids, lot.vehicleId)
+            end
+            if getVehicle(lot.attachmentId) ~= nil then
+                table.insert(ids, lot.attachmentId)
+            end
+        end
+    end
+    self:applySync(site ~= nil and site.fieldId or 0, ids)
+    if g_server ~= nil then
+        g_server:broadcastEvent(TCAuctionSiteEvent.new(self.fieldId, ids))
+    end
+end
+
+-- Lots ---------------------------------------------------------------------------------
+
+-- A lot's footprint, its attachment in front (FarmerFleet.getFootprint)
+-- with the gap it's loaded at, and FOOTPRINT_MARGIN round it: width,
+-- length, widthOffset, lengthOffset, height, and the models. false when the
+-- store hasn't got it.
+function TheContractorAuctionSite.setFootprint(lot)
+    local F = TheContractorFarmerFleet
+    local model = F.getSizeModel(lot.xmlFilename)
+    if model == nil then
+        return false
+    end
+    local attachment = lot.attachmentXml ~= nil and F.getSizeModel(lot.attachmentXml) or nil
+    local footprint = F.getFootprint(model, attachment)
+    lot.model, lot.attachmentModel = model, attachment
+    lot.width = footprint.width
+    lot.length = footprint.length
+    lot.widthOffset = footprint.widthOffset or 0
+    lot.lengthOffset = footprint.lengthOffset or 0
+    lot.height = footprint.height
+    if attachment ~= nil then
+        local gap = TheContractorRepairContracts.CLEARANCE
+        lot.length = lot.length + gap
+        lot.lengthOffset = lot.lengthOffset + gap * 0.5
+    end
+    local margin = TheContractorAuctionSite.FOOTPRINT_MARGIN
+    lot.width = lot.width + margin.width
+    lot.length = lot.length + margin.length
+    return true
+end
+
+-- A sale's lots with their footprints: roles, models and attachments from
+-- the catalog. Lots the store can't size are left out.
+function TheContractorAuctionSite.planLots(lotCount, random)
+    local catalog = TheContractorFarmerFleet.buildCatalog()
+    local roleDefs = TheContractorAuctionSite.LOT_ROLES
+    local roles = TCAuctionLayout.pickRoles(roleDefs, lotCount, random,
+        TCAuctionLayout.getAvailableRoles(catalog, roleDefs, TheContractorAuctionSite.MAX_DUPLICATES))
+    local lots = {}
+    for _, lot in ipairs(TCAuctionLayout.pickLots(catalog, roles, random,
+            TheContractorAuctionSite.MAX_DUPLICATES)) do
+        if TheContractorAuctionSite.setFootprint(lot) then
+            table.insert(lots, lot)
+        end
+    end
+    return lots
+end
+
+local function seededRandom(seed)
+    local state = seed
+    return function()
+        state = state * 16807 % 2147483647
+        return (state - 1) / 2147483646
+    end
+end
+
+-- Picking the field (server) -------------------------------------------------------------
+
+local function getHolderName(field)
+    local farmers = g_currentMission.TheContractor.Farmers
+    local farmland = field.getFarmland ~= nil and field:getFarmland() or nil
+    local holder = farmers ~= nil and farmland ~= nil and farmers:getHolder(farmland:getId()) or nil
+    return holder ~= nil and holder.name or nil
+end
+
+-- The field's slope over the layout's rectangle: steepest, average (%), rise (m).
+local function measureSlope(rect)
+    local step = TheContractorAuctionSite.SLOPE_STEP
+    local heights = {}
+    for _, point in ipairs(TCAuctionLayout.getSamplePoints(rect, step)) do
+        heights[point.row] = heights[point.row] or {}
+        heights[point.row][point.col] = getTerrainHeightAtWorldPos(g_terrainNode, point.x, 0, point.z)
+    end
+    return TCAuctionLayout.measureSlope(heights, step)
+end
+
+-- Why a field can't be a site at all (nil if it can): the console's words.
+function TheContractorAuctionSite.getFieldRefusal(field)
+    if field:getOwner() ~= FarmlandManager.NO_OWNER_FARM_ID then
+        return "a farm owns it"
+    end
+    if g_currentMission.TheContractor.Jobs:isFieldProtected(field:getId()) then
+        return "it has a live job"
+    end
+    return nil
+end
+
+-- One field measured for a sale of these lots: { fieldId, areaHa, fitted,
+-- of, slopePercent, averageSlope, rise, entranceDistance, holder, entrance,
+-- layout }.
+function TheContractorAuctionSite.measureField(field, lots, roads)
+    local polygon = TCAuctionCrowd.getFieldPolygon(field)
+    local entrance = TCAuctionLayout.findEntrance(polygon, roads, TCAuctionLayout.RULES.entranceReach)
+    local layout = TCAuctionLayout.layOut(polygon, entrance, lots)
+    local candidate = {
+        fieldId = field:getId(),
+        areaHa = field:getAreaHa() or 0,
+        fitted = layout ~= nil and layout.placedCount or 0,
+        of = #lots,
+        entranceDistance = entrance ~= nil and entrance.distance or nil,
+        holder = getHolderName(field),
+        entrance = entrance,
+        layout = layout,
+    }
+    if layout ~= nil then
+        candidate.slopePercent, candidate.averageSlope, candidate.rise = measureSlope(layout.rect)
+    end
+    return candidate
+end
+
+-- Every field that could be a site (grass, nobody's farm, no live job, big
+-- enough to try), measured against a typical sale of the preferred size and
+-- ranked: those that fit MIN_LOTS first, the most lots first. Returns the
+-- ranked list and how many fields there are in all.
+function TheContractorAuctionSite:getCandidates(preferredLots)
+    local lots = TheContractorAuctionSite.planLots(preferredLots,
+        seededRandom(TheContractorAuctionSite.CANDIDATE_SEED))
+    local roads = TheContractorFallenTree.sampleRoads()
+    local candidates = {}
+    local fields = g_fieldManager:getFields()
+    for _, field in ipairs(fields) do
+        if TheContractorJoyriders.isGrassField(field) and TheContractorAuctionSite.getFieldRefusal(field) == nil and
+                (field:getAreaHa() or 0) >= TheContractorAuctionSite.MIN_AREA_HA then
+            table.insert(candidates, TheContractorAuctionSite.measureField(field, lots, roads))
+        end
+    end
+    return TCAuctionLayout.rankCandidates(candidates, TheContractorAuctionSite.MIN_LOTS), #fields
+end
+
+-- Spawning (server) ----------------------------------------------------------------------
+
+local function range(values, random)
+    return values[1] + random() * (values[2] - values[1])
+end
+
+-- A sale sized to its field: a plan of the wanted lots, laid out; if fewer
+-- fit, a new plan of as many as did (so the mix of roles is drawn for that
+-- size, rather than the last ones in being left out), up to
+-- SIZING_ATTEMPTS. Returns the lots and the field's measure (with their
+-- layout) of the plan that placed the most.
+function TheContractorAuctionSite.sizeSale(field, wantedLots, roads, random)
+    local bestLots, best = nil, nil
+    local count = wantedLots
+    for _ = 1, TheContractorAuctionSite.SIZING_ATTEMPTS do
+        local lots = TheContractorAuctionSite.planLots(count, random)
+        if #lots == 0 then
+            break
+        end
+        local candidate = TheContractorAuctionSite.measureField(field, lots, roads)
+        -- A tie goes to the later plan: its roles were drawn for that size.
+        if best == nil or candidate.fitted >= best.fitted then
+            bestLots, best = lots, candidate
+        end
+        if candidate.fitted >= #lots or candidate.fitted == 0 then
+            break
+        end
+        count = candidate.fitted
+    end
+    return bestLots or {}, best
+end
+
+-- Puts a site on a field: lays it out, cuts the grass and starts spawning
+-- its lots one after another. lotCount: nil for as many as fit, up to the
+-- preferred number. Returns the text to print.
+function TheContractorAuctionSite:start(fieldId, lotCount)
+    if self.site ~= nil then
+        return string.format("There's a site on field %d already: 'tcCompany auctionSite clear' first.",
+            self.site.fieldId)
+    end
+    local field = g_fieldManager:getFieldById(fieldId)
+    if field == nil then
+        return string.format("No field %d.", fieldId)
+    end
+    local refusal = TheContractorAuctionSite.getFieldRefusal(field)
+    if refusal ~= nil then
+        return string.format("Field %d can't be a site: %s.", fieldId, refusal)
+    end
+
+    local lots, candidate = TheContractorAuctionSite.sizeSale(field,
+        lotCount or TheContractorAuctionSite.PREFERRED_LOTS, TheContractorFallenTree.sampleRoads(), math.random)
+    if candidate == nil then
+        return "The store has nothing for any of the lots' roles."
+    end
+    local layout = candidate.layout
+    if layout == nil or layout.placedCount == 0 then
+        return string.format("Field %d has no room for a lot.", fieldId)
+    end
+
+    local site = {
+        fieldId = fieldId,
+        entrance = candidate.entrance,
+        lots = {},
+        planned = #lots,
+        unplaced = #layout.unplaced,
+        layout = layout,
+        isSpawning = true,
+        startedAt = getTimeSec(),
+        frames = 0,
+        frameMsTotal = 0,
+        worstFrameMs = 0,
+    }
+    for index, lot in ipairs(lots) do
+        local spot = layout.placed[index]
+        if spot ~= nil then
+            local condition = TCAuctionLayout.rollCondition(TheContractorAuctionSite.CONDITION,
+                TheContractorAuctionSite.HOURS_PER_YEAR, math.random)
+            lot.hours, lot.damage, lot.wear, lot.ageMonths = condition.hours, condition.damage, condition.wear,
+                condition.ageMonths
+            lot.dirt = range(TheContractorAuctionSite.DIRT, math.random)
+            lot.fuel = range(TheContractorAuctionSite.FUEL, math.random)
+            lot.x, lot.z, lot.yaw = spot.x, spot.z, spot.yaw
+            lot.rootX, lot.rootZ = spot.rootX, spot.rootZ
+            lot.number = #site.lots + 1
+            table.insert(site.lots, lot)
+        end
+    end
+    self.site = site
+    self.queue = TheContractorFarmerFleet.copy(site.lots)
+    self.debugVisible = true
+
+    -- The lots aren't to stand in long grass.
+    local wasCut = TheContractorJoyriders.isGrassField(field) and TCFieldPreparation.cutGrass(field)
+    TCLog.info("TheContractor: auction site on field %d, %d of %d lots laid out, grass %s", fieldId,
+        #site.lots, #lots, wasCut and "cut" or "left")
+    self:sync()
+    self:spawnNext()
+
+    local lines = { string.format("Auction site on field %d: %d of %d lots laid out (%d didn't fit), spawning one at a time.",
+        fieldId, #site.lots, #lots, site.unplaced) }
+    table.insert(lines, TheContractorAuctionSite.describeCandidate(
+        TCAuctionLayout.rankCandidates({ candidate }, TheContractorAuctionSite.MIN_LOTS)[1]))
+    if not wasCut then
+        table.insert(lines, "  The grass wasn't cut: not a grass field.")
+    end
+    table.insert(lines, "Rows red, aisles green, the entrance's space blue, the entrance yellow (this machine). 'tcCompany auctionSite' for progress.")
+    return table.concat(lines, "\n")
+end
+
+function TheContractorAuctionSite:spawnNext()
+    local site = self.site
+    if self.loading ~= nil or site == nil then
+        return
+    end
+    local lot = table.remove(self.queue, 1)
+    if lot == nil then
+        if site.isSpawning then
+            site.isSpawning = false
+            site.spawnedAt = getTimeSec()
+            TCLog.info("TheContractor: auction site on field %d spawned in %.1f s", site.fieldId,
+                site.spawnedAt - site.startedAt)
+        end
+        return
+    end
+    local storeItem = g_storeManager:getItemByXMLFilename(lot.xmlFilename)
+    if storeItem == nil then
+        lot.failed = "not in the store"
+        self:spawnNext()
+        return
+    end
+    if not TCParking.isAreaClear(lot.x, lot.z, lot.yaw, lot.width, lot.length, lot.height) then
+        lot.failed = "something in the way"
+        self:spawnNext()
+        return
+    end
+
+    local loadingData = VehicleLoadingData.new()
+    loadingData:setStoreItem(storeItem)
+    -- The store's own offset puts an implement down on its stands, as the
+    -- shop sets it down (a mower on a small stand tipped over without it).
+    loadingData:setIgnoreShopOffset(false)
+    loadingData:setPosition(lot.rootX, nil, lot.rootZ, TCParking.PLACE_HEIGHT_OFFSET)
+    loadingData:setRotation(0, lot.yaw, 0)
+    loadingData:setPropertyState(VehiclePropertyState.OWNED)
+    loadingData:setOwnerFarmId(0)
+    lot.loadStarted = getTimeSec()
+    self.loading = lot
+    loadingData:load(self.onLotLoaded, self, { lot = lot, site = site })
+end
+
+local function deleteAll(vehicles)
+    for _, vehicle in ipairs(vehicles or {}) do
+        if vehicle ~= nil and not vehicle.isDeleted then
+            vehicle:delete()
+        end
+    end
+end
+
+-- VehicleLoadingData's callback.
+function TheContractorAuctionSite:onLotLoaded(vehicles, loadingState, args)
+    local lot = args.lot
+    if args.site ~= self.site then
+        -- Cleared while it loaded.
+        deleteAll(vehicles)
+        return
+    end
+    local vehicle = vehicles ~= nil and vehicles[1] or nil
+    if vehicle == nil or loadingState ~= VehicleLoadingState.OK then
+        deleteAll(vehicles)
+        lot.failed = "didn't load"
+        self.loading = nil
+        self:spawnNext()
+        return
+    end
+    lot.vehicleId = NetworkUtil.getObjectId(vehicle)
+    -- Where it was set down, to stand it back there if it tips over.
+    if vehicle.rootNode ~= nil then
+        local x, y, z = getWorldTranslation(vehicle.rootNode)
+        local rx, ry, rz = getWorldRotation(vehicle.rootNode)
+        lot.pose = { x, y, z, rx, ry, rz }
+        table.insert(self.uprightChecks, { lot = lot, dueMs = self.clockMs + TheContractorAuctionSite.UPRIGHT_CHECK_MS })
+    end
+    TheContractorAuctionSite.applyCondition(vehicle, lot)
+    if lot.attachmentModel ~= nil then
+        self:loadAttachment(lot, vehicle)
+        return
+    end
+    self:finishLot(lot, vehicle, nil)
+end
+
+-- A combine's header, loaded in front of it and hitched on
+-- (RepairContracts:loadAttachment's way).
+function TheContractorAuctionSite:loadAttachment(lot, vehicle)
+    local storeItem = g_storeManager:getItemByXMLFilename(lot.attachmentXml)
+    if storeItem == nil or vehicle.rootNode == nil then
+        self:finishLot(lot, vehicle, nil)
+        return
+    end
+    local model, attachment = lot.model, lot.attachmentModel
+    local x, _, z = getWorldTranslation(vehicle.rootNode)
+    local dirX, _, dirZ = localDirectionToWorld(vehicle.rootNode, 0, 0, 1)
+    local ahead = (model.lengthOffset or 0) + model.length * 0.5 + attachment.length * 0.5 +
+        TheContractorRepairContracts.CLEARANCE
+    local loadingData = VehicleLoadingData.new()
+    loadingData:setStoreItem(storeItem)
+    loadingData:setIgnoreShopOffset(true)
+    loadingData:setPosition(x + dirX * ahead, nil, z + dirZ * ahead, TCParking.PLACE_HEIGHT_OFFSET)
+    loadingData:setRotation(0, MathUtil.getYRotationFromDirection(dirX, dirZ), 0)
+    loadingData:setPropertyState(VehiclePropertyState.OWNED)
+    loadingData:setOwnerFarmId(0)
+    loadingData:load(self.onAttachmentLoaded, self, { lot = lot, site = self.site, vehicle = vehicle })
+end
+
+function TheContractorAuctionSite:onAttachmentLoaded(vehicles, loadingState, args)
+    local lot, vehicle = args.lot, args.vehicle
+    if args.site ~= self.site then
+        deleteAll(vehicles)
+        deleteAll({ vehicle })
+        return
+    end
+    local attachment = vehicles ~= nil and vehicles[1] or nil
+    if attachment ~= nil and (loadingState ~= VehicleLoadingState.OK or vehicle.isDeleted or
+            not TCJobSiteSetup.hitchImplement(vehicle, attachment, 0)) then
+        TCLog.info("TheContractor: auction lot %d: %s couldn't be hitched to %s, left out", lot.number,
+            attachment:getFullName(), vehicle:getFullName())
+        lot.attachmentFailed = true
+        deleteAll(vehicles)
+        attachment = nil
+    end
+    if attachment ~= nil then
+        TheContractorAuctionSite.applyCondition(attachment, lot)
+    end
+    self:finishLot(lot, vehicle, attachment)
+end
+
+-- The lot's rolled condition on a vehicle, as UEY applies its own: wear,
+-- damage (with the wear's dirty flag cleared, so no delta goes to clients
+-- before they've its nodes), hours (written as loading, which ADS lets
+-- through: TCADSUsedLots), age, dirt and a low tank.
+function TheContractorAuctionSite.applyCondition(vehicle, lot)
+    if vehicle.addWearAmount ~= nil then
+        vehicle:addWearAmount(lot.wear)
+    end
+    if vehicle.setDamageAmount ~= nil then
+        vehicle:setDamageAmount(lot.damage)
+    end
+    if vehicle.spec_wearable ~= nil and vehicle.clearDirtyFlags ~= nil then
+        vehicle:clearDirtyFlags(vehicle.spec_wearable.dirtyFlag)
+    end
+    if vehicle.setOperatingTime ~= nil then
+        vehicle:setOperatingTime(lot.hours * 3600000, true)
+    end
+    vehicle.age = lot.ageMonths
+    if vehicle.setDirtAmount ~= nil then
+        vehicle:setDirtAmount(lot.dirt)
+    end
+    if vehicle.getConsumerFillUnitIndex ~= nil then
+        for _, fillType in ipairs({ FillType.DIESEL, FillType.ELECTRICCHARGE, FillType.METHANE }) do
+            local fillUnitIndex = fillType ~= nil and vehicle:getConsumerFillUnitIndex(fillType) or nil
+            if fillUnitIndex ~= nil then
+                local capacity = vehicle:getFillUnitCapacity(fillUnitIndex)
+                if capacity > 0 then
+                    local delta = capacity * lot.fuel - vehicle:getFillUnitFillLevel(fillUnitIndex)
+                    vehicle:addFillUnitFillLevel(vehicle:getOwnerFarmId(), fillUnitIndex, delta, fillType,
+                        ToolType.UNDEFINED, nil)
+                end
+            end
+        end
+    end
+end
+
+-- Vanilla's sell price for a vehicle with the lot's age, hours, damage and
+-- wear (UEY's way). A vanilla price: never scaled again.
+function TheContractorAuctionSite.getGuidePrice(vehicle, lot)
+    local storeItem = g_storeManager:getItemByXMLFilename(vehicle.configFileName)
+    if storeItem == nil then
+        return 0
+    end
+    local price = vehicle.getPrice ~= nil and vehicle:getPrice() or storeItem.price or 0
+    local repairPrice = Wearable.calculateRepairPrice(price, lot.damage)
+    local repaintPrice = Wearable.calculateRepaintPrice(price, lot.wear)
+    return Vehicle.calculateSellPrice(storeItem, lot.ageMonths, lot.hours * 3600000, price, repairPrice, repaintPrice)
+end
+
+function TheContractorAuctionSite:finishLot(lot, vehicle, attachment)
+    lot.loadMs = (getTimeSec() - lot.loadStarted) * 1000
+    lot.attachmentId = attachment ~= nil and NetworkUtil.getObjectId(attachment) or nil
+    local ok, reason = TCADSUsedLots.initialiseLot(vehicle)
+    lot.adsResult = ok and "ok" or reason
+    if attachment ~= nil then
+        TCADSUsedLots.initialiseLot(attachment)
+    end
+    lot.guidePrice = TheContractorAuctionSite.getGuidePrice(vehicle, lot) +
+        (attachment ~= nil and TheContractorAuctionSite.getGuidePrice(attachment, lot) or 0)
+    TCLog.info("TheContractor: auction lot %d (%s) %s out in %.0f ms, %.1f h, %d months, ADS %s", lot.number,
+        lot.role, vehicle:getFullName(), lot.loadMs, lot.hours, lot.ageMonths, lot.adsResult)
+    self.loading = nil
+    self:sync()
+    self:spawnNext()
+end
+
+-- Takes every lot away. Returns the text to print.
+function TheContractorAuctionSite:clear()
+    local site = self.site
+    if site == nil then
+        return "There's no auction site."
+    end
+    local count = 0
+    for _, lot in ipairs(site.lots) do
+        for _, vehicle in ipairs({ getVehicle(lot.attachmentId) or false, getVehicle(lot.vehicleId) or false }) do
+            if vehicle then
+                vehicle:delete()
+                count = count + 1
+            end
+        end
+    end
+    -- A lot still loading is deleted when it arrives (its site has gone).
+    self.site = nil
+    self.queue = {}
+    self.loading = nil
+    self.uprightChecks = {}
+    self.debugVisible = false
+    self:sync()
+    return string.format("Auction site on field %d cleared: %d vehicle(s) deleted.", site.fieldId, count)
+end
+
+-- A vehicle's tilt from upright, in degrees.
+function TheContractorAuctionSite.getTilt(vehicle)
+    local _, upY = localDirectionToWorld(vehicle.rootNode, 0, 1, 0)
+    return math.deg(math.acos(math.max(-1, math.min(1, upY))))
+end
+
+-- What to do about a lot's tilt (pure): "ok", "right" (stand it back up)
+-- or "tipped" (it's been stood up as often as it will be).
+function TheContractorAuctionSite.getUprightAction(tiltDegrees, attempts)
+    if tiltDegrees <= TheContractorAuctionSite.TIP_DEGREES then
+        return "ok"
+    end
+    if (attempts or 0) < TheContractorAuctionSite.UPRIGHT_ATTEMPTS then
+        return "right"
+    end
+    return "tipped"
+end
+
+-- Server: a lot that's tipped over put back as it was set down, the shop's
+-- offset included (vanilla's setAbsolutePosition, out of physics
+-- meanwhile), and checked again later; one that tips again is taken away
+-- (removeLot). A lot with its attachment hitched on isn't stood up (moving
+-- the machine would leave the attachment behind), so a tipped one goes at
+-- once.
+function TheContractorAuctionSite:checkUpright(lot)
+    local vehicle = getVehicle(lot.vehicleId)
+    if vehicle == nil or vehicle.rootNode == nil or lot.pose == nil or self.site == nil then
+        return
+    end
+    local action = TheContractorAuctionSite.getUprightAction(TheContractorAuctionSite.getTilt(vehicle),
+        lot.attachmentId ~= nil and TheContractorAuctionSite.UPRIGHT_ATTEMPTS or lot.uprightAttempts)
+    if action == "tipped" then
+        self:removeLot(lot, "tipped over")
+        return
+    elseif action ~= "right" then
+        return
+    end
+    lot.uprightAttempts = (lot.uprightAttempts or 0) + 1
+    local pose = lot.pose
+    TCLog.info("TheContractor: auction lot %d (%s) tipped over, stood back up", lot.number, vehicle:getFullName())
+    vehicle:removeFromPhysics()
+    vehicle:setAbsolutePosition(pose[1], pose[2], pose[3], pose[4], pose[5], pose[6])
+    vehicle:addToPhysics()
+    table.insert(self.uprightChecks, { lot = lot, dueMs = self.clockMs + TheContractorAuctionSite.UPRIGHT_CHECK_MS })
+end
+
+-- Server: a lot taken off the field (it and its attachment deleted), kept
+-- in the site's list as failed, and every machine told.
+function TheContractorAuctionSite:removeLot(lot, reason)
+    TCLog.info("TheContractor: auction lot %d (%s) removed: %s", lot.number, lot.xmlFilename, reason)
+    for _, vehicle in ipairs({ getVehicle(lot.attachmentId) or false, getVehicle(lot.vehicleId) or false }) do
+        if vehicle then
+            vehicle:delete()
+        end
+    end
+    lot.failed = reason
+    lot.vehicleId, lot.attachmentId = nil, nil
+    self:sync()
+end
+
+-- Every frame (server): the frame time, and while lots spawn, its worst;
+-- lots due a check for tipping over.
+function TheContractorAuctionSite:update(dt)
+    self.frameMs = self.frameMs ~= nil and (self.frameMs * 0.95 + dt * 0.05) or dt
+    self.clockMs = self.clockMs + dt
+    local site = self.site
+    if site ~= nil and site.isSpawning then
+        site.frames = site.frames + 1
+        site.frameMsTotal = site.frameMsTotal + dt
+        site.worstFrameMs = math.max(site.worstFrameMs, dt)
+    end
+    for i = #self.uprightChecks, 1, -1 do
+        local check = self.uprightChecks[i]
+        if self.clockMs >= check.dueMs then
+            table.remove(self.uprightChecks, i)
+            self:checkUpright(check.lot)
+        end
+    end
+end
+
+-- Debug lines -------------------------------------------------------------------------------
+
+local function drawPolyline(points, r, g, b, closed)
+    local count = #points
+    local last = closed and count or count - 1
+    for i = 1, last do
+        local a, c = points[i], points[i % count + 1]
+        local ay = getTerrainHeightAtWorldPos(g_terrainNode, a.x, 0, a.z) + 0.3
+        local cy = getTerrainHeightAtWorldPos(g_terrainNode, c.x, 0, c.z) + 0.3
+        drawDebugLine(a.x, ay, a.z, r, g, b, c.x, cy, c.z, r, g, b)
+    end
+end
+
+-- Every frame on a machine with a client: the layout this session laid out.
+function TheContractorAuctionSite:draw()
+    local site = self.site
+    if not self.debugVisible or site == nil or site.layout == nil or drawDebugLine == nil then
+        return
+    end
+    local layout = site.layout
+    for _, row in ipairs(layout.rows) do
+        drawPolyline(row.corners, 1, 0.2, 0.2, true)
+    end
+    for _, aisle in ipairs(layout.aisles) do
+        drawPolyline(aisle.points, 0.2, 1, 0.2, false)
+    end
+    drawPolyline(layout.reserve.corners, 0.3, 0.5, 1, true)
+    local entrance = site.entrance
+    if entrance ~= nil then
+        local y = getTerrainHeightAtWorldPos(g_terrainNode, entrance.x, 0, entrance.z)
+        drawDebugLine(entrance.x, y, entrance.z, 1, 1, 0, entrance.x, y + 6, entrance.z, 1, 1, 0)
+        drawPolyline({ entrance, { x = entrance.edgeX, z = entrance.edgeZ } }, 1, 1, 0, false)
+    end
+end
+
+-- Console text ------------------------------------------------------------------------------
+
+local PROBLEM_WORDS = {
+    [TCAuctionLayout.PROBLEM.TOO_SMALL] = "too small",
+    [TCAuctionLayout.PROBLEM.TOO_STEEP] = "too steep",
+    [TCAuctionLayout.PROBLEM.NO_ROAD] = "no road near",
+}
+
+function TheContractorAuctionSite.describeCandidate(candidate)
+    local problems = {}
+    for _, problem in ipairs(candidate.problems or {}) do
+        table.insert(problems, PROBLEM_WORDS[problem] or problem)
+    end
+    return string.format("  field %d%s: %.2f ha, %d of %d lots fit, slope %s, road %s - %s", candidate.fieldId,
+        candidate.holder ~= nil and (" (" .. candidate.holder .. ")") or "", candidate.areaHa, candidate.fitted,
+        candidate.of,
+        candidate.slopePercent ~= nil and string.format("steepest %.1f%%, average %.1f%%, rise %.1f m",
+            candidate.slopePercent, candidate.averageSlope, candidate.rise) or "-",
+        candidate.entranceDistance ~= nil and string.format("%.0f m from the edge", candidate.entranceDistance) or
+            "none",
+        #problems == 0 and "can hold the sale" or table.concat(problems, ", "))
+end
+
+-- tcCompany auctionSite: the site, if there's one, and the best fields.
+function TheContractorAuctionSite:getListText(preferredLots)
+    local lines = {}
+    if self.site ~= nil then
+        table.insert(lines, self:describe())
+        table.insert(lines, "")
+    end
+    local started = getTimeSec()
+    local ranked, fieldCount = self:getCandidates(preferredLots)
+    table.insert(lines, string.format(
+        "Auction site candidates (grass, nobody's farm, no live job, %.0f ha or more), measured against a sale of %d lots, a sale needing %d, most lots first:",
+        TheContractorAuctionSite.MIN_AREA_HA, preferredLots, TheContractorAuctionSite.MIN_LOTS))
+    for i = 1, math.min(#ranked, TheContractorAuctionSite.TOP_CANDIDATES) do
+        table.insert(lines, TheContractorAuctionSite.describeCandidate(ranked[i]))
+    end
+    local qualifying = 0
+    for _, candidate in ipairs(ranked) do
+        if #candidate.problems == 0 then
+            qualifying = qualifying + 1
+        end
+    end
+    table.insert(lines, string.format("%d of %d candidates can hold the sale (%d fields on the map), checked in %.0f ms.",
+        qualifying, #ranked, fieldCount, (getTimeSec() - started) * 1000))
+    return table.concat(lines, "\n")
+end
+
+-- The site: how far its spawning's got and what it cost, whether the lots
+-- stayed where they were put, and what ADS made of them.
+function TheContractorAuctionSite:describe()
+    local site = self.site
+    if site == nil then
+        return "There's no auction site."
+    end
+    local lines = {}
+    local out, failed, adsCounts = 0, {}, {}
+    for _, lot in ipairs(site.lots) do
+        if lot.failed ~= nil then
+            table.insert(failed, string.format("  lot %d (%s, %s): %s", lot.number, lot.role, lot.xmlFilename,
+                lot.failed))
+        elseif getVehicle(lot.vehicleId) ~= nil then
+            out = out + 1
+            if lot.adsResult ~= nil then
+                adsCounts[lot.adsResult] = (adsCounts[lot.adsResult] or 0) + 1
+            end
+        end
+    end
+    table.insert(lines, string.format("Auction site on field %d: %d of %d lots out, %d failed, %d didn't fit%s",
+        site.fieldId, out, #site.lots, #failed, site.unplaced or 0,
+        site.entrance ~= nil and string.format(", entrance %.0f m from the edge", site.entrance.distance) or
+            ", no entrance"))
+
+    if site.startedAt ~= nil then
+        local done = site.spawnedAt or getTimeSec()
+        local loadTotal, loadWorst, loaded = 0, 0, 0
+        for _, lot in ipairs(site.lots) do
+            if lot.loadMs ~= nil then
+                loadTotal, loadWorst, loaded = loadTotal + lot.loadMs, math.max(loadWorst, lot.loadMs), loaded + 1
+            end
+        end
+        table.insert(lines, string.format(
+            "  %s %.1f s: %.0f ms a lot on average (longest %.0f ms). Frames while spawning: %.1f ms on average (%.0f fps), worst %.0f ms.",
+            site.isSpawning and "Spawning for" or "Spawned in", done - site.startedAt,
+            loaded > 0 and loadTotal / loaded or 0, loadWorst,
+            site.frames > 0 and site.frameMsTotal / site.frames or 0,
+            site.frames > 0 and 1000 * site.frames / math.max(site.frameMsTotal, 1) or 0, site.worstFrameMs))
+    end
+    if self.frameMs ~= nil then
+        table.insert(lines, string.format("  Now: %.1f ms a frame (%.0f fps).", self.frameMs,
+            1000 / math.max(self.frameMs, 0.001)))
+    end
+
+    -- Settling: how far each lot is from where it was put, and its tilt.
+    local settled, measured, mostMoved, movedLot, mostTilt, tiltLot = 0, 0, 0, nil, 0, nil
+    for _, lot in ipairs(site.lots) do
+        local vehicle = getVehicle(lot.vehicleId)
+        if vehicle ~= nil and vehicle.rootNode ~= nil and lot.rootX ~= nil then
+            local x, _, z = getWorldTranslation(vehicle.rootNode)
+            local moved = math.sqrt((x - lot.rootX) ^ 2 + (z - lot.rootZ) ^ 2)
+            local tilt = TheContractorAuctionSite.getTilt(vehicle)
+            measured = measured + 1
+            if moved <= TheContractorAuctionSite.SETTLE_DISTANCE then
+                settled = settled + 1
+            end
+            if moved > mostMoved then
+                mostMoved, movedLot = moved, lot.number
+            end
+            if tilt > mostTilt then
+                mostTilt, tiltLot = tilt, lot.number
+            end
+        end
+    end
+    local righted = {}
+    for _, lot in ipairs(site.lots) do
+        if (lot.uprightAttempts or 0) > 0 and lot.failed == nil then
+            table.insert(righted, string.format("%d %s", lot.number, lot.role))
+        end
+    end
+    if #righted > 0 then
+        table.insert(lines, string.format("  Stood back up after tipping over: %s (any that tipped again were removed, below).",
+            table.concat(righted, ", ")))
+    end
+    if measured > 0 then
+        table.insert(lines, string.format(
+            "  Settled: %d of %d within %.0f m of where they were put; most moved %.1f m (lot %s), most tilted %.0f degrees (lot %s).",
+            settled, measured, TheContractorAuctionSite.SETTLE_DISTANCE, mostMoved, tostring(movedLot), mostTilt,
+            tostring(tiltLot)))
+    end
+
+    if not TCADSUsedLots.isActive() then
+        table.insert(lines, "  ADS: not loaded (or no reinitializeVehicle), vanilla condition only.")
+    else
+        local parts = {}
+        for result, count in pairs(adsCounts) do
+            table.insert(parts, string.format("%s %d", result, count))
+        end
+        table.sort(parts)
+        table.insert(lines, "  ADS: " .. (#parts > 0 and table.concat(parts, ", ") or "none yet"))
+    end
+
+    local total = 0
+    for _, lot in ipairs(site.lots) do
+        total = total + (lot.guidePrice or 0)
+    end
+    table.insert(lines, string.format("  Guide prices: %s in all.", g_i18n:formatMoney(total, 0, true, true)))
+    for _, lot in ipairs(site.lots) do
+        if lot.guidePrice ~= nil then
+            table.insert(lines, string.format("  lot %d %s: %s, %.1f h, %d months, guide %s%s", lot.number, lot.role,
+                TheContractorFarmerFleet.getModelName(lot.xmlFilename), lot.hours, lot.ageMonths,
+                g_i18n:formatMoney(lot.guidePrice, 0, true, true),
+                lot.attachmentXml ~= nil and (lot.attachmentId ~= nil and " (with header)" or " (header left out)") or ""))
+        end
+    end
+    for _, line in ipairs(failed) do
+        table.insert(lines, line)
+    end
+    return table.concat(lines, "\n")
+end
+
+-- Persistence -----------------------------------------------------------------------------
+
+function TheContractorAuctionSite:saveToXmlFile(xmlFile)
+    if not g_currentMission:getIsServer() or self.site == nil then
+        return
+    end
+    local site = self.site
+    local key = TheContractor.SaveKey .. ".auctionSite"
+    setXMLInt(xmlFile, key .. "#fieldId", site.fieldId)
+    setXMLInt(xmlFile, key .. "#planned", site.planned or #site.lots)
+    setXMLInt(xmlFile, key .. "#unplaced", site.unplaced or 0)
+    if site.entrance ~= nil then
+        setXMLFloat(xmlFile, key .. "#entranceX", site.entrance.x)
+        setXMLFloat(xmlFile, key .. "#entranceZ", site.entrance.z)
+        setXMLFloat(xmlFile, key .. "#entranceEdgeX", site.entrance.edgeX)
+        setXMLFloat(xmlFile, key .. "#entranceEdgeZ", site.entrance.edgeZ)
+        setXMLFloat(xmlFile, key .. "#entranceDistance", site.entrance.distance)
+    end
+    local index = 0
+    for _, lot in ipairs(site.lots) do
+        local uniqueId = lot.uniqueId or TCVehicleIds.getUniqueId(lot.vehicleId)
+        if uniqueId ~= nil and lot.failed == nil then
+            local lotKey = string.format("%s.lot(%d)", key, index)
+            setXMLInt(xmlFile, lotKey .. "#number", lot.number)
+            setXMLString(xmlFile, lotKey .. "#role", lot.role)
+            setXMLString(xmlFile, lotKey .. "#xmlFilename", lot.xmlFilename)
+            setXMLString(xmlFile, lotKey .. "#uniqueId", uniqueId)
+            local attachmentUniqueId = lot.attachmentUniqueId or TCVehicleIds.getUniqueId(lot.attachmentId)
+            if lot.attachmentXml ~= nil then
+                setXMLString(xmlFile, lotKey .. "#attachmentXml", lot.attachmentXml)
+            end
+            if attachmentUniqueId ~= nil then
+                setXMLString(xmlFile, lotKey .. "#attachmentUniqueId", attachmentUniqueId)
+            end
+            setXMLFloat(xmlFile, lotKey .. "#hours", lot.hours)
+            setXMLInt(xmlFile, lotKey .. "#ageMonths", lot.ageMonths)
+            setXMLFloat(xmlFile, lotKey .. "#damage", lot.damage)
+            setXMLFloat(xmlFile, lotKey .. "#wear", lot.wear)
+            setXMLFloat(xmlFile, lotKey .. "#guidePrice", lot.guidePrice or 0)
+            setXMLFloat(xmlFile, lotKey .. "#x", lot.rootX)
+            setXMLFloat(xmlFile, lotKey .. "#z", lot.rootZ)
+            setXMLFloat(xmlFile, lotKey .. "#yaw", lot.yaw)
+            setXMLString(xmlFile, lotKey .. "#ads", lot.adsResult or "")
+            index = index + 1
+        end
+    end
+end
+
+function TheContractorAuctionSite:loadFromXMLFile(xmlFile)
+    if not g_currentMission:getIsServer() then
+        return
+    end
+    local key = TheContractor.SaveKey .. ".auctionSite"
+    local fieldId = getXMLInt(xmlFile, key .. "#fieldId")
+    if fieldId == nil then
+        return
+    end
+    local site = {
+        fieldId = fieldId,
+        planned = getXMLInt(xmlFile, key .. "#planned"),
+        unplaced = getXMLInt(xmlFile, key .. "#unplaced") or 0,
+        lots = {},
+        isSpawning = false,
+    }
+    local entranceX = getXMLFloat(xmlFile, key .. "#entranceX")
+    if entranceX ~= nil then
+        site.entrance = {
+            x = entranceX,
+            z = getXMLFloat(xmlFile, key .. "#entranceZ"),
+            edgeX = getXMLFloat(xmlFile, key .. "#entranceEdgeX"),
+            edgeZ = getXMLFloat(xmlFile, key .. "#entranceEdgeZ"),
+            distance = getXMLFloat(xmlFile, key .. "#entranceDistance") or 0,
+        }
+    end
+    local i = 0
+    while true do
+        local lotKey = string.format("%s.lot(%d)", key, i)
+        if not hasXMLProperty(xmlFile, lotKey) then
+            break
+        end
+        local lot = {
+            number = getXMLInt(xmlFile, lotKey .. "#number") or i + 1,
+            role = getXMLString(xmlFile, lotKey .. "#role"),
+            xmlFilename = getXMLString(xmlFile, lotKey .. "#xmlFilename"),
+            uniqueId = getXMLString(xmlFile, lotKey .. "#uniqueId"),
+            attachmentXml = getXMLString(xmlFile, lotKey .. "#attachmentXml"),
+            attachmentUniqueId = getXMLString(xmlFile, lotKey .. "#attachmentUniqueId"),
+            hours = getXMLFloat(xmlFile, lotKey .. "#hours") or 0,
+            ageMonths = getXMLInt(xmlFile, lotKey .. "#ageMonths") or 0,
+            damage = getXMLFloat(xmlFile, lotKey .. "#damage") or 0,
+            wear = getXMLFloat(xmlFile, lotKey .. "#wear") or 0,
+            guidePrice = getXMLFloat(xmlFile, lotKey .. "#guidePrice"),
+            rootX = getXMLFloat(xmlFile, lotKey .. "#x"),
+            rootZ = getXMLFloat(xmlFile, lotKey .. "#z"),
+            yaw = getXMLFloat(xmlFile, lotKey .. "#yaw"),
+        }
+        local ads = getXMLString(xmlFile, lotKey .. "#ads")
+        lot.adsResult = ads ~= nil and ads ~= "" and ads or nil
+        if lot.role ~= nil and lot.xmlFilename ~= nil and lot.uniqueId ~= nil then
+            table.insert(site.lots, lot)
+        else
+            TCLog.xmlWarning(xmlFile, "TheContractor: skipping auction lot %s", lotKey)
+        end
+        i = i + 1
+    end
+    self.site = site
+    -- Protected from the start; the vehicles follow in resolveSavedVehicles.
+    self:applySync(fieldId, {})
+end
+
+-- Server, once vehicles exist: each lot's vehicle again, a lot whose
+-- vehicle has gone left out.
+function TheContractorAuctionSite:resolveSavedVehicles()
+    local site = self.site
+    if site == nil then
+        return
+    end
+    local lots = {}
+    for _, lot in ipairs(site.lots) do
+        lot.vehicleId = TCVehicleIds.getObjectId(lot.uniqueId)
+        lot.attachmentId = lot.attachmentUniqueId ~= nil and TCVehicleIds.getObjectId(lot.attachmentUniqueId) or nil
+        lot.uniqueId, lot.attachmentUniqueId = nil, nil
+        if lot.vehicleId ~= nil then
+            table.insert(lots, lot)
+        else
+            TCLog.info("TheContractor: auction lot %d (%s) has gone", lot.number, tostring(lot.xmlFilename))
+        end
+    end
+    site.lots = lots
+    self:sync()
+end
+
+function TheContractorAuctionSite:writeInitialClientState(streamId, connection)
+    TCAuctionSiteEvent.writeSite(streamId, self.fieldId, self.vehicleIds)
+end
+
+function TheContractorAuctionSite:readInitialClientState(streamId, connection)
+    local fieldId, vehicleIds = TCAuctionSiteEvent.readSite(streamId)
+    self:applySync(fieldId, vehicleIds)
+end
+
+-- Console ---------------------------------------------------------------------------------
+
+function TheContractorAuctionSite.registerConsoleCommands()
+    TCConsole.register("company", "auctionSite", {
+        args = "[fieldId [lots]|clear]",
+        description = "Auction site spike: the best fields for a sale, or lay out and spawn lots on a field, or clear them",
+        run = function(_, args)
+            local site = g_currentMission.TheContractor.AuctionSite
+            if args[1] == nil then
+                return site:getListText(TheContractorAuctionSite.PREFERRED_LOTS)
+            end
+            if string.lower(args[1]) == "clear" then
+                return site:clear()
+            end
+            local fieldId = tonumber(args[1])
+            local lots = args[2] ~= nil and tonumber(args[2]) or nil
+            if fieldId == nil or (args[2] ~= nil and (lots == nil or lots < 1)) then
+                return false
+            end
+            return site:start(fieldId, lots ~= nil and math.min(math.floor(lots), TheContractorAuctionSite.MAX_LOTS) or nil)
+        end,
+    })
+end

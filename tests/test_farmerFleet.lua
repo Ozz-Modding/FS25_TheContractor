@@ -133,6 +133,41 @@ test("the store's models by role, and only what fits a combine or telehandler go
     assertEquals(TheContractorFarmerFleet.pickModel(catalog, "combine", always(0)).xmlFilename, "combine.xml")
 end)
 
+test("135: implements by what they do, a drill before a cultivator, and never in a farmer's fleet", function()
+    local world = setup()
+    addStore(world)
+    world:addItem("mower.xml", "MOWERS", { mower = true })
+    world:addItem("selfMower.xml", "MOWERVEHICLES", { drivable = true, mower = true })
+    world:addItem("tedder.xml", "TEDDERS", { tedder = true })
+    world:addItem("rake.xml", "WINDROWERS", { windrower = true })
+    world:addItem("baler.xml", "BALERS", { baler = true, pickup = true })
+    world:addItem("plough.xml", "PLOWS", { plow = true })
+    world:addItem("cultivator.xml", "CULTIVATORS", { cultivator = true })
+    world:addItem("drill.xml", "SEEDERS", { sowingMachine = true, cultivator = true })
+    world:addItem("potatoPlanter.xml", "POTATOPLANTERS", { sowingMachine = true })
+    local catalog = TheContractorFarmerFleet.buildCatalog()
+    local ROLE = TheContractorFarmerFleet.ROLE
+    local function only(role)
+        local models = catalog.byRole[role]
+        return #models == 1 and models[1].xmlFilename or tostring(#models)
+    end
+    assertEquals(only(ROLE.MOWER), "mower.xml", "not the self-propelled mower")
+    assertEquals(only(ROLE.TEDDER), "tedder.xml")
+    assertEquals(only(ROLE.RAKE), "rake.xml")
+    assertEquals(only(ROLE.BALER), "baler.xml")
+    assertEquals(only(ROLE.PLOUGH), "plough.xml")
+    assertEquals(only(ROLE.CULTIVATOR), "cultivator.xml", "not the drill")
+    assertEquals(only(ROLE.SEED_DRILL), "drill.xml", "not the planter")
+
+    local farmer = world:addFarmer(1, 80, 1, nil)
+    TheContractorFarmerFleet.ensureFleet(farmer, catalog, true, 80, math.random)
+    local counts = countRoles(farmer)
+    for _, role in ipairs({ ROLE.MOWER, ROLE.TEDDER, ROLE.RAKE, ROLE.BALER, ROLE.PLOUGH, ROLE.CULTIVATOR,
+        ROLE.SEED_DRILL }) do
+        assertEquals(counts[role], nil, role)
+    end
+end)
+
 test("a corn header does when there's no grain header", function()
     local world = setup()
     world:addItem("combine.xml", "HARVESTERS", { drivable = true, combine = true }, { "cornHeader.xml" })

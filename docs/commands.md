@@ -668,6 +668,55 @@ tcCompany crowd
 tcCompany crowd off
 ```
 
+### `tcCompany auctionSite [fieldId [lots]|clear]`
+
+The auction site spike (135). Finds fields that could hold a machinery auction, or lays one out on a field and spawns its lots: used equipment in rows facing aisles, with space kept at the end nearest the road for the car park and the auctioneer's stand.
+
+- With no argument: the site, if there's one up (see below), then the best candidate fields, best first. A candidate is a grass field no farm owns, with no live job, of 1 ha or more. A sale takes as many lots as its field fits, up to 120, so each field is measured against a typical 120-lot sale. Each line has the field's id and the farmer who holds it, its area, how many of the 120 fit, its slope (the steepest rise between ground samples 8 m apart, the average, and the whole rise in metres), how far the nearest road is from its edge, and whether it can hold a sale. It can't if fewer than 30 lots fit, the steepest slope is over 8%, or there's no road within 60 m. Those that can come first, the most lots first, then the biggest. The last line says how many can, and how long the check took.
+- `<fieldId> [lots]`: lays out and spawns a sale on the field, which no farm may own and which can't have a live job. It doesn't have to be a candidate. With no `[lots]` the sale is as many lots as the field fits, up to 120; `[lots]` asks for that many instead (at most 200), and the field still takes only what fits. When fewer fit than were asked for, the sale is drawn again at the size that fits, so the mix of roles suits it. The lots' roles are drawn by weight, each with a minimum and maximum per sale (tractors of each size, telehandler, combine with a header, mower, tedder, rake, baler, trailer, plough, cultivator, seed drill), and their models come from the store, no model more than 3 times in a sale. Each lot is given its store size plus 1 m on width and 2 m on length, since store sizes often leave out drawbars and hitches. A grass field is cut short first. Each lot is set down with the store's own offset, as the shop does; one found tipped over a few seconds later is stood back up as it was set down, once, and removed if it tips again (a combine with its header on is removed straight away, as moving it would leave the header behind). Lots spawn one after another, owned by nobody, locked for driving and out of the Tab cycle; with FS25_AdvancedDamageSystem each gets a history from its hours. The field is kept free of jobs and NPC fieldwork while the site's up. Rows are drawn in red, aisles in green, the entrance's space in blue and the entrance (the nearest road point) in yellow, on this machine and only until the save's reloaded.
+- `clear`: deletes every lot and frees the field.
+
+With a site up, the command with no argument starts with it: how many lots are out, failed (with why: not in the store, something in the way, didn't load, tipped over) or didn't fit; how long spawning took, the average and longest load a lot, and the frame time while spawning (average and worst) and now; which lots tipped over and were stood back up; how many lots are still within 1 m of where they were put, the one that moved most and the one that tilts most; what ADS made of the lots; and each lot's model, hours, age in months and guide price (vanilla's sell price for that age, hours, damage and wear). The site and its lots are saved.
+
+```
+tcCompany auctionSite
+tcCompany auctionSite 12
+tcCompany auctionSite 12 50
+tcCompany auctionSite clear
+```
+
+```
+Auction site candidates (grass, nobody's farm, no live job, 1 ha or more), measured against a sale of 120 lots, a sale needing 30, most lots first:
+  field 12 (Tom Hughes): 6.40 ha, 120 of 120 lots fit, slope steepest 4.1%, average 1.2%, rise 3.0 m, road 14 m from the edge - can hold the sale
+  field 31: 2.10 ha, 22 of 120 lots fit, slope steepest 2.0%, average 0.8%, rise 1.1 m, road 40 m from the edge - too small
+1 of 2 candidates can hold the sale (64 fields on the map), checked in 410 ms.
+```
+
+### `tcCompany auctionSigns [month|clear]`
+
+The auction roadside signs spike (136). Puts up signs at the map's 10 busiest road junctions, spread over the map, each reading "SECOND HAND / BRAND NEW DAY / COMING IN <MONTH>", and marks each on the map. Any signs already up come down first. There's no day on the board: the auction's job will give that.
+
+- `<month>`: the month on the boards, 1 to 12 or its name (`july`, or its first three letters, `jul`). The busiest junctions are those with the most road within 250 m (in villages and towns); no two signs within 400 m. A junction's sign stands about 35 m back along one of the roads into it, facing drivers coming in, 5 m from the road's middle, or 4.25 or 3.5 m if that's not clear, on the right-hand verge first, then the left; if none of those spots on that road is clear, the next road in. A spot is passed over if it's on a road, by a bridge, in water, on a field, on ground too steep or well above or below the road, or with anything in the way (buildings, walls, fences, trees, vehicles). It prints each sign (where, which verge and how far out, how much road is round its junction) and how many spots were passed over for each reason.
+- `clear`: takes them down.
+- With no argument: the signs up now and their month.
+
+Every player sees the signs, a player who joins later too, and they're saved. Server only: the road splines are only on the server.
+
+```
+tcCompany auctionSigns july
+tcCompany auctionSigns 9
+tcCompany auctionSigns
+tcCompany auctionSigns clear
+```
+
+```
+Auction signs for July: 10 up, of 58 junction(s) on 212 road spline(s), in 140 ms. Marked on the map.
+  1. 512.3, -88.1, right verge 5.00 m out, 2480 m of road round its junction
+  2. -401.0, 12.6, left verge 4.25 m out, 1960 m of road round its junction
+  ...
+  Spots passed over: blocked 7, field 2, tooClose 31
+```
+
 ### `tcCompany yards [farmlandId|here|show [farmlandId]|hide]`
 
 A spike for finding the map's farm yards (108), where the generated farmers will live. A yard is a farmland with at least 2 buildings that change hands with the land (sheds, silos, animal pens, farmhouses, ...; the map's own, preplaced or from its default placeables), at least one of them a shed or a farmhouse and one not a farmhouse (a working building), and no more than 5 farmhouses (more is a village). Detection runs on the live map each time; only your overrides (`tcCompany yard`) are saved. Read-only, so it also works on a joined client.
