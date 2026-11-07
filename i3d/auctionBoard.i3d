@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="iso-8859-1"?>
+
+<i3D name="auctionBoard.i3d" version="1.6" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://i3d.giants.ch/schema/i3d-1.6.xsd">
+  <Asset>
+    <Export program="GIANTS Editor 64bit" version="10.0.11"/>
+  </Asset>
+
+  <Files>
+    <File fileId="8" filename="../images/auctionBoard01.dds"/>
+    <File fileId="11" filename="../images/auctionBoard02.dds"/>
+    <File fileId="12" filename="../images/auctionBoard03.dds"/>
+    <File fileId="13" filename="../images/auctionBoard04.dds"/>
+    <File fileId="14" filename="../images/auctionBoard05.dds"/>
+    <File fileId="1" filename="$data/maps/mapAS/textures/props/ads/adGround_diffuse.png"/>
+    <File fileId="2" filename="$data/maps/mapAS/textures/props/ads/adGround_normal.png"/>
+    <File fileId="3" filename="$data/maps/mapAS/textures/props/ads/adGround_specular.png"/>
+    <File fileId="4" filename="$data/shaders/placeableShader.xml"/>
+    <File fileId="9" filename="$data/shared/default_normal.dds"/>
+    <File fileId="10" filename="$data/shared/default_specular.dds"/>
+  </Files>
+
+
+  <Materials>
+    <Material name="adGround_mat" materialId="5" customShaderId="4">
+      <Texture fileId="1"/>
+      <Normalmap fileId="2"/>
+      <Glossmap fileId="3"/>
+    </Material>
+    <Material name="lambert1" materialId="6" diffuseColor="0.501961 0.501961 0.501961 1">
+    </Material>
+    <Material name="auctionBoard01_mat" materialId="7">
+      <Texture fileId="8"/>
+      <Normalmap fileId="9"/>
+      <Glossmap fileId="10"/>
+    </Material>
+    <Material name="auctionBoard02_mat" materialId="8">
+      <Texture fileId="11"/>
+      <Normalmap fileId="9"/>
+      <Glossmap fileId="10"/>
+    </Material>
+    <Material name="auctionBoard03_mat" materialId="9">
+      <Texture fileId="12"/>
+      <Normalmap fileId="9"/>
+      <Glossmap fileId="10"/>
+    </Material>
+    <Material name="auctionBoard04_mat" materialId="10">
+      <Texture fileId="13"/>
+      <Normalmap fileId="9"/>
+      <Glossmap fileId="10"/>
+    </Material>
+    <Material name="auctionBoard05_mat" materialId="11">
+      <Texture fileId="14"/>
+      <Normalmap fileId="9"/>
+      <Glossmap fileId="10"/>
+    </Material>
+  </Materials>
+
+
+  <Shapes externalShapesFile="auctionBoard.i3d.shapes">
+  </Shapes>
+
+  <Scene>
+    <TransformGroup name="auctionBoard" nodeId="21">
+      <TransformGroup name="visuals" rotation="-0 90 0" clipDistance="80" nodeId="37">
+        <TransformGroup name="board01" rotation="-0 -90 0" visibility="false" clipDistance="80" nodeId="38">
+          <Shape name="largeAdBoard" scale="2.5 1 1" shapeId="1" nodeId="39" castsShadows="true" receiveShadows="true" materialIds="5"/>
+          <Shape name="col" shapeId="2" static="true" collisionFilterMask="0xfffffbff" density="0.0001" nodeId="40" castsShadows="true" receiveShadows="true" nonRenderable="true" materialIds="6"/>
+          <Shape name="face" rotation="90 -0 0" shapeId="3" nodeId="41" castsShadows="true" receiveShadows="true" materialIds="7"/>
+        </TransformGroup>
+        <TransformGroup name="board02" rotation="-0 -90 0" visibility="false" clipDistance="80" nodeId="42">
+          <Shape name="largeAdBoard" scale="2.5 1 1" shapeId="1" nodeId="43" castsShadows="true" receiveShadows="true" materialIds="5"/>
+          <Shape name="col" shapeId="2" static="true" collisionFilterMask="0xfffffbff" density="0.0001" nodeId="44" castsShadows="true" receiveShadows="true" nonRenderable="true" materialIds="6"/>
+          <Shape name="face" rotation="90 -0 0" shapeId="3" nodeId="45" castsShadows="true" receiveShadows="true" materialIds="8"/>
+        </TransformGroup>
+        <TransformGroup name="board03" rotation="-0 -90 0" visibility="false" clipDistance="80" nodeId="46">
+          <Shape name="largeAdBoard" scale="2.5 1 1" shapeId="1" nodeId="47" castsShadows="true" receiveShadows="true" materialIds="5"/>
+          <Shape name="col" shapeId="2" static="true" collisionFilterMask="0xfffffbff" density="0.0001" nodeId="48" castsShadows="true" receiveShadows="true" nonRenderable="true" materialIds="6"/>
+          <Shape name="face" rotation="90 -0 0" shapeId="3" nodeId="49" castsShadows="true" receiveShadows="true" materialIds="9"/>
+        </TransformGroup>
+        <TransformGroup name="board04" rotation="-0 -90 0" visibility="false" clipDistance="80" nodeId="50">
+          <Shape name="largeAdBoard" scale="2.5 1 1" shapeId="1" nodeId="51" castsShadows="true" receiveShadows="true" materialIds="5"/>
+          <Shape name="col" shapeId="2" static="true" collisionFilterMask="0xfffffbff" density="0.0001" nodeId="52" castsShadows="true" receiveShadows="true" nonRenderable="true" materialIds="6"/>
+          <Shape name="face" rotation="90 -0 0" shapeId="3" nodeId="53" castsShadows="true" receiveShadows="true" materialIds="10"/>
+        </TransformGroup>
+        <TransformGroup name="board05" rotation="-0 -90 0" visibility="false" clipDistance="80" nodeId="54">
+          <Shape name="largeAdBoard" scale="2.5 1 1" shapeId="1" nodeId="55" castsShadows="true" receiveShadows="true" materialIds="5"/>
+          <Shape name="col" shapeId="2" static="true" collisionFilterMask="0xfffffbff" density="0.0001" nodeId="56" castsShadows="true" receiveShadows="true" nonRenderable="true" materialIds="6"/>
+          <Shape name="face" rotation="90 -0 0" shapeId="3" nodeId="57" castsShadows="true" receiveShadows="true" materialIds="11"/>
+        </TransformGroup>
+      </TransformGroup>
+    </TransformGroup>
+  </Scene>
+
+</i3D>

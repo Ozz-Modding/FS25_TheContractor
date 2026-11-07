@@ -55,6 +55,7 @@ TheContractorAuctionSigns.REJECT = {
     STEEP = "steep",
     BANK = "bank",
     BLOCKED = "blocked",
+    ON_OBJECT = "onObject",
 }
 
 -- The console's month names (English, as the board's are), by their first
@@ -64,7 +65,23 @@ local MONTH_WORDS = { "January", "February", "March", "April", "May", "June", "J
     "October", "November", "December" }
 
 local OVERLAP_MASK = CollisionFlag ~= nil and (CollisionFlag.STATIC_OBJECT + CollisionFlag.BUILDING +
-    CollisionFlag.TREE + CollisionFlag.VEHICLE + CollisionFlag.DYNAMIC_OBJECT + CollisionFlag.TRAFFIC_VEHICLE) or 0
+    CollisionFlag.TREE + CollisionFlag.VEHICLE + CollisionFlag.DYNAMIC_OBJECT + CollisionFlag.TRAFFIC_VEHICLE +
+    CollisionFlag.ROAD) or 0
+-- What's under a spot, as vanilla finds the ground (FSBaseMission): the
+-- first hit looking down that isn't the terrain is something the sign
+-- would stand on (a road's or an island's mesh, a kerb, a wall's top).
+local GROUND_MASK = CollisionFlag ~= nil and (CollisionFlag.TERRAIN + CollisionFlag.STATIC_OBJECT +
+    CollisionFlag.ROAD + CollisionFlag.AI_DRIVABLE + CollisionFlag.BUILDING) or 0
+
+-- Whether something other than the terrain is under (x, z), at about the
+-- ground's height (groundY).
+local function isOnObject(x, groundY, z)
+    if RaycastUtil == nil or RaycastUtil.raycastClosest == nil then
+        return false
+    end
+    local hitId, _, hitY = RaycastUtil.raycastClosest(x, groundY + 3, z, 0, -1, 0, 4, GROUND_MASK)
+    return hitId ~= nil and hitId ~= 0 and hitId ~= g_terrainNode and hitY ~= nil and hitY > groundY - 0.1
+end
 
 function TheContractorAuctionSigns.new()
     local self = setmetatable({}, TheContractorAuctionSigns_mt)
@@ -78,6 +95,10 @@ function TheContractorAuctionSigns.new()
     -- terrain's there by then).
     self.models = {}
     self.markers = {}
+    -- A testing aid (tcCompany auctionSigns flag): a pin on each sign as
+    -- well, easier to see than its marker's circle and teleported to from
+    -- the map. This machine only, never saved.
+    self.isFlagged = false
     self.isDirty = false
     return self
 end
@@ -175,6 +196,20 @@ function TheContractorAuctionSigns:rebuild()
             TheContractorYards.addMarker(self.markers, sign.x, sign.z, TheContractorAuctionSigns.MARKER_RADIUS)
         end
     end
+    if self.isFlagged and g_currentMission.hud ~= nil and PlaceableHotspot ~= nil and
+            g_currentMission.addMapHotspot ~= nil then
+        for i, sign in ipairs(self.signs) do
+            local hotspot = PlaceableHotspot.new()
+            hotspot:setName(string.format("Auction sign %d", i))
+            hotspot:createIcon()
+            hotspot:setPlaceableType(PlaceableHotspot.TYPE.EXCLAMATION_MARK)
+            hotspot:setWorldPosition(sign.x, sign.z)
+            hotspot:setTeleportWorldPosition(sign.x, getTerrainHeightAtWorldPos(g_terrainNode, sign.x, 0, sign.z),
+                sign.z)
+            g_currentMission:addMapHotspot(hotspot)
+            table.insert(self.markers, hotspot)
+        end
+    end
 end
 
 function TheContractorAuctionSigns:delete()
@@ -253,6 +288,9 @@ function TheContractorAuctionSigns.isSpotClear(candidate)
             return false, REJECT.FIELD
         end
         local y = getTerrainHeightAtWorldPos(g_terrainNode, cx, 0, cz)
+        if isOnObject(cx, y, cz) then
+            return false, REJECT.ON_OBJECT
+        end
         lowest, highest = math.min(lowest, y), math.max(highest, y)
     end
     if highest - lowest > S.MAX_GROUND_STEP then
@@ -309,6 +347,21 @@ function TheContractorAuctionSigns.describeSign(i, sign)
             sign.offset or 0, sign.busyMetres)
     end
     return text
+end
+
+-- tcCompany auctionSigns flag: pins on the signs, or off again. Returns the
+-- text to print.
+function TheContractorAuctionSigns:toggleFlags()
+    self.isFlagged = not self.isFlagged
+    self.isDirty = true
+    if not self.isFlagged then
+        return "Auction sign pins off."
+    end
+    if #self.signs == 0 then
+        return "Auction sign pins on: there are no signs up yet, they'll be pinned when they go up."
+    end
+    return string.format("Auction sign pins on: %d pinned on the map (teleport from there).\n%s", #self.signs,
+        self:describe())
 end
 
 -- Takes them down. Returns the text to print.
@@ -413,8 +466,8 @@ end
 
 function TheContractorAuctionSigns.registerConsoleCommands()
     TCConsole.register("company", "auctionSigns", {
-        args = "[month|clear]",
-        description = "Auction signs spike: put up signs at the map's busiest junctions for a month, or take them down",
+        args = "[month|clear|flag]",
+        description = "Auction signs spike: put up signs at the map's busiest junctions for a month, take them down, or pin them on the map",
         run = function(_, args)
             local signs = g_currentMission.TheContractor.AuctionSigns
             if args[1] == nil then
@@ -422,6 +475,9 @@ function TheContractorAuctionSigns.registerConsoleCommands()
             end
             if string.lower(args[1]) == "clear" and args[2] == nil then
                 return signs:clear()
+            end
+            if string.lower(args[1]) == "flag" and args[2] == nil then
+                return signs:toggleFlags()
             end
             local month = TheContractorAuctionSigns.parseMonth(args[1])
             if month == nil or args[2] ~= nil then

@@ -363,6 +363,10 @@
     <!-- tc_detailRow is unanchored (it's for BoxLayouts); these rows are
          placed by hand, so their offsets need a top-left anchor. -->
     <Profile name="tc_repairQuoteRow" extends="tc_detailRow" with="anchorTopLeft"/>
+    <!-- The lot card's specifications strip (138): placed by hand in the
+         canvas, so it needs the top-left anchor too, or its offset runs
+         from the screen's bottom. -->
+    <Profile name="tc_auctionLotSpecs" extends="emptyPanel" with="anchorTopLeft"/>
     <Profile name="tc_repairQuotePicker"extends="fs25_multiTextOption" with="anchorTopLeft">
         <size value="340px 36px" />
     </Profile>

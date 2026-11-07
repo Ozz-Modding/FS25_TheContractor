@@ -32,6 +32,11 @@
 --   The crowd's walks (137): each row aisle's middle line and width
 --     (TCAuctionLayout's walkways), sent to every machine and saved, so the
 --     crowd walks the aisles and never through a lot.
+--   The scene (140): the layout's frame, entrance space, gate and rows with
+--     their lots' numbers and places (TCAuctionLayout.getScene, with a seed
+--     rolled here), sent to every machine and saved, for the site's
+--     dressing (TCAuctionProps) and the crowd's spots. A site saved before
+--     140 has none, so it goes undressed.
 --   The lots as everyone sees them (138): each lot's number (in the order
 --     they're walked, TCAuctionLayout.getWalkOrder), model, hours, age,
 --     guide price and closing time (CLOSE_HOURS, in lot order), with its
@@ -136,11 +141,13 @@ function TheContractorAuctionSite.new()
     self.loading = nil
     -- Every machine: the site's field (0: none), its lots as everyone sees
     -- them (138, getPublicLot's, by number), their vehicle ids (lots and
-    -- attachments) and its walkways (137), as the server sent them.
+    -- attachments), its walkways (137) and its scene (140, or nil), as the
+    -- server sent them.
     self.fieldId = 0
     self.lots = {}
     self.vehicleIdSet = {}
     self.walkways = {}
+    self.scene = nil
     -- Server: the frame time, smoothed (ms).
     self.frameMs = nil
     -- Server: lots to check for tipping over, { lot, dueMs }, and the clock
@@ -180,6 +187,11 @@ function TheContractorAuctionSite:getWalkways()
     return self.walkways
 end
 
+-- 140: the site's scene (TCAuctionLayout.getScene's), or nil.
+function TheContractorAuctionSite:getScene()
+    return self.scene
+end
+
 -- 138: the lots as everyone sees them, by number.
 function TheContractorAuctionSite:getLots()
     return self.lots
@@ -201,10 +213,11 @@ local function sortByNumber(lots)
 end
 
 -- Every machine: the site as the server sent it (TCAuctionSiteEvent).
--- lots: getPublicLot's.
-function TheContractorAuctionSite:applySync(fieldId, lots, walkways)
+-- lots: getPublicLot's. scene: 140's, or nil.
+function TheContractorAuctionSite:applySync(fieldId, lots, walkways, scene)
     self.fieldId = fieldId or 0
     self.walkways = walkways or {}
+    self.scene = self.fieldId ~= 0 and scene or nil
     self.lots = {}
     for _, lot in ipairs(lots or {}) do
         table.insert(self.lots, lot)
@@ -287,9 +300,10 @@ function TheContractorAuctionSite:sync()
         end
     end
     local walkways = site ~= nil and site.walkways or {}
-    self:applySync(site ~= nil and site.fieldId or 0, lots, walkways)
+    local scene = site ~= nil and site.scene or nil
+    self:applySync(site ~= nil and site.fieldId or 0, lots, walkways, scene)
     if g_server ~= nil then
-        g_server:broadcastEvent(TCAuctionSiteEvent.new(self.fieldId, self.lots, walkways))
+        g_server:broadcastEvent(TCAuctionSiteEvent.new(self.fieldId, self.lots, walkways, scene))
     end
 end
 
@@ -630,6 +644,8 @@ function TheContractorAuctionSite:start(fieldId, lotCount, auctionId)
         unplaced = #layout.unplaced,
         layout = layout,
         walkways = layout.walkways or {},
+        -- 140: the dressing's, with its own seed for the props' picks.
+        scene = TCAuctionLayout.getScene(layout, candidate.entrance, math.random(1, 1000000000)),
         isSpawning = true,
         startedAt = getTimeSec(),
         frames = 0,
@@ -1268,6 +1284,86 @@ function TheContractorAuctionSite:saveToXmlFile(xmlFile)
         setXMLFloat(xmlFile, walkwayKey .. "#z2", walkway.z2)
         setXMLFloat(xmlFile, walkwayKey .. "#halfWidth", walkway.halfWidth)
     end
+    if site.scene ~= nil then
+        TheContractorAuctionSite.saveScene(xmlFile, key .. ".scene", site.scene)
+    end
+end
+
+-- 140: the scene's numbers, as written to the stream (TCAuctionSiteEvent).
+local SCENE_FLOATS = { "cx", "cz", "angle", "halfV", "nearEdge", "farEdge", "aisleWidth", "endAisle", "gateV" }
+local RESERVE_FLOATS = { "uFrom", "uTo", "vFrom", "vTo" }
+
+function TheContractorAuctionSite.saveScene(xmlFile, key, scene)
+    setXMLInt(xmlFile, key .. "#seed", scene.seed or 0)
+    setXMLInt(xmlFile, key .. "#nearSign", scene.nearSign)
+    for _, name in ipairs(SCENE_FLOATS) do
+        setXMLFloat(xmlFile, key .. "#" .. name, scene[name] or 0)
+    end
+    for _, name in ipairs(RESERVE_FLOATS) do
+        setXMLFloat(xmlFile, key .. ".reserve#" .. name, scene.reserve[name])
+    end
+    for i, row in ipairs(scene.rows) do
+        local rowKey = string.format("%s.row(%d)", key, i - 1)
+        setXMLFloat(xmlFile, rowKey .. "#vFrom", row.vFrom)
+        setXMLFloat(xmlFile, rowKey .. "#vTo", row.vTo)
+        setXMLFloat(xmlFile, rowKey .. "#frontV", row.frontV)
+        setXMLInt(xmlFile, rowKey .. "#facing", row.facing)
+        setXMLFloat(xmlFile, rowKey .. "#used", row.used or 0)
+        setXMLInt(xmlFile, rowKey .. "#lotFrom", row.lotFrom)
+        setXMLInt(xmlFile, rowKey .. "#lotTo", row.lotTo)
+        local slots = {}
+        for _, u in ipairs(row.slots or {}) do
+            table.insert(slots, string.format("%.3f", u))
+        end
+        setXMLString(xmlFile, rowKey .. "#slots", table.concat(slots, " "))
+    end
+end
+
+-- The scene saved at key, or nil (none, or a save from before 140).
+function TheContractorAuctionSite.loadScene(xmlFile, key)
+    local seed = getXMLInt(xmlFile, key .. "#seed")
+    local nearSign = getXMLInt(xmlFile, key .. "#nearSign")
+    if seed == nil or nearSign == nil then
+        return nil
+    end
+    local scene = { seed = seed, nearSign = nearSign >= 0 and 1 or -1, reserve = {}, rows = {} }
+    for _, name in ipairs(SCENE_FLOATS) do
+        scene[name] = getXMLFloat(xmlFile, key .. "#" .. name)
+        if scene[name] == nil then
+            return nil
+        end
+    end
+    for _, name in ipairs(RESERVE_FLOATS) do
+        scene.reserve[name] = getXMLFloat(xmlFile, key .. ".reserve#" .. name)
+        if scene.reserve[name] == nil then
+            return nil
+        end
+    end
+    local i = 0
+    while true do
+        local rowKey = string.format("%s.row(%d)", key, i)
+        if not hasXMLProperty(xmlFile, rowKey) then
+            break
+        end
+        local row = {
+            vFrom = getXMLFloat(xmlFile, rowKey .. "#vFrom"),
+            vTo = getXMLFloat(xmlFile, rowKey .. "#vTo"),
+            frontV = getXMLFloat(xmlFile, rowKey .. "#frontV"),
+            facing = (getXMLInt(xmlFile, rowKey .. "#facing") or 1) >= 0 and 1 or -1,
+            used = getXMLFloat(xmlFile, rowKey .. "#used") or 0,
+            lotFrom = getXMLInt(xmlFile, rowKey .. "#lotFrom"),
+            lotTo = getXMLInt(xmlFile, rowKey .. "#lotTo"),
+            slots = {},
+        }
+        for word in string.gmatch(getXMLString(xmlFile, rowKey .. "#slots") or "", "%S+") do
+            table.insert(row.slots, tonumber(word))
+        end
+        if row.vFrom ~= nil and row.vTo ~= nil and row.frontV ~= nil and row.lotFrom ~= nil and row.lotTo ~= nil then
+            table.insert(scene.rows, row)
+        end
+        i = i + 1
+    end
+    return scene
 end
 
 function TheContractorAuctionSite:loadFromXMLFile(xmlFile)
@@ -1358,9 +1454,10 @@ function TheContractorAuctionSite:loadFromXMLFile(xmlFile)
         end
         i = i + 1
     end
+    site.scene = TheContractorAuctionSite.loadScene(xmlFile, key .. ".scene")
     self.site = site
     -- Protected from the start; the vehicles follow in resolveSavedVehicles.
-    self:applySync(fieldId, {}, site.walkways)
+    self:applySync(fieldId, {}, site.walkways, site.scene)
 end
 
 -- Server, once vehicles exist: each lot's vehicle again, a lot whose
@@ -1386,7 +1483,7 @@ function TheContractorAuctionSite:resolveSavedVehicles()
 end
 
 function TheContractorAuctionSite:writeInitialClientState(streamId, connection)
-    TCAuctionSiteEvent.writeSite(streamId, self.fieldId, self.lots, self.walkways)
+    TCAuctionSiteEvent.writeSite(streamId, self.fieldId, self.lots, self.walkways, self.scene)
 end
 
 function TheContractorAuctionSite:readInitialClientState(streamId, connection)

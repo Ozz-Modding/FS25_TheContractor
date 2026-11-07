@@ -8,7 +8,7 @@
 <GUI onOpen="onOpen" onClose="onClose" onCreate="onCreate">
     <GuiElement profile="newLayer"/>
     <Bitmap profile="dialogFullscreenBg" id="dialogBg"/>
-    <GuiElement profile="fs25_dialogBg" id="dialogElement" size="760px 850px">
+    <GuiElement profile="fs25_dialogBg" id="dialogElement" size="760px 882px">
         <ThreePartBitmap profile="fs25_dialogBgMiddle"/>
         <ThreePartBitmap profile="fs25_dialogBgTop"/>
         <ThreePartBitmap profile="fs25_dialogBgBottom"/>
@@ -16,7 +16,7 @@
 
             <Text profile="fs25_dialogTitle" id="dialogTitleElement" position="0px -30px" text=""/>
 
-            <GuiElement profile="tc_repairQuoteCanvas" position="0px -76px" size="700px 670px">
+            <GuiElement profile="tc_repairQuoteCanvas" position="0px -76px" size="700px 702px">
 
                 <!-- The machine. -->
                 <RoundCorner profile="tc_panel" position="0px 0px" size="700px 200px"/>
@@ -42,9 +42,9 @@
                 <!-- The shop's specifications (power, speed, tank, working
                      width, ...), as vanilla's shop and UEY's barter dialog show
                      them: one icon and value each, cloned from the template. -->
-                <RoundCorner profile="tc_panel" position="0px -212px" size="700px 110px"/>
+                <RoundCorner profile="tc_panel" position="0px -212px" size="700px 142px"/>
                 <Text profile="tc_sectionTitle" text="$l10n_tc_auctionLot_specs" position="24px -224px" size="652px 24px"/>
-                <ScrollingLayout position="24px -252px" size="652px 64px" flowDirection="horizontal" numFlows="2" id="specsLayout">
+                <ScrollingLayout profile="tc_auctionLotSpecs" position="24px -252px" size="652px 96px" flowDirection="horizontal" numFlows="3" id="specsLayout">
                     <GuiElement profile="fs25_itemDetailsTemplateBox" name="detailTemplate" id="specTemplate" visible="false">
                         <Bitmap profile="fs25_itemDetailsIcon" name="icon"/>
                         <Text profile="fs25_itemDetailsText" text="" name="text" textAutoWidth="true"/>
@@ -52,24 +52,24 @@
                 </ScrollingLayout>
 
                 <!-- What to judge a bid from, when bidding closes, and the farm's bid. -->
-                <RoundCorner profile="tc_panel" position="0px -334px" size="700px 330px"/>
-                <Text profile="tc_sectionTitle" text="$l10n_tc_auctionLot_guide" position="24px -348px" size="652px 24px"/>
-                <Bitmap profile="tc_divider" position="24px -376px" size="652px 1px"/>
-                <Text profile="tc_auctionGuidePrice" id="guideText" text="" position="24px -384px" size="652px 56px"/>
-                <Text profile="tc_panelNote" text="$l10n_tc_auctionLot_guideNote" position="24px -440px" size="652px 24px"/>
-                <Text profile="tc_panelHeading" id="closesText" text="" position="24px -468px" size="652px 32px"/>
-                <Bitmap profile="tc_divider" position="24px -508px" size="652px 1px"/>
-                <Text profile="tc_panelHeading" id="yourBidText" text="" position="24px -516px" size="652px 32px"/>
+                <RoundCorner profile="tc_panel" position="0px -366px" size="700px 330px"/>
+                <Text profile="tc_sectionTitle" text="$l10n_tc_auctionLot_guide" position="24px -380px" size="652px 24px"/>
+                <Bitmap profile="tc_divider" position="24px -408px" size="652px 1px"/>
+                <Text profile="tc_auctionGuidePrice" id="guideText" text="" position="24px -416px" size="652px 56px"/>
+                <Text profile="tc_panelNote" text="$l10n_tc_auctionLot_guideNote" position="24px -472px" size="652px 24px"/>
+                <Text profile="tc_panelHeading" id="closesText" text="" position="24px -500px" size="652px 32px"/>
+                <Bitmap profile="tc_divider" position="24px -540px" size="652px 1px"/>
+                <Text profile="tc_panelHeading" id="yourBidText" text="" position="24px -548px" size="652px 32px"/>
                 <!-- 139: the bid to leave, left/right through the guide's
                      percentages (gamepad and mouse alike), then Bid. Only while
                      the lot's open. -->
-                <GuiElement profile="tc_repairQuoteRow" id="bidRow" position="24px -552px" size="652px 44px">
+                <GuiElement profile="tc_repairQuoteRow" id="bidRow" position="24px -584px" size="652px 44px">
                     <Text profile="tc_detailLabel" text="$l10n_tc_auctionLot_newBid" position="0px 0px" size="200px 44px"/>
                     <MultiTextOption profile="tc_repairQuotePicker" id="bidOption" position="210px -4px" focusInit="onOpen">
                         <Text profile="fs25_multiTextOptionText" width="300px" name="text"/>
                     </MultiTextOption>
                 </GuiElement>
-                <Text profile="tc_panelNote" id="noteText" text="" position="24px -600px" size="652px 52px" textMaxNumLines="3"/>
+                <Text profile="tc_panelNote" id="noteText" text="" position="24px -632px" size="652px 52px" textMaxNumLines="3"/>
             </GuiElement>
         </GuiElement>
 

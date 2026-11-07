@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="iso-8859-1"?>
+
+<i3D name="auctionSiteSign" version="1.6" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://i3d.giants.ch/schema/i3d-1.6.xsd">
+  <Asset>
+    <Export program="i3dConverter" version="1.0"/>
+  </Asset>
+
+  <Files>
+    <File fileId="4" filename="$data/shaders/placeableShader.xml"/>
+    <File fileId="1" filename="$data/shared/detailLibrary/metallic/zincGalvanized_diffuse.dds"/>
+    <File fileId="2" filename="$data/shared/detailLibrary/metallic/zincGalvanized_normal.dds"/>
+    <File fileId="3" filename="$data/shared/detailLibrary/metallic/zincGalvanized_specular.dds"/>
+    <File fileId="7" filename="$data/shared/detailLibrary/nonMetallic/wood/wood2Oak_diffuse.dds"/>
+    <File fileId="8" filename="$data/shared/detailLibrary/nonMetallic/wood/wood2_normal.dds"/>
+    <File fileId="9" filename="$data/shared/detailLibrary/nonMetallic/wood/wood2_specular.dds"/>
+    <File fileId="11" filename="../images/auctionSiteSignDigits.dds"/>
+    <File fileId="10" filename="../images/auctionSiteSigns.dds"/>
+  </Files>
+
+
+  <Materials>
+    <Material name="auctionSiteSignDigits_mat" materialId="3" alphaBlending="true">
+      <Texture fileId="11"/>
+    </Material>
+    <Material name="auctionSiteSignFace_mat" materialId="2">
+      <Texture fileId="10"/>
+    </Material>
+    <Material name="auctionSiteSignPost_mat" materialId="4" customShaderId="4">
+      <Texture fileId="1"/>
+      <Normalmap fileId="2"/>
+      <Glossmap fileId="3"/>
+    </Material>
+    <Material name="auctionSiteSignWood_mat" materialId="1" customShaderId="4">
+      <Texture fileId="7"/>
+      <Normalmap fileId="8"/>
+      <Glossmap fileId="9"/>
+    </Material>
+  </Materials>
+
+
+  <Shapes externalShapesFile="auctionSiteSign.i3d.shapes">
+  </Shapes>
+
+  <Scene>
+    <TransformGroup name="auctionSiteSign" clipDistance="250" nodeId="25">
+      <TransformGroup name="visuals" nodeId="26">
+        <Shape name="posts" shapeId="1" nodeId="27" castsShadows="true" receiveShadows="true" materialIds="4"/>
+        <Shape name="board" shapeId="2" nodeId="28" castsShadows="true" receiveShadows="true" materialIds="1"/>
+        <TransformGroup name="faces" nodeId="29">
+          <Shape name="face1" shapeId="3" nodeId="30" castsShadows="false" receiveShadows="true" materialIds="2"/>
+          <Shape name="face2" shapeId="4" nodeId="31" castsShadows="false" receiveShadows="true" materialIds="2"/>
+          <Shape name="face3" shapeId="5" nodeId="32" castsShadows="false" receiveShadows="true" materialIds="2"/>
+          <Shape name="face4" shapeId="6" nodeId="33" castsShadows="false" receiveShadows="true" materialIds="2"/>
+          <Shape name="face5" shapeId="7" nodeId="34" castsShadows="false" receiveShadows="true" materialIds="2"/>
+        </TransformGroup>
+        <TransformGroup name="digits" nodeId="35">
+          <TransformGroup name="slot1" nodeId="36">
+            <Shape name="digit0" shapeId="8" nodeId="37" castsShadows="false" receiveShadows="true" materialIds="3"/>
+            <Shape name="digit1" shapeId="9" nodeId="38" castsShadows="false" receiveShadows="true" materialIds="3"/>
+            <Shape name="digit2" shapeId="10" nodeId="39" castsShadows="false" receiveShadows="true" materialIds="3"/>
+            <Shape name="digit3" shapeId="11" nodeId="40" castsShadows="false" receiveShadows="true" materialIds="3"/>
+            <Shape name="digit4" shapeId="12" nodeId="41" castsShadows="false" receiveShadows="true" materialIds="3"/>
+            <Shape name="digit5" shapeId="13" nodeId="42" castsShadows="false" receiveShadows="true" materialIds="3"/>
+            <Shape name="digit6" shapeId="14" nodeId="43" castsShadows="false" receiveShadows="true" materialIds="3"/>
+            <Shape name="digit7" shapeId="15" nodeId="44" castsShadows="false" receiveShadows="true" materialIds="3"/>
+            <Shape name="digit8" shapeId="16" nodeId="45" castsShadows="false" receiveShadows="true" materialIds="3"/>
+            <Shape name="digit9" shapeId="17" nodeId="46" castsShadows="false" receiveShadows="true" materialIds="3"/>
+          </TransformGroup>
+          <TransformGroup name="slot2" nodeId="47">
+            <Shape name="digit0" shapeId="8" nodeId="48" castsShadows="false" receiveShadows="true" materialIds="3"/>
+            <Shape name="digit1" shapeId="9" nodeId="49" castsShadows="false" receiveShadows="true" materialIds="3"/>
+            <Shape name="digit2" shapeId="10" nodeId="50" castsShadows="false" receiveShadows="true" materialIds="3"/>
+            <Shape name="digit3" shapeId="11" nodeId="51" castsShadows="false" receiveShadows="true" materialIds="3"/>
+            <Shape name="digit4" shapeId="12" nodeId="52" castsShadows="false" receiveShadows="true" materialIds="3"/>
+            <Shape name="digit5" shapeId="13" nodeId="53" castsShadows="false" receiveShadows="true" materialIds="3"/>
+            <Shape name="digit6" shapeId="14" nodeId="54" castsShadows="false" receiveShadows="true" materialIds="3"/>
+            <Shape name="digit7" shapeId="15" nodeId="55" castsShadows="false" receiveShadows="true" materialIds="3"/>
+            <Shape name="digit8" shapeId="16" nodeId="56" castsShadows="false" receiveShadows="true" materialIds="3"/>
+            <Shape name="digit9" shapeId="17" nodeId="57" castsShadows="false" receiveShadows="true" materialIds="3"/>
+          </TransformGroup>
+          <TransformGroup name="slot3" nodeId="58">
+            <Shape name="digit0" shapeId="8" nodeId="59" castsShadows="false" receiveShadows="true" materialIds="3"/>
+            <Shape name="digit1" shapeId="9" nodeId="60" castsShadows="false" receiveShadows="true" materialIds="3"/>
+            <Shape name="digit2" shapeId="10" nodeId="61" castsShadows="false" receiveShadows="true" materialIds="3"/>
+            <Shape name="digit3" shapeId="11" nodeId="62" castsShadows="false" receiveShadows="true" materialIds="3"/>
+            <Shape name="digit4" shapeId="12" nodeId="63" castsShadows="false" receiveShadows="true" materialIds="3"/>
+            <Shape name="digit5" shapeId="13" nodeId="64" castsShadows="false" receiveShadows="true" materialIds="3"/>
+            <Shape name="digit6" shapeId="14" nodeId="65" castsShadows="false" receiveShadows="true" materialIds="3"/>
+            <Shape name="digit7" shapeId="15" nodeId="66" castsShadows="false" receiveShadows="true" materialIds="3"/>
+            <Shape name="digit8" shapeId="16" nodeId="67" castsShadows="false" receiveShadows="true" materialIds="3"/>
+            <Shape name="digit9" shapeId="17" nodeId="68" castsShadows="false" receiveShadows="true" materialIds="3"/>
+          </TransformGroup>
+          <TransformGroup name="slot4" nodeId="69">
+            <Shape name="digit0" shapeId="8" nodeId="70" castsShadows="false" receiveShadows="true" materialIds="3"/>
+            <Shape name="digit1" shapeId="9" nodeId="71" castsShadows="false" receiveShadows="true" materialIds="3"/>
+            <Shape name="digit2" shapeId="10" nodeId="72" castsShadows="false" receiveShadows="true" materialIds="3"/>
+            <Shape name="digit3" shapeId="11" nodeId="73" castsShadows="false" receiveShadows="true" materialIds="3"/>
+            <Shape name="digit4" shapeId="12" nodeId="74" castsShadows="false" receiveShadows="true" materialIds="3"/>
+            <Shape name="digit5" shapeId="13" nodeId="75" castsShadows="false" receiveShadows="true" materialIds="3"/>
+            <Shape name="digit6" shapeId="14" nodeId="76" castsShadows="false" receiveShadows="true" materialIds="3"/>
+            <Shape name="digit7" shapeId="15" nodeId="77" castsShadows="false" receiveShadows="true" materialIds="3"/>
+            <Shape name="digit8" shapeId="16" nodeId="78" castsShadows="false" receiveShadows="true" materialIds="3"/>
+            <Shape name="digit9" shapeId="17" nodeId="79" castsShadows="false" receiveShadows="true" materialIds="3"/>
+          </TransformGroup>
+          <TransformGroup name="slot5" nodeId="80">
+            <Shape name="digit0" shapeId="8" nodeId="81" castsShadows="false" receiveShadows="true" materialIds="3"/>
+            <Shape name="digit1" shapeId="9" nodeId="82" castsShadows="false" receiveShadows="true" materialIds="3"/>
+            <Shape name="digit2" shapeId="10" nodeId="83" castsShadows="false" receiveShadows="true" materialIds="3"/>
+            <Shape name="digit3" shapeId="11" nodeId="84" castsShadows="false" receiveShadows="true" materialIds="3"/>
+            <Shape name="digit4" shapeId="12" nodeId="85" castsShadows="false" receiveShadows="true" materialIds="3"/>
+            <Shape name="digit5" shapeId="13" nodeId="86" castsShadows="false" receiveShadows="true" materialIds="3"/>
+            <Shape name="digit6" shapeId="14" nodeId="87" castsShadows="false" receiveShadows="true" materialIds="3"/>
+            <Shape name="digit7" shapeId="15" nodeId="88" castsShadows="false" receiveShadows="true" materialIds="3"/>
+            <Shape name="digit8" shapeId="16" nodeId="89" castsShadows="false" receiveShadows="true" materialIds="3"/>
+            <Shape name="digit9" shapeId="17" nodeId="90" castsShadows="false" receiveShadows="true" materialIds="3"/>
+          </TransformGroup>
+          <TransformGroup name="slot6" nodeId="91">
+            <Shape name="digit0" shapeId="8" nodeId="92" castsShadows="false" receiveShadows="true" materialIds="3"/>
+            <Shape name="digit1" shapeId="9" nodeId="93" castsShadows="false" receiveShadows="true" materialIds="3"/>
+            <Shape name="digit2" shapeId="10" nodeId="94" castsShadows="false" receiveShadows="true" materialIds="3"/>
+            <Shape name="digit3" shapeId="11" nodeId="95" castsShadows="false" receiveShadows="true" materialIds="3"/>
+            <Shape name="digit4" shapeId="12" nodeId="96" castsShadows="false" receiveShadows="true" materialIds="3"/>
+            <Shape name="digit5" shapeId="13" nodeId="97" castsShadows="false" receiveShadows="true" materialIds="3"/>
+            <Shape name="digit6" shapeId="14" nodeId="98" castsShadows="false" receiveShadows="true" materialIds="3"/>
+            <Shape name="digit7" shapeId="15" nodeId="99" castsShadows="false" receiveShadows="true" materialIds="3"/>
+            <Shape name="digit8" shapeId="16" nodeId="100" castsShadows="false" receiveShadows="true" materialIds="3"/>
+            <Shape name="digit9" shapeId="17" nodeId="101" castsShadows="false" receiveShadows="true" materialIds="3"/>
+          </TransformGroup>
+          <Shape name="dash" shapeId="18" nodeId="102" castsShadows="false" receiveShadows="true" materialIds="3"/>
+        </TransformGroup>
+      </TransformGroup>
+      <Shape name="col" shapeId="19" static="true" collisionFilterGroup="0x3e" collisionFilterMask="0xfffffbff" density="0.0001" nodeId="103" castsShadows="false" receiveShadows="false" nonRenderable="true" materialIds="1"/>
+    </TransformGroup>
+  </Scene>
+
+</i3D>

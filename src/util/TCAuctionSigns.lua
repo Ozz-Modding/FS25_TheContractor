@@ -19,8 +19,10 @@
 --     (the first whose verge has room), facing a driver coming in.
 --   The verge: offset from the road's middle by each of vergeOffsets in
 --     turn, the driver's side (DRIVE_SIDE) first, then the other. A spot
---     nearer than minRoadClearance to any road's middle is on a road; the
---     caller's isClear says whether anything's in the way there.
+--     nearer than minRoadClearance to any road's middle is on a road, and
+--     one with road all round it (isEnclosed: a roundabout's island) is
+--     passed over too; the caller's
+--     isClear says whether anything's in the way there.
 --   Which: the best junctions first, one sign each, each junction at least
 --     minSpacing from the signs already up (spread over the map), at most
 --     maxSigns.
@@ -39,9 +41,14 @@ TCAuctionSigns.RULES = {
     busyRadius = 250,         -- a junction's road counted within this
     busyCell = 50,            -- the grid the road's counted in
     approachDistance = 35,    -- a junction's sign this far back along the road a driver comes in on
-    minApproach = 12,         -- an approach shorter than this (another junction) gets none
+    minApproach = 25,         -- an approach shorter than this (another junction, a roundabout's ring) gets none
+    minThrough = 150,         -- the sign's road carries on at least this far past it (no dead ends)
     vergeOffsets = { 5, 4.25, 3.5 }, -- from the road's middle, tried in turn
     minRoadClearance = 3,     -- from any road's middle
+    crossRoadClearance = 8,   -- from the middle of a road across the sign's own (a ring, a side road)
+    crossRoadDegrees = 30,    -- a road this far off the sign's own direction is across it
+    enclosedRadius = 30,      -- isEnclosed's rays: this long,
+    enclosedRays = 16,        -- this many round the spot
     minSpacing = 400,         -- between signs
     maxSigns = 10,
 }
@@ -53,6 +60,9 @@ TCAuctionSigns.DRIVE_SIDE = "right"
 -- isClear adds its own reasons).
 TCAuctionSigns.REJECT = {
     ON_ROAD = "onRoad",
+    CROSS_ROAD = "crossRoad",
+    DEAD_END = "deadEnd",
+    ENCLOSED = "enclosed",
     TOO_CLOSE = "tooClose",
 }
 
@@ -407,10 +417,104 @@ local function countReject(rejected, reason)
     rejected[reason] = (rejected[reason] or 0) + 1
 end
 
+-- Whether a spot has road all round it (pure): a roundabout's island. A
+-- ray every enclosedRays round the spot, enclosedRadius long: enclosed
+-- when every one crosses a road. On a verge the rays along the road cross
+-- nothing, whatever's behind it (another street, a village's next block).
+-- (AI splines run round an island but never over it, so isOnRoad misses
+-- it.)
+function TCAuctionSigns.isEnclosed(network, x, z)
+    local R = TCAuctionSigns.RULES
+    local nodes = network.nodes
+    local radius = R.enclosedRadius
+    local near = nearNodes(network.grid, network.cellSize, nodes, x, z, radius + R.sampleStep)
+    for i = 0, R.enclosedRays - 1 do
+        local angle = 2 * math.pi * i / R.enclosedRays
+        local ex, ez = x + math.cos(angle) * radius, z + math.sin(angle) * radius
+        local hit = false
+        for _, index in ipairs(near) do
+            local a = nodes[index]
+            for _, edge in ipairs(a.edges) do
+                local b = nodes[edge.to]
+                if segmentsCross(x, z, ex, ez, a.x, a.z, b.x, b.z) then
+                    hit = true
+                    break
+                end
+            end
+            if hit then
+                break
+            end
+        end
+        if not hit then
+            return false
+        end
+    end
+    return true
+end
+
+-- Whether a road across the sign's own (heading hx, hz) passes nearer than
+-- crossRoadClearance to (x, z) (pure). A road's middle line can be well
+-- inside its tarmac (a roundabout's wide ring), so one crossing the sign's
+-- road keeps further off than minRoadClearance; one alongside (the other
+-- lane's spline) is isOnRoad's.
+function TCAuctionSigns.isNearCrossRoad(network, x, z, hx, hz)
+    local R = TCAuctionSigns.RULES
+    local nodes = network.nodes
+    local cosAcross = math.cos(math.rad(R.crossRoadDegrees))
+    local clearance = R.crossRoadClearance
+    for _, index in ipairs(nearNodes(network.grid, network.cellSize, nodes, x, z, clearance + R.sampleStep)) do
+        local a = nodes[index]
+        for _, edge in ipairs(a.edges) do
+            local b = nodes[edge.to]
+            local abx, abz = b.x - a.x, b.z - a.z
+            local lengthSq = abx * abx + abz * abz
+            if lengthSq > 0.0001 then
+                local length = math.sqrt(lengthSq)
+                if math.abs((abx * hx + abz * hz) / length) < cosAcross then
+                    local t = math.max(0, math.min(1, ((x - a.x) * abx + (z - a.z) * abz) / lengthSq))
+                    local px, pz = a.x + abx * t, a.z + abz * t
+                    if (x - px) ^ 2 + (z - pz) ^ 2 < clearance * clearance then
+                        return true
+                    end
+                end
+            end
+        end
+    end
+    return false
+end
+
+-- Whether the road carries on minThrough past node at (pure), away from
+-- the node before it (back towards the junction) and the junction itself:
+-- a drive or a yard's spur that stops short is a dead end.
+function TCAuctionSigns.leadsOn(network, at, back, startCluster)
+    local R = TCAuctionSigns.RULES
+    local nodes = network.nodes
+    local best = { [at] = 0, [back] = math.huge }
+    local stack = { at }
+    while #stack > 0 do
+        local index = table.remove(stack)
+        local walked = best[index]
+        if walked >= R.minThrough then
+            return true
+        end
+        for _, edge in ipairs(nodes[index].edges) do
+            local to = edge.to
+            if nodes[to].cluster ~= startCluster then
+                local further = walked + distanceBetween(nodes[index], nodes[to])
+                if best[to] == nil or further < best[to] then
+                    best[to] = further
+                    table.insert(stack, to)
+                end
+            end
+        end
+    end
+    return false
+end
+
 -- The first verge spot that works for a sign by road point (roadX, roadZ):
 -- sides in order, each at every verge offset. base: the sign's other values
 -- (yaw, ...); each spot's x, z, side and offset are added.
-local function placeOnVerge(network, roadX, roadZ, sides, base, isClear, rejected)
+local function placeOnVerge(network, roadX, roadZ, sides, base, isClear, rejected, hx, hz)
     for _, side in ipairs(sides) do
         for _, offset in ipairs(TCAuctionSigns.RULES.vergeOffsets) do
             local x = roadX + side.x * offset
@@ -422,6 +526,10 @@ local function placeOnVerge(network, roadX, roadZ, sides, base, isClear, rejecte
             candidate.x, candidate.z, candidate.side, candidate.offset = x, z, side.name, offset
             if isOnRoad(network, x, z) then
                 countReject(rejected, TCAuctionSigns.REJECT.ON_ROAD)
+            elseif TCAuctionSigns.isNearCrossRoad(network, x, z, hx, hz) then
+                countReject(rejected, TCAuctionSigns.REJECT.CROSS_ROAD)
+            elseif TCAuctionSigns.isEnclosed(network, x, z) then
+                countReject(rejected, TCAuctionSigns.REJECT.ENCLOSED)
             else
                 local clear, reason = isClear(candidate)
                 if clear then
@@ -467,7 +575,10 @@ function TCAuctionSigns.pick(splines, isClear)
         else
             for _, arm in ipairs(junction.arms) do
                 local at, walked, towards = walkApproach(network, arm, junctionIds)
-                if walked >= R.minApproach and towards ~= nil then
+                if walked >= R.minApproach and towards ~= nil and
+                        not TCAuctionSigns.leadsOn(network, at, towards, junction.cluster.id) then
+                    countReject(rejected, TCAuctionSigns.REJECT.DEAD_END)
+                elseif walked >= R.minApproach and towards ~= nil then
                     local node = nodes[at]
                     -- The driver's heading here, towards the junction.
                     local hx, hz = normalise(nodes[towards].x - node.x, nodes[towards].z - node.z)
@@ -477,7 +588,8 @@ function TCAuctionSigns.pick(splines, isClear)
                         junctionX = junction.cluster.x, junctionZ = junction.cluster.z,
                         busyMetres = junction.busyMetres,
                     }
-                    local spot = placeOnVerge(network, node.x, node.z, getSides(hx, hz), base, isClear, rejected)
+                    local spot = placeOnVerge(network, node.x, node.z, getSides(hx, hz), base, isClear, rejected,
+                        hx, hz)
                     if spot ~= nil then
                         table.insert(signs, spot)
                         break
