@@ -463,7 +463,7 @@ end
 function TheContractorFinances:getPursuitMessageArgs(invoice)
     local job = g_currentMission.TheContractor.Jobs:getJob(invoice.farmId, invoice.jobId)
     return {
-        job ~= nil and ("$l10n_tc_jobType_" .. job.jobType) or "$l10n_tc_legal_unknownJob",
+        job ~= nil and ("$l10n_tc_jobType_" .. job:getTypeLabel()) or "$l10n_tc_legal_unknownJob",
         job ~= nil and job:getLocationText() or "?",
         "$money_" .. invoice.amount,
         "$money_" .. (invoice.pursuitFee or 0),

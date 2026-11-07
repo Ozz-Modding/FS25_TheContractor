@@ -19,10 +19,10 @@ function TCWatchdogInterventionEvent.emptyNew()
     return Event.new(TCWatchdogInterventionEvent_mt)
 end
 
-function TCWatchdogInterventionEvent.new(farmId, jobType, fieldId, isEscalation)
+function TCWatchdogInterventionEvent.new(farmId, typeLabel, fieldId, isEscalation)
     local self = TCWatchdogInterventionEvent.emptyNew()
     self.farmId = farmId
-    self.jobType = jobType
+    self.typeLabel = typeLabel
     self.fieldId = fieldId
     self.isEscalation = isEscalation
     return self
@@ -30,27 +30,27 @@ end
 
 function TCWatchdogInterventionEvent:writeStream(streamId, connection)
     streamWriteInt32(streamId, self.farmId)
-    streamWriteString(streamId, self.jobType)
+    streamWriteString(streamId, self.typeLabel)
     streamWriteInt32(streamId, self.fieldId)
     streamWriteBool(streamId, self.isEscalation)
 end
 
 function TCWatchdogInterventionEvent:readStream(streamId, connection)
     self.farmId = streamReadInt32(streamId)
-    self.jobType = streamReadString(streamId)
+    self.typeLabel = streamReadString(streamId)
     self.fieldId = streamReadInt32(streamId)
     self.isEscalation = streamReadBool(streamId)
     self:run(connection)
 end
 
 function TCWatchdogInterventionEvent:run(connection)
-    TCWatchdogInterventionEvent.showNotification(self.farmId, self.jobType, self.fieldId, self.isEscalation)
+    TCWatchdogInterventionEvent.showNotification(self.farmId, self.typeLabel, self.fieldId, self.isEscalation)
 end
 
 -- Shared by run() (remote clients) and TheContractorWatchdog's own
 -- server/host local notification - see this file's header comment on why
 -- that can't just rely on the broadcast.
-function TCWatchdogInterventionEvent.showNotification(farmId, jobType, fieldId, isEscalation)
+function TCWatchdogInterventionEvent.showNotification(farmId, typeLabel, fieldId, isEscalation)
     if farmId ~= g_currentMission:getFarmId() then
         return
     end
@@ -63,5 +63,5 @@ function TCWatchdogInterventionEvent.showNotification(farmId, jobType, fieldId, 
         FSBaseMission.INGAME_NOTIFICATION_INFO
 
     g_currentMission:addIngameNotification(notificationType,
-        string.format(g_i18n:getText(textKey), g_i18n:getText("tc_jobType_" .. jobType), fieldLabel))
+        string.format(g_i18n:getText(textKey), g_i18n:getText("tc_jobType_" .. typeLabel), fieldLabel))
 end

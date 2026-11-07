@@ -181,6 +181,10 @@ function TheContractorDispatch:startJobForWorker(job, skipTransport)
         return
     end
 
+    -- A sow job's machines are set to its crop before anything else, so the
+    -- worker sows the right thing (vanilla's AI sows whatever was left set).
+    TCJobSiteSetup.selectJobSeed(job)
+
     -- 032: the job's supplies go on first, out of the farm's stock. With a
     -- tank still empty (nothing in stock) or holding the wrong product, the
     -- worker doesn't go anywhere: the job's on hold until TCJobSupplies'
@@ -620,10 +624,10 @@ end
 -- text as it is), reasonArgs its plain args.
 function TheContractorDispatch:notifyDispatchFailed(job, reasonKey, reasonArgs)
     reasonArgs = reasonArgs or {}
-    TCDispatchFailedEvent.showNotification(job.farmId, job.jobType, job.fieldId, reasonKey, reasonArgs)
+    TCDispatchFailedEvent.showNotification(job.farmId, job:getTypeLabel(), job.fieldId, reasonKey, reasonArgs)
 
     if g_server ~= nil then
-        g_server:broadcastEvent(TCDispatchFailedEvent.new(job.farmId, job.jobType, job.fieldId, reasonKey,
+        g_server:broadcastEvent(TCDispatchFailedEvent.new(job.farmId, job:getTypeLabel(), job.fieldId, reasonKey,
             reasonArgs))
     end
 end

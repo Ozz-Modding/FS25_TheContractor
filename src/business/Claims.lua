@@ -87,8 +87,10 @@ function TheContractorClaims.new()
     local self = {}
     setmetatable(self, TheContractorClaims_mt)
 
-    -- pendingClaims[i] = { farmId, jobId, jobType, fieldId, workerName,
-    -- cause, amount, insured, reputationPenalty, notifyDay } - server-only.
+    -- pendingClaims[i] = { farmId, jobId, jobType, typeLabel, fieldId,
+    -- workerName, cause, amount, insured, reputationPenalty, notifyDay } -
+    -- server-only. typeLabel is the job's getTypeLabel(), what the message
+    -- calls it ("plant" for a planted crop's sow job).
     self.pendingClaims = {}
 
     -- historyByFarm[farmId] = { { periodIndex, amount }, ... } - insured
@@ -212,6 +214,7 @@ function TheContractorClaims:createPendingClaim(job, worker, delayDays)
         farmId = job.farmId,
         jobId = job.id,
         jobType = job.jobType,
+        typeLabel = job:getTypeLabel(),
         fieldId = job.fieldId,
         workerName = worker.name,
         cause = causes[math.random(#causes)],
@@ -318,7 +321,7 @@ function TheContractorClaims:deliverClaim(claim)
         claim.fieldId,
         claim.workerName,
         "$l10n_tc_claims_cause_" .. claim.cause,
-        "$l10n_tc_jobType_" .. claim.jobType,
+        "$l10n_tc_jobType_" .. (claim.typeLabel or claim.jobType),
         "$money_" .. claim.amount,
         "$money_" .. paid,
     }
@@ -378,6 +381,7 @@ function TheContractorClaims:loadFromXMLFile(xmlFile)
             farmId = getXMLInt(xmlFile, key .. "#farmId"),
             jobId = Utils.getNoNil(getXMLInt(xmlFile, key .. "#jobId"), 0),
             jobType = Utils.getNoNil(getXMLString(xmlFile, key .. "#jobType"), "cultivate"),
+            typeLabel = getXMLString(xmlFile, key .. "#typeLabel"),
             fieldId = Utils.getNoNil(getXMLInt(xmlFile, key .. "#fieldId"), 0),
             workerName = Utils.getNoNil(getXMLString(xmlFile, key .. "#workerName"), "?"),
             cause = Utils.getNoNil(getXMLString(xmlFile, key .. "#cause"), "ruts"),
@@ -418,6 +422,9 @@ function TheContractorClaims:saveToXmlFile(xmlFile)
         setXMLInt(xmlFile, key .. "#farmId", claim.farmId)
         setXMLInt(xmlFile, key .. "#jobId", claim.jobId)
         setXMLString(xmlFile, key .. "#jobType", claim.jobType)
+        if claim.typeLabel ~= nil then
+            setXMLString(xmlFile, key .. "#typeLabel", claim.typeLabel)
+        end
         setXMLInt(xmlFile, key .. "#fieldId", claim.fieldId)
         setXMLString(xmlFile, key .. "#workerName", claim.workerName)
         setXMLString(xmlFile, key .. "#cause", claim.cause)

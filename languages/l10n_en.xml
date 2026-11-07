@@ -91,7 +91,8 @@
 		<text name="tc_equipment_need_trailerHitch" text="Trailer that hitches to the haulage tractor"/>
 		<text name="tc_equipment_need_haulageSuffix" text="%s (if a worker hauls)"/>
 		<text name="tc_equipment_need_implement_cultivate" text="Cultivator"/>
-		<text name="tc_equipment_need_implement_sow" text="Seeder or planter"/>
+		<text name="tc_equipment_need_implement_sow" text="Seeder for %s"/>
+		<text name="tc_equipment_need_implement_plant" text="Planter for %s"/>
 		<text name="tc_equipment_need_implement_plow" text="Plow"/>
 		<text name="tc_equipment_need_implement_mow" text="Mower"/>
 		<text name="tc_equipment_need_implement_tedder" text="Tedder"/>
@@ -196,6 +197,7 @@
 		<text name="tc_jobType_harvest" text="Harvest"/>
 		<text name="tc_jobType_cultivate" text="Cultivate"/>
 		<text name="tc_jobType_sow" text="Sow"/>
+		<text name="tc_jobType_plant" text="Plant"/>
 		<text name="tc_jobType_plow" text="Plow"/>
 		<text name="tc_jobType_harvestHaul" text="Harvest &amp; Haul"/>
 		<text name="tc_jobType_mow" text="Mow"/>
@@ -891,7 +893,8 @@
 		<text name="tc_equipment_missing_harvester" text="a harvester"/>
 		<text name="tc_equipment_missing_tractor" text="a tractor"/>
 		<text name="tc_equipment_missing_implement_cultivate" text="a cultivator"/>
-		<text name="tc_equipment_missing_implement_sow" text="a seeder or planter"/>
+		<text name="tc_equipment_missing_implement_sow" text="a seeder that can sow %s"/>
+		<text name="tc_equipment_missing_implement_plant" text="a planter that can plant %s"/>
 		<text name="tc_equipment_missing_implement_plow" text="a plow"/>
 		<text name="tc_equipment_missing_implement_mow" text="a mower"/>
 		<text name="tc_equipment_missing_implement_tedder" text="a tedder"/>

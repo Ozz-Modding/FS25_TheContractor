@@ -191,9 +191,9 @@ end
 -- farm - same "no SP loopback" shape TCJobMissedEvent/TCDispatchFailedEvent
 -- already use (see src/events/README.md).
 function TheContractorWatchdog:notify(job, isEscalation)
-    TCWatchdogInterventionEvent.showNotification(job.farmId, job.jobType, job.fieldId, isEscalation)
+    TCWatchdogInterventionEvent.showNotification(job.farmId, job:getTypeLabel(), job.fieldId, isEscalation)
 
     if g_server ~= nil then
-        g_server:broadcastEvent(TCWatchdogInterventionEvent.new(job.farmId, job.jobType, job.fieldId, isEscalation))
+        g_server:broadcastEvent(TCWatchdogInterventionEvent.new(job.farmId, job:getTypeLabel(), job.fieldId, isEscalation))
     end
 end

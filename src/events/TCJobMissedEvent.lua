@@ -20,11 +20,14 @@ function TCJobMissedEvent.emptyNew()
     return Event.new(TCJobMissedEvent_mt)
 end
 
-function TCJobMissedEvent.new(farmId, jobType, fieldId)
+-- typeLabel: the job's TheContractorJob:getTypeLabel(), the suffix of its
+-- tc_jobType_ key ("plant" for a sow job for a planted crop).
+function TCJobMissedEvent.new(farmId, jobType, fieldId, typeLabel)
     local self = TCJobMissedEvent.emptyNew()
     self.farmId = farmId
     self.jobType = jobType
     self.fieldId = fieldId
+    self.typeLabel = typeLabel
     return self
 end
 
@@ -32,23 +35,26 @@ function TCJobMissedEvent:writeStream(streamId, connection)
     streamWriteInt32(streamId, self.farmId)
     streamWriteString(streamId, self.jobType)
     streamWriteInt32(streamId, self.fieldId)
+    streamWriteString(streamId, self.typeLabel or self.jobType)
 end
 
 function TCJobMissedEvent:readStream(streamId, connection)
     self.farmId = streamReadInt32(streamId)
     self.jobType = streamReadString(streamId)
     self.fieldId = streamReadInt32(streamId)
+    self.typeLabel = streamReadString(streamId)
     self:run(connection)
 end
 
 function TCJobMissedEvent:run(connection)
-    TCJobMissedEvent.showNotification(self.farmId, self.jobType, self.fieldId)
+    TCJobMissedEvent.showNotification(self.farmId, self.jobType, self.fieldId, self.typeLabel)
 end
 
 -- Shared by run() (remote clients) and TheContractorJobs:missJob (the
 -- server/host's own local notification — see this file's header comment on
 -- why that can't just rely on the broadcast).
-function TCJobMissedEvent.showNotification(farmId, jobType, fieldId)
+function TCJobMissedEvent.showNotification(farmId, jobType, fieldId, typeLabel)
+    typeLabel = typeLabel or jobType
     if farmId ~= g_currentMission:getFarmId() then
         return
     end
@@ -85,6 +91,6 @@ function TCJobMissedEvent.showNotification(farmId, jobType, fieldId)
     local fieldLabel = field ~= nil and field:getName() or tostring(fieldId)
 
     g_currentMission:addIngameNotification(FSBaseMission.INGAME_NOTIFICATION_CRITICAL,
-        string.format(g_i18n:getText("tc_job_missedNotification"), g_i18n:getText("tc_jobType_" .. jobType),
+        string.format(g_i18n:getText("tc_job_missedNotification"), g_i18n:getText("tc_jobType_" .. typeLabel),
             fieldLabel))
 end
