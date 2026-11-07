@@ -1,7 +1,8 @@
--- HUD progress bars for player-driven jobs: which jobs get one (allocated
--- or in progress, to a player, never a hired crew or a workshop job), the
--- progress they show, bars coming and going as jobs move on, marked for
--- drawing every frame, and nothing for other farms or a spectator.
+-- HUD progress bars for jobs: which jobs get one (allocated or in progress,
+-- never a workshop job; by default to a player only, all jobs or none by
+-- the local jobProgressBars setting), the progress they show, bars coming
+-- and going as jobs move on, marked for drawing every frame, and nothing
+-- for other farms or a spectator.
 
 local function setup()
     local world = stubs.install()
@@ -16,8 +17,13 @@ local function setup()
     math.clamp = math.clamp or function(value, low, high)
         return math.min(math.max(value, low), high)
     end
+    world.texts.ui_on = "On"
+    world.texts.ui_off = "Off"
+    g_currentModSettingsDirectory = nil
     world:load("src/business/Job.lua")
     world:load("src/util/TCJobHud.lua")
+    world:load("src/business/Settings.lua")
+    g_currentMission.TheContractor.Settings = TheContractorSettings.new()
 
     g_fieldManager = {
         getFieldById = function(_, fieldId)
@@ -191,4 +197,48 @@ test("refreshed once a second, and reset clears every bar", function()
 
     TCJobHud.reset()
     assertEquals(#world.bars, 0, "after reset")
+end)
+
+local function setMode(key)
+    g_currentMission.TheContractor.Settings:setLocal("jobProgressBars", TheContractorSettings.JOB_PROGRESS_BARS[key])
+end
+
+test("the setting defaults to player only", function()
+    setup()
+    assertEquals(TCJobHud.getMode(), TheContractorSettings.JOB_PROGRESS_BARS.PLAYER_ONLY)
+    assertTrue(TheContractorSettings.isLocalItem("jobProgressBars"), "a local item")
+end)
+
+test("all shows a hired crew's allocated and started jobs too, never a workshop job", function()
+    local world = setup()
+    world:addJob({ state = TheContractorJob.STATE.ALLOCATED })
+    world:addJob({ state = TheContractorJob.STATE.ALLOCATED, workerId = 7 })
+    world:addJob({ state = TheContractorJob.STATE.IN_PROGRESS, workerId = 8 })
+    world:addJob({ state = TheContractorJob.STATE.ACCEPTED })
+    world:addJob({ state = TheContractorJob.STATE.COMPLETED, workerId = 9 })
+    world:addJob({}).workshop = { vehicleName = "Tractor" }
+    setMode("ALL")
+
+    local ids = barJobIds()
+    assertEquals(#ids, 3, "bars")
+    assertEquals(ids[1], 1)
+    assertEquals(ids[2], 2)
+    assertEquals(ids[3], 3)
+end)
+
+test("none shows no bars, and changing the setting adds and removes them at once", function()
+    local world = setup()
+    world:addJob({})
+    world:addJob({ workerId = 7 })
+    TCJobHud.refresh()
+    assertEquals(#world.bars, 1, "player only")
+
+    setMode("NONE")
+    assertEquals(#world.bars, 0, "none")
+
+    setMode("ALL")
+    assertEquals(#world.bars, 2, "all")
+
+    setMode("PLAYER_ONLY")
+    assertEquals(#world.bars, 1, "player only again")
 end)

@@ -21,6 +21,11 @@
 		<text name="tc_toolTip_farmerRetirements" text="On: now and then a farmer retires and a new person takes over their farm, with its land, yard, machines and your open jobs for them, at half your relationship with the old farmer. Farmers you've renamed or edited can retire too, and are replaced for good. Off: farmers never retire on their own."/>
 		<text name="tc_setting_showParkingSlots" text="Show parking slots"/>
 		<text name="tc_toolTip_showParkingSlots" text="Show your parking slots', repair zones' and standing spots' markings outside the construction menu too. Just for you: other players choose their own. Right Ctrl+P switches it by default."/>
+		<text name="tc_setting_jobProgressBars" text="Job progress bars"/>
+		<text name="tc_toolTip_jobProgressBars" text="Which of your farm's jobs show a progress bar on screen while they're allocated or under way: those allocated to a player, all of them (your staff's too), or none. Just for you: other players choose their own."/>
+		<text name="tc_setting_jobProgressBars_player" text="Player only"/>
+		<text name="tc_setting_jobProgressBars_all" text="All"/>
+		<text name="tc_setting_jobProgressBars_none" text="None"/>
 		<text name="tc_nameStyle_british" text="British"/>
 		<text name="tc_nameStyle_irish" text="Irish"/>
 		<text name="tc_nameStyle_american" text="American"/>

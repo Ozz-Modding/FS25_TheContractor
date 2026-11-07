@@ -123,12 +123,26 @@ TheContractorSettings.DEFINITIONS.showParkingSlots = {
     end
 }
 
+-- Which jobs get a HUD progress bar (TCJobHud): those allocated to a
+-- player, every allocated or started job, or none. A display preference,
+-- so a local item. Saved as the option's number.
+TheContractorSettings.JOB_PROGRESS_BARS = { PLAYER_ONLY = 1, ALL = 2, NONE = 3 }
+TheContractorSettings.DEFINITIONS.jobProgressBars = {
+    values = { 1, 2, 3 },
+    stringKeys = { "tc_setting_jobProgressBars_player", "tc_setting_jobProgressBars_all",
+        "tc_setting_jobProgressBars_none" },
+    default = 1,
+    onChanged = function()
+        TCJobHud.refresh()
+    end
+}
+
 -- Local items: one value per machine (each player's own), not per savegame.
 -- Shown in the same menu section and changeable by anyone, never synced,
 -- and kept in LOCAL_FILENAME in this machine's modSettings folder rather
 -- than the savegame. Adding one: a DEFINITIONS entry, its id here and the
 -- same two l10n keys.
-TheContractorSettings.LOCAL_ITEMS = { "showParkingSlots" }
+TheContractorSettings.LOCAL_ITEMS = { "showParkingSlots", "jobProgressBars" }
 TheContractorSettings.LOCAL_FILENAME = "localSettings.xml"
 TheContractorSettings.LOCAL_SAVE_KEY = "TheContractorLocal"
 

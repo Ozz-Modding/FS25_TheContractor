@@ -1,9 +1,10 @@
--- HUD progress bars for player-driven jobs: a job the local player's farm
--- has allocated to a player (not a hired worker) shows vanilla's contract
--- progress bar in the side notifications while it's allocated or in
--- progress, as a running vanilla contract does (AbstractMission:update).
--- Like vanilla it's shown to everyone on the farm, not only the player who
--- took the job on.
+-- HUD progress bars for jobs: a job of the local player's farm shows
+-- vanilla's contract progress bar in the side notifications while it's
+-- allocated or in progress, as a running vanilla contract does
+-- (AbstractMission:update). Which jobs is this machine's jobProgressBars
+-- setting: those allocated to a player (the default), every job (hired
+-- crews' too), or none. Like vanilla it's shown to everyone on the farm,
+-- not only the player who took the job on.
 --
 -- Client-side and visual only: every machine reads the job state it already
 -- has (completionPercentage is kept live by TCJobProgress, or sent by the
@@ -24,11 +25,27 @@ local function getHud()
     return g_currentMission ~= nil and g_currentMission.hud or nil
 end
 
--- Whether a job gets a bar: allocated to a player, not a hired crew. A
--- workshop job (100) is never allocated, so never shows one.
-function TCJobHud.isShown(job)
-    return (job.state == TheContractorJob.STATE.ALLOCATED or job.state == TheContractorJob.STATE.IN_PROGRESS) and
-        not job:isWorkshop() and job:isPlayerDriven()
+-- The jobProgressBars setting (PLAYER_ONLY before the settings exist).
+function TCJobHud.getMode()
+    local tc = g_currentMission ~= nil and g_currentMission.TheContractor or nil
+    local mode = tc ~= nil and tc.Settings ~= nil and tc.Settings:get("jobProgressBars") or nil
+    return mode or TheContractorSettings.JOB_PROGRESS_BARS.PLAYER_ONLY
+end
+
+-- Whether a job gets a bar under a mode: allocated or in progress, and for
+-- PLAYER_ONLY allocated to a player, not a hired crew. A workshop job (100)
+-- is never allocated, so never shows one.
+function TCJobHud.isShown(job, mode)
+    local modes = TheContractorSettings.JOB_PROGRESS_BARS
+    mode = mode or modes.PLAYER_ONLY
+    if mode == modes.NONE then
+        return false
+    end
+    if not (job.state == TheContractorJob.STATE.ALLOCATED or job.state == TheContractorJob.STATE.IN_PROGRESS) or
+        job:isWorkshop() then
+        return false
+    end
+    return mode == modes.ALL or job:isPlayerDriven()
 end
 
 -- The farm's jobs that get a bar, in job order.
@@ -38,8 +55,9 @@ function TCJobHud.getShownJobs(farmId)
     if farmId == nil or farmId == FarmManager.SPECTATOR_FARM_ID or tc == nil or tc.Jobs == nil then
         return shown
     end
+    local mode = TCJobHud.getMode()
     for _, job in ipairs(tc.Jobs:getAllJobs(farmId)) do
-        if TCJobHud.isShown(job) then
+        if TCJobHud.isShown(job, mode) then
             table.insert(shown, job)
         end
     end
@@ -85,7 +103,8 @@ function TCJobHud.removeBar(jobId)
     end
 end
 
--- Adds and removes bars to match the local farm's jobs now.
+-- Adds and removes bars to match the local farm's jobs now (and the
+-- setting, whose onChanged calls this).
 function TCJobHud.refresh()
     local hud = getHud()
     if hud == nil or hud.addSideNotificationProgressBar == nil then
