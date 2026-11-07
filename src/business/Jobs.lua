@@ -722,10 +722,10 @@ function TheContractorJobs:missJob(job, noPenalty)
         g_currentMission.TheContractor.RepairContracts:queueCollection(job)
     end
 
-    TCJobMissedEvent.showNotification(job.farmId, job.jobType, job.fieldId)
+    TCJobMissedEvent.showNotification(job.farmId, job.jobType, job.fieldId, job:getTypeLabel())
 
     if g_server ~= nil then
-        g_server:broadcastEvent(TCJobMissedEvent.new(job.farmId, job.jobType, job.fieldId))
+        g_server:broadcastEvent(TCJobMissedEvent.new(job.farmId, job.jobType, job.fieldId, job:getTypeLabel()))
     end
 
     TCLog.info("TheContractor: farm %d job %d missed its deadline (%s, field %d, %.0f%% done, penalty -%d reputation)",

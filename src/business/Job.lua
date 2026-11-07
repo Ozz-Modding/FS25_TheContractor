@@ -563,11 +563,18 @@ end
 
 -- "Harvest", "Cultivate", "Mow", ... - or "Harvest & Haul"/"Bale &
 -- Deliver" for a haulage job. A straw delivery is all haulage, so it's
--- just "Deliver Straw".
+-- just "Deliver Straw". A sow job for a planted crop is "Plant" (getTypeLabel).
 function TheContractorJob:getTypeText()
     local jobDef = TheContractorJobGeneration.JOB_TYPES[self.jobType]
     local isExtraHaulage = self.includesHaulage and not (jobDef ~= nil and jobDef.deliveryOnly)
-    return g_i18n:getText("tc_jobType_" .. self.jobType .. (isExtraHaulage and "Haul" or ""))
+    return g_i18n:getText("tc_jobType_" .. self:getTypeLabel() .. (isExtraHaulage and "Haul" or ""))
+end
+
+-- The suffix of this job's tc_jobType_ key: its type, or "plant" for a sow
+-- job whose crop is planted (TheContractorJobGeneration.getTypeLabel). From
+-- the recorded crop, so clients get the same answer.
+function TheContractorJob:getTypeLabel()
+    return TheContractorJobGeneration.getTypeLabel(self.jobType, self:getFruitTypeIndex())
 end
 
 -- "Harvest (Spinach)" for crop jobs, plain "Cultivate" otherwise, and

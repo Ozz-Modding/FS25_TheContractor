@@ -52,6 +52,7 @@ local function setup(def)
         JOB_TYPES = {},
         getOperationSkill = function() return nil end,
         getFruitTypeIndexByName = function() return nil end,
+        getTypeLabel = function(jobType) return jobType end,
     }
     TCFieldPreparation = { clearUpAfterJob = function() end }
     TCJobConsequences = {

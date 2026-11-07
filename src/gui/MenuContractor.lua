@@ -3110,7 +3110,8 @@ end
 local function getEquipmentNeedText(key, isHaulage, job)
     local text
     if key == "implement" then
-        text = g_i18n:getText("tc_equipment_need_implement_" .. job.jobType)
+        text = TCEquipmentClass.getImplementText("tc_equipment_need_implement_", job:getTypeLabel(),
+            job:getCropTitle())
     elseif key == "cutter" or key == "cutterMismatch" or key == "trailer" then
         text = string.format(g_i18n:getText("tc_equipment_need_" .. key),
             job:getCropTitle() or g_i18n:getText("tc_equipment_anyCrop"))
@@ -4938,7 +4939,7 @@ function MenuContractor:getAllocationProblem(job)
     end
     if #missing > 0 then
         return string.format(g_i18n:getText("tc_allocation_selectWarning"),
-            TCEquipmentClass.getMissingEquipmentText(missing, job.jobType, cropTitle)), true
+            TCEquipmentClass.getMissingEquipmentText(missing, job:getTypeLabel(), cropTitle)), true
     end
 
     local filledHarvester, heldFillType = TheContractorAllocation.getFilledHarvester(equipmentIds)
@@ -5051,11 +5052,11 @@ function MenuContractor:updateAllocationWarning()
     local lines = {}
     if #missingOwned > 0 then
         table.insert(lines, string.format(g_i18n:getText("tc_allocation_notOwnedWarning"),
-            TCEquipmentClass.getMissingEquipmentText(missingOwned, job.jobType, cropTitle)))
+            TCEquipmentClass.getMissingEquipmentText(missingOwned, job:getTypeLabel(), cropTitle)))
     end
     if #missingBusy > 0 then
         table.insert(lines, string.format(g_i18n:getText("tc_allocation_busyWarning"),
-            TCEquipmentClass.getMissingEquipmentText(missingBusy, job.jobType, cropTitle)))
+            TCEquipmentClass.getMissingEquipmentText(missingBusy, job:getTypeLabel(), cropTitle)))
     end
     if #lines > 0 then
         self.allocationWarningText:setText(table.concat(lines, "\n"))

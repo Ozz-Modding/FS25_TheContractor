@@ -185,8 +185,10 @@ end
 -- WeedMission/HoeMission tell them apart by Weeder's isHoeWeeder), and a
 -- sprayer has to take one of the job's products (fertilizer or herbicide -
 -- the same sprayer spec covers fertilizer spreaders, manure spreaders and
--- slurry tankers).
-function TCEquipmentClass.isJobImplement(vehicle, jobDef)
+-- slurry tankers). A sowing machine has to take the job's crop
+-- (canSowFruit): a grain drill can't put in parsnips, nor a potato planter
+-- wheat. fruitTypeIndex nil means "any crop", as for canCutFruit.
+function TCEquipmentClass.isJobImplement(vehicle, jobDef, fruitTypeIndex)
     if jobDef.implementSpec == nil or vehicle[jobDef.implementSpec] == nil then
         return false
     end
@@ -194,6 +196,10 @@ function TCEquipmentClass.isJobImplement(vehicle, jobDef)
         if vehicle[spec] ~= nil then
             return false
         end
+    end
+
+    if jobDef.implementSpec == "spec_sowingMachine" then
+        return TCEquipmentClass.canSowFruit(vehicle, fruitTypeIndex)
     end
 
     if jobDef.weederType ~= nil then
@@ -215,6 +221,28 @@ function TCEquipmentClass.isJobImplement(vehicle, jobDef)
     end
 
     return true
+end
+
+-- Whether a sowing machine can put in this crop: it's in the machine's own
+-- seed list (SowingMachine's spec.seeds, from its seedFruitTypeCategories/
+-- seedFruitTypes), the same list the player cycles through in the cab.
+-- That's what tells a seeder from a planter, mod machines included.
+-- fruitTypeIndex nil means "any crop". A machine with no list we can read
+-- counts as taking it - better shown and unable than hidden and able.
+function TCEquipmentClass.canSowFruit(vehicle, fruitTypeIndex)
+    local spec = vehicle.spec_sowingMachine
+    if spec == nil then
+        return false
+    end
+    if fruitTypeIndex == nil or fruitTypeIndex == FruitType.UNKNOWN or spec.seeds == nil then
+        return true
+    end
+    for _, index in ipairs(spec.seeds) do
+        if index == fruitTypeIndex then
+            return true
+        end
+    end
+    return false
 end
 
 -- Seed tanks (032 follow-up): some seeders have no hopper of their own
@@ -261,7 +289,7 @@ function TCEquipmentClass.getJobRole(vehicle, jobDef, fruitTypeIndex)
         if TCEquipmentClass.canCutFruit(vehicle, fruitTypeIndex) then
             return "header"
         end
-    elseif TCEquipmentClass.isJobImplement(vehicle, jobDef) then
+    elseif TCEquipmentClass.isJobImplement(vehicle, jobDef, fruitTypeIndex) then
         return "implement"
     elseif jobDef.implementSpec == "spec_sowingMachine" and TCEquipmentClass.isSeedTank(vehicle) then
         return "seedTank"
@@ -321,7 +349,7 @@ function TCEquipmentClass.getMissingEquipment(vehicles, jobDef, fruitTypeIndex)
                     hasSelfPropelledHarvester = true
                 end
             end
-        elseif TCEquipmentClass.isJobImplement(vehicle, jobDef) then
+        elseif TCEquipmentClass.isJobImplement(vehicle, jobDef, fruitTypeIndex) then
             hasImplement = true
             if TCEquipmentClass.isSelfPropelled(vehicle) then
                 hasSelfPropelledImplement = true
@@ -504,16 +532,32 @@ function TCEquipmentClass.getMissingHaulageEquipment(vehicles, fillTypeIndex)
     return missing
 end
 
+-- Player-facing name of the implement a job needs: the text at `prefix`
+-- (tc_equipment_need_implement_/tc_equipment_missing_implement_) plus the
+-- job's type label (TheContractorJob:getTypeLabel). A seeder's or planter's
+-- names the crop, since only one that takes it will do (canSowFruit).
+function TCEquipmentClass.getImplementText(prefix, typeLabel, cropTitle)
+    local text = g_i18n:getText(prefix .. typeLabel)
+    local jobDef = TheContractorJobGeneration.JOB_TYPES[typeLabel]
+    if typeLabel == TheContractorJobGeneration.PLANT_TYPE_LABEL or
+        (jobDef ~= nil and jobDef.implementSpec == "spec_sowingMachine") then
+        text = string.format(text, cropTitle or g_i18n:getText("tc_equipment_anyCrop"))
+    end
+    return text
+end
+
 -- Player-facing, comma-joined list for getMissingEquipment's result, e.g.
--- "a header or harvester that can harvest Spinach, a tractor".
-function TCEquipmentClass.getMissingEquipmentText(missing, jobType, cropTitle)
+-- "a header or harvester that can harvest Spinach, a tractor". typeLabel
+-- is the job's getTypeLabel().
+function TCEquipmentClass.getMissingEquipmentText(missing, typeLabel, cropTitle)
     local parts = {}
     for _, key in ipairs(missing) do
         if key == "cutter" or key == "cutterMismatch" or key == "trailer" then
             table.insert(parts, string.format(g_i18n:getText("tc_equipment_missing_" .. key),
                 cropTitle or g_i18n:getText("tc_equipment_anyCrop")))
         elseif key == "implement" then
-            table.insert(parts, g_i18n:getText("tc_equipment_missing_implement_" .. jobType))
+            table.insert(parts, TCEquipmentClass.getImplementText("tc_equipment_missing_implement_", typeLabel,
+                cropTitle))
         else
             table.insert(parts, g_i18n:getText("tc_equipment_missing_" .. key))
         end

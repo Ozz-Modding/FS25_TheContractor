@@ -46,10 +46,10 @@ function TCDispatchFailedEvent.emptyNew()
 end
 
 -- reasonKey: one of REASON_KEYS, or nil with the text as args[1].
-function TCDispatchFailedEvent.new(farmId, jobType, fieldId, reasonKey, reasonArgs)
+function TCDispatchFailedEvent.new(farmId, typeLabel, fieldId, reasonKey, reasonArgs)
     local self = TCDispatchFailedEvent.emptyNew()
     self.farmId = farmId
-    self.jobType = jobType
+    self.typeLabel = typeLabel
     self.fieldId = fieldId
     self.reasonKey = reasonKey
     self.reasonArgs = reasonArgs or {}
@@ -58,7 +58,7 @@ end
 
 function TCDispatchFailedEvent:writeStream(streamId, connection)
     streamWriteInt32(streamId, self.farmId)
-    streamWriteString(streamId, self.jobType)
+    streamWriteString(streamId, self.typeLabel)
     streamWriteInt32(streamId, self.fieldId)
     streamWriteUInt8(streamId, TCDispatchFailedEvent.REASON_INDEX[self.reasonKey] or 0)
     streamWriteUInt8(streamId, #self.reasonArgs)
@@ -69,7 +69,7 @@ end
 
 function TCDispatchFailedEvent:readStream(streamId, connection)
     self.farmId = streamReadInt32(streamId)
-    self.jobType = streamReadString(streamId)
+    self.typeLabel = streamReadString(streamId)
     self.fieldId = streamReadInt32(streamId)
     self.reasonKey = TCDispatchFailedEvent.REASON_KEYS[streamReadUInt8(streamId)]
     self.reasonArgs = {}
@@ -80,7 +80,7 @@ function TCDispatchFailedEvent:readStream(streamId, connection)
 end
 
 function TCDispatchFailedEvent:run(connection)
-    TCDispatchFailedEvent.showNotification(self.farmId, self.jobType, self.fieldId, self.reasonKey, self.reasonArgs)
+    TCDispatchFailedEvent.showNotification(self.farmId, self.typeLabel, self.fieldId, self.reasonKey, self.reasonArgs)
 end
 
 -- The reason in this machine's language.
@@ -102,13 +102,13 @@ function TCDispatchFailedEvent.findReasonKey(text)
     return nil
 end
 
-function TCDispatchFailedEvent.showNotification(farmId, jobType, fieldId, reasonKey, reasonArgs)
+function TCDispatchFailedEvent.showNotification(farmId, typeLabel, fieldId, reasonKey, reasonArgs)
     if farmId ~= g_currentMission:getFarmId() then
         return
     end
     local field = g_fieldManager:getFieldById(fieldId)
     local fieldLabel = field ~= nil and field:getName() or tostring(fieldId)
     g_currentMission:addIngameNotification(FSBaseMission.INGAME_NOTIFICATION_CRITICAL,
-        string.format(g_i18n:getText("tc_dispatch_failedNotification"), g_i18n:getText("tc_jobType_" .. jobType),
+        string.format(g_i18n:getText("tc_dispatch_failedNotification"), g_i18n:getText("tc_jobType_" .. typeLabel),
             fieldLabel, TCDispatchFailedEvent.getReasonText(reasonKey, reasonArgs or {})))
 end

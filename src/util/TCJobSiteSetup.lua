@@ -261,6 +261,40 @@ function TCJobSiteSetup.rigAndPlace(job)
     return operatingVehicle
 end
 
+-- Seed choice ---------------------------------------------------------------
+
+-- Server-only. Sets each of a sow job's sowing machines to the job's crop
+-- before the worker sets off: vanilla's AI Helper sows whatever seed the
+-- machine was left on, so a planter last used for potatoes would plant
+-- potatoes on a parsnip job. setSeedFruitType sends vanilla's own
+-- SetSeedIndexEvent to the clients. A machine that can't take the crop
+-- (allocation never picks one, TCEquipmentClass.canSowFruit) is left alone.
+-- Returns how many machines were changed.
+function TCJobSiteSetup.selectJobSeed(job)
+    local jobDef = TheContractorJobGeneration.JOB_TYPES[job.jobType]
+    if jobDef == nil or jobDef.implementSpec ~= "spec_sowingMachine" then
+        return 0
+    end
+    local fruitTypeIndex = job:getFruitTypeIndex()
+    if fruitTypeIndex == nil or fruitTypeIndex == FruitType.UNKNOWN then
+        return 0
+    end
+
+    local changed = 0
+    for _, vehicleId in ipairs(job.assignedEquipmentIds) do
+        local vehicle = NetworkUtil.getObject(vehicleId)
+        local spec = vehicle ~= nil and vehicle.spec_sowingMachine or nil
+        if spec ~= nil and spec.seeds ~= nil and vehicle.setSeedFruitType ~= nil and
+            spec.seeds[spec.currentSeed] ~= fruitTypeIndex and TCEquipmentClass.canSowFruit(vehicle, fruitTypeIndex) then
+            vehicle:setSeedFruitType(fruitTypeIndex)
+            changed = changed + 1
+            TCLog.info("TheContractor: job %d: '%s' set to sow the job's crop (%s)", job.id, vehicle:getName(),
+                tostring(job.fruitTypeName))
+        end
+    end
+    return changed
+end
+
 -- Going home ----------------------------------------------------------------
 
 local function resolveJobVehicles(job)

@@ -613,10 +613,13 @@ end
 -- for planters (PLANTER_FRUIT_TYPE_CATEGORY - what planters list in their
 -- seedFruitTypeCategories, so mod crops come along for free), plus a
 -- fallback list of crops vanilla plants with dedicated machines that may
--- sit outside that category (potatoes, sugarcane, poplar).
+-- sit outside that category: every crop vanilla's SowMission:
+-- getVehicleVariant gives a planter rather than a grain drill (maize-type,
+-- beet, potatoes, cotton, sugarcane, vegetables, onions), plus poplar.
+-- The same split names the job "Plant" rather than "Sow" (getTypeLabel).
 TheContractorJobGeneration.PLANTER_FRUIT_TYPE_CATEGORY = "PLANTER"
-TheContractorJobGeneration.PLANTING_FRUIT_TYPE_NAMES = { "MAIZE", "SUNFLOWER", "SOYBEAN", "SUGARBEET", "POTATO",
-    "SUGARCANE", "COTTON", "POPLAR" }
+TheContractorJobGeneration.PLANTING_FRUIT_TYPE_NAMES = { "MAIZE", "SUNFLOWER", "SOYBEAN", "SORGHUM", "GREENBEAN",
+    "SUGARBEET", "POTATO", "SUGARCANE", "COTTON", "CARROT", "PARSNIP", "BEETROOT", "ONION", "POPLAR" }
 
 function TheContractorJobGeneration.isPlantingFruitType(fruitTypeIndex)
     if fruitTypeIndex == nil or fruitTypeIndex == FruitType.UNKNOWN then
@@ -662,6 +665,22 @@ function TheContractorJobGeneration.getOperationSkill(jobType, fieldId)
         end
     end
     return jobDef.skill
+end
+
+-- What a job of this type on this crop is called, as the suffix of its
+-- tc_jobType_/tc_equipment_*_implement_ keys: the job type, except that a
+-- sow job for a planted crop (isPlantingFruitType) is "plant" - "Plant
+-- (Parsnips)", not "Sow (Parsnips)". Only ever a label: behaviour still
+-- keys off the job type and its JOB_TYPES flags.
+TheContractorJobGeneration.PLANT_TYPE_LABEL = "plant"
+
+function TheContractorJobGeneration.getTypeLabel(jobType, fruitTypeIndex)
+    local jobDef = TheContractorJobGeneration.JOB_TYPES[jobType]
+    if jobDef ~= nil and jobDef.implementSpec == "spec_sowingMachine" and
+        TheContractorJobGeneration.isPlantingFruitType(fruitTypeIndex) then
+        return TheContractorJobGeneration.PLANT_TYPE_LABEL
+    end
+    return jobType
 end
 
 function TheContractorJobGeneration.getFruitTypeIndexByName(fruitTypeName)
@@ -726,13 +745,19 @@ function TheContractorJobGeneration:getJobTypeOptions(farmId, onlyJobType)
 end
 
 -- Which of `fields` the farm's `vehicles` could do a job of this type on
--- (getMissingEquipment, ownership only). Only harvest's answer depends on
--- the field (its crop), so it's worked out once per crop, not per field.
+-- (getMissingEquipment, ownership only). Only harvest's and sow's answers
+-- depend on the field (the crop on it, the crop to go in), so it's worked
+-- out once per crop, not per field.
 function TheContractorJobGeneration.getFulfillableFields(vehicles, jobDef, fields)
     local result = {}
     local byFruitType = {}
     for _, field in ipairs(fields) do
-        local fruitTypeIndex = jobDef.cropDependent and field:getFieldState().fruitTypeIndex or nil
+        local fruitTypeIndex = nil
+        if jobDef.cropDependent then
+            fruitTypeIndex = field:getFieldState().fruitTypeIndex
+        elseif jobDef.recordsPlannedCrop then
+            fruitTypeIndex = field:getPlannedFruitTypeIndex()
+        end
         local key = fruitTypeIndex or 0
         if byFruitType[key] == nil then
             byFruitType[key] = #TCEquipmentClass.getMissingEquipment(vehicles, jobDef, fruitTypeIndex) == 0
