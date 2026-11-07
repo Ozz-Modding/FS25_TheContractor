@@ -149,6 +149,9 @@
 		<text name="tc_overview_currentJobsHeading" text="Current Jobs"/>
 		<text name="tc_overview_currentJobsEmpty" text="No jobs allocated, in progress or in the workshop."/>
 		<text name="tc_overview_currentJobLine" text="Field %s: %s - %d%%"/>
+		<text name="tc_jobHud_title" text="Job"/>
+		<text name="tc_jobHud_text" text="%s, %s"/>
+		<text name="tc_jobHud_field" text="Field %s"/>
 		<text name="tc_repair_overviewLine" text="%s: %s - %s, due %s"/>
 		<text name="tc_overview_deliveredSuffix" text=" (%d%% delivered to %s)"/>
 		<text name="tc_overview_supplySuffix" text=" - %s"/>
