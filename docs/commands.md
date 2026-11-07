@@ -718,17 +718,20 @@ Auction signs for July: 10 up, of 58 junction(s) on 212 road spline(s), in 140 m
   Spots passed over: blocked 7, field 2, tooClose 31
 ```
 
-### `tcCompany auction [start [fieldId|auto] [days]|day|cancel]`
+### `tcCompany auction [start [fieldId|auto] [days]|day|cancel|lots|bid <lot> <amount|guide|off>|close [lot|all]]`
 
-The machinery auction (137). One is announced now and then by itself (about one a year, now and then two, never within 3 months of the last one ending, for a sale in spring or autumn, 2 to 4 months ahead); this shows it or makes one happen. One started here counts as the last one when it ends.
+The machinery auction (137) and its sale (139). One is announced now and then by itself (about one a year, now and then two, never within 3 months of the last one ending, for a sale in spring or autumn, 2 to 4 months ahead); this shows it or makes one happen. One started here counts as the last one when it ends.
 
 - With no argument: the auction, if there's one: its id, field, host farmer and state (`announced`, `signsUp`, `setOut`, `onSale` or `collection`), the day it was announced, the day its signs go up, its reminder day and its sale day, and its entrance.
 - `start`: announces one now, ignoring the season and the monthly roll. Its field is picked as a real one is (a grass field nobody's farm owns, held by a farmer, with no live job, that can hold a sale; at random among the best 3), its sale 2 to 4 months ahead. The signs go up 3 months before the sale, or at once if it's nearer. Every company farm gets the message, and every player the map marker.
   - `<fieldId>`: on that field instead. No farm may own it, a farmer must hold it, and it can't have a live job; it doesn't have to be grass or a candidate.
   - `auto`: the field picked as above, so `[days]` can be given without a field.
   - `[days]`: the sale that many days from today (at least 1), not 2 to 4 months. The signs go up 3 months before the sale, or at once if the sale's nearer than that.
-- `day`: makes today the sale day: the lots are set out now (and the signs put up if they weren't), every company farm gets the morning's message, and the sale starts at 10:00 as usual (collection from 16:00 until 139 sells the lots). Everything's cleared away at midnight.
-- `cancel`: calls it off: anything on the field is deleted, the signs come down, the field's free again, and every company farm is told.
+- `day`: makes today the sale day: the lots are set out now (and the signs put up if they weren't), every company farm gets the morning's message, and bidding's open from 08:00 as usual. Each lot closes at its own time between 17:00 and 18:00, collection runs until midnight, and then everything's cleared away: a won lot still on the field is delivered to its farm, free, into a free parking slot, or to the shop if there's none (or, with both full, it waits in the parking queue).
+- `cancel`: calls it off: no more lots are sold, anything already won and still on the field is delivered, anything else on the field is deleted, the signs come down, the field's free again, and every company farm is told.
+- `lots`: every lot that's out: its number, model, guide price, closing time, the room's hidden bid (a tuning aid: never shown in game), its result (`open`, `local buyer` or the farm that won it) and every farm's bid with what became of it (`won`, `lost`, `unpaid`, `delivered`).
+- `bid <lot> <amount|guide|off>`: leaves a bid on a lot for your farm, as the lot's card does: an amount, `guide` for its guide price, or `off` to withdraw it. Refused (and says why) when there's no sale on, the lot's closed, or the amount's under the minimum (70% of the guide).
+- `close [lot|all]`: closes the next open lot now (in lot order), that lot, or every open lot, and settles it as its closing time would: the highest farm bid over the room's wins and pays its bid; a farm that can't pay loses it and pays a fee. Prints `lots` after.
 
 There's only ever one auction: `start` refuses while one's on. The auction is saved, and a player joining gets it.
 
@@ -740,12 +743,25 @@ tcCompany auction start 12 3
 tcCompany auction start auto 3
 tcCompany auction day
 tcCompany auction cancel
+tcCompany auction lots
+tcCompany auction bid 12 45000
+tcCompany auction bid 12 guide
+tcCompany auction bid 12 off
+tcCompany auction close
+tcCompany auction close 12
+tcCompany auction close all
 ```
 
 ```
 Auction 1 on field 12, held by Tom Hughes: signsUp.
-  Announced March 4, Year 2; signs up April 10, Year 2; reminder May 3, Year 2; sale May 10, Year 2 (viewing from 08:00, selling from 10:00).
+  Announced March 4, Year 2; signs up April 10, Year 2; reminder May 3, Year 2; sale May 10, Year 2 (viewing and bidding from 08:00, lots closing from 17:00).
   Entrance at 512, -88.
+```
+
+```
+Auction lots on field 12 (minimum bid 70% of the guide):
+  lot 1 Fendt 942 Vario: guide £118,400, closes 17:00, local bid £104,210, farm 1; bids: farm 1 £120,000 won, farm 2 £110,000 lost
+  lot 2 Kuhn GMD 3125 F: guide £9,850, closes 17:01, local bid £10,240, open; bids: none
 ```
 
 ### `tcCompany yards [farmlandId|here|show [farmlandId]|hide]`

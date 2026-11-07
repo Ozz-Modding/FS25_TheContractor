@@ -29,6 +29,17 @@
 --   The crowd's walks (137): each row aisle's middle line and width
 --     (TCAuctionLayout's walkways), sent to every machine and saved, so the
 --     crowd walks the aisles and never through a lot.
+--   The lots as everyone sees them (138): each lot's number (in the order
+--     they're walked, TCAuctionLayout.getWalkOrder), model, hours, age,
+--     guide price and closing time (CLOSE_HOURS, in lot order), with its
+--     vehicle ids, sent to every machine for the "View lot" prompt, the
+--     card and the menu's catalogue, and (139) whether it's sold (RESULT:
+--     never to whom or for what). Only those fields go on the wire
+--     (writeLot): the rolls, ADS's result and the hidden local bid's roll
+--     (localRoll, 139) stay on the server.
+--   Sold (139, AuctionSale): a lot a farm won is the farm's (soldTo), off the
+--     lock and never deleted with the site; a local buyer's (soldTo 0) goes
+--     at the first midnight (removeUnsold).
 --   Saving: vanilla saves the vehicles; we save each lot's uniqueId
 --     (TCVehicleIds) with its rolls and guide price. Lots still to spawn
 --     when the game saves are dropped. The layout's debug lines are this
@@ -83,6 +94,14 @@ TheContractorAuctionSite.TIP_DEGREES = 25
 TheContractorAuctionSite.UPRIGHT_CHECK_MS = 3000
 TheContractorAuctionSite.UPRIGHT_ATTEMPTS = 1
 
+-- 138: bidding on the lots closes between these hours on the sale day, one
+-- lot after another in lot order: lot 1 at the first, the last at the
+-- second (139).
+TheContractorAuctionSite.CLOSE_HOURS = { 17, 18 }
+
+-- 139: a lot's result as everyone sees it.
+TheContractorAuctionSite.RESULT = { OPEN = 0, LOCAL = 1, FARM = 2 }
+
 local ROLE = TheContractorFarmerFleet.ROLE
 
 -- The roles a sale's lots are, in the order they're listed: weight and
@@ -112,11 +131,11 @@ function TheContractorAuctionSite.new()
     -- Server: lots still to spawn, and the one loading.
     self.queue = {}
     self.loading = nil
-    -- Every machine: the site's field (0: none), its lots' vehicle ids
-    -- (lots and their attachments) and its walkways (137), as the server
-    -- sent them.
+    -- Every machine: the site's field (0: none), its lots as everyone sees
+    -- them (138, getPublicLot's, by number), their vehicle ids (lots and
+    -- attachments) and its walkways (137), as the server sent them.
     self.fieldId = 0
-    self.vehicleIds = {}
+    self.lots = {}
     self.vehicleIdSet = {}
     self.walkways = {}
     -- Server: the frame time, smoothed (ms).
@@ -158,37 +177,191 @@ function TheContractorAuctionSite:getWalkways()
     return self.walkways
 end
 
+-- 138: the lots as everyone sees them, by number.
+function TheContractorAuctionSite:getLots()
+    return self.lots
+end
+
+function TheContractorAuctionSite:getLot(number)
+    for _, lot in ipairs(self.lots) do
+        if lot.number == number then
+            return lot
+        end
+    end
+    return nil
+end
+
+local function sortByNumber(lots)
+    table.sort(lots, function(a, b)
+        return a.number < b.number
+    end)
+end
+
 -- Every machine: the site as the server sent it (TCAuctionSiteEvent).
-function TheContractorAuctionSite:applySync(fieldId, vehicleIds, walkways)
+-- lots: getPublicLot's.
+function TheContractorAuctionSite:applySync(fieldId, lots, walkways)
     self.fieldId = fieldId or 0
     self.walkways = walkways or {}
-    self.vehicleIds = vehicleIds or {}
+    self.lots = {}
+    for _, lot in ipairs(lots or {}) do
+        table.insert(self.lots, lot)
+    end
+    self:onLotsChanged()
+end
+
+-- Every machine: one lot more (the server's lots come out one at a time),
+-- or one that's changed (139: sold).
+function TheContractorAuctionSite:appendLot(lot)
+    for i, other in ipairs(self.lots) do
+        if other.number == lot.number then
+            table.remove(self.lots, i)
+            break
+        end
+    end
+    table.insert(self.lots, lot)
+    self:onLotsChanged()
+end
+
+-- The lots by number, and the locked vehicles: every lot's still standing
+-- that no farm has won (139: a won lot's the farm's).
+function TheContractorAuctionSite:onLotsChanged()
+    sortByNumber(self.lots)
     self.vehicleIdSet = {}
-    for _, vehicleId in ipairs(self.vehicleIds) do
-        self.vehicleIdSet[vehicleId] = true
+    for _, lot in ipairs(self.lots) do
+        if (lot.result or 0) ~= TheContractorAuctionSite.RESULT.FARM then
+            for _, vehicleId in ipairs({ lot.vehicleId or false, lot.attachmentId or false }) do
+                if vehicleId then
+                    self.vehicleIdSet[vehicleId] = true
+                end
+            end
+        end
     end
 end
 
--- Server: the site's field and live lot ids, to this machine and every
--- client.
+-- Server: a lot's RESULT (139).
+function TheContractorAuctionSite.getResult(lot)
+    local R = TheContractorAuctionSite.RESULT
+    if lot.soldTo == nil then
+        return R.OPEN
+    end
+    return lot.soldTo > 0 and R.FARM or R.LOCAL
+end
+
+-- Server: what everyone may know of a lot (138), or nil while an unsold
+-- lot's vehicle isn't out (a sold one stays listed after it's gone). Only
+-- these fields are ever sent (TCAuctionSiteEvent.writeLot).
+function TheContractorAuctionSite.getPublicLot(lot)
+    if lot.failed ~= nil or (lot.soldTo == nil and getVehicle(lot.vehicleId) == nil) then
+        return nil
+    end
+    local vehicleId = getVehicle(lot.vehicleId) ~= nil and lot.vehicleId or nil
+    local attachmentId = getVehicle(lot.attachmentId) ~= nil and lot.attachmentId or nil
+    return {
+        number = lot.number,
+        xmlFilename = lot.xmlFilename,
+        attachmentXml = attachmentId ~= nil and lot.attachmentXml or nil,
+        hours = lot.hours or 0,
+        ageMonths = lot.ageMonths or 0,
+        guidePrice = lot.guidePrice or 0,
+        closeMinute = lot.closeMinute or 0,
+        result = TheContractorAuctionSite.getResult(lot),
+        vehicleId = vehicleId,
+        attachmentId = attachmentId,
+    }
+end
+
+-- Server: the site's field and the lots that are out, to this machine and
+-- every client.
 function TheContractorAuctionSite:sync()
     local site = self.site
-    local ids = {}
+    local lots = {}
     if site ~= nil then
         for _, lot in ipairs(site.lots) do
-            if getVehicle(lot.vehicleId) ~= nil then
-                table.insert(ids, lot.vehicleId)
-            end
-            if getVehicle(lot.attachmentId) ~= nil then
-                table.insert(ids, lot.attachmentId)
+            local public = TheContractorAuctionSite.getPublicLot(lot)
+            if public ~= nil then
+                table.insert(lots, public)
             end
         end
     end
     local walkways = site ~= nil and site.walkways or {}
-    self:applySync(site ~= nil and site.fieldId or 0, ids, walkways)
+    self:applySync(site ~= nil and site.fieldId or 0, lots, walkways)
     if g_server ~= nil then
-        g_server:broadcastEvent(TCAuctionSiteEvent.new(self.fieldId, ids, walkways))
+        g_server:broadcastEvent(TCAuctionSiteEvent.new(self.fieldId, self.lots, walkways))
     end
+end
+
+-- Server: a lot that's just come out, to this machine and every client,
+-- without sending the whole site again.
+function TheContractorAuctionSite:syncLot(lot)
+    local public = TheContractorAuctionSite.getPublicLot(lot)
+    if public == nil then
+        return
+    end
+    self:appendLot(public)
+    if g_server ~= nil then
+        g_server:broadcastEvent(TCAuctionSiteEvent.newLot(public))
+    end
+end
+
+-- A lot's closing time (138), in minutes after midnight on the sale day:
+-- lot 1 at the first of CLOSE_HOURS, the last at the second, the rest
+-- spread evenly between in lot order (whole minutes).
+function TheContractorAuctionSite.getCloseMinute(number, lotCount)
+    local hours = TheContractorAuctionSite.CLOSE_HOURS
+    local span = (hours[2] - hours[1]) * 60
+    if lotCount <= 1 then
+        return hours[1] * 60
+    end
+    return hours[1] * 60 + math.floor((number - 1) * span / (lotCount - 1) + 0.5)
+end
+
+-- "17:24".
+function TheContractorAuctionSite.formatCloseTime(minute)
+    return string.format("%02d:%02d", math.floor(minute / 60), minute % 60)
+end
+
+-- Whether bidding on a lot is open or closed (138; 139 adds the farm's bid
+-- and the result). saleDay: the auction's (nil for the console's site,
+-- which has no sale: always open); today a monotonic day, minute the
+-- minutes after midnight.
+TheContractorAuctionSite.LOT_STATE = { OPEN = "open", CLOSED = "closed" }
+function TheContractorAuctionSite.getLotState(lot, saleDay, today, minute)
+    local S = TheContractorAuctionSite.LOT_STATE
+    if saleDay == nil or today < saleDay then
+        return S.OPEN
+    end
+    if today > saleDay or minute >= lot.closeMinute then
+        return S.CLOSED
+    end
+    return S.OPEN
+end
+
+-- The sale day of the auction (137) these lots are for, or nil for the
+-- console's site.
+function TheContractorAuctionSite:getSaleDay()
+    local auctions = g_currentMission.TheContractor.Auctions
+    local auction = auctions ~= nil and auctions:getAuction() or nil
+    if auction ~= nil and self.fieldId ~= 0 and auction.fieldId == self.fieldId then
+        return auction.saleDay
+    end
+    return nil
+end
+
+-- getLotState now.
+function TheContractorAuctionSite:getLotStateNow(lot)
+    local environment = g_currentMission.environment
+    return TheContractorAuctionSite.getLotState(lot, self:getSaleDay(), environment.currentMonotonicDay,
+        (environment.currentHour or 0) * 60 + (environment.currentMinute or 0))
+end
+
+-- A lot's name: its model, and the header that goes with it.
+function TheContractorAuctionSite.getLotName(lot)
+    local name = TheContractorFarmerFleet.getModelName(lot.xmlFilename)
+    if lot.attachmentXml ~= nil then
+        return string.format(g_i18n:getText("tc_auctionLot_withAttachment"), name,
+            TheContractorFarmerFleet.getModelName(lot.attachmentXml))
+    end
+    return name
 end
 
 -- Lots ---------------------------------------------------------------------------------
@@ -404,20 +577,23 @@ function TheContractorAuctionSite:start(fieldId, lotCount, auctionId)
         frameMsTotal = 0,
         worstFrameMs = 0,
     }
-    for index, lot in ipairs(lots) do
-        local spot = layout.placed[index]
-        if spot ~= nil then
-            local condition = TCAuctionLayout.rollCondition(TheContractorAuctionSite.CONDITION,
-                TheContractorAuctionSite.HOURS_PER_YEAR, math.random)
-            lot.hours, lot.damage, lot.wear, lot.ageMonths = condition.hours, condition.damage, condition.wear,
-                condition.ageMonths
-            lot.dirt = range(TheContractorAuctionSite.DIRT, math.random)
-            lot.fuel = range(TheContractorAuctionSite.FUEL, math.random)
-            lot.x, lot.z, lot.yaw = spot.x, spot.z, spot.yaw
-            lot.rootX, lot.rootZ = spot.rootX, spot.rootZ
-            lot.number = #site.lots + 1
-            table.insert(site.lots, lot)
-        end
+    -- 138: numbered in the order they're walked, and spawned in that order.
+    local order = TCAuctionLayout.getWalkOrder(layout.placed)
+    for _, index in ipairs(order) do
+        local lot, spot = lots[index], layout.placed[index]
+        local condition = TCAuctionLayout.rollCondition(TheContractorAuctionSite.CONDITION,
+            TheContractorAuctionSite.HOURS_PER_YEAR, math.random)
+        lot.hours, lot.damage, lot.wear, lot.ageMonths = condition.hours, condition.damage, condition.wear,
+            condition.ageMonths
+        lot.dirt = range(TheContractorAuctionSite.DIRT, math.random)
+        lot.fuel = range(TheContractorAuctionSite.FUEL, math.random)
+        lot.x, lot.z, lot.yaw = spot.x, spot.z, spot.yaw
+        lot.rootX, lot.rootZ = spot.rootX, spot.rootZ
+        lot.number = #site.lots + 1
+        lot.closeMinute = TheContractorAuctionSite.getCloseMinute(lot.number, #order)
+        -- 139: the room's hidden bid for it, rolled now (AuctionSale).
+        lot.localRoll = math.random()
+        table.insert(site.lots, lot)
     end
     self.site = site
     self.queue = TheContractorFarmerFleet.copy(site.lots)
@@ -629,7 +805,7 @@ function TheContractorAuctionSite:finishLot(lot, vehicle, attachment)
     TCLog.info("TheContractor: auction lot %d (%s) %s out in %.0f ms, %.1f h, %d months, ADS %s", lot.number,
         lot.role, vehicle:getFullName(), lot.loadMs, lot.hours, lot.ageMonths, lot.adsResult)
     self.loading = nil
-    self:sync()
+    self:syncLot(lot)
     self:spawnNext()
 end
 
@@ -641,10 +817,13 @@ function TheContractorAuctionSite:clear()
     end
     local count = 0
     for _, lot in ipairs(site.lots) do
-        for _, vehicle in ipairs({ getVehicle(lot.attachmentId) or false, getVehicle(lot.vehicleId) or false }) do
-            if vehicle then
-                vehicle:delete()
-                count = count + 1
+        -- 139: a lot a farm won is the farm's.
+        if lot.soldTo == nil or lot.soldTo <= 0 then
+            for _, vehicle in ipairs({ getVehicle(lot.attachmentId) or false, getVehicle(lot.vehicleId) or false }) do
+                if vehicle then
+                    vehicle:delete()
+                    count = count + 1
+                end
             end
         end
     end
@@ -656,6 +835,33 @@ function TheContractorAuctionSite:clear()
     self.debugVisible = false
     self:sync()
     return string.format("Auction site on field %d cleared: %d vehicle(s) deleted.", site.fieldId, count)
+end
+
+-- Server (139): the lots nobody's farm won taken off the field (the
+-- collection day's midnight), still listed as sold. Returns how many.
+function TheContractorAuctionSite:removeUnsold()
+    local site = self.site
+    if site == nil then
+        return 0
+    end
+    local count = 0
+    for _, lot in ipairs(site.lots) do
+        if lot.failed == nil and (lot.soldTo == nil or lot.soldTo <= 0) and lot.vehicleId ~= nil then
+            for _, vehicle in ipairs({ getVehicle(lot.attachmentId) or false, getVehicle(lot.vehicleId) or false }) do
+                if vehicle then
+                    vehicle:delete()
+                end
+            end
+            lot.soldTo = lot.soldTo or 0
+            lot.vehicleId, lot.attachmentId = nil, nil
+            count = count + 1
+        end
+    end
+    if count > 0 then
+        TCLog.info("TheContractor: %d unsold auction lot(s) taken away", count)
+        self:sync()
+    end
+    return count
 end
 
 -- A vehicle's tilt from upright, in degrees.
@@ -973,6 +1179,12 @@ function TheContractorAuctionSite:saveToXmlFile(xmlFile)
             setXMLFloat(xmlFile, lotKey .. "#damage", lot.damage)
             setXMLFloat(xmlFile, lotKey .. "#wear", lot.wear)
             setXMLFloat(xmlFile, lotKey .. "#guidePrice", lot.guidePrice or 0)
+            setXMLInt(xmlFile, lotKey .. "#closeMinute", lot.closeMinute or 0)
+            setXMLFloat(xmlFile, lotKey .. "#localRoll", lot.localRoll or 0.5)
+            if lot.soldTo ~= nil then
+                setXMLInt(xmlFile, lotKey .. "#soldTo", lot.soldTo)
+                setXMLInt(xmlFile, lotKey .. "#salePrice", lot.salePrice or 0)
+            end
             setXMLFloat(xmlFile, lotKey .. "#x", lot.rootX)
             setXMLFloat(xmlFile, lotKey .. "#z", lot.rootZ)
             setXMLFloat(xmlFile, lotKey .. "#yaw", lot.yaw)
@@ -1034,6 +1246,11 @@ function TheContractorAuctionSite:loadFromXMLFile(xmlFile)
             damage = getXMLFloat(xmlFile, lotKey .. "#damage") or 0,
             wear = getXMLFloat(xmlFile, lotKey .. "#wear") or 0,
             guidePrice = getXMLFloat(xmlFile, lotKey .. "#guidePrice"),
+            closeMinute = getXMLInt(xmlFile, lotKey .. "#closeMinute"),
+            -- 139: a save from before the sale rolls the room now.
+            localRoll = getXMLFloat(xmlFile, lotKey .. "#localRoll") or math.random(),
+            soldTo = getXMLInt(xmlFile, lotKey .. "#soldTo"),
+            salePrice = getXMLInt(xmlFile, lotKey .. "#salePrice"),
             rootX = getXMLFloat(xmlFile, lotKey .. "#x"),
             rootZ = getXMLFloat(xmlFile, lotKey .. "#z"),
             yaw = getXMLFloat(xmlFile, lotKey .. "#yaw"),
@@ -1046,6 +1263,11 @@ function TheContractorAuctionSite:loadFromXMLFile(xmlFile)
             TCLog.xmlWarning(xmlFile, "TheContractor: skipping auction lot %s", lotKey)
         end
         i = i + 1
+    end
+    -- A save from before 138 had no closing times: spread them now.
+    for _, lot in ipairs(site.lots) do
+        lot.closeMinute = lot.closeMinute or
+            TheContractorAuctionSite.getCloseMinute(lot.number, math.max(site.planned or 0, #site.lots))
     end
     site.walkways = {}
     i = 0
@@ -1095,7 +1317,7 @@ function TheContractorAuctionSite:resolveSavedVehicles()
 end
 
 function TheContractorAuctionSite:writeInitialClientState(streamId, connection)
-    TCAuctionSiteEvent.writeSite(streamId, self.fieldId, self.vehicleIds, self.walkways)
+    TCAuctionSiteEvent.writeSite(streamId, self.fieldId, self.lots, self.walkways)
 end
 
 function TheContractorAuctionSite:readInitialClientState(streamId, connection)

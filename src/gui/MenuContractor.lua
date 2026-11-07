@@ -1,5 +1,5 @@
--- Top-level "Contractor" in-game menu page: eight sub-tabs (Overview, Inbox,
--- Jobs, Staff, Finances, Logbook, Supplies, and Workshop while
+-- Top-level "Contractor" in-game menu page: nine sub-tabs (Overview, Inbox,
+-- Jobs, Staff, Finances, Logbook, Supplies, Auction, and Workshop while
 -- FS25_AdvancedDamageSystem is loaded). Structure mirrors FS25_RedTape/src/gui/MenuRedTape.lua's own
 -- top-level page + subCategory-tab pattern.
 
@@ -21,9 +21,12 @@ MenuContractor.SUB_CATEGORY = {
     FINANCES = 5,
     LOGBOOK = 6,
     SUPPLIES = 7,
+    -- 138: the machinery auction's catalogue, for every farm (no company
+    -- needed: anyone can bid).
+    AUCTION = 8,
     -- 100: ADS repair contracts being worked on. Kept last: it's hidden
     -- without ADS, which only works for the last tab (onFrameOpen).
-    WORKSHOP = 8,
+    WORKSHOP = 9,
 }
 
 -- How often, at most, the open tab redraws for data from the server
@@ -38,6 +41,7 @@ MenuContractor.HEADER_SLICES = {
     [MenuContractor.SUB_CATEGORY.FINANCES] = "gui.icon_ingameMenu_prices",
     [MenuContractor.SUB_CATEGORY.LOGBOOK] = "gui.icon_ingameMenu_handToolsOverview",
     [MenuContractor.SUB_CATEGORY.SUPPLIES] = "gui.icon_ingameMenu_productionChains",
+    [MenuContractor.SUB_CATEGORY.AUCTION] = "gui.icon_ingameMenu_map",
     [MenuContractor.SUB_CATEGORY.WORKSHOP] = "gui.icon_ingameMenu_options",
 }
 
@@ -49,6 +53,7 @@ MenuContractor.HEADER_TITLES = {
     [MenuContractor.SUB_CATEGORY.FINANCES] = "tc_header_finances",
     [MenuContractor.SUB_CATEGORY.LOGBOOK] = "tc_header_logbook",
     [MenuContractor.SUB_CATEGORY.SUPPLIES] = "tc_header_supplies",
+    [MenuContractor.SUB_CATEGORY.AUCTION] = "tc_header_auction",
     [MenuContractor.SUB_CATEGORY.WORKSHOP] = "tc_header_workshop",
 }
 
@@ -240,10 +245,10 @@ function MenuContractor:initialize()
 
     for i, tab in pairs(self.subCategoryTabs) do
         tab:getDescendantByName("background").getIsSelected = function()
-            return i == self.subCategoryPaging:getState()
+            return i == self:getSubCategory()
         end
         function tab.getIsSelected()
-            return i == self.subCategoryPaging:getState()
+            return i == self:getSubCategory()
         end
     end
 
@@ -785,10 +790,29 @@ function MenuContractor:initialize()
     self.workshopTable:setDelegate(self)
     self.workshopDetailTable:setDataSource(self)
     self.workshopDetailTable:setDelegate(self)
+
+    -- Auction (138): the sale's lots by number, read only, with the
+    -- highlighted one's details. Show on map while there's an auction.
+    self.auctionLots = {}
+    self.selectedAuctionLotNumber = nil
+    self.auctionDetailRows = {}
+    self.btnAuctionShowOnMap = {
+        inputAction = InputAction.MENU_ACTIVATE,
+        text = g_i18n:getText("tc_auction_showOnMap"),
+        callback = function()
+            self:onClickAuctionShowOnMap()
+        end
+    }
+    self.menuButtonInfoAuction = { self.btnBack, self.btnNextPage, self.btnPrevPage, self.btnAuctionShowOnMap }
+
+    self.auctionTable:setDataSource(self)
+    self.auctionTable:setDelegate(self)
+    self.auctionDetailTable:setDataSource(self)
+    self.auctionDetailTable:setDelegate(self)
 end
 
 function MenuContractor:getMenuButtonInfo()
-    local state = self.subCategoryPaging:getState()
+    local state = self:getSubCategory()
 
     if state == MenuContractor.SUB_CATEGORY.OVERVIEW then
         if not self:hasCompany() then
@@ -878,26 +902,86 @@ function MenuContractor:getMenuButtonInfo()
         return self:getLogbookButtonInfo()
     end
 
+    if state == MenuContractor.SUB_CATEGORY.AUCTION and MenuContractor.getAuction() ~= nil then
+        return self.menuButtonInfoAuction
+    end
+
     return self.menuButtonInfo[state]
 end
 
-function MenuContractor:onFrameOpen()
-    -- 100: the Workshop tab only with ADS. It's the last tab, so leaving it
-    -- out of the paging texts keeps every other tab's index.
-    local texts = {}
+-- Which tabs are shown: the Workshop only with ADS (100), the Auction only
+-- on an auction's sale day, while its lots are out (138). Every other tab
+-- always, its content gated instead.
+function MenuContractor.isSubCategoryShown(category)
+    local S = MenuContractor.SUB_CATEGORY
+    if category == S.WORKSHOP then
+        return TCADSRepairContracts.isActive()
+    elseif category == S.AUCTION then
+        local auction = MenuContractor.getAuction()
+        return auction ~= nil and TheContractorAuctions.isOnTheField(auction.state)
+    end
+    return true
+end
+
+-- The paging control only knows positions among the shown tabs, so a
+-- hidden tab would shift every one after it. shownSubCategories maps a
+-- position to its SUB_CATEGORY: always go through getSubCategory and
+-- setSubCategory, never the paging's state.
+function MenuContractor:getSubCategory()
+    local state = self.subCategoryPaging:getState()
+    if self.shownSubCategories == nil then
+        return state
+    end
+    return self.shownSubCategories[state] or MenuContractor.SUB_CATEGORY.OVERVIEW
+end
+
+-- Pages to a tab; false (and nothing done) if it isn't shown.
+function MenuContractor:setSubCategory(category)
+    for position, shown in ipairs(self.shownSubCategories or {}) do
+        if shown == category then
+            self.subCategoryPaging:setState(position, true)
+            return true
+        end
+    end
+    if self.shownSubCategories == nil then
+        self.subCategoryPaging:setState(category, true)
+        return true
+    end
+    return false
+end
+
+-- Shows and hides the tabs (isSubCategoryShown), staying on the one that
+-- was showing if it still is. Returns whether anything changed.
+function MenuContractor:updateShownTabs()
+    local current = self.shownSubCategories ~= nil and self:getSubCategory() or MenuContractor.SUB_CATEGORY.OVERVIEW
+    local shown, texts = {}, {}
     for k, tab in ipairs(self.subCategoryTabs) do
-        local isShown = k ~= MenuContractor.SUB_CATEGORY.WORKSHOP or TCADSRepairContracts.isActive()
+        local isShown = MenuContractor.isSubCategoryShown(k)
         tab:setVisible(isShown)
         if isShown then
+            table.insert(shown, k)
             table.insert(texts, tostring(k))
         end
     end
-    if self.subCategoryPaging:getState() > #texts then
-        self.subCategoryPaging:setState(MenuContractor.SUB_CATEGORY.OVERVIEW)
+    if self.shownSubCategories ~= nil and table.concat(shown, ",") == table.concat(self.shownSubCategories, ",") then
+        return false
     end
+    self.shownSubCategories = shown
     self.subCategoryBox:invalidateLayout()
     self.subCategoryPaging:setTexts(texts)
     self.subCategoryPaging:setSize(self.subCategoryBox.maxFlowSize + 140 * g_pixelSizeScaledX)
+    local position = 1
+    for i, category in ipairs(shown) do
+        if category == current then
+            position = i
+        end
+    end
+    self.subCategoryPaging:setState(position)
+    return true
+end
+
+function MenuContractor:onFrameOpen()
+    self:updateShownTabs()
 
     self.isFrameOpen = true
     self:updateContent()
@@ -942,7 +1026,7 @@ function MenuContractor:update(dt)
     self.staffHoursRefreshMs = (self.staffHoursRefreshMs or 0) + dt
     if self.staffHoursRefreshMs >= MenuContractor.SUPPLIES_REFRESH_MS then
         self.staffHoursRefreshMs = 0
-        if self.isFrameOpen and self.subCategoryPaging:getState() == MenuContractor.SUB_CATEGORY.STAFF and
+        if self.isFrameOpen and self:getSubCategory() == MenuContractor.SUB_CATEGORY.STAFF and
                 self:hasCompany() then
             local signature = self:getStaffHoursSignature(g_currentMission:getFarmId())
             if signature ~= self.staffHoursSignature then
@@ -958,12 +1042,19 @@ function MenuContractor:update(dt)
     self.suppliesRefreshMs = (self.suppliesRefreshMs or 0) + dt
     if self.suppliesRefreshMs >= MenuContractor.SUPPLIES_REFRESH_MS then
         self.suppliesRefreshMs = 0
-        if self.isFrameOpen and self.subCategoryPaging:getState() == MenuContractor.SUB_CATEGORY.SUPPLIES and
+        if self.isFrameOpen and self:getSubCategory() == MenuContractor.SUB_CATEGORY.SUPPLIES and
                 self:hasCompany() then
             self:refreshSuppliesState(g_currentMission:getFarmId())
         end
+        -- 138: and the Auction tab, as lots close.
+        if self.isFrameOpen and self:getSubCategory() == MenuContractor.SUB_CATEGORY.AUCTION then
+            local signature = self:getAuctionSignature()
+            if signature ~= self.auctionSignature then
+                self:refreshAuctionState()
+            end
+        end
         -- 100: so is the Workshop tab, as ADS's progress moves.
-        if self.isFrameOpen and self.subCategoryPaging:getState() == MenuContractor.SUB_CATEGORY.WORKSHOP and
+        if self.isFrameOpen and self:getSubCategory() == MenuContractor.SUB_CATEGORY.WORKSHOP and
                 self:hasCompany() then
             self:refreshWorkshopState(g_currentMission:getFarmId())
         end
@@ -1004,7 +1095,11 @@ end
 -- every tab, so those redraw the lot.
 function MenuContractor:refreshOpenTab()
     local S = MenuContractor.SUB_CATEGORY
-    local state = self.subCategoryPaging:getState()
+    -- 138: the Auction tab comes and goes with the sale day.
+    if self:updateShownTabs() then
+        self:updateContent()
+    end
+    local state = self:getSubCategory()
     local hasCompany = self:hasCompany()
     if state == S.OVERVIEW or not hasCompany or hasCompany ~= self.shownHasCompany then
         self:refreshCompanyState()
@@ -1026,6 +1121,8 @@ function MenuContractor:refreshOpenTab()
             self:refreshSuppliesState(farmId)
         elseif state == S.WORKSHOP then
             self:refreshWorkshopState(farmId)
+        elseif state == S.AUCTION then
+            self:refreshAuctionState()
         end
     end
     self:updateWorkerPortrait()
@@ -1055,7 +1152,7 @@ function MenuContractor:updateWorkerPortrait()
     -- 066: not while the edit dialog's showing its own - both scenes sit in
     -- the same spot in the world.
     local worker, key = nil, nil
-    local state = self.subCategoryPaging:getState()
+    local state = self:getSubCategory()
     if self.isFrameOpen and not self.isEditingWorker and state == MenuContractor.SUB_CATEGORY.INBOX and
             self:hasCompany() then
         local customer = self:getSelectedInboxCustomer()
@@ -1251,6 +1348,9 @@ function MenuContractor:refreshCompanyState()
     self.placeholderSupplies:setText(lockedText)
     self.placeholderWorkshop:setVisible(not hasCompany)
     self.placeholderWorkshop:setText(lockedText)
+
+    -- 138: with or without a company.
+    self:refreshAuctionState()
 end
 
 -- Overview tab's last-job line (029): the most recent completion summary,
@@ -2357,7 +2457,7 @@ function MenuContractor:reopenEditPerson(kind, personId, draft)
 
     local isFarmer = kind == TCEditPersonDialog.KIND.FARMER
     local view = isFarmer and "others" or "roster"
-    self.subCategoryPaging:setState(MenuContractor.SUB_CATEGORY.STAFF, true)
+    self:setSubCategory(MenuContractor.SUB_CATEGORY.STAFF)
     if self.staffView ~= view then
         self.staffViewSelector:setState(MenuContractor.STAFF_VIEW_STATES[view])
         self:onClickStaffView()
@@ -3197,6 +3297,10 @@ function MenuContractor:getNumberOfItemsInSection(list, section)
         return #self.workshopJobs
     elseif list == self.workshopDetailTable then
         return #self.workshopDetailRows
+    elseif list == self.auctionTable then
+        return #self.auctionLots
+    elseif list == self.auctionDetailTable then
+        return #self.auctionDetailRows
     elseif list == self.inboxMessageTable then
         return #self.inboxMessages
     end
@@ -3245,6 +3349,12 @@ function MenuContractor:populateCellForItemInSection(list, section, index, cell)
         return
     elseif list == self.workshopDetailTable then
         self:populateWorkshopDetailCell(index, cell)
+        return
+    elseif list == self.auctionTable then
+        self:populateAuctionLotCell(index, cell)
+        return
+    elseif list == self.auctionDetailTable then
+        self:populateAuctionDetailCell(index, cell)
         return
     end
 
@@ -3410,6 +3520,14 @@ function MenuContractor:onListSelectionChanged(list, section, index)
     if list == self.logbookDetailTable then
         self.logbookDetailIndex = index
         self:setMenuButtonInfoDirty()
+        return
+    end
+
+    -- 138: the catalogue redraws its detail panel; no reload from here.
+    if list == self.auctionTable then
+        local lot = self.auctionLots[index]
+        self.selectedAuctionLotNumber = lot ~= nil and lot.number or nil
+        self:updateAuctionLotDetails()
         return
     end
 
@@ -4385,7 +4503,7 @@ end
 function MenuContractor:showWorkshopJob(jobId)
     self.workshopView = "current"
     self.selectedWorkshopJobId = jobId
-    self.subCategoryPaging:setState(MenuContractor.SUB_CATEGORY.WORKSHOP, true)
+    self:setSubCategory(MenuContractor.SUB_CATEGORY.WORKSHOP)
     self:setMenuButtonInfoDirty()
 end
 
@@ -6365,7 +6483,7 @@ function MenuContractor:onPeopleChanged()
         local tc = g_currentMission.TheContractor
         self:refreshStaffState(g_currentMission:getFarmId(), tc.Staff, tc.Jobs)
         -- 112: and the Inbox names offers' customers.
-        if self.subCategoryPaging:getState() == MenuContractor.SUB_CATEGORY.INBOX then
+        if self:getSubCategory() == MenuContractor.SUB_CATEGORY.INBOX then
             self:refreshInboxState(g_currentMission:getFarmId(), tc.Jobs)
         end
     end
@@ -6610,7 +6728,7 @@ function MenuContractor:openOfficeRow(role, workerId)
     end
     g_inGameMenu:goToPage(self)
 
-    self.subCategoryPaging:setState(MenuContractor.SUB_CATEGORY.STAFF, true)
+    self:setSubCategory(MenuContractor.SUB_CATEGORY.STAFF)
     if self.staffView ~= "roster" then
         self.staffViewSelector:setState(1)
         self:onClickStaffView()
@@ -7921,6 +8039,190 @@ function MenuContractor:showCompanyWelcome(name)
     InfoDialog.show(table.concat(paragraphs, "\n\n"))
 end
 
+-- Auction (138) --------------------------------------------------------------
+
+-- The auction announced or under way (every machine's synced copy), or nil.
+function MenuContractor.getAuction()
+    local tc = g_currentMission.TheContractor
+    return tc ~= nil and tc.Auctions ~= nil and tc.Auctions:getAuction() or nil
+end
+
+-- The auction's lots as everyone sees them, by number: none until they're
+-- out on its field.
+function MenuContractor.getAuctionLots(auction)
+    local site = g_currentMission.TheContractor.AuctionSite
+    if auction == nil or site == nil or site.fieldId ~= auction.fieldId then
+        return {}
+    end
+    return site:getLots()
+end
+
+-- The host's name, the field's and the sale's date.
+local function getAuctionArgs(auction)
+    local tc = g_currentMission.TheContractor
+    local host = tc.Farmers ~= nil and tc.Farmers:getPerson(auction.hostFarmerId) or nil
+    local field = g_fieldManager:getFieldById(auction.fieldId)
+    return host ~= nil and host.name or g_i18n:getText("tc_inbox_customerUnknown"),
+        field ~= nil and field:getName() or tostring(auction.fieldId), formatMonotonicDay(auction.saleDay)
+end
+
+-- What the tab was last drawn from: redrawn when a lot comes out, closes or
+-- is settled, or the farm's bids change.
+function MenuContractor:getAuctionSignature()
+    local auction = MenuContractor.getAuction()
+    if auction == nil then
+        return "none"
+    end
+    local sale = g_currentMission.TheContractor.AuctionSale
+    local farmId = g_currentMission:getFarmId()
+    local parts = { auction.id, auction.state }
+    for _, lot in ipairs(MenuContractor.getAuctionLots(auction)) do
+        local bid = sale:getFarmBid(lot.number, farmId)
+        table.insert(parts, sale:getDisplayState(lot, farmId) .. (bid ~= nil and bid.amount or ""))
+    end
+    return table.concat(parts, ":")
+end
+
+-- Every farm's, company or not, on the sale day (isSubCategoryShown): the
+-- auction's lots.
+function MenuContractor:refreshAuctionState()
+    self.auctionSignature = self:getAuctionSignature()
+    local auction = MenuContractor.getAuction()
+    local lots = MenuContractor.getAuctionLots(auction)
+    local hasLots = #lots > 0
+    self.auctionContent:setVisible(hasLots)
+    self.auctionEmptyText:setVisible(not hasLots)
+    if not hasLots then
+        self.auctionLots = {}
+        self.selectedAuctionLotNumber = nil
+        -- The tab's only shown on the sale day: before the first lot's out,
+        -- or once the auction's over while the menu's open.
+        self.auctionEmptyText:setText(g_i18n:getText(auction ~= nil and "tc_auction_catalogueSettingOut" or
+            "tc_auction_catalogueNone"))
+        return
+    end
+
+    self.auctionSummaryText:setText(string.format(g_i18n:getText("tc_auction_catalogueSummary"),
+        getAuctionArgs(auction)))
+
+    -- reloadData re-raises the selection callback with the old index, so
+    -- the wanted lot is held on to first (as the Supplies tab does).
+    local wantedNumber = self.selectedAuctionLotNumber
+    self.auctionLots = {}
+    for i, lot in ipairs(lots) do
+        self.auctionLots[i] = lot
+    end
+    self.auctionTable:reloadData()
+    local selectedIndex = 1
+    for i, lot in ipairs(self.auctionLots) do
+        if lot.number == wantedNumber then
+            selectedIndex = i
+        end
+    end
+    if self.auctionTable:getSelectedIndexInSection() ~= selectedIndex then
+        self.auctionTable:setSelectedIndex(selectedIndex)
+    end
+    self.selectedAuctionLotNumber = self.auctionLots[selectedIndex].number
+    self:updateAuctionLotDetails()
+end
+
+function MenuContractor:getSelectedAuctionLot()
+    for _, lot in ipairs(self.auctionLots) do
+        if lot.number == self.selectedAuctionLotNumber then
+            return lot
+        end
+    end
+    return nil
+end
+
+-- How the farm sees a lot (139: its bid, the result), as its chip's text
+-- and tone: the card's own.
+local function getAuctionLotChip(lot)
+    local _, text, tone = TCAuctionLotDialog.getState(lot, g_currentMission:getFarmId())
+    return text, tone
+end
+
+function MenuContractor:populateAuctionLotCell(index, cell)
+    local lot = self.auctionLots[index]
+    if lot == nil then
+        return
+    end
+    cell:getAttribute("number"):setText(tostring(lot.number))
+    cell:getAttribute("name"):setText(TheContractorAuctionSite.getLotName(lot))
+    cell:getAttribute("hours"):setText(TCAuctionLotDialog.formatHours(lot.hours))
+    cell:getAttribute("guide"):setText(g_i18n:formatMoney(lot.guidePrice, 0, true, true))
+    cell:getAttribute("closes"):setText(TheContractorAuctionSite.formatCloseTime(lot.closeMinute))
+    local chipText, tone = getAuctionLotChip(lot)
+    setChip(cell:getAttribute("chip"), cell:getAttribute("chipText"), chipText, tone)
+end
+
+-- The highlighted lot: the card's figures, as label/value rows under its
+-- picture. Nothing ADS knows (099).
+function MenuContractor:updateAuctionLotDetails()
+    local lot = self:getSelectedAuctionLot()
+    self.auctionDetailsBox:setVisible(lot ~= nil)
+    if lot == nil then
+        self.auctionDetailRows = {}
+        self.auctionDetailTable:reloadData()
+        return
+    end
+    self.auctionDetailTitle:setText(string.format(g_i18n:getText("tc_auctionLot_title"), lot.number))
+    local chipText, tone = getAuctionLotChip(lot)
+    setChip(self.auctionDetailChip, self.auctionDetailChipText, chipText, tone)
+    local storeItem = g_storeManager:getItemByXMLFilename(lot.xmlFilename)
+    local hasImage = storeItem ~= nil and storeItem.imageFilename ~= nil
+    self.auctionLotImage:setVisible(hasImage)
+    if hasImage then
+        self.auctionLotImage:setImageFilename(storeItem.imageFilename)
+        self.auctionLotImage:setImageUVs(nil, unpack(Overlay.DEFAULT_UVS))
+    end
+
+    local rows = {}
+    local function add(labelKey, value)
+        table.insert(rows, { label = g_i18n:getText(labelKey), value = value })
+    end
+    table.insert(rows, { section = g_i18n:getText("tc_auctionLot_sectionMachine") })
+    add("tc_auctionLot_machine", TheContractorFarmerFleet.getModelName(lot.xmlFilename))
+    if lot.attachmentXml ~= nil then
+        add("tc_auctionLot_attachment", TheContractorFarmerFleet.getModelName(lot.attachmentXml))
+    end
+    add("tc_auctionLot_hours", TCAuctionLotDialog.formatHours(lot.hours))
+    add("tc_auctionLot_age", TCAuctionLotDialog.formatAge(lot.ageMonths))
+    table.insert(rows, { section = g_i18n:getText("tc_auctionLot_sectionBidding") })
+    add("tc_auctionLot_guide", g_i18n:formatMoney(lot.guidePrice, 0, true, true))
+    add("tc_auctionLot_closesLabel", TheContractorAuctionSite.formatCloseTime(lot.closeMinute))
+    add("tc_auctionLot_bidding", chipText)
+    -- 139: the farm's own bid and what became of it, as on the card.
+    local farmId = g_currentMission:getFarmId()
+    add("tc_auctionLot_yourBidLabel", TCAuctionLotDialog.getYourBidText(lot, farmId))
+    local state = g_currentMission.TheContractor.AuctionSale:getDisplayState(lot, farmId)
+    self.auctionDetailNote:setText(TCAuctionLotDialog.getNoteText(lot, farmId, state) or "")
+    self.auctionDetailRows = rows
+    self.auctionDetailTable:reloadData()
+end
+
+function MenuContractor:populateAuctionDetailCell(index, cell)
+    local row = self.auctionDetailRows[index]
+    if row == nil then
+        return
+    end
+    local isSection = row.section ~= nil
+    cell:getAttribute("surface"):setVisible(not isSection)
+    cell:getAttribute("section"):setVisible(isSection)
+    cell:getAttribute("section"):setText(row.section or "")
+    cell:getAttribute("label"):setVisible(not isSection)
+    cell:getAttribute("label"):setText(row.label or "")
+    cell:getAttribute("value"):setVisible(not isSection)
+    cell:getAttribute("value"):setText(row.value or "")
+end
+
+function MenuContractor:onClickAuctionShowOnMap()
+    local auctions = g_currentMission.TheContractor.Auctions
+    if auctions ~= nil and auctions:getAuction() ~= nil then
+        auctions:showOnMap()
+    end
+end
+
 -- Level/duration choice, cost preview and the funds/tier checks all live in
 -- TCAdvertisingDialog (027), which sends the purchase event itself.
 function MenuContractor:onClickBuyAdvertising()
@@ -7930,7 +8232,7 @@ function MenuContractor:onClickBuyAdvertising()
 end
 
 function MenuContractor:onClickInbox()
-    self.subCategoryPaging:setState(MenuContractor.SUB_CATEGORY.INBOX, true)
+    self:setSubCategory(MenuContractor.SUB_CATEGORY.INBOX)
     self:setMenuButtonInfoDirty()
 end
 
@@ -7949,37 +8251,42 @@ function MenuContractor:markInboxSeen()
 end
 
 function MenuContractor:onClickJobs()
-    self.subCategoryPaging:setState(MenuContractor.SUB_CATEGORY.JOBS, true)
+    self:setSubCategory(MenuContractor.SUB_CATEGORY.JOBS)
     self:setMenuButtonInfoDirty()
 end
 
 function MenuContractor:onClickStaff()
-    self.subCategoryPaging:setState(MenuContractor.SUB_CATEGORY.STAFF, true)
+    self:setSubCategory(MenuContractor.SUB_CATEGORY.STAFF)
     self:setMenuButtonInfoDirty()
 end
 
 function MenuContractor:onClickFinances()
-    self.subCategoryPaging:setState(MenuContractor.SUB_CATEGORY.FINANCES, true)
+    self:setSubCategory(MenuContractor.SUB_CATEGORY.FINANCES)
     self:setMenuButtonInfoDirty()
 end
 
 function MenuContractor:onClickLogbook()
-    self.subCategoryPaging:setState(MenuContractor.SUB_CATEGORY.LOGBOOK, true)
+    self:setSubCategory(MenuContractor.SUB_CATEGORY.LOGBOOK)
     self:setMenuButtonInfoDirty()
 end
 
 function MenuContractor:onClickSupplies()
-    self.subCategoryPaging:setState(MenuContractor.SUB_CATEGORY.SUPPLIES, true)
+    self:setSubCategory(MenuContractor.SUB_CATEGORY.SUPPLIES)
+    self:setMenuButtonInfoDirty()
+end
+
+function MenuContractor:onClickAuction()
+    self:setSubCategory(MenuContractor.SUB_CATEGORY.AUCTION)
     self:setMenuButtonInfoDirty()
 end
 
 function MenuContractor:onClickWorkshop()
-    self.subCategoryPaging:setState(MenuContractor.SUB_CATEGORY.WORKSHOP, true)
+    self:setSubCategory(MenuContractor.SUB_CATEGORY.WORKSHOP)
     self:setMenuButtonInfoDirty()
 end
 
 function MenuContractor:onClickOverview()
-    self.subCategoryPaging:setState(MenuContractor.SUB_CATEGORY.OVERVIEW, true)
+    self:setSubCategory(MenuContractor.SUB_CATEGORY.OVERVIEW)
     self:setMenuButtonInfoDirty()
 end
 
@@ -7989,7 +8296,7 @@ function MenuContractor:updateSubCategoryPages(subCategoryIndex)
 end
 
 function MenuContractor:updateContent()
-    local state = self.subCategoryPaging:getState()
+    local state = self:getSubCategory()
 
     self.categoryHeaderIcon:setImageSlice(nil, MenuContractor.HEADER_SLICES[state])
     self.categoryHeaderText:setText(g_i18n:getText(MenuContractor.HEADER_TITLES[state]))

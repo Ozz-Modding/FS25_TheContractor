@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8" standalone="no" ?>
+<!-- Auction lot card (138, 139), see TCAuctionLotDialog.lua. The dialog
+     frame of TCRepairQuoteDialog.xml around two panel-kit cards (043): the
+     machine (store image, name, hours, age, the farm's view of the lot as
+     a chip), its shop specifications, then the bidding: the guide price, large, a note on it, when
+     bidding closes, the farm's own bid and a note (the result, or a
+     warning). Positions inside the canvas are offsets from its top-left. -->
+<GUI onOpen="onOpen" onClose="onClose" onCreate="onCreate">
+    <GuiElement profile="newLayer"/>
+    <Bitmap profile="dialogFullscreenBg" id="dialogBg"/>
+    <GuiElement profile="fs25_dialogBg" id="dialogElement" size="760px 850px">
+        <ThreePartBitmap profile="fs25_dialogBgMiddle"/>
+        <ThreePartBitmap profile="fs25_dialogBgTop"/>
+        <ThreePartBitmap profile="fs25_dialogBgBottom"/>
+        <GuiElement profile="fs25_dialogContentContainer">
+
+            <Text profile="fs25_dialogTitle" id="dialogTitleElement" position="0px -30px" text=""/>
+
+            <GuiElement profile="tc_repairQuoteCanvas" position="0px -76px" size="700px 670px">
+
+                <!-- The machine. -->
+                <RoundCorner profile="tc_panel" position="0px 0px" size="700px 200px"/>
+                <Bitmap profile="tc_auctionLotImage" id="lotImage" position="16px -10px"/>
+                <Text profile="tc_panelHeading" id="nameText" text="" position="214px -16px" size="470px 32px"/>
+                <Bitmap profile="tc_divider" position="214px -54px" size="470px 1px"/>
+                <GuiElement profile="tc_repairQuoteRow" position="214px -60px" size="470px 34px">
+                    <Text profile="tc_detailLabel" text="$l10n_tc_auctionLot_hours" position="0px 0px" size="160px 34px"/>
+                    <Text profile="tc_detailValue" id="hoursText" text="" position="170px 0px" size="290px 34px"/>
+                    <Bitmap profile="tc_detailRowDivider"/>
+                </GuiElement>
+                <GuiElement profile="tc_repairQuoteRow" position="214px -94px" size="470px 34px">
+                    <Text profile="tc_detailLabel" text="$l10n_tc_auctionLot_age" position="0px 0px" size="160px 34px"/>
+                    <Text profile="tc_detailValue" id="ageText" text="" position="170px 0px" size="290px 34px"/>
+                    <Bitmap profile="tc_detailRowDivider"/>
+                </GuiElement>
+                <GuiElement profile="tc_repairQuoteRow" position="214px -128px" size="470px 34px">
+                    <Text profile="tc_detailLabel" text="$l10n_tc_auctionLot_bidding" position="0px 0px" size="160px 34px"/>
+                    <RoundCorner profile="tc_chip" id="stateChip" position="170px -7px" size="160px 20px"/>
+                    <Text profile="tc_chipText" id="stateChipText" position="170px -7px" size="160px 20px"/>
+                </GuiElement>
+
+                <!-- The shop's specifications (power, speed, tank, working
+                     width, ...), as vanilla's shop and UEY's barter dialog show
+                     them: one icon and value each, cloned from the template. -->
+                <RoundCorner profile="tc_panel" position="0px -212px" size="700px 110px"/>
+                <Text profile="tc_sectionTitle" text="$l10n_tc_auctionLot_specs" position="24px -224px" size="652px 24px"/>
+                <ScrollingLayout position="24px -252px" size="652px 64px" flowDirection="horizontal" numFlows="2" id="specsLayout">
+                    <GuiElement profile="fs25_itemDetailsTemplateBox" name="detailTemplate" id="specTemplate" visible="false">
+                        <Bitmap profile="fs25_itemDetailsIcon" name="icon"/>
+                        <Text profile="fs25_itemDetailsText" text="" name="text" textAutoWidth="true"/>
+                    </GuiElement>
+                </ScrollingLayout>
+
+                <!-- What to judge a bid from, when bidding closes, and the farm's bid. -->
+                <RoundCorner profile="tc_panel" position="0px -334px" size="700px 330px"/>
+                <Text profile="tc_sectionTitle" text="$l10n_tc_auctionLot_guide" position="24px -348px" size="652px 24px"/>
+                <Bitmap profile="tc_divider" position="24px -376px" size="652px 1px"/>
+                <Text profile="tc_auctionGuidePrice" id="guideText" text="" position="24px -384px" size="652px 56px"/>
+                <Text profile="tc_panelNote" text="$l10n_tc_auctionLot_guideNote" position="24px -440px" size="652px 24px"/>
+                <Text profile="tc_panelHeading" id="closesText" text="" position="24px -468px" size="652px 32px"/>
+                <Bitmap profile="tc_divider" position="24px -508px" size="652px 1px"/>
+                <Text profile="tc_panelHeading" id="yourBidText" text="" position="24px -516px" size="652px 32px"/>
+                <!-- 139: the bid to leave, left/right through the guide's
+                     percentages (gamepad and mouse alike), then Bid. Only while
+                     the lot's open. -->
+                <GuiElement profile="tc_repairQuoteRow" id="bidRow" position="24px -552px" size="652px 44px">
+                    <Text profile="tc_detailLabel" text="$l10n_tc_auctionLot_newBid" position="0px 0px" size="200px 44px"/>
+                    <MultiTextOption profile="tc_repairQuotePicker" id="bidOption" position="210px -4px" focusInit="onOpen">
+                        <Text profile="fs25_multiTextOptionText" width="300px" name="text"/>
+                    </MultiTextOption>
+                </GuiElement>
+                <Text profile="tc_panelNote" id="noteText" text="" position="24px -600px" size="652px 52px" textMaxNumLines="3"/>
+            </GuiElement>
+        </GuiElement>
+
+        <BoxLayout profile="fs25_dialogButtonBox" id="buttonBox">
+            <!-- 139: only while the lot's open (refresh); Withdraw once there's a bid. -->
+            <Button profile="buttonOK" text="$l10n_tc_auctionLot_bidButton" onClick="onClickBid" id="bidButton"/>
+            <Bitmap profile="fs25_dialogButtonBoxSeparator" id="bidSeparator"/>
+            <Button profile="buttonExtra1" text="$l10n_tc_auctionLot_withdrawButton" onClick="onClickWithdraw" id="withdrawButton"/>
+            <Bitmap profile="fs25_dialogButtonBoxSeparator" id="withdrawSeparator"/>
+            <Button profile="buttonBack" text="$l10n_button_back" onClick="onClickBack" id="backButton"/>
+        </BoxLayout>
+    </GuiElement>
+</GUI>

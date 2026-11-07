@@ -41,6 +41,7 @@
 		<text name="tc_header_finances" text="Finances"/>
 		<text name="tc_header_logbook" text="Logbook"/>
 		<text name="tc_header_supplies" text="Supplies"/>
+		<text name="tc_header_auction" text="Auction"/>
 		<text name="tc_header_workshop" text="Workshop"/>
 		<text name="tc_overview_companyHeading" text="Company"/>
 		<text name="tc_overview_businessHeading" text="Business"/>
@@ -350,6 +351,8 @@
 		<text name="finance_tcGoodNews" text="Refunds and rebates"/>
 		<text name="tc_moneyType_wasteDisposal" text="Tipping fees"/>
 		<text name="finance_tcWasteDisposal" text="Tipping fees"/>
+		<text name="tc_moneyType_auctionPurchase" text="Machinery auctions"/>
+		<text name="finance_tcAuctionPurchase" text="Machinery auctions"/>
 		<text name="tc_staff_viewRoster" text="Your Staff"/>
 		<text name="tc_staff_viewCandidates" text="Candidates"/>
 		<text name="tc_staff_viewOthers" text="Others"/>
@@ -543,13 +546,75 @@
 		<text name="tc_auction_mapName" text="Machinery auction"/>
 		<text name="tc_auction_showOnMap" text="Show on map"/>
 		<text name="tc_auction_announced_title" text="Machinery auction announced"/>
-		<text name="tc_auction_announced_body" text="%s is holding a machinery auction on Field %s on %s. Used tractors and machinery of every kind will be laid out on the field, with viewing from 08:00 and the sale from 10:00. Anyone may come and bid. Look out for the signs round the area."/>
+		<text name="tc_auction_announced_body" text="%s is holding a machinery auction on Field %s on %s. Used tractors and machinery of every kind will be laid out on the field, with viewing and bidding from 08:00; bidding on each lot closes at its own time from 17:00. Anyone may come and bid. Look out for the signs round the area."/>
 		<text name="tc_auction_reminder_title" text="Machinery auction coming up"/>
-		<text name="tc_auction_reminder_body" text="A reminder: %s's machinery auction on Field %s is on %s. Viewing from 08:00, the sale from 10:00."/>
+		<text name="tc_auction_reminder_body" text="A reminder: %s's machinery auction on Field %s is on %s. Viewing and bidding from 08:00, each lot closing at its own time from 17:00."/>
 		<text name="tc_auction_today_title" text="Machinery auction today"/>
-		<text name="tc_auction_today_body" text="%s's machinery auction on Field %s is today, %s. The lots are out on the field: viewing from 08:00, the sale from 10:00."/>
+		<text name="tc_auction_today_body" text="%s's machinery auction on Field %s is today, %s. The lots are out on the field: viewing and bidding from 08:00, each lot closing at its own time from 17:00."/>
 		<text name="tc_auction_cancelled_title" text="Machinery auction cancelled"/>
 		<text name="tc_auction_cancelled_body" text="%s's machinery auction on Field %s, due on %s, has been called off."/>
+		<text name="tc_auction_catalogueNone" text="The machinery auction is over."/>
+		<text name="tc_auction_catalogueSettingOut" text="The lots are being set out on the field. The catalogue fills in as they arrive."/>
+		<text name="tc_auction_catalogueSummary" text="%s's machinery auction, Field %s, %s. Viewing from 08:00; bidding on each lot closes at its own time from 17:00. Bids are made at the lot itself."/>
+		<text name="tc_auction_columnLot" text="Lot"/>
+		<text name="tc_auction_columnMachine" text="Machine"/>
+		<text name="tc_auction_columnHours" text="Hours"/>
+		<text name="tc_auction_columnGuide" text="Guide"/>
+		<text name="tc_auction_columnCloses" text="Closes"/>
+		<text name="tc_auctionLot_view" text="View lot %d: %s"/>
+		<text name="tc_auctionLot_viewGeneric" text="View lot"/>
+		<text name="tc_auctionLot_title" text="Lot %d"/>
+		<text name="tc_auctionLot_withAttachment" text="%s with %s"/>
+		<text name="tc_auctionLot_sectionMachine" text="Machine"/>
+		<text name="tc_auctionLot_sectionBidding" text="Bidding"/>
+		<text name="tc_auctionLot_machine" text="Model"/>
+		<text name="tc_auctionLot_attachment" text="With"/>
+		<text name="tc_auctionLot_hours" text="Hours"/>
+		<text name="tc_auctionLot_hoursValue" text="%s h"/>
+		<text name="tc_auctionLot_age" text="Age"/>
+		<text name="tc_auctionLot_ageOne" text="1 month"/>
+		<text name="tc_auctionLot_ageMany" text="%d months"/>
+		<text name="tc_auctionLot_bidding" text="Bidding"/>
+		<text name="tc_auctionLot_state_open" text="Open"/>
+		<text name="tc_auctionLot_state_closed" text="Closed"/>
+		<text name="tc_auctionLot_guide" text="Guide price"/>
+		<text name="tc_auctionLot_specs" text="Specifications"/>
+		<text name="tc_auctionLot_guideNote" text="What the lot's expected to fetch: bid around it for a fair chance of winning."/>
+		<text name="tc_auctionLot_closes" text="Bidding closes %s"/>
+		<text name="tc_auctionLot_closesLabel" text="Bidding closes"/>
+		<text name="tc_auctionLot_state_yourBid" text="Your bid"/>
+		<text name="tc_auctionLot_state_sold" text="Sold"/>
+		<text name="tc_auctionLot_state_won" text="Won"/>
+		<text name="tc_auctionLot_state_outbid" text="Sold elsewhere"/>
+		<text name="tc_auctionLot_state_unpaid" text="Not paid"/>
+		<text name="tc_auctionLot_yourBidLabel" text="Your bid"/>
+		<text name="tc_auctionLot_noBid" text="You haven't bid on this lot."/>
+		<text name="tc_auctionLot_yourBid" text="Your bid: %s"/>
+		<text name="tc_auctionLot_noteWon" text="You won this lot and paid %s. It's yours to drive away: collect it from the field before midnight, or it's delivered to your parking (or the shop, if your parking's full)."/>
+		<text name="tc_auctionLot_noteOutbid" text="Bidding's closed and the lot went to another bidder."/>
+		<text name="tc_auctionLot_noteUnpaid" text="Your bid won, but you couldn't pay when bidding closed, so the lot went elsewhere. You were charged a %s fee."/>
+		<text name="tc_auctionLot_noteSold" text="Bidding's closed and the lot's sold."/>
+		<text name="tc_auctionLot_noteClosed" text="Bidding's closed."/>
+		<text name="tc_auctionLot_noteOverBalance" text="Your open bids come to %s, more than you have (%s). Money's checked when each lot closes: a win you can't pay for goes to the next bidder, and you're charged a fee."/>
+		<text name="tc_auctionLot_bidButton" text="Bid"/>
+		<text name="tc_auctionLot_changeBidButton" text="Change bid"/>
+		<text name="tc_auctionLot_withdrawButton" text="Withdraw bid"/>
+		<text name="tc_auctionLot_newBid" text="Bid"/>
+		<text name="tc_auctionLot_bidStep" text="%s (%d%% of guide)"/>
+		<text name="tc_auctionLot_withdrawConfirm" text="Withdraw your bid on lot %d?"/>
+		<text name="tc_auctionBid_refusedNoSale" text="There's no auction sale on."/>
+		<text name="tc_auctionBid_refusedNoLot" text="That lot isn't in the sale."/>
+		<text name="tc_auctionBid_refusedClosed" text="Bidding on that lot has closed."/>
+		<text name="tc_auctionBid_refusedMinimum" text="That bid's under the lot's minimum."/>
+		<text name="tc_auctionBid_refusedNoBid" text="You have no bid on that lot to withdraw."/>
+		<text name="tc_auctionSale_wonNotice" text="You won lot %d, %s, for %s."/>
+		<text name="tc_auctionSale_lostNotice" text="Lot %d went to another bidder."/>
+		<text name="tc_auctionSale_unpaidNotice" text="You couldn't pay for lot %d when it closed, so it went elsewhere. Fee: %s."/>
+		<text name="tc_auctionSale_deliveredNotice" text="Lot %d, %s, was left on the auction field and has been delivered to your parking."/>
+		<text name="tc_auctionSale_deliveredShopNotice" text="Lot %d, %s, was left on the auction field. Your parking's full, so it's been delivered to the shop."/>
+		<text name="tc_auctionSale_deliveredWaitingNotice" text="Lot %d, %s, was left on the auction field. Your parking and the shop are both full, so it's waiting to be parked."/>
+		<text name="tc_auctionSale_wonTitle" text="Auction lot won"/>
+		<text name="tc_auctionSale_wonBody" text="You won lot %s at the machinery auction: %s, for %s, paid. It's yours: collect it from the auction field before midnight, or it'll be delivered to your parking (or the shop, if your parking's full)."/>
 		<text name="tc_construction_tab" text="Contractor"/>
 		<text name="tc_parkingSlot_name" text="Vehicle Parking Slot"/>
 		<text name="tc_parkingSlotMedium_name" text="Vehicle Parking Slot (Medium)"/>

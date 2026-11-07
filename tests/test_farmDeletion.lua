@@ -13,7 +13,7 @@ local SUBSYSTEM_FILES = {
     "Company", "Reputation", "Advertising", "JobGeneration", "Job", "Jobs", "Staff", "Cooldown", "Drivers",
     "Notices", "Holidays", "Finances", "Inbox", "Overheads", "Claims", "Office", "Logbook",
     "MachineryInsurance", "GoodNews", "Parking", "RandomEvents", "Relationships", "RepairContracts",
-    "Dispatch", "Watchdog",
+    "Dispatch", "Watchdog", "AuctionSale",
 }
 
 local function setup()
@@ -121,6 +121,9 @@ local function setup()
             ranOutOfFillJobIds = { [11] = true, [21] = true },
         }),
         Watchdog = make("TheContractorWatchdog", { trackedByJobId = { [11] = {}, [21] = {} } }),
+        -- 139: bids on lots, by lot then farm.
+        AuctionSale = make("TheContractorAuctionSale", { bids = { [4] = { [1] = { amount = 100 }, [2] = { amount = 90 } },
+            [5] = { [1] = { amount = 50 } } } }),
     }
     g_currentMission.TheContractor = tc
     return world, tc
@@ -195,6 +198,10 @@ test("the deleted farm's state goes and the other farm's stays", function()
     assertEquals(tc.Parking.messageIdByBatch[1], nil, "batch message")
     assertEquals(tc.Parking.messageIdByBatch[2], 8, "other batch message")
     assertEquals(tc.Parking.noticeByFarm[1], nil, "parking notice")
+
+    assertEquals(tc.AuctionSale.bids[4][1], nil, "auction bids")
+    assertEquals(tc.AuctionSale.bids[5][1], nil, "every lot's")
+    assertEquals(tc.AuctionSale.bids[4][2].amount, 90, "the other farm's bid kept")
 
     assertEquals(count(tc.RandomEvents.incidents), 1, "incidents")
     assertEquals(tc.RandomEvents.lastPeriodByFarm[1], nil, "event cooldowns")
