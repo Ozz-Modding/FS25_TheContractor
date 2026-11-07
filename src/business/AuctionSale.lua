@@ -353,6 +353,10 @@ function TheContractorAuctionSale:placeBid(farmId, lotNumber, amount)
             end
         end
         TCLog.info("TheContractor: farm %d bid %d on lot %d", farmId, amount, lotNumber)
+        -- 141: a bid means they came.
+        if amount > 0 then
+            TCAuctionAttendance.markAttended(farmId)
+        end
     end
     self:sendFarmBids(farmId, nil, problem ~= nil and { lotNumber = lotNumber, key = problem } or nil)
     return problem
@@ -501,6 +505,8 @@ function TheContractorAuctionSale:closeLot(lot)
         lot.soldTo, lot.salePrice = winner, price
         TheContractorAuctionSale.handOver(lot, winner)
         self:postWonMessage(lot, winner, price)
+        -- 141: and so does a win.
+        TCAuctionAttendance.markAttended(winner)
     else
         lot.soldTo = 0
     end

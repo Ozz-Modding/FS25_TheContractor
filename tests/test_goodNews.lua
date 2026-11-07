@@ -51,6 +51,8 @@ local function setup(options)
     tc.Reputation = TheContractorReputation.new()
 
     world.completedJobs = options.completedJobs or 1
+    -- 141: attend-the-auction jobs done, which aren't work.
+    world.attendedAuctions = 0
     tc.Jobs = {
         getJobsByState = function(_, farmId, state)
             local jobs = {}
@@ -58,10 +60,14 @@ local function setup(options)
                 for i = 1, world.completedJobs do
                     table.insert(jobs, { id = i, farmId = farmId })
                 end
+                for i = 1, world.attendedAuctions do
+                    table.insert(jobs, { id = 100 + i, farmId = farmId, noConsequences = true })
+                end
             end
             return jobs
         end,
     }
+    TheContractorJobs = { hasNoConsequences = function(job) return job.noConsequences == true end }
 
     world.money = {}
     g_currentMission.addMoney = function(_, amount, farmId, moneyType)
@@ -187,6 +193,12 @@ test("nothing before the farm's first completed job", function()
     assertEquals(tc.RandomEvents:triggerEvent(1, "goodNews"), nil)
     world.completedJobs = 1
     assertTrue(tc.GoodNews:pickStory(1) ~= nil)
+end)
+
+test("going to an auction (141) isn't a first completed job", function()
+    local world, tc = setup({ completedJobs = 0 })
+    world.attendedAuctions = 1
+    assertEquals(tc.GoodNews:pickStory(1), nil)
 end)
 
 test("never the same story twice in a row", function()

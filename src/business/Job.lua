@@ -322,6 +322,10 @@ function TheContractorJob.new(id, farmId, jobType, fieldId, requiredSkillLevel, 
     -- to clients; read it through getCustomer/getCustomerName.
     self.customerId = nil
 
+    -- 141: the machinery auction (137) an attend job is for, by its id, nil
+    -- for every other job. Saved and sent to clients.
+    self.auctionId = nil
+
     return self
 end
 
@@ -437,6 +441,10 @@ function TheContractorJob:getSummaryText()
     if self.workshop ~= nil then
         return string.format(g_i18n:getText("tc_repair_summaryLine"), self:getTypeText(),
             self.workshop.vehicleName or "?")
+    end
+    -- 141: just went along.
+    if self.auctionId ~= nil then
+        return string.format(g_i18n:getText("tc_attendAuction_summaryLine"), self:getLocationText())
     end
     -- 124, 126: to or from a farmer's yard, no field.
     if self:isYardJob() then

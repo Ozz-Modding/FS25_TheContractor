@@ -59,6 +59,17 @@ function TCJobMissedEvent.showNotification(farmId, jobType, fieldId, typeLabel)
         return
     end
 
+    -- 141: nothing was riding on it (an auction no one went to), so it just
+    -- ends, with a word that it's over.
+    local quietDef = TheContractorJobGeneration.JOB_TYPES[jobType]
+    if quietDef ~= nil and quietDef.noConsequences then
+        local field = g_fieldManager:getFieldById(fieldId)
+        g_currentMission:addIngameNotification(FSBaseMission.INGAME_NOTIFICATION_INFO,
+            string.format(g_i18n:getText("tc_" .. jobType .. "_overNotification"),
+                field ~= nil and field:getName() or tostring(fieldId)))
+        return
+    end
+
     -- 100: a workshop job has no field (fieldId 0).
     if fieldId == 0 then
         -- 116: a favour was the farmer's own machine.

@@ -61,6 +61,11 @@ function TheContractorCompany:createCompany(farmId, name)
     end
 
     self:applyCompanyCreation(farmId, name)
+
+    -- 141: a sale this month is on its list too.
+    if g_currentMission:getIsServer() then
+        TCAuctionAttendance.onCompanyCreated(farmId)
+    end
 end
 
 -- The actual state flip, run on whichever machine (server, or a client

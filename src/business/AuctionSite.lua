@@ -2,8 +2,9 @@
 -- with rows of used equipment, driven from the console (tcCompany
 -- auctionSite) with no auction around it yet (137 owns the auction).
 --
---   Picking the field (getCandidates): a grass field nobody's farm owns (a
---     farmer's, 110), with no live job, ranked by TCAuctionLayout: the ones
+--   Picking the field (getCandidates): a field nobody's farm owns (a
+--     farmer's, 110) that's grass, bare or harvested (isCropFit, 143), with
+--     no live job, ranked by TCAuctionLayout: the ones
 --     that can hold the sale first (enough lots fit, gentle enough, a road
 --     near), then by area. The entrance is the road point nearest the
 --     field's edge (FallenTree's road samples), where buyers drive out and
@@ -24,7 +25,9 @@
 --     (TCVehicleLock, from the lot ids this sends every machine), and kept
 --     out of our lists (farm 0 is nobody's, so the farm lists skip them;
 --     isLot for anything that lists every vehicle). The grass is cut short
---     first, and the field is protected while the site's up (Jobs:
+--     first; a field that isn't grass is put down to short grass, its state
+--     kept (groundSnapshot, saved) and put back when the site's cleared
+--     (143's prepareGround/restoreGround). The field is protected while the site's up (Jobs:
 --     isFieldProtected, so 034's freeze and job generation leave it be).
 --   The crowd's walks (137): each row aisle's middle line and width
 --     (TCAuctionLayout's walkways), sent to every machine and saved, so the
@@ -483,10 +486,30 @@ function TheContractorAuctionSite.measureField(field, lots, roads)
     return candidate
 end
 
--- Every field that could be a site (grass, nobody's farm, no live job, big
--- enough to try), measured against a typical sale of the preferred size and
--- ranked: those that fit MIN_LOTS first, the most lots first. Returns the
--- ranked list and how many fields there are in all.
+-- 143: whether a field's crop lets it be picked as a site: grass, no crop,
+-- or a crop at a cut (harvested) state. A sown, growing or withered crop
+-- doesn't. Only the pick asks: the consoles' sites can be any field, and on
+-- the sale day whatever's there is put down to grass and put back after.
+function TheContractorAuctionSite.isCropFit(field)
+    local fieldState = field:getFieldState()
+    if fieldState == nil or not fieldState.isValid then
+        return false
+    end
+    local fruitTypeIndex = fieldState.fruitTypeIndex
+    if fruitTypeIndex == nil or fruitTypeIndex == FruitType.UNKNOWN then
+        return true
+    end
+    if TheContractorJobGeneration.isGrass(fruitTypeIndex) then
+        return true
+    end
+    local fruitType = g_fruitTypeManager:getFruitTypeByIndex(fruitTypeIndex)
+    return fruitType ~= nil and fruitType.cutStates ~= nil and fruitType.cutStates[fieldState.growthState] == true
+end
+
+-- Every field that could be a site (grass, bare or harvested, nobody's
+-- farm, no live job, big enough to try), measured against a typical sale of
+-- the preferred size and ranked: those that fit MIN_LOTS first, the most
+-- lots first. Returns the ranked list and how many fields there are in all.
 function TheContractorAuctionSite:getCandidates(preferredLots)
     local lots = TheContractorAuctionSite.planLots(preferredLots,
         seededRandom(TheContractorAuctionSite.CANDIDATE_SEED))
@@ -494,7 +517,7 @@ function TheContractorAuctionSite:getCandidates(preferredLots)
     local candidates = {}
     local fields = g_fieldManager:getFields()
     for _, field in ipairs(fields) do
-        if TheContractorJoyriders.isGrassField(field) and TheContractorAuctionSite.getFieldRefusal(field) == nil and
+        if TheContractorAuctionSite.isCropFit(field) and TheContractorAuctionSite.getFieldRefusal(field) == nil and
                 (field:getAreaHa() or 0) >= TheContractorAuctionSite.MIN_AREA_HA then
             table.insert(candidates, TheContractorAuctionSite.measureField(field, lots, roads))
         end
@@ -532,6 +555,42 @@ function TheContractorAuctionSite.sizeSale(field, wantedLots, roads, random)
         count = candidate.fitted
     end
     return bestLots or {}, best
+end
+
+-- 143: the site's field made ready for the lots. A grass field is cut short
+-- (nothing kept: it grows back); any other has its state kept on the site
+-- (groundSnapshot, saved with it) and is put down to short grass. Returns
+-- "cut", "grassed" or "left" (neither could be done).
+function TheContractorAuctionSite.prepareGround(site, field)
+    if TheContractorJoyriders.isGrassField(field) then
+        return TCFieldPreparation.cutGrass(field) and "cut" or "left"
+    end
+    local snapshot = TCFieldPreparation.snapshotField(field)
+    if snapshot == nil or not TCFieldPreparation.putDownGrass(field) then
+        return "left"
+    end
+    site.groundSnapshot = snapshot
+    return "grassed"
+end
+
+-- 143: the field as it was before the sale, if it was put down to grass.
+-- Done as the site's cleared, which is the auction's end at the collection
+-- day's midnight. That's before the month's growth on the same midnight:
+-- vanilla publishes HOUR_CHANGED and DAY_CHANGED (which end the auction)
+-- before PERIOD_CHANGED (GrowthSystem:onPeriodChanged), so the growth
+-- applies to the crop put back. Don't move the end to beat it.
+function TheContractorAuctionSite.restoreGround(site)
+    local snapshot = site.groundSnapshot
+    if snapshot == nil then
+        return false
+    end
+    site.groundSnapshot = nil
+    local field = g_fieldManager:getFieldById(site.fieldId)
+    if field == nil then
+        return false
+    end
+    TCLog.info("TheContractor: auction field %d put back to %s", site.fieldId, snapshot.fruitType)
+    return TCFieldPreparation.restoreField(field, snapshot)
 end
 
 -- Puts a site on a field: lays it out, cuts the grass and starts spawning
@@ -599,10 +658,12 @@ function TheContractorAuctionSite:start(fieldId, lotCount, auctionId)
     self.queue = TheContractorFarmerFleet.copy(site.lots)
     self.debugVisible = auctionId == nil
 
-    -- The lots aren't to stand in long grass.
-    local wasCut = TheContractorJoyriders.isGrassField(field) and TCFieldPreparation.cutGrass(field)
-    TCLog.info("TheContractor: auction site on field %d, %d of %d lots laid out, grass %s", fieldId,
-        #site.lots, #lots, wasCut and "cut" or "left")
+    -- The lots aren't to stand in long grass, or in a crop or bare earth
+    -- (143): a grass field is cut short and grows back; any other is put
+    -- down to short grass for the sale, its state kept to put back (clear).
+    local ground = TheContractorAuctionSite.prepareGround(site, field)
+    TCLog.info("TheContractor: auction site on field %d, %d of %d lots laid out, ground %s", fieldId,
+        #site.lots, #lots, ground)
     self:sync()
     self:spawnNext()
 
@@ -610,8 +671,10 @@ function TheContractorAuctionSite:start(fieldId, lotCount, auctionId)
         fieldId, #site.lots, #lots, site.unplaced) }
     table.insert(lines, TheContractorAuctionSite.describeCandidate(
         TCAuctionLayout.rankCandidates({ candidate }, TheContractorAuctionSite.MIN_LOTS)[1]))
-    if not wasCut then
-        table.insert(lines, "  The grass wasn't cut: not a grass field.")
+    if ground == "grassed" then
+        table.insert(lines, "  Not a grass field: put down to grass for the sale, put back when it's cleared.")
+    elseif ground == "left" then
+        table.insert(lines, "  The ground was left as it is.")
     end
     table.insert(lines, "Rows red, aisles green, the entrance's space blue, the entrance yellow (this machine). 'tcCompany auctionSite' for progress.")
     return table.concat(lines, "\n")
@@ -827,6 +890,7 @@ function TheContractorAuctionSite:clear()
             end
         end
     end
+    local restored = TheContractorAuctionSite.restoreGround(site)
     -- A lot still loading is deleted when it arrives (its site has gone).
     self.site = nil
     self.queue = {}
@@ -834,7 +898,8 @@ function TheContractorAuctionSite:clear()
     self.uprightChecks = {}
     self.debugVisible = false
     self:sync()
-    return string.format("Auction site on field %d cleared: %d vehicle(s) deleted.", site.fieldId, count)
+    return string.format("Auction site on field %d cleared: %d vehicle(s) deleted%s.", site.fieldId, count,
+        restored and ", the field put back as it was" or "")
 end
 
 -- Server (139): the lots nobody's farm won taken off the field (the
@@ -1012,7 +1077,7 @@ function TheContractorAuctionSite:getListText(preferredLots)
     local started = getTimeSec()
     local ranked, fieldCount = self:getCandidates(preferredLots)
     table.insert(lines, string.format(
-        "Auction site candidates (grass, nobody's farm, no live job, %.0f ha or more), measured against a sale of %d lots, a sale needing %d, most lots first:",
+        "Auction site candidates (grass, bare or harvested, nobody's farm, no live job, %.0f ha or more), measured against a sale of %d lots, a sale needing %d, most lots first:",
         TheContractorAuctionSite.MIN_AREA_HA, preferredLots, TheContractorAuctionSite.MIN_LOTS))
     for i = 1, math.min(#ranked, TheContractorAuctionSite.TOP_CANDIDATES) do
         table.insert(lines, TheContractorAuctionSite.describeCandidate(ranked[i]))
@@ -1192,6 +1257,9 @@ function TheContractorAuctionSite:saveToXmlFile(xmlFile)
             index = index + 1
         end
     end
+    if site.groundSnapshot ~= nil then
+        TCFieldPreparation.saveSnapshot(xmlFile, key .. ".groundSnapshot", site.groundSnapshot)
+    end
     for i, walkway in ipairs(site.walkways or {}) do
         local walkwayKey = string.format("%s.walkway(%d)", key, i - 1)
         setXMLFloat(xmlFile, walkwayKey .. "#x1", walkway.x1)
@@ -1217,6 +1285,7 @@ function TheContractorAuctionSite:loadFromXMLFile(xmlFile)
         unplaced = getXMLInt(xmlFile, key .. "#unplaced") or 0,
         lots = {},
         isSpawning = false,
+        groundSnapshot = TCFieldPreparation.loadSnapshot(xmlFile, key .. ".groundSnapshot"),
     }
     local entranceX = getXMLFloat(xmlFile, key .. "#entranceX")
     if entranceX ~= nil then
