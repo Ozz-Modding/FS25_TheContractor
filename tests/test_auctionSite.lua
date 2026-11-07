@@ -21,6 +21,7 @@ local function setup()
     world:load("src/util/TCADSUsedLots.lua")
     world:load("src/business/AuctionSite.lua")
     world:load("src/events/TCAuctionSiteEvent.lua")
+    world:load("src/util/TCAuctionLotActivatable.lua")
 
     -- ADS, when a test gives it one.
     world.adsEnv = nil
@@ -223,7 +224,7 @@ test("the site's field is protected and its lots are sent to every machine", fun
     assertTrue(site:getLotVehicleIds()[tractor.id])
     local event = world.events[#world.events]
     assertEquals(event.fieldId, 7)
-    assertEquals(#event.vehicleIds, 3)
+    assertEquals(#event.lots, 2, "two lots, three vehicles")
     assertWalkways(event.walkways)
 
     -- A client hears it from the server only.
@@ -333,7 +334,7 @@ test("no site, nothing saved; clearing deletes every lot and frees the field", f
     assertEquals(#world.site:getWalkways(), 0)
     assertEquals(world.site.site, nil)
     assertEquals(world.events[#world.events].fieldId, 0)
-    assertEquals(#world.events[#world.events].vehicleIds, 0)
+    assertEquals(#world.events[#world.events].lots, 0)
 end)
 
 test("a lot that finishes loading after the site's cleared is deleted, not kept", function()
@@ -410,7 +411,7 @@ test("a lot that tips over is stood back up as it was set down, and reported if 
     assertTrue(mower.isDeleted)
     assertEquals(lot.failed, "tipped over")
     assertTrue(not world.site:isLot(mower))
-    assertEquals(#world.events[#world.events].vehicleIds, 0)
+    assertEquals(#world.events[#world.events].lots, 0)
 end)
 
 test("a lot with its header hitched on is never moved: tipped, it goes with its header", function()
@@ -534,4 +535,204 @@ test("an auction's field is its own site, and no other's", function()
     assertTrue(TheContractorAuctionSite.getFieldRefusal(field(4)) ~= nil, "the console's spike")
     assertTrue(TheContractorAuctionSite.getFieldRefusal(field(4), 2) ~= nil)
     assertEquals(TheContractorAuctionSite.getFieldRefusal(field(6)), nil)
+end)
+
+-- 138: the lots as everyone sees them ------------------------------------------------------------
+
+-- Whether any value written to a stream is this one.
+local function streamHas(stream, value)
+    for _, written in ipairs(stream.values) do
+        if written == value then
+            return true
+        end
+    end
+    return false
+end
+
+local PUBLIC_FIELDS = { number = true, xmlFilename = true, attachmentXml = true, hours = true, ageMonths = true,
+    guidePrice = true, closeMinute = true, result = true, vehicleId = true, attachmentId = true }
+
+-- A lot carrying everything the server keeps on one, 139's hidden bid too.
+local function secretLot(world, number)
+    local vehicle = addLotVehicle(world, { uniqueId = "secret-unique" })
+    local lot = makeLot(number)
+    lot.vehicleId = vehicle.id
+    lot.guidePrice, lot.closeMinute = 54321, 17 * 60 + 24
+    lot.damage, lot.wear, lot.adsResult = 0.371, 0.583, "ADS-SECRET"
+    lot.hiddenBid = 98765
+    -- 139: the room's roll, the hidden bid's source.
+    lot.localRoll = 0.4242
+    return lot, vehicle
+end
+
+local function assertNothingSecret(stream)
+    for _, secret in ipairs({ 98765, 0.371, 0.583, 0.4242, "ADS-SECRET", "secret-unique", "smallTractor" }) do
+        assertTrue(not streamHas(stream, secret), "never streamed: " .. tostring(secret))
+    end
+end
+
+local function assertOnlyPublic(lot)
+    for key in pairs(lot) do
+        assertTrue(PUBLIC_FIELDS[key], "a client's lot has only what everyone may know: " .. key)
+    end
+end
+
+test("only what everyone may know of a lot goes on the wire: no hidden bid, rolls or ADS", function()
+    local world = setup()
+    local lot = secretLot(world, 12)
+    addSite(world, 7, { lot })
+
+    local event = world.events[#world.events]
+    local stream = world:newStream()
+    event:writeStream(stream)
+    assertNothingSecret(stream)
+    assertTrue(streamHas(stream, 54321), "the guide price is")
+
+    local client = TheContractorAuctionSite.new()
+    g_currentMission.TheContractor.AuctionSite = client
+    TCAuctionSiteEvent.emptyNew():readStream(stream, { getIsServer = function() return true end })
+    local seen = client:getLot(12)
+    assertOnlyPublic(seen)
+    assertEquals(seen.guidePrice, 54321)
+    assertEquals(seen.closeMinute, 17 * 60 + 24)
+    assertNear(seen.hours, 20, 0.0001)
+    assertEquals(seen.ageMonths, 1)
+    assertEquals(seen.xmlFilename, "tractor.xml")
+    assertEquals(seen.attachmentXml, nil)
+    assertEquals(lot.hiddenBid, 98765, "still on the server's own lot")
+
+    -- A joining client's initial state too.
+    local initial = world:newStream()
+    world.site:writeInitialClientState(initial)
+    assertNothingSecret(initial)
+    local joiner = TheContractorAuctionSite.new()
+    joiner:readInitialClientState(initial)
+    assertOnlyPublic(joiner:getLot(12))
+    assertEquals(joiner:getLot(12).guidePrice, 54321)
+end)
+
+test("a lot that comes out is added on every machine without sending the whole site", function()
+    local world = setup()
+    addSite(world, 7, {})
+    local client = TheContractorAuctionSite.new()
+    g_currentMission.TheContractor.AuctionSite = client
+    local fromServer = { getIsServer = function() return true end }
+    local stream = world:newStream()
+    world.events[#world.events]:writeStream(stream)
+    TCAuctionSiteEvent.emptyNew():readStream(stream, fromServer)
+    assertTrue(client:isFieldInUse(7))
+    assertWalkways(client:getWalkways())
+
+    -- Lot 2 comes out first, then lot 1 with its header.
+    g_currentMission.TheContractor.AuctionSite = world.site
+    local site = world.site
+    local second, secondVehicle = secretLot(world, 2)
+    local combine, header = addLotVehicle(world), addLotVehicle(world)
+    local first = makeLot(1)
+    first.attachmentXml, first.closeMinute, first.vehicleId = "header.xml", 1020, combine.id
+    site.site.lots = { first, second }
+    for _, entry in ipairs({ { second, secondVehicle }, { first, combine, header } }) do
+        local lot = entry[1]
+        lot.loadStarted = 99
+        site.loading = lot
+        site:finishLot(lot, entry[2], entry[3])
+        local event = world.events[#world.events]
+        assertEquals(event.lots, nil, "one lot, not the site")
+        local lotStream = world:newStream()
+        event:writeStream(lotStream)
+        assertNothingSecret(lotStream)
+        g_currentMission.TheContractor.AuctionSite = client
+        TCAuctionSiteEvent.emptyNew():readStream(lotStream, fromServer)
+        g_currentMission.TheContractor.AuctionSite = site
+    end
+
+    local lots = client:getLots()
+    assertEquals(#lots, 2)
+    assertEquals(lots[1].number, 1, "by number, whatever order they came out in")
+    assertEquals(lots[2].number, 2)
+    assertEquals(lots[1].attachmentXml, "header.xml")
+    assertTrue(client:isLot(header), "the header's locked too")
+    assertTrue(client:isLot(secondVehicle))
+    assertWalkways(client:getWalkways())
+    assertEquals(#site:getLots(), 2, "the server sees the same")
+    assertEquals(site:getLot(1).guidePrice, first.guidePrice)
+end)
+
+test("bidding closes lot by lot from 17:00 to 18:00, in lot order", function()
+    setup()
+    local A = TheContractorAuctionSite
+    assertEquals(A.getCloseMinute(1, 120), 17 * 60)
+    assertEquals(A.getCloseMinute(120, 120), 18 * 60, "the last at 18:00 (139)")
+    assertEquals(A.getCloseMinute(1, 1), 17 * 60, "a one-lot sale")
+    local last = -1
+    for number = 1, 120 do
+        local minute = A.getCloseMinute(number, 120)
+        assertTrue(minute >= last, "never earlier than the lot before")
+        last = minute
+    end
+    -- A small sale has a lot every few minutes.
+    assertEquals(A.getCloseMinute(2, 30) - A.getCloseMinute(1, 30), 2)
+    assertEquals(A.getCloseMinute(30, 30), 18 * 60)
+end)
+
+test("a lot's bidding is open until its time on the sale day, then closed", function()
+    setup()
+    local A = TheContractorAuctionSite
+    local S = A.LOT_STATE
+    local lot = { closeMinute = 17 * 60 + 24 }
+    assertEquals(A.getLotState(lot, 40, 39, 18 * 60), S.OPEN, "the day before")
+    assertEquals(A.getLotState(lot, 40, 40, 17 * 60 + 23), S.OPEN)
+    assertEquals(A.getLotState(lot, 40, 40, 17 * 60 + 24), S.CLOSED, "at its time")
+    assertEquals(A.getLotState(lot, 40, 41, 0), S.CLOSED, "the day after")
+    assertEquals(A.getLotState(lot, nil, 40, 23 * 60), S.OPEN, "the console's site has no sale")
+end)
+
+test("the auction on the site's own field sets the state now", function()
+    local world = setup()
+    local lot = secretLot(world, 1)
+    addSite(world, 7, { lot })
+    local environment = g_currentMission.environment or {}
+    g_currentMission.environment = environment
+    environment.currentMonotonicDay, environment.currentHour, environment.currentMinute = 40, 17, 30
+    local site = world.site
+    local S = TheContractorAuctionSite.LOT_STATE
+    g_currentMission.TheContractor.Auctions = { getAuction = function() return world.auction end }
+    world.auction = nil
+    assertEquals(site:getLotStateNow(site:getLot(1)), S.OPEN, "no auction: the console's site")
+    world.auction = { fieldId = 7, saleDay = 40 }
+    assertEquals(site:getLotStateNow(site:getLot(1)), S.CLOSED, "past 17:24 on the day")
+    world.auction = { fieldId = 8, saleDay = 40 }
+    assertEquals(site:getLotStateNow(site:getLot(1)), S.OPEN, "another field's auction")
+end)
+
+test("closing times survive a save; a save from before them gets them spread in lot order", function()
+    local world = setup()
+    local lot = secretLot(world, 3)
+    addSite(world, 9, { lot })
+    local xmlFile = {}
+    world.site:saveToXmlFile(xmlFile)
+    local loaded = TheContractorAuctionSite.new()
+    g_currentMission.TheContractor.AuctionSite = loaded
+    loaded:loadFromXMLFile(xmlFile)
+    loaded:resolveSavedVehicles()
+    assertEquals(loaded.site.lots[1].closeMinute, 17 * 60 + 24)
+    assertEquals(loaded:getLot(3).closeMinute, 17 * 60 + 24, "and sent to clients")
+
+    xmlFile["TheContractor.auctionSite.lot(0)#closeMinute"] = nil
+    xmlFile["TheContractor.auctionSite#planned"] = 30
+    local old = TheContractorAuctionSite.new()
+    old:loadFromXMLFile(xmlFile)
+    assertEquals(old.site.lots[1].closeMinute, TheContractorAuctionSite.getCloseMinute(3, 30))
+end)
+
+test("the View lot prompt reaches a machine from beside it, measured from its size box", function()
+    setup()
+    local size = { width = 3, length = 8, widthOffset = 0, lengthOffset = 1 }
+    local distance = TCAuctionLotActivatable.getBoxDistance
+    assertEquals(distance(0, 1, size), 0, "inside")
+    assertNear(distance(3.5, 1, size), 2, 0.0001, "2 m off its side")
+    assertNear(distance(0, 1 + 4 + 3, size), 3, 0.0001, "3 m off its front, the offset counted")
+    assertNear(distance(1.5 + 3, 5 + 4, size), 5, 0.0001, "off a corner")
+    assertTrue(distance(0, 8, size) <= TCAuctionLotActivatable.ACTIVATE_DISTANCE)
+    assertTrue(distance(5.5, 1, size) > TCAuctionLotActivatable.ACTIVATE_DISTANCE)
 end)

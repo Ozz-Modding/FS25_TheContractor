@@ -35,9 +35,13 @@
             <Button profile="fs25_subCategorySelectorTabbedTab" id="subCategoryTabs[7]" text="$l10n_tc_header_supplies" onClick="onClickSupplies">
                 <ThreePartBitmap profile="fs25_subCategorySelectorTabbedTabBg" name="background"/>
             </Button>
+            <!-- 138: the machinery auction's catalogue, for every farm. -->
+            <Button profile="fs25_subCategorySelectorTabbedTab" id="subCategoryTabs[8]" text="$l10n_tc_header_auction" onClick="onClickAuction">
+                <ThreePartBitmap profile="fs25_subCategorySelectorTabbedTabBg" name="background"/>
+            </Button>
             <!-- 100: last, so hiding it without ADS leaves the other tabs'
                  indices alone (MenuContractor:onFrameOpen). -->
-            <Button profile="fs25_subCategorySelectorTabbedTab" id="subCategoryTabs[8]" text="$l10n_tc_header_workshop" onClick="onClickWorkshop">
+            <Button profile="fs25_subCategorySelectorTabbedTab" id="subCategoryTabs[9]" text="$l10n_tc_header_workshop" onClick="onClickWorkshop">
                 <ThreePartBitmap profile="fs25_subCategorySelectorTabbedTabBg" name="background"/>
             </Button>
         </BoxLayout>
@@ -1164,8 +1168,72 @@
             </GuiElement>
         </GuiElement>
 
-        <!-- Workshop (100) ================================================= -->
+        <!-- Auction (138) ================================================== -->
         <GuiElement profile="fs25_subCategorySelectorTabbedContainer" id="subCategoryPages[8]">
+            <!-- No auction, or one announced whose lots aren't out yet (where,
+                 whose and when). Not gated on a company: anyone can bid. -->
+            <Text profile="tc_emptyStateText" id="auctionEmptyText" text="" position="40px -250px" size="1440px 90px" textMaxNumLines="3"/>
+
+            <GuiElement id="auctionContent" position="0px 0px">
+                <!-- The sale: whose, where and when. -->
+                <Text profile="tc_panelNote" id="auctionSummaryText" text="" position="40px -14px" size="576px 44px" textMaxNumLines="2"/>
+
+                <!-- The lots by number (read only: bids are made at the lot). -->
+                <GuiElement id="auctionListContainer" position="40px -64px">
+                    <GuiElement profile="tc_tableHeaderRow" position="0px 0px" size="600px 30px">
+                        <Button profile="tc_tableHeader" position="14px 0px" text="$l10n_tc_auction_columnLot" handleFocus="false"/>
+                        <Button profile="tc_tableHeader" position="60px 0px" text="$l10n_tc_auction_columnMachine" handleFocus="false"/>
+                        <Button profile="tc_tableHeader" position="266px 0px" text="$l10n_tc_auction_columnHours" handleFocus="false"/>
+                        <Button profile="tc_tableHeader" position="340px 0px" text="$l10n_tc_auction_columnGuide" handleFocus="false"/>
+                        <Button profile="tc_tableHeader" position="454px 0px" text="$l10n_tc_auction_columnCloses" handleFocus="false"/>
+                        <Bitmap profile="tc_tableHeaderDivider"/>
+                    </GuiElement>
+                    <SmoothList id="auctionTable" profile="tc_table" position="0px -36px" size="600px 530px">
+                        <ListItem profile="tc_tableListItem">
+                            <RoundCorner profile="tc_tableRowSurface"/>
+                            <Bitmap profile="tc_tableRowAccent"/>
+                            <Text profile="tc_listRowCellLeft" position="14px 0px" size="42px 32px" name="number"/>
+                            <Text profile="tc_listRowValue" position="60px 0px" size="200px 32px" name="name"/>
+                            <Text profile="tc_listRowCellLeft" position="266px 0px" size="70px 32px" name="hours"/>
+                            <Text profile="tc_listRowCellLeft" position="340px 0px" size="110px 32px" name="guide"/>
+                            <Text profile="tc_listRowCellLeft" position="454px 0px" size="50px 32px" name="closes"/>
+                            <RoundCorner profile="tc_rowChip" position="508px 0px" size="82px 20px" name="chip"/>
+                            <Text profile="tc_rowChipText" position="508px 0px" size="82px 20px" name="chipText"/>
+                        </ListItem>
+                    </SmoothList>
+                    <ThreePartBitmap profile="tc_slider_box" position="610px -36px" size="6px 530px">
+                        <Slider profile="fs25_listSlider" dataElementId="auctionTable"/>
+                    </ThreePartBitmap>
+                </GuiElement>
+
+                <!-- The highlighted lot: its picture, then the card's figures. -->
+                <GuiElement id="auctionDetailsBox" position="680px -20px">
+                    <RoundCorner profile="tc_panel" position="0px 0px" size="800px 610px"/>
+                    <Text profile="tc_panelHeading" id="auctionDetailTitle" text="" position="24px -16px" size="600px 32px"/>
+                    <RoundCorner profile="tc_chip" id="auctionDetailChip" position="636px -22px" size="140px 20px"/>
+                    <Text profile="tc_chipText" id="auctionDetailChipText" position="636px -22px" size="140px 20px"/>
+                    <Bitmap profile="tc_divider" position="24px -56px" size="752px 1px"/>
+                    <Bitmap profile="tc_auctionLotImage" id="auctionLotImage" position="24px -70px"/>
+                    <SmoothList id="auctionDetailTable" profile="tc_table" position="224px -66px" size="540px 430px">
+                        <ListItem profile="tc_tableListItem">
+                            <RoundCorner profile="tc_tableRowSurface" name="surface"/>
+                            <Bitmap profile="tc_tableRowAccent"/>
+                            <Text profile="tc_listRowSection" position="14px 0px" size="500px 32px" name="section"/>
+                            <Text profile="tc_listRowLabel" position="14px 0px" size="180px 32px" name="label"/>
+                            <Text profile="tc_listRowValue" position="200px 0px" size="320px 32px" name="value"/>
+                        </ListItem>
+                    </SmoothList>
+                    <ThreePartBitmap profile="tc_slider_box" position="770px -66px" size="6px 430px">
+                        <Slider profile="fs25_listSlider" dataElementId="auctionDetailTable"/>
+                    </ThreePartBitmap>
+                    <!-- 139: what became of the farm's bid, or a warning. -->
+                    <Text profile="tc_panelNote" id="auctionDetailNote" text="" position="224px -508px" size="552px 90px" textMaxNumLines="4"/>
+                </GuiElement>
+            </GuiElement>
+        </GuiElement>
+
+        <!-- Workshop (100) ================================================= -->
+        <GuiElement profile="fs25_subCategorySelectorTabbedContainer" id="subCategoryPages[9]">
             <Text profile="tc_emptyStateText" id="placeholderWorkshop" text="$l10n_tc_placeholder_locked" position="40px -250px" size="1440px 60px" textMaxNumLines="2"/>
 
             <GuiElement id="workshopContent" position="0px 0px">

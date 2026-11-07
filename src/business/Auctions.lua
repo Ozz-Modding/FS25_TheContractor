@@ -35,11 +35,13 @@
 --     the sale's month); at midnight starting the sale
 --     day the lots are set out (135's start: the grass cut, the lots
 --     spawned), and every machine with a client puts the crowd up (134);
---     on sale from 10:00; collection from SALE_END_HOUR (a placeholder until
---     139 sells the lots and ends the sale after the last); over at the
---     next midnight: anything still standing deleted, the signs down, the
---     crowd down, the field released and the auction's messages gone. A
---     state skipped over (a long sleep) does nothing it would only undo.
+--     on sale (viewing and bidding) from SALE_HOUR until the last lot
+--     closes at SALE_END_HOUR (139's AuctionSale settles each lot at its
+--     time); collection from then until midnight (COLLECTION_DAYS); over
+--     then: won lots left on the field delivered (139), anything else
+--     still standing deleted, the signs down, the crowd down, the field released
+--     and the auction's messages gone. A state skipped over (a long sleep)
+--     does nothing it would only undo.
 --   Players (every machine): a map marker at the field from the
 --     announcement, for every farm, company or not, with a Visit to the
 --     entrance. Company farms get the inbox: the announcement, a reminder a
@@ -75,11 +77,15 @@ TheContractorAuctions.SALE_PERIODS = { [1] = true, [2] = true, [3] = true, [7] =
 -- it's nearer); the reminder this many.
 TheContractorAuctions.SIGNS_MONTHS = 3
 TheContractorAuctions.REMINDER_MONTHS = 0.25
--- The sale day's hours: viewing (138's), selling, and (until 139 ends the
--- sale after its last lot) when collection starts.
+-- The sale day's hours (139): viewing and bidding from SALE_HOUR, until the
+-- last lot closes (AuctionSite.CLOSE_HOURS); collection from then.
 TheContractorAuctions.VIEWING_HOUR = 8
-TheContractorAuctions.SALE_HOUR = 10
-TheContractorAuctions.SALE_END_HOUR = 16
+TheContractorAuctions.SALE_HOUR = 8
+TheContractorAuctions.SALE_END_HOUR = 18
+-- Days after the sale day that collection runs to the end of: none (the
+-- user's call), so it ends at the sale day's midnight, when a won lot still
+-- on the field is delivered (AuctionSale).
+TheContractorAuctions.COLLECTION_DAYS = 0
 -- The site's picked at random among this many of the best fields.
 TheContractorAuctions.TOP_PICKS = 3
 -- The most days a sale day is looked for ahead.
@@ -212,8 +218,10 @@ end
 -- The state an auction should be in on a day at an hour (monotonic day,
 -- 0-23).
 function TheContractorAuctions.getStateFor(auction, today, hour)
-    if today > auction.saleDay then
+    if today > auction.saleDay + TheContractorAuctions.COLLECTION_DAYS then
         return STATE.OVER
+    elseif today > auction.saleDay then
+        return STATE.COLLECTION
     end
     if today == auction.saleDay then
         if hour < TheContractorAuctions.SALE_HOUR then
@@ -275,6 +283,7 @@ function TheContractorAuctions:onDayChanged()
         end
         self:advance(getToday(), 0)
         self:postDayMessages(getToday())
+        self:catchUpSale()
     elseif g_currentMission.environment.currentDayInPeriod == 1 then
         self:rollAnnouncement(math.random)
     end
@@ -283,6 +292,25 @@ end
 function TheContractorAuctions:onHourChanged()
     if self.auction ~= nil and self:checkField() then
         self:advance(getToday(), getHour())
+        self:catchUpSale()
+    end
+end
+
+-- Server (139): lots past their closing time settled, and after the sale
+-- day the local buyers' lots taken away. Both do nothing twice, so they're
+-- run on every hour and day (a sleep, a load).
+function TheContractorAuctions:catchUpSale()
+    local auction = self.auction
+    local tc = g_currentMission.TheContractor
+    if auction == nil or not TheContractorAuctions.isOnTheField(auction.state) then
+        return
+    end
+    if tc.AuctionSale ~= nil then
+        tc.AuctionSale:closeDue()
+    end
+    local site = tc.AuctionSite
+    if getToday() > auction.saleDay and site.site ~= nil and site.site.fieldId == auction.fieldId then
+        site:removeUnsold()
     end
 end
 
@@ -536,6 +564,11 @@ function TheContractorAuctions:enterState(auction, state, target)
                     auction.fieldId)
             end
         end
+    elseif state == STATE.COLLECTION then
+        -- 139: every lot's closed by now.
+        if tc.AuctionSale ~= nil then
+            tc.AuctionSale:closeDue(true)
+        end
     elseif state == STATE.OVER then
         self:finish()
     end
@@ -565,9 +598,16 @@ end
 -- Server: the auction's over.
 function TheContractorAuctions:finish()
     local auction = self.auction
+    -- 139: the last lots settled, won lots left on the field delivered.
+    local sale = g_currentMission.TheContractor.AuctionSale
+    if sale ~= nil then
+        sale:finish(auction.id)
+    end
     self:clearAway()
     self.auction = nil
-    self.lastEndedPeriodIndex = TCCalendar.getPeriodIndex()
+    -- The wait's from the sale's month (139's collection day can run into
+    -- the next).
+    self.lastEndedPeriodIndex = math.min(TCCalendar.getPeriodIndex(), (TCCalendar.getDayInfo(auction.saleDay)))
     TCLog.info("TheContractor: auction %d over, field %d released", auction.id, auction.fieldId)
     self:sync()
 end
@@ -578,6 +618,11 @@ function TheContractorAuctions:cancel(tellFarms)
     local auction = self.auction
     if auction == nil then
         return false
+    end
+    -- 139: no more lots sold, but anything already won is delivered.
+    local sale = g_currentMission.TheContractor.AuctionSale
+    if sale ~= nil then
+        sale:finish(auction.id, true)
     end
     self:clearAway()
     if tellFarms then
@@ -827,10 +872,11 @@ function TheContractorAuctions:describe()
     local lines = {
         string.format("Auction %d on field %d, held by %s: %s.", auction.id, auction.fieldId,
             host ~= nil and host.name or ("farmer " .. auction.hostFarmerId), auction.state),
-        string.format("  Announced %s; signs up %s; reminder %s; sale %s (viewing from %02d:00, selling from %02d:00).",
+        string.format("  Announced %s; signs up %s; reminder %s; sale %s (viewing and bidding from %02d:00, lots closing from %02d:00).",
             TCCalendar.formatDay(auction.announcedDay), TCCalendar.formatDay(auction.signsDay),
             auction.reminderDay ~= nil and TCCalendar.formatDay(auction.reminderDay) or "none",
-            TCCalendar.formatDay(auction.saleDay), TheContractorAuctions.VIEWING_HOUR, TheContractorAuctions.SALE_HOUR),
+            TCCalendar.formatDay(auction.saleDay), TheContractorAuctions.SALE_HOUR,
+            TheContractorAuctionSite.CLOSE_HOURS[1]),
     }
     if auction.entrance ~= nil then
         table.insert(lines, string.format("  Entrance at %.0f, %.0f.", auction.entrance.x, auction.entrance.z))
@@ -889,9 +935,9 @@ end
 
 function TheContractorAuctions.registerConsoleCommands()
     TCConsole.register("company", "auction", {
-        args = "[start [fieldId|auto] [days]|day|cancel]",
-        description = "The machinery auction: show it, announce one, jump to its sale day, or cancel it",
-        run = function(_, args)
+        args = "[start [fieldId|auto] [days]|day|cancel|lots|bid <lot> <amount|guide|off>|close [lot|all]]",
+        description = "The machinery auction: show it, announce one, jump to its sale day, cancel it; its lots, bids and closing",
+        run = function(farmId, args)
             local auctions = g_currentMission.TheContractor.Auctions
             local sub = args[1] ~= nil and string.lower(args[1]) or nil
             if sub == nil then
@@ -913,6 +959,22 @@ function TheContractorAuctions.registerConsoleCommands()
                     return "There's no auction announced."
                 end
                 return "Auction cancelled: everything's cleared away and every company told."
+            elseif sub == "lots" and args[2] == nil then
+                -- 139: the lots, their bids and (a tuning aid) the room's.
+                return g_currentMission.TheContractor.AuctionSale:describeLots()
+            elseif sub == "bid" then
+                local lotNumber = tonumber(args[2] or "")
+                local value = args[3] ~= nil and string.lower(args[3]) or nil
+                if lotNumber == nil or value == nil or args[4] ~= nil then
+                    return false
+                end
+                return g_currentMission.TheContractor.AuctionSale:consoleBid(farmId, math.floor(lotNumber), value)
+            elseif sub == "close" and args[3] == nil then
+                local which = args[2] ~= nil and string.lower(args[2]) or nil
+                if which ~= nil and which ~= "all" and tonumber(which) == nil then
+                    return false
+                end
+                return g_currentMission.TheContractor.AuctionSale:consoleClose(which)
             end
             return false
         end,

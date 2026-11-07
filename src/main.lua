@@ -29,6 +29,7 @@ source(TheContractor.dir .. "src/util/TCParking.lua")
 source(TheContractor.dir .. "src/util/TCParkingSlotFilter.lua")
 source(TheContractor.dir .. "src/util/TCParkingSlotActivatable.lua")
 source(TheContractor.dir .. "src/util/TCTippedTrailerActivatable.lua")
+source(TheContractor.dir .. "src/util/TCAuctionLotActivatable.lua")
 source(TheContractor.dir .. "src/util/TCHaulage.lua")
 source(TheContractor.dir .. "src/util/TCJobSupplies.lua")
 source(TheContractor.dir .. "src/util/TCSupplyStock.lua")
@@ -81,6 +82,7 @@ source(TheContractor.dir .. "src/gui/TCEditPersonDialog.lua")
 source(TheContractor.dir .. "src/gui/TCParkingSlotDialog.lua")
 source(TheContractor.dir .. "src/gui/TCJobDetailsDialog.lua")
 source(TheContractor.dir .. "src/gui/TCRepairQuoteDialog.lua")
+source(TheContractor.dir .. "src/gui/TCAuctionLotDialog.lua")
 source(TheContractor.dir .. "src/hud/TCInboxHUD.lua")
 source(TheContractor.dir .. "src/business/Settings.lua")
 source(TheContractor.dir .. "src/business/Reputation.lua")
@@ -145,6 +147,7 @@ source(TheContractor.dir .. "src/business/FarmerLandChanges.lua")
 source(TheContractor.dir .. "src/business/AuctionSite.lua")
 source(TheContractor.dir .. "src/business/AuctionSigns.lua")
 source(TheContractor.dir .. "src/business/Auctions.lua")
+source(TheContractor.dir .. "src/business/AuctionSale.lua")
 source(TheContractor.dir .. "src/events/TCInitialClientStateEvent.lua")
 source(TheContractor.dir .. "src/events/TCSettingsEvent.lua")
 source(TheContractor.dir .. "src/events/TCCreateCompanyEvent.lua")
@@ -242,6 +245,8 @@ source(TheContractor.dir .. "src/events/TCRefuelMachineEvent.lua")
 source(TheContractor.dir .. "src/events/TCFarmDeletedEvent.lua")
 source(TheContractor.dir .. "src/events/TCAuctionSiteEvent.lua")
 source(TheContractor.dir .. "src/events/TCAuctionSignsEvent.lua")
+source(TheContractor.dir .. "src/events/TCAuctionBidEvent.lua")
+source(TheContractor.dir .. "src/events/TCAuctionBidsEvent.lua")
 source(TheContractor.dir .. "src/events/TCAuctionEvent.lua")
 
 -- The top-level Contractor page itself stays always-visible (see Company.lua
@@ -382,6 +387,9 @@ function TheContractor:loadMap()
     -- 137: the machinery auction, server-wide.
     self.Auctions = TheContractorAuctions.new()
     self.Auctions:register(self.Inbox)
+    -- 139: bids and the sale.
+    self.AuctionSale = TheContractorAuctionSale.new()
+    self.AuctionSale:register(self.Inbox)
     self.InboxHUD = TCInboxHUD.new()
 
     -- Module-level caches outlive a savegame; start each load clean.
@@ -429,12 +437,16 @@ function TheContractor:loadMap()
     TCJobDetailsDialog.register()
     -- 102: pricing an inspected ADS repair contract.
     TCRepairQuoteDialog.register()
+    -- 138: an auction lot's card.
+    TCAuctionLotDialog.register()
     TCParkingSlotActivatable.install()
     -- 100: repair zone filters, the same way.
     TCRepairZoneActivatable.install()
     TCStandingSpotActivatable.install()
     -- 105: pushing a tipped trailer back onto its wheels.
     TCTippedTrailerActivatable.install()
+    -- 138: viewing an auction lot.
+    TCAuctionLotActivatable.install()
     -- 077: a worker's look is edited in the vanilla wardrobe.
     TCWardrobe.install()
 
@@ -478,6 +490,7 @@ function TheContractor:loadMap()
     self.Farmers:startListening()
     -- 137: the auction's schedule and days (server).
     self.Auctions:startListening()
+    self.AuctionSale:startListening()
     -- 113: relationships drift back towards neutral (server).
     self.Relationships:startPeriodTick()
 
@@ -578,6 +591,7 @@ function TheContractor:loadFromXMLFile()
     self.AuctionSite:loadFromXMLFile(xmlFile)
     self.AuctionSigns:loadFromXMLFile(xmlFile)
     self.Auctions:loadFromXMLFile(xmlFile)
+    self.AuctionSale:loadFromXMLFile(xmlFile)
 
     delete(xmlFile)
 end
@@ -669,6 +683,7 @@ function TheContractor:saveToXmlFile()
     tc.AuctionSite:saveToXmlFile(xmlFile)
     tc.AuctionSigns:saveToXmlFile(xmlFile)
     tc.Auctions:saveToXmlFile(xmlFile)
+    tc.AuctionSale:saveToXmlFile(xmlFile)
 
     saveXMLFile(xmlFile)
     delete(xmlFile)
@@ -742,6 +757,7 @@ function TheContractor:deleteMap()
     TCRepairZoneActivatable.uninstall()
     TCStandingSpotActivatable.uninstall()
     TCTippedTrailerActivatable.uninstall()
+    TCAuctionLotActivatable.uninstall()
 
     if self.JobGeneration ~= nil then
         self.JobGeneration:stopHourlyTick()
@@ -825,6 +841,9 @@ function TheContractor:deleteMap()
         self.AuctionSigns:delete()
     end
     -- 137: the auction's marker and crowd.
+    if self.AuctionSale ~= nil then
+        self.AuctionSale:stopListening()
+    end
     if self.Auctions ~= nil then
         self.Auctions:stopListening()
         self.Auctions:delete()

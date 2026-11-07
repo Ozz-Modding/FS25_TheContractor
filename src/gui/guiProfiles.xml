@@ -373,6 +373,21 @@
         <textMaxNumLines value="1" />
     </Profile>
 
+    <!-- Auction lots (138): the lot's store image, on the card and in the
+         catalogue's details, and the card's guide price, large. -->
+    <Profile name="tc_auctionLotImage" extends="baseReference" with="anchorTopLeft">
+        <size value="180px 180px"/>
+        <imageColor value="1 1 1 1"/>
+    </Profile>
+    <Profile name="tc_auctionGuidePrice" extends="fs25_textDefault" with="anchorTopLeft">
+        <size value="652px 56px"/>
+        <textSize value="40px"/>
+        <textBold value="true"/>
+        <textColor value="$preset_fs25_colorMainHighlight"/>
+        <textAlignment value="left"/>
+        <textVerticalAlignment value="middle"/>
+    </Profile>
+
     <!-- Staff driver picker dialog (037). anchorTopCenter for the same
          reason as the advertising dialog's profiles above. -->
     <Profile name="tc_driverPickerList" extends="emptyPanel" with="anchorTopCenter">

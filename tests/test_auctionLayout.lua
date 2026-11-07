@@ -614,3 +614,32 @@ test("an aisle too narrow for both lanes and their clearance gets no loop", func
         assertTrue(point.x >= -0.01 and point.x <= 100.01, "not past its ends")
     end
 end)
+
+-- 138: lot numbers ----------------------------------------------------------------------------
+
+test("lots are numbered as they're walked: row by row, each row from the entrance end out", function()
+    setup()
+    local polygon = rectPolygon(0, 0, 300, 160)
+    local lots = makeLots(60)
+    for _, entrance in ipairs({ { x = 320, z = 80 }, { x = -20, z = 80 } }) do
+        local layout = TCAuctionLayout.layOut(polygon, entrance, lots)
+        local order = TCAuctionLayout.getWalkOrder(layout.placed)
+        assertEquals(#order, layout.placedCount, "every placed lot gets a number")
+        local seen = {}
+        local lastRow, lastFromEntrance = 0, -math.huge
+        for _, index in ipairs(order) do
+            assertTrue(not seen[index], "no lot numbered twice")
+            seen[index] = true
+            local spot = layout.placed[index]
+            -- How far along the rows from the entrance's end.
+            local u = TCAuctionLayout.toLocal(layout.rect, spot.x, spot.z)
+            local fromEntrance = -layout.nearSign * u
+            assertTrue(spot.row >= lastRow, "rows in order")
+            if spot.row == lastRow then
+                assertTrue(fromEntrance > lastFromEntrance, "along a row, away from the entrance")
+            end
+            lastRow, lastFromEntrance = spot.row, fromEntrance
+        end
+        assertTrue(lastRow > 1, "more than one row to walk")
+    end
+end)

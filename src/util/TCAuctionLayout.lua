@@ -139,7 +139,8 @@ end
 -- Returns nil when the polygon holds no rectangle, else {
 --   rect = { cx, cz, angle, halfU, halfV },
 --   placed = { [lot index] = { x, z (the footprint's centre), rootX, rootZ,
---     yaw, row } }, placedCount, unplaced = { lot index, ... },
+--     yaw, row, slot (its place in the row, 1 nearest the entrance) } },
+--     placedCount, unplaced = { lot index, ... },
 --   rows = { { corners, facing (1 or -1), lotCount } },
 --   aisles = { { points } } (along the rows, then the two cross aisles),
 --   aisleStrips = { { vFrom, vTo } } (the rows' aisles, in the rect's frame),
@@ -236,7 +237,8 @@ function TCAuctionLayout.layOut(polygon, entrance, lots, options)
                 local dx, dz = directionToWorld(rect, 0, facing)
                 local yaw = math.atan2(dx, dz)
                 local rootX, rootZ = TCAuctionLayout.getRootPosition(x, z, yaw, lot.widthOffset, lot.lengthOffset)
-                result.placed[index] = { x = x, z = z, rootX = rootX, rootZ = rootZ, yaw = yaw, row = rowIndex }
+                result.placed[index] = { x = x, z = z, rootX = rootX, rootZ = rootZ, yaw = yaw, row = rowIndex,
+                    slot = count + 1 }
                 result.placedCount = result.placedCount + 1
                 count = count + 1
                 next = next + 1
@@ -321,6 +323,27 @@ function TCAuctionLayout.layOut(polygon, entrance, lots, options)
     result.reserve = { corners = boxCorners(rect, reserveFrom, reserveV1, reserveTo, reserveV2), uFrom = reserveFrom,
         uTo = reserveTo, vFrom = reserveV1, vTo = reserveV2 }
     return result
+end
+
+-- The placed lots in the order they're walked (pure), for their numbers
+-- (138): row by row, each from the entrance end out. placed: layOut's.
+-- Returns the lot indices.
+function TCAuctionLayout.getWalkOrder(placed)
+    local order = {}
+    for index in pairs(placed) do
+        table.insert(order, index)
+    end
+    table.sort(order, function(a, b)
+        local pa, pb = placed[a], placed[b]
+        if pa.row ~= pb.row then
+            return pa.row < pb.row
+        end
+        if pa.slot ~= pb.slot then
+            return pa.slot < pb.slot
+        end
+        return a < b
+    end)
+    return order
 end
 
 -- Ranking --------------------------------------------------------------------------------

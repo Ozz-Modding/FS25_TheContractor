@@ -83,6 +83,7 @@ local function setup(daysPerPeriod)
     world.siteClears = 0
     TheContractorAuctionSite = {
         PREFERRED_LOTS = 120,
+        CLOSE_HOURS = { 17, 18 },
         getFieldRefusal = function(field) return world.refusals ~= nil and world.refusals[field:getId()] or nil end,
     }
     -- The walkways a site lays out (its aisles), as every machine has them.
@@ -98,6 +99,8 @@ local function setup(daysPerPeriod)
             self.site = { fieldId = fieldId }
             self.fieldId, self.walkways = fieldId, world.walkways
         end,
+        -- 139: the local buyers' lots taken away after the sale day.
+        removeUnsold = function() world.unsoldRemovals = (world.unsoldRemovals or 0) + 1 end,
         clear = function(self)
             world.siteClears = world.siteClears + 1
             self.site = nil
@@ -246,11 +249,14 @@ test("an auction ending or called off starts the wait again, and the wait's save
     world:addField(5, 7)
     world.candidates = { { fieldId = 5, problems = {} } }
     world.auctions:consoleStart(5, 2)
-    nextDay(world)
-    nextDay(world)
-    nextDay(world)
+    local saleDay = world.auctions:getAuction().saleDay
+    -- The sale day, then over at its midnight.
+    for _ = 1, 3 do
+        nextDay(world)
+    end
     assertEquals(world.auctions:getAuction(), nil)
-    local ended = TCCalendar.getPeriodIndex()
+    -- Counted from the sale's month.
+    local ended = TCCalendar.getDayInfo(saleDay)
     assertEquals(world.auctions.lastEndedPeriodIndex, ended)
     -- In the wait, even a sure roll announces nothing.
     assertEquals(world.auctions:rollAnnouncement(function() return 0 end), nil)
@@ -349,6 +355,7 @@ test("the state by day and hour", function()
     assertEquals(A.getStateFor(auction, 30, A.SALE_HOUR - 1), A.STATE.SET_OUT)
     assertEquals(A.getStateFor(auction, 30, A.SALE_HOUR), A.STATE.ON_SALE)
     assertEquals(A.getStateFor(auction, 30, A.SALE_END_HOUR), A.STATE.COLLECTION)
+    assertEquals(A.getStateFor(auction, 30, 23), A.STATE.COLLECTION, "139: collection until midnight")
     assertEquals(A.getStateFor(auction, 31, 0), A.STATE.OVER)
 end)
 
@@ -433,7 +440,7 @@ test("the console's sale day puts the lots out now", function()
     local world = setup(10)
     world:addField(5, 7)
     world.auctions:consoleStart(5, 30)
-    g_currentMission.environment.currentHour = 9
+    g_currentMission.environment.currentHour = TheContractorAuctions.SALE_HOUR - 1
     world.auctions:consoleSaleDay()
     local auction = world.auctions:getAuction()
     assertEquals(auction.saleDay, 1)
