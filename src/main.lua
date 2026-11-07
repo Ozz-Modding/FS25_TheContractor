@@ -67,6 +67,7 @@ source(TheContractor.dir .. "src/util/TCAuctionCrowd.lua")
 source(TheContractor.dir .. "src/util/TCAuctionLayout.lua")
 source(TheContractor.dir .. "src/util/TCAuctionSigns.lua")
 source(TheContractor.dir .. "src/util/TCJobHotspots.lua")
+source(TheContractor.dir .. "src/util/TCJobHud.lua")
 source(TheContractor.dir .. "src/util/TCFarmDeletion.lua")
 source(TheContractor.dir .. "src/util/TCJobList.lua")
 source(TheContractor.dir .. "src/gui/TCWorkerPortrait.lua")
@@ -393,6 +394,7 @@ function TheContractor:loadMap()
     TCIdleStaff.reset()
     TCYardFarmers.reset()
     TCJobHotspots.reset()
+    TCJobHud.reset()
     TheContractorRepairContracts.clearCache()
     TheContractorFarmerFleet.clearCatalog()
 
@@ -841,6 +843,8 @@ function TheContractor:deleteMap()
     TCYardFarmers.reset()
     -- 088: the due jobs' map markers.
     TCJobHotspots.reset()
+    -- Player-driven jobs' HUD progress bars.
+    TCJobHud.reset()
     -- 134: an auction crowd goes with the map.
     TCAuctionCrowd.reset()
 
@@ -964,6 +968,8 @@ function TheContractor:update(dt)
 
     -- 088: map markers on the fields of jobs due this month.
     TCJobHotspots.update(dt)
+    -- Progress bars for jobs allocated to a player.
+    TCJobHud.update(dt)
 end
 
 function TheContractor:draw()
