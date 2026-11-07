@@ -60,6 +60,7 @@ Each entry is the rule and the trap, not the detail: the code and the ticket's O
 - **Job quality** (080): skill reaches reputation only through the quality score, so never scale a reward by skill, and set quality before the reward in `completeJob`.
 - **Unallocating** (094): anything new `allocateJob` sets up on a job, or holds for its crew, must be undone in `unallocateJob` and kept or redone on a resumed allocation (`wasUnallocated`).
 - **Finished jobs are trimmed at save** (`Jobs:getJobsToSave`). **Anything new that holds a job id past the job's end must be added to `getHeldJobIds`**, and code looking up a finished job must cope with `getJob` returning nil.
+- **A job with nothing riding on it** (141's attend-the-auction, JOB_TYPES `noConsequences`) ends through `Jobs:endWithoutConsequences`, which `completeJob`/`missJob` branch to first. Anything new that reacts to a finished job outside those two (counting completed work, a reward, a notice) skips `TheContractorJobs.hasNoConsequences(job)`. A job that's never allocated says so with `noAllocation`, checked through `TheContractorAllocation.isAllocatable`. A job taken back as if it never was goes through `Jobs:removeJob`, never by dropping it from `jobsByFarm`.
 - **Due job map markers** (`src/util/TCJobHotspots.lua`) re-read the jobs every second, so a new job path needs nothing there unless it changes what "due" means or the marker belongs somewhere other than the field (`getSpotPositions`).
 
 ### Staff

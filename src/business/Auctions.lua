@@ -1,8 +1,9 @@
 -- Machinery auctions (137): now and then a farmer holds an auction of used
--- machinery on one of their grass fields. This is the auction's skeleton:
+-- machinery on one of their fields. This is the auction's skeleton:
 -- its schedule, its site, the announcement, signs and map marker, and the
 -- lots set out and cleared away. Viewing (138), bidding (139), the crowd's
--- atmosphere (140) and the attend job (141) hang off it.
+-- atmosphere (140) and the attend job (141, TCAuctionAttendance) hang off
+-- it.
 --
 -- One auction is for everyone on the server, so it isn't a random event
 -- (068's are per farm): it's this server-wide subsystem, like Farmers. At
@@ -17,8 +18,8 @@
 --     so a southern map's spring too), never winter or summer. A month with
 --     no lead landing in a sale month doesn't roll.
 --   The site (server) is chosen at the announcement by 135's rules
---     (AuctionSite:getCandidates): a grass field nobody's farm owns, held by
---     a farmer (110, the host), with no live job of any kind and room for
+--     (AuctionSite:getCandidates): a field nobody's farm owns (grass, bare
+--     or harvested, 143), held by a farmer (110, the host), with no live job of any kind and room for
 --     the sale, picked at random among the best (TOP_PICKS). No field, no
 --     auction. Refusing any live job (not just one whose dates reach the
 --     sale) is what keeps the sale day clear: from the announcement the
@@ -33,8 +34,9 @@
 --   The days (server, getStateFor, pure): announced; signs up 3 months
 --     before, or at the announcement if it's nearer than that (136's place,
 --     the sale's month); at midnight starting the sale
---     day the lots are set out (135's start: the grass cut, the lots
---     spawned), and every machine with a client puts the crowd up (134);
+--     day the lots are set out (135's start: the grass cut, or a field
+--     that isn't grass put down to grass and put back as it was at the end,
+--     143; the lots spawned), and every machine with a client puts the crowd up (134);
 --     on sale (viewing and bidding) from SALE_HOUR until the last lot
 --     closes at SALE_END_HOUR (139's AuctionSale settles each lot at its
 --     time); collection from then until midnight (COLLECTION_DAYS); over
@@ -284,6 +286,10 @@ function TheContractorAuctions:onDayChanged()
         self:advance(getToday(), 0)
         self:postDayMessages(getToday())
         self:catchUpSale()
+        -- 141: the sale's month has come.
+        if self.auction ~= nil then
+            TCAuctionAttendance.createDueJobs(self.auction)
+        end
     elseif g_currentMission.environment.currentDayInPeriod == 1 then
         self:rollAnnouncement(math.random)
     end
@@ -293,6 +299,10 @@ function TheContractorAuctions:onHourChanged()
     if self.auction ~= nil and self:checkField() then
         self:advance(getToday(), getHour())
         self:catchUpSale()
+        -- 141: who's turned up.
+        if self.auction ~= nil then
+            TCAuctionAttendance.checkAttendance(self.auction)
+        end
     end
 end
 
@@ -456,6 +466,8 @@ function TheContractorAuctions:announce(site, saleDay, random)
     -- The signs may be due already (a short lead).
     self:advance(today, getHour())
     self:sync()
+    -- 141: and the attend jobs, if the sale's this month.
+    TCAuctionAttendance.createDueJobs(auction)
     return auction
 end
 
@@ -628,6 +640,8 @@ function TheContractorAuctions:cancel(tellFarms)
     if tellFarms then
         self:postMessages("cancelled", false)
     end
+    -- 141: nothing to go to now.
+    TCAuctionAttendance.removeJobs(auction.id)
     self.auction = nil
     self.lastEndedPeriodIndex = TCCalendar.getPeriodIndex()
     TCLog.info("TheContractor: auction %d cancelled", auction.id)
@@ -929,6 +943,9 @@ function TheContractorAuctions:consoleSaleDay()
         self:advance(today, getHour())
         self:postMessages("today", true)
         self:sync()
+        -- 141: the attend jobs made again for the new day.
+        TCAuctionAttendance.removeJobs(auction.id)
+        TCAuctionAttendance.createDueJobs(auction)
     end
     return self:describe()
 end

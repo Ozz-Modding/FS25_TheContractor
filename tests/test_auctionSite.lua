@@ -19,6 +19,8 @@ local function setup()
     world:load("src/util/TCAuctionLayout.lua")
     world:load("src/business/FarmerFleet.lua")
     world:load("src/util/TCADSUsedLots.lua")
+    FieldGroundType = {}
+    world:load("src/util/TCFieldPreparation.lua")
     world:load("src/business/AuctionSite.lua")
     world:load("src/events/TCAuctionSiteEvent.lua")
     world:load("src/util/TCAuctionLotActivatable.lua")

@@ -552,6 +552,14 @@ local function checkVehicles(self, farmId, vehicleIds, seen)
     return true
 end
 
+-- Whether a job is ever allocated: never a workshop job (100), whose
+-- customer's machine is the work, nor one with nobody to put on it (141's
+-- noAllocation).
+function TheContractorAllocation.isAllocatable(job)
+    local jobDef = job ~= nil and TheContractorJobGeneration.JOB_TYPES[job.jobType] or nil
+    return jobDef ~= nil and job.workshop == nil and not jobDef.noAllocation
+end
+
 -- Assigns a crew (workerIds - empty for "do it myself", per Q25's
 -- decoupled acceptance/allocation and the player's unrestricted-skill
 -- status; see Crew above) plus equipmentIds, and for a two-worker haulage
@@ -571,8 +579,9 @@ function TheContractorAllocation:allocateJob(farmId, jobId, workerIds, equipment
 
     local jobs = g_currentMission.TheContractor.Jobs
     local job = jobs:getJob(farmId, jobId)
-    -- 100: a workshop job has no crew or kit to allocate.
-    if job == nil or job.state ~= TheContractorJob.STATE.ACCEPTED or job.workshop ~= nil then
+    -- 100: a workshop job has no crew or kit to allocate. 141: nor has a
+    -- job with nobody to put on it.
+    if job == nil or job.state ~= TheContractorJob.STATE.ACCEPTED or not TheContractorAllocation.isAllocatable(job) then
         return false
     end
     -- 132: not before its ready day - preparing the field below would force

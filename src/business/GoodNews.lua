@@ -142,7 +142,13 @@ end
 
 function TheContractorGoodNews:hasCompletedJob(farmId)
     local jobs = g_currentMission.TheContractor.Jobs
-    return #jobs:getJobsByState(farmId, TheContractorJob.STATE.COMPLETED) > 0
+    for _, job in ipairs(jobs:getJobsByState(farmId, TheContractorJob.STATE.COMPLETED)) do
+        -- 141: going to an auction isn't work done.
+        if not TheContractorJobs.hasNoConsequences(job) then
+            return true
+        end
+    end
+    return false
 end
 
 -- canTrigger (068): the incident's starting data, or nil. Not before the

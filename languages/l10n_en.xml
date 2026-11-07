@@ -215,6 +215,7 @@
 		<text name="tc_jobType_yardBales" text="Deliver Bales"/>
 		<text name="tc_jobType_yardHaul" text="Sell a Load"/>
 		<text name="tc_jobType_emergencyRefuel" text="Emergency Refuel"/>
+		<text name="tc_jobType_attendAuction" text="Attend Auction"/>
 		<text name="tc_jobType_flyTipping" text="Clear Fly-tipping"/>
 		<text name="tc_jobType_fertilize" text="Fertilize"/>
 		<text name="tc_jobType_herbicide" text="Spray Herbicide"/>
@@ -615,6 +616,16 @@
 		<text name="tc_auctionSale_deliveredWaitingNotice" text="Lot %d, %s, was left on the auction field. Your parking and the shop are both full, so it's waiting to be parked."/>
 		<text name="tc_auctionSale_wonTitle" text="Auction lot won"/>
 		<text name="tc_auctionSale_wonBody" text="You won lot %s at the machinery auction: %s, for %s, paid. It's yours: collect it from the auction field before midnight, or it'll be delivered to your parking (or the shop, if your parking's full)."/>
+		<text name="tc_attendAuction_summaryLine" text="Went to the machinery auction on Field %s"/>
+		<text name="tc_attendAuction_overNotification" text="The machinery auction on Field %s is over."/>
+		<text name="tc_attendAuction_chip" text="Go along"/>
+		<text name="tc_attendAuction_completedReport" text="Went along to the sale. Nothing was paid or owed for going."/>
+		<text name="tc_attendAuction_detailLots" text="Lots"/>
+		<text name="tc_attendAuction_lotCount" text="%d lots"/>
+		<text name="tc_attendAuction_lotsNotOut" text="Set out on the morning of the sale"/>
+		<text name="tc_attendAuction_detailHost" text="Held by"/>
+		<text name="tc_attendAuction_detailSaleDay" text="Sale day"/>
+		<text name="tc_attendAuction_note" text="Viewing and bidding from %02d:00; each lot's bidding closes at its own time between %02d:00 and %02d:00. Turning up is all it takes, and missing it costs nothing."/>
 		<text name="tc_construction_tab" text="Contractor"/>
 		<text name="tc_parkingSlot_name" text="Vehicle Parking Slot"/>
 		<text name="tc_parkingSlotMedium_name" text="Vehicle Parking Slot (Medium)"/>

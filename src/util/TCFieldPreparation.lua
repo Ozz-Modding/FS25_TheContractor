@@ -151,6 +151,120 @@ function TCFieldPreparation.cutGrass(field)
     return true
 end
 
+-- 143: an auction on a field that isn't grass puts it down to short grass
+-- for the sale day and puts it back after. The field's state, as plain
+-- values with the crop, ground and spray types by name (indices can move
+-- with the mod list), so it can be saved. Server. nil without a valid state.
+function TCFieldPreparation.snapshotField(field)
+    local fieldState = field ~= nil and field:getFieldState() or nil
+    if fieldState == nil or not fieldState.isValid then
+        return nil
+    end
+    local fruitName = nil
+    if fieldState.fruitTypeIndex ~= nil and fieldState.fruitTypeIndex ~= FruitType.UNKNOWN then
+        fruitName = g_fruitTypeManager:getFruitTypeNameByIndex(fieldState.fruitTypeIndex)
+    end
+    return {
+        fruitType = fruitName or "UNKNOWN",
+        growthState = fieldState.growthState or 0,
+        weedState = fieldState.weedState or 0,
+        stoneLevel = fieldState.stoneLevel or 0,
+        groundType = FieldGroundType.getName(fieldState.groundType) or "NONE",
+        sprayType = FieldSprayType.getName(fieldState.sprayType) or "NONE",
+        sprayLevel = fieldState.sprayLevel or 0,
+        limeLevel = fieldState.limeLevel or 0,
+        rollerLevel = fieldState.rollerLevel or 0,
+        plowLevel = fieldState.plowLevel or 0,
+        stubbleShredLevel = fieldState.stubbleShredLevel or 0,
+        waterLevel = fieldState.waterLevel or 0,
+    }
+end
+
+-- 143: the field as short grass (vanilla GRASS at its cut state, no weeds),
+-- the rest of its state left as it is. Server. Returns whether it was done.
+function TCFieldPreparation.putDownGrass(field)
+    local fruitType = g_fruitTypeManager:getFruitTypeByName("GRASS")
+    if field == nil or fruitType == nil or fruitType.cutState == nil then
+        TCLog.warning("TheContractor: no GRASS crop to put field %s down to",
+            field ~= nil and tostring(field:getId()) or "?")
+        return false
+    end
+    local task = FieldUpdateTask.new()
+    task:setField(field)
+    task:setGroundAngle(field:getAngle())
+    task:clearHeight()
+    task:setWeedState(0)
+    task:setFruit(fruitType.index, fruitType.cutState)
+    task:setGroundType(fruitType.harvestGroundType or FieldGroundType.GRASS_CUT)
+    g_fieldManager:addFieldUpdateTask(task, true)
+    return true
+end
+
+-- 143: a snapshot (snapshotField's) written back over the whole field. A
+-- crop that no longer exists (the mod list changed) leaves no crop.
+-- Server.
+function TCFieldPreparation.restoreField(field, snapshot)
+    if field == nil or snapshot == nil then
+        return false
+    end
+    local fruitTypeIndex, growthState = FruitType.UNKNOWN, 0
+    if snapshot.fruitType ~= "UNKNOWN" then
+        local fruitType = g_fruitTypeManager:getFruitTypeByName(snapshot.fruitType)
+        if fruitType ~= nil then
+            fruitTypeIndex, growthState = fruitType.index, snapshot.growthState
+        else
+            TCLog.warning("TheContractor: field %d's crop %s is gone, put back with none", field:getId(),
+                tostring(snapshot.fruitType))
+        end
+    end
+    local task = FieldUpdateTask.new()
+    task:setField(field)
+    task:setGroundAngle(field:getAngle())
+    task:clearHeight()
+    task:setFruit(fruitTypeIndex, growthState)
+    task:setWeedState(snapshot.weedState)
+    task:setStoneLevel(snapshot.stoneLevel)
+    task:setGroundType(FieldGroundType.getByName(snapshot.groundType) or FieldGroundType.NONE)
+    task:setSprayType(FieldSprayType.getByName(snapshot.sprayType) or FieldSprayType.NONE)
+    task:setSprayLevel(snapshot.sprayLevel)
+    task:setPlowLevel(snapshot.plowLevel)
+    task:setLimeLevel(snapshot.limeLevel)
+    task:setRollerLevel(snapshot.rollerLevel)
+    task:setStubbleShredLevel(snapshot.stubbleShredLevel)
+    task:setWaterLevel(snapshot.waterLevel)
+    g_fieldManager:addFieldUpdateTask(task, true)
+    return true
+end
+
+-- 143: snapshotField's values, saved and loaded under a key.
+TCFieldPreparation.SNAPSHOT_STRINGS = { "fruitType", "groundType", "sprayType" }
+TCFieldPreparation.SNAPSHOT_INTS = { "growthState", "weedState", "stoneLevel", "sprayLevel", "limeLevel",
+    "rollerLevel", "plowLevel", "stubbleShredLevel", "waterLevel" }
+
+function TCFieldPreparation.saveSnapshot(xmlFile, key, snapshot)
+    for _, name in ipairs(TCFieldPreparation.SNAPSHOT_STRINGS) do
+        setXMLString(xmlFile, key .. "#" .. name, snapshot[name])
+    end
+    for _, name in ipairs(TCFieldPreparation.SNAPSHOT_INTS) do
+        setXMLInt(xmlFile, key .. "#" .. name, snapshot[name])
+    end
+end
+
+-- nil if there's none under the key.
+function TCFieldPreparation.loadSnapshot(xmlFile, key)
+    if getXMLString(xmlFile, key .. "#fruitType") == nil then
+        return nil
+    end
+    local snapshot = {}
+    for _, name in ipairs(TCFieldPreparation.SNAPSHOT_STRINGS) do
+        snapshot[name] = getXMLString(xmlFile, key .. "#" .. name) or "NONE"
+    end
+    for _, name in ipairs(TCFieldPreparation.SNAPSHOT_INTS) do
+        snapshot[name] = getXMLInt(xmlFile, key .. "#" .. name) or 0
+    end
+    return snapshot
+end
+
 -- Weed area on the field right now, in density-map pixels - WeedMission/
 -- HoeMission's totalWeedArea (finishedPreparing).
 local function measureWeedArea(field)

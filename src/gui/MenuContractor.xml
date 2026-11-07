@@ -418,7 +418,7 @@
                             <Bitmap profile="tc_detailRowDivider"/>
                         </GuiElement>
                         <GuiElement profile="tc_detailRow" size="752px 34px">
-                            <Text profile="tc_detailLabel" text="$l10n_tc_jobDetails_price" position="0px 0px"/>
+                            <Text profile="tc_detailLabel" id="jobsLabelPrice" text="$l10n_tc_jobDetails_price" position="0px 0px"/>
                             <Text profile="tc_detailValue" id="jobsDetailPrice" text="" position="220px 0px" size="532px 34px"/>
                             <Bitmap profile="tc_detailRowDivider"/>
                         </GuiElement>
@@ -429,7 +429,7 @@
                             <Bitmap profile="tc_detailRowDivider"/>
                         </GuiElement>
                         <GuiElement profile="tc_detailRow" size="752px 34px">
-                            <Text profile="tc_detailLabel" text="$l10n_tc_jobDetails_due" position="0px 0px"/>
+                            <Text profile="tc_detailLabel" id="jobsLabelDue" text="$l10n_tc_jobDetails_due" position="0px 0px"/>
                             <Text profile="tc_detailValue" id="jobsDetailDue" text="" position="220px 0px" size="532px 34px"/>
                         </GuiElement>
                     </BoxLayout>

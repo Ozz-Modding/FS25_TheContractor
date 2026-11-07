@@ -851,9 +851,10 @@ function MenuContractor:getMenuButtonInfo()
 
         local selectedJob = self:getSelectedJob()
         -- 100: a workshop job has no crew to allocate, only its details.
-        -- 132: nor one whose ready day hasn't come (it has neither).
+        -- 132: nor one whose ready day hasn't come (it has neither). 141:
+        -- nor an auction to go to (its details are on the right).
         if selectedJob ~= nil and selectedJob.state == TheContractorJob.STATE.ACCEPTED then
-            if not selectedJob:isWorkshop() and selectedJob:isReady() then
+            if TheContractorAllocation.isAllocatable(selectedJob) and selectedJob:isReady() then
                 return self.menuButtonInfoJobsWithAllocatableJob
             elseif selectedJob:isWorkshop() then
                 return self.menuButtonInfoJobsWithJob
@@ -3753,6 +3754,11 @@ function MenuContractor:updateCompletedJobReport()
         self.jobsCompletedReport:setText("")
         return
     end
+    -- 141: there's nothing to report of going to an auction.
+    if job.auctionId ~= nil then
+        self.jobsCompletedReport:setText(g_i18n:getText("tc_attendAuction_completedReport"))
+        return
+    end
 
     self.jobsCompletedReport:setText(string.format(g_i18n:getText("tc_calendar_completedReport"),
         self:getCompletedJobCrewText(job),
@@ -3899,6 +3905,9 @@ function MenuContractor:getJobStatusChip(job)
             return g_i18n:getText("tc_favour_chipAtFarm"), "info"
         end
         return g_i18n:getText("tc_repair_chipInWorkshop"), "info"
+    elseif job.state == TheContractorJob.STATE.ACCEPTED and job.auctionId ~= nil then
+        -- 141: nothing to allocate, just go along.
+        return g_i18n:getText("tc_attendAuction_chip"), "info"
     elseif job.state == TheContractorJob.STATE.ACCEPTED then
         return g_i18n:getText("tc_calendar_jobUnallocated"), "warn"
     elseif job.state == TheContractorJob.STATE.IN_PROGRESS then
@@ -4713,7 +4722,8 @@ end
 
 function MenuContractor:onClickOpenAllocation()
     local job = self:getSelectedJob()
-    if job == nil or job.state ~= TheContractorJob.STATE.ACCEPTED or not job:isReady() then
+    if job == nil or job.state ~= TheContractorJob.STATE.ACCEPTED or not job:isReady() or
+            not TheContractorAllocation.isAllocatable(job) then
         return
     end
 
@@ -5388,6 +5398,13 @@ function MenuContractor:updateJobDetails()
     end
 
     self.jobsDetailTitle:setText(job:getDisplayTitle())
+    self.jobsLabelPrice:setText(g_i18n:getText("tc_jobDetails_price"))
+    self.jobsLabelDue:setText(g_i18n:getText("tc_jobDetails_due"))
+    -- 141: an auction to go to has its own rows.
+    if job.auctionId ~= nil then
+        self:updateAttendAuctionDetails(job)
+        return
+    end
 
     local placeKey = "tc_jobDetails_field"
     if job:isWorkshop() then
@@ -5422,6 +5439,33 @@ function MenuContractor:updateJobDetails()
     self.jobsDetailRows:invalidateLayout()
 
     self:updateJobNote(job)
+end
+
+-- 141: the auction to go to: where, how many lots (once they're out), who's
+-- holding it, the day, and the sale's hours.
+function MenuContractor:updateAttendAuctionDetails(job)
+    self.jobsLabelPlace:setText(g_i18n:getText("tc_jobDetails_field"))
+    self.jobsDetailPlace:setText(job:getLocationText())
+
+    self.jobsLabelCrew:setText(g_i18n:getText("tc_attendAuction_detailLots"))
+    local lotCount = TCAuctionAttendance.getLotCount(job)
+    if lotCount ~= nil then
+        self.jobsDetailCrew:setText(string.format(g_i18n:getText("tc_attendAuction_lotCount"), lotCount))
+    else
+        self.jobsDetailCrew:setText(g_i18n:getText("tc_attendAuction_lotsNotOut"))
+    end
+
+    self.jobsLabelPrice:setText(g_i18n:getText("tc_attendAuction_detailHost"))
+    self.jobsDetailPrice:setText(job:getCustomerName() or "-")
+
+    self.jobsRowReady:setVisible(false)
+    self.jobsLabelDue:setText(g_i18n:getText("tc_attendAuction_detailSaleDay"))
+    self.jobsDetailDue:setText(formatDueWithDaysLeft(job))
+    self.jobsDetailRows:invalidateLayout()
+
+    local closeHours = TheContractorAuctionSite.CLOSE_HOURS
+    self.jobsDetailNote:setText(string.format(g_i18n:getText("tc_attendAuction_note"), TheContractorAuctions.SALE_HOUR,
+        closeHours[1], closeHours[2]))
 end
 
 -- Why there's no Allocate yet (132), and a harvest & haul's selling point

@@ -170,11 +170,11 @@ end
 -- (TheContractorYardHaul), a haulage job to deliveryStation. refuel (127)
 -- is a farmer's machine run dry's job.refuel (TheContractorEmergencyRefuel).
 -- readyDay (132) is the first day the job can be worked (Job.readyDay), nil
--- for ready now.
+-- for ready now. auctionId (141) is an attend job's auction (Job.auctionId).
 function TheContractorJobs:createJob(farmId, jobType, fieldId, requiredSkillLevel, targetPeriod, targetDayInPeriod,
                                       price, equipmentAvailable, fruitTypeName, deadlineDay, includesHaulage,
                                       deliveryStation, startState, workshop, spill, yardDelivery, yardHaul, refuel,
-                                      readyDay)
+                                      readyDay, auctionId)
     if not g_currentMission:getIsServer() then
         return nil
     end
@@ -206,6 +206,7 @@ function TheContractorJobs:createJob(farmId, jobType, fieldId, requiredSkillLeve
     end
     job.yardHaul = yardHaul
     job.refuel = refuel
+    job.auctionId = auctionId
     -- 110: after workshop, spill, the yard jobs and a refuel, which decide
     -- it.
     local farmers = g_currentMission.TheContractor.Farmers
@@ -661,6 +662,11 @@ end
 -- noPenalty (100): a workshop job whose machine ADS stopped managing ends
 -- with nothing lost.
 function TheContractorJobs:missJob(job, noPenalty)
+    -- 141: a reminder (JOB_TYPES' noConsequences) just ends.
+    if TheContractorJobs.hasNoConsequences(job) then
+        self:endWithoutConsequences(job, TheContractorJob.STATE.MISSED)
+        return
+    end
     -- 126: whether a farmer's load went astray, while the trailer's still
     -- where it was left.
     if job.yardHaul ~= nil and not noPenalty then
@@ -1122,11 +1128,13 @@ function TheContractorJobs:isFieldProtected(fieldId)
 end
 
 -- Whether any farm has a job on the field that isn't over (on offer, taken
--- on or under way), whatever else protects it.
+-- on or under way), whatever else protects it. 141: a job to attend an
+-- auction isn't work on its field (it's the sale's own), so it never keeps
+-- the field from being the site.
 function TheContractorJobs:hasLiveJob(fieldId)
     for _, farmJobs in pairs(self.jobsByFarm) do
         for _, job in pairs(farmJobs) do
-            if job.fieldId == fieldId and not job:isTerminal() then
+            if job.fieldId == fieldId and not job:isTerminal() and job.auctionId == nil then
                 return true
             end
         end
@@ -1342,6 +1350,12 @@ function TheContractorJobs:completeJob(job, isForced)
         return
     end
 
+    -- 141: a reminder (JOB_TYPES' noConsequences) is just done.
+    if TheContractorJobs.hasNoConsequences(job) then
+        self:endWithoutConsequences(job, TheContractorJob.STATE.COMPLETED)
+        return
+    end
+
     if not job:canTransitionTo(TheContractorJob.STATE.COMPLETED) then
         return
     end
@@ -1441,6 +1455,71 @@ function TheContractorJobs:completeJob(job, isForced)
     -- 074: maybe a random event at the job's end (the kettle on, paid
     -- early, a worker stepping up). Last, so it follows everything above.
     g_currentMission.TheContractor.RandomEvents:onJobCompleted(job)
+end
+
+-- 141: a job with nothing riding on it (JOB_TYPES' noConsequences).
+function TheContractorJobs.hasNoConsequences(job)
+    local jobDef = job ~= nil and TheContractorJobGeneration.JOB_TYPES[job.jobType] or nil
+    return jobDef ~= nil and jobDef.noConsequences == true
+end
+
+-- Server (141): a noConsequences job done (COMPLETED) or over (MISSED), and
+-- nothing else: no invoice, quality score, reputation, relationship,
+-- logbook entry, growth or job event, and nothing to release (it's never
+-- allocated). Done says so as any job does (its summary is its own); a
+-- miss is the quiet ending TCJobMissedEvent gives it, not a failure.
+function TheContractorJobs:endWithoutConsequences(job, newState)
+    if not job:canTransitionTo(newState) then
+        return
+    end
+    if newState == TheContractorJob.STATE.COMPLETED then
+        job.completedAt = TheContractorJobs.getGameMinutes()
+        job.completionPercentage = 100
+    end
+    job:transitionTo(newState)
+    g_currentMission.TheContractor.Inbox:removeMessagesForJob(job.farmId, job.id)
+    TCLog.info("TheContractor: farm %d job %d (%s, field %d) %s, no consequences", job.farmId, job.id, job.jobType,
+        job.fieldId, newState)
+
+    if newState == TheContractorJob.STATE.COMPLETED then
+        TCJobCompletedEvent.showNotification(job)
+        if g_server ~= nil then
+            g_server:broadcastEvent(TCJobCompletedEvent.new(job))
+        end
+        return
+    end
+    if g_server ~= nil then
+        g_server:broadcastEvent(TCJobStateChangedEvent.new(job.farmId, job.id, newState))
+    end
+    TCJobMissedEvent.showNotification(job.farmId, job.jobType, job.fieldId, job:getTypeLabel())
+    if g_server ~= nil then
+        g_server:broadcastEvent(TCJobMissedEvent.new(job.farmId, job.jobType, job.fieldId, job:getTypeLabel()))
+    end
+end
+
+-- Server (141): a job taken away as if it had never been (an attend job
+-- whose auction's called off). Only for a job nothing else holds: never
+-- allocated, no invoice, nothing in the logbook.
+function TheContractorJobs:removeJob(job)
+    if not g_currentMission:getIsServer() or job == nil then
+        return
+    end
+    g_currentMission.TheContractor.Inbox:removeMessagesForJob(job.farmId, job.id)
+    self:applyJobRemoved(job.farmId, job.id)
+    if g_server ~= nil then
+        g_server:broadcastEvent(TCJobRemovedEvent.new(job.farmId, job.id))
+    end
+end
+
+-- Every machine (TCJobRemovedEvent on a client).
+function TheContractorJobs:applyJobRemoved(farmId, jobId)
+    local farmJobs = self.jobsByFarm[farmId]
+    if farmJobs == nil or farmJobs[jobId] == nil then
+        return
+    end
+    farmJobs[jobId] = nil
+    self.graceJobs[jobId] = nil
+    TCLog.info("TheContractor: farm %d job %d removed", farmId, jobId)
 end
 
 -- 100: a workshop job is done when ADS says the customer's machine is (or
@@ -1568,6 +1647,8 @@ function TheContractorJobs.writeJob(streamId, job)
     TheContractorEmergencyRefuel.writeStream(streamId, job.refuel)
     -- 132. -1 stands in for "ready now".
     streamWriteInt32(streamId, job.readyDay or -1)
+    -- 141. 0 stands in for "no auction".
+    streamWriteInt32(streamId, job.auctionId or 0)
 end
 
 -- 100: what a client needs of a workshop job (the uniqueIds stay on the
@@ -1763,6 +1844,8 @@ function TheContractorJobs.readJob(streamId)
     job.refuel = TheContractorEmergencyRefuel.readStream(streamId)
     local readyDay = streamReadInt32(streamId)
     job.readyDay = readyDay >= 0 and readyDay or nil
+    local auctionId = streamReadInt32(streamId)
+    job.auctionId = auctionId ~= 0 and auctionId or nil
 
     return job
 end
@@ -1924,6 +2007,8 @@ function TheContractorJobs:loadFromXMLFile(xmlFile)
             -- 110: nil for a job saved before it existed - TheContractorFarmers:
             -- setUp links it from its field.
             job.customerId = getXMLInt(xmlFile, jobKey .. "#customerId")
+            -- 141.
+            job.auctionId = getXMLInt(xmlFile, jobKey .. "#auctionId")
 
             self.jobsByFarm[farmId] = self.jobsByFarm[farmId] or {}
             self.jobsByFarm[farmId][id] = job
@@ -2262,6 +2347,9 @@ function TheContractorJobs:saveToXmlFile(xmlFile)
             end
             if job.customerId ~= nil then
                 setXMLInt(xmlFile, jobKey .. "#customerId", job.customerId)
+            end
+            if job.auctionId ~= nil then
+                setXMLInt(xmlFile, jobKey .. "#auctionId", job.auctionId)
             end
 
             if job.assignedWorkerId ~= nil then

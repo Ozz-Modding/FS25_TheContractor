@@ -93,6 +93,13 @@ TheContractorJobGeneration_mt = Class(TheContractorJobGeneration)
 --                    job's field. Also deliveryOnly, and:
 --   noReward         106: no reputation for doing it (or pay: its price is 0)
 --   noJobEvents      106: no job events (074) roll on it as it completes
+--   noConsequences   141: a reminder, nothing more. Done or missed, it
+--                    changes no reputation (024) or relationship (113), gets
+--                    no quality score (080), invoice or logbook entry, and
+--                    a miss ends it quietly (TheContractorJobs:
+--                    endWithoutConsequences), not with a missed notification
+--   noAllocation     141: never allocated: there's nobody or nothing to
+--                    put on it (the farm's players just turn up)
 --   workAreaTypes    076: the WorkAreaType names the job's field can be
 --                    worked with (TCFieldAccess), copied from the vanilla
 --                    mission's own workAreaTypes, so a cultivate job lets
@@ -111,7 +118,8 @@ TheContractorJobGeneration_mt = Class(TheContractorJobGeneration)
 --                    load of theirs sold from it (job.yardHaul,
 --                    TheContractorYardHaul). Its missed notification is
 --                    its own (tc_<type>_missedNotification).
--- A type left out of JOB_TYPE_KEYS (flyTipping, spillRecovery) is never
+-- A type left out of JOB_TYPE_KEYS (flyTipping, spillRecovery,
+-- attendAuction) is never
 -- generated, shown by the availability snapshot or created by tcJob: only
 -- its random event makes one (075 with createJobOnField, 106 with
 -- createJob).
@@ -217,6 +225,13 @@ TheContractorJobGeneration.JOB_TYPES = {
     -- reputation and more of the farmer's goodwill.
     emergencyRefuel = { serverMeasured = true, playerOnly = true, noEquipment = true, offField = true,
         allocateOnAccept = true, noJobEvents = true, reputationReward = 2, equipmentNeed = "diesel" },
+    -- 141: go to the machinery auction (137) on its sale day
+    -- (TCAuctionAttendance). Made, already accepted, for every company farm
+    -- as the sale's month begins; done by turning up, and missing it costs
+    -- nothing. Its field is the sale's (the due-job circle goes there) and
+    -- its customer the host, for show. No ground work, so no workAreaTypes.
+    attendAuction = { playerOnly = true, noEquipment = true, noReward = true, noJobEvents = true,
+        noConsequences = true, noAllocation = true },
 }
 TheContractorJobGeneration.JOB_TYPE_KEYS = { "harvest", "cultivate", "sow", "plow", "mow", "tedder", "bale",
     "baleWrap", "strawDelivery", "fertilize", "herbicide", "weed", "hoe", "stonePick" }
