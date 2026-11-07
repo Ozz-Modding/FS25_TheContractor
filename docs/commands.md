@@ -656,9 +656,9 @@ The auction crowd spike (134). Puts a crowd of people on a field. Some stand in 
 - `[fieldId]`: the field to put the crowd on.
 - `[people]`: how many people, 60 by default, at most 300. About 40% stand, as far as the field's standing spots go, and the rest walk.
 - `[laneGap]`: metres between one loop and the next, 14 by default (at least 3). A smaller gap fits more loops on a field.
-- On a field with an auction site up (`tcCompany auctionSite`, or a real auction's lots), the crowd walks the site's aisles instead, as an auction's does: one long loop down each aisle between the rows, with the talking groups down its middle, never among the lots. `[laneGap]` doesn't apply there.
+- On a field with an auction site up (`tcCompany auctionSite`, or a real auction's lots), the crowd walks the site's aisles instead, as an auction's does: one long loop down each aisle between the rows and one round each cross aisle at the rows' ends, never among the lots. Half stand: by the lots looking at them, round the food area, by the gate and in talking groups down the aisles. `[laneGap]` doesn't apply there. A console crowd stays all day; a real auction's comes and goes with the sale day's hours (nobody before 08:00, busiest late morning and round the closes, a handful by the gate after 19:30).
 - `off`: removes the crowd.
-- With no argument: how many people are in the crowd, how many models are loaded and shown now, and what the crowd's own update costs a frame. Drawing the people shows in the game's frame rate, not in that figure.
+- With no argument: how many people are in the crowd, how many models are loaded and shown now, and what the crowd's own update costs a frame. Drawing the people shows in the game's frame rate, not in that figure. For a real auction's crowd, also how many are there at this hour. Then the auction site's dressing (140): how many of its props (the car park, food area, toilets, office, bunting, signs and chalkboards) have loaded, and its crowd sounds.
 
 Models load within 150 m of the camera and show within 100 m. It works on this machine only: nothing is saved or sent to other players, and there's nothing on a dedicated server. The crowd is gone after reloading the save.
 
@@ -693,12 +693,13 @@ Auction site candidates (grass, bare or harvested, nobody's farm, no live job, 1
 1 of 2 candidates can hold the sale (64 fields on the map), checked in 410 ms.
 ```
 
-### `tcCompany auctionSigns [month|clear]`
+### `tcCompany auctionSigns [month|clear|flag]`
 
 The auction roadside signs spike (136). Puts up signs at the map's 10 busiest road junctions, spread over the map, each reading "SECOND HAND / BRAND NEW DAY / COMING IN <MONTH>", and marks each on the map. Any signs already up come down first. There's no day on the board: the auction's job will give that.
 
-- `<month>`: the month on the boards, 1 to 12 or its name (`july`, or its first three letters, `jul`). The busiest junctions are those with the most road within 250 m (in villages and towns); no two signs within 400 m. A junction's sign stands about 35 m back along one of the roads into it, facing drivers coming in, 5 m from the road's middle, or 4.25 or 3.5 m if that's not clear, on the right-hand verge first, then the left; if none of those spots on that road is clear, the next road in. A spot is passed over if it's on a road, by a bridge, in water, on a field, on ground too steep or well above or below the road, or with anything in the way (buildings, walls, fences, trees, vehicles). It prints each sign (where, which verge and how far out, how much road is round its junction) and how many spots were passed over for each reason.
+- `<month>`: the month on the boards, 1 to 12 or its name (`july`, or its first three letters, `jul`). The busiest junctions are those with the most road within 250 m (in villages and towns); no two signs within 400 m. A junction's sign stands about 35 m back along one of the roads into it, facing drivers coming in, 5 m from the road's middle, or 4.25 or 3.5 m if that's not clear, on the right-hand verge first, then the left; if none of those spots on that road is clear, the next road in. A road into a junction gets no sign if it's shorter than 25 m to the next junction (a roundabout's ring) or if it stops within 150 m past the sign (`deadEnd`: a drive, a yard). A spot is passed over if it's on a road (`onRoad`), within 8 m of the middle of a road crossing the sign's own (`crossRoad`: a roundabout's wide ring, a side road), has road all round it, as a roundabout's island (`enclosed`: every one of 16 rays out 30 m crosses a road), stands on something other than the ground, as a road's or an island's mesh or a kerb (`onObject`), is by a bridge, in water, on a field, on ground too steep or well above or below the road, or has anything in the way (buildings, walls, fences, trees, vehicles, kerbs). A hedge with no collision (painted foliage, or a mesh without it) can't be seen: nothing in the game can find it. It prints each sign (where, which verge and how far out, how much road is round its junction) and how many spots were passed over for each reason.
 - `clear`: takes them down.
+- `flag`: a testing aid. Puts an exclamation-mark pin on each sign as well as its marker (a small circle, hard to see at the map's zoom), named "Auction sign 1" and so on, as the console numbers them. Teleport to one from the map. `flag` again takes the pins off. Signs that go up later are pinned too. Only on the machine running the command (the host's, in multiplayer) and not saved: off again after a load.
 - With no argument: the signs up now and their month.
 
 Every player sees the signs, a player who joins later too, and they're saved. Server only: the road splines are only on the server.
@@ -708,6 +709,7 @@ tcCompany auctionSigns july
 tcCompany auctionSigns 9
 tcCompany auctionSigns
 tcCompany auctionSigns clear
+tcCompany auctionSigns flag
 ```
 
 ```
@@ -722,7 +724,7 @@ Auction signs for July: 10 up, of 58 junction(s) on 212 road spline(s), in 140 m
 
 The machinery auction (137) and its sale (139). One is announced now and then by itself (about one a year, now and then two, never within 3 months of the last one ending, for a sale in spring or autumn, 2 to 4 months ahead); this shows it or makes one happen. One started here counts as the last one when it ends.
 
-- With no argument: the auction, if there's one: its id, field, host farmer and state (`announced`, `signsUp`, `setOut`, `onSale` or `collection`), the day it was announced, the day its signs go up, its reminder day and its sale day, and its entrance.
+- With no argument: the auction, if there's one: its id, field, host farmer and state (`announced`, `signsUp`, `setOut`, `onSale` or `collection`), the day it was announced, the day its signs go up, its reminder day and its sale day, its entrance, and once the signs are up (136) each sign's position (world x, z, as `tcCompany auctionSigns` lists them). `start` and `day` print the same, so the signs' positions are in the log as soon as they're up.
 - `start`: announces one now, ignoring the season and the monthly roll. If the sale's in this month, every company farm gets its attend-the-auction job (141) at once; otherwise on the first day of the sale's month. Its field is picked as a real one is (a grass, bare or harvested field nobody's farm owns, held by a farmer, with no live job, that can hold a sale; at random among the best 3), its sale 2 to 4 months ahead. The signs go up 3 months before the sale, or at once if it's nearer. Every company farm gets the message, and every player the map marker.
   - `<fieldId>`: on that field instead. No farm may own it, a farmer must hold it, and it can't have a live job; it doesn't have to be grass, bare or harvested, or a candidate (whatever's on it is put down to grass on the sale day and put back after).
   - `auto`: the field picked as above, so `[days]` can be given without a field.

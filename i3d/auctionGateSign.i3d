@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="iso-8859-1"?>
+
+<i3D name="auctionGateSign" version="1.6" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://i3d.giants.ch/schema/i3d-1.6.xsd">
+  <Asset>
+    <Export program="i3dConverter" version="1.0"/>
+  </Asset>
+
+  <Files>
+    <File fileId="4" filename="$data/shaders/placeableShader.xml"/>
+    <File fileId="1" filename="$data/shared/detailLibrary/metallic/zincGalvanized_diffuse.dds"/>
+    <File fileId="2" filename="$data/shared/detailLibrary/metallic/zincGalvanized_normal.dds"/>
+    <File fileId="3" filename="$data/shared/detailLibrary/metallic/zincGalvanized_specular.dds"/>
+    <File fileId="7" filename="$data/shared/detailLibrary/nonMetallic/wood/wood2Oak_diffuse.dds"/>
+    <File fileId="8" filename="$data/shared/detailLibrary/nonMetallic/wood/wood2_normal.dds"/>
+    <File fileId="9" filename="$data/shared/detailLibrary/nonMetallic/wood/wood2_specular.dds"/>
+    <File fileId="10" filename="../images/auctionSiteSigns.dds"/>
+  </Files>
+
+
+  <Materials>
+    <Material name="auctionSiteSignFace_mat" materialId="2">
+      <Texture fileId="10"/>
+    </Material>
+    <Material name="auctionSiteSignPost_mat" materialId="4" customShaderId="4">
+      <Texture fileId="1"/>
+      <Normalmap fileId="2"/>
+      <Glossmap fileId="3"/>
+    </Material>
+    <Material name="auctionSiteSignWood_mat" materialId="1" customShaderId="4">
+      <Texture fileId="7"/>
+      <Normalmap fileId="8"/>
+      <Glossmap fileId="9"/>
+    </Material>
+  </Materials>
+
+
+  <Shapes externalShapesFile="auctionGateSign.i3d.shapes">
+  </Shapes>
+
+  <Scene>
+    <TransformGroup name="auctionGateSign" clipDistance="250" nodeId="10">
+      <TransformGroup name="visuals" nodeId="11">
+        <Shape name="posts" shapeId="1" nodeId="12" castsShadows="true" receiveShadows="true" materialIds="4"/>
+        <Shape name="board" shapeId="2" nodeId="13" castsShadows="true" receiveShadows="true" materialIds="1"/>
+        <TransformGroup name="faces" nodeId="14">
+          <Shape name="face0" shapeId="3" nodeId="15" castsShadows="false" receiveShadows="true" materialIds="2"/>
+        </TransformGroup>
+      </TransformGroup>
+      <Shape name="col" shapeId="4" static="true" collisionFilterGroup="0x3e" collisionFilterMask="0xfffffbff" density="0.0001" nodeId="16" castsShadows="false" receiveShadows="false" nonRenderable="true" materialIds="1"/>
+    </TransformGroup>
+  </Scene>
+
+</i3D>

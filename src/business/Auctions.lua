@@ -36,7 +36,9 @@
 --     the sale's month); at midnight starting the sale
 --     day the lots are set out (135's start: the grass cut, or a field
 --     that isn't grass put down to grass and put back as it was at the end,
---     143; the lots spawned), and every machine with a client puts the crowd up (134);
+--     143; the lots spawned), and every machine with a client puts the crowd up (134),
+--     coming and going by the hour from 08:00 (140), with the site dressed
+--     (140's TCAuctionProps, from the site's own scene);
 --     on sale (viewing and bidding) from SALE_HOUR until the last lot
 --     closes at SALE_END_HOUR (139's AuctionSale settles each lot at its
 --     time); collection from then until midnight (COLLECTION_DAYS); over
@@ -745,15 +747,30 @@ function TheContractorAuctions:getWalkways()
     return site:getWalkways()
 end
 
+-- 140: the site's scene, if its lots are on the auction's field.
+function TheContractorAuctions:getScene()
+    local site = g_currentMission.TheContractor.AuctionSite
+    if site == nil or self.auction == nil or site.fieldId ~= self.auction.fieldId then
+        return nil
+    end
+    return site:getScene()
+end
+
 -- The crowd (134), on a machine with a client, while the lots are out: on
--- the site's walkways, down the aisles, never among the lots. None until
--- the walkways have come.
+-- the site's walkways, down the aisles and (140) the cross aisles, never
+-- among the lots, standing by the lots, round the food and by the gate,
+-- and coming and going through the day (TCAuctionCrowd.getShare). As big
+-- as the sale (getAuctionPeople, from the scene's last lot number). None
+-- until the walkways have come; put up again if the scene changes (its
+-- seed: a client's copy is new with every whole-site event).
 function TheContractorAuctions:refreshCrowd()
     local auction = self.auction
     local walkways = self:getWalkways()
+    local scene = self:getScene()
+    local seed = scene ~= nil and scene.seed or nil
     local wanted = auction ~= nil and TheContractorAuctions.isOnTheField(auction.state) and #walkways > 0 and
         TCAuctionCrowd.getUnavailableReason() == nil
-    if wanted and TheContractorAuctions.sameWalkways(self.crowdWalkways, walkways) then
+    if wanted and TheContractorAuctions.sameWalkways(self.crowdWalkways, walkways) and self.crowdSeed == seed then
         -- Up already, or tried on these and it couldn't be.
         return
     end
@@ -762,8 +779,14 @@ function TheContractorAuctions:refreshCrowd()
     end
     self:stopCrowd()
     if wanted then
-        TCAuctionCrowd.startOnWalkways(auction.fieldId, walkways, TCAuctionCrowd.DEFAULT_PEOPLE)
+        local lotCount = 0
+        for _, row in ipairs(scene ~= nil and scene.rows or {}) do
+            lotCount = math.max(lotCount, row.lotTo)
+        end
+        local people = scene ~= nil and TCAuctionCrowd.getAuctionPeople(lotCount) or TCAuctionCrowd.DEFAULT_PEOPLE
+        TCAuctionCrowd.startOnWalkways(auction.fieldId, walkways, people, { scene = scene, useHours = true })
         self.crowdWalkways = walkways
+        self.crowdSeed = seed
         if TCAuctionCrowd.active ~= nil then
             self.crowdFieldId = auction.fieldId
         end
@@ -777,6 +800,7 @@ function TheContractorAuctions:stopCrowd()
     end
     self.crowdFieldId = nil
     self.crowdWalkways = nil
+    self.crowdSeed = nil
 end
 
 -- Client: the in-game map, on the site's marker (the inbox's Show on map).
@@ -894,6 +918,13 @@ function TheContractorAuctions:describe()
     }
     if auction.entrance ~= nil then
         table.insert(lines, string.format("  Entrance at %.0f, %.0f.", auction.entrance.x, auction.entrance.z))
+    end
+    -- 136's roadside signs, where they are (world x, z), once they're up.
+    local signs = g_currentMission.TheContractor.AuctionSigns
+    if signs ~= nil and #signs.signs > 0 then
+        table.insert(lines, signs:describe())
+    elseif auction.state == TheContractorAuctions.STATE.ANNOUNCED then
+        table.insert(lines, "  No signs up yet: they go up on the signs day.")
     end
     return table.concat(lines, "\n")
 end

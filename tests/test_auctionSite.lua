@@ -738,3 +738,94 @@ test("the View lot prompt reaches a machine from beside it, measured from its si
     assertTrue(distance(0, 8, size) <= TCAuctionLotActivatable.ACTIVATE_DISTANCE)
     assertTrue(distance(5.5, 1, size) > TCAuctionLotActivatable.ACTIVATE_DISTANCE)
 end)
+
+-- 140: the scene ------------------------------------------------------------------------------
+
+local function makeScene()
+    return {
+        seed = 4242, cx = 150, cz = 80, angle = 0.25, halfV = 70, nearSign = -1, nearEdge = -120, farEdge = 130,
+        aisleWidth = 10, endAisle = 8, gateV = 3.5,
+        reserve = { uFrom = -150, uTo = -120, vFrom = -30, vTo = 28 },
+        rows = {
+            { vFrom = -30, vTo = -25, frontV = -25, facing = 1, used = 120, lotFrom = 1, lotTo = 3,
+                slots = { -118.5, -112, -104.25 } },
+            { vFrom = -15, vTo = -7, frontV = -15, facing = -1, used = 60, lotFrom = 4, lotTo = 5,
+                slots = { -118.7, -110 } },
+        },
+    }
+end
+
+local function assertScene(scene)
+    assertTrue(scene ~= nil, "a scene")
+    local expected = makeScene()
+    assertEquals(scene.seed, 4242)
+    assertEquals(scene.nearSign, -1)
+    for _, key in ipairs({ "cx", "cz", "angle", "halfV", "nearEdge", "farEdge", "aisleWidth", "endAisle", "gateV" }) do
+        assertNear(scene[key], expected[key], 0.001, key)
+    end
+    assertNear(scene.reserve.vTo, 28, 0.001)
+    assertEquals(#scene.rows, 2)
+    assertEquals(scene.rows[2].facing, -1)
+    assertEquals(scene.rows[2].lotFrom, 4)
+    assertEquals(scene.rows[2].lotTo, 5)
+    assertEquals(#scene.rows[1].slots, 3)
+    assertNear(scene.rows[1].slots[3], -104.25, 0.001)
+end
+
+test("140: the site's scene goes to every machine, a joining client and the save", function()
+    local world = setup()
+    local tractor = addLotVehicle(world)
+    local lot = makeLot(1)
+    lot.vehicleId = tractor.id
+    world.site.site = { fieldId = 6, lots = { lot }, planned = 1, unplaced = 0, isSpawning = false, walkways = {},
+        scene = makeScene() }
+    world.site:sync()
+    assertScene(world.site:getScene())
+    local event = world.events[#world.events]
+    local fromServer = { getIsServer = function() return true end }
+
+    -- Over the wire.
+    local stream = world:newStream()
+    event:writeStream(stream)
+    local client = TheContractorAuctionSite.new()
+    g_currentMission.TheContractor.AuctionSite = client
+    TCAuctionSiteEvent.emptyNew():readStream(stream, fromServer)
+    assertScene(client:getScene())
+
+    -- A joining client.
+    local initial = world:newStream()
+    world.site:writeInitialClientState(initial)
+    local joining = TheContractorAuctionSite.new()
+    joining:readInitialClientState(initial)
+    assertScene(joining:getScene())
+
+    -- The save.
+    local xmlFile = {}
+    world.site:saveToXmlFile(xmlFile)
+    local loaded = TheContractorAuctionSite.new()
+    g_currentMission.TheContractor.AuctionSite = loaded
+    loaded:loadFromXMLFile(xmlFile)
+    assertScene(loaded.site.scene)
+    assertScene(loaded:getScene())
+
+    -- Cleared: no scene anywhere.
+    world.site.site = nil
+    g_currentMission.TheContractor.AuctionSite = world.site
+    world.site:sync()
+    assertEquals(world.site:getScene(), nil)
+end)
+
+test("140: a site saved before the scene loads without one", function()
+    local world = setup()
+    local tractor = addLotVehicle(world)
+    local lot = makeLot(1)
+    lot.vehicleId = tractor.id
+    addSite(world, 9, { lot })
+    local xmlFile = {}
+    world.site:saveToXmlFile(xmlFile)
+    local loaded = TheContractorAuctionSite.new()
+    g_currentMission.TheContractor.AuctionSite = loaded
+    loaded:loadFromXMLFile(xmlFile)
+    assertTrue(loaded:isFieldInUse(9))
+    assertEquals(loaded:getScene(), nil)
+end)

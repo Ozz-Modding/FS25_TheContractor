@@ -5,6 +5,7 @@
 local function setup()
     local world = stubs.install()
     world:load("src/util/TCAuctionCrowd.lua")
+    world:load("src/util/TCAuctionScene.lua")
     return world
 end
 
@@ -346,4 +347,116 @@ test("walkers never step backwards or jump, even round a small loop's corners", 
             end
         end
     end
+end)
+
+-- 140: the crowd's hours and size ----------------------------------------------------------
+
+-- How many of the figures are there at an hour.
+local function presentAt(ranks, hour)
+    local share = TCAuctionCrowd.getShare(hour)
+    local count = 0
+    for _, rank in ipairs(ranks) do
+        if rank < share then
+            count = count + 1
+        end
+    end
+    return count
+end
+
+test("the crowd's hours: nobody before 08:00, busiest late morning and round the closes, a handful by the gate after", function()
+    setup()
+    local categories = {}
+    for i = 1, 6 do
+        categories[i] = TCAuctionScene.SPOT.GATE
+    end
+    local ranks = TCAuctionCrowd.rankFigures(categories, 100)
+    assertEquals(presentAt(ranks, 0), 0)
+    assertEquals(presentAt(ranks, 7.5), 0)
+    local arriving = presentAt(ranks, 8)
+    assertTrue(arriving > 0 and arriving < 30, "a few at 08:00")
+    assertTrue(presentAt(ranks, 9.5) > arriving, "more through the morning")
+    assertEquals(presentAt(ranks, 11.5), 100)
+    local afternoon = presentAt(ranks, 14)
+    assertTrue(afternoon < 90 and afternoon > 40, "quieter after lunch")
+    assertTrue(presentAt(ranks, 17.5) > 90, "busy round the closes")
+    -- After the last close, only the gate's.
+    for _, hour in ipairs({ 20, 22, 23.9 }) do
+        assertEquals(presentAt(ranks, hour), 6)
+    end
+    -- The gate's are there whenever anyone is.
+    local share = TCAuctionCrowd.getShare(8)
+    for i = 1, 6 do
+        assertTrue(ranks[i] < share)
+    end
+end)
+
+test("the crowd thins evenly: the ones who go first aren't all one end of the list", function()
+    setup()
+    local ranks = TCAuctionCrowd.rankFigures({}, 100)
+    local share = TCAuctionCrowd.getShare(14)
+    local firstHalf, secondHalf = 0, 0
+    for i, rank in ipairs(ranks) do
+        if rank < share then
+            if i <= 50 then
+                firstHalf = firstHalf + 1
+            else
+                secondHalf = secondHalf + 1
+            end
+        end
+    end
+    assertTrue(math.abs(firstHalf - secondHalf) <= 6)
+end)
+
+test("the food area's busy from breakfast till the evening thins out", function()
+    setup()
+    local categories = {}
+    for i = 1, 3 do
+        categories[i] = TCAuctionScene.SPOT.GATE
+    end
+    for i = 4, 16 do
+        categories[i] = TCAuctionScene.SPOT.FOOD
+    end
+    local ranks = TCAuctionCrowd.rankFigures(categories, 100)
+    local function foodAt(hour)
+        local share, count = TCAuctionCrowd.getShare(hour), 0
+        for i = 4, 16 do
+            if ranks[i] < share then
+                count = count + 1
+            end
+        end
+        return count
+    end
+    assertTrue(foodAt(8) > 0, "some at breakfast")
+    for _, hour in ipairs({ 8.5, 11.5, 14, 17.5 }) do
+        assertEquals(foodAt(hour), 13)
+    end
+    assertEquals(foodAt(20), 0)
+    -- The gate's still go last.
+    for i = 1, 3 do
+        for j = 4, 16 do
+            assertTrue(ranks[i] < ranks[j])
+        end
+    end
+end)
+
+test("the share moves smoothly between the hours given", function()
+    setup()
+    assertNear(TCAuctionCrowd.getShare(11.5), 1, 0.0001)
+    assertNear(TCAuctionCrowd.getShare(12), 0.95, 0.0001)
+    assertNear(TCAuctionCrowd.getShare(30), TCAuctionCrowd.GATE_SHARE, 0.0001)
+end)
+
+test("an auction's crowd grows with its lots, within the frame-rate range", function()
+    setup()
+    assertEquals(TCAuctionCrowd.getAuctionPeople(0), TCAuctionCrowd.AUCTION_MIN)
+    assertEquals(TCAuctionCrowd.getAuctionPeople(120), 100)
+    assertEquals(TCAuctionCrowd.getAuctionPeople(1000), TCAuctionCrowd.AUCTION_MAX)
+    assertTrue(TCAuctionCrowd.getAuctionPeople(60) < TCAuctionCrowd.getAuctionPeople(100))
+end)
+
+test("the crowd plan takes a standing share when given one", function()
+    setup()
+    local plan = TCAuctionCrowd.planCrowd({ 100 }, 200, 100, 0.5)
+    assertEquals(plan.standers, 50)
+    assertEquals(#plan.walkers, 50)
 end)

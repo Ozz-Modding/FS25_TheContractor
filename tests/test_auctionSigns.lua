@@ -202,6 +202,90 @@ test("a spot on another road is passed over", function()
         "the driver's side counted as on a road")
 end)
 
+-- A ring road of radius r round (cx, cz), a point every 8 m or so, closed.
+local function ring(cx, cz, r)
+    local count = math.max(6, math.floor(2 * math.pi * r / 8))
+    local points = {}
+    for i = 0, count do
+        local a = 2 * math.pi * i / count
+        table.insert(points, { x = cx + r * math.cos(a), z = cz + r * math.sin(a), y = 0 })
+    end
+    return points
+end
+
+-- A roundabout at (0, 0): a ring of radius 15 and four roads out of it.
+local function roundabout()
+    return { ring(0, 0, 15), line(15, 0, 400, 0), line(-15, 0, -400, 0), line(0, 15, 0, 400), line(0, -15, 0, -400) }
+end
+
+test("a spot with road all round it (a roundabout's island) is enclosed; a verge isn't", function()
+    setup()
+    local network = TCAuctionSigns.buildNetwork(roundabout())
+    assertTrue(TCAuctionSigns.isEnclosed(network, 0, 0), "the island")
+    assertTrue(TCAuctionSigns.isEnclosed(network, 4, -5), "off the island's middle")
+    -- On the verge of a road into it, a junction sign's distance back.
+    assertTrue(not TCAuctionSigns.isEnclosed(network, 50, 5), "a verge before the roundabout")
+    assertTrue(not TCAuctionSigns.isEnclosed(network, 200, 5), "a verge out in the country")
+end)
+
+test("a verge with another street close behind it isn't enclosed (a village's blocks)", function()
+    setup()
+    -- Two streets 20 m apart, crossed by others 60 m on.
+    local network = TCAuctionSigns.buildNetwork({ line(-400, 0, 400, 0), line(-400, 20, 400, 20),
+        line(-60, -100, -60, 100), line(60, -100, 60, 100) })
+    assertTrue(not TCAuctionSigns.isEnclosed(network, 0, 5), "a verge between the streets")
+    assertTrue(not TCAuctionSigns.isEnclosed(network, 0, 15), "the other street's verge")
+end)
+
+test("no sign goes up inside a roundabout", function()
+    setup()
+    local result = TCAuctionSigns.pick(roundabout(), allClear)
+    assertTrue(#result.signs >= 1)
+    for _, sign in ipairs(result.signs) do
+        assertTrue(distance(sign.x, sign.z, 0, 0) > 15, "a sign inside the ring")
+        assertTrue(not TCAuctionSigns.isEnclosed(TCAuctionSigns.buildNetwork(roundabout()), sign.x, sign.z))
+    end
+end)
+
+test("no sign on a roundabout's ring: only on the roads into it", function()
+    setup()
+    local result = TCAuctionSigns.pick(roundabout(), allClear)
+    assertTrue(#result.signs >= 1)
+    for _, sign in ipairs(result.signs) do
+        -- Its road point is on an approach, out past the ring.
+        assertTrue(distance(sign.roadX, sign.roadZ, 0, 0) > 20, "a sign by the ring")
+    end
+end)
+
+test("no sign on a dead end: a spur that stops short", function()
+    setup()
+    -- A road along x, and a 60 m spur north (a drive, a yard). Only the
+    -- spur's verges are free, so without the rule the sign goes there.
+    local roads = { line(-400, 0, 400, 0), line(0, 0, 0, -60) }
+    local function onlySpur(candidate)
+        return math.abs(candidate.x) < 10
+    end
+    local result = TCAuctionSigns.pick(roads, onlySpur)
+    assertEquals(0, #result.signs)
+    -- A long enough road north takes one.
+    result = TCAuctionSigns.pick({ line(-400, 0, 400, 0), line(0, 0, 0, -300) }, onlySpur)
+    assertEquals(1, #result.signs)
+end)
+
+test("another road crossing the sign's keeps further off than the road it stands by", function()
+    setup()
+    -- A T junction, and a road running south from 10 m off the main road
+    -- at x = -38, not joined to it: the west road's south verge is 6 m
+    -- from it.
+    local roads = { line(-400, 0, 400, 0), line(0, 0, 0, 300), line(-38, 10, -38, 300) }
+    local function westOnly(candidate)
+        return candidate.x < -20 and candidate.x > -60
+    end
+    local result = TCAuctionSigns.pick(roads, westOnly)
+    assertEquals(1, #result.signs)
+    assertTrue(result.signs[1].z < 0, "the north verge, away from the crossing road")
+end)
+
 -- The engine half (TheContractorAuctionSigns) -------------------------------------------------
 
 -- A fake engine for the sign's model: nodes are tables, the model's tree as
@@ -381,6 +465,30 @@ local function installRoadsAndField(world)
     world.overlaps = 0
     overlapBox = function() world.overlaps = world.overlaps + 1 end
 end
+
+-- The T junction's spots checked as the game checks them: north of the main
+-- road (z < 0) has a mesh on the ground (a road or island the splines don't
+-- run along).
+local function pickWithGround(world)
+    installRoadsAndField(world)
+    RaycastUtil = {
+        raycastClosest = function(x, y, z)
+            if z < 0 then
+                return 99, x, y - 2.9, z
+            end
+            return g_terrainNode, x, y - 3, z
+        end,
+    }
+    return TCAuctionSigns.pick(TheContractorAuctionSigns.sampleRoads(), TheContractorAuctionSigns.isSpotClear)
+end
+
+test("a spot on something other than the ground is passed over: a road's or an island's mesh", function()
+    local world = setupGame()
+    local result = pickWithGround(world)
+    assertEquals(1, #result.signs)
+    assertTrue(result.signs[1].z > 0, "the sign south of the road, off the mesh")
+    assertTrue((result.rejected[TheContractorAuctionSigns.REJECT.ON_OBJECT] or 0) > 0)
+end)
 
 test("tcCompany auctionSigns <month>: signs at the junctions for that month, none on a field", function()
     local world = setupGame()

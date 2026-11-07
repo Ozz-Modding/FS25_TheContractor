@@ -11,7 +11,7 @@
 --     A lot faces its aisle, its front on the aisle's edge, so the shorter
 --     lots in a row line up with the longest. Lots go in longest first, so
 --     machines of a size share a row. Space is kept at the end nearest the
---     entrance for the car park and the auctioneer's stand (140's props),
+--     entrance for the car park and the food area (140's props, TCAuctionScene),
 --     and a cross aisle at the far end, so the aisles join up into the
 --     crowd's loops (the layout returns every aisle as a polyline, for 134's
 --     paths).
@@ -34,7 +34,7 @@ TCAuctionLayout.LAYOUT = {
     aisleWidth = 10,      -- the crowd's walk, and room to drive a lot out
     backGap = 2,          -- between rows back to back
     lotGap = 3,           -- between lots in a row
-    entranceSpace = 30,   -- the car park and stand, at the entrance end
+    entranceSpace = 30,   -- the car park and food area, at the entrance end
     endAisle = 8,         -- the cross aisle at the far end
     pointSpacing = 8,     -- between an aisle polyline's points
 }
@@ -248,6 +248,12 @@ function TCAuctionLayout.layOut(polygon, entrance, lots, options)
                 corners = boxCorners(rect, lotsFrom, math.min(frontV, backV), lotsTo, math.max(frontV, backV)),
                 facing = facing,
                 lotCount = count,
+                -- 140: across the rectangle, its front's v, and how far from
+                -- the entrance end its lots reach.
+                vFrom = math.min(frontV, backV),
+                vTo = math.max(frontV, backV),
+                frontV = frontV,
+                used = used,
             })
             return count
         end
@@ -312,7 +318,7 @@ function TCAuctionLayout.layOut(polygon, entrance, lots, options)
     local result
     result, vEnd = build(vStart)
 
-    -- The car park and stand's space: at the entrance end, as wide as the
+    -- The car park and food area's space: at the entrance end, as wide as the
     -- rows (the whole rectangle with none).
     local reserveFrom = nearSign > 0 and halfU - layout.entranceSpace or -halfU
     local reserveTo = nearSign > 0 and halfU or -halfU + layout.entranceSpace
@@ -322,7 +328,65 @@ function TCAuctionLayout.layOut(polygon, entrance, lots, options)
     end
     result.reserve = { corners = boxCorners(rect, reserveFrom, reserveV1, reserveTo, reserveV2), uFrom = reserveFrom,
         uTo = reserveTo, vFrom = reserveV1, vTo = reserveV2 }
+    result.nearEdge, result.farEdge = nearEdge, farEdge
+    result.aisleWidth, result.endAisle = layout.aisleWidth, layout.endAisle
     return result
+end
+
+-- 140: what every machine needs to dress the site (TCAuctionScene), from
+-- layOut's result (pure): the rectangle's frame, the entrance's space, where
+-- the gate is along its outer edge, the cross aisles' sizes and each row's
+-- place and lots. Lots are numbered row by row (getWalkOrder), so a row's
+-- lots are the next lotCount numbers. entrance: { x, z } or nil (the gate in
+-- the middle). seed: any whole number, for the props' picks. Returns {
+--   seed, cx, cz, angle, halfV (the rectangle's), nearSign, nearEdge,
+--   farEdge, aisleWidth, endAisle,
+--   reserve = { uFrom, uTo, vFrom, vTo }, gateV,
+--   rows = { { vFrom, vTo, frontV, facing, used, lotFrom, lotTo, slots } }
+--     (rows with no lots left out; slots: each lot's middle along u, in
+--     slot order),
+-- }, all in the rectangle's frame (u along the rows, v across).
+function TCAuctionLayout.getScene(layout, entrance, seed)
+    local rect, reserve = layout.rect, layout.reserve
+    local scene = {
+        seed = seed or 0,
+        cx = rect.cx,
+        cz = rect.cz,
+        angle = rect.angle,
+        halfV = rect.halfV,
+        nearSign = layout.nearSign,
+        nearEdge = layout.nearEdge,
+        farEdge = layout.farEdge,
+        aisleWidth = layout.aisleWidth,
+        endAisle = layout.endAisle,
+        reserve = { uFrom = reserve.uFrom, uTo = reserve.uTo, vFrom = reserve.vFrom, vTo = reserve.vTo },
+        rows = {},
+    }
+    local gateV = (reserve.vFrom + reserve.vTo) * 0.5
+    if entrance ~= nil then
+        local _, v = TCAuctionLayout.toLocal(rect, entrance.x, entrance.z)
+        gateV = math.max(reserve.vFrom, math.min(reserve.vTo, v))
+    end
+    scene.gateV = gateV
+    -- Each row's lots' middles along u, by slot.
+    local slots = {}
+    for _, spot in pairs(layout.placed) do
+        slots[spot.row] = slots[spot.row] or {}
+        slots[spot.row][spot.slot] = (TCAuctionLayout.toLocal(rect, spot.x, spot.z))
+    end
+    local number = 0
+    for rowIndex, row in ipairs(layout.rows) do
+        if row.lotCount > 0 then
+            local rowSlots = {}
+            for slot = 1, row.lotCount do
+                table.insert(rowSlots, slots[rowIndex] ~= nil and slots[rowIndex][slot] or nil)
+            end
+            table.insert(scene.rows, { vFrom = row.vFrom, vTo = row.vTo, frontV = row.frontV, facing = row.facing,
+                used = row.used, lotFrom = number + 1, lotTo = number + row.lotCount, slots = rowSlots })
+            number = number + row.lotCount
+        end
+    end
+    return scene
 end
 
 -- The placed lots in the order they're walked (pure), for their numbers

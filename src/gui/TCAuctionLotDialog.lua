@@ -27,6 +27,12 @@ local TCAuctionLotDialog_mt = Class(TCAuctionLotDialog, MessageDialog)
 
 TCAuctionLotDialog.REFRESH_MS = 1000
 
+-- Defined before any function that uses it: a local declared further down
+-- is a nil global to the functions above it.
+local function formatMoney(amount)
+    return g_i18n:formatMoney(amount or 0, 0, true, true)
+end
+
 function TCAuctionLotDialog.register()
     local dialog = TCAuctionLotDialog.new()
     g_gui:loadGui(TheContractor.dir .. "src/gui/TCAuctionLotDialog.xml", "TCAuctionLotDialog", dialog)
@@ -177,10 +183,6 @@ function TCAuctionLotDialog:getLot()
         return nil
     end
     return lot
-end
-
-local function formatMoney(amount)
-    return g_i18n:formatMoney(amount or 0, 0, true, true)
 end
 
 -- The tone of each display state's chip (AuctionSale.DISPLAY), on the card

@@ -66,6 +66,8 @@ source(TheContractor.dir .. "src/util/TCJoyriderRuts.lua")
 source(TheContractor.dir .. "src/util/TCDebris.lua")
 source(TheContractor.dir .. "src/util/TCAuctionCrowd.lua")
 source(TheContractor.dir .. "src/util/TCAuctionLayout.lua")
+source(TheContractor.dir .. "src/util/TCAuctionScene.lua")
+source(TheContractor.dir .. "src/util/TCAuctionProps.lua")
 source(TheContractor.dir .. "src/util/TCAuctionSigns.lua")
 source(TheContractor.dir .. "src/util/TCAuctionAttendance.lua")
 source(TheContractor.dir .. "src/util/TCJobHotspots.lua")
@@ -868,6 +870,8 @@ function TheContractor:deleteMap()
     TCJobHud.reset()
     -- 134: an auction crowd goes with the map.
     TCAuctionCrowd.reset()
+    -- 140: and the auction site's dressing.
+    TCAuctionProps.reset()
 
     TCConsole.uninstall()
     TCFarmDeletion.uninstall()
@@ -986,6 +990,9 @@ function TheContractor:update(dt)
     TCYardFarmers.update(dt)
     -- 134: an auction crowd, if one's up (clients only).
     TCAuctionCrowd.update(dt)
+    -- 140: the auction site's props and crowd sound, following its scene
+    -- (every machine; a server without a client loads only what collides).
+    TCAuctionProps.update(dt)
 
     -- 088: map markers on the fields of jobs due this month.
     TCJobHotspots.update(dt)

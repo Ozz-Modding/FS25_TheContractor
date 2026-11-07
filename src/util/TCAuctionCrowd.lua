@@ -1,7 +1,11 @@
 -- Auction crowd (134, spike): people on a field, walking loops round it and
 -- standing about in small talking groups. Driven from the console
--- (tcCompany crowd) on any field; nothing here knows about auctions yet
--- (140 wires it to them).
+-- (tcCompany crowd) on any field, and put on an auction's aisles by 137.
+-- 140: on an auction the cross aisles are walked too, people stand by the
+-- lots, round the food and by the gate (TCAuctionScene's spots), and they
+-- come and go through the sale day (getShare, rankFigures): nobody before
+-- 08:00, busiest late morning and round the closes, a handful by the gate
+-- after the last.
 --
 -- Our own people, not the game's pedestrian system. The spike's first part
 -- swapped the map's pedestrian system for one of ours and found the
@@ -51,6 +55,30 @@ TCAuctionCrowd.SOURCE_XMLS = {
 
 TCAuctionCrowd.DEFAULT_PEOPLE = 60
 TCAuctionCrowd.MAX_PEOPLE = 300
+-- 140: an auction's crowd at its busiest, from its lot count
+-- (getAuctionPeople): AUCTION_BASE plus AUCTION_PER_LOT a lot, between
+-- AUCTION_MIN and AUCTION_MAX (134 measured 120 at 73 fps against 81 with
+-- none).
+TCAuctionCrowd.AUCTION_BASE = 40
+TCAuctionCrowd.AUCTION_PER_LOT = 0.5
+TCAuctionCrowd.AUCTION_MIN = 60
+TCAuctionCrowd.AUCTION_MAX = 120
+-- 140: the share of an auction's crowd that stands (more spots than the
+-- aisles' groups: by the lots, round the food, by the gate).
+TCAuctionCrowd.AUCTION_STANDING_SHARE = 0.5
+-- 140: the crowd through the sale day, as a share of its busiest, by hour
+-- (straight lines between): nobody before 08:00, arriving through the
+-- morning, busiest late morning, quieter after lunch, busy again round the
+-- closes (17:00 to 18:00), thinning out after the last close to the
+-- handful by the gate (GATE_SHARE), who stay till midnight (collection).
+TCAuctionCrowd.GATE_SHARE = 0.08
+-- The food area's people arrive within the first FOOD_SHARE of the crowd
+-- (rankFigures): breakfast, and there till the evening thins out.
+TCAuctionCrowd.FOOD_SHARE = 0.3
+TCAuctionCrowd.HOUR_SHARES = {
+    { 0, 0 }, { 7.99, 0 }, { 8, 0.15 }, { 9, 0.45 }, { 10.5, 0.85 }, { 11.5, 1 }, { 12.5, 0.9 }, { 13.5, 0.7 },
+    { 15, 0.65 }, { 16.5, 0.9 }, { 17, 1 }, { 18, 0.95 }, { 18.5, 0.4 }, { 19.5, 0.08 }, { 24, 0.08 },
+}
 -- The share of the people that stand, as far as the spots go.
 TCAuctionCrowd.STANDING_SHARE = 0.4
 -- Walking speed range (m/s): a stroll. Each lane gets one speed.
@@ -443,7 +471,8 @@ end
 
 -- Who goes where (pure). loopLengths: each loop's length in metres;
 -- spotCount: the standing spots there are. Standers take STANDING_SHARE of
--- the people, as far as the spots go; everyone else walks. Each loop has a
+-- the people (or standingShare, 140's auctions), as far as the spots go;
+-- everyone else walks. Each loop has a
 -- lane each way, and the walkers are shared out between the lanes by
 -- length (largest remainders, so the counts add up). A lane's walkers all
 -- go at the lane's speed, spaced evenly round it, so they never catch each
@@ -453,8 +482,8 @@ end
 -- -1), offset (metres along the loop), speed } } }.
 local GOLDEN = 0.6180339887498949
 
-function TCAuctionCrowd.planCrowd(loopLengths, spotCount, people)
-    local standers = math.min(spotCount, math.floor(people * TCAuctionCrowd.STANDING_SHARE))
+function TCAuctionCrowd.planCrowd(loopLengths, spotCount, people, standingShare)
+    local standers = math.min(spotCount, math.floor(people * (standingShare or TCAuctionCrowd.STANDING_SHARE)))
     local walkerCount = people - standers
     local plan = { standers = standers, lanes = 0, walkers = {} }
     if #loopLengths == 0 then
@@ -511,6 +540,58 @@ function TCAuctionCrowd.planCrowd(loopLengths, spotCount, people)
         end
     end
     return plan
+end
+
+-- 140: the busiest crowd for a sale of lotCount lots.
+function TCAuctionCrowd.getAuctionPeople(lotCount)
+    local people = TCAuctionCrowd.AUCTION_BASE + TCAuctionCrowd.AUCTION_PER_LOT * (lotCount or 0)
+    return math.floor(math.max(TCAuctionCrowd.AUCTION_MIN, math.min(TCAuctionCrowd.AUCTION_MAX, people)) + 0.5)
+end
+
+-- 140: the share of the crowd there at an hour of the sale day (0 to 24,
+-- with minutes as fractions).
+function TCAuctionCrowd.getShare(hour)
+    local points = TCAuctionCrowd.HOUR_SHARES
+    if hour <= points[1][1] then
+        return points[1][2]
+    end
+    for i = 2, #points do
+        local a, b = points[i - 1], points[i]
+        if hour <= b[1] then
+            local t = (hour - a[1]) / (b[1] - a[1])
+            return a[2] + (b[2] - a[2]) * t
+        end
+    end
+    return points[#points][2]
+end
+
+-- 140: each figure's place in the order people arrive and leave (pure): a
+-- figure is there while its rank is under the hour's share. categories:
+-- each figure's spot category (TCAuctionScene.SPOT, nil for a walker or an
+-- aisle's group). The gate's take the ranks under GATE_SHARE, so they're
+-- the last to go; the food's are spread over GATE_SHARE to FOOD_SHARE, so
+-- the food area's busy from breakfast till after the closes; everyone
+-- else's over the rest (a golden-ratio sequence, so the crowd thins evenly
+-- over the site rather than one aisle at a time). count: how many figures
+-- (categories has gaps). Returns a rank for each.
+function TCAuctionCrowd.rankFigures(categories, count)
+    local ranks = {}
+    local counts = {}
+    local gateShare, foodShare = TCAuctionCrowd.GATE_SHARE, TCAuctionCrowd.FOOD_SHARE
+    for i = 1, count do
+        local category = categories[i]
+        local from, to = gateShare, 1
+        if category == TCAuctionScene.SPOT.GATE then
+            from, to = 0, gateShare
+        elseif category == TCAuctionScene.SPOT.FOOD then
+            from, to = gateShare, foodShare
+        else
+            category = "other"
+        end
+        counts[category] = (counts[category] or 0) + 1
+        ranks[i] = from + (to - from) * ((counts[category] * GOLDEN) % 1)
+    end
+    return ranks
 end
 
 -- How far round its loop a walker is after elapsedSec, in [0, length).
@@ -722,23 +803,57 @@ function TCAuctionCrowd.start(fieldId, people, laneGap)
 end
 
 -- 137: puts a crowd on an auction's walks (135's walkways, buildWalkwayLoops),
--- never among its lots. Returns the text to print.
-function TCAuctionCrowd.startOnWalkways(fieldId, walkways, people)
+-- never among its lots. Returns the text to print. options (140), all
+-- optional: scene (TCAuctionLayout.getScene's: the cross aisles walked too,
+-- TCAuctionScene.getWalks, and its spots by the lots, the food and the
+-- gate stood on, TCAuctionScene.layOut) and useHours (the crowd comes and
+-- goes through the sale day, getShare).
+function TCAuctionCrowd.startOnWalkways(fieldId, walkways, people, options)
     local reason = TCAuctionCrowd.getUnavailableReason()
     if reason ~= nil then
         return reason
     end
-    local loops = TCAuctionCrowd.buildWalkwayLoops(walkways)
+    options = options or {}
+    local scene = options.scene
+    local loops = TCAuctionCrowd.buildWalkwayLoops(TCAuctionScene.getWalks(scene, walkways))
     if #loops == 0 then
         return "The auction has no aisles wide enough to walk."
     end
-    local spots = TCAuctionCrowd.buildWalkwaySpots(loops, math.floor(people * TCAuctionCrowd.STANDING_SHARE))
-    return TCAuctionCrowd.putUp(fieldId, loops, spots, people)
+    local share = scene ~= nil and TCAuctionCrowd.AUCTION_STANDING_SHARE or TCAuctionCrowd.STANDING_SHARE
+    local spots = TCAuctionCrowd.getAuctionSpots(scene, loops, math.floor(people * share))
+    return TCAuctionCrowd.putUp(fieldId, loops, spots, people, { standingShare = share, useHours = options.useHours })
+end
+
+-- 140: where an auction's standers go (pure): the scene's spots (by the
+-- lots, round the food, by the gate) and the aisles' groups, in the order
+-- they're filled (TCAuctionScene.orderSpots). scene may be nil (the aisles'
+-- groups only).
+function TCAuctionCrowd.getAuctionSpots(scene, loops, wanted)
+    local spots = {}
+    if scene ~= nil then
+        for _, spot in ipairs(TCAuctionScene.layOut(scene).spots) do
+            table.insert(spots, spot)
+        end
+    end
+    for _, spot in ipairs(TCAuctionCrowd.buildWalkwaySpots(loops, wanted)) do
+        table.insert(spots, spot)
+    end
+    return TCAuctionScene.orderSpots(spots)
+end
+
+-- The sale day's hour on this machine (0 to 24).
+function TCAuctionCrowd.getHour()
+    local environment = g_currentMission ~= nil and g_currentMission.environment or nil
+    if environment == nil or environment.dayTime == nil then
+        return 12
+    end
+    return environment.dayTime / 3600000
 end
 
 -- Puts the people on the loops and spots, replacing any crowd. Returns the
--- text to print.
-function TCAuctionCrowd.putUp(fieldId, loops, spots, people)
+-- text to print. options (140): standingShare (planCrowd's) and useHours.
+function TCAuctionCrowd.putUp(fieldId, loops, spots, people, options)
+    options = options or {}
     local templates = TCAuctionCrowd.readTemplates()
     if #templates == 0 then
         return "None of the base maps' pedestrian XMLs could be read."
@@ -751,18 +866,27 @@ function TCAuctionCrowd.putUp(fieldId, loops, spots, people)
         paths[i] = TCAuctionCrowd.buildPath(loop.points)
         lengths[i] = paths[i].length
     end
-    local plan = TCAuctionCrowd.planCrowd(lengths, #spots, people)
+    local plan = TCAuctionCrowd.planCrowd(lengths, #spots, people, options.standingShare)
     local looks = TCAuctionCrowd.pickTemplates(templates, plan.standers + #plan.walkers)
 
     local figures = {}
+    local categories = {}
     for i = 1, plan.standers do
         local spot = spots[i]
         table.insert(figures, { kind = "stand", template = looks[i], x = spot.x, y = groundY(spot.x, spot.z),
             z = spot.z, yaw = spot.yaw })
+        categories[#figures] = spot.category
     end
     for k, walker in ipairs(plan.walkers) do
         table.insert(figures, { kind = "walk", template = looks[plan.standers + k], walker = walker,
             x = 0, y = 0, z = 0, yaw = 0 })
+    end
+    -- 140: who's there at what hour.
+    if options.useHours then
+        local ranks = TCAuctionCrowd.rankFigures(categories, #figures)
+        for i, figure in ipairs(figures) do
+            figure.rank = ranks[i]
+        end
     end
 
     TCAuctionCrowd.active = {
@@ -774,7 +898,9 @@ function TCAuctionCrowd.putUp(fieldId, loops, spots, people)
         standers = plan.standers,
         walkers = #plan.walkers,
         lanes = plan.lanes,
-        stats = { loaded = 0, shown = 0, updateMs = 0 },
+        stats = { loaded = 0, shown = 0, present = #figures, updateMs = 0 },
+        useHours = options.useHours == true,
+        share = 1,
     }
     TCLog.info("TheContractor: crowd on field %d, %d standing, %d walking in %d lanes", fieldId, plan.standers,
         #plan.walkers, plan.lanes)
@@ -877,44 +1003,56 @@ function TCAuctionCrowd.update(dt)
     active.elapsedMs = active.elapsedMs + dt
     local elapsedSec = active.elapsedMs / 1000
 
-    local loaded, shown, loadsStarted = 0, 0, 0
-    for _, figure in ipairs(active.figures) do
-        local isWalker = figure.kind == "walk"
-        if isWalker then
-            -- A walker's distance is checked from where it is now; placing
-            -- it is cheap next to animating it.
-            placeWalker(figure, active.loops, elapsedSec)
-        end
-        local distance = MathUtil.vector3Length(figure.x - cx, figure.y - cy, figure.z - cz)
-        if figure.graphics == nil then
-            if distance <= TCAuctionCrowd.LOAD_DISTANCE and not figure.noModel and
-                loadsStarted < TCAuctionCrowd.MAX_LOADS_PER_FRAME then
-                loadModel(figure)
-                loadsStarted = loadsStarted + 1
-            end
-        elseif distance > TCAuctionCrowd.UNLOAD_DISTANCE then
-            freeModel(figure)
-        end
+    -- 140: the share of the crowd there now.
+    local share = active.useHours and TCAuctionCrowd.getShare(TCAuctionCrowd.getHour()) or 1
+    active.share = share
 
-        if figure.graphics ~= nil then
-            loaded = loaded + 1
-        end
-        if figure.isReady then
-            if distance > TCAuctionCrowd.CLIP_DISTANCE then
-                setVisible(figure, false)
-            else
-                setVisible(figure, true)
-                shown = shown + 1
-                figure.graphics:setModelPosition(figure.x, figure.y, figure.z)
-                figure.graphics:setModelYaw(figure.yaw)
-                figure.graphics:defaultAllParameters()
-                figure.graphics:update(dt)
+    local loaded, shown, present, loadsStarted = 0, 0, 0, 0
+    for _, figure in ipairs(active.figures) do
+        if figure.rank ~= nil and figure.rank >= share then
+            -- Not here at this hour: their model's freed until they come.
+            if figure.graphics ~= nil then
+                freeModel(figure)
+            end
+        else
+            present = present + 1
+            local isWalker = figure.kind == "walk"
+            if isWalker then
+                -- A walker's distance is checked from where it is now; placing
+                -- it is cheap next to animating it.
+                placeWalker(figure, active.loops, elapsedSec)
+            end
+            local distance = MathUtil.vector3Length(figure.x - cx, figure.y - cy, figure.z - cz)
+            if figure.graphics == nil then
+                if distance <= TCAuctionCrowd.LOAD_DISTANCE and not figure.noModel and
+                    loadsStarted < TCAuctionCrowd.MAX_LOADS_PER_FRAME then
+                    loadModel(figure)
+                    loadsStarted = loadsStarted + 1
+                end
+            elseif distance > TCAuctionCrowd.UNLOAD_DISTANCE then
+                freeModel(figure)
+            end
+
+            if figure.graphics ~= nil then
+                loaded = loaded + 1
+            end
+            if figure.isReady then
+                if distance > TCAuctionCrowd.CLIP_DISTANCE then
+                    setVisible(figure, false)
+                else
+                    setVisible(figure, true)
+                    shown = shown + 1
+                    figure.graphics:setModelPosition(figure.x, figure.y, figure.z)
+                    figure.graphics:setModelYaw(figure.yaw)
+                    figure.graphics:defaultAllParameters()
+                    figure.graphics:update(dt)
+                end
             end
         end
     end
 
     local stats = active.stats
-    stats.loaded, stats.shown = loaded, shown
+    stats.loaded, stats.shown, stats.present = loaded, shown, present
     local ms = (getTimeSec() - started) * 1000
     stats.updateMs = stats.updateMs * 0.95 + ms * 0.05
     stats.peakMs = math.max(stats.peakMs or 0, ms)
@@ -939,10 +1077,15 @@ function TCAuctionCrowd.describe()
         return "No crowd up."
     end
     local stats = active.stats
-    return string.format(
+    local text = string.format(
         "Crowd on field %d: %d people (%d standing, %d walking in %d lanes). Models loaded: %d, shown now: %d. The crowd's own update takes %.2f ms a frame on average (peak %.2f ms); the models' drawing and animation cost shows in the game's frame rate.",
         active.fieldId, active.people, active.standers, active.walkers, active.lanes, stats.loaded, stats.shown,
         stats.updateMs, stats.peakMs or 0)
+    if active.useHours then
+        text = text .. string.format("\nBy the sale day's hours: %d of them here now (%.0f%% of the busiest).",
+            stats.present or 0, (active.share or 1) * 100)
+    end
+    return text
 end
 
 -- deleteMap: the crowd goes with the map.
@@ -957,7 +1100,7 @@ function TCAuctionCrowd.registerConsoleCommands()
         serverOnly = false,
         run = function(_, args)
             if args[1] == nil then
-                return TCAuctionCrowd.describe()
+                return TCAuctionCrowd.describe() .. "\n" .. TCAuctionProps.describe()
             end
             if string.lower(args[1]) == "off" then
                 return TCAuctionCrowd.stop() and "Crowd removed." or "There's no crowd up."
@@ -972,7 +1115,7 @@ function TCAuctionCrowd.registerConsoleCommands()
             -- 137: on an auction site's field, its aisles (laneGap doesn't apply).
             local site = g_currentMission.TheContractor ~= nil and g_currentMission.TheContractor.AuctionSite or nil
             if site ~= nil and site.fieldId == fieldId and #site:getWalkways() > 0 then
-                return TCAuctionCrowd.startOnWalkways(fieldId, site:getWalkways(), people)
+                return TCAuctionCrowd.startOnWalkways(fieldId, site:getWalkways(), people, { scene = site:getScene() })
             end
             return TCAuctionCrowd.start(fieldId, people, laneGap)
         end,

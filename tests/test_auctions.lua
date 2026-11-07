@@ -93,7 +93,10 @@ local function setup(daysPerPeriod)
         site = nil,
         fieldId = 0,
         walkways = {},
+        scene = nil,
         getWalkways = function(self) return self.walkways end,
+        -- 140: the site's scene (its seed, its rows' lot numbers).
+        getScene = function(self) return self.scene end,
         getCandidates = function() return world.candidates end,
         start = function(self, fieldId, lotCount, auctionId)
             table.insert(world.siteStarts, { fieldId = fieldId, auctionId = auctionId })
@@ -118,6 +121,7 @@ local function setup(daysPerPeriod)
             self.month, self.signs = month, { { x = 1, z = 2, yaw = 0 } }
         end,
         clear = function(self) self.month, self.signs = 0, {} end,
+        describe = function(self) return #self.signs .. " sign(s)" end,
     }
     -- 134's crowd, on a machine with a client.
     world.crowdStarts = {}
@@ -125,13 +129,15 @@ local function setup(daysPerPeriod)
         DEFAULT_PEOPLE = 60,
         active = nil,
         getUnavailableReason = function() return world.noCrowd end,
-        startOnWalkways = function(fieldId, walkways, people)
+        startOnWalkways = function(fieldId, walkways, people, options)
             table.insert(world.crowdStarts, fieldId)
             world.crowdWalkways = walkways
+            world.crowdPeople, world.crowdOptions = people, options
             TCAuctionCrowd.active = { fieldId = fieldId }
         end,
         stop = function() TCAuctionCrowd.active = nil end,
         getFieldPolygon = function() return {} end,
+        getAuctionPeople = function(lotCount) return 1000 + lotCount end,
     }
     TCAuctionLayout = { RULES = { entranceReach = 60 }, findEntrance = function() return { x = 5, z = 6 } end }
     TheContractorFallenTree = { sampleRoads = function() return {} end }
@@ -587,6 +593,29 @@ test("a client hears the auction from the server only, and puts the crowd up whi
     client:update(16)
     assertEquals(TCAuctionCrowd.active, nil)
     assertTrue(not client:isFieldInUse(5))
+end)
+
+test("140: the crowd gets the site's scene and hours, is as big as the sale, and goes up again for a new scene", function()
+    local world = setup(10)
+    world:addField(5, 7)
+    world.auctions:consoleStart(5, 3)
+    world.auctions:consoleSaleDay()
+    local site = g_currentMission.TheContractor.AuctionSite
+    site.scene = { seed = 7, rows = { { lotFrom = 1, lotTo = 40 }, { lotFrom = 41, lotTo = 88 } } }
+    world.auctions:update(16)
+    assertEquals(#world.crowdStarts, 1)
+    assertEquals(world.crowdPeople, 1088, "sized by the last lot")
+    assertEquals(world.crowdOptions.scene, site.scene)
+    assertTrue(world.crowdOptions.useHours)
+    -- The same scene again (a client's fresh copy): nothing.
+    site.scene = { seed = 7, rows = site.scene.rows }
+    world.auctions:update(16)
+    assertEquals(#world.crowdStarts, 1)
+    -- Another scene (a site put up again): a new crowd.
+    site.scene = { seed = 8, rows = { { lotFrom = 1, lotTo = 10 } } }
+    world.auctions:update(16)
+    assertEquals(#world.crowdStarts, 2)
+    assertEquals(world.crowdPeople, 1010)
 end)
 
 test("no crowd on a machine without a client, and a console crowd elsewhere is left alone", function()
