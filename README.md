@@ -20,7 +20,7 @@ Run your farm as an agricultural contracting business in Farming Simulator 25. T
 
 ### Jobs
 - Vanilla contracts are switched off and replaced by the mod's own job offers
-- Every vanilla field job type: harvesting, mowing, tedding, baling, wrapping, cultivating, ploughing, sowing, fertilising, spraying, weeding, hoeing, stone picking
+- Every vanilla field job type: harvesting, mowing, tedding, baling, wrapping, cultivating, ploughing, sowing, fertilising, spraying, weeding, hoeing, stone picking, plus spreading lime
 - **Harvest & haul** and **straw bale delivery** jobs, where the crop or bales have to reach a selling point
 - Offers are matched to the machines you own, and some are booked ahead for crops that aren't ready yet
 - **Price negotiation**: counter-offer, but push too hard and the client walks away

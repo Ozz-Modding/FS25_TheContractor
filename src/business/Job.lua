@@ -399,8 +399,12 @@ function TheContractorJob:isWaitingForSupplies()
     return self.supplyStatus ~= nil
 end
 
--- "Seeds", "Liquid fertilizer" - the product a supply status is about.
+-- "Seeds", "Liquid fertilizer" - the product a supply status is about, or
+-- for a machine needing a service (150) the machine's name.
 function TheContractorJob:getSupplyFillTypeTitle()
+    if TCJobSupplies ~= nil and self.supplyStatus == TCJobSupplies.STATUS.NEEDS_SERVICE then
+        return tostring(self.supplyFillTypeName)
+    end
     local fillTypeIndex = self.supplyFillTypeName ~= nil and
         g_fillTypeManager:getFillTypeIndexByName(self.supplyFillTypeName) or nil
     return fillTypeIndex ~= nil and g_fillTypeManager:getFillTypeTitleByIndex(fillTypeIndex) or

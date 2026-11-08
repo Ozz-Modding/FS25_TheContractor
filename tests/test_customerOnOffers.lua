@@ -123,6 +123,7 @@ test("the real kinds name the customer in every body they list, and only there",
         tc_joyriders_offerBody = { 4 },
         tc_joyriders_sowBody = { 4 },
         tc_flyTipping_offerBody = { 4, 3 },
+        tc_flyTipping_roadsideOfferBody = { 4, 3 },
     }
     for _, keys in ipairs({ TheContractorJoyriders.NAMED_BODY_KEYS, TheContractorFlyTipping.NAMED_BODY_KEYS }) do
         for key in pairs(keys) do

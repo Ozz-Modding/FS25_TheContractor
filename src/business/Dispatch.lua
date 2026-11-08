@@ -193,6 +193,14 @@ function TheContractorDispatch:startJobForWorker(job, skipTransport)
     -- it. Should that empty a tank (the farm's out of diesel), the second
     -- topUp is what puts the job on hold.
     local loaded, supplyStatus, supplyFillTypeName, fuelLoaded = TCJobSupplies.topUp(job)
+    -- 150: nor with a machine ADS won't let them drive until it's serviced.
+    -- Before the trip's diesel, which a held job would burn again each try.
+    if supplyStatus == nil then
+        local refusedVehicle = TCADSWorkerRefusal.getRefusedVehicle(job.assignedEquipmentIds)
+        if refusedVehicle ~= nil then
+            supplyStatus, supplyFillTypeName = TCJobSupplies.STATUS.NEEDS_SERVICE, refusedVehicle:getName()
+        end
+    end
     if supplyStatus == nil and not skipTransport and job.transportRemainingMs == nil and
         TCJobFuel.burnTravelFuel(job) then
         local reloaded, refuelled
@@ -464,6 +472,26 @@ function TheContractorDispatch:onAIJobStopped(aiJob, aiMessage)
     local isClean = aiMessage == nil or aiMessage:getType() ~= AIMessageType.ERROR
     TCLog.info("TheContractor: job %d AI job stopped (%s): %s", ourJobId, isClean and "clean" or "error",
         aiMessage ~= nil and aiMessage:getMessage(aiJob) or "no message")
+
+    -- 150: ADS stopped it, at the start or mid-shift, for a machine that
+    -- needs a service. On hold like a supplies problem: the worker waits
+    -- where they are, and TCJobSupplies' poll restarts the job once ADS
+    -- would take the machine again.
+    if not isClean and TCADSWorkerRefusal.isRefusalMessage(aiMessage) then
+        self.ourJobIdByAIJob[aiJob] = nil
+        if self.aiJobByOurJobId[ourJobId] == aiJob then
+            self.aiJobByOurJobId[ourJobId] = nil
+        end
+        local jobs = g_currentMission.TheContractor.Jobs
+        local job = jobs:getJobById(ourJobId)
+        if job ~= nil then
+            local vehicle = TCADSWorkerRefusal.getRefusedVehicle(job.assignedEquipmentIds) or
+                TCAINotifications.getVehicle(aiJob)
+            jobs:setJobSupplyStatus(job, TCJobSupplies.STATUS.NEEDS_SERVICE,
+                vehicle ~= nil and vehicle:getName() or "?")
+        end
+        return
+    end
 
     -- 032: an empty tank isn't the watchdog's business - it's a supplies
     -- problem. Forgotten here straight away (like stopJob does) so the job

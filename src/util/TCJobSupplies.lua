@@ -32,6 +32,12 @@
 -- on by themselves once the farm restocks; a player-driven job just shows
 -- the status. Server-only apart from that status.
 --
+-- 150: the same hold covers a machine FS25_AdvancedDamageSystem won't let
+-- the worker drive until it's serviced ("needsService", the machine's name
+-- where a product's would be - TCADSWorkerRefusal). The worker waits on the
+-- field and carries on once it's been seen to (Dispatch:startJobForWorker
+-- checks again each poll).
+--
 -- Diesel (063): a hired worker's machines run on the farm's own diesel,
 -- out of the same stock (a fuel tank is a storage). Their diesel tanks are
 -- tanks like the rest, filled as the worker sets off and topped up below
@@ -66,6 +72,7 @@ TCJobSupplies.POLL_INTERVAL_MS = TCJobProgress.POLL_INTERVAL_MS
 TCJobSupplies.STATUS = {
     NO_STOCK = "noStock",
     WRONG_FILL = "wrongFill",
+    NEEDS_SERVICE = "needsService",
 }
 
 local accumulatedMs = 0

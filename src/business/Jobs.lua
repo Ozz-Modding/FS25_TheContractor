@@ -408,9 +408,14 @@ end
 -- Anything laid out for it before it was even taken (075's fly-tipped pile)
 -- goes - the farmer has found someone else. reason (113): a
 -- TheContractorRelationships.DECLINE_REASON, nil for a plain decline; the
--- customer's relationship drops by it.
+-- customer's relationship drops by it, and (148) the farm's reputation by
+-- the job type's declineReputation.
 function TheContractorJobs:onJobDeclined(job, reason)
     g_currentMission.TheContractor.Relationships:onJobDeclined(job, reason)
+    local jobDef = TheContractorJobGeneration.JOB_TYPES[job.jobType]
+    if jobDef ~= nil and jobDef.declineReputation ~= nil then
+        g_currentMission.TheContractor.Reputation:addReputation(job.farmId, -jobDef.declineReputation)
+    end
     TCFieldPreparation.clearUpAfterJob(job)
     g_currentMission.TheContractor.Inbox:removeMessagesForJob(job.farmId, job.id)
     -- 100: the customer takes their machine elsewhere.
