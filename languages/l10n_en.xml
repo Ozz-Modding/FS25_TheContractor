@@ -109,6 +109,7 @@
 		<text name="tc_equipment_need_implement_weed" text="Weeder"/>
 		<text name="tc_equipment_need_implement_hoe" text="Hoe"/>
 		<text name="tc_equipment_need_implement_stonePick" text="Stone picker"/>
+		<text name="tc_equipment_need_implement_lime" text="Lime spreader"/>
 		<text name="tc_equipment_need_baleTransport" text="Whatever you move bales with (bale loader, trailer, front loader)"/>
 		<text name="tc_equipment_need_disposalSkip" text="A disposal skip to carry the pieces to (Contractor tab of the construction menu)"/>
 		<text name="tc_equipment_need_chainsaw" text="Chainsaw"/>
@@ -222,11 +223,13 @@
 		<text name="tc_jobType_emergencyRefuel" text="Emergency Refuel"/>
 		<text name="tc_jobType_attendAuction" text="Attend Auction"/>
 		<text name="tc_jobType_flyTipping" text="Clear Fly-tipping"/>
+		<text name="tc_jobType_flyTippingRoadside" text="Clear Roadside Fly-tipping"/>
 		<text name="tc_jobType_fertilize" text="Fertilize"/>
 		<text name="tc_jobType_herbicide" text="Spray Herbicide"/>
 		<text name="tc_jobType_weed" text="Weed"/>
 		<text name="tc_jobType_hoe" text="Hoe"/>
 		<text name="tc_jobType_stonePick" text="Pick Stones"/>
+		<text name="tc_jobType_lime" text="Spread Lime"/>
 		<text name="tc_inbox_empty" text="Nothing in your inbox right now — check back later, or buy some advertising to bring more in."/>
 		<text name="tc_inbox_columnType" text="Type"/>
 		<text name="tc_inbox_columnMessage" text="Message"/>
@@ -989,10 +992,12 @@
 		<text name="tc_equipment_missing_implement_weed" text="a weeder"/>
 		<text name="tc_equipment_missing_implement_hoe" text="a hoe"/>
 		<text name="tc_equipment_missing_implement_stonePick" text="a stone picker"/>
+		<text name="tc_equipment_missing_implement_lime" text="a lime spreader"/>
 		<text name="tc_equipment_missing_seedTank" text="a seed tank (front hopper) - the seeder has no hopper of its own"/>
 		<text name="tc_equipment_missing_seedTankHitch" text="a seed tank that fits the tractor (a front hopper needs front linkage)"/>
 		<text name="tc_supplies_status_noStock" text="Waiting for %s"/>
 		<text name="tc_supplies_status_wrongFill" text="Tank holds %s - empty it"/>
+		<text name="tc_supplies_status_needsService" text="%s needs a service"/>
 		<text name="tc_supplies_onHold" text="%s on %s is on hold: %s."/>
 		<text name="tc_supplies_or" text=" or "/>
 		<text name="tc_supplies_noticeOne" text="Out of %s: a job is on hold until you restock."/>
@@ -1000,6 +1005,7 @@
 		<text name="tc_allocation_blockedWarning" text="%s isn't certified on %s."/>
 		<text name="tc_allocation_notCertifiedWarning" text="%s doesn't hold a %s certificate. Book them on a course from the Staff tab."/>
 		<text name="tc_allocation_filledHarvesterWarning" text="%s still has %s in its tank. Empty it before it goes out on a job."/>
+		<text name="tc_allocation_needsServiceWarning" text="%s needs a service before a worker will take it out."/>
 		<text name="tc_allocation_crewRolesTitle" text="Who does what"/>
 		<text name="tc_allocation_crewRolesPrompt" text="Choose who harvests and who hauls. The recommended way round suits their skills best, but you can swap them round to give the other one the practice."/>
 		<text name="tc_allocation_crewRolesOption" text="%s harvests, %s hauls"/>
@@ -1297,6 +1303,9 @@
 		<text name="tc_flyTipping_eventName" text="Fly-tipping"/>
 		<text name="tc_flyTipping_offerTitle" text="Fly-tipping on Field %s"/>
 		<text name="tc_flyTipping_offerBody" text="Someone has dumped a load of junk just inside the gate of Field %s, %s pieces in all. %s wants it cleared and has offered you the job. Carry each piece to a disposal skip (from the Contractor tab of the construction menu) and drop it there."/>
+		<text name="tc_flyTipping_roadsideLocation" text="Roadside by Field %s"/>
+		<text name="tc_flyTipping_roadsideOfferTitle" text="Fly-tipping by the road near Field %s"/>
+		<text name="tc_flyTipping_roadsideOfferBody" text="Someone has dumped a load of junk on the verge by the road near Field %s, %s pieces in all. %s at the council wants it cleared and has offered you the job; each piece is marked on your map. Carry each piece to a disposal skip (from the Contractor tab of the construction menu) and drop it there. Turn it down and the council will see to it, but they will remember."/>
 		<text name="tc_overheads_priceLevel" text="%s cover: %s"/>
 		<text name="tc_overheads_levelSwitching" text="%s (%s cover from renewal)"/>
 		<text name="tc_overheads_priceFrom" text="From %s a year paid annually, or %s a month"/>

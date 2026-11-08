@@ -604,6 +604,11 @@ function TCFieldPreparation.prepareFieldForJob(job)
     elseif jobType == "herbicide" then
         fieldState.weedState = job.startState or fieldState.weedState
         applyFieldState(field, fieldState)
+    elseif jobType == "lime" then
+        -- 149: out of lime all over, so the job's measured against the
+        -- whole field, whatever was limed since the offer.
+        fieldState.limeLevel = 0
+        applyFieldState(field, fieldState)
     elseif jobType == "weed" or jobType == "hoe" then
         if job.startState ~= nil and job.startState > 0 then
             fieldState.weedState = TCFieldPreparation.getVisibleWeedState(g_currentMission.weedSystem,

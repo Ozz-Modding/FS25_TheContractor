@@ -5076,6 +5076,12 @@ function MenuContractor:getAllocationProblem(job)
             g_fillTypeManager:getFillTypeTitleByIndex(heldFillType) or "?"), true
     end
 
+    -- 150: ADS won't let a hired worker drive it until it's serviced.
+    local refusedVehicle = operatorId ~= nil and TheContractorAllocation.getServiceRefusedVehicle(equipmentIds) or nil
+    if refusedVehicle ~= nil then
+        return string.format(g_i18n:getText("tc_allocation_needsServiceWarning"), refusedVehicle:getName()), true
+    end
+
     if capability == TheContractorAllocation.CAPABILITY.WARN then
         return self:getCrewWeaknessText(job, operatorId, haulerId, equipmentIds, haulageIds), false
     end

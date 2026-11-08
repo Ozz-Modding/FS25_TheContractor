@@ -188,6 +188,17 @@ local function createFertilizeModifier(state, job)
     return modifier, filter
 end
 
+-- 149: limed ground, at the lime level spreading sets
+-- (FSDensityMapUtil.updateLimeArea).
+local function createLimeModifier()
+    local fieldGroundSystem = g_currentMission.fieldGroundSystem
+    local mapId, firstChannel, numChannels = fieldGroundSystem:getDensityMapData(FieldDensityMap.LIME_LEVEL)
+    local modifier = DensityMapModifier.new(mapId, firstChannel, numChannels, g_terrainNode)
+    local filter = DensityMapFilter.new(modifier)
+    filter:setValueCompareParams(DensityValueCompareType.EQUAL, fieldGroundSystem:getMaxValue(FieldDensityMap.LIME_LEVEL))
+    return modifier, filter
+end
+
 -- Mirrors HerbicideMission:createModifier — the weed state herbicide turns
 -- the starting weeds into (the weed system's herbicide replacements), over
 -- all weeded area.
@@ -335,6 +346,7 @@ local JOB_TYPE_HANDLERS = {
     baleWrap = { getCompletion = getBaleWrapCompletion },
     strawDelivery = { getCompletion = getDeliveryCompletion },
     flyTipping = { getCompletion = getFlyTippingCompletion },
+    flyTippingRoadside = { getCompletion = getFlyTippingCompletion },
     -- 107: the road clear of the fallen tree.
     fallenTree = { getCompletion = function(job)
         return TheContractorFallenTree.getJobCompletion(job)
@@ -360,6 +372,7 @@ local JOB_TYPE_HANDLERS = {
     weed = { createModifier = createWeedModifier, measure = "remainingArea" },
     hoe = { createModifier = createWeedModifier, measure = "remainingArea" },
     stonePick = { createModifier = createStonePickModifier },
+    lime = { createModifier = createLimeModifier },
 }
 
 local function resolveTargetFruitType(field, source)

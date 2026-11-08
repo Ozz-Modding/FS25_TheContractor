@@ -74,6 +74,7 @@ TheContractorClaims.CAUSES = {
     mow = { "boundary", "ruts" },
     bale = { "ruts", "boundary" },
     fertilize = { "rate", "scorch" },
+    lime = { "rate", "ruts" },
     herbicide = { "drift", "rate" },
     weed = { "cropDamage" },
     hoe = { "cropDamage" },

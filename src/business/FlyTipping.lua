@@ -1,12 +1,32 @@
 -- Fly-tipping (075), a random event (068): someone has dumped a pile of
--- junk just inside an NPC's field, by the gate. The farmer offers the
--- contractor a job to clear it: the player carries the pieces (TCDebris) to
--- a skip the farm has placed (PlaceableTCDisposalSkip), where they
--- disappear. Each piece from a job costs a small tipping fee.
+-- junk, either just inside an NPC's field by the gate (the farmer offers
+-- the job) or on a road's verge (148: the local official offers it, for the
+-- council). The player carries the pieces (TCDebris) to a skip the farm has
+-- placed (PlaceableTCDisposalSkip), where they disappear. Each piece from a
+-- job costs a small tipping fee.
+--
+-- Which (pick): ROADSIDE_SHARE of hits go to a verge, the rest to a field;
+-- if the one rolled has nowhere to go, the other is tried. The console can
+-- ask for either, and then gets only that one.
 --
 -- Which fields (getEligibleFields): owned by nobody (an NPC's) and with no
 -- live job for any farm on it. Never the farm's own, never another
 -- player's. Any season.
+--
+-- Which verges (findRoadsideSpot, 148): points on AI road splines
+-- (TheContractorFallenTree.sampleRoads), in random order, the pile
+-- VERGE_OFFSET out from the road's middle on a random side. Skipped on a
+-- bridge, where the verge drops or rises too far from the road (a ditch, a
+-- bank), where the ground under the pile isn't flat, near another road (a
+-- junction), where anything's in the way (walls, hedges, buildings,
+-- vehicles, players), with a player within MIN_PLAYER_DISTANCE (nobody sees
+-- it appear), or with no field without a live job within the fallen tree's
+-- MAX_FIELD_DISTANCE: the nearest names the job ("Roadside by Field 12")
+-- and is its field, nothing more (JOB_TYPES' flyTippingRoadside is
+-- offField, so the official is its customer, 110). No ruts, and the pieces'
+-- own map markers show where it is. Turned down or left to lapse, it costs
+-- a little reputation (JOB_TYPES' declineReputation) as well as the usual
+-- relationship knock with the official.
 --
 -- The job (JobGeneration's flyTipping type) is due this month, like 072's
 -- plow job, priced per piece. Its pieces are tracked by item uniqueId in
@@ -15,7 +35,8 @@
 -- of the pile goes when the job's over (TCFieldPreparation.clearUpAfterJob),
 -- or when the offer is declined or runs out.
 --
--- State: none of its own. The incident's data is { fieldId }.
+-- State: none of its own. The incident's data is { fieldId }, plus
+-- roadside, x, z for a verge (148).
 
 TheContractorFlyTipping = {}
 TheContractorFlyTipping_mt = Class(TheContractorFlyTipping)
@@ -25,6 +46,14 @@ TheContractorFlyTipping.MESSAGE_KIND = "flyTipping"
 -- 112: the body that ends with the customer's name (getCustomerNamedArgs).
 TheContractorFlyTipping.NAMED_BODY_KEYS = { tc_flyTipping_offerBody = true }
 TheContractorFlyTipping.JOB_TYPE = "flyTipping"
+-- 148: the same on a road's verge, for the council.
+TheContractorFlyTipping.ROADSIDE_JOB_TYPE = "flyTippingRoadside"
+TheContractorFlyTipping.NAMED_BODY_KEYS.tc_flyTipping_roadsideOfferBody = true
+
+-- 148: the share of hits that go to a verge rather than a field.
+TheContractorFlyTipping.ROADSIDE_SHARE = 0.5
+-- The console's names for the two (tcCompany event flyTipping [field|road]).
+TheContractorFlyTipping.SITES = { field = "field", road = "road" }
 
 -- About one every couple of years, like joyriders: it's the area's fields
 -- that get hit, not the farm's.
@@ -45,6 +74,24 @@ TheContractorFlyTipping.GATE_INSET = 6
 -- bulky item), charged through scaleCost. An old ADS part (103) costs the
 -- same.
 TheContractorFlyTipping.TIPPING_FEE = 5
+
+-- 148: finding a verge (see the header). Metres.
+TheContractorFlyTipping.SPOT_TRIES = 120
+-- The pile's middle from the road's middle, and how close it may be to any
+-- road's middle (a junction's other road).
+TheContractorFlyTipping.VERGE_OFFSET = 6
+TheContractorFlyTipping.MIN_ROAD_DISTANCE = 5
+-- The ground under the spline (a bridge if further), and the verge's
+-- against the road's (a ditch or a bank if further).
+TheContractorFlyTipping.MAX_ROAD_HEIGHT_GAP = 1.5
+TheContractorFlyTipping.MAX_VERGE_STEP = 1
+-- The pile's footprint (half its side) and how flat it must be under it.
+TheContractorFlyTipping.PILE_HALF_SIZE = 2
+TheContractorFlyTipping.MAX_PILE_SLOPE = 0.6
+-- The room it needs above the ground.
+TheContractorFlyTipping.ROOM_FLOOR = 0.3
+TheContractorFlyTipping.ROOM_TOP = 2.5
+TheContractorFlyTipping.MIN_PLAYER_DISTANCE = 150
 
 table.insert(FinanceStats.statNames, "tcWasteDisposal")
 FinanceStats.statNameToIndex["tcWasteDisposal"] = #FinanceStats.statNames
@@ -68,8 +115,17 @@ function TheContractorFlyTipping:register(randomEvents, inbox)
             return TheContractorFlyTipping.RATE_PER_PERIOD
         end,
         canTrigger = function(farmId)
-            return self:pickField(farmId)
+            return self:pick(farmId, math.random)
         end,
+        -- tcCompany event flyTipping [field|road]
+        console = {
+            prepareTrigger = function(farmId, details, context)
+                return self:prepareConsole(details)
+            end,
+            clearTrigger = function()
+                self.consoleSite = nil
+            end,
+        },
         stages = {
             { key = "dump", run = function(incident)
                 return self:onDump(incident)
@@ -103,16 +159,163 @@ function TheContractorFlyTipping:getEligibleFields(farmId)
     return result
 end
 
--- canTrigger (068): the incident's starting data, or nil.
+-- A random eligible field's data, or nil.
 function TheContractorFlyTipping:pickField(farmId)
-    if #TCDebris.RANDOM_PROPS == 0 then
-        return nil
-    end
     local fields = self:getEligibleFields(farmId)
     if #fields == 0 then
         return nil
     end
     return { fieldId = fields[math.random(1, #fields)]:getId() }
+end
+
+-- tcCompany event flyTipping [field|road]. Returns nil, or an error.
+function TheContractorFlyTipping:prepareConsole(details)
+    local site = details[1] ~= nil and TheContractorFlyTipping.SITES[string.lower(details[1])] or nil
+    if #details > 1 or (details[1] ~= nil and site == nil) then
+        return "Error: flyTipping takes nothing, 'field' or 'road'"
+    end
+    self.consoleSite = site
+    return nil
+end
+
+-- canTrigger (068): the incident's starting data, or nil. ROADSIDE_SHARE
+-- of the time a verge, else a field, falling back to the other (148). The
+-- console's choice has no fallback. random is for the tests.
+function TheContractorFlyTipping:pick(farmId, random)
+    if not TCDebris.hasRandomProps() then
+        return nil
+    end
+    local SITES = TheContractorFlyTipping.SITES
+    local first = self.consoleSite
+    if first == nil then
+        first = random() < TheContractorFlyTipping.ROADSIDE_SHARE and SITES.road or SITES.field
+    end
+    local order = { first }
+    if self.consoleSite == nil then
+        table.insert(order, first == SITES.road and SITES.field or SITES.road)
+    end
+    for _, site in ipairs(order) do
+        local data
+        if site == SITES.road then
+            data = self:pickRoadside(random)
+        else
+            data = self:pickField(farmId)
+        end
+        if data ~= nil then
+            return data
+        end
+    end
+    return nil
+end
+
+-- Verges (server, 148) -----------------------------------------------------------------
+
+-- The distance from (x, z) to the nearest road's middle, each sample
+-- standing for the stretch of road ROAD_SAMPLE_STEP long through it.
+function TheContractorFlyTipping.getRoadDistance(x, z, samples)
+    local halfStep = TheContractorFallenTree.ROAD_SAMPLE_STEP * 0.5
+    local best = math.huge
+    for _, sample in ipairs(samples) do
+        local dx, dz = x - sample.x, z - sample.z
+        local along = math.max(-halfStep, math.min(halfStep, dx * sample.dirX + dz * sample.dirZ))
+        local ex, ez = dx - sample.dirX * along, dz - sample.dirZ * along
+        best = math.min(best, math.sqrt(ex * ex + ez * ez))
+    end
+    return best
+end
+
+-- Whether the ground under the pile is flat: each corner of its footprint
+-- within MAX_PILE_SLOPE of its middle.
+function TheContractorFlyTipping.isGroundFlat(x, z)
+    local T = TheContractorFlyTipping
+    local y = getTerrainHeightAtWorldPos(g_terrainNode, x, 0, z)
+    local h = T.PILE_HALF_SIZE
+    for _, corner in ipairs({ { -h, -h }, { h, -h }, { h, h }, { -h, h } }) do
+        local cornerY = getTerrainHeightAtWorldPos(g_terrainNode, x + corner[1], 0, z + corner[2])
+        if math.abs(cornerY - y) > T.MAX_PILE_SLOPE then
+            return false
+        end
+    end
+    return true
+end
+
+-- Whether nothing's in the pile's way: static objects, buildings, trees,
+-- vehicles, traffic, dynamic objects, players (the terrain and the road
+-- aren't in it).
+function TheContractorFlyTipping.hasRoom(x, z, rotY)
+    local T = TheContractorFlyTipping
+    local mask = CollisionFlag.STATIC_OBJECT + CollisionFlag.BUILDING + CollisionFlag.TREE +
+        CollisionFlag.VEHICLE + CollisionFlag.DYNAMIC_OBJECT + CollisionFlag.TRAFFIC_VEHICLE + CollisionFlag.PLAYER
+    local y = getTerrainHeightAtWorldPos(g_terrainNode, x, 0, z)
+    local halfHeight = (T.ROOM_TOP - T.ROOM_FLOOR) * 0.5
+    local target = { blocked = false }
+    function target:onOverlap(node)
+        if node ~= g_terrainNode then
+            self.blocked = true
+            return false
+        end
+        return true
+    end
+    overlapBox(x, y + T.ROOM_FLOOR + halfHeight, z, 0, rotY, 0, T.PILE_HALF_SIZE, halfHeight, T.PILE_HALF_SIZE,
+        "onOverlap", target, mask, true, true, true, true)
+    return not target.blocked
+end
+
+local function isNearAny(x, z, points, distance)
+    for _, point in ipairs(points) do
+        local dx, dz = x - point.x, z - point.z
+        if dx * dx + dz * dz < distance * distance then
+            return true
+        end
+    end
+    return false
+end
+
+-- A verge that will do (see the header), as { x, z, fieldId }, or nil.
+-- random is for the tests.
+function TheContractorFlyTipping.findRoadsideSpot(random)
+    local T = TheContractorFlyTipping
+    local samples = TheContractorFallenTree.sampleRoads()
+    local order = {}
+    for i = 1, #samples do
+        order[i] = samples[i]
+    end
+    for i = #order, 2, -1 do
+        local j = math.min(i, math.floor(random() * i) + 1)
+        order[i], order[j] = order[j], order[i]
+    end
+
+    local players = TheContractorFallenTree.getPlayerPositions()
+    for i = 1, math.min(T.SPOT_TRIES, #order) do
+        local sample = order[i]
+        local side = random() < 0.5 and -1 or 1
+        -- Square off the road, to one side.
+        local x = sample.x - sample.dirZ * side * T.VERGE_OFFSET
+        local z = sample.z + sample.dirX * side * T.VERGE_OFFSET
+        local roadY = getTerrainHeightAtWorldPos(g_terrainNode, sample.x, 0, sample.z)
+        local vergeY = getTerrainHeightAtWorldPos(g_terrainNode, x, 0, z)
+        if math.abs(roadY - sample.y) <= T.MAX_ROAD_HEIGHT_GAP and
+                math.abs(vergeY - roadY) <= T.MAX_VERGE_STEP and
+                not isNearAny(x, z, players, T.MIN_PLAYER_DISTANCE) and
+                T.getRoadDistance(x, z, samples) >= T.MIN_ROAD_DISTANCE and
+                T.isGroundFlat(x, z) and
+                T.hasRoom(x, z, MathUtil.getYRotationFromDirection(sample.dirX, sample.dirZ)) then
+            local field = TheContractorFallenTree.findNearestField(x, z)
+            if field ~= nil then
+                return { x = x, z = z, fieldId = field:getId() }
+            end
+        end
+    end
+    return nil
+end
+
+-- A verge's data, or nil.
+function TheContractorFlyTipping:pickRoadside(random)
+    local spot = TheContractorFlyTipping.findRoadsideSpot(random)
+    if spot == nil then
+        return nil
+    end
+    return { fieldId = spot.fieldId, roadside = true, x = spot.x, z = spot.z }
 end
 
 -- The fallback spot (see GATE_INSET): in from the field's gate towards its
@@ -133,33 +336,39 @@ end
 
 function TheContractorFlyTipping:onDump(incident)
     local tc = g_currentMission.TheContractor
-    local field = g_fieldManager:getFieldById(incident.data.fieldId)
+    local data = incident.data
+    local field = g_fieldManager:getFieldById(data.fieldId)
     -- Someone may have taken a job on it since the roll (a load in between).
-    if field == nil or tc.Jobs:isFieldProtected(incident.data.fieldId) then
+    if field == nil or tc.Jobs:isFieldProtected(data.fieldId) then
         return TheContractorRandomEvents.DONE
     end
 
     local count = math.random(TheContractorFlyTipping.MIN_PIECES, TheContractorFlyTipping.MAX_PIECES)
     local x, z
-    local site = TCJoyriderRuts.paintDumpSite(field)
-    if site ~= nil then
-        x, z = site.x, site.z
+    if data.roadside then
+        -- 148: on the verge, as found. No ruts.
+        x, z = data.x, data.z
     else
-        x, z = TheContractorFlyTipping.getDumpSpot(field)
+        local site = TCJoyriderRuts.paintDumpSite(field)
+        if site ~= nil then
+            x, z = site.x, site.z
+        else
+            x, z = TheContractorFlyTipping.getDumpSpot(field)
+        end
     end
     local pieces = TCDebris.spawnPileAt(x, z, count, incident.farmId)
     if #pieces == 0 then
         return TheContractorRandomEvents.DONE
     end
 
-    local job = tc.JobGeneration:createJobOnField(incident.farmId, TheContractorFlyTipping.JOB_TYPE, field, true,
-        #pieces)
+    local jobType = data.roadside and TheContractorFlyTipping.ROADSIDE_JOB_TYPE or TheContractorFlyTipping.JOB_TYPE
+    local job = tc.JobGeneration:createJobOnField(incident.farmId, jobType, field, true, #pieces)
     if job == nil then
         for _, debris in ipairs(pieces) do
             debris:delete()
         end
-        TCLog.info("TheContractor: farm %d incident %d: fly-tipping on field %d, but no job could be dated",
-            incident.farmId, incident.id, incident.data.fieldId)
+        TCLog.info("TheContractor: farm %d incident %d: fly-tipping by field %d, but no job could be dated",
+            incident.farmId, incident.id, data.fieldId)
         return TheContractorRandomEvents.DONE
     end
     for _, debris in ipairs(pieces) do
@@ -167,11 +376,15 @@ function TheContractorFlyTipping:onDump(incident)
     end
     job.workTotal = #pieces
 
-    tc.Inbox:postMessage(incident.farmId, TheContractorFlyTipping.MESSAGE_KIND, "tc_flyTipping_offerTitle",
-        "tc_flyTipping_offerBody", { incident.data.fieldId, #pieces }, nil,
+    local titleKey, bodyKey = "tc_flyTipping_offerTitle", "tc_flyTipping_offerBody"
+    if data.roadside then
+        titleKey, bodyKey = "tc_flyTipping_roadsideOfferTitle", "tc_flyTipping_roadsideOfferBody"
+    end
+    tc.Inbox:postMessage(incident.farmId, TheContractorFlyTipping.MESSAGE_KIND, titleKey,
+        bodyKey, { data.fieldId, #pieces }, nil,
         { incidentId = incident.id, jobId = job.id })
-    TCLog.info("TheContractor: farm %d incident %d: %d pieces fly-tipped on field %d, job %d offered",
-        incident.farmId, incident.id, #pieces, incident.data.fieldId, job.id)
+    TCLog.info("TheContractor: farm %d incident %d: %d pieces fly-tipped %s field %d, job %d offered",
+        incident.farmId, incident.id, #pieces, data.roadside and "on the verge by" or "on", data.fieldId, job.id)
     return TheContractorRandomEvents.DONE
 end
 

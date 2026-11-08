@@ -25,6 +25,9 @@ local function setup()
     world:load("src/business/CropSpill.lua")
     world:load("src/business/JobGeneration.lua")
     world:load("src/business/Allocation.lua")
+    -- 150: no ADS, so nothing is refused.
+    world:load("src/util/TCADSWorkerRefusal.lua")
+    TCADSWorkerRefusal.getEnv = function() return nil end
     world:load("src/business/WorkingHours.lua")
     -- 097: midday, so idle workers are at work.
     g_currentMission.environment = { currentMonotonicDay = 1, dayTime = 12 * 3600000, daysPerPeriod = 1 }

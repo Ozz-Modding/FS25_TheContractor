@@ -183,9 +183,9 @@ end
 -- with a packer isn't a cultivator), and on top of that a weeder has to be
 -- the right kind (a hoe for hoeing, a tine weeder for weeding - vanilla's
 -- WeedMission/HoeMission tell them apart by Weeder's isHoeWeeder), and a
--- sprayer has to take one of the job's products (fertilizer or herbicide -
--- the same sprayer spec covers fertilizer spreaders, manure spreaders and
--- slurry tankers). A sowing machine has to take the job's crop
+-- sprayer has to take one of the job's products (fertilizer, herbicide or
+-- lime - the same sprayer spec covers fertilizer and lime spreaders, manure
+-- spreaders and slurry tankers). A sowing machine has to take the job's crop
 -- (canSowFruit): a grain drill can't put in parsnips, nor a potato planter
 -- wheat. fruitTypeIndex nil means "any crop", as for canCutFruit.
 function TCEquipmentClass.isJobImplement(vehicle, jobDef, fruitTypeIndex)

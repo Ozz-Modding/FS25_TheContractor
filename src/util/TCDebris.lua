@@ -14,10 +14,17 @@
 --
 -- Vanilla's hands (HandToolHands:getCanPickUpNode) lift any dynamic rigid
 -- body of 200 kg or less that the look ray hits (DYNAMIC_OBJECT is in its
--- mask). A prop's i3d needs a dynamic root collision, re-saved in GE (a
--- scenery prop's static one stays frozen whatever we set at runtime). load()
--- gives it the DYNAMIC_OBJECT collision preset, and every piece weighs
+-- mask). A prop's i3d needs a dynamic root collision, binarized again after
+-- the edit (docs/tools/binarize.py) so its .shapes matches (a scenery
+-- prop's static one stays frozen whatever we set at runtime). load() gives
+-- it the DYNAMIC_OBJECT collision preset, and every piece weighs
 -- TCDebris.MASS, whatever density GE gave it.
+--
+-- 147: bin bags, picked for a random pile by weight like the rest, our own model
+-- (docs/tools/genBinBagI3d.py) that squashes, stretches and swings as it's
+-- dropped and carried: TCBinBagSquash works the pose out from how the bag
+-- moves, and updateSquash puts it on the bag's nodes, on every machine
+-- that draws it, each for itself.
 
 TCDebris = {}
 local TCDebris_mt = Class(TCDebris, MountableObject)
@@ -31,6 +38,9 @@ TCDebris.CLASS_NAME = g_currentModName .. ".TCDebris"
 -- prop would otherwise be too heavy.
 TCDebris.MASS = 0.01
 
+-- Each prop's weight is how often a random pile picks it, against the
+-- others' (1 if not given; 0 never, only by name). Not its mass: that's
+-- MASS for every piece.
 TCDebris.PROPS = {
     -- The vanilla motorex barrel, re-exported with a dynamic collision.
     barrel = { filename = "i3d/debris/debrisBarrel.i3d" },
@@ -41,7 +51,6 @@ TCDebris.PROPS = {
     bicycle = { filename = "i3d/debris/bicycle01.i3d" },
     board = { filename = "i3d/debris/boardStack02Board.i3d" },
     cardboard = { filename = "i3d/debris/cardboardStack02.i3d" },
-    sawhorse = { filename = "i3d/debris/sawhorse.i3d" },
     trashCan = { filename = "i3d/debris/trashCan01.i3d" },
     trashCan2 = { filename = "i3d/debris/trashCan02.i3d" },
     wheelBarrow = { filename = "i3d/debris/wheelBarrow.i3d" },
@@ -53,17 +62,27 @@ TCDebris.PROPS = {
     crate = { filename = "i3d/debris/woodenCrate01.i3d" },
     crate2 = { filename = "i3d/debris/woodenCrate02.i3d" },
     crate3 = { filename = "i3d/debris/woodenCrate03.i3d" },
-    -- Vanilla, already exported dynamic: the control for whether a prop's
-    -- collision is the problem. Only spawned by name.
-    bakeryBox = { filename = "$data/objects/pallets/bakeryBoxPallet/bakeryBox.i3d", testOnly = true },
+    -- 147: our own model, squashed in code (TCBinBagSquash). neck is the
+    -- generator's HEIGHT, where its `hang` node is.
+    binBag = { filename = "i3d/debris/binBag.i3d", isBinBag = true, neck = 0.6, weight = 6 },
 }
 
--- The props a random pile picks from, sorted so it's the same list everywhere.
+TCDebris.BIN_BAG = "binBag"
+
+-- A bin bag is dropped nearly upright: tipped at most this far (radians).
+TCDebris.BIN_BAG_TIP = 0.3
+
+-- Beyond this from the camera a bin bag isn't squashed (metres).
+TCDebris.SQUASH_DISTANCE = 60
+
+-- A bag moved further than this in a frame was put there, not moved: no
+-- squash from it (metres).
+TCDebris.SQUASH_JUMP = 2
+
+-- Every prop, sorted so a random pick walks the same list everywhere.
 TCDebris.RANDOM_PROPS = {}
-for key, def in pairs(TCDebris.PROPS) do
-    if not def.testOnly then
-        table.insert(TCDebris.RANDOM_PROPS, key)
-    end
+for key in pairs(TCDebris.PROPS) do
+    table.insert(TCDebris.RANDOM_PROPS, key)
 end
 table.sort(TCDebris.RANDOM_PROPS)
 
@@ -130,6 +149,14 @@ function TCDebris:load(propKey, x, y, z, rx, ry, rz)
     TCDebris.instances[self] = true
     if self.isClient then
         self:addMapHotspot()
+        -- 147: the bag's nodes for its squash (the i3d's hang > squash).
+        if def.isBinBag and getNumOfChildren(node) > 0 then
+            local hang = getChildAt(node, 0)
+            if getNumOfChildren(hang) > 0 then
+                self.squash = { hang = hang, node = getChildAt(hang, 0), neck = def.neck,
+                    state = TCBinBagSquash.new() }
+            end
+        end
     end
     return true
 end
@@ -300,19 +327,69 @@ function TCDebris:getUniqueId()
     return self.uniqueId
 end
 
+function TCDebris.getWeight(propKey)
+    local def = TCDebris.PROPS[propKey]
+    if def == nil then
+        return 0
+    end
+    return def.weight or 1
+end
+
+-- Whether a random pile has anything to pick from.
+function TCDebris.hasRandomProps()
+    for _, key in ipairs(TCDebris.RANDOM_PROPS) do
+        if TCDebris.getWeight(key) > 0 then
+            return true
+        end
+    end
+    return false
+end
+
+-- Which prop a random pile's next piece is: each in proportion to its
+-- weight. Nil if every weight is 0.
+function TCDebris.pickRandomProp()
+    local total = 0
+    for _, key in ipairs(TCDebris.RANDOM_PROPS) do
+        total = total + TCDebris.getWeight(key)
+    end
+    if total <= 0 then
+        return nil
+    end
+    local roll = math.random() * total
+    for _, key in ipairs(TCDebris.RANDOM_PROPS) do
+        roll = roll - TCDebris.getWeight(key)
+        if roll < 0 then
+            return key
+        end
+    end
+    -- Rounding at the very top of the range.
+    for i = #TCDebris.RANDOM_PROPS, 1, -1 do
+        local key = TCDebris.RANDOM_PROPS[i]
+        if TCDebris.getWeight(key) > 0 then
+            return key
+        end
+    end
+    return nil
+end
+
 -- Server: drops count pieces from a little height around (cx, cz),
 -- scattered and tumbled so they settle into a pile, and returns them.
--- propKey nil picks a random prop for each piece.
+-- propKey nil picks each piece (pickRandomProp). A bin bag is dropped
+-- nearly upright, so it lands on its bottom and squashes.
 function TCDebris.spawnPileAt(cx, cz, count, farmId, propKey)
     local pieces = {}
     for i = 1, count do
+        local key = propKey or TCDebris.pickRandomProp()
+        if key == nil then
+            break
+        end
+        local tip = TCDebris.PROPS[key] ~= nil and TCDebris.PROPS[key].isBinBag and TCDebris.BIN_BAG_TIP * 2 or math.pi
         local x = cx + (math.random() - 0.5) * TCDebris.PILE_SPREAD
         local z = cz + (math.random() - 0.5) * TCDebris.PILE_SPREAD
         local y = getTerrainHeightAtWorldPos(g_terrainNode, x, 0, z) + 0.6 + (i - 1) * 0.4
-        local rx = (math.random() - 0.5) * math.pi
+        local rx = (math.random() - 0.5) * tip
         local ry = math.random() * 2 * math.pi
-        local rz = (math.random() - 0.5) * math.pi
-        local key = propKey or TCDebris.RANDOM_PROPS[math.random(#TCDebris.RANDOM_PROPS)]
+        local rz = (math.random() - 0.5) * tip
         local debris = TCDebris.spawn(key, x, y, z, rx, ry, rz, farmId)
         if debris ~= nil then
             table.insert(pieces, debris)
@@ -334,6 +411,72 @@ end
 
 function TCDebris.isDebris(object)
     return TCDebris.instances[object] == true
+end
+
+-- 147: every frame, on any machine that draws (TheContractor:update). Each
+-- bin bag near the camera is squashed from how its velocity changed since
+-- the last frame (TCBinBagSquash), measured from its position, so it works
+-- the same for a client's interpolated copy as for the server's body. A
+-- bag out of range, or put somewhere rather than moved there (SQUASH_JUMP),
+-- starts afresh.
+function TCDebris.updateSquash(dt)
+    local dtSec = dt / 1000
+    if dtSec <= 0 then
+        return
+    end
+    local camera = g_cameraManager ~= nil and g_cameraManager:getActiveCamera() or nil
+    local cx, cy, cz = nil, nil, nil
+    if camera ~= nil and camera ~= 0 then
+        cx, cy, cz = getWorldTranslation(camera)
+    end
+    for debris in pairs(TCDebris.instances) do
+        local squash = debris.squash
+        if squash ~= nil and debris.nodeId ~= nil and debris.nodeId ~= 0 and not debris.isDeleted then
+            TCDebris.updateBagSquash(debris, squash, dtSec, cx, cy, cz)
+        end
+    end
+end
+
+function TCDebris.updateBagSquash(debris, squash, dtSec, cx, cy, cz)
+    local node = debris.nodeId
+    local x, y, z = getWorldTranslation(node)
+    local far = cx ~= nil and MathUtil.vector3Length(x - cx, y - cy, z - cz) > TCDebris.SQUASH_DISTANCE
+    local jumped = squash.x ~= nil and MathUtil.vector3Length(x - squash.x, y - squash.y, z - squash.z) > TCDebris.SQUASH_JUMP
+    if far or jumped or squash.x == nil then
+        squash.x, squash.y, squash.z = x, y, z
+        squash.vx = nil
+        if far and not squash.isPlain then
+            squash.state = TCBinBagSquash.new()
+            TCDebris.applySquashPose(squash)
+        end
+        return
+    end
+    local vx, vy, vz = (x - squash.x) / dtSec, (y - squash.y) / dtSec, (z - squash.z) / dtSec
+    squash.x, squash.y, squash.z = x, y, z
+    local dvx, dvy, dvz = 0, 0, 0
+    if squash.vx ~= nil then
+        dvx, dvy, dvz = worldDirectionToLocal(node, vx - squash.vx, vy - squash.vy, vz - squash.vz)
+    end
+    squash.vx, squash.vy, squash.vz = vx, vy, vz
+
+    local state = squash.state
+    TCBinBagSquash.step(state, dtSec, dvx, dvy, dvz, TCDebris.isHeld(debris))
+    if TCBinBagSquash.isSettled(state) then
+        if not squash.isPlain then
+            squash.state = TCBinBagSquash.new()
+            TCDebris.applySquashPose(squash)
+        end
+        return
+    end
+    TCDebris.applySquashPose(squash)
+end
+
+function TCDebris.applySquashPose(squash)
+    local sides, height, y, tiltX, tiltZ = TCBinBagSquash.getPose(squash.state, squash.neck)
+    setScale(squash.node, sides, height, sides)
+    setTranslation(squash.node, 0, y, 0)
+    setRotation(squash.hang, tiltX, 0, tiltZ)
+    squash.isPlain = TCBinBagSquash.isSettled(squash.state)
 end
 
 -- Whether a player has this piece in their hands. The server runs
@@ -371,7 +514,7 @@ end
 function TCDebris.registerConsoleCommands()
     TCConsole.register("company", "debris", {
         args = "[count] [prop]",
-        description = "Drop a pile of hand-movable debris in front of you (random props unless one is named)",
+        description = "Drop a pile of hand-movable debris in front of you (random props and bin bags unless one is named)",
         run = function(farmId, args, context)
             local count = tonumber(args[1] or "8")
             local propKey = args[2]

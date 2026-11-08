@@ -55,6 +55,10 @@ TheContractorJobGeneration_mt = Class(TheContractorJobGeneration)
 --   requiresWeeds    only when the save has weeds switched on (vanilla's
 --                    weed missions' canRun). requiresStones likewise for
 --                    stones.
+--   requiresLime     149: spreading lime, which vanilla has no contract for,
+--                    so no vanillaMission: only on a save that needs lime
+--                    (getLimeRequired), and the field by our own rule
+--                    (needsLime).
 --   serverMeasured   progress is measured against something only the server
 --                    knows (spawned windrow, the field's weeds at the start,
 --                    spawned bales) - see TCJobProgress.
@@ -88,6 +92,10 @@ TheContractorJobGeneration_mt = Class(TheContractorJobGeneration)
 --   rewardPerItem    075: paid per piece rather than per hectare (fly-tipping,
 --                    see estimatePrice's itemCount), with reputationPerItem
 --                    in place of reputationPerHa.
+--   declineReputation  148: reputation lost when the offer's turned down,
+--                    lapses or is walked away from (Jobs:onJobDeclined), on
+--                    top of the customer's relationship knock: a job the
+--                    council's counting on.
 --   spill            106: a tipped trailer's spilt crop to clear off the road
 --                    and deliver (TheContractorCropSpill), on the harvest
 --                    job's field. Also deliveryOnly, and:
@@ -118,7 +126,7 @@ TheContractorJobGeneration_mt = Class(TheContractorJobGeneration)
 --                    load of theirs sold from it (job.yardHaul,
 --                    TheContractorYardHaul). Its missed notification is
 --                    its own (tc_<type>_missedNotification).
--- A type left out of JOB_TYPE_KEYS (flyTipping, spillRecovery,
+-- A type left out of JOB_TYPE_KEYS (flyTipping, flyTippingRoadside, spillRecovery,
 -- attendAuction) is never
 -- generated, shown by the availability snapshot or created by tcJob: only
 -- its random event makes one (075 with createJobOnField, 106 with
@@ -175,11 +183,22 @@ TheContractorJobGeneration.JOB_TYPES = {
     stonePick = { implementSpec = "spec_stonePicker", vanillaMission = StonePickMission, seasonRule = "noWinter",
         requiresStones = true, rewardPerHa = 2200, reputationPerHa = 7.5, skill = "tillage",
         workAreaTypes = { "STONEPICKER" } },
+    -- 149: a lime spreader is a sprayer that takes lime. Paid twice
+    -- fertilize's, as lime costs far more to spread a hectare with; the
+    -- work's fertilize's, so the reputation is too.
+    lime = { implementSpec = "spec_sprayer", supplyFillTypeNames = { "LIME" }, requiresLime = true,
+        seasonRule = "noWinter", rewardPerHa = 3000, reputationPerHa = 5.1, skill = "cropCare",
+        workAreaTypes = { "SPRAYER" } },
     -- 075: clearing a fly-tipped pile by hand. A piece pays what a bale
     -- wrap's bale does, and earns about the reputation that pay would on
     -- a plow job (REPUTATION_PER_REWARD).
     flyTipping = { serverMeasured = true, playerOnly = true, noEquipment = true, rewardPerItem = 300,
         reputationPerItem = 1 },
+    -- 148: the same on a road's verge, for the council (the local
+    -- official, as an offField job). Its field only names where it is.
+    flyTippingRoadside = { serverMeasured = true, playerOnly = true, noEquipment = true, offField = true,
+        rewardPerItem = 300, reputationPerItem = 1, declineReputation = 3,
+        locationKey = "tc_flyTipping_roadsideLocation" },
     -- 106: a tipped trailer's load off the road and to the customer's
     -- selling point, by the end of tomorrow, for nothing.
     spillRecovery = { serverMeasured = true, playerOnly = true, noEquipment = true, deliveryOnly = true,
@@ -234,7 +253,7 @@ TheContractorJobGeneration.JOB_TYPES = {
         noConsequences = true, noAllocation = true },
 }
 TheContractorJobGeneration.JOB_TYPE_KEYS = { "harvest", "cultivate", "sow", "plow", "mow", "tedder", "bale",
-    "baleWrap", "strawDelivery", "fertilize", "herbicide", "weed", "hoe", "stonePick" }
+    "baleWrap", "strawDelivery", "fertilize", "herbicide", "weed", "hoe", "stonePick", "lime" }
 
 -- Reputation per unit of rewardPerHa, from plow's anchor above - for job
 -- types without a fixed reputationPerHa (bale wrap, whose rewardPerHa is
@@ -888,6 +907,9 @@ function TheContractorJobGeneration:getCandidateFields(farmId, jobDef)
     if jobDef.requiresStones and g_currentMission.missionInfo.stonesEnabled == false then
         return candidates
     end
+    if jobDef.requiresLime and not TheContractorJobGeneration.getLimeRequired() then
+        return candidates
+    end
     -- 067: nowhere on the map takes straw bales, so nowhere to deliver to.
     if jobDef.deliveryOnly and TCHaulage.findBaleDeliveryStation(FillType.STRAW) == nil then
         return candidates
@@ -955,7 +977,42 @@ function TheContractorJobGeneration.isFieldEligible(field, jobDef)
     if jobDef.deliveryOnly and TheContractorJobGeneration.getStrawFillType(fieldState.fruitTypeIndex) == nil then
         return false
     end
+    if jobDef.requiresLime then
+        return TheContractorJobGeneration.needsLime(fieldState)
+    end
     return TheContractorJobGeneration.isVanillaAvailable(field, jobDef)
+end
+
+-- 149: whether lime matters on this save: the platform keeps a lime level
+-- and the save's "lime required" setting is on (FieldState:
+-- getHarvestScaleFactors ignores the level otherwise).
+function TheContractorJobGeneration.getLimeRequired()
+    local maxValue = g_fieldManager ~= nil and g_fieldManager.limeLevelMaxValue or nil
+    return Platform ~= nil and Platform.gameplay ~= nil and Platform.gameplay.useLimeCounter == true and
+        g_currentMission.missionInfo.limeRequired == true and maxValue ~= nil and maxValue > 0
+end
+
+-- 149: a field due lime: its lime level has run out (harvests wear it down,
+-- FieldManager:harvestField) and lime would land on it. Vanilla's spreading
+-- (FSDensityMapUtil.updateLimeArea) only writes to bare ground, a crop just
+-- sown or one past harvest, never to a growing crop. So the field's empty
+-- or its crop's cut, and that crop doesn't regrow (grass would be growing
+-- again by the time the job's done, GrowthSystem's regrowth). A just-sown
+-- crop takes lime too, but is left out for the same reason: it can grow on
+-- before the work's done. Catch crops are left out too.
+function TheContractorJobGeneration.needsLime(fieldState)
+    if fieldState.limeLevel == nil or fieldState.limeLevel > 0 then
+        return false
+    end
+    local fruitType = g_fruitTypeManager:getFruitTypeByIndex(fieldState.fruitTypeIndex)
+    if fruitType == nil then
+        return true
+    end
+    if fruitType:getIsCatchCrop() or fruitType.regrows then
+        return false
+    end
+    local growthState = fieldState.growthState
+    return growthState ~= nil and fruitType:getIsCut(growthState) and growthState > fruitType.maxHarvestingGrowthState
 end
 
 -- Grass by vanilla's own definition: what its mow contracts cut (grass),
@@ -1284,6 +1341,9 @@ function TheContractorJobGeneration.registerConsoleCommands()
             end
             if jobDef.requiresStones and g_currentMission.missionInfo.stonesEnabled == false then
                 return string.format("No %s job possible: stones are switched off for this save", jobType)
+            end
+            if jobDef.requiresLime and not TheContractorJobGeneration.getLimeRequired() then
+                return string.format("No %s job possible: lime isn't required on this save", jobType)
             end
             if jobDef.deliveryOnly and TCHaulage.findBaleDeliveryStation(FillType.STRAW) == nil then
                 return string.format("No %s job possible: no selling point on this map takes straw bales", jobType)

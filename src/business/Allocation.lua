@@ -519,6 +519,13 @@ function TheContractorAllocation.getFilledHarvester(equipmentIds)
     return nil
 end
 
+-- 150: a machine among equipmentIds that ADS wouldn't let a hired worker
+-- drive (TCADSWorkerRefusal), or nil. Only a hired worker's allocation is
+-- refused for it: the player drives their own job.
+function TheContractorAllocation.getServiceRefusedVehicle(equipmentIds)
+    return TCADSWorkerRefusal.getRefusedVehicle(equipmentIds)
+end
+
 -- Allocation (server-authoritative) ----------------------------------------
 
 -- 093: the nickname of the player on the other end of an event's
@@ -665,6 +672,9 @@ function TheContractorAllocation:allocateJob(farmId, jobId, workerIds, equipment
     local operatorId, haulerId, capability = self:assignCrewRoles(farmId, job, workerIds, equipmentIds,
         haulageEquipmentIds, fixedRoles)
     if capability == TheContractorAllocation.CAPABILITY.BLOCKED then
+        return false
+    end
+    if operatorId ~= nil and TheContractorAllocation.getServiceRefusedVehicle(equipmentIds) ~= nil then
         return false
     end
 
