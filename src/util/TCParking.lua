@@ -243,7 +243,7 @@ end
 
 -- A free spot for the vehicle in one of farmId's slots of its kind (vehicle,
 -- implement or harvester) whose filter takes it (getSlotsFor): x, y, z, rotY
--- for setAbsolutePosition, or nil. isRandom (the tcJob park command) picks
+-- for setAbsolutePosition, or nil. isRandom (the tcDebug park command) picks
 -- a random free spot rather than the first, still in rank order.
 function TCParking.findSpot(vehicle, farmId, isRandom)
     local width, length, widthOffset, lengthOffset, height = getFootprint(vehicle)

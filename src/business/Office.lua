@@ -693,7 +693,7 @@ function TheContractorOffice.registerConsoleCommands()
         end,
     })
 
-    TCConsole.register("company", "officeLevel", {
+    TCConsole.register("debug", "officeLevel", {
         args = "<administrator> <1-3>",
         description = "Set an office role's level (and salary) now, ending any course",
         run = function(farmId, args)

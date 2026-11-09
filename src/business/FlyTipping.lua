@@ -52,7 +52,7 @@ TheContractorFlyTipping.NAMED_BODY_KEYS.tc_flyTipping_roadsideOfferBody = true
 
 -- 148: the share of hits that go to a verge rather than a field.
 TheContractorFlyTipping.ROADSIDE_SHARE = 0.5
--- The console's names for the two (tcCompany event flyTipping [field|road]).
+-- The console's names for the two (tcEvent trigger flyTipping [field|road]).
 TheContractorFlyTipping.SITES = { field = "field", road = "road" }
 
 -- About one every couple of years, like joyriders: it's the area's fields
@@ -117,8 +117,9 @@ function TheContractorFlyTipping:register(randomEvents, inbox)
         canTrigger = function(farmId)
             return self:pick(farmId, math.random)
         end,
-        -- tcCompany event flyTipping [field|road]
+        -- tcEvent trigger flyTipping [field|road]
         console = {
+            details = "[field|road]",
             prepareTrigger = function(farmId, details, context)
                 return self:prepareConsole(details)
             end,
@@ -168,7 +169,7 @@ function TheContractorFlyTipping:pickField(farmId)
     return { fieldId = fields[math.random(1, #fields)]:getId() }
 end
 
--- tcCompany event flyTipping [field|road]. Returns nil, or an error.
+-- tcEvent trigger flyTipping [field|road]. Returns nil, or an error.
 function TheContractorFlyTipping:prepareConsole(details)
     local site = details[1] ~= nil and TheContractorFlyTipping.SITES[string.lower(details[1])] or nil
     if #details > 1 or (details[1] ~= nil and site == nil) then

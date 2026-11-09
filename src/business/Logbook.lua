@@ -1882,6 +1882,7 @@ function TheContractorLogbook.registerConsoleCommands()
         args = "[jobId]",
         description = "Show a job's logbook entry, or list the last 10",
         serverOnly = false,
+        hints = { jobId = "a logged job's id (tcJob log on its own lists the last 10)" },
         run = function(farmId, args)
             local logbook = g_currentMission.TheContractor.Logbook
             if args[1] ~= nil then
@@ -1913,8 +1914,9 @@ function TheContractorLogbook.registerConsoleCommands()
 
     TCConsole.register("company", "vehicleLog", {
         args = "<vehicle>",
-        description = "Show a vehicle's logbook history for the last year (name, or part of it)",
+        description = "Show a vehicle's logbook history for the last year",
         serverOnly = false,
+        hints = { vehicle = "any part of its name, case-insensitive; only vehicles in your farm's logbook" },
         run = function(farmId, args)
             if args[1] == nil then
                 return false

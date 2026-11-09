@@ -118,7 +118,7 @@ function TheContractorYardBales.new()
     local self = {}
     setmetatable(self, TheContractorYardBales_mt)
 
-    -- Server: tcCompany event yardBales [straw|hay|silage] [farmer], for one trigger.
+    -- Server: tcEvent trigger yardBales [straw|hay|silage] [farmer], for one trigger.
     self.forcedFillTypeName = nil
     self.forcedFarmerId = nil
     -- Every machine with a player: jobId -> { node, sharedLoadRequestId, x,
@@ -149,6 +149,7 @@ function TheContractorYardBales:register(randomEvents, inbox)
             end },
         },
         console = {
+            details = "[straw|hay|silage] [farmer]",
             prepareTrigger = function(farmId, details)
                 return self:prepareTrigger(details)
             end,
@@ -542,7 +543,7 @@ function TheContractorYardBales:prepareTrigger(details)
         end
     end
     self.forcedFillTypeName = nil
-    return "Usage: tcCompany event yardBales [straw|hay|silage] [farmer id or name] (tcCompany farmers lists them)"
+    return "Usage: tcEvent trigger yardBales [straw|hay|silage] [farmer id or name] (tcFarmer list)"
 end
 
 -- The drop area (server) -----------------------------------------------------------------

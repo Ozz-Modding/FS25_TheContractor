@@ -1,7 +1,7 @@
 -- A farmland's yard override (108). Client -> server (117, the map's
 -- Set/Unset as farmer yard): the server checks the sender is the host or
--- an admin and the farmland and mode are real, then sets it as tcCompany
--- yard does. Server -> client: the server has set it (TheContractorYards:
+-- an admin and the farmland and mode are real, then sets it as tcYard
+-- set does. Server -> client: the server has set it (TheContractorYards:
 -- setOverride) and the clients apply it.
 
 TCYardOverrideEvent = {}

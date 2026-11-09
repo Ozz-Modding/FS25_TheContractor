@@ -571,7 +571,7 @@ function TCADSRepairContracts.getToolNames(toolIds)
     return table.concat(names, ", ")
 end
 
--- One line for tcJob repairStatus.
+-- One line for tcDebug repairStatus.
 function TCADSRepairContracts.describe()
     if TCADSRepairContracts.getEnv() == nil then
         return "ADS repair contracts: ADS not loaded"

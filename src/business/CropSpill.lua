@@ -87,7 +87,7 @@ function TheContractorCropSpill:register(inbox)
     })
 end
 
--- 105's console: tcCompany outcome tippedTrailer claim|noClaim.
+-- 105's console: tcDebug outcome tippedTrailer claim|noClaim.
 function TheContractorCropSpill:setForcedClaim(isClaim)
     self.forcedClaim = isClaim
 end

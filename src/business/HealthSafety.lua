@@ -89,7 +89,7 @@ end
 
 -- Inspections (server-only) ------------------------------------------------------
 
--- A worker on the farm has just fallen sick. force (tcWorker sick ... inspect)
+-- A worker on the farm has just fallen sick. force (tcDebug sick ... inspect)
 -- skips the roll, but never fines a farm that has the programme.
 function TheContractorHealthSafety:onWorkerFellSick(farmId, worker, force)
     if not g_currentMission:getIsServer() or self:isActive(farmId) then

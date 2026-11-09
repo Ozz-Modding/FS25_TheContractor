@@ -346,7 +346,7 @@ end
 
 -- Console ---------------------------------------------------------------------
 
--- tcCompany farmers standing: where each farmer is now, and why anyone
+-- tcDebug farmerStanding: where each farmer is now, and why anyone
 -- isn't in their yard.
 function TCYardFarmers.describe()
     local mission = g_currentMission

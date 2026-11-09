@@ -1011,7 +1011,7 @@ end
 
 local getModelName = TheContractorFarmerFleet.getModelName
 
--- tcCompany farmers fleet [farmer]: each farmer's machines.
+-- tcFarmer fleet [farmer]: each farmer's machines.
 function TheContractorFarmerFleet.getListText(wanted)
     local tc = g_currentMission.TheContractor
     local environment = g_currentMission.environment
@@ -1035,7 +1035,7 @@ function TheContractorFarmerFleet.getListText(wanted)
         end
     end
     if #lines == 0 then
-        return wanted ~= nil and string.format("No farmer %s (tcCompany farmers lists them).", wanted) or
+        return wanted ~= nil and string.format("No farmer %s (tcFarmer list).", wanted) or
             "No farmers yet."
     end
     return table.concat(lines, "\n")

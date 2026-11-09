@@ -33,7 +33,7 @@
 -- out (splitLiveMap leaves it out).
 --
 -- Nothing here is saved or synced: 110's TheContractorFarmers runs the
--- split once and keeps the result, and tcCompany farmers preview|show
+-- split once and keeps the result, and tcFarmer preview|show
 -- previews a split and marks it on this machine's map.
 
 TheContractorFarmerSplit = {}
@@ -588,7 +588,7 @@ function TheContractorFarmerSplit.getPreviewText(result, targetAcres, seed, farm
     return table.concat(lines, "\n")
 end
 
--- tcCompany farmers preview|show|hide (110 registers the command, which
+-- tcFarmer preview|show|hide (110 registers the command, which
 -- also lists and regenerates the real farmers). Returns the text, or false
 -- for bad arguments.
 function TheContractorFarmerSplit.runPreview(mode, args)
@@ -608,7 +608,7 @@ function TheContractorFarmerSplit.runPreview(mode, args)
     local text = S.getPreviewText(result, targetAcres, seed, #farmlands, #yards)
     if mode == "show" then
         local count = S.showMarkers(result, farmlands, yards)
-        text = text .. string.format("\nMarked %d place(s) on the map. tcCompany farmers hide to clear.", count)
+        text = text .. string.format("\nMarked %d place(s) on the map. tcFarmer hide to clear.", count)
     end
     return text
 end

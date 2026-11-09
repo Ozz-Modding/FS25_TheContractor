@@ -103,7 +103,7 @@ function TheContractorYardHaul.new()
     local self = {}
     setmetatable(self, TheContractorYardHaul_mt)
 
-    -- Server: tcCompany event yardHaul [crop] [reason] [farmer], for one
+    -- Server: tcEvent trigger yardHaul [crop] [reason] [farmer], for one
     -- trigger.
     self.forcedFillTypeName = nil
     self.forcedReason = nil
@@ -132,6 +132,7 @@ function TheContractorYardHaul:register(randomEvents, inbox)
             end },
         },
         console = {
+            details = "[crop] [injured|sick|left] [farmer]",
             prepareTrigger = function(farmId, details)
                 return self:prepareTrigger(details)
             end,
@@ -602,7 +603,7 @@ function TheContractorYardHaul:prepareTrigger(details)
         end
     end
     self.forcedFillTypeName, self.forcedReason = nil, nil
-    return "Usage: tcCompany event yardHaul [crop] [injured|sick|left] [farmer id or name] (tcCompany farmers lists them)"
+    return "Usage: tcEvent trigger yardHaul [crop] [injured|sick|left] [farmer id or name] (tcFarmer list)"
 end
 
 -- Pricing (server) ----------------------------------------------------------------------

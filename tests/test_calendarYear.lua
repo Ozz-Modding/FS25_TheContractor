@@ -63,3 +63,35 @@ test("the Finances year's totals run January to December", function()
     assertEquals(finances:getYearStats(1).year, 2)
     assertEquals(finances:getYearStats(1).wages, 50, "not reset in March")
 end)
+
+test("months are vanilla's: period 1 is March, six months on for a southern map", function()
+    setup()
+    assertEquals(TCCalendar.getMonth(1, false), 3)
+    assertEquals(TCCalendar.getMonth(11, false), 1)
+    assertEquals(TCCalendar.getMonth(1, true), 9)
+    assertEquals(TCCalendar.getMonth(5, true), 1)
+    assertEquals(TCCalendar.getMonth(12, true), 8)
+end)
+
+test("the month follows the map's latitude", function()
+    setup()
+    local environment = g_currentMission.environment
+    assertEquals(TCCalendar.getMonthTextKey(1), "ui_month3", "no daylight: northern")
+    environment.daylight = { latitude = 50 }
+    assertEquals(TCCalendar.getMonthTextKey(13), "ui_month3")
+    environment.daylight = { latitude = -35 }
+    assertEquals(TCCalendar.getMonthTextKey(1), "ui_month9")
+    assertEquals(TCCalendar.getMonthTextKey(16), "ui_month12")
+end)
+
+test("on a southern map the game year starts in September, so January to August show the next year", function()
+    setup()
+    g_currentMission.environment.daylight = { latitude = -35 }
+    assertEquals(TCCalendar.getDisplayYear(1, 1), 1, "September")
+    assertEquals(TCCalendar.getDisplayYear(1, 4), 1, "December")
+    assertEquals(TCCalendar.getDisplayYear(1, 5), 2, "January")
+    assertEquals(TCCalendar.getDisplayYear(1, 12), 2, "August")
+    assertEquals(TCCalendar.getDisplayYear(2, 1), 2, "the next September")
+    assertEquals(TCCalendar.getDisplayYearOfPeriodIndex(16), 2, "December, year 2")
+    assertEquals(TCCalendar.getDisplayYearOfPeriodIndex(17), 3, "January, year 2")
+end)

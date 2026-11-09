@@ -43,7 +43,7 @@ function TheContractorFarmerLandChanges.new()
     local self = {}
     setmetatable(self, TheContractorFarmerLandChanges_mt)
 
-    -- Set by the console (tcCompany event) around its trigger.
+    -- Set by the console (tcEvent trigger) around its trigger.
     self.forcedReason = nil
     self.forcedFarmerId = nil
     self.forceRetirement = false
@@ -63,8 +63,9 @@ function TheContractorFarmerLandChanges:register(randomEvents, inbox)
         canTrigger = function(farmId)
             return self:pickSale()
         end,
-        -- tcCompany event fieldSold [retiring|selling|bereavement] [farmer]
+        -- tcEvent trigger fieldSold [retiring|selling|bereavement] [farmer]
         console = {
+            details = "[retiring|selling|bereavement] [farmer]",
             prepareTrigger = function(farmId, details)
                 return self:prepareTrigger(details, true)
             end,
@@ -91,8 +92,9 @@ function TheContractorFarmerLandChanges:register(randomEvents, inbox)
         canTrigger = function(farmId)
             return self:pickRetirement()
         end,
-        -- tcCompany event farmerRetirement [farmer], setting on or off.
+        -- tcEvent trigger farmerRetirement [farmer], setting on or off.
         console = {
+            details = "[farmer]",
             prepareTrigger = function(farmId, details)
                 self.forceRetirement = true
                 return self:prepareTrigger(details, false)
@@ -324,7 +326,7 @@ end
 function TheContractorFarmerLandChanges:readInitialClientState(streamId, connection)
 end
 
--- Console (068's tcCompany event, server) -------------------------------------------
+-- Console (068's tcEvent trigger, server) -------------------------------------------
 
 -- details: a reason (fieldSold only) and a farmer's id or full name, in
 -- any order. Sets them for the trigger, or returns the usage.
@@ -356,9 +358,9 @@ function TheContractorFarmerLandChanges:prepareTrigger(details, withReason)
     end
     self:clearTrigger()
     if withReason then
-        return "Usage: tcCompany event fieldSold [retiring|selling|bereavement] [farmer id or name] (tcCompany farmers lists them)"
+        return "Usage: tcEvent trigger fieldSold [retiring|selling|bereavement] [farmer id or name] (tcFarmer list)"
     end
-    return "Usage: tcCompany event farmerRetirement [farmer id or name] (tcCompany farmers lists them)"
+    return "Usage: tcEvent trigger farmerRetirement [farmer id or name] (tcFarmer list)"
 end
 
 function TheContractorFarmerLandChanges:clearTrigger()

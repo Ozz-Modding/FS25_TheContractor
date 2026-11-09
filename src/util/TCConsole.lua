@@ -1,17 +1,19 @@
 -- Console commands. Everything the mod offers in the developer console is
--- a subcommand of one of a few group commands (tcWorker, tcJob, tcFinance,
--- tcCompany), and tcHelp lists the groups. tcLog, which toggles TCLog's
--- detailed log, is the one other top-level command. Typing a group on its own (or
+-- a subcommand of a group command (GROUPS below: tcWorker, tcJob, tcEvent,
+-- ...), and tcHelp lists the groups. tcLog, which toggles TCLog's detailed
+-- log, is the one other top-level command. Typing a group on its own (or
 -- with "help") lists its subcommands with their arguments, so players can
--- find their way around without the docs. docs/commands.md has the detail.
+-- find their way around without the docs. docs/commands.md has the detail
+-- (docs/debug-commands.md for tcDebug).
 --
 -- Each subsystem registers its own subcommands at load, from a static
 -- registerConsoleCommands() called in main.lua's loadMap:
 --
---   TCConsole.register("worker", "sick", {
---       args = "<worker> [inspect]",
---       description = "Make a worker fall sick now",
+--   TCConsole.register("worker", "duty", {
+--       args = "<worker> <hour|home>",
+--       description = "Keep a worker on until an hour, or send them home",
 --       serverOnly = true,          -- default true; false for read-only ones
+--       hints = { ... },            -- optional, overrides HINTS for this one
 --       run = function(farmId, args, context) ... end,
 --   })
 --
@@ -19,6 +21,20 @@
 -- as strings and the context (below), and returns the text to print, or
 -- false for bad arguments (the subcommand's usage is printed instead). Help,
 -- usage and "unknown subcommand" messages are all built from these entries.
+--
+-- Discoverability: nothing a command takes should need the docs to find.
+-- An argument that's an id or a name from a list (<worker>, <jobId>,
+-- <farmer>) has a hint naming the list command that shows them, and one
+-- that's a set of names lists them: a short set inline in args (<on|off>),
+-- a long or live one (<jobType>, <eventType>) as a hint that lists it.
+-- Hints are registered with registerHint (or a def's own hints), keyed by
+-- the word in args, and printed under the usage and the group's help.
+-- tests/test_console.lua checks every id-like argument has one.
+--
+-- tcDebug is the testing group: spikes, forced rolls and readouts of what
+-- players never see. It's only installed on a machine with DEBUG_FILENAME
+-- in its modSettings folder (and a joined admin's request runs only if the
+-- server has it too), so a release never shows it.
 --
 -- Commands aren't cheat-gated: they're there for players to shape their
 -- game. Anything that changes state is server-only, since the subsystems
@@ -41,33 +57,58 @@ TCConsole = {}
 
 TCConsole.HELP_COMMAND = "tcHelp"
 TCConsole.LOG_COMMAND = "tcLog"
-TCConsole.LOG_DESCRIPTION = "Toggle the mod's detailed log on this machine (off by default)"
+TCConsole.LOG_DESCRIPTION = "Toggle the mod's detailed log on this machine (on by default)"
+
+-- The marker file that unlocks tcDebug, in this machine's modSettings folder.
+TCConsole.DEBUG_FILENAME = "tcDebug.txt"
+TCConsole.settingsDir = g_currentModSettingsDirectory
 
 -- In tcHelp's order.
 TCConsole.GROUPS = {
-    { key = "worker", command = "tcWorker", description = "Hire, list and change your staff" },
-    { key = "job", command = "tcJob", description = "Offer, create and force jobs" },
-    { key = "finance", command = "tcFinance", description = "Invoices, claims and botched jobs" },
-    { key = "company", command = "tcCompany", description = "Reputation, Overview notices and random events" },
+    { key = "worker", command = "tcWorker", description = "Hire, list and manage your staff" },
+    { key = "job", command = "tcJob", description = "List, offer, create and force jobs" },
+    { key = "finance", command = "tcFinance", description = "Your claims and machinery insurance" },
+    { key = "company", command = "tcCompany", description = "Reputation, notices, the office, storages and vehicle history" },
+    { key = "event", command = "tcEvent", description = "Random events: their odds, and making one happen" },
+    { key = "farmer", command = "tcFarmer", description = "The map's farmers: who they are, their machines, your relationships, a new land split" },
+    { key = "yard", command = "tcYard", description = "Farm yards: list them, check a farmland, mark them on the map, override detection" },
+    { key = "auction", command = "tcAuction", description = "The machinery auction: see it, announce one, call it off" },
+    { key = "debug", command = "tcDebug", description = "Testing tools: spikes, forced rolls and hidden state", debugOnly = true },
 }
 
--- groups[key] = { key, command, description, order = { names }, subcommands = { [lowerName] = def } }
+-- groups[key] = { key, command, description, debugOnly, order = { names }, subcommands = { [lowerName] = def } }
 TCConsole.groups = {}
+-- hints[word] = text, or a function returning it (for a live list).
+TCConsole.hints = {}
 TCConsole.installed = false
+TCConsole.debugEnabled = false
 
 -- Every loadMap, before the subsystems register: drops the last save's entries.
 function TCConsole.reset()
     TCConsole.uninstall()
     TCConsole.groups = {}
+    TCConsole.hints = {}
     for _, group in ipairs(TCConsole.GROUPS) do
         TCConsole.groups[group.key] = {
             key = group.key,
             command = group.command,
             description = group.description,
+            debugOnly = group.debugOnly == true,
             order = {},
             subcommands = {},
         }
     end
+    TCConsole.debugEnabled = TCConsole.readDebugEnabled()
+end
+
+function TCConsole.readDebugEnabled()
+    local dir = TCConsole.settingsDir
+    return dir ~= nil and fileExists ~= nil and fileExists(dir .. TCConsole.DEBUG_FILENAME) == true
+end
+
+-- Whether this machine has a group: tcDebug only with its marker file.
+function TCConsole.isGroupEnabled(group)
+    return not group.debugOnly or TCConsole.debugEnabled
 end
 
 function TCConsole.register(groupKey, name, def)
@@ -83,6 +124,12 @@ function TCConsole.register(groupKey, name, def)
     end
     table.insert(group.order, name)
     group.subcommands[string.lower(name)] = def
+end
+
+-- Where to find what an argument word takes (see the header). text is a
+-- string, or a function returning one for a list that's only known live.
+function TCConsole.registerHint(word, text)
+    TCConsole.hints[word] = text
 end
 
 -- Installing --------------------------------------------------------------------
@@ -105,11 +152,14 @@ function TCConsole.install()
 
     for _, groupInfo in ipairs(TCConsole.GROUPS) do
         local group = TCConsole.groups[groupInfo.key]
-        addConsoleCommand(group.command, group.description .. ". Type it on its own to list subcommands.", "run", {
-            run = function(_, ...)
-                return TCConsole.dispatch(group, { ... })
-            end,
-        })
+        if TCConsole.isGroupEnabled(group) then
+            addConsoleCommand(group.command, group.description .. ". Type it on its own to list subcommands.", "run", {
+                run = function(_, ...)
+                    return TCConsole.dispatch(group, { ... })
+                end,
+            })
+            group.installed = true
+        end
     end
 
     TCConsole.installed = true
@@ -123,7 +173,11 @@ function TCConsole.uninstall()
     removeConsoleCommand(TCConsole.HELP_COMMAND)
     removeConsoleCommand(TCConsole.LOG_COMMAND)
     for _, groupInfo in ipairs(TCConsole.GROUPS) do
-        removeConsoleCommand(groupInfo.command)
+        local group = TCConsole.groups[groupInfo.key]
+        if group ~= nil and group.installed then
+            removeConsoleCommand(groupInfo.command)
+            group.installed = false
+        end
     end
     TCConsole.installed = false
 end
@@ -133,7 +187,10 @@ end
 function TCConsole.getHelpText()
     local lines = { "The Contractor console commands:" }
     for _, groupInfo in ipairs(TCConsole.GROUPS) do
-        table.insert(lines, string.format("  %-11s %s", groupInfo.command, groupInfo.description))
+        local group = TCConsole.groups[groupInfo.key]
+        if group == nil or TCConsole.isGroupEnabled(group) then
+            table.insert(lines, string.format("  %-11s %s", groupInfo.command, groupInfo.description))
+        end
     end
     table.insert(lines, string.format("  %-11s %s", TCConsole.LOG_COMMAND, TCConsole.LOG_DESCRIPTION))
     table.insert(lines, "Type a command on its own to see what it can do, e.g. tcWorker")
@@ -148,22 +205,73 @@ function TCConsole.getUsage(group, def)
     return usage
 end
 
+-- The words in an args string, in order, each once (the hints' keys).
+function TCConsole.getArgWords(args)
+    local words, seen = {}, {}
+    for word in string.gmatch(args or "", "%a[%w_]*") do
+        if not seen[word] then
+            seen[word] = true
+            table.insert(words, word)
+        end
+    end
+    return words
+end
+
+-- A word's hint for def (its own hints first), or nil.
+function TCConsole.getHint(word, def)
+    local hint = def ~= nil and def.hints ~= nil and def.hints[word] or nil
+    if hint == nil then
+        hint = TCConsole.hints[word]
+    end
+    if type(hint) == "function" then
+        hint = hint()
+    end
+    return hint
+end
+
+-- "  word: hint" lines for defs' args, each word once.
+function TCConsole.getHintLines(defs)
+    local lines, seen = {}, {}
+    for _, def in ipairs(defs) do
+        for _, word in ipairs(TCConsole.getArgWords(def.args)) do
+            local hint = not seen[word] and TCConsole.getHint(word, def) or nil
+            if hint ~= nil then
+                seen[word] = true
+                table.insert(lines, string.format("  %s: %s", word, hint))
+            end
+        end
+    end
+    return lines
+end
+
 function TCConsole.getGroupHelpText(group)
-    local usages, width = {}, 0
+    local usages, defs, width = {}, {}, 0
     for i, name in ipairs(group.order) do
-        usages[i] = TCConsole.getUsage(group, group.subcommands[string.lower(name)])
+        defs[i] = group.subcommands[string.lower(name)]
+        usages[i] = TCConsole.getUsage(group, defs[i])
         width = math.max(width, string.len(usages[i]))
     end
 
     local lines = { group.command .. ": " .. group.description }
-    local takesWorker = false
-    for i, name in ipairs(group.order) do
-        local def = group.subcommands[string.lower(name)]
+    for i, def in ipairs(defs) do
         table.insert(lines, string.format("  %-" .. width .. "s  %s", usages[i], def.description))
-        takesWorker = takesWorker or string.find(def.args, "<worker>", 1, true) ~= nil
     end
-    if takesWorker then
-        table.insert(lines, "<worker> is a worker's id or the start of their first or last name (tcWorker list shows both).")
+    local hintLines = TCConsole.getHintLines(defs)
+    if #hintLines > 0 then
+        table.insert(lines, "What they take:")
+        for _, line in ipairs(hintLines) do
+            table.insert(lines, line)
+        end
+    end
+    return table.concat(lines, "\n")
+end
+
+-- A subcommand's usage, description and hints: printed when its arguments
+-- are wrong or missing.
+function TCConsole.getUsageText(group, def)
+    local lines = { "Usage: " .. TCConsole.getUsage(group, def), def.description }
+    for _, line in ipairs(TCConsole.getHintLines({ def })) do
+        table.insert(lines, line)
     end
     return table.concat(lines, "\n")
 end
@@ -210,7 +318,7 @@ function TCConsole.execute(group, def, args, context)
 
     local result = def.run(context.farmId, subArgs, context)
     if result == false then
-        return string.format("Usage: %s\n%s", TCConsole.getUsage(group, def), def.description)
+        return TCConsole.getUsageText(group, def)
     end
     return result
 end
@@ -221,7 +329,7 @@ function TCConsole.runRequest(groupKey, args, context, connection)
     local group = TCConsole.groups[groupKey]
     local name = args[1]
     local def = group ~= nil and name ~= nil and group.subcommands[string.lower(name)] or nil
-    if def == nil then
+    if def == nil or not TCConsole.isGroupEnabled(group) then
         return "Error: the server doesn't know that command"
     end
     if not TheContractorSettings.getCanConnectionChange(connection) then

@@ -212,13 +212,6 @@ function TheContractorAuctions.getLeadChoices(period)
     return leads
 end
 
--- The month (1 to 12) a seasonal period is, as vanilla's I18N:formatPeriod
--- works it out: period 1 is March, six months on for a southern map.
-function TheContractorAuctions.getMonth(period, isSouthern)
-    local month = period + 2 + (isSouthern and 6 or 0)
-    return (month - 1) % 12 + 1
-end
-
 -- The state an auction should be in on a day at an hour (monotonic day,
 -- 0-23).
 function TheContractorAuctions.getStateFor(auction, today, hour)
@@ -568,7 +561,7 @@ function TheContractorAuctions:enterState(auction, state, target)
         if not passing then
             local period = select(1, TCCalendar.getDayInfo(auction.saleDay))
             period = (period - 1) % Environment.PERIODS_IN_YEAR + 1
-            tc.AuctionSigns:place(TheContractorAuctions.getMonth(period, TheContractorAuctions.isSouthern()))
+            tc.AuctionSigns:place(TCCalendar.getMonth(period))
         end
     elseif state == STATE.SET_OUT then
         if not passing then
@@ -586,12 +579,6 @@ function TheContractorAuctions:enterState(auction, state, target)
     elseif state == STATE.OVER then
         self:finish()
     end
-end
-
-function TheContractorAuctions.isSouthern()
-    local environment = g_currentMission.environment
-    return environment ~= nil and environment.daylight ~= nil and environment.daylight.latitude ~= nil and
-        environment.daylight.latitude < 0
 end
 
 -- Server: takes everything away: the lots still standing, the signs, the
@@ -903,7 +890,7 @@ end
 function TheContractorAuctions:describe()
     local auction = self.auction
     if auction == nil then
-        return "There's no auction announced. 'tcCompany auction start' announces one."
+        return "There's no auction announced. 'tcAuction start' announces one."
     end
     local farmers = g_currentMission.TheContractor.Farmers
     local host = farmers ~= nil and farmers:getPerson(auction.hostFarmerId) or nil
@@ -929,10 +916,10 @@ function TheContractorAuctions:describe()
     return table.concat(lines, "\n")
 end
 
--- tcCompany auction start [fieldId] [days].
+-- tcAuction start [fieldId] [days].
 function TheContractorAuctions:consoleStart(fieldId, days)
     if self.auction ~= nil then
-        return "There's an auction already: 'tcCompany auction cancel' first."
+        return "There's an auction already: 'tcAuction cancel' first."
     end
     local site = nil
     if fieldId ~= nil then
@@ -960,7 +947,7 @@ function TheContractorAuctions:consoleStart(fieldId, days)
     return self:describe()
 end
 
--- tcCompany auction day: the sale's today, the lots out now.
+-- tcDebug auctionDay: the sale's today, the lots out now.
 function TheContractorAuctions:consoleSaleDay()
     local auction = self.auction
     if auction == nil then
@@ -982,49 +969,88 @@ function TheContractorAuctions:consoleSaleDay()
 end
 
 function TheContractorAuctions.registerConsoleCommands()
-    TCConsole.register("company", "auction", {
-        args = "[start [fieldId|auto] [days]|day|cancel|lots|bid <lot> <amount|guide|off>|close [lot|all]]",
-        description = "The machinery auction: show it, announce one, jump to its sale day, cancel it; its lots, bids and closing",
-        run = function(farmId, args)
-            local auctions = g_currentMission.TheContractor.Auctions
-            local sub = args[1] ~= nil and string.lower(args[1]) or nil
-            if sub == nil then
-                return auctions:describe()
-            elseif sub == "start" then
-                -- "auto" picks the field by 135's rules, so days can still be given.
-                local isAuto = args[2] ~= nil and string.lower(args[2]) == "auto"
-                local fieldId = args[2] ~= nil and not isAuto and tonumber(args[2]) or nil
-                local days = args[3] ~= nil and tonumber(args[3]) or nil
-                if (args[2] ~= nil and not isAuto and fieldId == nil) or
-                        (args[3] ~= nil and (days == nil or days < 1)) or args[4] ~= nil then
-                    return false
-                end
-                return auctions:consoleStart(fieldId, days ~= nil and math.floor(days) or nil)
-            elseif sub == "day" and args[2] == nil then
-                return auctions:consoleSaleDay()
-            elseif sub == "cancel" and args[2] == nil then
-                if not auctions:cancel(true) then
-                    return "There's no auction announced."
-                end
-                return "Auction cancelled: everything's cleared away and every company told."
-            elseif sub == "lots" and args[2] == nil then
-                -- 139: the lots, their bids and (a tuning aid) the room's.
-                return g_currentMission.TheContractor.AuctionSale:describeLots()
-            elseif sub == "bid" then
-                local lotNumber = tonumber(args[2] or "")
-                local value = args[3] ~= nil and string.lower(args[3]) or nil
-                if lotNumber == nil or value == nil or args[4] ~= nil then
-                    return false
-                end
-                return g_currentMission.TheContractor.AuctionSale:consoleBid(farmId, math.floor(lotNumber), value)
-            elseif sub == "close" and args[3] == nil then
-                local which = args[2] ~= nil and string.lower(args[2]) or nil
-                if which ~= nil and which ~= "all" and tonumber(which) == nil then
-                    return false
-                end
-                return g_currentMission.TheContractor.AuctionSale:consoleClose(which)
+    TCConsole.registerHint("lot", "a lot's number (tcDebug auctionLots)")
+
+    TCConsole.register("auction", "status", {
+        description = "The auction, if there's one: its field, host, state, days and signs",
+        run = function()
+            return g_currentMission.TheContractor.Auctions:describe()
+        end,
+    })
+
+    -- "auto" picks the field by 135's rules, so days can still be given.
+    TCConsole.register("auction", "start", {
+        args = "[fieldId|auto] [days]",
+        description = "Announce an auction now: on a field or one picked for you, its sale in days or 2 to 4 months",
+        hints = { fieldId = "a field's number (tcAuction fields lists those that can hold a sale)" },
+        run = function(_, args)
+            local isAuto = args[1] ~= nil and string.lower(args[1]) == "auto"
+            local fieldId = args[1] ~= nil and not isAuto and tonumber(args[1]) or nil
+            local days = args[2] ~= nil and tonumber(args[2]) or nil
+            if (args[1] ~= nil and not isAuto and fieldId == nil) or
+                    (args[2] ~= nil and (days == nil or days < 1)) or args[3] ~= nil then
+                return false
             end
-            return false
+            return g_currentMission.TheContractor.Auctions:consoleStart(fieldId,
+                days ~= nil and math.floor(days) or nil)
+        end,
+    })
+
+    TCConsole.register("auction", "cancel", {
+        description = "Call the auction off: lots already won are delivered, the rest cleared away",
+        run = function()
+            if not g_currentMission.TheContractor.Auctions:cancel(true) then
+                return "There's no auction announced."
+            end
+            return "Auction cancelled: everything's cleared away and every company told."
+        end,
+    })
+
+    -- 135's candidates, for tcAuction start's fieldId.
+    TCConsole.register("auction", "fields", {
+        description = "The fields that could hold an auction, best first",
+        run = function()
+            return g_currentMission.TheContractor.AuctionSite:getListText(TheContractorAuctionSite.PREFERRED_LOTS)
+        end,
+    })
+
+    TCConsole.register("debug", "auctionDay", {
+        description = "Make today the auction's sale day: lots out now, bidding from 08:00",
+        run = function()
+            return g_currentMission.TheContractor.Auctions:consoleSaleDay()
+        end,
+    })
+
+    -- 139: the lots, their bids and (a tuning aid) the room's.
+    TCConsole.register("debug", "auctionLots", {
+        description = "Every lot out: guide, closing time, the room's hidden bid, result and every farm's bid",
+        run = function()
+            return g_currentMission.TheContractor.AuctionSale:describeLots()
+        end,
+    })
+
+    TCConsole.register("debug", "auctionBid", {
+        args = "<lot> <amount|guide|off>",
+        description = "Leave a bid on a lot for your farm, as the lot's card does, or withdraw it",
+        run = function(farmId, args)
+            local lotNumber = tonumber(args[1] or "")
+            local value = args[2] ~= nil and string.lower(args[2]) or nil
+            if lotNumber == nil or value == nil or args[3] ~= nil then
+                return false
+            end
+            return g_currentMission.TheContractor.AuctionSale:consoleBid(farmId, math.floor(lotNumber), value)
+        end,
+    })
+
+    TCConsole.register("debug", "auctionClose", {
+        args = "[lot|all]",
+        description = "Close the next open lot now, that lot, or every one, and settle it",
+        run = function(_, args)
+            local which = args[1] ~= nil and string.lower(args[1]) or nil
+            if args[2] ~= nil or (which ~= nil and which ~= "all" and tonumber(which) == nil) then
+                return false
+            end
+            return g_currentMission.TheContractor.AuctionSale:consoleClose(which)
         end,
     })
 end

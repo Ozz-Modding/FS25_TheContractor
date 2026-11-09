@@ -244,6 +244,7 @@ end
 -- Console commands (tcCompany - see TCConsole) -----------------------------------------
 
 function TheContractorNotices.registerConsoleCommands()
+    TCConsole.registerHint("noticeId", "a notice's id (tcCompany notices)")
     -- The board doesn't show ids, and removeNotice needs one. Read-only.
     TCConsole.register("company", "notices", {
         description = "The notices on your Overview board, with their ids",
@@ -281,7 +282,7 @@ function TheContractorNotices.registerConsoleCommands()
 
     TCConsole.register("company", "removeNotice", {
         args = "<noticeId>",
-        description = "Take a notice off the board (tcCompany notices shows the ids)",
+        description = "Take a notice off the board",
         run = function(farmId, args)
             local noticeId = tonumber(args[1])
             if noticeId == nil then

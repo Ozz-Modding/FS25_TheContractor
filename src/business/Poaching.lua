@@ -81,7 +81,7 @@ function TheContractorPoaching.new()
     local self = {}
     setmetatable(self, TheContractorPoaching_mt)
 
-    -- tcCompany event poaching <worker>: the worker it goes after. tcCompany
+    -- tcEvent trigger poaching <worker>: the worker it goes after. tcDebug
     -- outcome poaching: true/false for the next "do nothing" decision. Both
     -- server-only, not saved.
     self.forcedWorkerId = nil
@@ -104,9 +104,10 @@ function TheContractorPoaching:register(randomEvents, inbox)
         canTrigger = function(farmId)
             return self:pickTarget(farmId, math.random(), math.random())
         end,
-        -- tcCompany event poaching [worker], tcCompany outcome poaching
+        -- tcEvent trigger poaching [worker], tcDebug outcome poaching
         -- <stays|leaves>.
         console = {
+            details = "[worker]",
             prepareTrigger = function(farmId, details)
                 return self:prepareConsoleTarget(farmId, details[1])
             end,
@@ -435,7 +436,7 @@ end
 function TheContractorPoaching:readInitialClientState(streamId, connection)
 end
 
--- Console (068's tcCompany event) ---------------------------------------------------
+-- Console (068's tcEvent trigger) ---------------------------------------------------
 
 -- A worker named: sets forcedWorkerId, or returns why not. None: the usual
 -- pick.

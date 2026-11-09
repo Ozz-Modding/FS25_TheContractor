@@ -853,7 +853,7 @@ end
 
 function TheContractorHolidays.registerConsoleCommands()
     -- 089.
-    TCConsole.register("worker", "holidayRequest", {
+    TCConsole.register("debug", "holidayRequest", {
         description = "A worker asks for a holiday now, as the daily roll would (whoever's been refused most first)",
         run = function(farmId, args)
             local holidays = g_currentMission.TheContractor.Holidays

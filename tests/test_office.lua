@@ -393,15 +393,15 @@ test("ADS is told the receptionist, and training", function()
     assertEquals(TCADSWorkshop.hasPartsStorage(1), false, "no parts storage")
 end)
 
-test("tcCompany office and officeLevel register and run", function()
+test("tcCompany office and tcDebug officeLevel register and run", function()
     local world, tc = setup()
     world:load("src/util/TCConsole.lua")
     TCConsole.reset()
     TheContractorOffice.registerConsoleCommands()
     assertEquals(#world.warnings, 0, "no registration errors")
     local office = TCConsole.groups.company.subcommands.office
-    local officeLevel = TCConsole.groups.company.subcommands.officelevel
-    assertTrue(office ~= nil and officeLevel ~= nil, "both under tcCompany")
+    local officeLevel = TCConsole.groups.debug.subcommands.officelevel
+    assertTrue(office ~= nil and officeLevel ~= nil, "both registered")
 
     officeLevel.run(1, { "administrator", "2" })
     assertEquals(tc.Office:getMember(1, ADMIN), nil, "nobody to set")

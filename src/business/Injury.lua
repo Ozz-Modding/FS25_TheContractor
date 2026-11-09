@@ -52,7 +52,7 @@ function TheContractorInjury.new()
     local self = {}
     setmetatable(self, TheContractorInjury_mt)
 
-    -- tcCompany event injury: its pick takes anyone who could be hurt, at
+    -- tcEvent trigger injury: its pick takes anyone who could be hurt, at
     -- work or not, since it ignores the hour. Server-only, not saved.
     self.fromConsole = false
 
@@ -73,7 +73,7 @@ function TheContractorInjury:register(randomEvents, inbox)
         canTrigger = function(farmId)
             return self:pickInjury(farmId, math.random(), math.random(), math.random())
         end,
-        -- tcCompany event injury, no details.
+        -- tcEvent trigger injury, no details.
         console = {
             prepareTrigger = function(farmId, details)
                 if #details > 0 then

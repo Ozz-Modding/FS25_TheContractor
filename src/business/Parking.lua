@@ -644,10 +644,10 @@ function TheContractorParking:resolveSavedVehicles()
     self:removeFinishedBatchMessages()
 end
 
--- Console commands (tcJob park - see TCConsole) --------------------------------
+-- Console commands (tcDebug park - see TCConsole) --------------------------------
 
 function TheContractorParking.registerConsoleCommands()
-    TCConsole.register("job", "park", {
+    TCConsole.register("debug", "park", {
         description = "Park the vehicle you're in: a random free parking slot, or the parking queue if none is free",
         run = function(farmId, args, context)
             local vehicle = TCConsole.getVehicle(context)

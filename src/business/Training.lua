@@ -582,7 +582,7 @@ function TheContractorTraining:canRequest(worker, cert)
         self:findMessage(worker.farmId, worker.id) == nil
 end
 
--- Also the tcWorker askTraining console command's way in.
+-- Also the tcDebug askTraining console command's way in.
 function TheContractorTraining:postRequest(farmId, worker, cert)
     local price = TheContractorTraining.getPrice(farmId, worker, cert)
     local isRetake = TheContractorTraining.isRetake(worker, cert)
@@ -856,7 +856,7 @@ function TheContractorTraining.registerConsoleCommands()
 
             local cert = "spraying"
             if worker:hasCertification(cert) then
-                return string.format("%s is already certified (tcWorker certify %d off to take it away)", worker.name,
+                return string.format("%s is already certified (tcWorker certify %d off takes it away)", worker.name,
                     worker.id)
             end
             if worker:hasTrainingBooked() then
@@ -874,7 +874,7 @@ function TheContractorTraining.registerConsoleCommands()
         end,
     })
 
-    TCConsole.register("worker", "askTraining", {
+    TCConsole.register("debug", "askTraining", {
         args = "<worker>",
         description = "Make a worker ask for spraying training through the inbox now",
         run = function(farmId, args)

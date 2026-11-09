@@ -819,12 +819,12 @@ function TheContractorFinances:readInitialClientState(streamId, connection)
     end
 end
 
--- Console commands (tcFinance - see TCConsole) -----------------------------------------
+-- Console commands (tcDebug - see TCConsole) -----------------------------------------
 
 function TheContractorFinances.registerConsoleCommands()
     -- Server-only, since it shows what clients never get: when (or whether)
     -- each invoice will really be paid.
-    TCConsole.register("finance", "invoices", {
+    TCConsole.register("debug", "invoices", {
         description = "Your invoices, with the hidden late/bad-debt rolls and pursuit details",
         run = function(farmId, args)
             local lines = { string.format("Farm %d invoices (today is day %d):", farmId,

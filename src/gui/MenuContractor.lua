@@ -57,20 +57,8 @@ MenuContractor.HEADER_TITLES = {
     [MenuContractor.SUB_CATEGORY.WORKSHOP] = "tc_header_workshop",
 }
 
--- Same period->month convention as FS25_RedTape/src/RedTape.lua's
--- periodToMonth/monthToString (period 1 == March, wrapping 1-12) — there's
--- no other date-formatting precedent in this codebase yet, so this borrows
--- the sibling mod's directly rather than inventing a second convention.
-local function periodToMonth(period)
-    local month = period + 2
-    if month > 12 then
-        month = month - 12
-    end
-    return month
-end
-
 local function formatTargetDate(period, dayInPeriod)
-    return string.format("%s %d", g_i18n:getText("ui_month" .. periodToMonth(period)), dayInPeriod)
+    return string.format("%s %d", g_i18n:getText("ui_month" .. TCCalendar.getMonth(period)), dayInPeriod)
 end
 
 -- An absolute (monotonic) day, as formatTargetDate shows a job's due date.
@@ -84,7 +72,7 @@ end
 -- (environment.currentYear's count), and TCCalendar.formatYear shows
 -- January and February as the next one.
 local function formatCalendarDate(period, dayInPeriod, year)
-    return string.format("%s %d, %s", g_i18n:getText("ui_month" .. periodToMonth(period)), dayInPeriod,
+    return string.format("%s %d, %s", g_i18n:getText("ui_month" .. TCCalendar.getMonth(period)), dayInPeriod,
         TCCalendar.formatYear(year, period))
 end
 

@@ -19,15 +19,36 @@ function TCCalendar.getYearOfPeriodIndex(periodIndex)
     return math.floor((periodIndex - 1) / Environment.PERIODS_IN_YEAR) + 1
 end
 
--- The year to show for a date. The game's year runs March to February
--- (period 1 == March), so January and February (periods 11 and 12) still
--- carry the previous currentYear. Players read "January, Year 1" as coming
--- before March, Year 1, so those two months are shown as the next year, the
--- same as FS25_RedTape's getActualYear. Only for display: anything that
--- counts or compares game years (year-to-date stats, holiday allowance)
--- keeps currentYear.
+-- Whether the map is in the southern hemisphere (a negative latitude), as
+-- vanilla's I18N:formatPeriod decides it.
+function TCCalendar.isSouthern()
+    local environment = g_currentMission ~= nil and g_currentMission.environment or nil
+    return environment ~= nil and environment.daylight ~= nil and environment.daylight.latitude ~= nil and
+        environment.daylight.latitude < 0
+end
+
+-- The month (1 to 12) a seasonal period (1 to 12) is called, as vanilla's
+-- I18N:formatPeriod works it out: periods are seasons (period 1 is the
+-- first month of spring), so period 1 is March, or September on a southern
+-- map. isSouthern defaults to the current map's.
+function TCCalendar.getMonth(period, isSouthern)
+    if isSouthern == nil then
+        isSouthern = TCCalendar.isSouthern()
+    end
+    local month = period + 2 + (isSouthern and 6 or 0)
+    return (month - 1) % 12 + 1
+end
+
+-- The year to show for a date. The game's year starts at period 1 (March,
+-- or September on a southern map), so the months from January up to that
+-- start still carry the previous currentYear. Players read "January, Year 1"
+-- as coming before March, Year 1, so those months are shown as the next
+-- year, as FS25_RedTape's getActualYear does. Only for display: anything
+-- that counts or compares game years (year-to-date stats, holiday
+-- allowance) keeps currentYear.
 function TCCalendar.getDisplayYear(year, period)
-    if period > Environment.PERIODS_IN_YEAR - 2 then
+    local isSouthern = TCCalendar.isSouthern()
+    if TCCalendar.getMonth(period, isSouthern) < TCCalendar.getMonth(1, isSouthern) then
         return year + 1
     end
     return year
@@ -43,13 +64,11 @@ function TCCalendar.formatYear(year, period)
     return string.format(g_i18n:getText("tc_calendar_yearLabel"), TCCalendar.getDisplayYear(year, period))
 end
 
--- Same period->month mapping (period 1 == March) as MenuContractor's
--- periodToMonth. The key on its own is for text rendered elsewhere (051's
--- inbox message args).
+-- The month's text key, for a period index. The key on its own is for text
+-- rendered elsewhere (051's inbox message args).
 function TCCalendar.getMonthTextKey(periodIndex)
     local period = (periodIndex - 1) % Environment.PERIODS_IN_YEAR + 1
-    local month = (period + 1) % 12 + 1
-    return "ui_month" .. month
+    return "ui_month" .. TCCalendar.getMonth(period)
 end
 
 local function getMonthName(periodIndex)

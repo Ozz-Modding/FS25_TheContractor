@@ -400,7 +400,7 @@ test("tcWorker holidayRequest asks now, most-refused first, then books whatever"
     world.roll = 0.99
     TCConsole.reset()
     TheContractorHolidays.registerConsoleCommands()
-    local group = TCConsole.groups.worker
+    local group = TCConsole.groups.debug
 
     -- Ben's been refused once: he goes first, missed daily chance or not.
     ben.holidayDeclines = 1

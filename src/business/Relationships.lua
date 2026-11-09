@@ -524,7 +524,7 @@ function TheContractorRelationships:readInitialClientState(streamId, connection)
     end
 end
 
--- Console (tcCompany) -----------------------------------------------------------
+-- Console (tcFarmer) -----------------------------------------------------------
 
 -- A person by id or name (case-insensitive), or nil.
 local function findPerson(text)
@@ -562,27 +562,30 @@ function TheContractorRelationships:getListText(farmId)
 end
 
 function TheContractorRelationships.registerConsoleCommands()
-    TCConsole.register("company", "relationship", {
-        args = "[<person> <amount>]",
-        description = "List your farm's relationships with the farmers and the official, or change one",
+    TCConsole.register("farmer", "relationships", {
+        description = "Your farm's relationship with each farmer and the local official",
         serverOnly = false,
+        run = function(farmId)
+            return g_currentMission.TheContractor.Relationships:getListText(farmId)
+        end,
+    })
+
+    -- Through adjust, so word gets round as it would in the game.
+    TCConsole.register("farmer", "relationship", {
+        args = "<farmer> <amount>",
+        description = "Change your farm's relationship with a farmer or the official by an amount (can be negative)",
+        hints = { farmer = "a farmer's or the official's id or full name (tcFarmer relationships)" },
         run = function(farmId, args)
-            local relationships = g_currentMission.TheContractor.Relationships
-            if args[1] == nil then
-                return relationships:getListText(farmId)
-            end
             local amount = tonumber(args[#args])
             if #args < 2 or amount == nil then
                 return false
             end
-            local person = findPerson(table.concat(args, " ", 1, #args - 1))
+            local name = table.concat(args, " ", 1, #args - 1)
+            local person = findPerson(name)
             if person == nil then
-                return string.format("No farmer or official called %s.", table.concat(args, " ", 1, #args - 1))
+                return string.format("No farmer or official called %s (tcFarmer relationships lists them).", name)
             end
-            if not g_currentMission:getIsServer() then
-                return "Changing a relationship only works on the server (single player or the host)."
-            end
-            local score = relationships:adjust(farmId, person.id, amount, "console")
+            local score = g_currentMission.TheContractor.Relationships:adjust(farmId, person.id, amount, "console")
             return string.format("Farm %d's relationship with %s is now %d (%s).", farmId, person.name, score,
                 TheContractorRelationships.getBand(score).key)
         end,

@@ -115,7 +115,7 @@ TheContractorFallenTree.MAX_FIELD_DISTANCE = 2000
 TheContractorFallenTree.TREE_SEPARATION = 200
 TheContractorFallenTree.MAX_SPREAD = 1000
 
--- tcCompany event fallenTree here: this far ahead of the player.
+-- tcEvent trigger fallenTree here: this far ahead of the player.
 TheContractorFallenTree.FRONT_DISTANCE = 8
 
 TheContractorFallenTree.SPAWN_HEIGHT = 1
@@ -169,7 +169,7 @@ function TheContractorFallenTree.new()
     -- Server, not saved: incident id -> { [tree index] = clear checks in a
     -- row with nothing on its road }.
     self.clearCounts = {}
-    -- tcCompany event fallenTree here: the next one comes down in front of
+    -- tcEvent trigger fallenTree here: the next one comes down in front of
     -- the player. Server, not saved.
     self.consoleHere = false
 
@@ -191,8 +191,9 @@ function TheContractorFallenTree:register(randomEvents, inbox)
         canTrigger = function(farmId)
             return self:pickSpot(farmId, math.random)
         end,
-        -- tcCompany event fallenTree [here]
+        -- tcEvent trigger fallenTree [here]
         console = {
+            details = "[here]",
             prepareTrigger = function(farmId, details, context)
                 return self:prepareConsole(details, context)
             end,
@@ -317,7 +318,7 @@ function TheContractorFallenTree.getPlacement(roadX, roadZ, roadDirX, roadDirZ, 
     }
 end
 
--- tcCompany event fallenTree here: the player's view line is the road, the
+-- tcEvent trigger fallenTree here: the player's view line is the road, the
 -- point FRONT_DISTANCE ahead its middle, and the tree falls across it from
 -- their left.
 function TheContractorFallenTree.getHerePlacement(px, pz, faceX, faceZ)
@@ -520,7 +521,7 @@ function TheContractorFallenTree:hasOpenTree(farmId)
     return false
 end
 
--- tcCompany event fallenTree [here]. Returns nil, or an error. "here" keeps
+-- tcEvent trigger fallenTree [here]. Returns nil, or an error. "here" keeps
 -- where the typing player stands and looks (TCConsole's context).
 function TheContractorFallenTree:prepareConsole(details, context)
     if #details > 1 or (details[1] ~= nil and string.lower(details[1]) ~= "here") then
@@ -546,7 +547,7 @@ function TheContractorFallenTree:pickSpot(farmId, random)
 
     local count = T.TREES_MIN + math.min(T.TREES_MAX - T.TREES_MIN,
         math.floor(random() * (T.TREES_MAX - T.TREES_MIN + 1)))
-    -- tcCompany event fallenTree here: the first in front of the player,
+    -- tcEvent trigger fallenTree here: the first in front of the player,
     -- and that one will do on its own.
     local placements = {}
     local fewest = T.TREES_MIN

@@ -32,7 +32,7 @@
 -- again when a farmland's override changes, kept in memory (not saved) and
 -- sent to the clients (initial client state, TCYardSpotsEvent).
 --
--- tcCompany yards (and yard) is the spike's way in, with map markers on
+-- tcYard is the spike's way in, with map markers on
 -- this machine only. The host or an admin can also set or unset a yard
 -- from a farmland's box on the in-game map (117, TCYardMapAction).
 
@@ -43,7 +43,7 @@ TheContractorYards_mt = Class(TheContractorYards)
 TheContractorYards.MIN_BUILDINGS = 2
 
 -- Store categories (upper case, as vanilla keeps them) that count towards
--- a yard. A first cut: tcCompany yards lists every category it finds, so
+-- a yard. A first cut: tcYard list lists every category it finds, so
 -- this can be set from real maps.
 TheContractorYards.YARD_CATEGORIES = {
     SHEDS = true,
@@ -713,7 +713,7 @@ function overlapTarget.onOverlap(_, node)
     return false
 end
 
--- What an overlap hit, for tcCompany yards: its object's name (a
+-- What an overlap hit, for tcYard list: its object's name (a
 -- placeable's or vehicle's) and the node's.
 local function describeHit(node)
     local name = getName ~= nil and getName(node) or tostring(node)
@@ -1363,7 +1363,7 @@ function TheContractorYards.getFarmlandText(farmlandId, yards, nearMisses, exclu
     end
     if group == nil and #excluded == 0 then
         table.insert(lines, "No placeables stand on this farmland. Buildings built into the map's own scene " ..
-            "aren't placeables, so detection can't see them: declare it with tcCompany yard " .. farmlandId .. " on.")
+            "aren't placeables, so detection can't see them: declare it with tcYard set " .. farmlandId .. " on.")
     end
     if spots ~= nil then
         for _, line in ipairs(getSpotLines(spots, isServer)) do
@@ -1374,72 +1374,95 @@ function TheContractorYards.getFarmlandText(farmlandId, yards, nearMisses, exclu
 end
 
 function TheContractorYards.registerConsoleCommands()
-    TCConsole.register("company", "yards", {
-        args = "[farmlandId|here|show [farmlandId]|hide]",
-        description = "List the map's farm yards, check why a farmland is or isn't one, or mark yards on this machine's map",
-        serverOnly = false,
-        run = function(farmId, args, context)
-            local yardsSystem = g_currentMission.TheContractor.Yards
-            local first = args[1] ~= nil and string.lower(args[1]) or nil
-            if first == "show" then
-                local farmlandId = args[2] ~= nil and tonumber(args[2]) or nil
-                if args[2] ~= nil and farmlandId == nil then
-                    return false
-                end
-                local yardCount, spotCount, houseLines = yardsSystem:showMarkers(farmlandId)
-                if farmlandId ~= nil then
-                    if yardCount == 0 then
-                        yardsSystem:hideMarkers()
-                        return string.format("Farmland %d isn't a yard.", farmlandId)
-                    end
-                    local text = string.format("Marked yard %d and its %d spot(s). tcCompany yards hide to clear.",
-                        farmlandId, spotCount)
-                    if #houseLines > 0 then
-                        text = text .. "\nFarmhouses:\n" .. table.concat(houseLines, "\n")
-                    end
-                    return text
-                end
-                return string.format("Marked %d yard(s). tcCompany yards hide to clear.", yardCount)
-            elseif first == "hide" then
-                yardsSystem:hideMarkers()
-                return "Yard markers cleared."
-            end
+    TCConsole.registerHint("farmlandId", "a farmland's number, as the map shows it (tcYard list for the yards)")
 
-            local yards, nearMisses, categories = yardsSystem:getYards()
-            if first ~= nil then
-                local farmlandId
-                if first == "here" then
-                    if not TCConsole.hasPosition(context) then
-                        return "Error: no position for the current player"
-                    end
-                    farmlandId = g_farmlandManager:getFarmlandIdAtWorldPosition(context.x, context.z)
-                    if not g_farmlandManager:getIsValidFarmlandId(farmlandId) then
-                        return "You're not standing on a farmland."
-                    end
-                else
-                    farmlandId = tonumber(first)
-                    if farmlandId == nil then
-                        return false
-                    end
-                end
-                local spots = nil
-                for _, yard in ipairs(yards) do
-                    if yard.farmlandId == farmlandId then
-                        local tally = {}
-                        local kept, open = TheContractorYards.findSpots(yard, tally)
-                        local synced = yardsSystem:getSpots(farmlandId)
-                        spots = { kept = #kept, open = open, tally = tally,
-                            synced = synced ~= nil and #synced.spots or nil }
-                    end
-                end
-                return TheContractorYards.getFarmlandText(farmlandId, yards, nearMisses,
-                    yardsSystem:getMapExcludedOn(farmlandId), spots, g_currentMission:getIsServer())
-            end
+    TCConsole.register("yard", "list", {
+        description = "The map's farm yards, the farmlands that nearly are, and every building category seen",
+        serverOnly = false,
+        run = function()
+            local yards, nearMisses, categories = g_currentMission.TheContractor.Yards:getYards()
             return TheContractorYards.getListText(yards, nearMisses, categories, g_currentMission:getIsServer())
         end,
     })
 
-    TCConsole.register("company", "yard", {
+    TCConsole.register("yard", "check", {
+        args = "<farmlandId|here>",
+        description = "Why a farmland (or the one you're standing on) is or isn't a yard, and how its standing spots came out",
+        serverOnly = false,
+        run = function(_, args, context)
+            local yardsSystem = g_currentMission.TheContractor.Yards
+            if args[1] == nil then
+                return false
+            end
+            local farmlandId
+            if string.lower(args[1]) == "here" then
+                if not TCConsole.hasPosition(context) then
+                    return "Error: no position for the current player"
+                end
+                farmlandId = g_farmlandManager:getFarmlandIdAtWorldPosition(context.x, context.z)
+                if not g_farmlandManager:getIsValidFarmlandId(farmlandId) then
+                    return "You're not standing on a farmland."
+                end
+            else
+                farmlandId = tonumber(args[1])
+                if farmlandId == nil then
+                    return false
+                end
+            end
+
+            local yards, nearMisses = yardsSystem:getYards()
+            local spots = nil
+            for _, yard in ipairs(yards) do
+                if yard.farmlandId == farmlandId then
+                    local tally = {}
+                    local kept, open = TheContractorYards.findSpots(yard, tally)
+                    local synced = yardsSystem:getSpots(farmlandId)
+                    spots = { kept = #kept, open = open, tally = tally,
+                        synced = synced ~= nil and #synced.spots or nil }
+                end
+            end
+            return TheContractorYards.getFarmlandText(farmlandId, yards, nearMisses,
+                yardsSystem:getMapExcludedOn(farmlandId), spots, g_currentMission:getIsServer())
+        end,
+    })
+
+    TCConsole.register("yard", "show", {
+        args = "[farmlandId]",
+        description = "Circle every yard on this machine's map, or one yard and its standing spots and farmhouses",
+        serverOnly = false,
+        run = function(_, args)
+            local yardsSystem = g_currentMission.TheContractor.Yards
+            local farmlandId = args[1] ~= nil and tonumber(args[1]) or nil
+            if args[1] ~= nil and farmlandId == nil then
+                return false
+            end
+            local yardCount, spotCount, houseLines = yardsSystem:showMarkers(farmlandId)
+            if farmlandId ~= nil then
+                if yardCount == 0 then
+                    yardsSystem:hideMarkers()
+                    return string.format("Farmland %d isn't a yard (tcYard list shows them).", farmlandId)
+                end
+                local text = string.format("Marked yard %d and its %d spot(s). tcYard hide to clear.",
+                    farmlandId, spotCount)
+                if #houseLines > 0 then
+                    text = text .. "\nFarmhouses:\n" .. table.concat(houseLines, "\n")
+                end
+                return text
+            end
+            return string.format("Marked %d yard(s). tcYard hide to clear.", yardCount)
+        end,
+    })
+
+    TCConsole.register("yard", "hide", {
+        description = "Clear tcYard show's circles",
+        serverOnly = false,
+        run = function()
+            g_currentMission.TheContractor.Yards:hideMarkers()
+            return "Yard markers cleared."
+        end,
+    })
+
+    TCConsole.register("yard", "set", {
         args = "<farmlandId> <on|off|auto>",
         description = "Declare a farmland a yard, rule one out, or go back to detection",
         run = function(farmId, args)

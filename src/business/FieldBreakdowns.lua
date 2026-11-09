@@ -76,7 +76,7 @@ function TheContractorFieldBreakdowns.new()
     local self = {}
     setmetatable(self, TheContractorFieldBreakdowns_mt)
 
-    -- Server: tcCompany event fieldBreakdown <player|mobile>, for one trigger.
+    -- Server: tcEvent trigger fieldBreakdown <player|mobile>, for one trigger.
     self.forcedFieldService = nil
 
     return self
@@ -100,6 +100,7 @@ function TheContractorFieldBreakdowns:register(randomEvents)
             end },
         },
         console = {
+            details = "[player|mobile]",
             prepareTrigger = function(farmId, details)
                 return self:prepareTrigger(details)
             end,
@@ -204,7 +205,7 @@ function TheContractorFieldBreakdowns:prepareTrigger(details)
             return nil
         end
     end
-    return "Usage: tcCompany event fieldBreakdown [player|mobile]"
+    return "Usage: tcEvent trigger fieldBreakdown [player|mobile]"
 end
 
 -- Model and spot (server) ------------------------------------------------------------

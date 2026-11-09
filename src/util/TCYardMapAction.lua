@@ -12,7 +12,7 @@
 -- Overrides are server-wide (farmers are shared), so only the host or an
 -- admin sees it, as with the settings (048). It isn't shown on land a
 -- player owns, which is never a farmer's yard. A click asks the server
--- (TCYardOverrideEvent), which sets the override tcCompany yard would:
+-- (TCYardOverrideEvent), which sets the override tcYard set would:
 -- only where it differs from detection (TheContractorYards.getModeFor).
 -- The button's text follows when the change comes back (refresh, from
 -- TheContractorYards:applyOverride).

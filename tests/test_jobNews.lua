@@ -332,7 +332,7 @@ test("on completion: good work only, one event at most, then cooldowns", functio
     assertEquals(tc.RandomEvents:getCooldownLeft(1, "kettle"), TheContractorJobNews.KETTLE_COOLDOWN_PERIODS)
 end)
 
-test("tcCompany event kettle uses the latest completed job with workers", function()
+test("tcEvent trigger kettle uses the latest completed job with workers", function()
     local world, tc = setup()
     world:addWorker(1, "Dave Smith")
     world:addJob({ workerId = 1, fieldId = 5, completedAt = 10 })

@@ -222,11 +222,11 @@ test("the last story survives a save and load", function()
     assertEquals(loaded.lastStoryByFarm[1], "ratesRefund")
 end)
 
-test("tcCompany event goodNews forces a story, or says which there are", function()
+test("tcEvent trigger goodNews forces a story, or says which there are", function()
     local world, tc = setup({ completedJobs = 0 })
     TCConsole.reset()
     TheContractorRandomEvents.registerConsoleCommands()
-    local command = TCConsole.groups.company.subcommands.event
+    local command = TCConsole.groups.event.subcommands.trigger
     command.run(1, { "goodNews", "PARISHCOUNCIL" })
     assertEquals(world.messages[1].titleKey, "tc_goodNews_parishCouncil_title", "that story, whatever the case")
     assertEquals(tc.GoodNews.forcedStory, nil, "cleared")

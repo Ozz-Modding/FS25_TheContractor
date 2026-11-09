@@ -67,7 +67,7 @@ function TheContractorFarmerFavours.new()
     local self = {}
     setmetatable(self, TheContractorFarmerFavours_mt)
 
-    -- Server: tcCompany event farmerFavour <farmer>, for one trigger.
+    -- Server: tcEvent trigger farmerFavour <farmer>, for one trigger.
     self.forcedFarmerId = nil
 
     return self
@@ -91,6 +91,7 @@ function TheContractorFarmerFavours:register(randomEvents)
             end },
         },
         console = {
+            details = "[farmer]",
             prepareTrigger = function(farmId, details)
                 return self:prepareTrigger(details)
             end,
@@ -218,7 +219,7 @@ function TheContractorFarmerFavours:prepareTrigger(details)
             return nil
         end
     end
-    return "Usage: tcCompany event farmerFavour [farmer id or name] (tcCompany farmers lists them)"
+    return "Usage: tcEvent trigger farmerFavour [farmer id or name] (tcFarmer list)"
 end
 
 -- The parts (server) ---------------------------------------------------------------------

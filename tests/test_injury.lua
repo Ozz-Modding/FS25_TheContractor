@@ -241,26 +241,26 @@ test("every scenario has its text", function()
     end
 end)
 
-test("tcCompany event injury takes no details, and works at any hour", function()
+test("tcEvent trigger injury takes no details, and works at any hour", function()
     local world, tc = setup()
     world:addWorker({ id = 1, name = "Amy Hall" })
     world:addWorker({ id = 2, name = "Ben Ward", status = TheContractorWorker.STATUS.SICK })
     TCConsole.reset()
     TheContractorRandomEvents.registerConsoleCommands()
-    local group = TCConsole.groups.company
+    local group = TCConsole.groups.event
 
-    TCConsole.dispatch(group, { "event", "injury", "amy" })
+    TCConsole.dispatch(group, { "trigger", "injury", "amy" })
     assertEquals(tc.Staff:getWorker(1, 1).status, TheContractorWorker.STATUS.IDLE, "takes no details: nothing happened")
 
     -- 22:00, nobody at work: the console still finds someone, never the sick one.
     g_currentMission.environment.dayTime = 22 * 3600000
     g_currentMission.environment.currentHour = 22
-    TCConsole.dispatch(group, { "event", "injury" })
+    TCConsole.dispatch(group, { "trigger", "injury" })
     assertEquals(tc.Staff:getWorker(1, 1).status, TheContractorWorker.STATUS.SICK)
     assertEquals(tc.Injury.fromConsole, false, "cleared")
 
     local messageCount = #world.messages
-    TCConsole.dispatch(group, { "event", "injury" })
+    TCConsole.dispatch(group, { "trigger", "injury" })
     assertEquals(#world.messages, messageCount, "nobody left to hurt")
 end)
 
