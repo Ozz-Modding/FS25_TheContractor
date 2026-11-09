@@ -517,6 +517,117 @@ test("no model more than its duplicates limit, and a role held to what its model
     assertEquals(#extra, 3)
 end)
 
+-- A role's models at these prices: model1.xml at the first, and so on.
+local function pricedModels(...)
+    local list = {}
+    for i, price in ipairs({ ... }) do
+        table.insert(list, { xmlFilename = "model" .. i .. ".xml", price = price })
+    end
+    return list
+end
+
+test("the cheapest share of a role's models by price weigh the boost, the rest 1", function()
+    setup()
+    -- Five models, listed out of price order: the cheapest 40% are two.
+    local weights = TCAuctionLayout.getModelWeights(pricedModels(300, 100, 500, 200, 400), 0.4, 3)
+    assertEquals(weights["model2.xml"], 3)
+    assertEquals(weights["model4.xml"], 3)
+    assertEquals(weights["model1.xml"], 1)
+    assertEquals(weights["model5.xml"], 1)
+    assertEquals(weights["model3.xml"], 1)
+
+    -- 80% of five: all but the dearest.
+    weights = TCAuctionLayout.getModelWeights(pricedModels(300, 100, 500, 200, 400), 0.8, 3)
+    assertEquals(weights["model3.xml"], 1)
+    assertEquals(weights["model1.xml"], 3)
+    assertEquals(weights["model5.xml"], 3)
+
+    -- Two models at 40%: the cheaper one.
+    weights = TCAuctionLayout.getModelWeights(pricedModels(900, 400), 0.4, 3)
+    assertEquals(weights["model2.xml"], 3)
+    assertEquals(weights["model1.xml"], 1)
+end)
+
+test("a model with no price, or a role with no band, weighs 1", function()
+    setup()
+    local models = pricedModels(100, 200)
+    table.insert(models, { xmlFilename = "unpriced.xml" })
+    local weights = TCAuctionLayout.getModelWeights(models, 0.5, 3)
+    assertEquals(weights["model1.xml"], 3)
+    assertEquals(weights["model2.xml"], 1)
+    assertEquals(weights["unpriced.xml"], 1)
+
+    weights = TCAuctionLayout.getModelWeights(models, nil, 3)
+    assertEquals(weights["model1.xml"], 1)
+end)
+
+test("a role's models over its cap times their median price are left out, before the bands", function()
+    local world = setup()
+    world:load("src/business/FarmerFleet.lua")
+    -- Median 300k (an odd count: the middle one), cap 1.6: 480k and under.
+    local catalog = { byRole = { combine = pricedModels(100000, 300000, 750000, 250000, 480000) }, attachments = {} }
+    local def = { role = "combine", weight = 1, min = 1, max = 6, medianPriceCap = 1.6 }
+    local kept = {}
+    for _, model in ipairs(TCAuctionLayout.getLotModels(catalog, "combine", def)) do
+        kept[model.xmlFilename] = true
+    end
+    assertTrue(kept["model1.xml"] and kept["model2.xml"] and kept["model4.xml"] and kept["model5.xml"])
+    assertEquals(kept["model3.xml"], nil)
+
+    -- The role's lot limit counts only the models kept.
+    local available = TCAuctionLayout.getAvailableRoles(catalog, { def }, 3)
+    assertEquals(available.combine, 12)
+
+    -- And no lot is ever the dropped one.
+    local roles = {}
+    for _ = 1, 12 do
+        table.insert(roles, "combine")
+    end
+    for _, lot in ipairs(TCAuctionLayout.pickLots(catalog, roles, math.random, 3, { def }, 3)) do
+        assertTrue(lot.xmlFilename ~= "model3.xml", "the flagship left out")
+    end
+
+    -- An even count: the median's the middle two's average (200k and 400k),
+    -- so 1.5 keeps up to 450k. An unpriced model's kept; no cap keeps all.
+    local even = { byRole = { trailer = pricedModels(100000, 200000, 400000, 500000) }, attachments = {} }
+    table.insert(even.byRole.trailer, { xmlFilename = "unpriced.xml" })
+    local trailerDef = { role = "trailer", medianPriceCap = 1.5 }
+    assertEquals(#TCAuctionLayout.getLotModels(even, "trailer", trailerDef), 4)
+    assertEquals(#TCAuctionLayout.getLotModels(even, "trailer", { role = "trailer" }), 5)
+    assertEquals(#TCAuctionLayout.getLotModels(even, "trailer", nil), 5)
+end)
+
+test("a sale's lots favour a role's cheap band by its boost", function()
+    local world = setup()
+    world:load("src/business/FarmerFleet.lua")
+    -- One cheap model and one dear: boost 3, so the cheap one is 3 in 4.
+    local catalog = { byRole = { smallTractor = pricedModels(50000, 150000) }, attachments = {} }
+    local defs = { { role = "smallTractor", weight = 1, min = 1, max = 25, cheapShare = 0.5 } }
+    local roles = {}
+    for _ = 1, 4000 do
+        table.insert(roles, "smallTractor")
+    end
+    local lots = TCAuctionLayout.pickLots(catalog, roles, math.random, nil, defs, 3)
+    local cheap = 0
+    for _, lot in ipairs(lots) do
+        if lot.xmlFilename == "model1.xml" then
+            cheap = cheap + 1
+        end
+    end
+    assertNear(cheap / #lots, 0.75, 0.04)
+
+    -- A role's own boost wins over the default.
+    defs[1].cheapBoost = 1
+    lots = TCAuctionLayout.pickLots(catalog, roles, math.random, nil, defs, 3)
+    cheap = 0
+    for _, lot in ipairs(lots) do
+        if lot.xmlFilename == "model1.xml" then
+            cheap = cheap + 1
+        end
+    end
+    assertNear(cheap / #lots, 0.5, 0.04)
+end)
+
 -- The crowd's walks (137) ----------------------------------------------------------------------
 
 -- How far a point is from a convex quad (0 inside it).

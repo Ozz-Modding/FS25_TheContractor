@@ -13,7 +13,7 @@
 --     footprint (its model's size, and its attachment's in front).
 --   The lots: roles drawn by LOT_ROLES' weights and count ranges, a model
 --     for each from 121's catalog (the fleet's roles, plus the implements
---     135 adds there), a combine with a header that fits. Each gets Used
+--     135 adds there), the cheaper models likelier (LOT_ROLES' cheapShare), a combine with a header that fits. Each gets Used
 --     Equipment Yards' MEDIUM condition (CONDITION: hours, damage, wear; the
 --     age from the hours), light dirt and a low tank. With ADS, ADS builds
 --     its history from those (TCADSUsedLots). Its guide price is vanilla's
@@ -114,20 +114,26 @@ local ROLE = TheContractorFarmerFleet.ROLE
 
 -- The roles a sale's lots are, in the order they're listed: weight and
 -- count range per sale (TCAuctionLayout.pickRoles). Grows over time.
+-- Within a role: first, any model priced over medianPriceCap times the
+-- role's median store price is left out (no flagships at a farm sale;
+-- TCAuctionLayout.getLotModels). Then the cheapest cheapShare of the rest are
+-- CHEAP_BOOST times as likely as the rest (cheapBoost overrides it for a
+-- role), so a sale has less of the top end (TCAuctionLayout.getModelWeights).
+TheContractorAuctionSite.CHEAP_BOOST = 3
 TheContractorAuctionSite.LOT_ROLES = {
-    { role = ROLE.SMALL_TRACTOR, weight = 4, min = 1, max = 25 },
-    { role = ROLE.MEDIUM_TRACTOR, weight = 4, min = 1, max = 25 },
-    { role = ROLE.LARGE_TRACTOR, weight = 2, min = 0, max = 10 },
-    { role = ROLE.TELEHANDLER, weight = 2, min = 1, max = 10 },
-    { role = ROLE.COMBINE, weight = 1, min = 1, max = 6 },
-    { role = ROLE.MOWER, weight = 2, min = 1, max = 10 },
-    { role = ROLE.TEDDER, weight = 2, min = 1, max = 10 },
-    { role = ROLE.RAKE, weight = 2, min = 1, max = 10 },
-    { role = ROLE.BALER, weight = 2, min = 1, max = 10 },
-    { role = ROLE.TRAILER, weight = 3, min = 1, max = 15 },
-    { role = ROLE.PLOUGH, weight = 2, min = 1, max = 10 },
-    { role = ROLE.CULTIVATOR, weight = 2, min = 1, max = 10 },
-    { role = ROLE.SEED_DRILL, weight = 2, min = 1, max = 10 },
+    { role = ROLE.SMALL_TRACTOR, weight = 8, min = 1, max = 25, cheapShare = 0.8 },
+    { role = ROLE.MEDIUM_TRACTOR, weight = 5, min = 1, max = 25, cheapShare = 0.6 },
+    { role = ROLE.LARGE_TRACTOR, weight = 2, min = 0, max = 10, cheapShare = 0.4, medianPriceCap = 1.3 },
+    { role = ROLE.TELEHANDLER, weight = 2, min = 1, max = 10, cheapShare = 0.6, medianPriceCap = 2 },
+    { role = ROLE.COMBINE, weight = 1, min = 1, max = 6, cheapShare = 0.4, medianPriceCap = 1.6 },
+    { role = ROLE.MOWER, weight = 2, min = 1, max = 10, cheapShare = 0.6 },
+    { role = ROLE.TEDDER, weight = 2, min = 1, max = 10, cheapShare = 0.7 },
+    { role = ROLE.RAKE, weight = 2, min = 1, max = 10, cheapShare = 0.6 },
+    { role = ROLE.BALER, weight = 2, min = 1, max = 10, cheapShare = 0.5, medianPriceCap = 1.5 },
+    { role = ROLE.TRAILER, weight = 3, min = 1, max = 15, cheapShare = 0.7, medianPriceCap = 2 },
+    { role = ROLE.PLOUGH, weight = 2, min = 1, max = 10, cheapShare = 0.6 },
+    { role = ROLE.CULTIVATOR, weight = 2, min = 1, max = 10, cheapShare = 0.5 },
+    { role = ROLE.SEED_DRILL, weight = 2, min = 1, max = 10, cheapShare = 0.5, medianPriceCap = 1.5 },
 }
 
 function TheContractorAuctionSite.new()
@@ -421,7 +427,7 @@ function TheContractorAuctionSite.planLots(lotCount, random)
         TCAuctionLayout.getAvailableRoles(catalog, roleDefs, TheContractorAuctionSite.MAX_DUPLICATES))
     local lots = {}
     for _, lot in ipairs(TCAuctionLayout.pickLots(catalog, roles, random,
-            TheContractorAuctionSite.MAX_DUPLICATES)) do
+            TheContractorAuctionSite.MAX_DUPLICATES, roleDefs, TheContractorAuctionSite.CHEAP_BOOST)) do
         if TheContractorAuctionSite.setFootprint(lot) then
             table.insert(lots, lot)
         end
