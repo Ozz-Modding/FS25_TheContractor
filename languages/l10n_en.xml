@@ -948,7 +948,7 @@
 		<text name="tc_parking_allocationRefusedNotification" text="Couldn't allocate: %s is waiting for a parking space and there's no room at the shop to put it."/>
 		<text name="tc_parking_noticeOne" text="1 machine waiting for a free parking space"/>
 		<text name="tc_parking_noticeMany" text="%d machines waiting for a free parking space"/>
-		<text name="tc_allocation_awaitingParking" text="Awaiting parking"/>
+		<text name="tc_allocation_unavailable" text="Unavailable"/>
 		<text name="tc_dispatch_noAttachPoint" text="Couldn't hitch %s to %s - no compatible free attachment point."/>
 		<text name="tc_allocation_selectEquipmentButton" text="Select Equipment"/>
 		<text name="tc_allocation_deselectEquipmentButton" text="Deselect Equipment"/>

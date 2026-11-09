@@ -241,3 +241,21 @@ test("every subcommand is documented, and every documented one exists", function
         assertTrue(documented[key], "'" .. key .. "' isn't in docs/commands.md or docs/debug-commands.md")
     end
 end)
+
+test("listNames sorts a copy of the names", function()
+    setup()
+    local names = { "tyre", "bale", "pallet" }
+    assertEquals("bale, pallet, tyre", TCConsole.listNames(names))
+    assertEquals("tyre", names[1], "the caller's list left alone")
+end)
+
+test("every TCConsole function the sources call exists", function()
+    setup()
+    for _, path in ipairs(listLuaFiles()) do
+        local source = readFile(path)
+        for name in source:gmatch("TCConsole%.([%a_][%w_]*)%(") do
+            assertEquals("function", type(TCConsole[name]),
+                string.format("%s calls TCConsole.%s", path, name))
+        end
+    end
+end)

@@ -16,7 +16,9 @@
 --     (in a village or a town, where the most people pass), then the most
 --     arms.
 --   A junction's sign stands approachDistance back along one of its arms
---     (the first whose verge has room), facing a driver coming in.
+--     (the first whose verge has room), side on to the road and facing it,
+--     so a driver coming in reads it as they pass and it takes little of
+--     the verge's depth.
 --   The verge: offset from the road's middle by each of vergeOffsets in
 --     turn, the driver's side (DRIVE_SIDE) first, then the other. A spot
 --     nearer than minRoadClearance to any road's middle is on a road, and
@@ -512,8 +514,8 @@ function TCAuctionSigns.leadsOn(network, at, back, startCluster)
 end
 
 -- The first verge spot that works for a sign by road point (roadX, roadZ):
--- sides in order, each at every verge offset. base: the sign's other values
--- (yaw, ...); each spot's x, z, side and offset are added.
+-- sides in order, each at every verge offset. base: the sign's other values;
+-- each spot's x, z, side, offset and yaw (facing the road) are added.
 local function placeOnVerge(network, roadX, roadZ, sides, base, isClear, rejected, hx, hz)
     for _, side in ipairs(sides) do
         for _, offset in ipairs(TCAuctionSigns.RULES.vergeOffsets) do
@@ -524,6 +526,7 @@ local function placeOnVerge(network, roadX, roadZ, sides, base, isClear, rejecte
                 candidate[key] = value
             end
             candidate.x, candidate.z, candidate.side, candidate.offset = x, z, side.name, offset
+            candidate.yaw = TCAuctionSigns.getYaw(-side.x, -side.z)
             if isOnRoad(network, x, z) then
                 countReject(rejected, TCAuctionSigns.REJECT.ON_ROAD)
             elseif TCAuctionSigns.isNearCrossRoad(network, x, z, hx, hz) then
@@ -583,7 +586,6 @@ function TCAuctionSigns.pick(splines, isClear)
                     -- The driver's heading here, towards the junction.
                     local hx, hz = normalise(nodes[towards].x - node.x, nodes[towards].z - node.z)
                     local base = {
-                        yaw = TCAuctionSigns.getYaw(-hx, -hz),
                         roadX = node.x, roadZ = node.z, roadY = node.y,
                         junctionX = junction.cluster.x, junctionZ = junction.cluster.z,
                         busyMetres = junction.busyMetres,

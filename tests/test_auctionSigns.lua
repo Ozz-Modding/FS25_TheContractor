@@ -54,8 +54,8 @@ local function distance(ax, az, bx, bz)
     return math.sqrt((ax - bx) ^ 2 + (az - bz) ^ 2)
 end
 
--- A sign stands on the driver's (right) verge of the road it's on, facing a
--- driver heading to its junction. (The junction's middle is its joined
+-- A sign stands on the driver's (right) verge of the road it's on, side on
+-- to it and facing the road. (The junction's middle is its joined
 -- points' average, a little off a road's line, hence the leeway.)
 local function assertFacesDriver(sign)
     local hx, hz = sign.junctionX - sign.roadX, sign.junctionZ - sign.roadZ
@@ -65,10 +65,12 @@ local function assertFacesDriver(sign)
     assertEquals("right", sign.side)
     assertNear(sign.roadX + rx * sign.offset, sign.x, 0.5)
     assertNear(sign.roadZ + rz * sign.offset, sign.z, 0.5)
-    assertNear(math.atan2(-hx, -hz), sign.yaw, 0.1)
+    -- The board's front (+Z at its yaw) points back at the road.
+    assertNear(-rx, math.sin(sign.yaw), 0.1)
+    assertNear(-rz, math.cos(sign.yaw), 0.1)
 end
 
-test("a T junction gets a sign back along a road into it, on the driver's verge, facing them", function()
+test("a T junction gets a sign back along a road into it, on the driver's verge, facing the road", function()
     setup()
     local result = TCAuctionSigns.pick(tJunction(), allClear)
     assertEquals(1, result.junctionCount)
