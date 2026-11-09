@@ -621,12 +621,13 @@ function TCAuctionLayout.rollCondition(preset, hoursPerYear, random)
 end
 
 -- The roles the catalog (TheContractorFarmerFleet.buildCatalog's) has models
--- for, for pickRoles' available: role -> how many lots of it there can be
--- with at most maxDuplicates of each model (true with no maxDuplicates).
+-- for (getLotModels', within the role's price cap), for pickRoles'
+-- available: role -> how many lots of it there can be with at most
+-- maxDuplicates of each model (true with no maxDuplicates).
 function TCAuctionLayout.getAvailableRoles(catalog, roleDefs, maxDuplicates)
     local available = {}
     for _, def in ipairs(roleDefs) do
-        local count = #TheContractorFarmerFleet.getRoleModels(catalog, def.role)
+        local count = #TCAuctionLayout.getLotModels(catalog, def.role, def)
         if count > 0 then
             available[def.role] = maxDuplicates ~= nil and count * maxDuplicates or true
         end
@@ -634,23 +635,117 @@ function TCAuctionLayout.getAvailableRoles(catalog, roleDefs, maxDuplicates)
     return available
 end
 
+-- The models a sale's lots of a role can be (pure): getRoleModels', less
+-- any priced over medianPriceCap times the role's median price (def:
+-- LOT_ROLES' row, or nil: no cap), so a sale has no flagship machines. The
+-- median, not the cheapest, as a role's cheapest can be a toy (a small
+-- tipping trailer). A model with no price is kept. Never empty while the
+-- role has models: the median's under any cap of 1 or more.
+function TCAuctionLayout.getLotModels(catalog, role, def)
+    local models = TheContractorFarmerFleet.getRoleModels(catalog, role)
+    local cap = def ~= nil and def.medianPriceCap or nil
+    if cap == nil then
+        return models
+    end
+    local prices = {}
+    for _, model in ipairs(models) do
+        if model.price ~= nil then
+            table.insert(prices, model.price)
+        end
+    end
+    if #prices == 0 then
+        return models
+    end
+    table.sort(prices)
+    local middle = (#prices + 1) / 2
+    local median = (prices[math.floor(middle)] + prices[math.ceil(middle)]) / 2
+    local kept = {}
+    for _, model in ipairs(models) do
+        if model.price == nil or model.price <= median * cap then
+            table.insert(kept, model)
+        end
+    end
+    return kept
+end
+
+-- Each model's weight within its role (pure), by price band: the models
+-- ranked by price, the cheapest cheapShare of them (0 to 1) weigh boost,
+-- the rest 1, so a sale has less of the top end. A model in the band when
+-- the middle of its place in the ranking is: with 2 models and a share of
+-- 0.4, the cheaper one. A model with no price weighs 1 and isn't ranked.
+-- No share (or no boost): all 1. Returns xmlFilename -> weight.
+function TCAuctionLayout.getModelWeights(models, cheapShare, boost)
+    local weights = {}
+    local priced = {}
+    for _, model in ipairs(models) do
+        weights[model.xmlFilename] = 1
+        if model.price ~= nil then
+            table.insert(priced, model)
+        end
+    end
+    if cheapShare == nil or boost == nil or #priced == 0 then
+        return weights
+    end
+    table.sort(priced, function(a, b)
+        if a.price ~= b.price then
+            return a.price < b.price
+        end
+        return a.xmlFilename < b.xmlFilename
+    end)
+    for i, model in ipairs(priced) do
+        if (i - 0.5) / #priced < cheapShare then
+            weights[model.xmlFilename] = boost
+        end
+    end
+    return weights
+end
+
 -- A model for each role (pure, from the catalog): { { role, xmlFilename,
 -- attachmentXml } }, a machine that takes an attachment (a combine's
 -- header, ATTACHMENT_ROLE) with one that fits it when there's one. No model
 -- more than maxDuplicates times (nil: no limit), so a sale isn't a row of
--- the same tractor. A role with no model left is left out.
-function TCAuctionLayout.pickLots(catalog, roles, random, maxDuplicates)
+-- the same tractor. A role with no model left is left out. roleDefs
+-- (optional, LOT_ROLES'): a role's medianPriceCap drops its dearest models
+-- first (getLotModels), then its cheapShare and cheapBoost (or
+-- defaultBoost) weight the rest by price band (getModelWeights); without
+-- them every model's as likely.
+function TCAuctionLayout.pickLots(catalog, roles, random, maxDuplicates, roleDefs, defaultBoost)
     local F = TheContractorFarmerFleet
     local lots = {}
     local used = {}
+    local defsByRole = {}
+    for _, def in ipairs(roleDefs or {}) do
+        defsByRole[def.role] = def
+    end
+    local modelsByRole, weightsByRole = {}, {}
     for _, role in ipairs(roles) do
+        if modelsByRole[role] == nil then
+            local def = defsByRole[role]
+            local share = def ~= nil and def.cheapShare or nil
+            local boost = def ~= nil and (def.cheapBoost or defaultBoost) or nil
+            modelsByRole[role] = TCAuctionLayout.getLotModels(catalog, role, def)
+            weightsByRole[role] = TCAuctionLayout.getModelWeights(modelsByRole[role], share, boost)
+        end
+        local weights = weightsByRole[role]
         local models = {}
-        for _, candidate in ipairs(F.getRoleModels(catalog, role)) do
+        local weightSum = 0
+        for _, candidate in ipairs(modelsByRole[role]) do
             if maxDuplicates == nil or (used[candidate.xmlFilename] or 0) < maxDuplicates then
                 table.insert(models, candidate)
+                weightSum = weightSum + weights[candidate.xmlFilename]
             end
         end
-        local model = #models > 0 and (models[math.floor(random() * #models) + 1] or models[#models]) or nil
+        local model = nil
+        if #models > 0 then
+            local roll = random() * weightSum
+            for _, candidate in ipairs(models) do
+                model = candidate
+                roll = roll - weights[candidate.xmlFilename]
+                if roll < 0 then
+                    break
+                end
+            end
+        end
         if model ~= nil then
             used[model.xmlFilename] = (used[model.xmlFilename] or 0) + 1
             local lot = { role = role, xmlFilename = model.xmlFilename }

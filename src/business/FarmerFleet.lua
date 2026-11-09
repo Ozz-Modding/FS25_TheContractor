@@ -384,8 +384,11 @@ local function getBrandName(storeItem)
 end
 
 local function toModel(storeItem)
+    -- price: the store's base price (no configurations), for the auction's
+    -- price bands (TCAuctionLayout.getModelWeights). nil if the store has none.
     return { xmlFilename = storeItem.xmlFilename, categoryName = storeItem.categoryName,
-        name = storeItem.name or storeItem.xmlFilename, brand = getBrandName(storeItem) }
+        name = storeItem.name or storeItem.xmlFilename, brand = getBrandName(storeItem),
+        price = type(storeItem.price) == "number" and storeItem.price or nil }
 end
 
 -- The store items the shop offers with this one (its combinations).
