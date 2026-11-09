@@ -156,7 +156,7 @@ TheContractorRepairContracts.MIN_BENCHMARK = 0.05
 TheContractorRepairContracts.OVERCHARGE_MARGIN_FACTOR = 1.75
 TheContractorRepairContracts.OVERCHARGE_MONTHS = 3
 TheContractorRepairContracts.OVERCHARGE_ARRIVAL_FACTOR = 0.5
--- tcJob quoteOutcome's forced answers.
+-- tcDebug quoteOutcome's forced answers.
 TheContractorRepairContracts.QUOTE_OUTCOME = { ACCEPTED = "accepted", REFUSED = "refused" }
 
 -- Base reputation for a finished job, by kind and severity (1-3), before
@@ -224,7 +224,7 @@ function TheContractorRepairContracts.new()
     -- 102, server, saved: farmId -> { untilDay, noticeId } while the farm's
     -- known for overcharging.
     self.overcharged = {}
-    -- 102, server: tcJob quoteOutcome's answer for the next quote, or nil.
+    -- 102, server: tcDebug quoteOutcome's answer for the next quote, or nil.
     self.forcedQuoteOutcome = nil
 
     -- zoneType -> { model, ... }, built on first use per session.
@@ -2612,7 +2612,7 @@ end
 -- Console (tcJob) ------------------------------------------------------------------------
 
 -- The bay kinds `tcJob offer` takes (JobGeneration's command hands them to
--- consoleOffer): field breakdowns come from `tcCompany event` instead.
+-- consoleOffer): field breakdowns come from `tcEvent trigger` instead.
 TheContractorRepairContracts.CONSOLE_OFFER_KINDS = { "repair", "maintenance", "parts" }
 
 function TheContractorRepairContracts.findConsoleOfferKind(name)
@@ -2655,7 +2655,7 @@ function TheContractorRepairContracts.consoleOffer(farmId, kind, severityArg)
 end
 
 function TheContractorRepairContracts.registerConsoleCommands()
-    TCConsole.register("job", "repairStatus", {
+    TCConsole.register("debug", "repairStatus", {
         args = "",
         description = "Your repair zones, their bays, and machines on the way or waiting to be collected",
         run = function(farmId, args)
@@ -2698,7 +2698,7 @@ function TheContractorRepairContracts.registerConsoleCommands()
         end,
     })
 
-    TCConsole.register("job", "quoteOutcome", {
+    TCConsole.register("debug", "quoteOutcome", {
         args = "<accepted|refused|clear>",
         description = "Force the customer's answer to the next repair quote (Negotiate), or clear it",
         run = function(farmId, args)

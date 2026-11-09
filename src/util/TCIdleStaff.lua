@@ -550,7 +550,7 @@ end
 
 -- Console ---------------------------------------------------------------------
 
--- tcWorker standing: why each of the farm's workers is or isn't standing.
+-- tcDebug standing: why each of the farm's workers is or isn't standing.
 function TCIdleStaff.describe(farmId)
     local mission = g_currentMission
     local wanted = TCIdleStaff.getWanted()
@@ -626,7 +626,7 @@ function TCIdleStaff.describe(farmId)
 end
 
 function TCIdleStaff.registerConsoleCommands()
-    TCConsole.register("worker", "standing", {
+    TCConsole.register("debug", "standing", {
         description = "Show who's standing on your standing spots, and why anyone isn't",
         serverOnly = false,
         run = function(farmId)

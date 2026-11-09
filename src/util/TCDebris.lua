@@ -1,7 +1,7 @@
 -- Debris: loose props the player can pick up by hand, like a cut log
 -- segment. 075's fly-tipping dumps a pile of them (spawnPileAt) for the
 -- player to carry to a disposal skip (PlaceableTCDisposalSkip); the console
--- can drop a pile too (tcCompany debris).
+-- can drop a pile too (tcDebug debris).
 --
 -- Each piece is a MountableObject (vanilla's ForestryLog/MissionPhysicsObject
 -- pattern), not a vehicle, so it never shows in vehicle lists. It can be
@@ -512,9 +512,14 @@ function TCDebris.clearAll()
 end
 
 function TCDebris.registerConsoleCommands()
-    TCConsole.register("company", "debris", {
+    TCConsole.register("debug", "debris", {
         args = "[count] [prop]",
         description = "Drop a pile of hand-movable debris in front of you (random props and bin bags unless one is named)",
+        hints = {
+            prop = function()
+                return TCConsole.listNames(TCDebris.RANDOM_PROPS)
+            end,
+        },
         run = function(farmId, args, context)
             local count = tonumber(args[1] or "8")
             local propKey = args[2]
@@ -536,7 +541,7 @@ function TCDebris.registerConsoleCommands()
             return string.format("Spawned %d %s debris", spawned, propKey or "random")
         end,
     })
-    TCConsole.register("company", "debrisClear", {
+    TCConsole.register("debug", "debrisClear", {
         args = "",
         description = "Remove all debris",
         run = function(farmId, args)

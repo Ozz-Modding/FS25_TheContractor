@@ -655,7 +655,7 @@ function TheContractorFarmers:linkJobs(all)
     return links
 end
 
--- Server: tcCompany farmers regenerate. A new split and new farmers; every
+-- Server: tcFarmer regenerate. A new split and new farmers; every
 -- job is linked again from its field, and everyone's told.
 function TheContractorFarmers:regenerate(targetAcres)
     self:generate(targetAcres, math.random(1, 99999))
@@ -1265,7 +1265,7 @@ function TheContractorFarmers:getListText()
     return table.concat(lines, "\n")
 end
 
--- The farmers' yards on the map (tcCompany farmers yards) ---------------------------
+-- The farmers' yards on the map (tcDebug farmerYards) ---------------------------
 
 -- A test aid, on this machine's map only: a pulsing circle on every
 -- farmer's yard, labelled with the farmer, and one in another colour,
@@ -1361,42 +1361,54 @@ function TheContractorFarmers:showYardMarkers()
 end
 
 function TheContractorFarmers.registerConsoleCommands()
-    TCConsole.register("company", "farmers", {
-        args = "[preview|show|hide|standing|yards|fleet|regenerate] [targetAcres|farmer] [seed]",
-        description = "List the farmers and the local official, preview a land split, show who's in their yard, " ..
-            "mark the farmers' yards on this machine's map, list the farmers' machines, or generate the farmers again",
-        serverOnly = false,
-        run = function(farmId, args)
-            local tc = g_currentMission.TheContractor
-            local mode = args[1] ~= nil and string.lower(args[1]) or nil
-            if mode == nil then
-                return tc.Farmers:getListText()
-            elseif mode == "preview" or mode == "show" or mode == "hide" then
-                return TheContractorFarmerSplit.runPreview(mode, args)
-            elseif mode == "standing" then
-                return TCYardFarmers.describe()
-            elseif mode == "yards" then
-                if TheContractorFarmers.yardHotspots ~= nil then
-                    TheContractorFarmers.hideYardMarkers()
-                    return "Farmers' yard markers cleared."
-                end
-                local held, free = tc.Farmers:showYardMarkers()
-                return string.format("Marked %d farmer's yard(s) (red, with the farmer) and %d free yard(s) (blue). " ..
-                    "tcCompany farmers yards again to clear.", held, free)
-            elseif mode == "fleet" then
-                -- 121: the machines are the server's.
-                if not g_currentMission:getIsServer() then
-                    return "tcCompany farmers fleet only works on the server (single player or the host)."
-                end
-                return TheContractorFarmerFleet.getListText(args[2] ~= nil and table.concat(args, " ", 2) or nil)
-            elseif mode ~= "regenerate" then
-                return false
-            end
+    TCConsole.registerHint("farmer", "a farmer's id or full name (tcFarmer list)")
+    TCConsole.registerHint("targetAcres", "acres a farmer, " .. TheContractorFarmerSplit.TARGET_ACRES .. " by default")
+    TCConsole.registerHint("seed", "any whole number; the same seed gives the same split (left out, a random one, printed)")
 
-            if not g_currentMission:getIsServer() then
-                return "tcCompany farmers regenerate only works on the server (single player or the host)."
-            end
-            local targetAcres = args[2] ~= nil and tonumber(args[2]) or TheContractorFarmerSplit.TARGET_ACRES
+    TCConsole.register("farmer", "list", {
+        description = "The farmers and the local official: ids, names, acres, farmlands and yards",
+        serverOnly = false,
+        run = function()
+            return g_currentMission.TheContractor.Farmers:getListText()
+        end,
+    })
+
+    -- 109's split, changing nothing; show marks it on this machine's map.
+    for _, mode in ipairs({ "preview", "show" }) do
+        TCConsole.register("farmer", mode, {
+            args = "[targetAcres] [seed]",
+            description = mode == "preview" and "How the land would be split between farmers now, changing nothing" or
+                "The same, and label each farmland with its farmer on this machine's map",
+            serverOnly = false,
+            run = function(_, args)
+                return TheContractorFarmerSplit.runPreview(mode, { mode, args[1], args[2] })
+            end,
+        })
+    end
+
+    TCConsole.register("farmer", "hide", {
+        description = "Clear tcFarmer show's labels",
+        serverOnly = false,
+        run = function()
+            return TheContractorFarmerSplit.runPreview("hide", { "hide" })
+        end,
+    })
+
+    -- 121: the machines are the server's.
+    TCConsole.register("farmer", "fleet", {
+        args = "[farmer]",
+        description = "Each farmer's machines, or one farmer's",
+        run = function(_, args)
+            return TheContractorFarmerFleet.getListText(args[1] ~= nil and table.concat(args, " ") or nil)
+        end,
+    })
+
+    TCConsole.register("farmer", "regenerate", {
+        args = "[targetAcres]",
+        description = "Throw the farmers away and make new ones from a fresh split (jobs and relationships lose them)",
+        run = function(_, args)
+            local tc = g_currentMission.TheContractor
+            local targetAcres = args[1] ~= nil and tonumber(args[1]) or TheContractorFarmerSplit.TARGET_ACRES
             if targetAcres == nil or targetAcres <= 0 then
                 return false
             end
@@ -1404,6 +1416,28 @@ function TheContractorFarmers.registerConsoleCommands()
             return string.format("%s\nWarning: every job lost its link to the old farmers, and every farm its " ..
                 "relationships with them; %d job(s) were linked again from their fields.", tc.Farmers:getListText(),
                 #links)
+        end,
+    })
+
+    TCConsole.register("debug", "farmerStanding", {
+        description = "Where each farmer stands in their yard now, and why anyone isn't",
+        serverOnly = false,
+        run = function()
+            return TCYardFarmers.describe()
+        end,
+    })
+
+    TCConsole.register("debug", "farmerYards", {
+        description = "Mark every farmer's yard (red) and every free yard (blue) on this machine's map, or clear them",
+        serverOnly = false,
+        run = function()
+            if TheContractorFarmers.yardHotspots ~= nil then
+                TheContractorFarmers.hideYardMarkers()
+                return "Farmers' yard markers cleared."
+            end
+            local held, free = g_currentMission.TheContractor.Farmers:showYardMarkers()
+            return string.format("Marked %d farmer's yard(s) (red, with the farmer) and %d free yard(s) (blue). " ..
+                "tcDebug farmerYards again to clear.", held, free)
         end,
     })
 end

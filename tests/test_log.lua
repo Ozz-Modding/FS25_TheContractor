@@ -3,7 +3,7 @@
 local function setup()
     local world = stubs.install()
     world:load("src/util/TCConsole.lua")
-    -- The stubs switch it on for every other test; start from the shipped default.
+    -- The stubs switch it on for every other test; start from off.
     TCLog.enabled = false
     TCLog.settingsDir = nil
     return world

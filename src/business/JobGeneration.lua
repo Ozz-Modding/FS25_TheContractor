@@ -1295,7 +1295,24 @@ end
 
 -- Console commands (tcJob - see TCConsole) ---------------------------------------------
 
+-- The job types the console takes: generated ones, then 100's bay kinds.
+function TheContractorJobGeneration.getConsoleJobTypesText()
+    return table.concat(TheContractorJobGeneration.JOB_TYPE_KEYS, ", ") .. ", " ..
+        table.concat(TheContractorRepairContracts.CONSOLE_OFFER_KINDS, ", ") .. " (ADS)"
+end
+
 function TheContractorJobGeneration.registerConsoleCommands()
+    TCConsole.registerHint("jobType", TheContractorJobGeneration.getConsoleJobTypesText)
+    TCConsole.registerHint("fieldId", "a field's number, as the map shows it")
+
+    TCConsole.register("job", "types", {
+        description = "The job types tcJob offer and tcJob create take",
+        serverOnly = false,
+        run = function()
+            return "Job types: " .. TheContractorJobGeneration.getConsoleJobTypesText()
+        end,
+    })
+
     -- Forces one generation hit for a single job type (tryGenerateJob's
     -- onlyJobType): a real offer on a real field, priced and dated by the
     -- same rules as the hourly roll, so it's safe for testing and for
@@ -1306,14 +1323,13 @@ function TheContractorJobGeneration.registerConsoleCommands()
     -- instead: a customer's machine sent to a repair zone bay, with an
     -- optional severity.
     TCConsole.register("job", "offer", {
-        args = "<jobType> [severity]",
-        description = "Offer your farm a real job of that type now (no type lists the types; repair/maintenance/parts take a severity 1-3)",
+        args = "<jobType> [severity 1-3]",
+        description = "Offer your farm a real job of that type now (severity only for repair, maintenance and parts)",
         run = function(farmId, args)
             local tc = g_currentMission.TheContractor
-            local typeList = table.concat(TheContractorJobGeneration.JOB_TYPE_KEYS, ", ")
-                .. ", " .. table.concat(TheContractorRepairContracts.CONSOLE_OFFER_KINDS, ", ") .. " (ADS)"
+            local typeList = TheContractorJobGeneration.getConsoleJobTypesText()
             if args[1] == nil then
-                return "Usage: tcJob offer <jobType> [severity]\nJob types: " .. typeList
+                return false
             end
             local repairKind = TheContractorRepairContracts.findConsoleOfferKind(args[1])
             local jobType = TheContractorJobGeneration.findJobType(args[1])

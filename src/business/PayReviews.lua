@@ -247,7 +247,7 @@ end
 
 -- Rolls a new expectation and, if it's well above their pay, asks for a
 -- rise. Any request still open goes: this one replaces it. Also the
--- tcWorker payReview console command's way in, which can give the
+-- tcDebug payReview console command's way in, which can give the
 -- expectation instead of rolling it. Returns true if they asked.
 function TheContractorPayReviews:review(worker, expected)
     if expected == nil then
@@ -447,7 +447,7 @@ function TheContractorPayReviews.registerConsoleCommands()
         end,
     })
 
-    TCConsole.register("worker", "payReview", {
+    TCConsole.register("debug", "payReview", {
         args = "<worker> [expected]",
         description = "Give a worker their pay review now: roll their expectation (or set it), asking for a rise if short",
         run = function(farmId, args)

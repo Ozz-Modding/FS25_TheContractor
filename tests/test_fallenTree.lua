@@ -341,7 +341,7 @@ local function setup()
     TCConsole.reset()
     TheContractorRandomEvents.registerConsoleCommands()
     function world:console(...)
-        return TCConsole.dispatch(TCConsole.groups.company, { "event", "fallenTree", ... })
+        return TCConsole.dispatch(TCConsole.groups.event, { "trigger", "fallenTree", ... })
     end
 
     -- Three roads running north from z = -100 to 100, along x = 0, 400 and

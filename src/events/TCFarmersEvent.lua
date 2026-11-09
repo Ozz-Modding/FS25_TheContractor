@@ -1,5 +1,5 @@
 -- Broadcast-only (110): the server has generated the farmers again
--- (tcCompany farmers regenerate, server only). Carries everyone, and every
+-- (tcFarmer regenerate, server only). Carries everyone, and every
 -- job whose customer changed with them. See TheContractorFarmers:regenerate.
 
 TCFarmersEvent = {}

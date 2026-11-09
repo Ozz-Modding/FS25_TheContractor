@@ -96,7 +96,7 @@ function TheContractorRoadAccident.new()
     local self = {}
     setmetatable(self, TheContractorRoadAccident_mt)
 
-    -- tcCompany outcome roadAccident: who's to blame for the next accident.
+    -- tcDebug outcome roadAccident: who's to blame for the next accident.
     -- Server-only, not saved.
     self.forcedFault = nil
 

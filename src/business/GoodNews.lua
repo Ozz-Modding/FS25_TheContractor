@@ -51,7 +51,7 @@ function TheContractorGoodNews.new()
 
     -- lastStoryByFarm[farmId] = the story key that farm last had (server).
     self.lastStoryByFarm = {}
-    -- Set by tcCompany event goodNews [story] around its triggerEvent.
+    -- Set by tcEvent trigger goodNews [story] around its triggerEvent.
     self.forcedStory = nil
 
     return self
@@ -68,9 +68,10 @@ function TheContractorGoodNews:register(randomEvents, inbox)
         canTrigger = function(farmId)
             return self:pickStory(farmId)
         end,
-        -- tcCompany event goodNews [story]: that story, or a random one other
+        -- tcEvent trigger goodNews [story]: that story, or a random one other
         -- than the last, with or without a completed job.
         console = {
+            details = TheContractorGoodNews.getStoryDetails(),
             prepareTrigger = function(farmId, details)
                 return self:prepareConsoleStory(farmId, details[1])
             end,
@@ -246,46 +247,17 @@ end
 function TheContractorGoodNews:readInitialClientState(streamId, connection)
 end
 
--- Console ----------------------------------------------------------------------
+-- Console (068's tcEvent trigger) ---------------------------------------------------
 
-function TheContractorGoodNews.registerConsoleCommands()
-    TCConsole.register("company", "goodNews", {
-        args = "[story]",
-        description = "Good news for your farm now: that story, or a random one (ignores the odds and the cooldown)",
-        run = function(farmId, args)
-            local tc = g_currentMission.TheContractor
-            local keys = {}
-            for _, story in ipairs(TheContractorGoodNews.STORIES) do
-                table.insert(keys, story.key)
-            end
-
-            local wanted = args[1]
-            local storyKey = nil
-            if wanted ~= nil then
-                for _, key in ipairs(keys) do
-                    if string.lower(key) == string.lower(wanted) then
-                        storyKey = key
-                    end
-                end
-                if storyKey == nil then
-                    return string.format("Error: no story '%s'. Stories: %s", wanted, table.concat(keys, ", "))
-                end
-            else
-                storyKey = TheContractorGoodNews.chooseStory(tc.GoodNews.lastStoryByFarm[farmId]).key
-            end
-
-            tc.GoodNews.forcedStory = storyKey
-            local incident, reason = tc.RandomEvents:triggerEvent(farmId, TheContractorGoodNews.EVENT_TYPE)
-            tc.GoodNews.forcedStory = nil
-            if incident == nil then
-                return string.format("No good news: %s", reason)
-            end
-            return string.format("Good news '%s' for farm %d (incident %d)", storyKey, farmId, incident.id)
-        end,
-    })
+-- tcEvent trigger goodNews's details: every story, so they can be found in
+-- game ("[photoPosted|parishNews|...]").
+function TheContractorGoodNews.getStoryDetails()
+    local keys = {}
+    for _, story in ipairs(TheContractorGoodNews.STORIES) do
+        table.insert(keys, story.key)
+    end
+    return "[" .. table.concat(keys, "|") .. "]"
 end
-
--- Console (068's tcCompany event) ---------------------------------------------------
 
 -- Sets forcedStory for the trigger, or returns why not.
 function TheContractorGoodNews:prepareConsoleStory(farmId, wanted)

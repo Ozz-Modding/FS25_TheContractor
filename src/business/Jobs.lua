@@ -2442,6 +2442,16 @@ end
 -- Console commands (tcJob - see TCConsole) ---------------------------------------------
 
 function TheContractorJobs.registerConsoleCommands()
+    TCConsole.registerHint("jobId", "a job's id (tcJob list; tcJob list all for finished ones too)")
+    TCConsole.registerHint("state", function()
+        local states = {}
+        for _, state in pairs(TheContractorJob.STATE) do
+            table.insert(states, state)
+        end
+        table.sort(states)
+        return TCConsole.listNames(states)
+    end)
+
     -- The ids the other job commands take. Open jobs by default (not yet
     -- completed, declined or missed), or one state, or all. Read-only, so it
     -- works on any machine.
@@ -2511,12 +2521,20 @@ function TheContractorJobs.registerConsoleCommands()
         args = "<jobType> <fieldId> <skill 1-10> <price> <period 1-12> <day>",
         description = "Create a job with every detail set by hand, unchecked",
         run = function(farmId, args)
-            local jobType = args[1]
             local fieldId, skill, price = tonumber(args[2]), tonumber(args[3]), tonumber(args[4])
             local targetPeriod, targetDay = tonumber(args[5]), tonumber(args[6])
-            if jobType == nil or fieldId == nil or skill == nil or price == nil or targetPeriod == nil or
+            if args[1] == nil or fieldId == nil or skill == nil or price == nil or targetPeriod == nil or
                 targetDay == nil then
                 return false
+            end
+            -- An event's own type (outside JOB_TYPE_KEYS) by its exact key.
+            local jobType = TheContractorJobGeneration.findJobType(args[1])
+            if jobType == nil and TheContractorJobGeneration.JOB_TYPES[args[1]] ~= nil then
+                jobType = args[1]
+            end
+            if jobType == nil then
+                return string.format("Unknown job type '%s'. Job types: %s", args[1],
+                    table.concat(TheContractorJobGeneration.JOB_TYPE_KEYS, ", "))
             end
 
             -- Typed at the current price level; jobs store it without

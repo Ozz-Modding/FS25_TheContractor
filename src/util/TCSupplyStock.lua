@@ -368,12 +368,18 @@ function TCSupplyStock.registerConsoleCommands()
         args = "[fillType]",
         description = "Your storages the Supplies tab counts, with where they are",
         serverOnly = false,
+        hints = { fillType = "a fill type's name, e.g. SEEDS (left out, every supply; a wrong one lists them)" },
         run = function(farmId, args, context)
             local fillTypes
             if args[1] ~= nil then
                 local fillTypeIndex = g_fillTypeManager:getFillTypeIndexByName(string.upper(args[1]))
                 if fillTypeIndex == nil then
-                    return string.format("No fill type called %s (e.g. SEEDS, FERTILIZER, DIESEL).", args[1])
+                    local names = {}
+                    for _, index in ipairs(TCSupplyStock.getSupplyFillTypes(farmId)) do
+                        table.insert(names, g_fillTypeManager:getFillTypeNameByIndex(index))
+                    end
+                    return string.format("No fill type called %s. Your supplies: %s", args[1],
+                        TCConsole.listNames(names))
                 end
                 fillTypes = { fillTypeIndex }
             else

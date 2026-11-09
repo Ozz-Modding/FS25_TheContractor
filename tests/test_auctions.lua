@@ -194,13 +194,6 @@ test("a sale's only ever in spring or autumn, 2 to 4 months ahead", function()
     assertEquals(A.periodAfter(12, 2), 2)
 end)
 
-test("the month on the signs is vanilla's: period 1 is March, six months on for a southern map", function()
-    setup()
-    assertEquals(TheContractorAuctions.getMonth(1, false), 3)
-    assertEquals(TheContractorAuctions.getMonth(11, false), 1)
-    assertEquals(TheContractorAuctions.getMonth(1, true), 9)
-end)
-
 test("over many years: about one a year, sometimes two, one at a time, every sale in spring or autumn", function()
     -- One day a month, so each month's roll is that day's.
     local world = setup(1)

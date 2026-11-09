@@ -115,7 +115,7 @@ function TheContractorTheft.new()
     local self = {}
     setmetatable(self, TheContractorTheft_mt)
 
-    -- tcCompany outcome theft: the next police report's outcome. Server-only,
+    -- tcDebug outcome theft: the next police report's outcome. Server-only,
     -- not saved.
     self.forcedOutcome = nil
 

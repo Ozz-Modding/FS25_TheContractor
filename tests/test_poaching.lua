@@ -351,29 +351,30 @@ test("a worker who's gone or leaving ends the offer quietly", function()
     assertEquals(#world.messages, 2, "nothing more said")
 end)
 
-test("tcCompany event poaching picks a worker, tcCompany outcome poaching the decision", function()
+test("tcEvent trigger poaching picks a worker, tcDebug outcome poaching the decision", function()
     local world, tc = setup()
     world:addWorker({ id = 1, name = "Amy Hall", market = 1000, hiredMonthsAgo = 1 })
     world:addWorker({ id = 2, name = "Ben Ward", market = 9000 })
     TCConsole.reset()
     TheContractorRandomEvents.registerConsoleCommands()
-    local group = TCConsole.groups.company
+    local group = TCConsole.groups.event
+    local debug = TCConsole.groups.debug
 
-    TCConsole.dispatch(group, { "event", "poaching", "amy" })
+    TCConsole.dispatch(group, { "trigger", "poaching", "amy" })
     assertEquals(world.messages[1].titleKey, "tc_poaching_offerTitle", "opened")
     assertEquals(world.messages[1].args[1], "Amy Hall", "the named worker, however new")
     assertEquals(tc.Poaching.forcedWorkerId, nil, "cleared")
 
-    TCConsole.dispatch(group, { "event", "poaching", "amy" })
+    TCConsole.dispatch(group, { "trigger", "poaching", "amy" })
     assertEquals(#world.messages, 1, "she already has an offer")
-    TCConsole.dispatch(group, { "event", "poaching", "zed" })
+    TCConsole.dispatch(group, { "trigger", "poaching", "zed" })
     assertEquals(#world.messages, 1, "no worker called that")
 
-    TCConsole.dispatch(group, { "outcome", "poaching", "STAYS" })
+    TCConsole.dispatch(debug, { "outcome", "poaching", "STAYS" })
     assertEquals(tc.Poaching.forcedStay, true)
-    TCConsole.dispatch(group, { "outcome", "poaching", "maybe" })
+    TCConsole.dispatch(debug, { "outcome", "poaching", "maybe" })
     assertEquals(tc.Poaching.forcedStay, true, "not an outcome: unchanged")
 
-    TCConsole.dispatch(group, { "event", "dieselTheft" })
+    TCConsole.dispatch(group, { "trigger", "dieselTheft" })
     assertEquals(#world.messages, 1, "not an event type here")
 end)

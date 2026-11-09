@@ -513,7 +513,7 @@ end
 
 -- Harvest bonus (server) ---------------------------------------------------------
 
--- Also the tcWorker harvestBonus console command's way in. Nothing for a
+-- Also the tcDebug harvestBonus console command's way in. Nothing for a
 -- farm with no staff, or one already being asked.
 function TheContractorMorale:postHarvestBonus(farmId)
     local count = #g_currentMission.TheContractor.Staff:getRoster(farmId)
@@ -679,9 +679,29 @@ end
 -- Console commands (tcWorker - see TCConsole) ------------------------------------------
 
 function TheContractorMorale.registerConsoleCommands()
+    -- The player's: set it. The readout (with the hidden temperament and
+    -- quit chance) is tcDebug's.
     TCConsole.register("worker", "morale", {
+        args = "<worker> <value 0-100>",
+        description = "Set a worker's morale",
+        run = function(farmId, args)
+            local worker, problem = TCConsole.findWorker(farmId, args[1])
+            if worker == nil then
+                return problem or false
+            end
+            local value = tonumber(args[2])
+            if value == nil or value < TheContractorMorale.MIN or value > TheContractorMorale.MAX then
+                return false
+            end
+            g_currentMission.TheContractor.Morale:setMorale(farmId, worker, value)
+            return string.format("%s's morale is now %.0f (%s)", worker.name, worker.morale,
+                TheContractorMorale.getBand(worker.morale))
+        end,
+    })
+
+    TCConsole.register("debug", "morale", {
         args = "<worker> [value]",
-        description = "Show a worker's morale and this month's workload, or set their morale (0-100)",
+        description = "A worker's morale, workload, target, quit chance and hidden temperament; or set it (0-100) first",
         run = function(farmId, args)
             local worker, problem = TCConsole.findWorker(farmId, args[1])
             if worker == nil then
@@ -709,7 +729,7 @@ function TheContractorMorale.registerConsoleCommands()
         end,
     })
 
-    TCConsole.register("worker", "roughPatch", {
+    TCConsole.register("debug", "roughPatch", {
         args = "<worker> [months=1-3 rolled, 0=end]",
         description = "Start a rough patch for a worker now (a morale knock, then a lower target), or end one",
         run = function(farmId, args)
@@ -756,7 +776,7 @@ function TheContractorMorale.registerConsoleCommands()
         end,
     })
 
-    TCConsole.register("worker", "harvestBonus", {
+    TCConsole.register("debug", "harvestBonus", {
         description = "Post the harvest bonus question to your inbox now",
         run = function(farmId, args)
             if g_currentMission.TheContractor.Morale:postHarvestBonus(farmId) then

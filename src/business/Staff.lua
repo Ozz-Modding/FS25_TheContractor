@@ -684,7 +684,7 @@ function TheContractorStaff:updateSickness()
 end
 
 -- A worker falls sick (server-only): off sick now if idle, else once
--- they're back. Also used by tcWorker sick, whose forceInspection makes 055's
+-- they're back. Also used by tcDebug sick, whose forceInspection makes 055's
 -- inspection certain if the farm has no H&S programme, and by 104's
 -- workplace injuries, whose days are set by the injury rather than rolled
 -- and whose isInjury changes the notification ("hurt at work", not "called
@@ -2115,6 +2115,9 @@ end
 -- Console commands (tcWorker - see TCConsole) ------------------------------------------
 
 function TheContractorStaff.registerConsoleCommands()
+    TCConsole.registerHint("worker", "a hired worker's id, or the start of their first or last name (tcWorker list)")
+    TCConsole.registerHint("candidate", "a candidate's id, or the start of their name (tcWorker pool)")
+
     -- The ids the other worker commands take - the Staff tab doesn't show
     -- them. Read-only, so it works on any machine.
     TCConsole.register("worker", "list", {
@@ -2203,7 +2206,7 @@ function TheContractorStaff.registerConsoleCommands()
 
     TCConsole.register("worker", "hire", {
         args = "<candidate>",
-        description = "Hire a candidate from the pool (id or name, see tcWorker pool)",
+        description = "Hire a candidate from the pool",
         run = function(farmId, args)
             local candidate, problem = TCConsole.findPerson(g_currentMission.TheContractor.Staff:getCandidatePool(),
                 args[1], "candidate")
@@ -2268,7 +2271,7 @@ function TheContractorStaff.registerConsoleCommands()
 
     -- 055: through the normal path, so the H&S programme's shorter spells
     -- and the no-programme inspection roll both apply.
-    TCConsole.register("worker", "sick", {
+    TCConsole.register("debug", "sick", {
         args = "<worker> [inspect]",
         description = "Make a worker fall sick now; inspect forces an H&S inspection if you have no programme",
         run = function(farmId, args)

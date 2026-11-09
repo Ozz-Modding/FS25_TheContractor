@@ -1,8 +1,9 @@
 -- The mod's own log. TCLog.info is the mod's running commentary (jobs
--- dispatched, invoices paid, events rolled): useful when chasing a bug, too
--- much to ship switched on, so it's off unless a player toggles it on with
--- `tcLog` (installed by TCConsole). Warnings and errors are real problems
--- and always go to the log, whatever the switch says.
+-- dispatched, invoices paid, events rolled): on by default, so a player's
+-- log.txt already has it when they report a bug, and a player who finds it
+-- too chatty toggles it off with `tcLog` (installed by TCConsole). Warnings
+-- and errors are real problems and always go to the log, whatever the
+-- switch says.
 --
 -- The switch is this machine's own (nothing is synced) and is kept in
 -- LOCAL_FILENAME in this machine's modSettings folder, so it stays on across
@@ -14,7 +15,7 @@ TCLog = {}
 TCLog.LOCAL_FILENAME = "debugLog.xml"
 TCLog.SAVE_KEY = "TheContractorDebugLog"
 
-TCLog.enabled = false
+TCLog.enabled = true
 TCLog.settingsDir = g_currentModSettingsDirectory
 
 function TCLog.info(fmt, ...)
@@ -49,7 +50,10 @@ function TCLog.load()
     if xmlFile == nil or xmlFile == 0 then
         return
     end
-    TCLog.enabled = getXMLBool(xmlFile, TCLog.SAVE_KEY .. "#enabled") == true
+    local enabled = getXMLBool(xmlFile, TCLog.SAVE_KEY .. "#enabled")
+    if enabled ~= nil then
+        TCLog.enabled = enabled
+    end
     delete(xmlFile)
 end
 

@@ -777,7 +777,7 @@ local function formatMoney(amount)
     return g_i18n:formatMoney(amount or 0, 0, true, true)
 end
 
--- tcCompany auction lots: every lot with its guide, closing time, the
+-- tcDebug auctionLots: every lot with its guide, closing time, the
 -- farms' bids and result, and (an admin's tuning aid) its local bid.
 function TheContractorAuctionSale:describeLots()
     local site = g_currentMission.TheContractor.AuctionSite
@@ -811,7 +811,7 @@ function TheContractorAuctionSale:describeLots()
     return table.concat(lines, "\n")
 end
 
--- tcCompany auction bid <lot> <amount|guide|off>.
+-- tcDebug auctionBid <lot> <amount|guide|off>.
 function TheContractorAuctionSale:consoleBid(farmId, lotNumber, value)
     local site = g_currentMission.TheContractor.AuctionSite
     local lot = site:getLot(lotNumber)
@@ -837,7 +837,7 @@ function TheContractorAuctionSale:consoleBid(farmId, lotNumber, value)
         formatMoney(lot.guidePrice))
 end
 
--- tcCompany auction close [lot|all]: the next open lot, that one, or every one.
+-- tcDebug auctionClose [lot|all]: the next open lot, that one, or every one.
 function TheContractorAuctionSale:consoleClose(which)
     local site = getSaleSite()
     if site == nil then

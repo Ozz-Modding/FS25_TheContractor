@@ -1,5 +1,5 @@
 -- Auction roadside signs (136, spike): signs at the map's busiest junctions
--- giving an auction's month, driven from the console (tcCompany
+-- giving an auction's month, driven from the console (tcDebug
 -- auctionSigns) with no auction around them yet (137 puts them up a month
 -- before a sale, with its month).
 --
@@ -95,7 +95,7 @@ function TheContractorAuctionSigns.new()
     -- terrain's there by then).
     self.models = {}
     self.markers = {}
-    -- A testing aid (tcCompany auctionSigns flag): a pin on each sign as
+    -- A testing aid (tcDebug auctionSigns flag): a pin on each sign as
     -- well, easier to see than its marker's circle and teleported to from
     -- the map. This machine only, never saved.
     self.isFlagged = false
@@ -349,7 +349,7 @@ function TheContractorAuctionSigns.describeSign(i, sign)
     return text
 end
 
--- tcCompany auctionSigns flag: pins on the signs, or off again. Returns the
+-- tcDebug auctionSigns flag: pins on the signs, or off again. Returns the
 -- text to print.
 function TheContractorAuctionSigns:toggleFlags()
     self.isFlagged = not self.isFlagged
@@ -378,7 +378,7 @@ end
 
 function TheContractorAuctionSigns:describe()
     if #self.signs == 0 then
-        return "There are no auction signs up. 'tcCompany auctionSigns <month>' puts them up."
+        return "There are no auction signs up. 'tcDebug auctionSigns <month>' puts them up."
     end
     local lines = { string.format("%d auction sign(s) up for %s:", #self.signs,
         MONTH_WORDS[self.month] or "?") }
@@ -465,8 +465,9 @@ end
 -- Console ---------------------------------------------------------------------------------------
 
 function TheContractorAuctionSigns.registerConsoleCommands()
-    TCConsole.register("company", "auctionSigns", {
+    TCConsole.register("debug", "auctionSigns", {
         args = "[month|clear|flag]",
+        hints = { month = "1 to 12, or its name (july, or jul)" },
         description = "Auction signs spike: put up signs at the map's busiest junctions for a month, take them down, or pin them on the map",
         run = function(_, args)
             local signs = g_currentMission.TheContractor.AuctionSigns

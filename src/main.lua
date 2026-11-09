@@ -530,7 +530,7 @@ function TheContractor:loadMap()
     TheContractorAuctions.registerConsoleCommands()
     TheContractorRepairContracts.registerConsoleCommands()
     TheContractorYards.registerConsoleCommands()
-    -- 110: tcCompany farmers, with 109's preview.
+    -- 110: tcFarmer list, with 109's preview.
     TheContractorFarmers.registerConsoleCommands()
     TheContractorRelationships.registerConsoleCommands()
     TCConsole.install()

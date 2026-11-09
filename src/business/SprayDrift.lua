@@ -85,7 +85,7 @@ function TheContractorSprayDrift.new()
     local self = {}
     setmetatable(self, TheContractorSprayDrift_mt)
 
-    -- tcCompany outcome sprayDrift: true/false for the next complaint's findings.
+    -- tcDebug outcome sprayDrift: true/false for the next complaint's findings.
     -- Server-only, not saved.
     self.forcedUpheld = nil
 

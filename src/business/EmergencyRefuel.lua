@@ -94,7 +94,7 @@ function TheContractorEmergencyRefuel.new()
     local self = {}
     setmetatable(self, TheContractorEmergencyRefuel_mt)
 
-    -- Server: tcCompany event emergencyRefuel [reason] [combine] [farmer],
+    -- Server: tcEvent trigger emergencyRefuel [reason] [combine] [farmer],
     -- for one trigger.
     self.forcedReason = nil
     self.forcedFarmerId = nil
@@ -123,6 +123,7 @@ function TheContractorEmergencyRefuel:register(randomEvents, inbox)
             end },
         },
         console = {
+            details = "[headland|gauge|forgot] [combine] [farmer]",
             prepareTrigger = function(farmId, details)
                 return self:prepareTrigger(details)
             end,
@@ -528,7 +529,7 @@ function TheContractorEmergencyRefuel:prepareTrigger(details)
         end
     end
     self.forcedReason, self.forcedCombine = nil, false
-    return "Usage: tcCompany event emergencyRefuel [headland|gauge|forgot] [combine] [farmer id or name] (tcCompany farmers lists them)"
+    return "Usage: tcEvent trigger emergencyRefuel [headland|gauge|forgot] [combine] [farmer id or name] (tcFarmer list)"
 end
 
 -- Pricing (server) ----------------------------------------------------------------------

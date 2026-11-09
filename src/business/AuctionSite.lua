@@ -1,5 +1,5 @@
 -- Auction site and lots (135, spike): a machinery auction's field, laid out
--- with rows of used equipment, driven from the console (tcCompany
+-- with rows of used equipment, driven from the console (tcDebug
 -- auctionSite) with no auction around it yet (137 owns the auction).
 --
 --   Picking the field (getCandidates): a field nobody's farm owns (a
@@ -614,7 +614,7 @@ end
 -- are drawn. Returns the text to print; self.site is set if it went up.
 function TheContractorAuctionSite:start(fieldId, lotCount, auctionId)
     if self.site ~= nil then
-        return string.format("There's a site on field %d already: 'tcCompany auctionSite clear' first.",
+        return string.format("There's a site on field %d already: 'tcDebug auctionSite clear' first.",
             self.site.fieldId)
     end
     local field = g_fieldManager:getFieldById(fieldId)
@@ -692,7 +692,7 @@ function TheContractorAuctionSite:start(fieldId, lotCount, auctionId)
     elseif ground == "left" then
         table.insert(lines, "  The ground was left as it is.")
     end
-    table.insert(lines, "Rows red, aisles green, the entrance's space blue, the entrance yellow (this machine). 'tcCompany auctionSite' for progress.")
+    table.insert(lines, "Rows red, aisles green, the entrance's space blue, the entrance yellow (this machine). 'tcDebug auctionSite' for progress.")
     return table.concat(lines, "\n")
 end
 
@@ -1083,7 +1083,7 @@ function TheContractorAuctionSite.describeCandidate(candidate)
         #problems == 0 and "can hold the sale" or table.concat(problems, ", "))
 end
 
--- tcCompany auctionSite: the site, if there's one, and the best fields.
+-- tcDebug auctionSite: the site, if there's one, and the best fields.
 function TheContractorAuctionSite:getListText(preferredLots)
     local lines = {}
     if self.site ~= nil then
@@ -1493,7 +1493,7 @@ end
 -- Console ---------------------------------------------------------------------------------
 
 function TheContractorAuctionSite.registerConsoleCommands()
-    TCConsole.register("company", "auctionSite", {
+    TCConsole.register("debug", "auctionSite", {
         args = "[fieldId [lots]|clear]",
         description = "Auction site spike: the best fields for a sale, or lay out and spawn lots on a field, or clear them",
         run = function(_, args)

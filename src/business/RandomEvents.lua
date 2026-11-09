@@ -50,7 +50,7 @@
 -- that day, and the hourly tick triggers it once that hour has come (late
 -- rather than never, if the hour was skipped). While one is pending, that
 -- type isn't rolled again on that farm. Pending triggers are server-only
--- and saved. The console's tcCompany event ignores the window.
+-- and saved. The console's tcEvent trigger ignores the window.
 --
 -- After bad weather (107): an event type with chancePerStorm (0-1) instead
 -- of ratePerPeriod is rolled once at the end of each spell of bad weather
@@ -63,17 +63,21 @@
 --
 -- Console (083): an optional console = { ... } on the definition, all
 -- server-side:
---   prepareTrigger(farmId, details, context)  tcCompany event <type>
+--   details = "[field|road]"         what tcEvent trigger <type> takes after
+--                                    the type, as usage text: tcEvent list and
+--                                    trigger's own list show it, so every
+--                                    type's options can be found in game
+--   prepareTrigger(farmId, details, context)  tcEvent trigger <type>
 --                                    [details]: sets up what the next trigger
 --                                    acts on (a worker, a story, the spot in
 --                                    front of the typing player: TCConsole's
 --                                    context) and returns nil, or an error to
 --                                    print
 --   clearTrigger()                   after that trigger, whatever happened
---   outcomes = { "yes", "no" }       tcCompany outcome <type> <outcome>: the
+--   outcomes = { "yes", "no" }       tcDebug outcome <type> <outcome>: the
 --   setOutcome(outcome)              outcomes there are, and forcing one for the
 --                                    next incident (returns the text to print)
--- so no event type needs a tcCompany subcommand of its own.
+-- so no event type needs a subcommand of its own.
 --
 -- Server: rolls, runs stages, saves. Every machine: holds the incidents and
 -- each farm's cooldowns (TCRandomEventIncidentEvent, initial client state),
@@ -1024,7 +1028,7 @@ function TheContractorRandomEvents:readInitialClientState(streamId, connection)
     end
 end
 
--- Console commands (tcCompany - see TCConsole) -----------------------------------------
+-- Console commands (tcEvent, tcDebug - see TCConsole) -----------------------------------------
 
 function TheContractorRandomEvents:getEventTypeName(key)
     local definition = self.eventTypes[key]
@@ -1060,80 +1064,26 @@ function TheContractorRandomEvents:getOutcomeTypesText()
     return #parts > 0 and table.concat(parts, ", ") or "none"
 end
 
+-- "  key [details]" for each type, for trigger's list and the hint.
+function TheContractorRandomEvents:getTriggerListText()
+    local lines = {}
+    for _, key in ipairs(self:getEventTypeKeys()) do
+        local console = self:getEventType(key).console
+        local details = console ~= nil and console.details or nil
+        table.insert(lines, details ~= nil and (key .. " " .. details) or key)
+    end
+    return #lines > 0 and table.concat(lines, ", ") or "none yet"
+end
+
 function TheContractorRandomEvents.registerConsoleCommands()
-    TCConsole.register("company", "event", {
-        args = "<type> [details]",
-        description = "Make a random event happen to your farm now (ignores the odds, the cooldown and the time of day)",
-        run = function(farmId, args, context)
-            local randomEvents = g_currentMission.TheContractor.RandomEvents
-            local wanted = args[1]
-            local keys = randomEvents:getEventTypeKeys()
-            if wanted == nil then
-                return string.format("Usage: tcCompany event <type> [details]. Types: %s",
-                    #keys > 0 and table.concat(keys, ", ") or "none yet")
-            end
+    TCConsole.registerHint("eventType", function()
+        local randomEvents = g_currentMission.TheContractor ~= nil and g_currentMission.TheContractor.RandomEvents
+        return randomEvents and randomEvents:getTriggerListText() or "tcEvent list"
+    end)
+    TCConsole.registerHint("details", "what the event acts on, shown after each type above; left out, it picks as the real event does")
 
-            local key = randomEvents:findEventTypeKey(wanted)
-            if key == nil then
-                return string.format("Error: no event type '%s'. Known types: %s", wanted,
-                    #keys > 0 and table.concat(keys, ", ") or "none yet")
-            end
-
-            -- The type's own details (a worker, a story), set up just for
-            -- this trigger.
-            local console = randomEvents:getEventType(key).console
-            local details = {}
-            for i = 2, #args do
-                table.insert(details, args[i])
-            end
-            if console ~= nil and console.prepareTrigger ~= nil then
-                local problem = console.prepareTrigger(farmId, details, context)
-                if problem ~= nil then
-                    return problem
-                end
-            elseif #details > 0 then
-                return string.format("Error: %s takes no details", key)
-            end
-
-            local incident, reason = randomEvents:triggerEvent(farmId, key)
-            if console ~= nil and console.clearTrigger ~= nil then
-                console.clearTrigger()
-            end
-            if incident == nil then
-                return string.format("No %s: %s", key, reason)
-            end
-            return string.format("Incident %d (%s) opened on farm %d, now at stage '%s'%s", incident.id, key, farmId,
-                incident.stage, randomEvents:getIncident(incident.id) == nil and " (already over)" or "")
-        end,
-    })
-
-    TCConsole.register("company", "outcome", {
-        args = "<type> <outcome>",
-        description = "Decide how the next event of a type comes out (once, then the odds are back to normal)",
-        run = function(farmId, args)
-            local randomEvents = g_currentMission.TheContractor.RandomEvents
-            local key = randomEvents:findEventTypeKey(args[1])
-            local console = key ~= nil and randomEvents:getEventType(key).console or nil
-            if console == nil or console.outcomes == nil then
-                return string.format("Usage: tcCompany outcome <type> <outcome>. Types: %s",
-                    randomEvents:getOutcomeTypesText())
-            end
-
-            local outcome = nil
-            for _, candidate in ipairs(console.outcomes) do
-                if args[2] ~= nil and string.lower(candidate) == string.lower(args[2]) then
-                    outcome = candidate
-                end
-            end
-            if outcome == nil then
-                return string.format("Usage: tcCompany outcome %s <%s>", key, table.concat(console.outcomes, "|"))
-            end
-            return console.setOutcome(outcome)
-        end,
-    })
-
-    TCConsole.register("company", "events", {
-        description = "Your farm's open incidents, and each event type's odds and cooldown",
+    TCConsole.register("event", "list", {
+        description = "Each event type: its odds for your farm, its cooldown and what tcEvent trigger takes for it",
         serverOnly = false,
         run = function(farmId, args)
             local randomEvents = g_currentMission.TheContractor.RandomEvents
@@ -1169,10 +1119,97 @@ function TheContractorRandomEvents.registerConsoleCommands()
                             definition.triggerHours[2])
                     end
                 end
-                table.insert(lines, string.format("  %s (%s): %s%s", key, randomEvents:getEventTypeName(key), odds,
+                local details = definition.console ~= nil and definition.console.details or nil
+                table.insert(lines, string.format("  %s%s (%s): %s%s", key, details ~= nil and (" " .. details) or "",
+                    randomEvents:getEventTypeName(key), odds,
                     cooldownLeft > 0 and string.format(", cooling down for %d more month(s)", cooldownLeft) or ""))
             end
+            return table.concat(lines, "\n")
+        end,
+    })
 
+    TCConsole.register("event", "trigger", {
+        args = "<eventType> [details]",
+        description = "Make a random event happen to your farm now (ignores the odds, the cooldown and the time of day)",
+        run = function(farmId, args, context)
+            local randomEvents = g_currentMission.TheContractor.RandomEvents
+            local wanted = args[1]
+            if wanted == nil then
+                return false
+            end
+
+            local key = randomEvents:findEventTypeKey(wanted)
+            if key == nil then
+                return string.format("Error: no event type '%s'. Types: %s", wanted,
+                    randomEvents:getTriggerListText())
+            end
+
+            -- The type's own details (a worker, a story), set up just for
+            -- this trigger.
+            local console = randomEvents:getEventType(key).console
+            local details = {}
+            for i = 2, #args do
+                table.insert(details, args[i])
+            end
+            if console ~= nil and console.prepareTrigger ~= nil then
+                local problem = console.prepareTrigger(farmId, details, context)
+                if problem ~= nil then
+                    return problem
+                end
+            elseif #details > 0 then
+                return string.format("Error: %s takes no details", key)
+            end
+
+            local incident, reason = randomEvents:triggerEvent(farmId, key)
+            if console ~= nil and console.clearTrigger ~= nil then
+                console.clearTrigger()
+            end
+            if incident == nil then
+                return string.format("No %s: %s", key, reason)
+            end
+            return string.format("Incident %d (%s) opened on farm %d, now at stage '%s'%s", incident.id, key, farmId,
+                incident.stage, randomEvents:getIncident(incident.id) == nil and " (already over)" or "")
+        end,
+    })
+
+    TCConsole.register("debug", "outcome", {
+        args = "<eventType> <outcome>",
+        description = "Decide how the next event of a type comes out (once, then the odds are back to normal)",
+        hints = {
+            eventType = function()
+                return g_currentMission.TheContractor.RandomEvents:getOutcomeTypesText()
+            end,
+            outcome = "one of the type's outcomes, shown beside it above",
+        },
+        run = function(farmId, args)
+            local randomEvents = g_currentMission.TheContractor.RandomEvents
+            local key = randomEvents:findEventTypeKey(args[1])
+            local console = key ~= nil and randomEvents:getEventType(key).console or nil
+            if console == nil or console.outcomes == nil then
+                return false
+            end
+
+            local outcome = nil
+            for _, candidate in ipairs(console.outcomes) do
+                if args[2] ~= nil and string.lower(candidate) == string.lower(args[2]) then
+                    outcome = candidate
+                end
+            end
+            if outcome == nil then
+                return string.format("Usage: tcDebug outcome %s <%s>", key, table.concat(console.outcomes, "|"))
+            end
+            return console.setOutcome(outcome)
+        end,
+    })
+
+    -- The hidden side: rolls waiting for their hour, and each open
+    -- incident's own data.
+    TCConsole.register("debug", "incidents", {
+        description = "Events rolled and waiting for their hour, and your open incidents with their stage and data",
+        serverOnly = false,
+        run = function(farmId, args)
+            local randomEvents = g_currentMission.TheContractor.RandomEvents
+            local lines = { string.format("Today is day %d.", getToday()) }
             for _, pending in ipairs(randomEvents.pendingTriggers) do
                 if pending.farmId == farmId then
                     table.insert(lines, string.format("  %s rolled, due day %d at %02d:00", pending.eventType,

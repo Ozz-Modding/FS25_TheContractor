@@ -301,17 +301,17 @@ test("the console forces an event, and only a known one", function()
     registerDummy(randomEvents)
     TCConsole.reset()
     TheContractorRandomEvents.registerConsoleCommands()
-    local group = TCConsole.groups.company
+    local group = TCConsole.groups.event
 
     g_farmManager.getFarmByUserId = function()
         return { farmId = 1 }
     end
 
-    TCConsole.dispatch(group, { "event", "DUMMY" })
+    TCConsole.dispatch(group, { "trigger", "DUMMY" })
     assertEquals(#randomEvents:getIncidents(1), 1, "opened, whatever the case")
     assertEquals(randomEvents:getCooldownLeft(1, "dummy"), 12)
-    TCConsole.dispatch(group, { "event", "nope" })
-    TCConsole.dispatch(group, { "event" })
+    TCConsole.dispatch(group, { "trigger", "nope" })
+    TCConsole.dispatch(group, { "trigger" })
     assertEquals(#randomEvents:getIncidents(1), 1, "an unknown type or none opens nothing")
 end)
 
@@ -671,7 +671,7 @@ test("the chance per spell follows the setting and the cooldown, and a held one 
     assertEquals(#randomEvents.pendingTriggers, 0, "off")
 end)
 
-test("an event after bad weather isn't rolled daily, and tcCompany events says how it comes", function()
+test("an event after bad weather isn't rolled daily, and tcEvent list says how it comes", function()
     local _, randomEvents = setup(5)
     local log = registerStorm(randomEvents, 0.15)
     for _ = 1, 50 do

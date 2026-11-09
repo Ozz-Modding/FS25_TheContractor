@@ -44,8 +44,12 @@ local function setup()
     tc.Morale = TheContractorMorale.new()
     TCConsole.reset()
     TheContractorMorale.registerConsoleCommands()
+    -- The player's commands are tcWorker's, the testing ones tcDebug's.
     world.console = function(args)
         return TCConsole.dispatch(TCConsole.groups.worker, args)
+    end
+    world.debugConsole = function(args)
+        return TCConsole.dispatch(TCConsole.groups.debug, args)
     end
 
     -- math.random() gives world.roll (1 = never); ranges their lowest value.
@@ -122,6 +126,11 @@ test("the console sets morale exactly, whatever the temperament", function()
     local amy = world:addWorker(1, "Amy Hall", TheContractorMorale.TEMPERAMENT_MIN)
     world.console({ "morale", "1", "20" })
     assertNear(amy.morale, 20, 0.001)
+
+    world.console({ "morale", "1" })
+    assertNear(amy.morale, 20, 0.001, "tcWorker morale only sets: no value, no change")
+    world.debugConsole({ "morale", "1", "35" })
+    assertNear(amy.morale, 35, 0.001, "tcDebug's readout can set it too")
 end)
 
 test("drift settles on a target moved by temperament", function()
@@ -191,13 +200,13 @@ end)
 test("the console starts and ends a rough patch", function()
     local world = setup()
     local amy = world:addWorker(1, "Amy Hall", 0)
-    world.console({ "roughPatch", "amy", "3" })
+    world.debugConsole({ "roughPatch", "amy", "3" })
     assertEquals(amy.roughPatchPeriods, 3)
     local morale = amy.morale
-    world.console({ "roughPatch", "amy", "0" })
+    world.debugConsole({ "roughPatch", "amy", "0" })
     assertEquals(amy.roughPatchPeriods, 0)
     assertNear(amy.morale, morale, 0.001)
-    world.console({ "roughPatch", "amy", "x" })
+    world.debugConsole({ "roughPatch", "amy", "x" })
     assertEquals(amy.roughPatchPeriods, 0, "not a number: refused")
 end)
 

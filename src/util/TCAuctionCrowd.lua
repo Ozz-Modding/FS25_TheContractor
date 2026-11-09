@@ -1,6 +1,6 @@
 -- Auction crowd (134, spike): people on a field, walking loops round it and
 -- standing about in small talking groups. Driven from the console
--- (tcCompany crowd) on any field, and put on an auction's aisles by 137.
+-- (tcDebug crowd) on any field, and put on an auction's aisles by 137.
 -- 140: on an auction the cross aisles are walked too, people stand by the
 -- lots, round the food and by the gate (TCAuctionScene's spots), and they
 -- come and go through the sale day (getShare, rankFigures): nobody before
@@ -911,7 +911,7 @@ function TCAuctionCrowd.putUp(fieldId, loops, spots, people, options)
         table.insert(lines, string.format("  loop %d: %.0f m", i, path.length))
     end
     table.insert(lines, string.format("  %d standing spots", #spots))
-    table.insert(lines, "Models load as you come within 150 m. 'tcCompany crowd' shows how many are loaded and shown, and what the crowd costs a frame.")
+    table.insert(lines, "Models load as you come within 150 m. 'tcDebug crowd' shows how many are loaded and shown, and what the crowd costs a frame.")
     return table.concat(lines, "\n")
 end
 
@@ -1094,7 +1094,7 @@ function TCAuctionCrowd.reset()
 end
 
 function TCAuctionCrowd.registerConsoleCommands()
-    TCConsole.register("company", "crowd", {
+    TCConsole.register("debug", "crowd", {
         args = "[fieldId|off] [people] [laneGap]",
         description = "Put an auction crowd on a field: people walking loops and standing in groups (this machine only)",
         serverOnly = false,

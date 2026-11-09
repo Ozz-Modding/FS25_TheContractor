@@ -426,11 +426,11 @@ test("a stolen vehicle that's gone after a reload is simply written off", functi
     assertEquals(world.messages[2].titleKey, "tc_theft_lostTitle", "written off")
 end)
 
-test("tcCompany outcome theft sets the next outcome", function()
+test("tcDebug outcome theft sets the next outcome", function()
     local _, tc = setup()
     TCConsole.reset()
     TheContractorRandomEvents.registerConsoleCommands()
-    local group = TCConsole.groups.company
+    local group = TCConsole.groups.debug
 
     TCConsole.dispatch(group, { "outcome", "THEFT", "Lost" })
     assertEquals(tc.Theft.forcedOutcome, "lost", "set, whatever the case")

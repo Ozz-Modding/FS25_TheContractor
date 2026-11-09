@@ -1,20 +1,27 @@
 # Console commands
 
-You type these into the developer console. You don't need cheats on. There are four group commands, a help command and a log switch:
+You type these into the developer console. You don't need cheats on. Each group is a command of its own, with subcommands:
 
 | Command | What it covers |
 |---|---|
 | `tcHelp` | Lists the groups below |
-| `tcWorker` | Hire, list and change your staff |
+| `tcWorker` | Hire, list and manage your staff |
 | `tcJob` | List, offer, create and force jobs |
-| `tcFinance` | Invoices, claims and botched jobs |
-| `tcCompany` | Reputation, Overview notices and random events |
+| `tcFinance` | Your claims and machinery insurance |
+| `tcCompany` | Reputation, Overview notices, the office, storages and vehicle history |
+| `tcEvent` | Random events: their odds, and making one happen |
+| `tcFarmer` | The map's farmers: who they are, their machines, your relationships, a new land split |
+| `tcYard` | Farm yards: list them, check a farmland, mark them on the map, override detection |
+| `tcAuction` | The machinery auction: see it, announce one, call it off |
 | `tcLog` | Toggles the mod's detailed log ([below](#tclog)) |
 
-Type a group on its own (or with `help`) to list its subcommands and their arguments. Subcommand names aren't case-sensitive. If you get the arguments wrong, the command prints that subcommand's usage.
+Testing tools that aren't part of the game (spikes, forced rolls, readouts of hidden state) are a separate group, `tcDebug`, in [debug-commands.md](debug-commands.md). It only appears with a marker file in place.
 
+Type a group on its own (or with `help`) to list its subcommands and their arguments. Subcommand names aren't case-sensitive. If you get the arguments wrong, or leave out one it needs, the command prints that subcommand's usage.
+
+- **Finding what a command takes:** nothing should need these docs to find. Under a subcommand's usage, and under a group's list, each argument that's an id or a name says where to find it, usually a list command: `<worker>` from `tcWorker list`, `<jobId>` from `tcJob list`, `<farmer>` from `tcFarmer list`, `<farmlandId>` from `tcYard list`, `<noticeId>` from `tcCompany notices`. An argument with a fixed set of values lists them, inline (`<on|off>`) or under the usage when there are many (`<jobType>`, `<eventType>`). A wrong name lists the right ones.
 - **Your farm:** every command acts on your current farm. Most need that farm to have created a company first.
-- **Server only:** commands that change something run on the server. In single player, or as the host, they run as you type them. As an admin on a joined client (a dedicated server's admins included) they're sent to the server and run there for your farm, where you're standing and the vehicle you're in, and the answer is printed when it comes back. Other players can't use them. The read-only lists `tcWorker list`, `tcWorker pool`, `tcJob list`, `tcJob log`, `tcCompany storages`, `tcCompany yards`, `tcCompany farmers`, `tcCompany notices`, `tcCompany vehicleLog`, `tcCompany events`, `tcWorker standing` and `tcWorker hours` also work on a joined client.
+- **Server only:** commands that change something run on the server. In single player, or as the host, they run as you type them. As an admin on a joined client (a dedicated server's admins included) they're sent to the server and run there for your farm, where you're standing and the vehicle you're in, and the answer is printed when it comes back. Other players can't use them. The read-only lists `tcWorker list`, `tcWorker pool`, `tcWorker hours`, `tcJob list`, `tcJob types`, `tcJob log`, `tcFinance insurance`, `tcCompany notices`, `tcCompany office`, `tcCompany storages`, `tcCompany vehicleLog`, `tcEvent list`, `tcFarmer list`, `tcFarmer preview`, `tcFarmer show`, `tcFarmer hide`, `tcFarmer relationships`, `tcYard list`, `tcYard check`, `tcYard show` and `tcYard hide` also work on a joined client.
 - **`<worker>`:** a hired worker's id, or the start of their first or last name. `amy`, `Hall` and `3` could all mean Amy Hall (#3). If a name matches more than one worker, the command lists them and asks for the id. `tcWorker list` shows ids and names.
 
 ## Workers — `tcWorker`
@@ -75,35 +82,12 @@ tcWorker quit 2
 tcWorker quit amy 0
 ```
 
-### `tcWorker morale <worker> [value]`
+### `tcWorker morale <worker> <value 0-100>`
 
-Shows one of your hired workers' morale, its band, this month's busy and idle days, the morale it's drifting toward at the next month roll, and their chance of quitting then. The target includes how their pay against what they expect moves it (`pay`, see `tcWorker pay`), their hidden temperament and any rough patch. It also shows the temperament (-15 to +10, never shown in the menus), how hard knocks land for them because of it, and how many months of a rough patch are left. With `value` (0-100), it sets their morale first, exactly (temperament doesn't scale it). The change syncs to everyone.
-
-```
-tcWorker morale 2
-tcWorker morale amy 20
-```
-
-Prints, for example:
+Sets one of your hired workers' morale, exactly: their temperament doesn't scale it. The change syncs to everyone. It prints their morale and its band.
 
 ```
-Amy Hall: morale 20.0 (unhappy), 3 busy / 1 idle days this month (target 54.0, pay -8.0), quit chance 8%, temperament -8 (knocks x1.27), no rough patch
-```
-
-### `tcWorker roughPatch <worker> [months]`
-
-Starts a rough patch for one of your hired workers now, as the monthly roll would: their morale takes a knock straight away (scaled by their temperament), you're told they seem out of sorts, and their morale target is lower until it's over. `months` defaults to a random 1-3. `0` ends a rough patch, with no change to their morale.
-
-```
-tcWorker roughPatch amy
-tcWorker roughPatch amy 3
-tcWorker roughPatch amy 0
-```
-
-Prints, for example:
-
-```
-Amy Hall is in a rough patch for 2 month(s): morale now 56.4, target 41.0
+tcWorker morale amy 80
 ```
 
 ### `tcWorker pay <worker> [salary]`
@@ -131,44 +115,6 @@ Prints, for example:
 Amy Hall: paid 2500, market value 2985, expects 2910 (-14.1%), loyalty 0.95 after 1 year(s), morale target -9.1, last review March, Year 3
 ```
 
-### `tcWorker payReview <worker> [expected]`
-
-Gives one of your hired workers their pay review now, as if it were their hire anniversary. They roll a new expected pay, or take `expected` if you give it, but never less than they're paid. If it's more than 5% above their pay, they ask for a rise in your inbox, replacing any request they already had open.
-
-```
-tcWorker payReview 2
-tcWorker payReview amy 3200
-```
-
-### `tcWorker harvestBonus`
-
-Posts the harvest bonus question to your inbox now, as if it were the start of August. It does nothing if you have no staff, or the question is already in your inbox.
-
-```
-tcWorker harvestBonus
-```
-
-### `tcWorker sick <worker> [inspect]`
-
-Makes one of your hired workers fall sick now, through the same path as the daily sickness roll.
-- **With the health and safety programme:** the bout uses the programme's shorter spells.
-- **Without it:** the inspection roll (3%) runs. `inspect` makes the inspection certain, so you can see the fine, notice and reputation hit.
-
-A worker out on a job goes off sick once they're back. It fails if the worker is already sick or on holiday.
-
-```
-tcWorker sick 2
-tcWorker sick amy inspect
-```
-
-### `tcWorker holidayRequest`
-
-Has one of your hired workers ask for a holiday now, as the daily roll would, but certainly and for the earliest start: an inbox request you can approve or decline, starting in 3 days (the usual notice) for half to all of their allowance. It takes no arguments. Whoever has been refused most this year goes first (then the lowest id), so running it again walks one worker through a decline, the warning on the second refusal and then a holiday booked without asking. A worker running out of year also books without asking. Workers who already have a holiday booked or asked for, are leaving, are booked on training or have no allowance left are skipped.
-
-```
-tcWorker holidayRequest
-```
-
 ### `tcWorker train <worker> [daysFromNow] [pass|fail|mechanic|electrician|bodyworker]`
 
 Books one of your hired workers on spraying training, or on an Advanced Damage System workshop trade course (092), for free, skipping the readiness check.
@@ -185,14 +131,6 @@ tcWorker train amy 0 fail
 tcWorker train amy 0 mechanic
 ```
 
-### `tcWorker askTraining <worker>`
-
-Makes one of your hired workers ask for spraying training now, through the inbox, as if the monthly roll had come up. They must be ready (crop care 4+), not certified and not already booked or asking.
-
-```
-tcWorker askTraining 2
-```
-
 ### `tcWorker certify <worker> [on|off]`
 
 Gives one of your hired workers the spraying certificate, or takes it away with `off`. `on` is the default. Useful for testing who can be allocated to herbicide jobs.
@@ -200,26 +138,6 @@ Gives one of your hired workers the spraying certificate, or takes it away with 
 ```
 tcWorker certify 2
 tcWorker certify 2 off
-```
-
-### `tcWorker standing`
-
-Shows, for each of your hired workers, whether they're standing on one of your farm's standing spots, and if not, why. Only workers who are idle or in a cooldown stand. Idle workers only stand during working hours (08:00 to 18:00 game time) or while they're kept on after them (Stay late, or Call back once they're in); anyone in a cooldown stands whatever the time. Outside working hours a line under the heading says so, and every idle worker who isn't kept on shows `gone home` (or `gone home once you look away`, if they're still on a spot you can see). Otherwise each line gives the spot they're assigned today (its position in decimetres, with `(kept for them)` if it's one of the spots kept for them) and how far it is from the camera, then one of:
-- waiting until you look away (nobody appears on a spot you can see)
-- waiting for another worker to leave the spot
-- standing, model not loaded (models load within 150 m)
-- standing, model loading
-- standing, shown, or hidden (too far)
-- standing, but their look couldn't be loaded
-
-The heading counts the spots kept for named staff (set by standing by a spot and choosing who stands there); a spot kept only for staff who've since left counts as open. A worker with nowhere to go shows `no spot free`, which includes a worker shut out of a kept spot.
-
-This only shows what your own machine is displaying, so it also works on a joined client.
-
-```
-Farm 1: 2 standing spot(s), 1 kept for named staff, day 104
-#3 Amy Hall - wants spot 1203:-455 (kept for them), 12 m away, standing, shown
-#7 John Smith - not standing (assigned)
 ```
 
 ### `tcWorker hours`
@@ -281,11 +199,19 @@ Farm 1 jobs (open, today is day 212):
 #15 Harvest (Wheat), field 8 - accepted, 6,920 €, ready from October 2, Year 1 (day 275), due October 4, Year 1 (day 277)
 ```
 
-### `tcJob offer <jobType> [severity]`
+### `tcJob types`
+
+Lists the job types `tcJob offer` and `tcJob create` take: the generated ones, then the Advanced Damage System repair contract kinds. The same list is printed under the usage of `tcJob offer` and `tcJob create`. Read-only, so it also works on a joined client.
+
+```
+tcJob types
+```
+
+### `tcJob offer <jobType> [severity 1-3]`
 
 Offers your farm a job of the given type right now, through the normal job generator. You get a real offer on a real field, with the usual price, deadline and required skill, so the game could have offered the same job by itself. This is useful for testing and for setting up a storyline.
 
-- No `jobType` lists the available types.
+- No `jobType` prints the usage, which lists the types (so does `tcJob types`).
 - Job types (case-insensitive): `harvest`, `cultivate`, `sow`, `plow`, `mow`, `tedder`, `bale`, `baleWrap`, `strawDelivery`, `fertilize`, `herbicide`, `weed`, `hoe`, `stonePick`, `lime`, plus `repair`, `maintenance` and `parts` (see below).
 - A `harvest` offer, or a `bale` offer on a straw crop, sometimes includes delivery (Harvest & Haul, Bale & Deliver), just as a generated offer would. `strawDelivery` is only possible when a selling point on the map takes straw bales.
 - It picks a field your farm has the equipment for when it can, and falls back to any eligible field otherwise.
@@ -295,7 +221,7 @@ Offers your farm a job of the given type right now, through the normal job gener
 tcJob offer mow
 ```
 
-**Repair contracts** (needs FS25_AdvancedDamageSystem): `repair`, `maintenance` and `parts` send a customer's machine to your first free repair zone bay instead. It's queued like a normal arrival and placed within a couple of seconds, then ADS prepares it and the job offer goes up in your Inbox. The model is picked at random from those the zone takes (its type, its filter, what fits a bay). Field breakdowns aren't offered here: use `tcCompany event fieldBreakdown`.
+**Repair contracts** (needs FS25_AdvancedDamageSystem): `repair`, `maintenance` and `parts` send a customer's machine to your first free repair zone bay instead. It's queued like a normal arrival and placed within a couple of seconds, then ADS prepares it and the job offer goes up in your Inbox. The model is picked at random from those the zone takes (its type, its filter, what fits a bay). Field breakdowns aren't offered here: use `tcEvent trigger fieldBreakdown`.
 
 | Argument | Meaning |
 |---|---|
@@ -326,7 +252,7 @@ Creates a job with every detail set by hand. Unlike `tcJob offer`, nothing is ch
 
 | Argument | Meaning |
 |---|---|
-| `jobType` | One of the job types listed under `tcJob offer` |
+| `jobType` | One of the job types `tcJob types` lists, or an event's own job type by its exact key. An unknown one lists the types |
 | `fieldId` | Field id |
 | `skill` | Expected skill level, 1–10 |
 | `price` | Payout in money, at the current price level. With FS25_EconomyScale loaded, the job's price follows that mod's factor afterwards, like any other job |
@@ -383,87 +309,14 @@ tcJob log
 tcJob log 42
 ```
 
-### `tcJob park`
-
-Parks the vehicle you're sitting in, for testing parking slots. You're put out of the vehicle and it's unhitched from anything it's pulling. It then goes to a random free spot in one of your farm's parking slots of its type: harvester parking slots for self-propelled harvesters, vehicle parking slots for anything else drivable, implement parking slots for everything else. If none is free (or you haven't placed any), it's hidden and joins the parking queue, the same as equipment back from a job: it's parked within about 5 seconds of a slot coming free. Takes no arguments. It has to be your farm's vehicle and not out on a job.
-
-```
-tcJob park
-```
-
-### `tcJob repairStatus`
-
-Lists your repair zones: their type, bays, filter and how many models they can get, which bays are taken, and how many machines are on their way (field breakdowns, 101, included), waiting to be collected and claims still to come. Also says whether ADS's repair contracts API is there. Then (102) each open workshop job: its state, ADS's stage (`inspection` until a price is agreed, then `authorized`), whether it's been inspected and the margin agreed. Last, whether the farm is known for overcharging and any answer forced with `tcJob quoteOutcome`. Takes no arguments.
-
-```
-tcJob repairStatus
-```
-
-```
-ADS repair contracts: API version 1
-Zone 1 (vehicle, 3 bay(s), any category, 42 model(s)):
-  bay 1: taken
-  bay 2: free
-  bay 3: free
-1 on the way, 0 waiting to be collected, 0 claim(s) to come
-Job 12 (Fendt 724 Vario, offered): inspection, inspected, no price agreed
-Known for overcharging until day 143
-```
-
-### `tcJob quoteOutcome <accepted|refused|clear>`
-
-Forces the customer's answer to the next repair quote (102's Negotiate dialog), whatever the margin: `accepted` or `refused`. It's used once, then quotes are judged as usual again. `clear` takes back a forced answer that hasn't been used yet. It doesn't skip the inspection: the quote still has to be for an inspected offer.
-
-```
-tcJob quoteOutcome refused
-```
-
-```
-The next repair quote will be refused, whatever the margin.
-```
-
 ## Finances — `tcFinance`
-
-### `tcFinance invoices`
-
-Lists your farm's invoices, including the hidden rolls the Finances tab doesn't show. Takes no arguments and changes nothing. Days are the game's running day count, and the output starts with today's.
-
-Each line shows the invoice id, job id, amount, issue day, due day, status (`outstanding`, `overdue`, `pursuing`, `paid`, `writtenOff`) and what will really happen:
-
-- `pays on time`: pays on its due day.
-- `late, pays day N`: a late payer. It shows as overdue after its due day and pays on day N.
-- `bad debt, never pays`: never pays by itself. Only pursuing it (053) can recover it.
-
-For an invoice being pursued (053) it also shows:
-- when the pursuit started,
-- whether it's under legal cover or a solicitor (with the fee),
-- the day it resolves.
-
-Use this to find an overdue invoice to pursue, and to know when to fast-forward to for the outcome.
-
-```
-tcFinance invoices
-```
-
-```
-#4 job 12: 4000, issued day 90, due day 95, pursuing (bad debt, never pays; pursued since day 101 (solicitor, fee 700), resolves day 104)
-```
 
 ### `tcFinance claims`
 
-Lists the claims that haven't arrived yet (amount, arrival day, insured or not, reputation hit), then your farm's claims in the last 3 years and the current public liability premium.
-
-### `tcFinance botch [daysUntilClaim]`
-
-Makes the next hired worker who finishes a job botch it, so the customer makes a compensation claim.
-- **What uses it up:** jobs the player drives don't, and nor do job types that can't cause a claim (stone picking, tedding). It waits for the next job that can.
-- **`daysUntilClaim`:** sets when the claim arrives. Without it, it's the usual 2–7 days. `0` brings it at the next day change.
-
-The setting isn't saved.
+Your farm's claims in the last 3 years (when, and how much), and the current public liability premium, with whether you're insured. Server only. Claims that haven't arrived yet are a testing readout, `tcDebug claims`.
 
 ```
-tcFinance botch
-tcFinance botch 0
+tcFinance claims
 ```
 
 ### `tcFinance insurance`
@@ -512,6 +365,14 @@ Takes a notice off your farm's Overview board. `tcCompany notices` shows the ids
 tcCompany removeNotice 4
 ```
 
+### `tcCompany office`
+
+Lists your farm's office staff (090): for the administrator, who's employed, their id, level, whether they're in the office or training (and until which day), and their monthly salary. The last line says whether Advanced Damage System's own workshop is taking your staff, and what state its staff provider is in. Read-only, so it also works on a joined client.
+
+```
+tcCompany office
+```
+
 ### `tcCompany vehicleLog <vehicle>`
 
 Shows a vehicle's Logbook history for the last year. You get a summary line (jobs, hours worked, how many uses a fault was found in, wear cost), then every logged use: jobs, staff drivers and players, with who, how long and its condition before and after. `<vehicle>` is any part of its name, case-insensitive. Words after the first are included, so names with spaces work. Every logged vehicle that matches is shown. Only vehicles with history on your farm are searched. Read-only, so it also works on a joined client.
@@ -523,7 +384,7 @@ tcCompany vehicleLog 942 Vario
 
 ### `tcCompany storages [fillType]`
 
-Lists the storages your farm owns that the Supplies tab counts, to track one down. For each one it shows the building's name, the mod it comes from (in brackets, if it's from a mod), how much is in it out of its room for that product, and how far away it is and in which direction from you. With no argument it covers every supply the tab lists; give a fill type's name (e.g. `SEEDS`, `FERTILIZER`, `DIESEL`, case-insensitive) for just that one. A storage shared between products shows its room for each one, so the same building can appear under several. Read-only, so it also works on a joined client.
+Lists the storages your farm owns that the Supplies tab counts, to track one down. For each one it shows the building's name, the mod it comes from (in brackets, if it's from a mod), how much is in it out of its room for that product, and how far away it is and in which direction from you. With no argument it covers every supply the tab lists; give a fill type's name (e.g. `SEEDS`, `FERTILIZER`, `DIESEL`, case-insensitive) for just that one; one it doesn't know lists your supplies' names. A storage shared between products shows its room for each one, so the same building can appear under several. Read-only, so it also works on a joined client.
 
 ```
 tcCompany storages
@@ -535,256 +396,174 @@ Seeds:
   Farm Silo [FS25_SomeMap] - 0 of 500000, 1.2 km north-east of you
 ```
 
-### `tcCompany event <type> [details]`
+## Random events — `tcEvent`
 
-Makes a random event happen to your farm now, ignoring the odds, the Random events setting, the event type's cooldown, its months (poaching only comes March to May) and its time of day (diesel theft normally comes to light between 07:00 and 09:00, an injury between 09:00 and 17:00). It still needs something to act on (a theft needs a vehicle that can be stolen, joyriders a grass field outside winter, fly-tipping an NPC's field with no job on it or a road verge with room for the pile, diesel theft some diesel in a storage of yours or in a parked machine, poaching a worker who isn't leaving, an injury a field worker who isn't already off sick, on holiday, training or due to be off sick (at work or not: the real event only picks someone in the yard during working hours or out working), a field breakdown needs FS25_AdvancedDamageSystem, an NPC's field with no job on it and no other breakdown of yours on the go), and says so if there isn't anything. It starts the event's cooldown like a real one. `<type>` is the event type's key, case-insensitive. With no type, or an unknown one, it lists the ones there are.
+### `tcEvent list`
 
-`[details]` picks what the event acts on, for the types that take one (any other type refuses them):
+Lists every random event type with its odds for your farm (a month and a day, after the Random events setting; for an event that happens as a job ends, the chance on each completed job, or "depends on the job" for one whose odds come from the job itself like `sprayDrift`, and the quality score it needs; for one that follows bad weather like `fallenTree`, the chance each time a spell of it ends) and any cooldown left (and, for an event with a time of day, its hours), Each type is shown with the details `tcEvent trigger` takes for it (`flyTipping [field|road]`). Read-only, so it also works on a joined client. What's been rolled and is waiting, and your open incidents with their hidden data, are a testing readout, `tcDebug incidents`.
+
+```
+tcEvent list
+```
+
+### `tcEvent trigger <eventType> [details]`
+
+Makes a random event happen to your farm now, ignoring the odds, the Random events setting, the event type's cooldown, its months (poaching only comes March to May) and its time of day (diesel theft normally comes to light between 07:00 and 09:00, an injury between 09:00 and 17:00). It still needs something to act on (a theft needs a vehicle that can be stolen, joyriders a grass field outside winter, fly-tipping an NPC's field with no job on it or a road verge with room for the pile, diesel theft some diesel in a storage of yours or in a parked machine, poaching a worker who isn't leaving, an injury a field worker who isn't already off sick, on holiday, training or due to be off sick (at work or not: the real event only picks someone in the yard during working hours or out working), a field breakdown needs FS25_AdvancedDamageSystem, an NPC's field with no job on it and no other breakdown of yours on the go), and says so if there isn't anything. It starts the event's cooldown like a real one. `<eventType>` is the event type's key, case-insensitive. With no type it prints the usage, which lists every type with the details it takes; an unknown one lists them too, as does `tcEvent list`.
+
+`[details]` picks what the event acts on, for the types that take one (any other type refuses them). Left out, it picks as the real event does:
 
 - `goodNews [story]`: that story, or a random one other than the last you had, even before your first completed job. The story's reward is applied and its inbox message posted. `[story]` is case-insensitive; an unknown one lists them: `photoPosted`, `parishNews`, `parishCouncil`, `youngFarmers` (reputation, scaled to your tier), `supplierRefund`, `loyaltyRebate`, `ratesRefund` (cash, scaled by the job pay setting).
 - `poaching [worker]`: the rival goes after that worker (a `<worker>` as for `tcWorker`: an id or the start of a name), however long they've been with you. Without one it picks as the real event does: someone with at least 3 months' service, nearly always one of your most valuable. Not someone who's leaving or already has an offer.
 - `flyTipping [field|road]`: the pile lands just inside an NPC's field (`field`, offered by its farmer) or on a road's verge (`road`, offered by the local official for the council). Without one it picks as the real event does: either, even odds, trying the other if the first has nowhere to go. With one it's only that, and it says there's nothing to act on if there's nowhere for it. A verge needs an AI road spline with flat ground 6 m out from the road's middle, level with the road, nothing in the way, no other road within 5 m, no player within 150 m and a field within 2 km to name it by.
 - `fallenTree [here]`: 2 to 4 fully grown beeches come down across roads and the council's job to clear them all goes up in your Inbox, due today, with a map marker on each tree once you take it on. Without `here` the roads are picked as the real event does (on AI road splines, with room for each tree, no player within 150 m, a field within 2 km to name each by, every tree at least 200 m from any other and the rest within 1 km of the first), and it says there's nothing to act on if fewer than 2 will do or you've one already. With `here` the first falls across the way you're facing, about 8 m ahead, which needs you in the game (an admin on a joined client counts), and the rest are picked as usual (it goes ahead with just that one if there's nowhere else). The trees are cut and laid down 3 seconds after they're planted.
 - `fieldBreakdown [player|mobile]`: a customer's machine breaks down on an NPC's field, fixable on the spot with ADS's tool box (`player`) or only with a mobile workshop (`mobile`). Without one it picks as the real event does: even odds, or mostly `player` if you've a tool box and no mobile workshop. The machine is the field's farmer's own (one of their machines ADS can take that isn't out already, their combine one time in five outside winter, with its header on), and the farmer's the customer. About a third of the time a farmer with a yard has it break down there instead, on a yard spot where it fits on open ground (on the field if there's no room); a field no farmer holds, or a farmer with nothing ADS can take, gets a random customer's tractor or harvester. The machine is placed like a repair zone arrival (within a couple of seconds) and the offer, due today, goes up in your Inbox.
-- `farmerFavour [farmer]`: one of the map's farmers asks you to fit a new battery or air filter to their own machine (needs FS25_AdvancedDamageSystem with its repair contract targets). The farmer is an id or full name from `tcCompany farmers`; without one it picks as the real event does, weighted by your relationships, never someone you've fallen out with, and never one who's already asked any farm. The machine is one of theirs that ADS can take and isn't out already (`tcCompany farmers fleet` lists them; a telehandler comes with its bale fork on), placed in their yard if it has room, or on the headland of one of their fields, within a couple of seconds; the part is the battery or the air filter (whichever the machine has, and not one fitted to it within a year), and the offer goes up in your Inbox to accept or decline. It says there's nothing to act on if you've a favour on already, or the farmer has no land.
+- `farmerFavour [farmer]`: one of the map's farmers asks you to fit a new battery or air filter to their own machine (needs FS25_AdvancedDamageSystem with its repair contract targets). The farmer is an id or full name from `tcFarmer list`; without one it picks as the real event does, weighted by your relationships, never someone you've fallen out with, and never one who's already asked any farm. The machine is one of theirs that ADS can take and isn't out already (`tcFarmer fleet` lists them; a telehandler comes with its bale fork on), placed in their yard if it has room, or on the headland of one of their fields, within a couple of seconds; the part is the battery or the air filter (whichever the machine has, and not one fitted to it within a year), and the offer goes up in your Inbox to accept or decline. It says there's nothing to act on if you've a favour on already, or the farmer has no land.
 
-- `yardBales [straw|hay|silage] [farmer]`: a farmer with a yard is short of straw, hay or silage and asks for some of your own bales (loose ones and those in your bale storages both count; a wrapped bale counts as silage only once it's fermented). `straw`, `hay` or `silage` picks which; without one it's any of them you hold enough of. The farmer is an id or full name from `tcCompany farmers`; without one it picks as the real event does, weighted by your relationships, never someone you've fallen out with or who's already asking. They ask for 30-70% of the bales you hold of your commonest size, 6 to 24 of them, and it says there's nothing to act on if you've fewer than 6 of that size, you've an order on already, or no farmer with a yard no player owns has their telehandler and bale fork free (`tcCompany farmers fleet` lists them). A drop area of 12 x 12 m is picked on open ground in their yard, with room for the telehandler beside it (no offer if there isn't any), and the offer, due in 2 or 3 days, goes up in your Inbox. Accept it and the telehandler comes out by the area, fork on, within a couple of seconds.
-- `yardHaul [crop] [injured|sick|left] [farmer]`: a farmer with a yard has nobody to drive (their worker's hurt, off sick or has walked out: the reason picks which, random without one) and asks you to take their trailer, full, to a selling point and tip it there. `[crop]` is a fill type name (`wheat`, `barley`, ...) the trailer carries and a selling point buys; without one it's a crop on the farmer's own fields that will do, else wheat or barley. The farmer is an id or full name from `tcCompany farmers`; without one it picks as the real event does, weighted by your relationships, never someone you've fallen out with or who has a job on in their yard already (this one or `yardBales`). It says there's nothing to act on if you've a load on already, no farmer with a yard no player owns has their trailer free (`tcCompany farmers fleet` lists them), there's no room for it on a spot in the yard, or nowhere buys a crop it carries. The load is 90-100% of the trailer's capacity, the selling point the one paying most for it, and the offer, due in 2 or 3 days, goes up in your Inbox. Accept it and the trailer comes out to its yard spot, full, within a couple of seconds.
-- `emergencyRefuel [headland|gauge|forgot] [combine] [farmer]`: one of a farmer's machines has run out of diesel on one of their fields, and they ask you to bring some, today. The reason (finishing the headland, a broken fuel gauge, forgot to fill up) picks the offer's wording, random without one. `combine` makes it their combine (with its header on) at any time of year; without it it's one of their tractors, or now and then their combine from July to October. The farmer is an id or full name from `tcCompany farmers`; without one it picks as the real event does, weighted by your relationships, never the local official, someone you've fallen out with or anyone who's already got a refuel on with any farm. The machine must be free (`tcCompany farmers fleet` lists them) and run on diesel, and the field one of theirs that no player owns and nobody has a job on. It says there's nothing to act on if you've a refuel on already, or no farmer has a field and a machine that will do. The offer asks for a quarter of the machine's tank and goes up in your Inbox, due today; it pays for that diesel at half as much again as the diesel price, plus a call-out fee. Accept it and the machine comes out on the field's headland, its tank empty, within a couple of seconds, and the farmer waits beside it. It's done once the tank's at least a quarter full, however the diesel got there.
-- `fieldSold [retiring|selling|bereavement] [farmer]`: a farmer lets one of their farmlands go to a neighbour, for the whole map. The reason (cutting back, selling to a neighbour, a death in the family) picks the notice's wording, random without one. The farmer (the seller) is an id or full name from `tcCompany farmers`; without one it's any farmer with a sale they could make. A seller needs more than one farmland that no player owns, and never lets go of the one their yard's on. The farmland goes by the same rule as land a player sells: the nearby farmer with the fewest acres for their target. If that would be the seller again, it's no sale, and it says there's nothing to act on if no farmer has a sale. Every farm with a company gets a notice naming both farmers and the field (or the farmland, when it has several fields). Jobs already agreed there stay with the old owner; new ones come from the new one.
-- `farmerRetirement [farmer]`: a farmer retires and a new person takes over their farm, for the whole map. This works even with the Farmer retirements setting off (the real event only comes with it on). The farmer is an id or full name from `tcCompany farmers`; without one it's any farmer, never the local official. The successor gets a new id, a new name and look, and takes over the land, the yard, the machines (any you've edited stay as they are) and every job, inbox message and machine on its way for the old farmer. Every farm's relationship with them starts at half what it was with the old farmer, rounded towards 0. The old farmer is gone from the People tab, and every farm with a company gets a notice.
+- `yardBales [straw|hay|silage] [farmer]`: a farmer with a yard is short of straw, hay or silage and asks for some of your own bales (loose ones and those in your bale storages both count; a wrapped bale counts as silage only once it's fermented). `straw`, `hay` or `silage` picks which; without one it's any of them you hold enough of. The farmer is an id or full name from `tcFarmer list`; without one it picks as the real event does, weighted by your relationships, never someone you've fallen out with or who's already asking. They ask for 30-70% of the bales you hold of your commonest size, 6 to 24 of them, and it says there's nothing to act on if you've fewer than 6 of that size, you've an order on already, or no farmer with a yard no player owns has their telehandler and bale fork free (`tcFarmer fleet` lists them). A drop area of 12 x 12 m is picked on open ground in their yard, with room for the telehandler beside it (no offer if there isn't any), and the offer, due in 2 or 3 days, goes up in your Inbox. Accept it and the telehandler comes out by the area, fork on, within a couple of seconds.
+- `yardHaul [crop] [injured|sick|left] [farmer]`: a farmer with a yard has nobody to drive (their worker's hurt, off sick or has walked out: the reason picks which, random without one) and asks you to take their trailer, full, to a selling point and tip it there. `[crop]` is a fill type name (`wheat`, `barley`, ...) the trailer carries and a selling point buys; without one it's a crop on the farmer's own fields that will do, else wheat or barley. The farmer is an id or full name from `tcFarmer list`; without one it picks as the real event does, weighted by your relationships, never someone you've fallen out with or who has a job on in their yard already (this one or `yardBales`). It says there's nothing to act on if you've a load on already, no farmer with a yard no player owns has their trailer free (`tcFarmer fleet` lists them), there's no room for it on a spot in the yard, or nowhere buys a crop it carries. The load is 90-100% of the trailer's capacity, the selling point the one paying most for it, and the offer, due in 2 or 3 days, goes up in your Inbox. Accept it and the trailer comes out to its yard spot, full, within a couple of seconds.
+- `emergencyRefuel [headland|gauge|forgot] [combine] [farmer]`: one of a farmer's machines has run out of diesel on one of their fields, and they ask you to bring some, today. The reason (finishing the headland, a broken fuel gauge, forgot to fill up) picks the offer's wording, random without one. `combine` makes it their combine (with its header on) at any time of year; without it it's one of their tractors, or now and then their combine from July to October. The farmer is an id or full name from `tcFarmer list`; without one it picks as the real event does, weighted by your relationships, never the local official, someone you've fallen out with or anyone who's already got a refuel on with any farm. The machine must be free (`tcFarmer fleet` lists them) and run on diesel, and the field one of theirs that no player owns and nobody has a job on. It says there's nothing to act on if you've a refuel on already, or no farmer has a field and a machine that will do. The offer asks for a quarter of the machine's tank and goes up in your Inbox, due today; it pays for that diesel at half as much again as the diesel price, plus a call-out fee. Accept it and the machine comes out on the field's headland, its tank empty, within a couple of seconds, and the farmer waits beside it. It's done once the tank's at least a quarter full, however the diesel got there.
+- `fieldSold [retiring|selling|bereavement] [farmer]`: a farmer lets one of their farmlands go to a neighbour, for the whole map. The reason (cutting back, selling to a neighbour, a death in the family) picks the notice's wording, random without one. The farmer (the seller) is an id or full name from `tcFarmer list`; without one it's any farmer with a sale they could make. A seller needs more than one farmland that no player owns, and never lets go of the one their yard's on. The farmland goes by the same rule as land a player sells: the nearby farmer with the fewest acres for their target. If that would be the seller again, it's no sale, and it says there's nothing to act on if no farmer has a sale. Every farm with a company gets a notice naming both farmers and the field (or the farmland, when it has several fields). Jobs already agreed there stay with the old owner; new ones come from the new one.
+- `farmerRetirement [farmer]`: a farmer retires and a new person takes over their farm, for the whole map. This works even with the Farmer retirements setting off (the real event only comes with it on). The farmer is an id or full name from `tcFarmer list`; without one it's any farmer, never the local official. The successor gets a new id, a new name and look, and takes over the land, the yard, the machines (any you've edited stay as they are) and every job, inbox message and machine on its way for the old farmer. Every farm's relationship with them starts at half what it was with the old farmer, rounded towards 0. The old farmer is gone from the People tab, and every farm with a company gets a notice.
 
-The events that happen as a job ends (`kettle`, `paidEarly`, `stepsUp`, `roadAccident`, `tippedTrailer`, `sprayDrift`) use your latest completed job they can act on, whatever its quality score: one with hired workers for `kettle`, one whose invoice isn't due yet for `paidEarly` (so none with the late invoices setting off), one with a worker rated 5 or under for their part of it for `stepsUp`, and one a hired worker drove whose machines are still yours for `roadAccident` (its machines are damaged wherever they are now), a harvest & haul job with a hired hauler whose trailer is still yours, not stolen, not already on its side and not out on another job for `tippedTrailer` (the trailer is taken from wherever it is now, even a parking slot, and laid on its side in that job's field, 10-20 m from its middle, with the job's haul tractor left beside it if that's free too; the field needs room for it. Its load is spilt beside it and the urgent delivery job (106) starts at once, due by the end of tomorrow, if that job's crop can lie on the ground and has somewhere to go), and a hired worker's herbicide job with no botch claim on its way for `sprayDrift` (judged on the wind right now, not on the day). Use `tcCompany outcome` first to decide how an event comes out.
-
-```
-tcCompany event theft
-tcCompany event joyriders
-tcCompany event flyTipping
-tcCompany event flyTipping road
-tcCompany event dieselTheft
-tcCompany event goodNews
-tcCompany event goodNews supplierRefund
-tcCompany event kettle
-tcCompany event paidEarly
-tcCompany event stepsUp
-tcCompany event roadAccident
-tcCompany event tippedTrailer
-tcCompany event sprayDrift
-tcCompany event poaching
-tcCompany event poaching amy
-tcCompany event injury
-tcCompany event fieldBreakdown
-tcCompany event fieldBreakdown mobile
-tcCompany event farmerFavour
-tcCompany event farmerFavour 4
-tcCompany event fallenTree
-tcCompany event fallenTree here
-tcCompany event yardBales
-tcCompany event yardBales hay 4
-tcCompany event yardBales silage
-tcCompany event yardHaul
-tcCompany event yardHaul barley sick 4
-tcCompany event emergencyRefuel
-tcCompany event emergencyRefuel gauge combine 4
-tcCompany event fieldSold
-tcCompany event fieldSold bereavement 4
-tcCompany event farmerRetirement
-tcCompany event farmerRetirement 4
-```
-
-### `tcCompany events`
-
-Lists every random event type with its odds for your farm (a month and a day, after the Random events setting; for an event that happens as a job ends, the chance on each completed job, or "depends on the job" for one whose odds come from the job itself like `sprayDrift`, and the quality score it needs; for one that follows bad weather like `fallenTree`, the chance each time a spell of it ends) and any cooldown left (and, for an event with a time of day, its hours), then any event that's been rolled and is waiting for its hour (the day and hour it's due), then your farm's open incidents: the stage each one is at, the day it moves on (or "waiting" if it's waiting on something else, like a reply in the inbox), when it started and the event's own details. Read-only, so it also works on a joined client.
-
-### `tcCompany outcome <type> <outcome>`
-
-Decides how the next event of that type comes out, instead of the usual roll. It applies once, to the next incident of that type to reach that point, then the odds are back to normal. Pair it with `tcCompany event` to try each outcome. With no type, or one that has no outcomes, it lists the types that do. Both arguments are case-insensitive.
-
-| Type | Outcomes | What it decides |
-|---|---|---|
-| `theft` | `recovered`, `lost` | The next police report on a stolen vehicle: `recovered` brings it back (damaged, through the parking queue), `lost` writes it off and removes it (or, if the farm had machinery insurance on the day of the theft, starts the insurance claim, and the vehicle goes when it settles). Normally a 35% chance of recovery, 95% for a vehicle with FS25_AdvancedDamageSystem's anti-theft system fitted. |
-| `roadAccident` | `ours`, `theirs` | Who's to blame for the next road accident: `ours` (a claim through public liability, a reputation hit and a morale knock for the driver), `theirs` (the other driver's insurer pays an estimated repair cost a month or two later). Normally rolled from the driver's tractor rating and the state of the machines. |
-| `sprayDrift` | `upheld`, `cleared` | The findings on the next spray drift complaint: `upheld` (the complainant's claim through public liability, a reputation hit and a morale knock for the operator), `cleared` (nothing else happens). Normally rolled from the operator's crop care and the wind. |
-| `tippedTrailer` | `claim`, `noClaim` | Whether the next spilt crop (106) that isn't cleared up in time brings a claim for the lost crop and the farmer's clear-up, through public liability. Normally a 50% chance. Force the miss with `tcJob state <jobId> missed`. |
-| `poaching` | `stays`, `leaves` | What the next poached worker you do nothing about decides (matching the offer always keeps them): `stays` on the same pay, or `leaves`, handing in a month's notice. Normally they stay with a 5-25% chance, from their morale and their pay against what they expect. |
+The events that happen as a job ends (`kettle`, `paidEarly`, `stepsUp`, `roadAccident`, `tippedTrailer`, `sprayDrift`) use your latest completed job they can act on, whatever its quality score: one with hired workers for `kettle`, one whose invoice isn't due yet for `paidEarly` (so none with the late invoices setting off), one with a worker rated 5 or under for their part of it for `stepsUp`, and one a hired worker drove whose machines are still yours for `roadAccident` (its machines are damaged wherever they are now), a harvest & haul job with a hired hauler whose trailer is still yours, not stolen, not already on its side and not out on another job for `tippedTrailer` (the trailer is taken from wherever it is now, even a parking slot, and laid on its side in that job's field, 10-20 m from its middle, with the job's haul tractor left beside it if that's free too; the field needs room for it. Its load is spilt beside it and the urgent delivery job (106) starts at once, due by the end of tomorrow, if that job's crop can lie on the ground and has somewhere to go), and a hired worker's herbicide job with no botch claim on its way for `sprayDrift` (judged on the wind right now, not on the day). To decide how an event comes out, see `tcDebug outcome` in [debug-commands.md](debug-commands.md).
 
 ```
-tcCompany outcome theft recovered
-tcCompany event theft
-
-tcCompany outcome roadAccident theirs
-tcCompany event roadAccident
-
-tcCompany outcome poaching leaves
-tcCompany event poaching amy
-
-tcCompany outcome tippedTrailer claim
-tcCompany event tippedTrailer
+tcEvent trigger theft
+tcEvent trigger joyriders
+tcEvent trigger flyTipping
+tcEvent trigger flyTipping road
+tcEvent trigger dieselTheft
+tcEvent trigger goodNews
+tcEvent trigger goodNews supplierRefund
+tcEvent trigger kettle
+tcEvent trigger paidEarly
+tcEvent trigger stepsUp
+tcEvent trigger roadAccident
+tcEvent trigger tippedTrailer
+tcEvent trigger sprayDrift
+tcEvent trigger poaching
+tcEvent trigger poaching amy
+tcEvent trigger injury
+tcEvent trigger fieldBreakdown
+tcEvent trigger fieldBreakdown mobile
+tcEvent trigger farmerFavour
+tcEvent trigger farmerFavour 4
+tcEvent trigger fallenTree
+tcEvent trigger fallenTree here
+tcEvent trigger yardBales
+tcEvent trigger yardBales hay 4
+tcEvent trigger yardBales silage
+tcEvent trigger yardHaul
+tcEvent trigger yardHaul barley sick 4
+tcEvent trigger emergencyRefuel
+tcEvent trigger emergencyRefuel gauge combine 4
+tcEvent trigger fieldSold
+tcEvent trigger fieldSold bereavement 4
+tcEvent trigger farmerRetirement
+tcEvent trigger farmerRetirement 4
 ```
 
-### `tcCompany office`
+## Farmers — `tcFarmer`
 
-Lists your farm's office staff (090): for the administrator, who's employed, their id, level, whether they're in the office or training (and until which day), and their monthly salary. The last line says whether Advanced Damage System's own workshop is taking your staff, and what state its staff provider is in. Read-only, so it also works on a joined client.
+### `tcFarmer list`
 
-```
-tcCompany office
-```
+The map's farmers and the local official (110), who the jobs come from. The farmers are made the first time the mod runs on a save, by sharing out every farmland with a field that no player owns (see `tcFarmer preview`), and they're the same for every farm. A farmer can lose all their land to players and still be on the list; land a player sells goes to a farmer near it. Jobs on a farmer's land are for that farmer, and anything else (jobs on land no farmer has, a fallen tree) is for the local official.
 
-### `tcCompany officeLevel <administrator> <1-3>`
-
-Sets an office role's level straight away, with that level's salary, and ends any course they're on, for testing Advanced Damage System's workshop at each level. The role has to be filled. The administrator is the only office role (098 made the storekeeper a workshop trade: set it with `tcWorker adsSkill`).
+One line per farmer with their id, name and gender, their acres (and the target they were made with), their farmlands, and their yard (or "yard off the map"), then the local official. These are the ids and names `<farmer>` takes. Read-only, so it also works on a joined client.
 
 ```
-tcCompany officeLevel administrator 3
-```
-
-### `tcCompany debris [count] [prop]`
-
-Drops a pile of loose debris about 4 m in front of you, the same mix fly-tipping (075) dumps, for testing pieces the player can pick up and carry by hand. Debris from here belongs to no job: a disposal skip takes it away free. Every prop weighs 10 kg. `[count]` defaults to 8 (at most 50). Without `[prop]` each piece is a random prop, picked by its weight as fly-tipping picks them (bin bags, 147, are three times as likely as any other prop); name one to spawn only that: `barrel`, `pipe`, `bicycle`, `board`, `cardboard`, `trashCan`, `trashCan2`, `wheelBarrow`, `chair`, `ladder`, `grill`, `stool`, `pitchFork`, `crate`, `crate2`, `crate3` or `binBag`. An unknown prop lists them. A bin bag squashes when it lands and hangs stretched and swinging when carried. The pieces are saved with the savegame. Needs you in the game (an admin on a joined client counts).
-
-```
-tcCompany debris
-tcCompany debris 20 ladder
-tcCompany debris 5 binBag
-```
-
-### `tcCompany debrisClear`
-
-Removes every piece of debris from the map.
-
-### `tcCompany crowd [fieldId|off] [people] [laneGap]`
-
-The auction crowd spike (134). Puts a crowd of people on a field. Some stand in small talking groups; the rest walk loops (rounded rectangles, one inside the next) in the largest rectangle that fits in the field. Each loop has a lane each way, and walkers keep to their side, so nobody walks through anybody. The people's looks are copied from the base maps' pedestrians. The map's own pedestrians aren't touched.
-
-- `[fieldId]`: the field to put the crowd on.
-- `[people]`: how many people, 60 by default, at most 300. About 40% stand, as far as the field's standing spots go, and the rest walk.
-- `[laneGap]`: metres between one loop and the next, 14 by default (at least 3). A smaller gap fits more loops on a field.
-- On a field with an auction site up (`tcCompany auctionSite`, or a real auction's lots), the crowd walks the site's aisles instead, as an auction's does: one long loop down each aisle between the rows and one round each cross aisle at the rows' ends, never among the lots. Half stand: by the lots looking at them, round the food area, by the gate and in talking groups down the aisles. `[laneGap]` doesn't apply there. A console crowd stays all day; a real auction's comes and goes with the sale day's hours (nobody before 08:00, busiest late morning and round the closes, a handful by the gate after 19:30).
-- `off`: removes the crowd.
-- With no argument: how many people are in the crowd, how many models are loaded and shown now, and what the crowd's own update costs a frame. Drawing the people shows in the game's frame rate, not in that figure. For a real auction's crowd, also how many are there at this hour. Then the auction site's dressing (140): how many of its props (the car park, food area, toilets, office, bunting, signs and chalkboards) have loaded, and its crowd sounds.
-
-Models load within 150 m of the camera and show within 100 m. It works on this machine only: nothing is saved or sent to other players, and there's nothing on a dedicated server. The crowd is gone after reloading the save.
-
-```
-tcCompany crowd 4
-tcCompany crowd 4 120 6
-tcCompany crowd
-tcCompany crowd off
-```
-
-### `tcCompany auctionSite [fieldId [lots]|clear]`
-
-The auction site spike (135). Finds fields that could hold a machinery auction, or lays one out on a field and spawns its lots: used equipment in rows facing aisles, with space kept at the end nearest the road for the car park and the auctioneer's stand.
-
-- With no argument: the site, if there's one up (see below), then the best candidate fields, best first. A candidate is a field no farm owns that's grass, bare (no crop) or harvested (its crop cut, not sown, growing or withered), with no live job, of 1 ha or more. A sale takes as many lots as its field fits, up to 120, so each field is measured against a typical 120-lot sale. Each line has the field's id and the farmer who holds it, its area, how many of the 120 fit, its slope (the steepest rise between ground samples 8 m apart, the average, and the whole rise in metres), how far the nearest road is from its edge, and whether it can hold a sale. It can't if fewer than 30 lots fit, the steepest slope is over 8%, or there's no road within 60 m. Those that can come first, the most lots first, then the biggest. The last line says how many can, and how long the check took.
-- `<fieldId> [lots]`: lays out and spawns a sale on the field, which no farm may own and which can't have a live job or an auction announced on it (137). It doesn't have to be a candidate. With no `[lots]` the sale is as many lots as the field fits, up to 120; `[lots]` asks for that many instead (at most 200), and the field still takes only what fits. When fewer fit than were asked for, the sale is drawn again at the size that fits, so the mix of roles suits it. The lots' roles are drawn by weight, each with a minimum and maximum per sale (tractors of each size, telehandler, combine with a header, mower, tedder, rake, baler, trailer, plough, cultivator, seed drill), and their models come from the store, no model more than 3 times in a sale. Each lot is given its store size plus 1 m on width and 2 m on length, since store sizes often leave out drawbars and hitches. A grass field is cut short first; any other field is put down to short grass, and put back as it was (crop, ground, weeds, fertiliser and the rest) when the site's cleared, a save in between included. Each lot is set down with the store's own offset, as the shop does; one found tipped over a few seconds later is stood back up as it was set down, once, and removed if it tips again (a combine with its header on is removed straight away, as moving it would leave the header behind). Lots spawn one after another, owned by nobody, locked for driving and out of the Tab cycle; with FS25_AdvancedDamageSystem each gets a history from its hours. The field is kept free of jobs and NPC fieldwork while the site's up. Rows are drawn in red, aisles in green, the entrance's space in blue and the entrance (the nearest road point) in yellow, on this machine and only until the save's reloaded.
-- `clear`: deletes every lot and frees the field, putting it back as it was if it was put down to grass.
-
-With a site up, the command with no argument starts with it: how many lots are out, failed (with why: not in the store, something in the way, didn't load, tipped over) or didn't fit; how long spawning took, the average and longest load a lot, and the frame time while spawning (average and worst) and now; which lots tipped over and were stood back up; how many lots are still within 1 m of where they were put, the one that moved most and the one that tilts most; what ADS made of the lots; and each lot's model, hours, age in months and guide price (vanilla's sell price for that age, hours, damage and wear). The site and its lots are saved.
-
-```
-tcCompany auctionSite
-tcCompany auctionSite 12
-tcCompany auctionSite 12 50
-tcCompany auctionSite clear
+tcFarmer list
 ```
 
 ```
-Auction site candidates (grass, bare or harvested, nobody's farm, no live job, 1 ha or more), measured against a sale of 120 lots, a sale needing 30, most lots first:
-  field 12 (Tom Hughes): 6.40 ha, 120 of 120 lots fit, slope steepest 4.1%, average 1.2%, rise 3.0 m, road 14 m from the edge - can hold the sale
-  field 31: 2.10 ha, 22 of 120 lots fit, slope steepest 2.0%, average 0.8%, rise 1.1 m, road 40 m from the edge - too small
-1 of 2 candidates can hold the sale (64 fields on the map), checked in 410 ms.
-```
-
-### `tcCompany auctionSigns [month|clear|flag]`
-
-The auction roadside signs spike (136). Puts up signs at the map's 10 busiest road junctions, spread over the map, each reading "SECOND HAND / BRAND NEW DAY / COMING IN <MONTH>", and marks each on the map. Any signs already up come down first. There's no day on the board: the auction's job will give that.
-
-- `<month>`: the month on the boards, 1 to 12 or its name (`july`, or its first three letters, `jul`). The busiest junctions are those with the most road within 250 m (in villages and towns); no two signs within 400 m. A junction's sign stands about 35 m back along one of the roads into it, facing drivers coming in, 5 m from the road's middle, or 4.25 or 3.5 m if that's not clear, on the right-hand verge first, then the left; if none of those spots on that road is clear, the next road in. A road into a junction gets no sign if it's shorter than 25 m to the next junction (a roundabout's ring) or if it stops within 150 m past the sign (`deadEnd`: a drive, a yard). A spot is passed over if it's on a road (`onRoad`), within 8 m of the middle of a road crossing the sign's own (`crossRoad`: a roundabout's wide ring, a side road), has road all round it, as a roundabout's island (`enclosed`: every one of 16 rays out 30 m crosses a road), stands on something other than the ground, as a road's or an island's mesh or a kerb (`onObject`), is by a bridge, in water, on a field, on ground too steep or well above or below the road, or has anything in the way (buildings, walls, fences, trees, vehicles, kerbs). A hedge with no collision (painted foliage, or a mesh without it) can't be seen: nothing in the game can find it. It prints each sign (where, which verge and how far out, how much road is round its junction) and how many spots were passed over for each reason.
-- `clear`: takes them down.
-- `flag`: a testing aid. Puts an exclamation-mark pin on each sign as well as its marker (a small circle, hard to see at the map's zoom), named "Auction sign 1" and so on, as the console numbers them. Teleport to one from the map. `flag` again takes the pins off. Signs that go up later are pinned too. Only on the machine running the command (the host's, in multiplayer) and not saved: off again after a load.
-- With no argument: the signs up now and their month.
-
-Every player sees the signs, a player who joins later too, and they're saved. Server only: the road splines are only on the server.
-
-```
-tcCompany auctionSigns july
-tcCompany auctionSigns 9
-tcCompany auctionSigns
-tcCompany auctionSigns clear
-tcCompany auctionSigns flag
-```
-
-```
-Auction signs for July: 10 up, of 58 junction(s) on 212 road spline(s), in 140 ms. Marked on the map.
-  1. 512.3, -88.1, right verge 5.00 m out, 2480 m of road round its junction
-  2. -401.0, 12.6, left verge 4.25 m out, 1960 m of road round its junction
+Farmers (5), from a split at 30 acres a farmer, seed 1234:
+  #2 Tom Hargreaves (male): 92 acres (target 88), 3 farmland(s): 12, 14, 15, yard 12
+  #3 Ruth Bell (female): no land, yard off the map
   ...
-  Spots passed over: blocked 7, field 2, tooClose 31
+Local official: #1 Alan Price (male)
 ```
 
-### `tcCompany auction [start [fieldId|auto] [days]|day|cancel|lots|bid <lot> <amount|guide|off>|close [lot|all]]`
+### `tcFarmer preview [targetAcres] [seed]`
 
-The machinery auction (137) and its sale (139). One is announced now and then by itself (about one a year, now and then two, never within 3 months of the last one ending, for a sale in spring or autumn, 2 to 4 months ahead); this shows it or makes one happen. One started here counts as the last one when it ends.
+How the land would be split now, without changing anything. The total acres and number of farmers, then one line per farmer with their acres (and target), how many farmlands and which, and their yard (`(start)` if the farmer started there). Last, the largest and smallest holdings, how many yards were used and how many balancing moves were made.
 
-- With no argument: the auction, if there's one: its id, field, host farmer and state (`announced`, `signsUp`, `setOut`, `onSale` or `collection`), the day it was announced, the day its signs go up, its reminder day and its sale day, its entrance, and once the signs are up (136) each sign's position (world x, z, as `tcCompany auctionSigns` lists them). `start` and `day` print the same, so the signs' positions are in the log as soon as they're up.
-- `start`: announces one now, ignoring the season and the monthly roll. If the sale's in this month, every company farm gets its attend-the-auction job (141) at once; otherwise on the first day of the sale's month. Its field is picked as a real one is (a grass, bare or harvested field nobody's farm owns, held by a farmer, with no live job, that can hold a sale; at random among the best 3), its sale 2 to 4 months ahead. The signs go up 3 months before the sale, or at once if it's nearer. Every company farm gets the message, and every player the map marker.
-  - `<fieldId>`: on that field instead. No farm may own it, a farmer must hold it, and it can't have a live job; it doesn't have to be grass, bare or harvested, or a candidate (whatever's on it is put down to grass on the sale day and put back after).
-  - `auto`: the field picked as above, so `[days]` can be given without a field.
-  - `[days]`: the sale that many days from today (at least 1), not 2 to 4 months. The signs go up 3 months before the sale, or at once if the sale's nearer than that.
-- `day`: makes today the sale day: the lots are set out now (and the signs put up if they weren't), every company farm gets the morning's message and its attend-the-auction job for today (141; any it had for the old day that wasn't done is replaced), and bidding's open from 08:00 as usual. Each lot closes at its own time between 17:00 and 18:00, collection runs until midnight, and then everything's cleared away (a field that was put down to grass goes back as it was): a won lot still on the field is delivered to its farm, free, into a free parking slot, or to the shop if there's none (or, with both full, it waits in the parking queue).
-- `cancel`: calls it off: no more lots are sold, anything already won and still on the field is delivered, anything else on the field is deleted, the signs come down, the field's free again, and every company farm is told. Any attend-the-auction job (141) not yet done is taken away.
-- `lots`: every lot that's out: its number, model, guide price, closing time, the room's hidden bid (a tuning aid: never shown in game), its result (`open`, `local buyer` or the farm that won it) and every farm's bid with what became of it (`won`, `lost`, `unpaid`, `delivered`).
-- `bid <lot> <amount|guide|off>`: leaves a bid on a lot for your farm, as the lot's card does: an amount, `guide` for its guide price, or `off` to withdraw it. Refused (and says why) when there's no sale on, the lot's closed, or the amount's under the minimum (70% of the guide).
-- `close [lot|all]`: closes the next open lot now (in lot order), that lot, or every open lot, and settles it as its closing time would: the highest farm bid over the room's wins and pays its bid; a farm that can't pay loses it and pays a fee. Prints `lots` after.
+The split: only farmlands with at least one field and no player owner, every one of them to a farmer, a farmland's size its fields' area in acres; one farmer per `targetAcres` (default 50), at least 4, each aiming for that size give or take up to 30%; farm yards (`tcYard list`) on or near field land start a farmer, the most yard-like first (a declared one, then one that isn't small, then one without a sell point, then the most yard buildings, then the most sheds and farmhouses), and any yard left over, in the same order, goes to a nearby farmer who has none. A small yard (4 yard buildings or fewer) never starts a farmer: it's only ever a leftover, for a farmer who ended up without a yard (a declared one, `tcYard set <id> on`, to the nearest farmer without one however far, and its land isn't shared out as fields). Read-only.
 
-There's only ever one auction: `start` refuses while one's on. The auction is saved, and a player joining gets it.
+`seed`: the same seed always gives the same split. Without one a random one is used, and the first line says which, so a split you like can be shown again.
 
 ```
-tcCompany auction
-tcCompany auction start
-tcCompany auction start 12
-tcCompany auction start 12 3
-tcCompany auction start auto 3
-tcCompany auction day
-tcCompany auction cancel
-tcCompany auction lots
-tcCompany auction bid 12 45000
-tcCompany auction bid 12 guide
-tcCompany auction bid 12 off
-tcCompany auction close
-tcCompany auction close 12
-tcCompany auction close all
+tcFarmer preview
+tcFarmer preview 80
+tcFarmer preview 80 1234
+```
+
+### `tcFarmer show [targetAcres] [seed]`
+
+The same as `tcFarmer preview`, and a label on the map at the middle of each farmland's fields with its farmer's number, and `Y` and the number on each farmer's yard, one colour per farmer, on this machine only. Use it to choose a `targetAcres` before `tcFarmer regenerate`.
+
+```
+tcFarmer show 80 1234
+```
+
+### `tcFarmer hide`
+
+Clears `tcFarmer show`'s labels.
+
+### `tcFarmer fleet [farmer]`
+
+Each farmer's machines (121), or one farmer's (an id or full name from `tcFarmer list`): a line per farmer with their acres and yard, then one per machine with its id, role (`smallTractor`, `mediumTractor`, `largeTractor`, `combine`, `header`, `trailer`, `telehandler`, `baleFork`), model, what it's hitched to (`on <id>`, for a header or a bale fork), its operating hours once it's been out, and `out now` while it's on a job or on its way. Every farmer has a small and a medium tractor, a combine with a header and a trailer; about half a second small tractor; one with a yard a telehandler and a bale fork; and the biggest 10% of farmers by land, if they're over 50 acres, a large tractor as well. Machines are only ever added (a new yard brings a telehandler), never taken away. A bale fork is always a spike (125): one that isn't, such as a bale grab from an older save, is changed to a spike on loading, under the same id (unless it's out, then on a later load). Server only.
+
+```
+tcFarmer fleet
+tcFarmer fleet Tom Hargreaves
+```
+
+### `tcFarmer regenerate [targetAcres]`
+
+Throws the farmers away and makes new ones from a fresh split at `targetAcres` (default 50), with new names, looks and ids. The local official stays. Every job loses its link to the old farmers, and every farm its relationships with them (`tcFarmer relationships`; the official's are kept): jobs are linked again from their fields, and the command says how many changed. Server only.
+
+```
+tcFarmer regenerate 60
+```
+
+### `tcFarmer relationships`
+
+Your farm's relationship with each farmer and the local official (113), from -100 to 100. Everyone starts at 0. Completed jobs raise it (more for better quality, and poor work lowers it). Missed, declined and lapsed offers, a counter-offer they walked away from, and an invoice you pursue all lower it. Every month it drifts 5 back towards 0. Good relationships bring more of that customer's offers and more room to haggle. Below -40 they offer you no work at all.
+
+When it goes bad (129): a missed job, or one done under 50% quality, that leaves a customer at `poor` (-40 to -15) gets a complaint from them in your Inbox, at most once a month each. A customer dropping below -40 tells the neighbours: every farmer with land or a yard within 500 m of theirs drops 5 with you, your reputation drops 15, and a notice names them. Their drops never spread word further.
+
+One line per person (the official first) with their id, name, score and band (`excellent`, `good`, `neutral`, `poor`, `fallenOut`). Read-only, so it also works on a joined client.
+
+```
+tcFarmer relationships
 ```
 
 ```
-Auction 1 on field 12, held by Tom Hughes: signsUp.
-  Announced March 4, Year 2; signs up April 10, Year 2; reminder May 3, Year 2; sale May 10, Year 2 (viewing and bidding from 08:00, lots closing from 17:00).
-  Entrance at 512, -88.
+Farm 1's relationships (-100 to 100, refusing work below -40):
+  #1 Alan Price (local official): 0 (neutral)
+  #2 Tom Hargreaves: 18 (good)
+  #3 Ruth Bell: -45 (fallenOut)
 ```
 
-```
-Auction lots on field 12 (minimum bid 70% of the guide):
-  lot 1 Fendt 942 Vario: guide £118,400, closes 17:00, local bid £104,210, farm 1; bids: farm 1 £120,000 won, farm 2 £110,000 lost
-  lot 2 Kuhn GMD 3125 F: guide £9,850, closes 17:01, local bid £10,240, open; bids: none
-```
+### `tcFarmer relationship <farmer> <amount>`
 
-### `tcCompany yards [farmlandId|here|show [farmlandId]|hide]`
-
-A spike for finding the map's farm yards (108), where the generated farmers will live. A yard is a farmland with at least 2 buildings that change hands with the land (sheds, silos, animal pens, farmhouses, ...; the map's own, preplaced or from its default placeables), at least one of them a shed or a farmhouse and one not a farmhouse (a working building), and no more than 5 farmhouses (more is a village). Detection runs on the live map each time; only your overrides (`tcCompany yard`) are saved. Read-only, so it also works on a joined client.
-
-- With no argument: one line per yard with its farmland id, owner farm (0 for nobody), how it became a yard (`detected`, or `declared` with `tcCompany yard`), its buildings by store category, whether any has a sell point or unloading station, its standing spots (how many it keeps, spread over the yard, of how many open ones it found) and where its middle is (`(centre marker)` when a yard centre marker sets it, 146). Then the farmlands that have such buildings but aren't yards (the near misses, including any you ruled out), and every store category seen, so the rule's categories can be set from real maps. Spots are worked out as you ask (it can take a moment); on a joined client the navigation map check is skipped, so the count can be higher than the server's.
-- `<farmlandId>`, or `here` for the farmland you're standing on: why that farmland is or isn't a yard. First whether it's a yard and how (with its override), then what detection alone makes of it and, if it fails, every reason (too few yard buildings, no shed or farmhouse, no yard building that isn't a farmhouse, more than 5 farmhouses, no buildings that count). For a yard, next comes where its middle is and where that comes from: its yard centre marker (146), the middle of its buildings, or the farmland's label on the map (where the map maker put its name, not necessarily the farm). Then the buildings it counts, one per line, with name, store category, whether that category counts towards a yard (`(yard)`), stations and position. Then every other placeable standing on the farmland, with whether it's preplaced (built into the map's i3d) or placed (the map's default placeables, or the player's), its owner farm, and every reason it isn't counted: its store item isn't sold with the farmland, the map or savegame says it isn't, or it's being deleted. With nothing at all on the farmland it says so: buildings built into the map's own scene aren't placeables, so detection can't see them, and `tcCompany yard <id> on` is the way to make it a yard, with a yard centre marker (the construction menu's Contractor tab) to say where on the farmland the yard is. For a yard, last comes how its standing spots came out, worked out again as you ask: how many it keeps of how many open ones, from how many candidate points; the server's list (what its farmer stands on); how many candidates each check ruled out (too close to a kept spot, inside a building's footprint, off the farmland, indoors by the indoor mask, too steep, on a field, off the AI navigation map, or something solid in the way); and what was in the way, most first: for a footprint, its building's name; for something solid, the placeable or vehicle, then the node it hit. Use it when a map's farm isn't picked up, or its farmer has no spots to stand on.
-- `show`: a red circle on the map at every yard, on this machine only. `show <farmlandId>`: just that yard, with a small circle on each of its standing spots: the server's list, the one its farmer stands on (114), worked out once a load and again when the yard's override changes. Each farmhouse in the yard also gets a big circle 10 m out along its own +Z (the direction the model faces in its file), and a small one on its spawn node (where a player appears on their farm) if it has one. The command lists each farmhouse with its +Z direction and how far, and how many degrees clockwise from +Z, its spawn node is, to check which side of a house is its front.
-- `hide`: clears the circles.
+Changes your farm's relationship with a farmer or the local official (their id or full name, from `tcFarmer relationships`) by `amount`, which can be negative. The result is kept within -100 to 100. It goes through the same path as the game's own changes, so taking someone from -40 or above to below it spreads word to their neighbours (see `tcFarmer relationships`; a complaint only comes from a job). Server only.
 
 ```
-tcCompany yards
-tcCompany yards 12
-tcCompany yards here
-tcCompany yards show
-tcCompany yards show 12
-tcCompany yards hide
+tcFarmer relationship 4 -50
+tcFarmer relationship Tom Hargreaves 20
+```
+
+## Yards — `tcYard`
+
+### `tcYard list`
+
+A spike for finding the map's farm yards (108), where the generated farmers will live. A yard is a farmland with at least 2 buildings that change hands with the land (sheds, silos, animal pens, farmhouses, ...; the map's own, preplaced or from its default placeables), at least one of them a shed or a farmhouse and one not a farmhouse (a working building), and no more than 5 farmhouses (more is a village). Detection runs on the live map each time; only your overrides (`tcYard set`) are saved. Read-only, so it also works on a joined client.
+
+One line per yard with its farmland id, owner farm (0 for nobody), how it became a yard (`detected`, or `declared` with `tcYard set`), its buildings by store category, whether any has a sell point or unloading station, its standing spots (how many it keeps, spread over the yard, of how many open ones it found) and where its middle is (`(centre marker)` when a yard centre marker sets it, 146). Then the farmlands that have such buildings but aren't yards (the near misses, including any you ruled out), and every store category seen, so the rule's categories can be set from real maps. Spots are worked out as you ask (it can take a moment); on a joined client the navigation map check is skipped, so the count can be higher than the server's.
+
+```
+tcYard list
 ```
 
 ```
@@ -793,6 +572,15 @@ Yards (1):
 Farmlands with buildings but no yard (1):
   #5 owner 0, 1 building(s) (SHEDS 1)
 Categories seen: ANIMALPENS 1, SHEDS 3, SILOS 1
+```
+
+### `tcYard check <farmlandId|here>`
+
+Why a farmland (`<farmlandId>`, or `here` for the one you're standing on) is or isn't a yard: why that farmland is or isn't a yard. First whether it's a yard and how (with its override), then what detection alone makes of it and, if it fails, every reason (too few yard buildings, no shed or farmhouse, no yard building that isn't a farmhouse, more than 5 farmhouses, no buildings that count). For a yard, next comes where its middle is and where that comes from: its yard centre marker (146), the middle of its buildings, or the farmland's label on the map (where the map maker put its name, not necessarily the farm). Then the buildings it counts, one per line, with name, store category, whether that category counts towards a yard (`(yard)`), stations and position. Then every other placeable standing on the farmland, with whether it's preplaced (built into the map's i3d) or placed (the map's default placeables, or the player's), its owner farm, and every reason it isn't counted: its store item isn't sold with the farmland, the map or savegame says it isn't, or it's being deleted. With nothing at all on the farmland it says so: buildings built into the map's own scene aren't placeables, so detection can't see them, and `tcYard set <id> on` is the way to make it a yard, with a yard centre marker (the construction menu's Contractor tab) to say where on the farmland the yard is. For a yard, last comes how its standing spots came out, worked out again as you ask: how many it keeps of how many open ones, from how many candidate points; the server's list (what its farmer stands on); how many candidates each check ruled out (too close to a kept spot, inside a building's footprint, off the farmland, indoors by the indoor mask, too steep, on a field, off the AI navigation map, or something solid in the way); and what was in the way, most first: for a footprint, its building's name; for something solid, the placeable or vehicle, then the node it hit. Use it when a map's farm isn't picked up, or its farmer has no spots to stand on. Read-only, so it also works on a joined client.
+
+```
+tcYard check 12
+tcYard check here
 ```
 
 ```
@@ -821,77 +609,91 @@ Spots: 0 kept of 0 open, from 214 candidates
     Machine Shed (wall): 30
 ```
 
-### `tcCompany yard <farmlandId> <on|off|auto>`
+### `tcYard show [farmlandId]`
+
+A red circle on the map at every yard, on this machine only. With a `farmlandId`, just that yard, with a small circle on each of its standing spots: the server's list, the one its farmer stands on (114), worked out once a load and again when the yard's override changes. Each farmhouse in the yard also gets a big circle 10 m out along its own +Z (the direction the model faces in its file), and a small one on its spawn node (where a player appears on their farm) if it has one. The command lists each farmhouse with its +Z direction and how far, and how many degrees clockwise from +Z, its spawn node is, to check which side of a house is its front.
+
+```
+tcYard show
+tcYard show 12
+```
+
+### `tcYard hide`
+
+Clears `tcYard show`'s circles.
+
+### `tcYard set <farmlandId> <on|off|auto>`
 
 Overrides yard detection for a farmland, for every farm (it's saved and sent to everyone): `on` makes it a yard whatever's on it (with no buildings it sits at the farmland's middle), `off` rules it out, and `auto` goes back to detection. The farmers' yards follow straight away. A yard you declare (`on`) isn't field land: whoever farmed it loses it, and it goes to the nearest farmer without a yard, however far. A farmer whose yard is ruled out loses it. Land a player owns is never a farmer's yard. Server only. The in-game map does the same from a farmland's box ("Set as farmer yard" / "Unset as farmer yard", for the host or an admin, on land no player owns).
 
 ```
-tcCompany yard 12 off
-tcCompany yard 30 on
-tcCompany yard 30 auto
+tcYard set 12 off
+tcYard set 30 on
+tcYard set 30 auto
 ```
 
-### `tcCompany farmers [preview|show|hide|standing|yards|fleet|regenerate] [targetAcres|farmer] [seed]`
+## Auction — `tcAuction`
 
-The map's farmers and the local official (110), who the jobs come from. The farmers are made the first time the mod runs on a save, by sharing out every farmland with a field that no player owns (see `preview` below), and they're the same for every farm. A farmer can lose all their land to players and still be on the list; land a player sells goes to a farmer near it. Jobs on a farmer's land are for that farmer, and anything else (jobs on land no farmer has, a fallen tree) is for the local official.
+### `tcAuction status`
 
-- With no argument: one line per farmer with their id, name and gender, their acres (and the target they were made with), their farmlands, and their yard (or "yard off the map"), then the local official. Read-only, so it also works on a joined client.
-- `preview`: how the land would be split now, without changing anything. The total acres and number of farmers, then one line per farmer with their acres (and target), how many farmlands and which, and their yard (`(start)` if the farmer started there). Last, the largest and smallest holdings, how many yards were used and how many balancing moves were made. The split: only farmlands with at least one field and no player owner, every one of them to a farmer, a farmland's size its fields' area in acres; one farmer per `targetAcres` (default 50), at least 4, each aiming for that size give or take up to 30%; farm yards (`tcCompany yards`) on or near field land start a farmer, the most yard-like first (a declared one, then one that isn't small, then one without a sell point, then the most yard buildings, then the most sheds and farmhouses), and any yard left over, in the same order, goes to a nearby farmer who has none. A small yard (4 yard buildings or fewer) never starts a farmer: it's only ever a leftover, for a farmer who ended up without a yard (a declared one, `tcCompany yard <id> on`, to the nearest farmer without one however far, and its land isn't shared out as fields). Read-only.
-- `show`: the same, and a label on the map at the middle of each farmland's fields with its farmer's number, and `Y` and the number on each farmer's yard, one colour per farmer, on this machine only.
-- `hide`: clears the labels.
-- `standing`: where each farmer stands in their yard now (114). It shows the yard, which of its spots (`farmland:spot`, and "by the house" for one within 15 m of a farmhouse), how many spots it has and how many are near the house, how far the spot is from you, and whether they're there, shown or waiting until you look away. Otherwise it says why they're not in a yard (none on the map, a player owns it, no open spots). Farmers are about from 07:00 to 19:00, and may move to another spot every 3 hours (out of view), spending about half that time near the farmhouse if the yard has one. A farmer with a favour on offer or taken on (116) is shown "by their favour's machine" instead, and one whose machine has broken down (101, 123) "by their broken-down machine", with the job and where they stand: beside the machine and facing it, at any time of day, whether it's in their yard or on a field. Read-only.
-- `yards`: turns markers on this machine's map on or off: a pulsing red circle on every farmer's yard, labelled with the farmer's id and name, and a pulsing blue one, labelled `free` and its farmland id, on every yard (each label ends with the yard's number of yard buildings in brackets) (`tcCompany yards`) no farmer holds. They're as the farmers and yards were when you turned them on, so turn them off and on again to see a change. Read-only, so it also works on a joined client.
-- `fleet [farmer]`: each farmer's machines (121), or one farmer's (an id or full name): a line per farmer with their acres and yard, then one per machine with its id, role (`smallTractor`, `mediumTractor`, `largeTractor`, `combine`, `header`, `trailer`, `telehandler`, `baleFork`), model, what it's hitched to (`on <id>`, for a header or a bale fork), its operating hours once it's been out, and `out now` while it's on a job or on its way. Every farmer has a small and a medium tractor, a combine with a header and a trailer; about half a second small tractor; one with a yard a telehandler and a bale fork; and the biggest 10% of farmers by land, if they're over 50 acres, a large tractor as well. Machines are only ever added (a new yard brings a telehandler), never taken away. A bale fork is always a spike (125): one that isn't, such as a bale grab from an older save, is changed to a spike on loading, under the same id (unless it's out, then on a later load). Server only.
-- `seed` (`preview` and `show`): the same seed always gives the same split. Without one a random one is used, and the first line says which, so a split you like can be shown again.
-- `regenerate [targetAcres]`: throws the farmers away and makes new ones from a fresh split at `targetAcres` (default 50), with new names, looks and ids. The local official stays. Every job loses its link to the old farmers, and every farm its relationships with them (`tcCompany relationship`; the official's are kept): jobs are linked again from their fields, and the command says how many changed. Server only.
+The machinery auction (137) and its sale (139). One is announced now and then by itself (about one a year, now and then two, never within 3 months of the last one ending, for a sale in spring or autumn, 2 to 4 months ahead); this shows it or makes one happen. One started here counts as the last one when it ends.
+
+The auction, if there's one: its id, field, host farmer and state (`announced`, `signsUp`, `setOut`, `onSale` or `collection`), the day it was announced, the day its signs go up, its reminder day and its sale day, its entrance, and once the signs are up (136) each sign's position (world x, z, as `tcDebug auctionSigns` lists them). `tcAuction start` and `tcDebug auctionDay` print the same, so the signs' positions are in the log as soon as they're up. Server only.
 
 ```
-tcCompany farmers
-tcCompany farmers preview 80
-tcCompany farmers show 80 1234
-tcCompany farmers hide
-tcCompany farmers standing
-tcCompany farmers fleet
-tcCompany farmers fleet Tom Hargreaves
-tcCompany farmers regenerate 60
-tcCompany farmers yards
+tcAuction status
 ```
 
 ```
-Farmers (5), from a split at 30 acres a farmer, seed 1234:
-  #2 Tom Hargreaves (male): 92 acres (target 88), 3 farmland(s): 12, 14, 15, yard 12
-  #3 Ruth Bell (female): no land, yard off the map
-  ...
-Local official: #1 Alan Price (male)
+Auction 1 on field 12, held by Tom Hargreaves: signsUp.
+  Announced March 4, Year 2; signs up April 10, Year 2; reminder May 3, Year 2; sale May 10, Year 2 (viewing and bidding from 08:00, lots closing from 17:00).
+  Entrance at 512, -88.
 ```
 
-### `tcCompany relationship [<person> <amount>]`
+### `tcAuction start [fieldId|auto] [days]`
 
-Your farm's relationship with each farmer and the local official (113), from -100 to 100. Everyone starts at 0. Completed jobs raise it (more for better quality, and poor work lowers it). Missed, declined and lapsed offers, a counter-offer they walked away from, and an invoice you pursue all lower it. Every month it drifts 5 back towards 0. Good relationships bring more of that customer's offers and more room to haggle. Below -40 they offer you no work at all.
+Announces one now, ignoring the season and the monthly roll. If the sale's in this month, every company farm gets its attend-the-auction job (141) at once; otherwise on the first day of the sale's month. Its field is picked as a real one is (a grass, bare or harvested field nobody's farm owns, held by a farmer, with no live job, that can hold a sale; at random among the best 3), its sale 2 to 4 months ahead. The signs go up 3 months before the sale, or at once if it's nearer. Every company farm gets the message, and every player the map marker.
+- `<fieldId>`: on that field instead (`tcAuction fields` lists the fields that can hold one). No farm may own it, a farmer must hold it, and it can't have a live job; it doesn't have to be grass, bare or harvested, or a candidate (whatever's on it is put down to grass on the sale day and put back after).
+- `auto`: the field picked as above, so `[days]` can be given without a field.
+- `[days]`: the sale that many days from today (at least 1), not 2 to 4 months. The signs go up 3 months before the sale, or at once if the sale's nearer than that.
 
-When it goes bad (129): a missed job, or one done under 50% quality, that leaves a customer at `poor` (-40 to -15) gets a complaint from them in your Inbox, at most once a month each. A customer dropping below -40 tells the neighbours: every farmer with land or a yard within 500 m of theirs drops 5 with you, your reputation drops 15, and a notice names them. Their drops never spread word further.
-
-- With no argument: one line per person (the official first) with their id, name, score and band (`excellent`, `good`, `neutral`, `poor`, `fallenOut`). Read-only, so it also works on a joined client.
-- `<person> <amount>`: changes the relationship with that person (their id or full name) by `amount`, which can be negative. The result is kept within -100 to 100. It goes through the same path as the game's own changes, so taking someone from -40 or above to below it spreads word to their neighbours as above (a complaint only comes from a job). Server only.
-
-```
-tcCompany relationship
-tcCompany relationship 4 -50
-tcCompany relationship Tom Hargreaves 20
-```
+There's only ever one auction: `start` refuses while one's on. The auction is saved, and a player joining gets it.
 
 ```
-Farm 1's relationships (-100 to 100, refusing work below -40):
-  #1 Alan Price (local official): 0 (neutral)
-  #2 Tom Hargreaves: 18 (good)
-  #3 Ruth Bell: -45 (fallenOut)
+tcAuction start
+tcAuction start 12
+tcAuction start 12 3
+tcAuction start auto 3
+```
+
+### `tcAuction cancel`
+
+Calls it off: no more lots are sold, anything already won and still on the field is delivered, anything else on the field is deleted, the signs come down, the field's free again, and every company farm is told. Any attend-the-auction job (141) not yet done is taken away.
+
+```
+tcAuction cancel
+```
+
+### `tcAuction fields`
+
+The fields that could hold a machinery auction, best first: the candidates a real auction picks from, for `tcAuction start <fieldId>`. A candidate is a field no farm owns that's grass, bare (no crop) or harvested (its crop cut, not sown, growing or withered), with no live job, of 1 ha or more. A sale takes as many lots as its field fits, up to 120, so each field is measured against a typical 120-lot sale. Each line has the field's id and the farmer who holds it, its area, how many of the 120 fit, its slope (the steepest rise between ground samples 8 m apart, the average, and the whole rise in metres), how far the nearest road is from its edge, and whether it can hold a sale. It can't if fewer than 30 lots fit, the steepest slope is over 8%, or there's no road within 60 m. Those that can come first, the most lots first, then the biggest. The last line says how many can, and how long the check took. With a test site up (`tcDebug auctionSite`) it starts with that. Server only.
+
+```
+tcAuction fields
+```
+
+```
+Auction site candidates (grass, bare or harvested, nobody's farm, no live job, 1 ha or more), measured against a sale of 120 lots, a sale needing 30, most lots first:
+  field 12 (Tom Hughes): 6.40 ha, 120 of 120 lots fit, slope steepest 4.1%, average 1.2%, rise 3.0 m, road 14 m from the edge - can hold the sale
+  field 31: 2.10 ha, 22 of 120 lots fit, slope steepest 2.0%, average 0.8%, rise 1.1 m, road 40 m from the edge - too small
+1 of 2 candidates can hold the sale (64 fields on the map), checked in 410 ms.
 ```
 
 ## Log — `tcLog`
 
 ### `tcLog`
 
-Toggles the mod's detailed log (jobs dispatched, invoices paid, events rolled and so on) in `log.txt`, and says whether it's now on or off. It takes no arguments. It's off by default; warnings and errors are logged whether it's on or not. The switch belongs to this machine only (it works from any player's console, and isn't synced) and is remembered across loads in `modSettings/FS25_TheContractor/debugLog.xml`, so turn it on and reload to catch a save loading.
+Toggles the mod's detailed log (jobs dispatched, invoices paid, events rolled and so on) in `log.txt`, and says whether it's now on or off. It takes no arguments. It's on by default, so a bug report's `log.txt` already has it; warnings and errors are logged whether it's on or not. The switch belongs to this machine only (it works from any player's console, and isn't synced) and is remembered across loads in `modSettings/FS25_TheContractor/debugLog.xml`, so turn it on and reload to catch a save loading.
 
 ```
 tcLog

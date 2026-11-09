@@ -98,7 +98,7 @@ function TheContractorClaims.new()
     -- claims, for the premium loading. Synced to clients.
     self.historyByFarm = {}
 
-    -- tcFinance botch: the next eligible worker botches. Server-only, not saved.
+    -- tcDebug botch: the next eligible worker botches. Server-only, not saved.
     self.forceBotch = nil
 
     MoneyType.TC_CLAIMS = MoneyType.register("tcClaims", "tc_moneyType_claims")
@@ -474,12 +474,28 @@ function TheContractorClaims:readInitialClientState(streamId, connection)
     end
 end
 
--- Console commands (tcFinance - see TCConsole) -----------------------------------------
+-- Console commands (tcFinance, tcDebug - see TCConsole) -----------------------------------------
 
 function TheContractorClaims.registerConsoleCommands()
-    -- Server-only, since pending claims never reach clients.
+    -- The farm's own record. Server-only: the history isn't synced.
     TCConsole.register("finance", "claims", {
-        description = "Claims still to arrive, your claims in the last 3 years and the premium",
+        description = "Your claims in the last 3 years and the public liability premium",
+        run = function(farmId, args)
+            local claims = g_currentMission.TheContractor.Claims
+            local lines = { string.format("Farm %d: %d claim(s) in the last 3 years, public liability %.0f a year%s",
+                farmId, claims:getRecentClaimCount(farmId), claims:getPremium(farmId),
+                claims:isInsured(farmId) and " (insured)" or " (not insured)") }
+            for _, record in ipairs(claims.historyByFarm[farmId] or {}) do
+                table.insert(lines, string.format("  %s: %.0f", TCCalendar.formatPeriodIndex(record.periodIndex),
+                    record.amount))
+            end
+            return table.concat(lines, "\n")
+        end,
+    })
+
+    -- Claims nobody's been told about yet.
+    TCConsole.register("debug", "claims", {
+        description = "Claims still to arrive (every farm's), and whether the next botch is forced",
         run = function(farmId, args)
             local claims = g_currentMission.TheContractor.Claims
             local lines = { string.format("Pending claims (today is day %d)%s:",
@@ -489,20 +505,12 @@ function TheContractorClaims.registerConsoleCommands()
                     claim.farmId, claim.jobId, claim.jobType, claim.fieldId, claim.workerName, claim.cause, claim.amount,
                     claim.notifyDay, claim.insured and "insured" or "uninsured", claim.reputationPenalty))
             end
-
-            table.insert(lines, string.format("Farm %d: %d claim(s) in the last 3 years, public liability %.0f a year%s",
-                farmId, claims:getRecentClaimCount(farmId), claims:getPremium(farmId),
-                claims:isInsured(farmId) and " (insured)" or " (not insured)"))
-            for _, record in ipairs(claims.historyByFarm[farmId] or {}) do
-                table.insert(lines, string.format("  %s: %.0f", TCCalendar.formatPeriodIndex(record.periodIndex),
-                    record.amount))
-            end
             return table.concat(lines, "\n")
         end,
     })
 
     -- The flag is server-only and transient.
-    TCConsole.register("finance", "botch", {
+    TCConsole.register("debug", "botch", {
         args = "[daysUntilClaim=2-7]",
         description = "The next worker to finish a job that can cause a claim botches it",
         run = function(farmId, args)
