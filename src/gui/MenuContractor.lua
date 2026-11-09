@@ -5004,10 +5004,15 @@ function MenuContractor:populateAllocationEquipmentCell(index, cell)
         setChip(sizeChip, sizeChipText, g_i18n:getText("tc_allocation_size_" .. row.sizeTier),
             self:getAllocationTierTone(row.sizeTier))
     end
-    -- 062: a machine back from a job that hasn't found a parking space yet.
-    local isPending = g_currentMission.TheContractor.Parking:isPending(row.vehicleId)
-    setChip(cell:getAttribute("parkingChip"), cell:getAttribute("parkingChipText"),
-        isPending and g_i18n:getText("tc_allocation_awaitingParking") or nil, "warn")
+    -- 150: ADS won't let the picked worker drive it until it's serviced
+    -- (the player can, so not while it's them alone). A machine still
+    -- waiting for a parking space (062) gets no chip: allocating sends it to
+    -- the shop for the player, and a worker's dispatch takes it from the
+    -- queue.
+    local vehicle = NetworkUtil.getObject(row.vehicleId)
+    local isRefused = #self.allocationSelectedWorkerIds > 0 and vehicle ~= nil and TCADSWorkerRefusal.isRefused(vehicle)
+    setChip(cell:getAttribute("availabilityChip"), cell:getAttribute("availabilityChipText"),
+        isRefused and g_i18n:getText("tc_allocation_unavailable") or nil, "bad")
 end
 
 -- Selected vehicle ids, field equipment or (isHaulage) the haulage rig.

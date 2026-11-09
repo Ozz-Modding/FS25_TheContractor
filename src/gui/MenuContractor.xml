@@ -471,9 +471,9 @@
                             <!-- A tractor's size, toned by whether the picked crew can drive it. -->
                             <RoundCorner profile="tc_rowChip" position="232px 0px" size="64px 20px" name="sizeChip"/>
                             <Text profile="tc_rowChipText" position="232px 0px" size="64px 20px" name="sizeChipText"/>
-                            <!-- 062: still waiting for a parking space. -->
-                            <RoundCorner profile="tc_rowChip" position="302px 0px" size="88px 20px" name="parkingChip"/>
-                            <Text profile="tc_rowChipText" position="302px 0px" size="88px 20px" name="parkingChipText"/>
+                            <!-- 150: ADS won't let the picked worker drive it. -->
+                            <RoundCorner profile="tc_rowChip" position="302px 0px" size="88px 20px" name="availabilityChip"/>
+                            <Text profile="tc_rowChipText" position="302px 0px" size="88px 20px" name="availabilityChipText"/>
                             <Text profile="tc_listRowCellLeft" position="396px 0px" size="88px 32px" name="kind"/>
                         </ListItem>
                     </SmoothList>

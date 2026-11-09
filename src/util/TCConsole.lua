@@ -501,3 +501,14 @@ function TCConsole.toCount(text, default)
     end
     return math.floor(number)
 end
+
+-- Names as a sorted, comma-separated list (for a hint, or a wrong one's
+-- reply). Leaves names as it was.
+function TCConsole.listNames(names)
+    local sorted = {}
+    for _, name in ipairs(names) do
+        table.insert(sorted, tostring(name))
+    end
+    table.sort(sorted)
+    return table.concat(sorted, ", ")
+end
