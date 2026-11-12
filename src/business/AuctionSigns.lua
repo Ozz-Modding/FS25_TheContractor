@@ -327,7 +327,9 @@ end
 function TheContractorAuctionSigns:place(month)
     local started = getTimeSec()
     local splines = TheContractorAuctionSigns.sampleRoads()
-    local result = TCAuctionSigns.pick(splines, TheContractorAuctionSigns.isSpotClear)
+    local mapId = g_currentMission.missionInfo ~= nil and g_currentMission.missionInfo.mapId or nil
+    local result = TCAuctionSigns.pick(splines, TheContractorAuctionSigns.isSpotClear,
+        TCAuctionSigns.getExclusions(mapId))
     local tookMs = (getTimeSec() - started) * 1000
 
     self.month = month

@@ -18,7 +18,7 @@
 --   - a LANE_MARGIN strip down each side of it, for a strand of bunting,
 --     straw bales by the gate and the blocks' signs;
 --   - either side of that, blocks packed out from the lane (packBlocks): the
---     sale office by the gate, the food area (the kiosk, picnic benches,
+--     sale office by the gate, the food area (the food van, picnic benches,
 --     bins, the menu board), the toilets, then the car park filling what's
 --     left of both sides. A block that fits nowhere is left out;
 --   - bunting along the outer edge either side of the gate, and a strand
@@ -59,7 +59,7 @@ TCAuctionScene.VIEW_SHARE = 0.4      -- of the lots that have someone looking at
 -- The sizes props take on the ground (width across, length along the way
 -- they face). A car's is its model's (CAR_MODELS).
 TCAuctionScene.SIZES = {
-    kiosk = { width = 5, length = 6 },
+    foodVan = { width = 5.4, length = 6 },
     bench = { width = 1.8, length = 1.6 },
     bin = { width = 0.7, length = 0.7 },
     toilet = { width = 1.2, length = 1.2 },
@@ -356,18 +356,18 @@ function TCAuctionScene.layOut(scene)
         addGroup(math.min(usable - 2, 8.5), sideV(side, a0 + 3), 3, 1.0, TCAuctionScene.SPOT.GATE)
     end
 
-    -- The food area: the kiosk facing in, a queue at its counter, picnic
+    -- The food area: the food van facing in, a queue at its counter, picnic
     -- benches in front, bins, its menu and its sign.
     local food = blocks.food
     if food ~= nil then
         local side, a0 = food.side, food.from
-        local kioskA = a0 + 9
-        add("kiosk", 4.0, sideV(side, kioskA), inwardYaw)
+        local vanA = a0 + 9
+        add("foodVan", 4.0, sideV(side, vanA), inwardYaw)
         -- Its sign beside the lane, facing the lots, for the people there.
         add("sign", 4.0, sideV(side, a0 + 1.2), inwardYaw, { face = TCAuctionScene.FACES.FOOD })
-        add("board", 7.6, sideV(side, kioskA + 3.2), inwardYaw, { board = TCAuctionScene.BOARDS.FOOD_MENU })
+        add("board", 7.6, sideV(side, vanA + 3.2), inwardYaw, { board = TCAuctionScene.BOARDS.FOOD_MENU })
         for k = 0, 2 do
-            addSpot(7.8 + k * 0.9, sideV(side, kioskA), outwardYaw, TCAuctionScene.SPOT.FOOD)
+            addSpot(7.8 + k * 0.9, sideV(side, vanA), outwardYaw, TCAuctionScene.SPOT.FOOD)
         end
         add("bin", 8.0, sideV(side, a0 + 1.6), inwardYaw)
         add("bin", 8.5, sideV(side, a0 + 16.0), inwardYaw)

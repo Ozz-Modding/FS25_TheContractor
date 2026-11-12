@@ -333,6 +333,7 @@ function TheContractorCourtesyVehicle:spawn(incident, storeItem)
     end
     local loadingData = VehicleLoadingData.new()
     loadingData:setStoreItem(storeItem)
+    TCStoreConfigurations.apply(loadingData, storeItem)
     loadingData:setLoadingPlace(g_currentMission.storeSpawnPlaces, g_currentMission.usedStorePlaces)
     loadingData:setPropertyState(VehiclePropertyState.MISSION)
     loadingData:setOwnerFarmId(incident.farmId)

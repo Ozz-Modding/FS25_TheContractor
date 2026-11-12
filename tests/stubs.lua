@@ -502,6 +502,9 @@ function stubs.install()
     world:load("src/util/TCLog.lua")
     TCLog.enabled = true
 
+    -- Every vehicle spawned from a store item loads through it.
+    world:load("src/util/TCStoreConfigurations.lua")
+
     return world
 end
 

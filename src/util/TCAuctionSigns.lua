@@ -29,6 +29,9 @@
 --     (designs, the caller's ids; they're different widths), the one
 --     after the last sign's first, so a map gets a mix, then the rest in
 --     turn: a verge with room only for the narrower board gets that one.
+--   Exclusions: circles a map's sign may not stand in (MAP_EXCLUSIONS, by
+--     the map's mod name): the odd spot the checks above get wrong on one
+--     map (a roundabout's island on Witcombe that isEnclosed passes).
 --   Which: the best junctions first, one sign each, each junction at least
 --     minSpacing from the signs already up (spread over the map), at most
 --     maxSigns.
@@ -71,7 +74,37 @@ TCAuctionSigns.REJECT = {
     DEAD_END = "deadEnd",
     ENCLOSED = "enclosed",
     TOO_CLOSE = "tooClose",
+    EXCLUDED = "excluded",
 }
+
+-- Spots no sign may stand within, by the map's mod name: { x, z, radius }
+-- (world metres). For a spot the general checks get wrong on one map.
+TCAuctionSigns.MAP_EXCLUSIONS = {
+    -- A roundabout's island the enclosed check misses.
+    FS25_Witcombe = {
+        { x = -278.3, z = 976.4, radius = 10 },
+    },
+}
+
+-- The map's exclusions (pure): mapId is missionInfo.mapId, "<modName>.<id>"
+-- for a mod map. An empty list for any other map, or none.
+function TCAuctionSigns.getExclusions(mapId)
+    if type(mapId) ~= "string" then
+        return {}
+    end
+    local modName = mapId:match("^([^%.]+)%.") or mapId
+    return TCAuctionSigns.MAP_EXCLUSIONS[modName] or {}
+end
+
+-- Whether (x, z) is inside any of exclusions (pure).
+function TCAuctionSigns.isExcluded(exclusions, x, z)
+    for _, zone in ipairs(exclusions or {}) do
+        if (x - zone.x) ^ 2 + (z - zone.z) ^ 2 < zone.radius * zone.radius then
+            return true
+        end
+    end
+    return false
+end
 
 -- Vectors ----------------------------------------------------------------------------------
 
@@ -542,12 +575,14 @@ end
 -- sides in order, each at every verge offset, each with every design in
 -- designOrder. base: the sign's other values; each spot's x, z, side,
 -- offset, yaw (facing the road) and design are added.
-local function placeOnVerge(network, roadX, roadZ, sides, base, isClear, rejected, hx, hz, designOrder)
+local function placeOnVerge(network, roadX, roadZ, sides, base, isClear, rejected, hx, hz, designOrder, exclusions)
     for _, side in ipairs(sides) do
         for _, offset in ipairs(TCAuctionSigns.RULES.vergeOffsets) do
             local x = roadX + side.x * offset
             local z = roadZ + side.z * offset
-            if isOnRoad(network, x, z) then
+            if TCAuctionSigns.isExcluded(exclusions, x, z) then
+                countReject(rejected, TCAuctionSigns.REJECT.EXCLUDED)
+            elseif isOnRoad(network, x, z) then
                 countReject(rejected, TCAuctionSigns.REJECT.ON_ROAD)
             elseif TCAuctionSigns.isNearCrossRoad(network, x, z, hx, hz) then
                 countReject(rejected, TCAuctionSigns.REJECT.CROSS_ROAD)
@@ -587,10 +622,11 @@ end
 
 -- The signs for the map. splines: as buildNetwork's. isClear(candidate):
 -- true, or false and a reason, for a spot (the caller's checks: anything in
--- the way, steep, a field, water). Returns { signs, junctionCount, rejected
+-- the way, steep, a field, water). exclusions: optional, getExclusions'
+-- circles. Returns { signs, junctionCount, rejected
 -- (reason -> count) }, each sign { x, z, yaw, design, side, offset, roadX,
 -- roadZ, roadY, junctionX, junctionZ, busyMetres }.
-function TCAuctionSigns.pick(splines, isClear)
+function TCAuctionSigns.pick(splines, isClear, exclusions)
     local R = TCAuctionSigns.RULES
     local result = { signs = {}, junctionCount = 0, rejected = {} }
     local network = TCAuctionSigns.buildNetwork(splines)
@@ -620,7 +656,7 @@ function TCAuctionSigns.pick(splines, isClear)
                         busyMetres = junction.busyMetres,
                     }
                     local spot = placeOnVerge(network, node.x, node.z, getSides(hx, hz), base, isClear, rejected,
-                        hx, hz, getDesignOrder(signs))
+                        hx, hz, getDesignOrder(signs), exclusions)
                     if spot ~= nil then
                         table.insert(signs, spot)
                         break

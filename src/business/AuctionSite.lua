@@ -731,6 +731,7 @@ function TheContractorAuctionSite:spawnNext()
 
     local loadingData = VehicleLoadingData.new()
     loadingData:setStoreItem(storeItem)
+    TCStoreConfigurations.apply(loadingData, storeItem)
     -- The store's own offset puts an implement down on its stands, as the
     -- shop sets it down (a mower on a small stand tipped over without it).
     loadingData:setIgnoreShopOffset(false)
@@ -798,6 +799,7 @@ function TheContractorAuctionSite:loadAttachment(lot, vehicle)
         TheContractorRepairContracts.CLEARANCE
     local loadingData = VehicleLoadingData.new()
     loadingData:setStoreItem(storeItem)
+    TCStoreConfigurations.apply(loadingData, storeItem)
     loadingData:setIgnoreShopOffset(true)
     loadingData:setPosition(x + dirX * ahead, nil, z + dirZ * ahead, TCParking.PLACE_HEIGHT_OFFSET)
     loadingData:setRotation(0, MathUtil.getYRotationFromDirection(dirX, dirZ), 0)
