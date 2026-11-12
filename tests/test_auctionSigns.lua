@@ -171,8 +171,10 @@ test("a blocked verge moves the sign in, then across the road, then to another r
     local sign = result.signs[1]
     assertEquals("left", sign.side)
     assertNear(TCAuctionSigns.RULES.vergeOffsets[2], sign.offset, 0.001)
-    assertEquals(#TCAuctionSigns.RULES.vergeOffsets, result.rejected.hedge)
-    assertEquals(1, result.rejected.gate)
+    -- Each spot is tried with every design.
+    local designs = #TCAuctionSigns.RULES.designs
+    assertEquals(#TCAuctionSigns.RULES.vergeOffsets * designs, result.rejected.hedge)
+    assertEquals(designs, result.rejected.gate)
 
     -- Every spot on the first road blocked: the next road in gets it.
     blockedRoad = nil
@@ -187,7 +189,35 @@ test("a blocked verge moves the sign in, then across the road, then to another r
     assertTrue(result.signs[1].roadX ~= blockedRoad[1] or result.signs[1].roadZ ~= blockedRoad[2],
         "on another road in")
     assertFacesDriver(result.signs[1])
-    assertEquals(2 * #TCAuctionSigns.RULES.vergeOffsets, result.rejected.hedge)
+    assertEquals(2 * #TCAuctionSigns.RULES.vergeOffsets * designs, result.rejected.hedge)
+end)
+
+test("signs take turns at the designs, and a verge too short for one gets the other", function()
+    setup()
+    local roads = {}
+    for i = 0, 3 do
+        addAll(roads, tJunction(i * 1000, 0))
+    end
+    local result = TCAuctionSigns.pick(roads, allClear)
+    assertEquals(4, #result.signs)
+    for i, sign in ipairs(result.signs) do
+        assertEquals(TCAuctionSigns.RULES.designs[(i - 1) % 2 + 1], sign.design)
+    end
+
+    -- Design 1 never fits: every sign is design 2, on the outer verge
+    -- (the narrower board isn't moved in for want of the wider one).
+    result = TCAuctionSigns.pick(roads, function(candidate)
+        if candidate.design == 1 then
+            return false, "tooWide"
+        end
+        return true
+    end)
+    assertEquals(4, #result.signs)
+    for _, sign in ipairs(result.signs) do
+        assertEquals(2, sign.design)
+        assertNear(TCAuctionSigns.RULES.vergeOffsets[1], sign.offset, 0.001)
+    end
+    assertEquals(4, result.rejected.tooWide)
 end)
 
 test("a spot on another road is passed over", function()
@@ -291,8 +321,8 @@ end)
 -- The engine half (TheContractorAuctionSigns) -------------------------------------------------
 
 -- A fake engine for the sign's model: nodes are tables, the model's tree as
--- the i3d has it (auctionSign > visuals > posts, board, face, date > month1
--- to month12; and col).
+-- the i3d has it (auctionSign > visuals > posts, board, face, plank, date >
+-- month1 to month12; and col).
 local function installModelEngine(world)
     world.loaded, world.released = {}, {}
     local function node(name, children)
@@ -305,7 +335,9 @@ local function installModelEngine(world)
                 table.insert(months, node("month" .. month))
             end
             local sign = node("auctionSign", {
-                node("visuals", { node("posts"), node("board"), node("face"), node("date", months) }), node("col") })
+                node("visuals", { node("posts"), node("board"), node("face"), node("plank"), node("date", months) }),
+                node("col") })
+            sign.filename = filename
             table.insert(world.loaded, sign)
             return node("root", { sign }), #world.loaded
         end,
@@ -344,8 +376,8 @@ local function setupGame()
 end
 
 local SIGNS = {
-    { x = 10, z = 20, yaw = 1.5 },
-    { x = -40, z = 5, yaw = -1.57 },
+    { x = 10, z = 20, yaw = 1.5, design = 2 },
+    { x = -40, z = 5, yaw = -1.57, design = 1 },
 }
 
 local function sameSpots(expected, actual)
@@ -354,6 +386,7 @@ local function sameSpots(expected, actual)
         assertNear(sign.x, actual[i].x, 0.001)
         assertNear(sign.z, actual[i].z, 0.001)
         assertNear(sign.yaw, actual[i].yaw, 0.001)
+        assertEquals(sign.design, actual[i].design)
     end
 end
 
@@ -392,7 +425,7 @@ test("a player joining afterwards gets the signs in the initial client state", f
     assertTrue(client.isDirty, "the client builds them on its next update")
 end)
 
-test("each sign is a model on the ground at its spot, showing only its month", function()
+test("each sign is its design's model on the ground at its spot, showing only its month", function()
     local world = setupGame()
     world.signs:applySync(7, SIGNS)
     world.signs:update(16)
@@ -402,8 +435,10 @@ test("each sign is a model on the ground at its spot, showing only its month", f
     assertEquals(10, model.translation[1])
     assertEquals(world.terrainHeight, model.translation[2])
     assertEquals(1.5, model.rotation[2])
-    assertEquals("month7", shown(model.children[1].children[4]))
-    assertEquals("month7", shown(world.loaded[2].children[1].children[4]))
+    assertEquals("month7", shown(model.children[1].children[5]))
+    assertEquals("month7", shown(world.loaded[2].children[1].children[5]))
+    assertEquals(TheContractorAuctionSigns.DESIGNS[2].filename, model.filename)
+    assertEquals(TheContractorAuctionSigns.DESIGNS[1].filename, world.loaded[2].filename)
 end)
 
 test("on a slope a sign stands at the lowest ground under its posts, so no post hangs in the air", function()
@@ -411,14 +446,19 @@ test("on a slope a sign stands at the lowest ground under its posts, so no post 
     -- Ground rising along world z; a sign turned a quarter has its board
     -- across z, so one post is downhill of the other.
     getTerrainHeightAtWorldPos = function(_, x, _, z) return 10 + z end
-    world.signs:applySync(7, { { x = 0, z = 0, yaw = math.pi / 2 } })
+    local function outerEdge(design)
+        return TheContractorAuctionSigns.DESIGNS[design].postX + TheContractorAuctionSigns.POST_SIZE / 2
+    end
+    world.signs:applySync(7, { { x = 0, z = 0, yaw = math.pi / 2, design = 1 } })
     world.signs:update(16)
-    assertNear(10 - 0.645, world.loaded[1].translation[2], 0.001)
+    assertNear(10 - outerEdge(1), world.loaded[1].translation[2], 0.001)
 
-    -- Turned the other way round, it's the other post that's downhill.
-    world.signs:applySync(7, { { x = 0, z = 0, yaw = -math.pi / 2 } })
+    -- Turned the other way round, it's the other post that's downhill; the
+    -- narrower design's posts are closer in.
+    world.signs:applySync(7, { { x = 0, z = 0, yaw = -math.pi / 2, design = 2 } })
     world.signs:update(16)
-    assertNear(10 - 0.645, world.loaded[2].translation[2], 0.001)
+    assertNear(10 - outerEdge(2), world.loaded[2].translation[2], 0.001)
+    assertTrue(outerEdge(2) < outerEdge(1), "design 2 is the narrower")
 end)
 
 test("taking the signs down deletes the models and frees the shared file", function()
@@ -448,6 +488,22 @@ test("the signs and their month survive a save, and nothing's saved without any"
     assertEquals(7, loaded.month)
     sameSpots(SIGNS, loaded.signs)
     assertTrue(loaded.isDirty, "built on the first update")
+end)
+
+test("a sign saved before there were designs, or with one that's gone, loads as the default", function()
+    setupGame()
+    local xmlFile = {}
+    setXMLInt(xmlFile, "TheContractor.auctionSigns#month", 5)
+    setXMLFloat(xmlFile, "TheContractor.auctionSigns.sign(0)#x", 1)
+    setXMLFloat(xmlFile, "TheContractor.auctionSigns.sign(0)#z", 2)
+    setXMLFloat(xmlFile, "TheContractor.auctionSigns.sign(1)#x", 3)
+    setXMLFloat(xmlFile, "TheContractor.auctionSigns.sign(1)#z", 4)
+    setXMLInt(xmlFile, "TheContractor.auctionSigns.sign(1)#design", 9)
+    local loaded = TheContractorAuctionSigns.new()
+    loaded:loadFromXMLFile(xmlFile)
+    assertEquals(2, #loaded.signs)
+    assertEquals(TheContractorAuctionSigns.DEFAULT_DESIGN, loaded.signs[1].design)
+    assertEquals(TheContractorAuctionSigns.DEFAULT_DESIGN, loaded.signs[2].design)
 end)
 
 -- A T junction's roads as engine splines, and a field south of the main
@@ -522,4 +578,18 @@ test("tcCompany auctionSigns <month>: signs at the junctions for that month, non
     command.run(1, { "clear" })
     assertEquals(0, #world.signs.signs)
     assertEquals(0, world.signs.month)
+end)
+
+test("a spot's clear space is as wide as its design's board", function()
+    local world = setupGame()
+    installRoadsAndField(world)
+    local widths = {}
+    overlapBox = function(_, _, _, _, _, _, halfWidth) table.insert(widths, halfWidth) end
+    -- East of the lane, off the field.
+    for design = 1, 2 do
+        TheContractorAuctionSigns.isSpotClear({ x = 100, z = 5, yaw = 0, roadX = 100, roadZ = 0, design = design })
+    end
+    local margin = TheContractorAuctionSigns.CLEARANCE.margin
+    assertNear(TheContractorAuctionSigns.DESIGNS[1].width / 2 + margin, widths[1], 0.001)
+    assertNear(TheContractorAuctionSigns.DESIGNS[2].width / 2 + margin, widths[2], 0.001)
 end)

@@ -9,12 +9,14 @@ InitEventClass(TCAuctionSignsEvent, "TCAuctionSignsEvent")
 
 -- The month's bits on the wire (0 to 12).
 TCAuctionSignsEvent.MONTH_BITS = 4
+-- A sign's design's (TheContractorAuctionSigns.DESIGNS).
+TCAuctionSignsEvent.DESIGN_BITS = 4
 
 function TCAuctionSignsEvent.emptyNew()
     return Event.new(TCAuctionSignsEvent_mt)
 end
 
--- month: 0 for none up. signs: { x, z, yaw }.
+-- month: 0 for none up. signs: { x, z, yaw, design }.
 function TCAuctionSignsEvent.new(month, signs)
     local self = TCAuctionSignsEvent.emptyNew()
     self.month = month or 0
@@ -30,6 +32,7 @@ function TCAuctionSignsEvent.writeSigns(streamId, month, signs)
         streamWriteFloat32(streamId, sign.x)
         streamWriteFloat32(streamId, sign.z)
         streamWriteFloat32(streamId, sign.yaw)
+        streamWriteUIntN(streamId, sign.design or 1, TCAuctionSignsEvent.DESIGN_BITS)
     end
 end
 
@@ -43,6 +46,7 @@ function TCAuctionSignsEvent.readSigns(streamId)
             x = streamReadFloat32(streamId),
             z = streamReadFloat32(streamId),
             yaw = streamReadFloat32(streamId),
+            design = streamReadUIntN(streamId, TCAuctionSignsEvent.DESIGN_BITS),
         })
     end
     return month, signs
