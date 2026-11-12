@@ -142,7 +142,7 @@ local function checkScene(sale)
     end
     -- The gate's sign and board stand in room of their own, a metre clear
     -- of the blocks (toilets, office, food) and the cars.
-    local blockKinds = { toilet = true, office = true, kiosk = true, bench = true, bin = true, car = true }
+    local blockKinds = { toilet = true, office = true, foodVan = true, bench = true, bin = true, car = true }
     for _, prop in ipairs(dressed.props) do
         if prop.kind == "gateSign" or (prop.kind == "board" and prop.board == TCAuctionScene.BOARDS.SOLD_AS_SEEN) then
             local room = TCAuctionLayout.getFootprintCorners(prop.x, prop.z, prop.yaw, prop.width + 2, prop.length + 2)
@@ -173,7 +173,7 @@ test("a big sale: everything in the entrance space, clear of the lane, the cross
     assertTrue(sale.layout.placedCount >= 100)
     checkScene(sale)
     local props = sale.dressed.props
-    assertEquals(count(props, "kiosk"), 1)
+    assertEquals(count(props, "foodVan"), 1)
     assertEquals(count(props, "office"), 1)
     assertEquals(count(props, "toilet"), 3)
     assertEquals(count(props, "gateSign"), 1)

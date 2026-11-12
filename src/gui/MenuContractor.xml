@@ -996,6 +996,14 @@
                 </BoxLayout>
                 <Text profile="tc_panelNote" text="$l10n_tc_finances_forecastNote" position="704px -604px" size="752px 24px"/>
             </GuiElement>
+
+            <!-- Mouse-over tooltip (TCTooltip), last so it draws on top. -->
+            <RoundCorner profile="tc_tooltipBox" id="financesTooltipBox" visible="false">
+                <RoundCorner profile="tc_tooltipSurface" id="financesTooltipSurface"/>
+                <Text profile="tc_tooltipTitle" id="financesTooltipTitle" text=""/>
+                <Bitmap profile="tc_tooltipDivider" id="financesTooltipDivider"/>
+                <Text profile="tc_tooltipText" id="financesTooltipText" text=""/>
+            </RoundCorner>
         </GuiElement>
 
         <!-- Logbook (060) ================================================== -->

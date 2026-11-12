@@ -1,7 +1,7 @@
 -- Auction site dressing (140): the engine half. Loads the props
 -- TCAuctionScene lays out from the site's synced scene (AuctionSite:
 -- getScene) and takes them away when the site goes: the car park, the food
--- kiosk, picnic benches, bins, toilets, the sale office, bunting, straw
+-- van, picnic benches, bins, toilets, the sale office, bunting, straw
 -- bales, the site signs and the chalkboards. Plus the crowd's murmur (a
 -- local sound) while people are about.
 --
@@ -13,8 +13,7 @@
 -- runs vehicles' physics, so without them there nothing would stop a
 -- vehicle driving through a car. Bunting and bales have none.
 --
--- The vanilla models (traffic cars, the farm kiosk, a park bin, a square
--- bale) are the base game's own, read from $data; ours come from
+-- The vanilla models (traffic cars, a park bin, a square bale) are the base game's own, read from $data; ours come from
 -- docs/tools (docs/auction-site-props.md). Anything here is the user's to
 -- swap.
 
@@ -26,8 +25,9 @@ TCAuctionProps = {}
 -- way the prop faces. collision: loaded on a server too, and added to
 -- physics.
 TCAuctionProps.MODELS = {
-    kiosk = { filename = "$data/placeables/brandless/farmerKioskSmall/farmerKioskSmall.i3d", originX = 0.5,
-        originZ = 1.5, collision = true },
+    -- Side on to its footprint, its hatch to the front: set 1.6 m forward
+    -- of the footprint's middle, so its counter meets the queue.
+    foodVan = { filename = "i3d/auctionFoodVan.i3d", isMod = true, originZ = -1.6, collision = true },
     bench = { filename = "i3d/auctionPicnicBench.i3d", isMod = true, collision = true },
     bin = { filename = "$data/maps/mapEU/textures/props/parkTrashCan.i3d", collision = true },
     toilet = { filename = "i3d/auctionToilet.i3d", isMod = true, collision = true },
@@ -198,26 +198,6 @@ local function setUp(node, prop, data)
                 TCLog.info("TheContractor: auction car %s: no paint slot found to colour", getName(node))
             end
         end
-    elseif kind == "kiosk" then
-        -- The farm shop's selling station and markings go. Its produce (the
-        -- fillplanes, each its own crate, that vanilla's selling station
-        -- shows once that crop's sold there) is all shown: a stocked stall.
-        local doomed = {}
-        for i = 0, getNumOfChildren(node) - 1 do
-            local child = getChildAt(node, i)
-            local name = getName(child)
-            if name == "sellingStation" or name == "warningStripes" then
-                table.insert(doomed, child)
-            end
-        end
-        for _, child in ipairs(doomed) do
-            delete(child)
-        end
-        eachNode(node, function(child)
-            if string.sub(getName(child), 1, 9) == "fillplane" then
-                setVisibility(child, true)
-            end
-        end)
     elseif kind == "board" then
         -- visuals (0) > one board per BOARDS entry: the prop's shown.
         local visuals = getChildAt(node, 0)

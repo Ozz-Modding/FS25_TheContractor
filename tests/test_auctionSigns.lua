@@ -304,6 +304,27 @@ test("no sign on a dead end: a spur that stops short", function()
     assertEquals(1, #result.signs)
 end)
 
+test("a map's exclusion keeps a sign out of its circle: the sign goes to the next spot that works", function()
+    setup()
+    local first = TCAuctionSigns.pick(tJunction(), allClear).signs[1]
+    local zone = { x = first.x, z = first.z, radius = 10 }
+    local result = TCAuctionSigns.pick(tJunction(), allClear, { zone })
+    assertEquals(1, #result.signs)
+    local sign = result.signs[1]
+    assertTrue(distance(sign.x, sign.z, zone.x, zone.z) >= zone.radius, "a sign inside the exclusion")
+    assertTrue((result.rejected[TCAuctionSigns.REJECT.EXCLUDED] or 0) > 0)
+end)
+
+test("a map's exclusions are found by its mod name; any other map has none", function()
+    setup()
+    local zone = { x = 1, z = 2, radius = 10 }
+    TCAuctionSigns.MAP_EXCLUSIONS.FS25_TestMap = { zone }
+    assertEquals(zone, TCAuctionSigns.getExclusions("FS25_TestMap.SampleModMap")[1])
+    assertEquals(0, #TCAuctionSigns.getExclusions("MapUS"))
+    assertEquals(0, #TCAuctionSigns.getExclusions("FS25_OtherMap.SampleModMap"))
+    assertEquals(0, #TCAuctionSigns.getExclusions(nil))
+end)
+
 test("another road crossing the sign's keeps further off than the road it stands by", function()
     setup()
     -- A T junction, and a road running south from 10 m off the main road

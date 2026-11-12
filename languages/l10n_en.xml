@@ -1106,6 +1106,9 @@
 		<text name="tc_finances_yearHeading" text="This calendar year (Year %d)"/>
 		<text name="tc_finances_invoiced" text="Invoiced"/>
 		<text name="tc_finances_received" text="Received"/>
+		<text name="tc_financesYearTip_title" text="Invoiced and received"/>
+		<text name="tc_financesYearTip_invoiced" text="Invoiced is the total of the jobs you've billed for since January, counted on the day each job was finished, whether or not the customer has paid yet."/>
+		<text name="tc_financesYearTip_received" text="Received is the money customers have paid since January, counted on the day it came in. It includes invoices issued last year but paid this year, so invoiced minus received won't match what's still outstanding. Refunds are shown separately in brackets."/>
 		<text name="tc_finances_writtenOff" text="Written off"/>
 		<text name="tc_finances_wages" text="Wages &amp; training"/>
 		<text name="tc_finances_overheads" text="Overheads"/>

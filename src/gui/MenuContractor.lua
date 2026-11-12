@@ -1202,9 +1202,21 @@ function MenuContractor:getPageTooltips()
         local staff = newTooltip("staff")
         staff:addTarget(self.staffPersonRelationshipChip, MenuContractor.getReputationTooltipContent)
 
-        self.pageTooltips = { overview, inbox, staff }
+        -- The year's invoiced and received count different invoices (a
+        -- payment in for last year's work is this year's), so say so.
+        local finances = newTooltip("finances")
+        finances:addTarget(self.financesYearInvoiced, MenuContractor.getYearTotalsTooltipContent)
+        finances:addTarget(self.financesYearReceived, MenuContractor.getYearTotalsTooltipContent)
+
+        self.pageTooltips = { overview, inbox, staff, finances }
     end
     return self.pageTooltips
+end
+
+-- What the year's invoiced and received each count, the same on both.
+function MenuContractor.getYearTotalsTooltipContent()
+    return g_i18n:getText("tc_financesYearTip_title"),
+        g_i18n:getText("tc_financesYearTip_invoiced") .. "\n\n" .. g_i18n:getText("tc_financesYearTip_received")
 end
 
 -- The company's reputation against one customer's relationship, the same
