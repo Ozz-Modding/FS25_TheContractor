@@ -25,6 +25,10 @@
 --     one with road all round it (isEnclosed: a roundabout's island) is
 --     passed over too; the caller's
 --     isClear says whether anything's in the way there.
+--   The design: each spot is tried with each of the board's designs
+--     (designs, the caller's ids; they're different widths), the one
+--     after the last sign's first, so a map gets a mix, then the rest in
+--     turn: a verge with room only for the narrower board gets that one.
 --   Which: the best junctions first, one sign each, each junction at least
 --     minSpacing from the signs already up (spread over the map), at most
 --     maxSigns.
@@ -52,7 +56,8 @@ TCAuctionSigns.RULES = {
     enclosedRadius = 30,      -- isEnclosed's rays: this long,
     enclosedRays = 16,        -- this many round the spot
     minSpacing = 400,         -- between signs
-    maxSigns = 10,
+    maxSigns = 15,
+    designs = { 1, 2 },       -- the boards a spot's tried with (TheContractorAuctionSigns.DESIGNS)
 }
 
 -- Vehicles drive on the right in FS: a sign goes on the driver's side first.
@@ -513,20 +518,35 @@ function TCAuctionSigns.leadsOn(network, at, back, startCluster)
     return false
 end
 
+-- The designs in the order a sign tries them: the one after the last
+-- sign's (the first if there's none yet), then on round.
+local function getDesignOrder(signs)
+    local designs = TCAuctionSigns.RULES.designs
+    local first = 1
+    local last = signs[#signs]
+    if last ~= nil then
+        for i, design in ipairs(designs) do
+            if design == last.design then
+                first = i % #designs + 1
+            end
+        end
+    end
+    local order = {}
+    for i = 0, #designs - 1 do
+        table.insert(order, designs[(first - 1 + i) % #designs + 1])
+    end
+    return order
+end
+
 -- The first verge spot that works for a sign by road point (roadX, roadZ):
--- sides in order, each at every verge offset. base: the sign's other values;
--- each spot's x, z, side, offset and yaw (facing the road) are added.
-local function placeOnVerge(network, roadX, roadZ, sides, base, isClear, rejected, hx, hz)
+-- sides in order, each at every verge offset, each with every design in
+-- designOrder. base: the sign's other values; each spot's x, z, side,
+-- offset, yaw (facing the road) and design are added.
+local function placeOnVerge(network, roadX, roadZ, sides, base, isClear, rejected, hx, hz, designOrder)
     for _, side in ipairs(sides) do
         for _, offset in ipairs(TCAuctionSigns.RULES.vergeOffsets) do
             local x = roadX + side.x * offset
             local z = roadZ + side.z * offset
-            local candidate = {}
-            for key, value in pairs(base) do
-                candidate[key] = value
-            end
-            candidate.x, candidate.z, candidate.side, candidate.offset = x, z, side.name, offset
-            candidate.yaw = TCAuctionSigns.getYaw(-side.x, -side.z)
             if isOnRoad(network, x, z) then
                 countReject(rejected, TCAuctionSigns.REJECT.ON_ROAD)
             elseif TCAuctionSigns.isNearCrossRoad(network, x, z, hx, hz) then
@@ -534,11 +554,20 @@ local function placeOnVerge(network, roadX, roadZ, sides, base, isClear, rejecte
             elseif TCAuctionSigns.isEnclosed(network, x, z) then
                 countReject(rejected, TCAuctionSigns.REJECT.ENCLOSED)
             else
-                local clear, reason = isClear(candidate)
-                if clear then
-                    return candidate
+                for _, design in ipairs(designOrder) do
+                    local candidate = {}
+                    for key, value in pairs(base) do
+                        candidate[key] = value
+                    end
+                    candidate.x, candidate.z, candidate.side, candidate.offset = x, z, side.name, offset
+                    candidate.yaw = TCAuctionSigns.getYaw(-side.x, -side.z)
+                    candidate.design = design
+                    local clear, reason = isClear(candidate)
+                    if clear then
+                        return candidate
+                    end
+                    countReject(rejected, reason)
                 end
-                countReject(rejected, reason)
             end
         end
     end
@@ -559,8 +588,8 @@ end
 -- The signs for the map. splines: as buildNetwork's. isClear(candidate):
 -- true, or false and a reason, for a spot (the caller's checks: anything in
 -- the way, steep, a field, water). Returns { signs, junctionCount, rejected
--- (reason -> count) }, each sign { x, z, yaw, side, offset, roadX, roadZ,
--- roadY, junctionX, junctionZ, busyMetres }.
+-- (reason -> count) }, each sign { x, z, yaw, design, side, offset, roadX,
+-- roadZ, roadY, junctionX, junctionZ, busyMetres }.
 function TCAuctionSigns.pick(splines, isClear)
     local R = TCAuctionSigns.RULES
     local result = { signs = {}, junctionCount = 0, rejected = {} }
@@ -591,7 +620,7 @@ function TCAuctionSigns.pick(splines, isClear)
                         busyMetres = junction.busyMetres,
                     }
                     local spot = placeOnVerge(network, node.x, node.z, getSides(hx, hz), base, isClear, rejected,
-                        hx, hz)
+                        hx, hz, getDesignOrder(signs))
                     if spot ~= nil then
                         table.insert(signs, spot)
                         break

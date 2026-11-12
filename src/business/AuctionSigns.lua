@@ -13,9 +13,11 @@
 --     placeable (vanilla would save, sell and list one), loaded from the
 --     synced spots, linked to the scene's root with a static collision, so
 --     nothing drives through it. The server loads them too, a dedicated one
---     included: it runs the vehicles' physics. The board shows "COMING IN
---     <MONTH>": one of its twelve, the rest hidden (no day: the auction's
---     job gives that). Every machine with a map has a marker on each.
+--     included: it runs the vehicles' physics. Each is one of the board's
+--     designs (DESIGNS, the widest a spot has room for first, a mix where
+--     they fit); the plank under it shows "<MONTH> SALE": one of its
+--     twelve, the rest hidden (no day: the auction's job gives that). Every
+--     machine with a map has a marker on each.
 --   Saving: the month and the spots in TheContractor.xml, so they stay up
 --     over a load.
 --
@@ -24,27 +26,49 @@
 TheContractorAuctionSigns = {}
 local TheContractorAuctionSigns_mt = Class(TheContractorAuctionSigns)
 
-TheContractorAuctionSigns.FILENAME = "i3d/auctionSign.i3d"
 TheContractorAuctionSigns.MARKER_RADIUS = 12
 
+-- The board's designs (TCAuctionSigns.RULES.designs, docs/auction-sign-i3d.md),
+-- the same height, different widths: each one's model, its board's width
+-- and its posts' centres either side (genAuctionSignI3d.py prints them). A
+-- sign saved before there were designs is the first.
+TheContractorAuctionSigns.DESIGNS = {
+    [1] = { filename = "i3d/auctionSign1.i3d", width = 2.98, postX = 1.09 },
+    [2] = { filename = "i3d/auctionSign2.i3d", width = 2.25, postX = 0.725 },
+}
+TheContractorAuctionSigns.DEFAULT_DESIGN = 1
+-- Every design's posts (genAuctionSignI3d.py's POST and POST_Z): their
+-- cross-section and their middle behind the board.
+TheContractorAuctionSigns.POST_SIZE = 0.1
+TheContractorAuctionSigns.POST_Z = -0.075
+
 -- The spot's checks (metres): the box that must be clear round the board
--- and posts (across the board, either side of it, and from the ground up),
--- the most the ground may vary under it, the most it may be above or below
--- the road, and the most the road may be above the ground (a bridge).
-TheContractorAuctionSigns.CLEARANCE = { halfWidth = 1.0, halfDepth = 0.35, floor = 0.15, top = 2.2 }
+-- and posts (margin past the board's ends, either side of it, and from the
+-- ground up to the month plank), the most the ground may vary under it, the
+-- most it may be above or below the road, and the most the road may be
+-- above the ground (a bridge).
+TheContractorAuctionSigns.CLEARANCE = { margin = 0.2, halfDepth = 0.35, floor = 0.15, top = 2.1 }
 TheContractorAuctionSigns.MAX_GROUND_STEP = 0.5
 TheContractorAuctionSigns.MAX_VERGE_HEIGHT = 1.5
 TheContractorAuctionSigns.MAX_ROAD_HEIGHT_GAP = 1.5
 
--- The posts' feet in the model's own x and z (genAuctionSignI3d.py's POST_X,
--- POST_Z and POST): each post's four corners. The sign stands at the lowest
--- ground under them, so on a slope neither post hangs in the air (the uphill
--- one goes a little into the ground instead).
-TheContractorAuctionSigns.POST_FEET = {}
-for _, postX in ipairs({ -0.6, 0.6 }) do
-    for _, corner in ipairs({ { 1, 1 }, { 1, -1 }, { -1, 1 }, { -1, -1 } }) do
-        table.insert(TheContractorAuctionSigns.POST_FEET, { postX + 0.045 * corner[1], -0.065 + 0.045 * corner[2] })
+function TheContractorAuctionSigns.getDesign(sign)
+    return TheContractorAuctionSigns.DESIGNS[sign.design] or
+        TheContractorAuctionSigns.DESIGNS[TheContractorAuctionSigns.DEFAULT_DESIGN]
+end
+
+-- The posts' feet in a design's own x and z: each post's four corners. The
+-- sign stands at the lowest ground under them, so on a slope neither post
+-- hangs in the air (the uphill one goes a little into the ground instead).
+function TheContractorAuctionSigns.getPostFeet(design)
+    local half = TheContractorAuctionSigns.POST_SIZE / 2
+    local feet = {}
+    for _, postX in ipairs({ -design.postX, design.postX }) do
+        for _, corner in ipairs({ { 1, 1 }, { 1, -1 }, { -1, 1 }, { -1, -1 } }) do
+            table.insert(feet, { postX + half * corner[1], TheContractorAuctionSigns.POST_Z + half * corner[2] })
+        end
     end
+    return feet
 end
 
 -- Why isSpotClear turned a spot down (the console's counts).
@@ -86,8 +110,8 @@ end
 function TheContractorAuctionSigns.new()
     local self = setmetatable({}, TheContractorAuctionSigns_mt)
     -- Every machine, as the server sent them: the month (1 to 12, 0: none
-    -- up) and each sign { x, z, yaw } (the server's have side, offset,
-    -- junctionX/Z and busyMetres too).
+    -- up) and each sign { x, z, yaw, design } (the server's have side,
+    -- offset, junctionX/Z and busyMetres too).
     self.month = 0
     self.signs = {}
     -- Every machine: the loaded models ({ node, sharedLoadRequestId }) and
@@ -138,10 +162,10 @@ function TheContractorAuctionSigns:removeAll()
     self.markers = {}
 end
 
--- Shows the board's month (docs/auction-sign-i3d.md): visuals (0) > date
--- (3) > month1 to month12, one shown.
+-- Shows the plank's month (docs/auction-sign-i3d.md): visuals (0) > date
+-- (4) > month1 to month12, one shown.
 function TheContractorAuctionSigns.setMonth(node, month)
-    local date = getChildAt(getChildAt(node, 0), 3)
+    local date = getChildAt(getChildAt(node, 0), 4)
     for i = 0, getNumOfChildren(date) - 1 do
         setVisibility(getChildAt(date, i), i == month - 1)
     end
@@ -152,7 +176,7 @@ function TheContractorAuctionSigns.getBaseHeight(sign)
     local acrossX, acrossZ = math.cos(sign.yaw), -math.sin(sign.yaw)
     local depthX, depthZ = math.sin(sign.yaw), math.cos(sign.yaw)
     local lowest = nil
-    for _, foot in ipairs(TheContractorAuctionSigns.POST_FEET) do
+    for _, foot in ipairs(TheContractorAuctionSigns.getPostFeet(TheContractorAuctionSigns.getDesign(sign))) do
         local x = sign.x + acrossX * foot[1] + depthX * foot[2]
         local z = sign.z + acrossZ * foot[1] + depthZ * foot[2]
         local y = getTerrainHeightAtWorldPos(g_terrainNode, x, 0, z)
@@ -165,7 +189,7 @@ end
 
 -- A sign's model at its spot, or nil if it won't load.
 function TheContractorAuctionSigns.loadModel(sign, month)
-    local filename = Utils.getFilename(TheContractorAuctionSigns.FILENAME, TheContractor.dir)
+    local filename = Utils.getFilename(TheContractorAuctionSigns.getDesign(sign).filename, TheContractor.dir)
     local root, sharedLoadRequestId = g_i3DManager:loadSharedI3DFile(filename, false, false)
     if root == nil or root == 0 then
         TCLog.warning("TheContractor: could not load the auction sign '%s'", filename)
@@ -280,10 +304,11 @@ function TheContractorAuctionSigns.isSpotClear(candidate)
     local acrossX, acrossZ = math.cos(candidate.yaw), -math.sin(candidate.yaw)
     local depthX, depthZ = math.sin(candidate.yaw), math.cos(candidate.yaw)
     local clearance = S.CLEARANCE
+    local halfWidth = S.getDesign(candidate).width / 2 + clearance.margin
     local lowest, highest = groundY, groundY
     for _, corner in ipairs({ { 1, 1 }, { 1, -1 }, { -1, 1 }, { -1, -1 }, { 0, 0 } }) do
-        local cx = x + acrossX * clearance.halfWidth * corner[1] + depthX * clearance.halfDepth * corner[2]
-        local cz = z + acrossZ * clearance.halfWidth * corner[1] + depthZ * clearance.halfDepth * corner[2]
+        local cx = x + acrossX * halfWidth * corner[1] + depthX * clearance.halfDepth * corner[2]
+        local cz = z + acrossZ * halfWidth * corner[1] + depthZ * clearance.halfDepth * corner[2]
         if FSDensityMapUtil ~= nil and FSDensityMapUtil.getIsFieldAtWorldPos(cx, cz) then
             return false, REJECT.FIELD
         end
@@ -302,7 +327,7 @@ function TheContractorAuctionSigns.isSpotClear(candidate)
 
     local halfHeight = (clearance.top - clearance.floor) * 0.5
     overlapTarget.blocked = false
-    overlapBox(x, groundY + clearance.floor + halfHeight, z, 0, candidate.yaw, 0, clearance.halfWidth, halfHeight,
+    overlapBox(x, groundY + clearance.floor + halfHeight, z, 0, candidate.yaw, 0, halfWidth, halfHeight,
         clearance.halfDepth, "onOverlap", overlapTarget, OVERLAP_MASK, true, true, true, true)
     if overlapTarget.blocked then
         return false, REJECT.BLOCKED
@@ -341,7 +366,8 @@ function TheContractorAuctionSigns:place(month)
 end
 
 function TheContractorAuctionSigns.describeSign(i, sign)
-    local text = string.format("  %d. %.1f, %.1f", i, sign.x, sign.z)
+    local text = string.format("  %d. %.1f, %.1f, design %d", i, sign.x, sign.z,
+        sign.design or TheContractorAuctionSigns.DEFAULT_DESIGN)
     if sign.busyMetres ~= nil then
         text = text .. string.format(", %s verge %.2f m out, %.0f m of road round its junction", tostring(sign.side),
             sign.offset or 0, sign.busyMetres)
@@ -420,6 +446,7 @@ function TheContractorAuctionSigns:saveToXmlFile(xmlFile)
         setXMLFloat(xmlFile, signKey .. "#x", sign.x)
         setXMLFloat(xmlFile, signKey .. "#z", sign.z)
         setXMLFloat(xmlFile, signKey .. "#yaw", sign.yaw)
+        setXMLInt(xmlFile, signKey .. "#design", sign.design or TheContractorAuctionSigns.DEFAULT_DESIGN)
     end
 end
 
@@ -443,7 +470,11 @@ function TheContractorAuctionSigns:loadFromXMLFile(xmlFile)
             x = getXMLFloat(xmlFile, signKey .. "#x"),
             z = getXMLFloat(xmlFile, signKey .. "#z"),
             yaw = getXMLFloat(xmlFile, signKey .. "#yaw") or 0,
+            design = getXMLInt(xmlFile, signKey .. "#design") or TheContractorAuctionSigns.DEFAULT_DESIGN,
         }
+        if TheContractorAuctionSigns.DESIGNS[sign.design] == nil then
+            sign.design = TheContractorAuctionSigns.DEFAULT_DESIGN
+        end
         if sign.x ~= nil and sign.z ~= nil then
             table.insert(signs, sign)
         else
