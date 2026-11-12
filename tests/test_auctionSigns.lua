@@ -1,8 +1,8 @@
 -- 136: where an auction's roadside signs go (TCAuctionSigns): junctions
 -- found from fake road splines, the busiest first, one sign each on the
 -- driver's verge of a road into it, spread over the map; and the engine
--- half (TheContractorAuctionSigns): the month on the board, sync, save and
--- the console. Directions: x east, z south (a heading's right is (-hz, hx)).
+-- half (TheContractorAuctionSigns): the models, sync, save and the
+-- console. Directions: x east, z south (a heading's right is (-hz, hx)).
 
 local function setup()
     local world = stubs.install()
@@ -321,8 +321,7 @@ end)
 -- The engine half (TheContractorAuctionSigns) -------------------------------------------------
 
 -- A fake engine for the sign's model: nodes are tables, the model's tree as
--- the i3d has it (auctionSign > visuals > posts, board, face, plank, date >
--- month1 to month12; and col).
+-- the i3d has it (auctionSign > visuals > posts, board, face; and col).
 local function installModelEngine(world)
     world.loaded, world.released = {}, {}
     local function node(name, children)
@@ -330,13 +329,8 @@ local function installModelEngine(world)
     end
     g_i3DManager = {
         loadSharedI3DFile = function(_, filename)
-            local months = {}
-            for month = 1, 12 do
-                table.insert(months, node("month" .. month))
-            end
             local sign = node("auctionSign", {
-                node("visuals", { node("posts"), node("board"), node("face"), node("plank"), node("date", months) }),
-                node("col") })
+                node("visuals", { node("posts"), node("board"), node("face") }), node("col") })
             sign.filename = filename
             table.insert(world.loaded, sign)
             return node("root", { sign }), #world.loaded
@@ -390,16 +384,6 @@ local function sameSpots(expected, actual)
     end
 end
 
--- The visible children's names under a node.
-local function shown(n)
-    local names = {}
-    for _, child in ipairs(n.children) do
-        if child.visible then
-            table.insert(names, child.name)
-        end
-    end
-    return table.concat(names, ",")
-end
 
 test("signs going up are sent to every client, and the event carries the month and every spot", function()
     local world = setupGame()
@@ -425,7 +409,7 @@ test("a player joining afterwards gets the signs in the initial client state", f
     assertTrue(client.isDirty, "the client builds them on its next update")
 end)
 
-test("each sign is its design's model on the ground at its spot, showing only its month", function()
+test("each sign is its design's model on the ground at its spot", function()
     local world = setupGame()
     world.signs:applySync(7, SIGNS)
     world.signs:update(16)
@@ -435,8 +419,6 @@ test("each sign is its design's model on the ground at its spot, showing only it
     assertEquals(10, model.translation[1])
     assertEquals(world.terrainHeight, model.translation[2])
     assertEquals(1.5, model.rotation[2])
-    assertEquals("month7", shown(model.children[1].children[5]))
-    assertEquals("month7", shown(world.loaded[2].children[1].children[5]))
     assertEquals(TheContractorAuctionSigns.DESIGNS[2].filename, model.filename)
     assertEquals(TheContractorAuctionSigns.DESIGNS[1].filename, world.loaded[2].filename)
 end)
@@ -548,32 +530,29 @@ test("a spot on something other than the ground is passed over: a road's or an i
     assertTrue((result.rejected[TheContractorAuctionSigns.REJECT.ON_OBJECT] or 0) > 0)
 end)
 
-test("tcCompany auctionSigns <month>: signs at the junctions for that month, none on a field", function()
+test("tcDebug auctionSigns up: signs at the junctions, noted with this month, none on a field", function()
     local world = setupGame()
     installRoadsAndField(world)
+    world:load("src/util/TCCalendar.lua")
+    g_currentMission.environment = { currentPeriod = 5 }
     local registered = {}
     TCConsole = { register = function(group, name, def) registered[name] = def end }
     TheContractorAuctionSigns.registerConsoleCommands()
     local command = registered.auctionSigns
 
-    for _, bad in ipairs({ { "x" }, { "13" }, { "0" }, { "7.5" }, { "july", "2" }, { "clear", "2" } }) do
+    for _, bad in ipairs({ { "x" }, { "7" }, { "july" }, { "up", "2" }, { "clear", "2" } }) do
         assertEquals(false, command.run(1, bad))
     end
     assertEquals(0, #world.signs.signs)
 
-    command.run(1, { "Jul" })
-    assertEquals(7, world.signs.month)
+    command.run(1, { "Up" })
+    assertEquals(TCCalendar.getMonth(5), world.signs.month)
     assertEquals(1, #world.signs.signs)
     assertTrue(world.overlaps > 0, "each spot checked for room")
     for _, sign in ipairs(world.signs.signs) do
         assertTrue(not FSDensityMapUtil.getIsFieldAtWorldPos(sign.x, sign.z), "no sign on the field")
     end
     assertEquals(1, #world.events)
-
-    command.run(1, { "9" })
-    assertEquals(9, world.signs.month)
-    command.run(1, { "september" })
-    assertEquals(9, world.signs.month)
 
     command.run(1, { "clear" })
     assertEquals(0, #world.signs.signs)

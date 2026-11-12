@@ -14,18 +14,14 @@
     <File fileId="8" filename="$data/shared/detailLibrary/nonMetallic/wood/wood2_normal.dds"/>
     <File fileId="9" filename="$data/shared/detailLibrary/nonMetallic/wood/wood2_specular.dds"/>
     <File fileId="10" filename="../images/auctionSign1.dds"/>
-    <File fileId="11" filename="../images/auctionSignDate.dds"/>
   </Files>
 
 
   <Materials>
-    <Material name="auctionSignDate_mat" materialId="3">
-      <Texture fileId="11"/>
-    </Material>
     <Material name="auctionSignFace_mat" materialId="2">
       <Texture fileId="10"/>
     </Material>
-    <Material name="auctionSignPost_mat" materialId="4" customShaderId="4">
+    <Material name="auctionSignPost_mat" materialId="3" customShaderId="4">
       <Texture fileId="1"/>
       <Normalmap fileId="2"/>
       <Glossmap fileId="3"/>
@@ -42,28 +38,13 @@
   </Shapes>
 
   <Scene>
-    <TransformGroup name="auctionSign" clipDistance="400" nodeId="23">
-      <TransformGroup name="visuals" nodeId="24">
-        <Shape name="posts" shapeId="1" nodeId="25" castsShadows="true" receiveShadows="true" materialIds="4"/>
-        <Shape name="board" shapeId="2" nodeId="26" castsShadows="true" receiveShadows="true" materialIds="1"/>
-        <Shape name="face" shapeId="3" nodeId="27" castsShadows="false" receiveShadows="true" materialIds="2"/>
-        <Shape name="plank" shapeId="4" nodeId="28" castsShadows="true" receiveShadows="true" materialIds="1"/>
-        <TransformGroup name="date" nodeId="29">
-          <Shape name="month1" shapeId="5" nodeId="30" castsShadows="false" receiveShadows="true" materialIds="3"/>
-          <Shape name="month2" shapeId="6" nodeId="31" castsShadows="false" receiveShadows="true" materialIds="3"/>
-          <Shape name="month3" shapeId="7" nodeId="32" castsShadows="false" receiveShadows="true" materialIds="3"/>
-          <Shape name="month4" shapeId="8" nodeId="33" castsShadows="false" receiveShadows="true" materialIds="3"/>
-          <Shape name="month5" shapeId="9" nodeId="34" castsShadows="false" receiveShadows="true" materialIds="3"/>
-          <Shape name="month6" shapeId="10" nodeId="35" castsShadows="false" receiveShadows="true" materialIds="3"/>
-          <Shape name="month7" shapeId="11" nodeId="36" castsShadows="false" receiveShadows="true" materialIds="3"/>
-          <Shape name="month8" shapeId="12" nodeId="37" castsShadows="false" receiveShadows="true" materialIds="3"/>
-          <Shape name="month9" shapeId="13" nodeId="38" castsShadows="false" receiveShadows="true" materialIds="3"/>
-          <Shape name="month10" shapeId="14" nodeId="39" castsShadows="false" receiveShadows="true" materialIds="3"/>
-          <Shape name="month11" shapeId="15" nodeId="40" castsShadows="false" receiveShadows="true" materialIds="3"/>
-          <Shape name="month12" shapeId="16" nodeId="41" castsShadows="false" receiveShadows="true" materialIds="3"/>
-        </TransformGroup>
+    <TransformGroup name="auctionSign" clipDistance="400" nodeId="9">
+      <TransformGroup name="visuals" nodeId="10">
+        <Shape name="posts" shapeId="1" nodeId="11" castsShadows="true" receiveShadows="true" materialIds="3"/>
+        <Shape name="board" shapeId="2" nodeId="12" castsShadows="true" receiveShadows="true" materialIds="1"/>
+        <Shape name="face" shapeId="3" nodeId="13" castsShadows="false" receiveShadows="true" materialIds="2"/>
       </TransformGroup>
-      <Shape name="col" shapeId="17" static="true" collisionFilterGroup="0x3e" collisionFilterMask="0xfffffbff" density="0.0001" nodeId="42" castsShadows="false" receiveShadows="false" nonRenderable="true" materialIds="1"/>
+      <Shape name="col" shapeId="4" static="true" collisionFilterGroup="0x3e" collisionFilterMask="0xfffffbff" density="0.0001" nodeId="14" castsShadows="false" receiveShadows="false" nonRenderable="true" materialIds="1"/>
     </TransformGroup>
   </Scene>
 

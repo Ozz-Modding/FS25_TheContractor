@@ -1,7 +1,7 @@
--- Auction roadside signs (136, spike): signs at the map's busiest junctions
--- giving an auction's month, driven from the console (tcDebug
+-- Auction roadside signs (136, spike): billboards at the map's busiest
+-- junctions advertising an auction, driven from the console (tcDebug
 -- auctionSigns) with no auction around them yet (137 puts them up a month
--- before a sale, with its month).
+-- before a sale, noting its month).
 --
 --   Finding spots (server, place): the AI road splines (sampleRoads; only
 --     the server keeps them) and TCAuctionSigns.pick (pure, tested): one
@@ -14,10 +14,9 @@
 --     synced spots, linked to the scene's root with a static collision, so
 --     nothing drives through it. The server loads them too, a dedicated one
 --     included: it runs the vehicles' physics. Each is one of the board's
---     designs (DESIGNS, the widest a spot has room for first, a mix where
---     they fit); the plank under it shows "<MONTH> SALE": one of its
---     twelve, the rest hidden (no day: the auction's job gives that). Every
---     machine with a map has a marker on each.
+--     designs (DESIGNS, a mix where they fit, the narrower where only it
+--     does), the artwork alone: no date on it (the auction's job gives
+--     that). Every machine with a map has a marker on each.
 --   Saving: the month and the spots in TheContractor.xml, so they stay up
 --     over a load.
 --
@@ -44,10 +43,10 @@ TheContractorAuctionSigns.POST_Z = -0.075
 
 -- The spot's checks (metres): the box that must be clear round the board
 -- and posts (margin past the board's ends, either side of it, and from the
--- ground up to the month plank), the most the ground may vary under it, the
+-- ground up to under the board), the most the ground may vary under it, the
 -- most it may be above or below the road, and the most the road may be
 -- above the ground (a bridge).
-TheContractorAuctionSigns.CLEARANCE = { margin = 0.2, halfDepth = 0.35, floor = 0.15, top = 2.1 }
+TheContractorAuctionSigns.CLEARANCE = { margin = 0.2, halfDepth = 0.35, floor = 0.15, top = 2.2 }
 TheContractorAuctionSigns.MAX_GROUND_STEP = 0.5
 TheContractorAuctionSigns.MAX_VERGE_HEIGHT = 1.5
 TheContractorAuctionSigns.MAX_ROAD_HEIGHT_GAP = 1.5
@@ -82,9 +81,7 @@ TheContractorAuctionSigns.REJECT = {
     ON_OBJECT = "onObject",
 }
 
--- The console's month names (English, as the board's are), by their first
--- three letters.
-local MONTH_NAMES = { "jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec" }
+-- The console's month names.
 local MONTH_WORDS = { "January", "February", "March", "April", "May", "June", "July", "August", "September",
     "October", "November", "December" }
 
@@ -162,15 +159,6 @@ function TheContractorAuctionSigns:removeAll()
     self.markers = {}
 end
 
--- Shows the plank's month (docs/auction-sign-i3d.md): visuals (0) > date
--- (4) > month1 to month12, one shown.
-function TheContractorAuctionSigns.setMonth(node, month)
-    local date = getChildAt(getChildAt(node, 0), 4)
-    for i = 0, getNumOfChildren(date) - 1 do
-        setVisibility(getChildAt(date, i), i == month - 1)
-    end
-end
-
 -- The height a sign stands at: the lowest ground under its posts' feet.
 function TheContractorAuctionSigns.getBaseHeight(sign)
     local acrossX, acrossZ = math.cos(sign.yaw), -math.sin(sign.yaw)
@@ -188,7 +176,7 @@ function TheContractorAuctionSigns.getBaseHeight(sign)
 end
 
 -- A sign's model at its spot, or nil if it won't load.
-function TheContractorAuctionSigns.loadModel(sign, month)
+function TheContractorAuctionSigns.loadModel(sign)
     local filename = Utils.getFilename(TheContractorAuctionSigns.getDesign(sign).filename, TheContractor.dir)
     local root, sharedLoadRequestId = g_i3DManager:loadSharedI3DFile(filename, false, false)
     if root == nil or root == 0 then
@@ -200,7 +188,6 @@ function TheContractorAuctionSigns.loadModel(sign, month)
     delete(root)
     setTranslation(node, sign.x, TheContractorAuctionSigns.getBaseHeight(sign), sign.z)
     setRotation(node, 0, sign.yaw, 0)
-    TheContractorAuctionSigns.setMonth(node, month)
     return { node = node, sharedLoadRequestId = sharedLoadRequestId }
 end
 
@@ -210,7 +197,7 @@ function TheContractorAuctionSigns:rebuild()
         return
     end
     for _, sign in ipairs(self.signs) do
-        local model = TheContractorAuctionSigns.loadModel(sign, self.month)
+        local model = TheContractorAuctionSigns.loadModel(sign)
         if model ~= nil then
             table.insert(self.models, model)
         end
@@ -335,8 +322,8 @@ function TheContractorAuctionSigns.isSpotClear(candidate)
     return true
 end
 
--- Puts signs up at the map's best junctions for a month (1 to 12),
--- replacing any. Returns the text to print.
+-- Puts signs up at the map's best junctions for a sale in a month (1 to
+-- 12: kept with them, not shown), replacing any. Returns the text to print.
 function TheContractorAuctionSigns:place(month)
     local started = getTimeSec()
     local splines = TheContractorAuctionSigns.sampleRoads()
@@ -404,7 +391,7 @@ end
 
 function TheContractorAuctionSigns:describe()
     if #self.signs == 0 then
-        return "There are no auction signs up. 'tcDebug auctionSigns <month>' puts them up."
+        return "There are no auction signs up. 'tcDebug auctionSigns up' puts them up."
     end
     local lines = { string.format("%d auction sign(s) up for %s:", #self.signs,
         MONTH_WORDS[self.month] or "?") }
@@ -412,25 +399,6 @@ function TheContractorAuctionSigns:describe()
         table.insert(lines, TheContractorAuctionSigns.describeSign(i, sign))
     end
     return table.concat(lines, "\n")
-end
-
--- The month from the console: 1 to 12, or a name (its first three letters
--- will do). nil if it's neither.
-function TheContractorAuctionSigns.parseMonth(text)
-    local number = tonumber(text)
-    if number ~= nil then
-        if number >= 1 and number <= 12 and number == math.floor(number) then
-            return number
-        end
-        return nil
-    end
-    local prefix = string.sub(string.lower(text), 1, 3)
-    for month, name in ipairs(MONTH_NAMES) do
-        if name == prefix then
-            return month
-        end
-    end
-    return nil
 end
 
 -- Persistence -----------------------------------------------------------------------------------
@@ -497,25 +465,28 @@ end
 
 function TheContractorAuctionSigns.registerConsoleCommands()
     TCConsole.register("debug", "auctionSigns", {
-        args = "[month|clear|flag]",
-        hints = { month = "1 to 12, or its name (july, or jul)" },
-        description = "Auction signs spike: put up signs at the map's busiest junctions for a month, take them down, or pin them on the map",
+        args = "[up|clear|flag]",
+        description = "Auction signs spike: put up signs at the map's busiest junctions, take them down, or pin them on the map",
         run = function(_, args)
             local signs = g_currentMission.TheContractor.AuctionSigns
             if args[1] == nil then
                 return signs:describe()
             end
-            if string.lower(args[1]) == "clear" and args[2] == nil then
-                return signs:clear()
-            end
-            if string.lower(args[1]) == "flag" and args[2] == nil then
-                return signs:toggleFlags()
-            end
-            local month = TheContractorAuctionSigns.parseMonth(args[1])
-            if month == nil or args[2] ~= nil then
+            if args[2] ~= nil then
                 return false
             end
-            return signs:place(month)
+            local action = string.lower(args[1])
+            if action == "up" then
+                -- This month's, as if a sale were coming.
+                return signs:place(TCCalendar.getMonth(g_currentMission.environment.currentPeriod))
+            end
+            if action == "clear" then
+                return signs:clear()
+            end
+            if action == "flag" then
+                return signs:toggleFlags()
+            end
+            return false
         end,
     })
 end
