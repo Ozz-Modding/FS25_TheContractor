@@ -127,7 +127,7 @@ TheContractorJobGeneration_mt = Class(TheContractorJobGeneration)
 --                    TheContractorYardHaul). Its missed notification is
 --                    its own (tc_<type>_missedNotification).
 -- A type left out of JOB_TYPE_KEYS (flyTipping, flyTippingRoadside, spillRecovery,
--- attendAuction) is never
+-- attendAuction, lotInspection, ...) is never
 -- generated, shown by the availability snapshot or created by tcJob: only
 -- its random event makes one (075 with createJobOnField, 106 with
 -- createJob).
@@ -251,6 +251,13 @@ TheContractorJobGeneration.JOB_TYPES = {
     -- its customer the host, for show. No ground work, so no workAreaTypes.
     attendAuction = { playerOnly = true, noEquipment = true, noReward = true, noJobEvents = true,
         noConsequences = true, noAllocation = true },
+    -- 152: an ADS standard inspection of a tractor lot at the auction, for a
+    -- farmer thinking of bidding (TCLotInspections). On the sale's field
+    -- (offField: the marker's on the lot), the player's as it's accepted,
+    -- done when ADS's log shows it, and due by the lot's closing time. A
+    -- fixed fee and a little reputation.
+    lotInspection = { serverMeasured = true, playerOnly = true, noEquipment = true, offField = true,
+        allocateOnAccept = true, noJobEvents = true, reputationReward = 2 },
 }
 TheContractorJobGeneration.JOB_TYPE_KEYS = { "harvest", "cultivate", "sow", "plow", "mow", "tedder", "bale",
     "baleWrap", "strawDelivery", "fertilize", "herbicide", "weed", "hoe", "stonePick", "lime" }

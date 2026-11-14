@@ -213,8 +213,9 @@ function TheContractorFarmers:getCustomerIdForJob(job)
         return farmerId ~= nil and self.people[farmerId] ~= nil and farmerId or nil
     end
     -- 124: bales to a farmer's yard are for that farmer. 126: and their
-    -- load sold from it. 127: and their machine run dry.
-    local yard = job.yardDelivery or job.yardHaul or job.refuel
+    -- load sold from it. 127: and their machine run dry. 152: and the lot
+    -- they want inspected.
+    local yard = job.yardDelivery or job.yardHaul or job.refuel or job.lotInspection
     if yard ~= nil then
         local farmerId = yard.farmerId
         return farmerId ~= nil and self.people[farmerId] ~= nil and farmerId or nil
@@ -932,11 +933,12 @@ function TheContractorFarmers:replacePersonReferences(oldId, newId)
                     count = count + 1
                 end
                 -- 116, 123: a favour's or breakdown's machine; 124, 126,
-                -- 127: a yard job's or refuel's.
+                -- 127: a yard job's or refuel's; 152: a lot inspection's.
                 replace(job.workshop)
                 replace(job.yardDelivery)
                 replace(job.yardHaul)
                 replace(job.refuel)
+                replace(job.lotInspection)
             end
         end
     end

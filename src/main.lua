@@ -74,6 +74,8 @@ source(TheContractor.dir .. "src/util/TCAuctionScene.lua")
 source(TheContractor.dir .. "src/util/TCAuctionProps.lua")
 source(TheContractor.dir .. "src/util/TCAuctionSigns.lua")
 source(TheContractor.dir .. "src/util/TCAuctionAttendance.lua")
+source(TheContractor.dir .. "src/util/TCLotInspections.lua")
+source(TheContractor.dir .. "src/util/TCAuctionLotHud.lua")
 source(TheContractor.dir .. "src/util/TCProtestLayout.lua")
 source(TheContractor.dir .. "src/util/TCProtestCrowd.lua")
 source(TheContractor.dir .. "src/util/TCJobHotspots.lua")
@@ -236,6 +238,7 @@ source(TheContractor.dir .. "src/events/TCLogClaimEvent.lua")
 source(TheContractor.dir .. "src/events/TCParkingQueuedEvent.lua")
 source(TheContractor.dir .. "src/events/TCParkingRemovedEvent.lua")
 source(TheContractor.dir .. "src/events/TCParkingNoticeEvent.lua")
+source(TheContractor.dir .. "src/events/TCProtestDelayEvent.lua")
 source(TheContractor.dir .. "src/events/TCParkingSlotFilterEvent.lua")
 source(TheContractor.dir .. "src/events/TCRepairZoneFilterEvent.lua")
 source(TheContractor.dir .. "src/events/TCStandingSpotFilterEvent.lua")
@@ -404,6 +407,8 @@ function TheContractor:loadMap()
     -- 139: bids and the sale.
     self.AuctionSale = TheContractorAuctionSale.new()
     self.AuctionSale:register(self.Inbox)
+    -- 152: farmers asking for auction lots to be inspected (ADS only).
+    TCLotInspections.register(self.Inbox)
     self.InboxHUD = TCInboxHUD.new()
 
     -- Module-level caches outlive a savegame; start each load clean.
@@ -427,7 +432,8 @@ function TheContractor:loadMap()
     TCADSWorkshop.detect()
     -- 100: whether ADS can prepare customers' machines for repair zones.
     TCADSRepairContracts.detect()
-    -- 135: whether ADS can give auction lots a history.
+    -- 135: whether ADS can give auction lots a history; 152: lots are for
+    -- sale to ADS, so any farm may inspect one.
     TCADSUsedLots.detect()
     -- 100/101: service vehicle mods' workshops list customers' machines.
     TCServiceVehicleMods.install()
@@ -537,6 +543,7 @@ function TheContractor:loadMap()
     TheContractorAuctionSite.registerConsoleCommands()
     TheContractorAuctionSigns.registerConsoleCommands()
     TheContractorAuctions.registerConsoleCommands()
+    TCLotInspections.registerConsoleCommands()
     TheContractorRepairContracts.registerConsoleCommands()
     TheContractorYards.registerConsoleCommands()
     -- 110: tcFarmer list, with 109's preview.
@@ -773,6 +780,7 @@ function TheContractor:deleteMap()
     TCStandingSpotActivatable.uninstall()
     TCTippedTrailerActivatable.uninstall()
     TCAuctionLotActivatable.uninstall()
+    TCADSUsedLots.uninstall()
 
     if self.JobGeneration ~= nil then
         self.JobGeneration:stopHourlyTick()

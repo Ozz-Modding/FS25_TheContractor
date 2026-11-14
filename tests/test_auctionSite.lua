@@ -19,6 +19,7 @@ local function setup()
     world:load("src/util/TCAuctionLayout.lua")
     world:load("src/business/FarmerFleet.lua")
     world:load("src/util/TCADSUsedLots.lua")
+    world:load("src/util/TCLotInspections.lua")
     FieldGroundType = {}
     world:load("src/util/TCFieldPreparation.lua")
     world:load("src/business/AuctionSite.lua")
@@ -204,7 +205,84 @@ test("without ADS a lot keeps vanilla's condition; ADS_UsedVehicles' own name is
     world.adsEnv = { AdvancedDamageSystem = {} }
     TCADSUsedLots.detect()
     assertTrue(not TCADSUsedLots.isActive(), "an ADS without the function")
-    assertEquals(#world.warnings, 1)
+    assertEquals(#world.warnings, 3, "one each for the history, the seller and the inspections (152)")
+end)
+
+-- 152: ADS's seller registry, as ADS_UsedVehicles keeps it: a vehicle's for
+-- sale while any registered seller says so.
+local function addSellerRegistry(world)
+    local registry = { sellers = {} }
+    function registry.registerSeller(id, isListed)
+        registry.sellers[id] = isListed
+        return true
+    end
+    function registry.unregisterSeller(id)
+        local had = registry.sellers[id] ~= nil
+        registry.sellers[id] = nil
+        return had
+    end
+    function registry.isVehicleForSale(vehicle)
+        for _, isListed in pairs(registry.sellers) do
+            if isListed(vehicle) == true then
+                return true
+            end
+        end
+        return false
+    end
+    world.adsEnv = { ADS_UsedVehicles = registry }
+    TCADSUsedLots.detect()
+    return registry
+end
+
+test("152: lots are for sale to ADS until a farm wins them, on the server and on a client", function()
+    local world = setup()
+    local registry = addSellerRegistry(world)
+    assertTrue(TCADSUsedLots.isSellerRegistered())
+    assertTrue(registry.sellers[TCADSUsedLots.SELLER_ID] ~= nil)
+
+    local tractor = addLotVehicle(world)
+    local combine = addLotVehicle(world)
+    local header = addLotVehicle(world)
+    local other = addLotVehicle(world)
+    assertTrue(not registry.isVehicleForSale(tractor), "no site, nothing for sale")
+
+    local lots = { makeLot(1), makeLot(2) }
+    lots[1].vehicleId = tractor.id
+    lots[2].vehicleId, lots[2].attachmentId = combine.id, header.id
+    addSite(world, 7, lots)
+    assertTrue(registry.isVehicleForSale(tractor))
+    assertTrue(registry.isVehicleForSale(header), "a combine's header too")
+    assertTrue(not registry.isVehicleForSale(other), "a vehicle that isn't a lot")
+
+    -- A client answers from the lots the server sent it.
+    local client = TheContractorAuctionSite.new()
+    g_currentMission.TheContractor.AuctionSite = client
+    world.events[#world.events]:run({ getIsServer = function() return true end })
+    assertTrue(registry.isVehicleForSale(combine))
+    assertTrue(not registry.isVehicleForSale(other))
+
+    -- Won: the farm's own machine at once, with no word to ADS.
+    g_currentMission.TheContractor.AuctionSite = world.site
+    lots[1].soldTo = 1
+    world.site:syncLot(lots[1])
+    assertTrue(not registry.isVehicleForSale(tractor))
+    assertTrue(registry.isVehicleForSale(combine), "the others are still for sale")
+end)
+
+test("152: the seller comes off at deleteMap, and an ADS without registerSeller warns once", function()
+    local world = setup()
+    local registry = addSellerRegistry(world)
+    TCADSUsedLots.detect()
+    assertTrue(registry.sellers[TCADSUsedLots.SELLER_ID] ~= nil, "a second loadMap registers again")
+    TCADSUsedLots.uninstall()
+    assertTrue(registry.sellers[TCADSUsedLots.SELLER_ID] == nil)
+    assertTrue(not TCADSUsedLots.isSellerRegistered())
+
+    world.adsEnv = { ADS_UsedVehicles = {} }
+    TCADSUsedLots.detect()
+    TCADSUsedLots.detect()
+    assertTrue(not TCADSUsedLots.isSellerRegistered())
+    assertEquals(#world.warnings, 3, "the history's, the seller's and the inspections', once each")
 end)
 
 -- The site on every machine -------------------------------------------------------------------

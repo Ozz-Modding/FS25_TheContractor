@@ -84,3 +84,23 @@ test("releasing a vehicle takes it out of its cooldown and leaves the rest runni
     assertEquals(entry.vehicleIds[1], tractor.id)
     assertEquals(world.statuses[3], "cooldown", "the crew still on its way back")
 end)
+
+-- 151: a protest still out on the farm's roads slows the trip back.
+test("a protest out adds to the trip back, and the farm's told", function()
+    local world, cooldown = setup()
+    local tractor = world:addVehicle({})
+    world:addJob({ workerId = 3, vehicles = { tractor } })
+    local job = world.jobs[1]
+    local plainMs = TheContractorCooldown.getBufferDurationMs(job)
+
+    world.protestMinutes = 15
+    assertEquals(TheContractorCooldown.getBufferDurationMs(job), plainMs + 15 * 60000, "15 minutes longer")
+    cooldown:startCooldown(job)
+
+    local _, farmEntries = next(cooldown.entriesByFarm)
+    local _, entry = next(farmEntries)
+    assertEquals(entry.remainingMs, plainMs + 15 * 60000, "the buffer includes it")
+    assertEquals(#world.protestDelays, 1, "told once")
+    assertEquals(world.protestDelays[1].jobId, job.id)
+    assertTrue(world.protestDelays[1].isReturn, "the trip back")
+end)

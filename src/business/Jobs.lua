@@ -171,10 +171,11 @@ end
 -- is a farmer's machine run dry's job.refuel (TheContractorEmergencyRefuel).
 -- readyDay (132) is the first day the job can be worked (Job.readyDay), nil
 -- for ready now. auctionId (141) is an attend job's auction (Job.auctionId).
+-- lotInspection (152) is an auction lot to inspect's (TCLotInspections).
 function TheContractorJobs:createJob(farmId, jobType, fieldId, requiredSkillLevel, targetPeriod, targetDayInPeriod,
                                       price, equipmentAvailable, fruitTypeName, deadlineDay, includesHaulage,
                                       deliveryStation, startState, workshop, spill, yardDelivery, yardHaul, refuel,
-                                      readyDay, auctionId)
+                                      readyDay, auctionId, lotInspection)
     if not g_currentMission:getIsServer() then
         return nil
     end
@@ -207,8 +208,9 @@ function TheContractorJobs:createJob(farmId, jobType, fieldId, requiredSkillLeve
     job.yardHaul = yardHaul
     job.refuel = refuel
     job.auctionId = auctionId
-    -- 110: after workshop, spill, the yard jobs and a refuel, which decide
-    -- it.
+    job.lotInspection = lotInspection
+    -- 110: after workshop, spill, the yard jobs, a refuel and a lot
+    -- inspection, which decide it.
     local farmers = g_currentMission.TheContractor.Farmers
     if farmers ~= nil then
         job.customerId = farmers:getCustomerIdForJob(job)
@@ -1135,11 +1137,12 @@ end
 -- Whether any farm has a job on the field that isn't over (on offer, taken
 -- on or under way), whatever else protects it. 141: a job to attend an
 -- auction isn't work on its field (it's the sale's own), so it never keeps
--- the field from being the site.
+-- the field from being the site; nor (152) is inspecting one of its lots.
 function TheContractorJobs:hasLiveJob(fieldId)
     for _, farmJobs in pairs(self.jobsByFarm) do
         for _, job in pairs(farmJobs) do
-            if job.fieldId == fieldId and not job:isTerminal() and job.auctionId == nil then
+            if job.fieldId == fieldId and not job:isTerminal() and job.auctionId == nil and
+                    job.lotInspection == nil then
                 return true
             end
         end
@@ -1654,6 +1657,8 @@ function TheContractorJobs.writeJob(streamId, job)
     streamWriteInt32(streamId, job.readyDay or -1)
     -- 141. 0 stands in for "no auction".
     streamWriteInt32(streamId, job.auctionId or 0)
+    -- 152.
+    TCLotInspections.writeStream(streamId, job.lotInspection)
 end
 
 -- 100: what a client needs of a workshop job (the uniqueIds stay on the
@@ -1851,6 +1856,7 @@ function TheContractorJobs.readJob(streamId)
     job.readyDay = readyDay >= 0 and readyDay or nil
     local auctionId = streamReadInt32(streamId)
     job.auctionId = auctionId ~= 0 and auctionId or nil
+    job.lotInspection = TCLotInspections.readStream(streamId)
 
     return job
 end
@@ -2014,6 +2020,8 @@ function TheContractorJobs:loadFromXMLFile(xmlFile)
             job.customerId = getXMLInt(xmlFile, jobKey .. "#customerId")
             -- 141.
             job.auctionId = getXMLInt(xmlFile, jobKey .. "#auctionId")
+            -- 152.
+            job.lotInspection = TCLotInspections.loadFromXML(xmlFile, jobKey .. ".lotInspection")
 
             self.jobsByFarm[farmId] = self.jobsByFarm[farmId] or {}
             self.jobsByFarm[farmId][id] = job
@@ -2355,6 +2363,9 @@ function TheContractorJobs:saveToXmlFile(xmlFile)
             end
             if job.auctionId ~= nil then
                 setXMLInt(xmlFile, jobKey .. "#auctionId", job.auctionId)
+            end
+            if job.lotInspection ~= nil then
+                TCLotInspections.saveToXML(xmlFile, jobKey .. ".lotInspection", job.lotInspection)
             end
 
             if job.assignedWorkerId ~= nil then

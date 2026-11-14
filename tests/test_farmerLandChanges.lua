@@ -43,6 +43,7 @@ local function setup()
     world:load("src/business/YardBales.lua")
     world:load("src/business/YardHaul.lua")
     world:load("src/business/EmergencyRefuel.lua")
+    world:load("src/util/TCLotInspections.lua")
     world:load("src/business/FarmerSplit.lua")
     world:load("src/business/Farmers.lua")
     world:load("src/business/FarmerFleet.lua")
@@ -180,6 +181,7 @@ local function setup()
         local job = TheContractorJob.new(def.id, def.farmId or 1, def.jobType or "plow", def.fieldId or 0, 1, 1, 1, 1000)
         job.customerId = def.customerId
         job.yardHaul = def.yardHaul
+        job.lotInspection = def.lotInspection
         tc.Jobs.jobsByFarm[job.farmId] = tc.Jobs.jobsByFarm[job.farmId] or {}
         tc.Jobs.jobsByFarm[job.farmId][job.id] = job
         return job
@@ -345,6 +347,9 @@ test("a retirement hands everything to a new person at half the relationship", f
     local openJob = world:addJob({ id = 1, jobType = "yardHaul", customerId = ann.id,
         yardHaul = { farmerId = ann.id, fillTypeName = "WHEAT" } })
     local bobJob = world:addJob({ id = 2, fieldId = 4, customerId = world.bob.id })
+    -- 152: an auction lot she wants inspected.
+    local lotJob = world:addJob({ id = 3, jobType = "lotInspection", customerId = ann.id,
+        lotInspection = { auctionId = 1, lotNumber = 4, farmerId = ann.id } })
     tc.RandomEvents.incidents[7] = { id = 7, data = { farmerId = ann.id } }
     tc.Inbox.messagesById[3] = { id = 3, payload = { farmerId = ann.id } }
     table.insert(tc.RepairContracts.arrivals, { farmerId = ann.id, machineId = 1 })
@@ -391,6 +396,8 @@ test("a retirement hands everything to a new person at half the relationship", f
     -- Everything holding her id holds the successor's.
     assertEquals(openJob.customerId, successor.id)
     assertEquals(openJob.yardHaul.farmerId, successor.id)
+    assertEquals(lotJob.customerId, successor.id)
+    assertEquals(lotJob.lotInspection.farmerId, successor.id)
     assertEquals(bobJob.customerId, world.bob.id)
     assertEquals(tc.RandomEvents.incidents[7].data.farmerId, successor.id)
     assertEquals(tc.Inbox.messagesById[3].payload.farmerId, successor.id)

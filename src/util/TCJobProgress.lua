@@ -367,6 +367,10 @@ local JOB_TYPE_HANDLERS = {
     emergencyRefuel = { getCompletion = function(job)
         return TheContractorEmergencyRefuel.getCompletion(job)
     end },
+    -- 152: an auction lot, inspected in ADS.
+    lotInspection = { getCompletion = function(job)
+        return TCLotInspections.getCompletion(job)
+    end },
     fertilize = { createModifier = createFertilizeModifier },
     herbicide = { createModifier = createHerbicideModifier },
     weed = { createModifier = createWeedModifier, measure = "remainingArea" },

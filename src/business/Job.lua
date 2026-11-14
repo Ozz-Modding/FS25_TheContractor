@@ -326,6 +326,11 @@ function TheContractorJob.new(id, farmId, jobType, fieldId, requiredSkillLevel, 
     -- for every other job. Saved and sent to clients.
     self.auctionId = nil
 
+    -- 152: the auction lot a farmer wants inspected and who's asking
+    -- (TCLotInspections), nil for every other job. Saved and sent to
+    -- clients (where ADS's log stood, server only).
+    self.lotInspection = nil
+
     return self
 end
 
@@ -371,6 +376,10 @@ function TheContractorJob:getLocationText()
     end
     local field = g_fieldManager:getFieldById(self.fieldId)
     local name = field ~= nil and field:getName() or tostring(self.fieldId)
+    -- 152: "Lot 12 at the auction on Field 34".
+    if self.lotInspection ~= nil then
+        return string.format(g_i18n:getText("tc_lotInspection_location"), self.lotInspection.lotNumber, name)
+    end
     -- 107: "Roads around Field 12".
     local jobDef = TheContractorJobGeneration ~= nil and TheContractorJobGeneration.JOB_TYPES[self.jobType] or nil
     if jobDef ~= nil and jobDef.locationKey ~= nil then
@@ -597,6 +606,11 @@ function TheContractorJob:getDisplayTitle()
     if self.workshop ~= nil then
         return string.format("%s (%s)", typeText, self.workshop.vehicleName or "?")
     end
+    -- 152: "Lot Inspection (Lot 12)".
+    if self.lotInspection ~= nil then
+        return string.format("%s (%s)", typeText,
+            string.format(g_i18n:getText("tc_lotInspection_lot"), self.lotInspection.lotNumber))
+    end
     local cropTitle = self:getCropTitle()
     if cropTitle == nil then
         return typeText
@@ -618,7 +632,8 @@ end
 -- (a breakdown's field for a workshop job), the yard's farmland id for a
 -- job in a farmer's yard (124, 126, and 116/123's machines in one), and "-"
 -- for a machine in one of our repair zones or (107) a job whose field only
--- says where it is (offField; 127's refuel is on its field).
+-- says where it is (offField; 127's refuel and 152's lot are on their
+-- field).
 function TheContractorJob:getListFieldText()
     local function fieldName(fieldId)
         local field = g_fieldManager:getFieldById(fieldId)
@@ -637,7 +652,7 @@ function TheContractorJob:getListFieldText()
         return farmlandText((self.yardDelivery or self.yardHaul).yardFarmlandId)
     end
     local jobDef = TheContractorJobGeneration ~= nil and TheContractorJobGeneration.JOB_TYPES[self.jobType] or nil
-    if jobDef ~= nil and jobDef.offField and self.refuel == nil then
+    if jobDef ~= nil and jobDef.offField and self.refuel == nil and self.lotInspection == nil then
         return "-"
     end
     return fieldName(self.fieldId)

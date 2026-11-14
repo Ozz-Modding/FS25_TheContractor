@@ -222,6 +222,7 @@
 		<text name="tc_jobType_yardHaul" text="Sell a Load"/>
 		<text name="tc_jobType_emergencyRefuel" text="Emergency Refuel"/>
 		<text name="tc_jobType_attendAuction" text="Attend Auction"/>
+		<text name="tc_jobType_lotInspection" text="Lot Inspection"/>
 		<text name="tc_jobType_flyTipping" text="Clear Fly-tipping"/>
 		<text name="tc_jobType_flyTippingRoadside" text="Clear Roadside Fly-tipping"/>
 		<text name="tc_jobType_fertilize" text="Fertilize"/>
@@ -589,6 +590,7 @@
 		<text name="tc_auctionLot_state_open" text="Open"/>
 		<text name="tc_auctionLot_state_closed" text="Closed"/>
 		<text name="tc_auctionLot_guide" text="Guide price"/>
+		<text name="tc_auctionLot_lot" text="Lot"/>
 		<text name="tc_auctionLot_specs" text="Specifications"/>
 		<text name="tc_auctionLot_guideNote" text="What the lot's expected to fetch: bid around it for a fair chance of winning."/>
 		<text name="tc_auctionLot_closes" text="Bidding closes %s"/>
@@ -636,6 +638,12 @@
 		<text name="tc_attendAuction_detailHost" text="Held by"/>
 		<text name="tc_attendAuction_detailSaleDay" text="Sale day"/>
 		<text name="tc_attendAuction_note" text="Viewing and bidding from %02d:00; each lot's bidding closes at its own time between %02d:00 and %02d:00. Turning up is all it takes, and missing it costs nothing."/>
+		<text name="tc_lotInspection_lot" text="Lot %d"/>
+		<text name="tc_lotInspection_location" text="Lot %d at the auction on Field %s"/>
+		<text name="tc_lotInspection_offerTitle" text="Could you look a tractor over for me?"/>
+		<text name="tc_lotInspection_offerBody" text="I've got my eye on lot %s at the machinery auction on Field %s today, a %s. Before I bid on it, could you give it a proper look over for me? A standard inspection will do; a quick look round won't tell me enough. Bidding on it closes at %s, so it needs doing before then. Thanks, %s"/>
+		<text name="tc_lotInspection_detailValue" text="Lot %d, %s: bidding closes %s"/>
+		<text name="tc_lotInspection_note" text="%s. It needs a standard inspection before then; a quick visual one doesn't count."/>
 		<text name="tc_construction_tab" text="Contractor"/>
 		<text name="tc_parkingSlot_name" text="Vehicle Parking Slot"/>
 		<text name="tc_parkingSlotMedium_name" text="Vehicle Parking Slot (Medium)"/>
@@ -1317,6 +1325,8 @@
 		<text name="tc_protest_councilName" text="Someone"/>
 		<text name="tc_protest_showOnMap" text="Show on map"/>
 		<text name="tc_protest_mapName" text="Protest"/>
+		<text name="tc_protest_delayOut" text="Protesters on the road: the crew for %s will take %d minutes longer to get there"/>
+		<text name="tc_protest_delayReturn" text="Protesters on the road: the crew from %s will take %d minutes longer to get back"/>
 		<text name="tc_overheads_priceLevel" text="%s cover: %s"/>
 		<text name="tc_overheads_levelSwitching" text="%s (%s cover from renewal)"/>
 		<text name="tc_overheads_priceFrom" text="From %s a year paid annually, or %s a month"/>

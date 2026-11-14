@@ -481,6 +481,12 @@ end
 -- Server: settles one lot (the site's own lot).
 function TheContractorAuctionSale:closeLot(lot)
     local tc = g_currentMission.TheContractor
+    -- 152: the lot's inspection is done or too late, before it can change
+    -- hands.
+    local auction = tc.Auctions ~= nil and tc.Auctions:getAuction() or nil
+    if auction ~= nil then
+        TCLotInspections.onLotClosed(auction.id, lot.number)
+    end
     local entries = {}
     for farmId, bid in pairs(self.bids[lot.number] or {}) do
         table.insert(entries, { farmId = farmId, amount = bid.amount, order = bid.order })

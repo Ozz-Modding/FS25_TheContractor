@@ -28,6 +28,8 @@ local function setup(daysPerPeriod)
     world:load("src/util/TCCalendar.lua")
     world:load("src/business/Inbox.lua")
     world:load("src/util/TCAuctionAttendance.lua")
+    world:load("src/util/TCADSUsedLots.lua")
+    world:load("src/util/TCLotInspections.lua")
     world:load("src/business/Auctions.lua")
     world:load("src/events/TCAuctionEvent.lua")
 

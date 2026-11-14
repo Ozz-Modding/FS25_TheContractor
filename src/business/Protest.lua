@@ -25,6 +25,10 @@
 -- whatever the hour or season; it ends at the next day change (or tcDebug
 -- protest clear).
 --
+-- While it's out, the farm's crews take TRAVEL_DELAY_MINUTES longer to
+-- reach a job (Dispatch) and to get back from one (Cooldown), each with a
+-- notification (notifyDelay).
+--
 -- State: none of its own. The incident's data is { day, seed, baseX,
 -- baseZ, forced, groupCount, g<n>_x/_z/_dirX/_dirZ/_count }
 -- (TCProtestLayout.getGroups).
@@ -48,6 +52,9 @@ TheContractorProtest.STAGE = {
 -- The warning stays in the inbox this many days.
 TheContractorProtest.MESSAGE_DAYS = 2
 TheContractorProtest.CHECK_INTERVAL_MS = 1000
+-- While one's out, a crew's trip out to a job and back each take this many
+-- in-game minutes longer (getTravelDelayMinutes), with a notification.
+TheContractorProtest.TRAVEL_DELAY_MINUTES = 15
 
 -- A spot (isSpotUsable, metres; the road's middle): the spline within MAX_ROAD_HEIGHT_GAP of
 -- the ground (else a bridge); the ground within MAX_GROUND_STEP of the
@@ -167,6 +174,38 @@ end
 
 function TheContractorProtest.isOut(incident)
     return incident.stage == TheContractorProtest.STAGE.OUT
+end
+
+-- Whether the farm has a protest out right now.
+function TheContractorProtest.isOutFor(farmId)
+    for _, incident in ipairs(TheContractorProtest.getIncidents()) do
+        if incident.farmId == farmId and TheContractorProtest.isOut(incident) then
+            return true
+        end
+    end
+    return false
+end
+
+-- What a protest adds to a crew's trip out (Dispatch's
+-- TRANSPORT_WAIT_FACTORS) or back (Cooldown's BUFFER_FACTORS), in minutes:
+-- TRAVEL_DELAY_MINUTES while the job's farm has one out, else 0.
+function TheContractorProtest.getTravelDelayMinutes(job)
+    return TheContractorProtest.isOutFor(job.farmId) and TheContractorProtest.TRAVEL_DELAY_MINUTES or 0
+end
+
+-- Server: tells the job's farm a protest has slowed its crew's trip
+-- (isReturn: the trip back), if it has.
+function TheContractorProtest.notifyDelay(job, isReturn)
+    local minutes = TheContractorProtest.getTravelDelayMinutes(job)
+    if minutes <= 0 then
+        return
+    end
+    TCLog.info("TheContractor: farm %d job %d: the protest adds %d min to the trip %s", job.farmId, job.id, minutes,
+        isReturn and "back" or "out")
+    TCProtestDelayEvent.showNotification(job.farmId, job.id, minutes, isReturn)
+    if g_server ~= nil then
+        g_server:broadcastEvent(TCProtestDelayEvent.new(job.farmId, job.id, minutes, isReturn))
+    end
 end
 
 -- Whether any farm has a protest on that day.

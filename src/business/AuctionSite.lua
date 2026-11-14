@@ -714,6 +714,8 @@ function TheContractorAuctionSite:spawnNext()
             site.spawnedAt = getTimeSec()
             TCLog.info("TheContractor: auction site on field %d spawned in %.1f s", site.fieldId,
                 site.spawnedAt - site.startedAt)
+            -- 152: the farmers needn't wait for the next hour to ask.
+            TCLotInspections.onLotsOut()
         end
         return
     end
