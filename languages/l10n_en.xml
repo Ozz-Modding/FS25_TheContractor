@@ -576,6 +576,8 @@
 		<text name="tc_auctionLot_withAttachment" text="%s with %s"/>
 		<text name="tc_auctionLot_sectionMachine" text="Machine"/>
 		<text name="tc_auctionLot_sectionBidding" text="Bidding"/>
+		<text name="tc_auctionLot_sectionConfiguration" text="Configuration"/>
+		<text name="tc_auctionLot_sectionAttachmentConfiguration" text="Attachment configuration"/>
 		<text name="tc_auctionLot_machine" text="Model"/>
 		<text name="tc_auctionLot_attachment" text="With"/>
 		<text name="tc_auctionLot_hours" text="Hours"/>
@@ -1309,6 +1311,12 @@
 		<text name="tc_flyTipping_roadsideLocation" text="Roadside by Field %s"/>
 		<text name="tc_flyTipping_roadsideOfferTitle" text="Fly-tipping by the road near Field %s"/>
 		<text name="tc_flyTipping_roadsideOfferBody" text="Someone has dumped a load of junk on the verge by the road near Field %s, %s pieces in all. %s at the council wants it cleared and has offered you the job; each piece is marked on your map. Carry each piece to a disposal skip (from the Contractor tab of the construction menu) and drop it there. Turn it down and the council will see to it, but they will remember."/>
+		<text name="tc_protest_eventName" text="Protest outside the farm"/>
+		<text name="tc_protest_noticeTitle" text="A protest near the farm tomorrow"/>
+		<text name="tc_protest_noticeBody" text="%s at the council has been told that a group of locals will be protesting on the roads near your farm tomorrow, from 07:00 until 19:00. They'll be standing in the road with placards, so take it slowly on the way in and out. There's nothing to be done about it: they'll have had their say and gone home by the evening."/>
+		<text name="tc_protest_councilName" text="Someone"/>
+		<text name="tc_protest_showOnMap" text="Show on map"/>
+		<text name="tc_protest_mapName" text="Protest"/>
 		<text name="tc_overheads_priceLevel" text="%s cover: %s"/>
 		<text name="tc_overheads_levelSwitching" text="%s (%s cover from renewal)"/>
 		<text name="tc_overheads_priceFrom" text="From %s a year paid annually, or %s a month"/>

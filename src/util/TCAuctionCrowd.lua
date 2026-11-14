@@ -12,14 +12,11 @@
 -- engine's limits too tight for a crowd: 64 people and 32 walkers a system,
 -- only about 16 shown at once, and extra systems adding a few more who walk
 -- through each other (the ticket's Outcome has the runs). So each person
--- here is a vanilla HumanGraphicsComponent we place and animate ourselves,
--- as 065's idle staff (TCIdleStaff), with no limit but the frame rate:
+-- here is one of TCFigures' (151 split them out for the protest): a
+-- vanilla HumanGraphicsComponent we place and animate ourselves, with no
+-- limit but the frame rate:
 --   - standers on the standing spots, playing vanilla's NPC idle (isNPC);
---   - walkers moved along our loops every frame (by distance, buildPath), animated as
---     vanilla animates a remote player (PlayerGraphicsState:updateRemote:
---     absSpeed, isWalking, isGrounded), the idea from FS25_PlaceableNPCSystem
---     by Arrow-kb (its NPCGraphicsComponent drives HumanGraphicsComponent's
---     animation from its own movement).
+--   - walkers moved along our loops every frame (by distance, buildPath).
 -- The map's own pedestrians are left alone.
 --
 -- Walkers keep to lanes: each loop has a lane each way, offset to either
@@ -28,9 +25,7 @@
 -- from the time since the crowd went up (walkerDistance), not from
 -- integrating each frame, so it's the same wherever the camera's been.
 --
--- Their looks are copied from the base maps' pedestrian XMLs
--- (SOURCE_XMLS), taken in turn, so no style name of vanilla's is written
--- into our code.
+-- Their looks are TCFigures' (the base maps' pedestrians), taken in turn.
 --
 -- The layout (pure, tested in tests/test_auctionCrowd.lua): the largest
 -- rectangle inset in the field's polygon (findLargestRect, tried at several
@@ -39,19 +34,11 @@
 -- (buildStandingSpots). planCrowd shares the people out between the spots
 -- and the lanes.
 --
--- Models are loaded within LOAD_DISTANCE of the camera, freed beyond
--- UNLOAD_DISTANCE and shown within CLIP_DISTANCE, as the idle staff's are.
--- Local and visual only: nothing is saved or synced, and nothing happens on
--- a dedicated server.
+-- Loading, culling and animating them is TCFigures'. Local and visual
+-- only: nothing is saved or synced, and nothing happens on a dedicated
+-- server.
 
 TCAuctionCrowd = {}
-
--- The base maps' pedestrian XMLs, whose people's looks we copy.
-TCAuctionCrowd.SOURCE_XMLS = {
-    "$data/maps/mapEU/config/pedestrianSystem.xml",
-    "$data/maps/mapUS/config/pedestrianSystem.xml",
-    "$data/maps/mapAS/config/pedestrianSystem.xml",
-}
 
 TCAuctionCrowd.DEFAULT_PEOPLE = 60
 TCAuctionCrowd.MAX_PEOPLE = 300
@@ -86,15 +73,6 @@ TCAuctionCrowd.WALK_SPEED_MIN = 1.0
 TCAuctionCrowd.WALK_SPEED_MAX = 1.4
 -- How far either side of the loop a lane runs (metres).
 TCAuctionCrowd.LANE_OFFSET = 0.8
--- Metres from the camera: shown within CLIP, model loaded within LOAD,
--- freed beyond UNLOAD (TCIdleStaff's).
-TCAuctionCrowd.CLIP_DISTANCE = 100
-TCAuctionCrowd.LOAD_DISTANCE = 150
-TCAuctionCrowd.UNLOAD_DISTANCE = 200
--- Models started loading a frame at most: starting dozens at once stalled
--- a frame for about 90 ms.
-TCAuctionCrowd.MAX_LOADS_PER_FRAME = 2
-
 -- Layout (metres unless said).
 TCAuctionCrowd.LAYOUT = {
     step = 4,            -- grid cell for the rectangle search
@@ -707,67 +685,9 @@ function TCAuctionCrowd.getFieldPolygon(field)
     return polygon
 end
 
--- Every person in the base maps' pedestrian XMLs: { variation, style,
--- walk = { animationName, blendWithAnimationName, distance, speedScaleMin,
--- speedScaleMax, triggers }, idle, staticIdles }.
-function TCAuctionCrowd.readTemplates()
-    local templates = {}
-    for _, source in ipairs(TCAuctionCrowd.SOURCE_XMLS) do
-        local filename = Utils.getFilename(source, nil)
-        if fileExists(filename) then
-            local xmlFile = XMLFile.load("tcCrowdSource", filename, PedestrianSystem.xmlSchema)
-            if xmlFile ~= nil then
-                for _, key in xmlFile:iterator("pedestrianSystem.pedestrians.pedestrian") do
-                    local style = PlayerStyle.new()
-                    if style:loadFromXMLFile(xmlFile, key .. ".style") then
-                        local template = {
-                            variation = xmlFile:getValue(key .. "#variation", "male"),
-                            style = style,
-                            idle = xmlFile:getValue(key .. ".idleAnimation#animationName"),
-                            staticIdles = {},
-                            walk = {
-                                animationName = xmlFile:getValue(key .. ".walkAnimation#animationName"),
-                                blendWithAnimationName = xmlFile:getValue(key ..
-                                    ".walkAnimation#blendWithAnimationName"),
-                                distance = xmlFile:getValue(key .. ".walkAnimation#distance"),
-                                speedScaleMin = xmlFile:getValue(key .. ".walkAnimation#speedScaleMin"),
-                                speedScaleMax = xmlFile:getValue(key .. ".walkAnimation#speedScaleMax"),
-                                triggers = {},
-                            },
-                        }
-                        for _, idleKey in xmlFile:iterator(key .. ".staticIdleAnimation") do
-                            table.insert(template.staticIdles, xmlFile:getValue(idleKey .. "#animationName"))
-                        end
-                        for _, triggerKey in xmlFile:iterator(key .. ".walkAnimation.stepSoundTrigger") do
-                            table.insert(template.walk.triggers, xmlFile:getValue(triggerKey .. "#time"))
-                        end
-                        if template.walk.animationName ~= nil then
-                            table.insert(templates, template)
-                        end
-                    end
-                end
-                xmlFile:delete()
-            end
-        else
-            TCLog.info("TheContractor: crowd source %s not found", filename)
-        end
-    end
-    return templates
-end
-
-local function groundY(x, z)
-    return getTerrainHeightAtWorldPos(g_terrainNode, x, 0, z)
-end
-
 -- Whether this machine shows a crowd at all, or why not.
 function TCAuctionCrowd.getUnavailableReason()
-    if g_dedicatedServer ~= nil then
-        return "There's no crowd on a dedicated server: nobody's there to see it."
-    end
-    if g_currentMission == nil or not g_currentMission:getIsClient() then
-        return "This machine has no client to show a crowd."
-    end
-    return nil
+    return TCFigures.getUnavailableReason()
 end
 
 -- Puts a crowd of people on the field (the spike's loops, over the whole
@@ -854,7 +774,7 @@ end
 -- text to print. options (140): standingShare (planCrowd's) and useHours.
 function TCAuctionCrowd.putUp(fieldId, loops, spots, people, options)
     options = options or {}
-    local templates = TCAuctionCrowd.readTemplates()
+    local templates = TCFigures.readTemplates()
     if #templates == 0 then
         return "None of the base maps' pedestrian XMLs could be read."
     end
@@ -873,8 +793,8 @@ function TCAuctionCrowd.putUp(fieldId, loops, spots, people, options)
     local categories = {}
     for i = 1, plan.standers do
         local spot = spots[i]
-        table.insert(figures, { kind = "stand", template = looks[i], x = spot.x, y = groundY(spot.x, spot.z),
-            z = spot.z, yaw = spot.yaw })
+        table.insert(figures, { kind = "stand", template = looks[i], x = spot.x,
+            y = TCFigures.groundY(spot.x, spot.z), z = spot.z, yaw = spot.yaw })
         categories[#figures] = spot.category
     end
     for k, walker in ipairs(plan.walkers) do
@@ -915,68 +835,6 @@ function TCAuctionCrowd.putUp(fieldId, loops, spots, people, options)
     return table.concat(lines, "\n")
 end
 
-local function freeModel(figure)
-    if figure.graphics ~= nil then
-        figure.graphics:delete()
-        figure.graphics = nil
-    end
-    figure.isReady = false
-    figure.isVisible = false
-end
-
-local function setVisible(figure, isVisible)
-    if figure.isVisible ~= isVisible then
-        figure.isVisible = isVisible
-        if isVisible then
-            figure.graphics:show()
-        else
-            figure.graphics:hide()
-        end
-    end
-end
-
--- Starts loading a figure's model: a vanilla character in its look,
--- standing (vanilla's NPC idle) or walking (as a remote player's walk:
--- PlayerGraphicsState:updateRemote's speed, walking and grounded).
-local function loadModel(figure)
-    local graphics = HumanGraphicsComponent.new()
-    local state = graphics.defaultState
-    if figure.kind == "walk" then
-        state.isNPC = false
-        state.isIdling = false
-        state.isWalking = true
-        state.absSpeed = figure.walker.speed
-        state.movementDirX = 0
-        state.movementDirZ = 1
-        state.isGrounded = true
-        state.isCloseToGround = true
-    else
-        state.isNPC = true
-    end
-    graphics:setSoundsEnabled(false)
-    graphics:initialize()
-    figure.graphics = graphics
-    figure.isReady = false
-    figure.isVisible = false
-
-    local style = PlayerStyle.new()
-    style:copyFrom(figure.template.style)
-    graphics:setStyleAsync(style, function(_, loadingState)
-        if figure.graphics ~= graphics then
-            return
-        end
-        if loadingState == HumanModelLoadingState.OK then
-            -- Loading shows the model at the origin: hidden until the next
-            -- update places it.
-            graphics:hide()
-            graphics:defaultAllParameters()
-            figure.isReady = true
-        else
-            figure.noModel = true
-        end
-    end, nil, nil, true)
-end
-
 -- Where a walker is now, into figure.x/y/z/yaw.
 local function placeWalker(figure, loops, elapsedSec)
     local walker = figure.walker
@@ -985,7 +843,7 @@ local function placeWalker(figure, loops, elapsedSec)
     local x, z, dx, dz = TCAuctionCrowd.getPathPoint(path, distance)
     local lx, lz, yaw = TCAuctionCrowd.getLanePosition(x, z, dx, dz, walker.direction)
     figure.x, figure.z, figure.yaw = lx, lz, yaw
-    figure.y = groundY(lx, lz)
+    figure.y = TCFigures.groundY(lx, lz)
 end
 
 -- Every frame on a machine with a client.
@@ -994,12 +852,11 @@ function TCAuctionCrowd.update(dt)
     if active == nil then
         return
     end
-    local camera = g_cameraManager ~= nil and g_cameraManager:getActiveCamera() or nil
-    if camera == nil or camera == 0 then
+    local cx, cy, cz = TCFigures.getCameraPosition()
+    if cx == nil then
         return
     end
     local started = getTimeSec()
-    local cx, cy, cz = getWorldTranslation(camera)
     active.elapsedMs = active.elapsedMs + dt
     local elapsedSec = active.elapsedMs / 1000
 
@@ -1007,49 +864,15 @@ function TCAuctionCrowd.update(dt)
     local share = active.useHours and TCAuctionCrowd.getShare(TCAuctionCrowd.getHour()) or 1
     active.share = share
 
-    local loaded, shown, present, loadsStarted = 0, 0, 0, 0
-    for _, figure in ipairs(active.figures) do
-        if figure.rank ~= nil and figure.rank >= share then
-            -- Not here at this hour: their model's freed until they come.
-            if figure.graphics ~= nil then
-                freeModel(figure)
-            end
-        else
-            present = present + 1
-            local isWalker = figure.kind == "walk"
-            if isWalker then
-                -- A walker's distance is checked from where it is now; placing
-                -- it is cheap next to animating it.
+    local loaded, shown, present = TCFigures.update(active.figures, dt, cx, cy, cz, share, {
+        -- A walker's distance is checked from where it is now; placing it
+        -- is cheap next to animating it.
+        place = function(figure)
+            if figure.kind == "walk" then
                 placeWalker(figure, active.loops, elapsedSec)
             end
-            local distance = MathUtil.vector3Length(figure.x - cx, figure.y - cy, figure.z - cz)
-            if figure.graphics == nil then
-                if distance <= TCAuctionCrowd.LOAD_DISTANCE and not figure.noModel and
-                    loadsStarted < TCAuctionCrowd.MAX_LOADS_PER_FRAME then
-                    loadModel(figure)
-                    loadsStarted = loadsStarted + 1
-                end
-            elseif distance > TCAuctionCrowd.UNLOAD_DISTANCE then
-                freeModel(figure)
-            end
-
-            if figure.graphics ~= nil then
-                loaded = loaded + 1
-            end
-            if figure.isReady then
-                if distance > TCAuctionCrowd.CLIP_DISTANCE then
-                    setVisible(figure, false)
-                else
-                    setVisible(figure, true)
-                    shown = shown + 1
-                    figure.graphics:setModelPosition(figure.x, figure.y, figure.z)
-                    figure.graphics:setModelYaw(figure.yaw)
-                    figure.graphics:defaultAllParameters()
-                    figure.graphics:update(dt)
-                end
-            end
-        end
-    end
+        end,
+    })
 
     local stats = active.stats
     stats.loaded, stats.shown, stats.present = loaded, shown, present
@@ -1064,9 +887,7 @@ function TCAuctionCrowd.stop()
     if active == nil then
         return false
     end
-    for _, figure in ipairs(active.figures) do
-        freeModel(figure)
-    end
+    TCFigures.freeAll(active.figures)
     TCAuctionCrowd.active = nil
     return true
 end

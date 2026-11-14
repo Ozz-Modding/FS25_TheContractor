@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="iso-8859-1"?>
+
+<i3D name="protestPlacard" version="1.6" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://i3d.giants.ch/schema/i3d-1.6.xsd">
+  <Asset>
+    <Export program="i3dConverter" version="1.0"/>
+  </Asset>
+
+  <Files>
+    <File fileId="1" filename="../images/protestPlacards_card.dds"/>
+    <File fileId="2" filename="../images/protestPlacards_chalk.dds"/>
+  </Files>
+
+
+  <Materials>
+    <Material name="protestPlacard_card_mat" materialId="1">
+      <Texture fileId="1"/>
+    </Material>
+    <Material name="protestPlacard_chalk_mat" materialId="2">
+      <Texture fileId="2"/>
+    </Material>
+  </Materials>
+
+
+  <Shapes externalShapesFile="protestPlacard.i3d.shapes">
+  </Shapes>
+
+  <Scene>
+    <TransformGroup name="protestPlacard" clipDistance="120" nodeId="41">
+      <TransformGroup name="visuals" nodeId="42">
+        <Shape name="pole" shapeId="1" nodeId="43" castsShadows="true" receiveShadows="true" materialIds="1"/>
+        <TransformGroup name="boards" nodeId="44">
+          <Shape name="board_card" shapeId="2" nodeId="45" castsShadows="true" receiveShadows="true" materialIds="1"/>
+          <Shape name="board_chalk" shapeId="3" nodeId="46" castsShadows="true" receiveShadows="true" materialIds="2"/>
+        </TransformGroup>
+        <TransformGroup name="faces" nodeId="47">
+          <Shape name="face_card01" shapeId="4" nodeId="48" castsShadows="false" receiveShadows="true" materialIds="1"/>
+          <Shape name="face_card02" shapeId="5" nodeId="49" castsShadows="false" receiveShadows="true" materialIds="1"/>
+          <Shape name="face_card03" shapeId="6" nodeId="50" castsShadows="false" receiveShadows="true" materialIds="1"/>
+          <Shape name="face_card04" shapeId="7" nodeId="51" castsShadows="false" receiveShadows="true" materialIds="1"/>
+          <Shape name="face_card05" shapeId="8" nodeId="52" castsShadows="false" receiveShadows="true" materialIds="1"/>
+          <Shape name="face_card06" shapeId="9" nodeId="53" castsShadows="false" receiveShadows="true" materialIds="1"/>
+          <Shape name="face_card07" shapeId="10" nodeId="54" castsShadows="false" receiveShadows="true" materialIds="1"/>
+          <Shape name="face_card08" shapeId="11" nodeId="55" castsShadows="false" receiveShadows="true" materialIds="1"/>
+          <Shape name="face_card09" shapeId="12" nodeId="56" castsShadows="false" receiveShadows="true" materialIds="1"/>
+          <Shape name="face_card10" shapeId="13" nodeId="57" castsShadows="false" receiveShadows="true" materialIds="1"/>
+          <Shape name="face_card11" shapeId="14" nodeId="58" castsShadows="false" receiveShadows="true" materialIds="1"/>
+          <Shape name="face_card12" shapeId="15" nodeId="59" castsShadows="false" receiveShadows="true" materialIds="1"/>
+          <Shape name="face_card13" shapeId="16" nodeId="60" castsShadows="false" receiveShadows="true" materialIds="1"/>
+          <Shape name="face_card14" shapeId="17" nodeId="61" castsShadows="false" receiveShadows="true" materialIds="1"/>
+          <Shape name="face_card15" shapeId="18" nodeId="62" castsShadows="false" receiveShadows="true" materialIds="1"/>
+          <Shape name="face_card16" shapeId="19" nodeId="63" castsShadows="false" receiveShadows="true" materialIds="1"/>
+          <Shape name="face_card17" shapeId="20" nodeId="64" castsShadows="false" receiveShadows="true" materialIds="1"/>
+          <Shape name="face_chalk01" shapeId="4" nodeId="65" castsShadows="false" receiveShadows="true" materialIds="2"/>
+          <Shape name="face_chalk02" shapeId="5" nodeId="66" castsShadows="false" receiveShadows="true" materialIds="2"/>
+          <Shape name="face_chalk03" shapeId="6" nodeId="67" castsShadows="false" receiveShadows="true" materialIds="2"/>
+          <Shape name="face_chalk04" shapeId="7" nodeId="68" castsShadows="false" receiveShadows="true" materialIds="2"/>
+          <Shape name="face_chalk05" shapeId="8" nodeId="69" castsShadows="false" receiveShadows="true" materialIds="2"/>
+          <Shape name="face_chalk06" shapeId="9" nodeId="70" castsShadows="false" receiveShadows="true" materialIds="2"/>
+          <Shape name="face_chalk07" shapeId="10" nodeId="71" castsShadows="false" receiveShadows="true" materialIds="2"/>
+          <Shape name="face_chalk08" shapeId="11" nodeId="72" castsShadows="false" receiveShadows="true" materialIds="2"/>
+          <Shape name="face_chalk09" shapeId="12" nodeId="73" castsShadows="false" receiveShadows="true" materialIds="2"/>
+          <Shape name="face_chalk10" shapeId="13" nodeId="74" castsShadows="false" receiveShadows="true" materialIds="2"/>
+          <Shape name="face_chalk11" shapeId="14" nodeId="75" castsShadows="false" receiveShadows="true" materialIds="2"/>
+          <Shape name="face_chalk12" shapeId="15" nodeId="76" castsShadows="false" receiveShadows="true" materialIds="2"/>
+          <Shape name="face_chalk13" shapeId="16" nodeId="77" castsShadows="false" receiveShadows="true" materialIds="2"/>
+          <Shape name="face_chalk14" shapeId="17" nodeId="78" castsShadows="false" receiveShadows="true" materialIds="2"/>
+          <Shape name="face_chalk15" shapeId="18" nodeId="79" castsShadows="false" receiveShadows="true" materialIds="2"/>
+          <Shape name="face_chalk16" shapeId="19" nodeId="80" castsShadows="false" receiveShadows="true" materialIds="2"/>
+          <Shape name="face_chalk17" shapeId="20" nodeId="81" castsShadows="false" receiveShadows="true" materialIds="2"/>
+        </TransformGroup>
+      </TransformGroup>
+      <TransformGroup name="handNode" translation="-0.05 0.2 -0.05" rotation="-110.8 8.5 91.9" nodeId="82"/>
+    </TransformGroup>
+  </Scene>
+
+</i3D>
