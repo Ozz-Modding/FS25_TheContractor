@@ -70,6 +70,13 @@ TheContractorDispatch.TRANSPORT_WAIT_FACTORS = {
             return TCJobSupplies.getLoadingMinutes(job.suppliesLoaded, job.fuelLoaded)
         end,
     },
+    -- 151: a protest out on the farm's roads slows the trip.
+    {
+        name = "protest",
+        getMinutes = function(job, worker)
+            return TheContractorProtest.getTravelDelayMinutes(job)
+        end,
+    },
 }
 
 function TheContractorDispatch.getTransportWaitMs(job)
@@ -238,6 +245,7 @@ function TheContractorDispatch:startJobForWorker(job, skipTransport)
         job.transportRemainingMs = 0
     elseif job.transportRemainingMs == nil then
         job.transportRemainingMs = TheContractorDispatch.getTransportWaitMs(job)
+        TheContractorProtest.notifyDelay(job, false)
     end
     if job.transportRemainingMs > 0 then
         TCLog.info("TheContractor: farm %d job %d on the road, arriving in %.1f min", job.farmId, job.id,

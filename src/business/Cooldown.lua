@@ -60,6 +60,13 @@ TheContractorCooldown.BUFFER_FACTORS = {
             return job.washMinutes or 0
         end,
     },
+    -- 151: a protest still out on the farm's roads slows the trip back.
+    {
+        name = "protest",
+        getMinutes = function(job, worker)
+            return TheContractorProtest.getTravelDelayMinutes(job)
+        end,
+    },
 }
 
 function TheContractorCooldown.new()
@@ -130,6 +137,7 @@ function TheContractorCooldown:startCooldown(job)
     end
 
     local durationMs = TheContractorCooldown.getBufferDurationMs(job)
+    TheContractorProtest.notifyDelay(job, true)
 
     local id = self.nextCooldownId
     self.nextCooldownId = self.nextCooldownId + 1

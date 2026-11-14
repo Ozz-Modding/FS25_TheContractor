@@ -124,7 +124,9 @@ function TheContractorAuctions.new()
     local self = setmetatable({}, TheContractorAuctions_mt)
     -- Every machine, as the server sent it: the auction, or nil. { id,
     -- fieldId, hostFarmerId, announcedDay, signsDay, reminderDay (nil for
-    -- none), saleDay, state, entrance = { x, z } or nil }.
+    -- none), saleDay, state, entrance = { x, z } or nil }. The server's also
+    -- has inspectionsOffered (152: the farmers have asked for lot
+    -- inspections), saved but never sent.
     self.auction = nil
     -- Server: the next auction's id, and the month (absolute period index)
     -- the last one ended or was called off (nil: none yet on this save).
@@ -297,6 +299,10 @@ function TheContractorAuctions:onHourChanged()
         -- 141: who's turned up.
         if self.auction ~= nil then
             TCAuctionAttendance.checkAttendance(self.auction)
+        end
+        -- 152: farmers asking for lots to be inspected, and lots gone.
+        if self.auction ~= nil then
+            TCLotInspections.onHour(self.auction, getToday(), getHour())
         end
     end
 end
@@ -629,8 +635,9 @@ function TheContractorAuctions:cancel(tellFarms)
     if tellFarms then
         self:postMessages("cancelled", false)
     end
-    -- 141: nothing to go to now.
+    -- 141: nothing to go to now. 152: nor to inspect.
     TCAuctionAttendance.removeJobs(auction.id)
+    TCLotInspections.endAll(auction.id)
     self.auction = nil
     self.lastEndedPeriodIndex = TCCalendar.getPeriodIndex()
     TCLog.info("TheContractor: auction %d cancelled", auction.id)
@@ -838,6 +845,9 @@ function TheContractorAuctions:saveToXmlFile(xmlFile)
         setXMLFloat(xmlFile, auctionKey .. "#entranceX", auction.entrance.x)
         setXMLFloat(xmlFile, auctionKey .. "#entranceZ", auction.entrance.z)
     end
+    if auction.inspectionsOffered then
+        setXMLBool(xmlFile, auctionKey .. "#inspectionsOffered", true)
+    end
 end
 
 function TheContractorAuctions:loadFromXMLFile(xmlFile)
@@ -861,6 +871,8 @@ function TheContractorAuctions:loadFromXMLFile(xmlFile)
         reminderDay = getXMLInt(xmlFile, auctionKey .. "#reminderDay"),
         saleDay = getXMLInt(xmlFile, auctionKey .. "#saleDay"),
         state = getXMLString(xmlFile, auctionKey .. "#state"),
+        -- 152, server only.
+        inspectionsOffered = getXMLBool(xmlFile, auctionKey .. "#inspectionsOffered") == true or nil,
     }
     local entranceX = getXMLFloat(xmlFile, auctionKey .. "#entranceX")
     if entranceX ~= nil then
@@ -961,9 +973,12 @@ function TheContractorAuctions:consoleSaleDay()
         self:advance(today, getHour())
         self:postMessages("today", true)
         self:sync()
-        -- 141: the attend jobs made again for the new day.
+        -- 141: the attend jobs made again for the new day. 152: and the
+        -- farmers ask again once the new day's lots are out.
         TCAuctionAttendance.removeJobs(auction.id)
         TCAuctionAttendance.createDueJobs(auction)
+        TCLotInspections.endAll(auction.id)
+        auction.inspectionsOffered = nil
     end
     return self:describe()
 end

@@ -289,3 +289,48 @@ test("the groups stand on the roads near the base, facing it", function()
         assertTrue(group.dirX * -group.x + group.dirZ * -group.z >= 0, "facing the base " .. i)
     end
 end)
+
+-- The trip delay: 15 minutes out and back while the job's farm has one out.
+test("a protest out slows the farm's crews, and the farm's told by a notification", function()
+    local world, tc = setup()
+    setUpFarm(world)
+    Event = { new = function(mt) return setmetatable({}, mt) end }
+    InitEventClass = function() end
+    world.events = {}
+    g_server = { broadcastEvent = function(_, event) table.insert(world.events, event) end }
+    world:load("src/events/TCProtestDelayEvent.lua")
+    local job = { id = 9, farmId = 1, getLocationText = function() return "Field 3" end }
+    local otherJob = { id = 10, farmId = 2, getLocationText = function() return "Field 4" end }
+    tc.Jobs = { getJobById = function(_, id) return id == 9 and job or otherJob end }
+
+    local incident = tc.RandomEvents:triggerEvent(1, "protest")
+    assertEquals(TheContractorProtest.getTravelDelayMinutes(job), 0, "not while it's only a warning")
+    world.events = {}
+    TheContractorProtest.notifyDelay(job, false)
+    assertEquals(#world.notifications, 0, "nothing to tell")
+    assertEquals(#world.events, 0, "nothing sent")
+
+    setTime(41, 7)
+    tc.Protest:checkIncidents()
+    assertEquals(TheContractorProtest.getTravelDelayMinutes(job), TheContractorProtest.TRAVEL_DELAY_MINUTES, "out")
+    assertEquals(TheContractorProtest.getTravelDelayMinutes(otherJob), 0, "another farm's crews aren't held up")
+
+    world.events = {}
+    TheContractorProtest.notifyDelay(job, true)
+    assertEquals(#world.notifications, 1, "the host's own notification")
+    assertEquals(#world.events, 1, "sent to everyone")
+    local event = world.events[1]
+    assertEquals(event.farmId, 1)
+    assertEquals(event.jobId, 9)
+    assertEquals(event.minutes, TheContractorProtest.TRAVEL_DELAY_MINUTES)
+    assertTrue(event.isReturn, "the trip back")
+
+    -- Another farm's player sees nothing of it.
+    TCProtestDelayEvent.showNotification(2, 10, 15, false)
+    assertEquals(#world.notifications, 1, "not for this farm")
+
+    setTime(41, 19)
+    tc.Protest:checkIncidents()
+    assertEquals(tc.RandomEvents:getIncident(incident.id), nil, "over")
+    assertEquals(TheContractorProtest.getTravelDelayMinutes(job), 0, "over, so no delay")
+end)

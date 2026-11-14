@@ -3,7 +3,7 @@
 -- stubs.install(); then world:addJob builds real TheContractorJobs.
 --
 -- Loaded for real: Job.lua, TCJobFuel, TCJobSupplies, Notices.
--- Faked (just enough for those): Jobs, Dispatch, Logbook,
+-- Faked (just enough for those): Jobs, Dispatch, Logbook, TheContractorProtest,
 -- TheContractorNegotiation, TheContractorJobGeneration, TCEquipmentClass,
 -- TCJobProgress.
 
@@ -31,6 +31,19 @@ function fakes.installContractor(world)
         end,
     }
     TCJobProgress = { POLL_INTERVAL_MS = 3000 }
+    -- 151: world.protestMinutes is what a protest adds to a trip (0: none
+    -- out); world.protestDelays the { jobId, isReturn } it was told of.
+    world.protestMinutes, world.protestDelays = 0, {}
+    TheContractorProtest = {
+        getTravelDelayMinutes = function(job)
+            return world.protestMinutes
+        end,
+        notifyDelay = function(job, isReturn)
+            if world.protestMinutes > 0 then
+                table.insert(world.protestDelays, { jobId = job.id, isReturn = isReturn })
+            end
+        end,
+    }
 
     world:load("src/business/Job.lua")
     world:load("src/business/Notices.lua")

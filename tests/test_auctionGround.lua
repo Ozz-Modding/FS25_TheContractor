@@ -75,6 +75,7 @@ local function setup()
     world:load("src/util/TCAuctionLayout.lua")
     world:load("src/business/FarmerFleet.lua")
     world:load("src/util/TCADSUsedLots.lua")
+    world:load("src/util/TCLotInspections.lua")
     world:load("src/business/AuctionSite.lua")
     world:load("src/events/TCAuctionSiteEvent.lua")
 

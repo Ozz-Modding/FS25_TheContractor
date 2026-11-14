@@ -2876,7 +2876,8 @@ function MenuContractor:updateInboxDetails()
 
     -- Harvest & haul (035): where the crop has to go. 124: what the
     -- farmer's asked for.
-    self.inboxRowDelivery:setVisible(job.includesHaulage or job.yardDelivery ~= nil or job.refuel ~= nil)
+    self.inboxRowDelivery:setVisible(job.includesHaulage or job.yardDelivery ~= nil or job.refuel ~= nil or
+        job.lotInspection ~= nil)
     self.inboxDetailDelivery:setText(job.deliveryStationName or "?")
     if job.yardDelivery ~= nil then
         self.inboxLabelDelivery:setText(g_i18n:getText("tc_yardBales_detailOrder"))
@@ -2890,6 +2891,11 @@ function MenuContractor:updateInboxDetails()
     if job.refuel ~= nil then
         self.inboxLabelDelivery:setText(g_i18n:getText("tc_jobDetails_machine"))
         self.inboxDetailDelivery:setText(TheContractorEmergencyRefuel.getDetailText(job))
+    end
+    -- 152: the lot, and when its bidding closes.
+    if job.lotInspection ~= nil then
+        self.inboxLabelDelivery:setText(g_i18n:getText("tc_jobDetails_machine"))
+        self.inboxDetailDelivery:setText(TCLotInspections.getDetailText(job))
     end
 
     self:updateInboxSupplies(job)
@@ -4092,6 +4098,10 @@ function MenuContractor:getJobDetailRows(job)
     -- 127: the farmer's machine, and the diesel it needs.
     if job.refuel ~= nil then
         add(g_i18n:getText("tc_jobDetails_machine"), TheContractorEmergencyRefuel.getDetailText(job))
+    end
+    -- 152: the auction lot, and when its bidding closes.
+    if job.lotInspection ~= nil then
+        add(g_i18n:getText("tc_jobDetails_machine"), TCLotInspections.getDetailText(job))
     end
 
     table.insert(rows, { section = g_i18n:getText("tc_jobDetails_sectionCrew") })
@@ -5499,6 +5509,10 @@ function MenuContractor:updateJobNote(job)
             job.deliveryStationName, math.floor(100 * job.deliveredLiters / job.requiredLiters)))
     else
         table.insert(notes, string.format(g_i18n:getText("tc_calendar_deliveryNote"), job.deliveryStationName))
+    end
+    -- 152: the lot, and the time it has to be done by.
+    if job.lotInspection ~= nil and not job:isTerminal() then
+        table.insert(notes, string.format(g_i18n:getText("tc_lotInspection_note"), TCLotInspections.getDetailText(job)))
     end
     self.jobsDetailNote:setText(table.concat(notes, " "))
 end

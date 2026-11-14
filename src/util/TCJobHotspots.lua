@@ -117,7 +117,8 @@ end
 
 -- jobId -> { x, z } for each circle that isn't a field's: 101's breakdowns
 -- (on the machine), 106's spills (on the spill, while it's taken on),
--- 124's drop areas, 126's trailers and 127's machines run dry (likewise).
+-- 124's drop areas, 126's trailers and 127's machines run dry (likewise),
+-- and 152's auction lots to inspect.
 -- 107's fallen trees have one per tree still on its road, keyed
 -- "<jobId>_<n>".
 function TCJobHotspots.getSpotPositions(farmId)
@@ -142,6 +143,9 @@ function TCJobHotspots.getSpotPositions(farmId)
         elseif job.refuel ~= nil then
             -- 127: on the farmer's machine run dry.
             positions[job.id] = TheContractorEmergencyRefuel.getSpot(job)
+        elseif job.lotInspection ~= nil then
+            -- 152: on the auction lot to inspect.
+            positions[job.id] = TCLotInspections.getSpot(job)
         elseif isTakenOn(job.state) and TheContractorFallenTree ~= nil then
             -- 107: on each fallen tree.
             for _, spot in ipairs(TheContractorFallenTree.getJobSpots(job)) do
