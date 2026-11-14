@@ -1222,6 +1222,14 @@
                     <Text profile="tc_chipText" id="auctionDetailChipText" position="636px -22px" size="140px 20px"/>
                     <Bitmap profile="tc_divider" position="24px -56px" size="752px 1px"/>
                     <Bitmap profile="tc_auctionLotImage" id="auctionLotImage" position="24px -70px"/>
+                    <!-- The shop's specifications, one icon and value a line
+                         under the picture, as on the card (TCAuctionLotDialog.fillSpecs). -->
+                    <BoxLayout profile="tc_detailRows" id="auctionSpecsLayout" position="24px -262px" size="190px 336px">
+                        <GuiElement profile="fs25_itemDetailsTemplateBox" name="detailTemplate" id="auctionSpecTemplate" visible="false">
+                            <Bitmap profile="fs25_itemDetailsIcon" name="icon"/>
+                            <Text profile="fs25_itemDetailsText" text="" name="text" textAutoWidth="true"/>
+                        </GuiElement>
+                    </BoxLayout>
                     <SmoothList id="auctionDetailTable" profile="tc_table" position="224px -66px" size="540px 430px">
                         <ListItem profile="tc_tableListItem">
                             <RoundCorner profile="tc_tableRowSurface" name="surface"/>

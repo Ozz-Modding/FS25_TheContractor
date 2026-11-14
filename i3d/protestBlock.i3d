@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="iso-8859-1"?>
+
+<i3D name="protestBlock" version="1.6" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://i3d.giants.ch/schema/i3d-1.6.xsd">
+  <Asset>
+    <Export program="i3dConverter" version="1.0"/>
+  </Asset>
+
+  <Files>
+    <File fileId="1" filename="$data/shared/detailLibrary/nonMetallic/wood/wood2Oak_diffuse.dds"/>
+  </Files>
+
+
+  <Materials>
+    <Material name="protestBlock_mat" materialId="1">
+      <Texture fileId="1"/>
+    </Material>
+  </Materials>
+
+
+  <Shapes externalShapesFile="protestBlock.i3d.shapes">
+  </Shapes>
+
+  <Scene>
+    <TransformGroup name="protestBlock" nodeId="4">
+      <Shape name="col" shapeId="1" static="true" collisionFilterGroup="0x2" collisionFilterMask="0xfffffbff" density="0.0001" nodeId="5" castsShadows="false" receiveShadows="false" nonRenderable="true" materialIds="1"/>
+    </TransformGroup>
+  </Scene>
+
+</i3D>

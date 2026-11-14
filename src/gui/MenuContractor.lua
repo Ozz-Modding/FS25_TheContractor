@@ -784,6 +784,10 @@ function MenuContractor:initialize()
     self.auctionLots = {}
     self.selectedAuctionLotNumber = nil
     self.auctionDetailRows = {}
+    -- The highlighted lot's specifications column (cloned from its
+    -- template), and which lot it was filled for.
+    self.auctionSpecElements = {}
+    self.auctionSpecsShownFor = nil
     self.btnAuctionShowOnMap = {
         inputAction = InputAction.MENU_ACTIVATE,
         text = g_i18n:getText("tc_auction_showOnMap"),
@@ -8133,7 +8137,9 @@ function MenuContractor:getAuctionSignature()
     local parts = { auction.id, auction.state }
     for _, lot in ipairs(MenuContractor.getAuctionLots(auction)) do
         local bid = sale:getFarmBid(lot.number, farmId)
-        table.insert(parts, sale:getDisplayState(lot, farmId) .. (bid ~= nil and bid.amount or ""))
+        -- And once its machine streams in, for its own configurations.
+        table.insert(parts, sale:getDisplayState(lot, farmId) .. (bid ~= nil and bid.amount or "") ..
+            (TCAuctionLotDialog.isLotStreamed(lot) and "s" or ""))
     end
     return table.concat(parts, ":")
 end
@@ -8219,7 +8225,16 @@ function MenuContractor:updateAuctionLotDetails()
     if lot == nil then
         self.auctionDetailRows = {}
         self.auctionDetailTable:reloadData()
+        self.auctionSpecsShownFor = nil
         return
+    end
+    -- The specifications column, once per lot (and again once its machine's
+    -- streamed in), as the card does.
+    local specsKey = lot.number .. ":" .. tostring(lot.vehicleId) .. ":" .. tostring(TCAuctionLotDialog.isLotStreamed(lot))
+    if self.auctionSpecsShownFor ~= specsKey then
+        self.auctionSpecsShownFor = specsKey
+        self.auctionSpecElements = TCAuctionLotDialog.fillSpecs(self.auctionSpecsLayout, self.auctionSpecTemplate,
+            self.auctionSpecElements, lot)
     end
     self.auctionDetailTitle:setText(string.format(g_i18n:getText("tc_auctionLot_title"), lot.number))
     local chipText, tone = getAuctionLotChip(lot)
@@ -8243,6 +8258,18 @@ function MenuContractor:updateAuctionLotDetails()
     end
     add("tc_auctionLot_hours", TCAuctionLotDialog.formatHours(lot.hours))
     add("tc_auctionLot_age", TCAuctionLotDialog.formatAge(lot.ageMonths))
+    -- The machine's configurations as the shop names them (engine, tyres,
+    -- ...), and its attachment's, once each has streamed in: added after
+    -- the bidding, so that's never scrolled off.
+    local function addConfigurations(sectionKey, xmlFilename, vehicleId)
+        local configurations = TCAuctionLotDialog.getConfigurations(xmlFilename, vehicleId)
+        if #configurations > 0 then
+            table.insert(rows, { section = g_i18n:getText(sectionKey) })
+            for _, configuration in ipairs(configurations) do
+                table.insert(rows, { label = configuration.title, value = configuration.value })
+            end
+        end
+    end
     table.insert(rows, { section = g_i18n:getText("tc_auctionLot_sectionBidding") })
     add("tc_auctionLot_guide", g_i18n:formatMoney(lot.guidePrice, 0, true, true))
     add("tc_auctionLot_closesLabel", TheContractorAuctionSite.formatCloseTime(lot.closeMinute))
@@ -8250,6 +8277,10 @@ function MenuContractor:updateAuctionLotDetails()
     -- 139: the farm's own bid and what became of it, as on the card.
     local farmId = g_currentMission:getFarmId()
     add("tc_auctionLot_yourBidLabel", TCAuctionLotDialog.getYourBidText(lot, farmId))
+    addConfigurations("tc_auctionLot_sectionConfiguration", lot.xmlFilename, lot.vehicleId)
+    if lot.attachmentXml ~= nil then
+        addConfigurations("tc_auctionLot_sectionAttachmentConfiguration", lot.attachmentXml, lot.attachmentId)
+    end
     local state = g_currentMission.TheContractor.AuctionSale:getDisplayState(lot, farmId)
     self.auctionDetailNote:setText(TCAuctionLotDialog.getNoteText(lot, farmId, state) or "")
     self.auctionDetailRows = rows

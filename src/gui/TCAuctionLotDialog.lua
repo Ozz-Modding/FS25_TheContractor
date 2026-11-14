@@ -71,6 +71,16 @@ function TCAuctionLotDialog:onGuiSetupFinished()
     self.specElements = {}
 end
 
+-- The streamed-in vehicle of a network id, or nil (not streamed in yet, or
+-- gone).
+local function getLotVehicle(vehicleId)
+    local vehicle = vehicleId ~= nil and NetworkUtil.getObject(vehicleId) or nil
+    if vehicle == nil or vehicle.isDeleted or vehicle.configurations == nil then
+        return nil
+    end
+    return vehicle
+end
+
 -- The shop's spec types the card leaves out: condition (vanilla's, or ADS's
 -- once ADS has a lot: never shown, 099), and the hours and age it shows in
 -- its own rows.
@@ -84,10 +94,7 @@ function TCAuctionLotDialog.getSpecs(lot)
     if storeItem == nil or g_shopController == nil or g_shopController.makeDisplayItem == nil then
         return {}
     end
-    local vehicle = lot.vehicleId ~= nil and NetworkUtil.getObject(lot.vehicleId) or nil
-    if vehicle ~= nil and (vehicle.isDeleted or vehicle.configurations == nil) then
-        vehicle = nil
-    end
+    local vehicle = getLotVehicle(lot.vehicleId)
     local displayItem = g_shopController:makeDisplayItem(storeItem, vehicle,
         vehicle ~= nil and vehicle.configurations or nil)
     if displayItem == nil or displayItem.attributeIconProfiles == nil then
@@ -110,19 +117,81 @@ function TCAuctionLotDialog.getSpecs(lot)
     return specs
 end
 
--- The specifications strip, once per lot (UEY's BarterDialog way: the
--- template cloned per spec, sized to its text).
-function TCAuctionLotDialog:showSpecs(lot)
-    for _, element in ipairs(self.specElements) do
+-- Whether a lot's machine (and its attachment, if it has one) has streamed
+-- in, with its own configurations rather than the store's defaults: what
+-- the card and the catalogue redraw on.
+function TCAuctionLotDialog.isLotStreamed(lot)
+    return getLotVehicle(lot.vehicleId) ~= nil and (lot.attachmentId == nil or getLotVehicle(lot.attachmentId) ~= nil)
+end
+
+-- A machine's configurations as the shop names them: { { title, value } },
+-- in the configuration manager's order. Only the ones the shop offers a
+-- choice of (one option is no news), never colours (a swatch, not a name),
+-- and only once the machine's streamed in: a lot's configurations aren't
+-- the store's defaults, so there's nothing to show until then.
+function TCAuctionLotDialog.getConfigurations(xmlFilename, vehicleId)
+    local vehicle = getLotVehicle(vehicleId)
+    local storeItem = xmlFilename ~= nil and g_storeManager:getItemByXMLFilename(xmlFilename) or nil
+    local manager = g_vehicleConfigurationManager
+    if vehicle == nil or storeItem == nil or storeItem.configurations == nil or manager == nil or
+            manager.getConfigurationDescByName == nil then
+        return {}
+    end
+    local names = {}
+    for configName, _ in pairs(storeItem.configurations) do
+        table.insert(names, configName)
+    end
+    local function order(name)
+        return manager.getConfigurationIndexByName ~= nil and manager:getConfigurationIndexByName(name) or 0
+    end
+    table.sort(names, function(a, b)
+        if order(a) ~= order(b) then
+            return order(a) < order(b)
+        end
+        return a < b
+    end)
+    local result = {}
+    for _, configName in ipairs(names) do
+        local desc = manager:getConfigurationDescByName(configName)
+        local isColor = desc ~= nil and desc.itemClass ~= nil and ConfigurationUtil ~= nil and
+            desc.itemClass.SELECTOR == ConfigurationUtil.SELECTOR_COLOR
+        local chosenIndex = vehicle.configurations[configName]
+        -- The title as the shop's (ShopConfigScreen): the first item's
+        -- overwritten one, or the configuration's own.
+        local selectable, chosen, overwrittenTitle = 0, nil, nil
+        for _, item in ipairs(storeItem.configurations[configName]) do
+            if item.isSelectable ~= false then
+                selectable = selectable + 1
+            end
+            if item.index == chosenIndex then
+                chosen = item
+            end
+            overwrittenTitle = overwrittenTitle or item.overwrittenTitle
+        end
+        local title = overwrittenTitle or (desc ~= nil and desc.title or nil)
+        if desc ~= nil and not isColor and selectable > 1 and chosen ~= nil and title ~= nil and title ~= "" and
+                chosen.name ~= nil and chosen.name ~= "" then
+            table.insert(result, { title = title, value = chosen.name })
+        end
+    end
+    return result
+end
+
+-- Fills a specifications layout from its hidden template (UEY's
+-- BarterDialog way: the template cloned per spec, sized to its text),
+-- deleting the last fill's elements first. The card's strip and the
+-- catalogue's column alike. Returns the new elements, for the next fill.
+function TCAuctionLotDialog.fillSpecs(layout, template, oldElements, lot)
+    for _, element in ipairs(oldElements or {}) do
         element:delete()
     end
-    self.specElements = {}
-    if self.specsLayout == nil or self.specTemplate == nil then
-        return
+    local elements = {}
+    if layout == nil or template == nil then
+        return elements
     end
     for _, spec in ipairs(TCAuctionLotDialog.getSpecs(lot)) do
-        local element = self.specTemplate:clone(self.specsLayout)
-        table.insert(self.specElements, element)
+        local element = template:clone(layout)
+        table.insert(elements, element)
         local icon = element:getDescendantByName("icon")
         if icon ~= nil then
             icon:applyProfile(spec.profile)
@@ -136,7 +205,13 @@ function TCAuctionLotDialog:showSpecs(lot)
             element:setSize(text.size[1] + icon.size[1] + 0.0025, text.size[2])
         end
     end
-    self.specsLayout:invalidateLayout()
+    layout:invalidateLayout()
+    return elements
+end
+
+-- The specifications strip, once per lot.
+function TCAuctionLotDialog:showSpecs(lot)
+    self.specElements = TCAuctionLotDialog.fillSpecs(self.specsLayout, self.specTemplate, self.specElements, lot)
 end
 
 function TCAuctionLotDialog:onOpen()

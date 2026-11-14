@@ -67,12 +67,15 @@ source(TheContractor.dir .. "src/util/TCYardMapAction.lua")
 source(TheContractor.dir .. "src/util/TCJoyriderRuts.lua")
 source(TheContractor.dir .. "src/util/TCBinBagSquash.lua")
 source(TheContractor.dir .. "src/util/TCDebris.lua")
+source(TheContractor.dir .. "src/util/TCFigures.lua")
 source(TheContractor.dir .. "src/util/TCAuctionCrowd.lua")
 source(TheContractor.dir .. "src/util/TCAuctionLayout.lua")
 source(TheContractor.dir .. "src/util/TCAuctionScene.lua")
 source(TheContractor.dir .. "src/util/TCAuctionProps.lua")
 source(TheContractor.dir .. "src/util/TCAuctionSigns.lua")
 source(TheContractor.dir .. "src/util/TCAuctionAttendance.lua")
+source(TheContractor.dir .. "src/util/TCProtestLayout.lua")
+source(TheContractor.dir .. "src/util/TCProtestCrowd.lua")
 source(TheContractor.dir .. "src/util/TCJobHotspots.lua")
 source(TheContractor.dir .. "src/util/TCJobHud.lua")
 source(TheContractor.dir .. "src/util/TCFarmDeletion.lua")
@@ -137,6 +140,7 @@ source(TheContractor.dir .. "src/business/SprayDrift.lua")
 source(TheContractor.dir .. "src/business/Poaching.lua")
 source(TheContractor.dir .. "src/business/Injury.lua")
 source(TheContractor.dir .. "src/business/FallenTree.lua")
+source(TheContractor.dir .. "src/business/Protest.lua")
 source(TheContractor.dir .. "src/business/CourtesyVehicle.lua")
 source(TheContractor.dir .. "src/business/RepairContracts.lua")
 source(TheContractor.dir .. "src/business/FieldBreakdowns.lua")
@@ -354,6 +358,9 @@ function TheContractor:loadMap()
     -- 107: a tree down across a road after bad weather.
     self.FallenTree = TheContractorFallenTree.new()
     self.FallenTree:register(self.RandomEvents, self.Inbox)
+    -- 151: locals protesting on the roads by the farm for a day.
+    self.Protest = TheContractorProtest.new()
+    self.Protest:register(self.RandomEvents, self.Inbox)
     -- 100: customers' machines in repair zones (ADS).
     self.RepairContracts = TheContractorRepairContracts.new()
     self.RepairContracts:register(self.Inbox)
@@ -526,6 +533,7 @@ function TheContractor:loadMap()
     TCIdleStaff.registerConsoleCommands()
     TCDebris.registerConsoleCommands()
     TCAuctionCrowd.registerConsoleCommands()
+    TheContractorProtest.registerConsoleCommands()
     TheContractorAuctionSite.registerConsoleCommands()
     TheContractorAuctionSigns.registerConsoleCommands()
     TheContractorAuctions.registerConsoleCommands()
@@ -875,6 +883,8 @@ function TheContractor:deleteMap()
     TCAuctionCrowd.reset()
     -- 140: and the auction site's dressing.
     TCAuctionProps.reset()
+    -- 151: a protest's people, placards, blocks and markers.
+    TCProtestCrowd.reset()
 
     TCConsole.uninstall()
     TCFarmDeletion.uninstall()
@@ -930,6 +940,11 @@ function TheContractor:update(dt)
     -- 107: fallen tree sites (every machine), cuts and clearing (server).
     if self.FallenTree ~= nil then
         self.FallenTree:update(dt)
+    end
+
+    -- 151: protests going out and ending (server).
+    if self.Protest ~= nil then
+        self.Protest:update(dt)
     end
 
     -- 106: where spills can be cleared up (every machine).
@@ -998,6 +1013,9 @@ function TheContractor:update(dt)
     -- 140: the auction site's props and crowd sound, following its scene
     -- (every machine; a server without a client loads only what collides).
     TCAuctionProps.update(dt)
+    -- 151: a protest's people and placards (clients), blocks (every
+    -- machine) and markers (its farm's players).
+    TCProtestCrowd.update(dt)
 
     -- 088: map markers on the fields of jobs due this month.
     TCJobHotspots.update(dt)
@@ -1013,6 +1031,8 @@ function TheContractor:draw()
     if self.AuctionSite ~= nil then
         self.AuctionSite:draw()
     end
+    -- 151: tcDebug protestShow's block outlines.
+    TCProtestCrowd.draw()
 end
 
 -- Every one of our events tells the menu its data may have changed
