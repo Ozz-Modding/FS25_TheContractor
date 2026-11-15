@@ -5,7 +5,8 @@
 -- so it goes by distance rather than by standing inside it). It opens 086's
 -- TCParkingSlotDialog with SPOT_ADAPTER: the farm's workers and office
 -- staff, those standing on the spot now first. Built like
--- TCParkingSlotActivatable; the nearer prompt wins.
+-- TCParkingSlotActivatable; the nearer prompt wins. A seat spot (153) is a
+-- standing spot too, and says "sits" rather than "stands".
 
 TCStandingSpotActivatable = {}
 local TCStandingSpotActivatable_mt = Class(TCStandingSpotActivatable)
@@ -16,11 +17,11 @@ TCStandingSpotActivatable.ACTIVATE_DISTANCE = 2
 TCStandingSpotActivatable.SPOT_ADAPTER = {
     headingKey = "tc_standingSpot_dialogHeading",
     emptyKey = "tc_standingSpot_nothingToPick",
-    getTitle = function()
-        return g_i18n:getText("tc_standingSpot_dialogTitle")
+    getTitle = function(spot)
+        return g_i18n:getText(TCStandingSpotActivatable.getTextKey(spot, "dialogTitle"))
     end,
     getHint = function(spot)
-        return g_i18n:getText("tc_standingSpot_dialogHint")
+        return g_i18n:getText(TCStandingSpotActivatable.getTextKey(spot, "dialogHint"))
     end,
     getFilter = function(spot)
         return PlaceableTCStandingSpot.getFilter(spot)
@@ -42,6 +43,15 @@ TCStandingSpotActivatable.SPOT_ADAPTER = {
             filter))
     end,
 }
+
+-- A seat spot's own text where it has one: tc_seatSpot_<suffix>, else
+-- tc_standingSpot_<suffix>.
+function TCStandingSpotActivatable.getTextKey(spot, suffix)
+    if spot ~= nil and PlaceableTCSeatSpot.isSeat(spot) then
+        return "tc_seatSpot_" .. suffix
+    end
+    return "tc_standingSpot_" .. suffix
+end
 
 -- The farm's staff, in a list: { person, isOffice }.
 function TCStandingSpotActivatable.getStaff(farmId)
@@ -178,6 +188,9 @@ function TCStandingSpotActivatable:getIsActivatable()
     end
     local x, _, z = player:getPosition()
     self.spot = TCStandingSpotActivatable.getOwnSpotNear(x, z)
+    if self.spot ~= nil then
+        self.activateText = g_i18n:getText(TCStandingSpotActivatable.getTextKey(self.spot, "activate"))
+    end
     return self.spot ~= nil
 end
 

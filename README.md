@@ -38,7 +38,7 @@ Run your farm as an agricultural contracting business in Farming Simulator 25. T
 - Notice and redundancy pay when you let someone go
 - Spraying certificates and paid training
 - Each worker has their own look, a live 3D portrait, and can be renamed and restyled
-- Idle staff stand around the yard on placeable **standing spots**. Stand by one and press the activate key to keep it for particular staff. Like parking slots, they show in the construction menu, or everywhere with Show parking slots (Right Ctrl+P)
+- Idle staff stand around the yard on placeable **standing spots**, or sit on placeable **seats** (a wooden chair, rocking chair or armchair, chosen as you place it). Stand by one and press the activate key to keep it for particular staff. Like parking slots, they show in the construction menu, or everywhere with Show parking slots (Right Ctrl+P)
 - AutoDrive, Courseplay and Follow Me vehicles get a driver from your staff
 
 ### Running the business

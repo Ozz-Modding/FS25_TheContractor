@@ -9,6 +9,7 @@ local function setup()
     dofile("src/business/WorkingHours.lua")
     dofile("src/placeables/PlaceableTCParkingSlot.lua")
     dofile("src/placeables/PlaceableTCStandingSpot.lua")
+    dofile("src/placeables/PlaceableTCSeatSpot.lua")
     dofile("src/util/TCIdleStaff.lua")
 
     -- Stand nodes are plain tables holding their position and facing.

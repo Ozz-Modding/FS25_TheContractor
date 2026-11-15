@@ -18,10 +18,11 @@
         <sourceFile filename="src/main.lua"/>
     </extraSourceFiles>
 
-    <!-- 062: parking slots. 065: standing spots. 100: repair zones. 146: yard centre markers. -->
+    <!-- 062: parking slots. 065: standing spots. 100: repair zones. 146: yard centre markers. 153: seat spots. -->
     <placeableSpecializations>
         <specialization name="tcParkingSlot" className="PlaceableTCParkingSlot" filename="src/placeables/PlaceableTCParkingSlot.lua" />
         <specialization name="tcStandingSpot" className="PlaceableTCStandingSpot" filename="src/placeables/PlaceableTCStandingSpot.lua" />
+        <specialization name="tcSeatSpot" className="PlaceableTCSeatSpot" filename="src/placeables/PlaceableTCSeatSpot.lua" />
         <specialization name="tcYardCentre" className="PlaceableTCYardCentre" filename="src/placeables/PlaceableTCYardCentre.lua" />
         <specialization name="tcDisposalSkip" className="PlaceableTCDisposalSkip" filename="src/placeables/PlaceableTCDisposalSkip.lua" />
         <specialization name="tcLogoSign" className="PlaceableTCLogoSign" filename="src/placeables/PlaceableTCLogoSign.lua" />
@@ -35,6 +36,11 @@
         <type name="tcStandingSpot" parent="placeable" className="Placeable" filename="$dataS/scripts/placeables/Placeable.lua">
             <specialization name="placement" />
             <specialization name="tcStandingSpot" />
+        </type>
+        <type name="tcSeatSpot" parent="placeable" className="Placeable" filename="$dataS/scripts/placeables/Placeable.lua">
+            <specialization name="placement" />
+            <specialization name="tcStandingSpot" />
+            <specialization name="tcSeatSpot" />
         </type>
         <type name="tcYardCentre" parent="placeable" className="Placeable" filename="$dataS/scripts/placeables/Placeable.lua">
             <specialization name="placement" />
@@ -62,6 +68,7 @@
         <storeItem xmlFilename="xml/parkingSlotImplementLarge.xml" />
         <storeItem xmlFilename="xml/parkingSlotHarvester.xml" />
         <storeItem xmlFilename="xml/standingSpot.xml" />
+        <storeItem xmlFilename="xml/seatSpot.xml" />
         <storeItem xmlFilename="xml/yardCentre.xml" />
         <storeItem xmlFilename="xml/disposalSkip.xml" />
         <storeItem xmlFilename="xml/logoSign.xml" />
