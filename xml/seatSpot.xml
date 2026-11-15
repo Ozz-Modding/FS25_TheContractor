@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8" standalone="no" ?>
+<!--
+    153 seat spot: a standing spot (065) with a chair, where an idle worker
+    is shown sitting (src/placeables/PlaceableTCSeatSpot.lua,
+    src/util/TCSeatedFigure.lua). The standing spot's own i3d: its decals
+    show only in the construction menu, the chair sits on standNode facing
+    the arrow (+Z), and the blocker stays in physics (keepBlocker). The
+    chair type is a configuration: each saveId names a TCSeatTypes entry
+    (src/util/TCSeatTypes.lua), the base-game model and how to sit on it.
+-->
+<placeable type="FS25_TheContractor.tcSeatSpot">
+    <storeData>
+        <name>$l10n_tc_seatSpot_name</name>
+        <functions>
+            <function>$l10n_tc_seatSpot_function</function>
+        </functions>
+        <image>images/store/seatSpot.dds</image>
+        <price>0</price>
+        <dailyUpkeep>0</dailyUpkeep>
+        <lifetime>1000</lifetime>
+        <rotation>0</rotation>
+        <brand>NONE</brand>
+        <species>PLACEABLE</species>
+        <category>misc</category>
+        <canBeSold>true</canBeSold>
+        <showInStore>true</showInStore>
+
+        <brush>
+            <type>placeable</type>
+            <category>buildings</category>
+            <tab>contractor</tab>
+        </brush>
+    </storeData>
+
+    <base>
+        <filename>i3d/standingSpot.i3d</filename>
+        <canBeRenamed>false</canBeRenamed>
+        <boughtWithFarmland>false</boughtWithFarmland>
+    </base>
+
+    <placement useRandomYRotation="false" useManualYRotation="true">
+        <testAreas>
+            <testArea startNode="testAreaStart" endNode="testAreaEnd" />
+        </testAreas>
+        <sounds>
+            <place template="smallImp" />
+        </sounds>
+    </placement>
+
+    <standingSpot startNode="areaStart" widthNode="areaWidth" heightNode="areaHeight" visualsNode="visuals"
+        standNode="standNode" blockerNode="blocker" keepBlocker="true" />
+
+    <tcSeatTypeConfigurations title="$l10n_tc_config_seatType">
+        <tcSeatTypeConfiguration name="$l10n_tc_seatType_lobbyArmchair" saveId="lobbyArmchair" isDefault="true" />
+        <tcSeatTypeConfiguration name="$l10n_tc_seatType_woodenChair" saveId="woodenChair" />
+        <tcSeatTypeConfiguration name="$l10n_tc_seatType_rockingChair" saveId="rockingChair" />
+    </tcSeatTypeConfigurations>
+
+    <i3dMappings>
+        <i3dMapping id="standingSpot" node="0>" />
+        <i3dMapping id="areaStart" node="0>0" />
+        <i3dMapping id="areaWidth" node="0>1" />
+        <i3dMapping id="areaHeight" node="0>2" />
+        <i3dMapping id="testAreaStart" node="0>3|0" />
+        <i3dMapping id="testAreaEnd" node="0>3|0|0" />
+        <i3dMapping id="pickCollision" node="0>4" />
+        <i3dMapping id="visuals" node="0>5" />
+        <i3dMapping id="standNode" node="0>6" />
+        <i3dMapping id="blocker" node="0>7" />
+    </i3dMappings>
+</placeable>

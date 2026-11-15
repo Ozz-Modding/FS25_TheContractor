@@ -37,6 +37,11 @@
 -- drops out of view, and turns up again the same way in the morning. The
 -- time of day is vanilla's, synced to every machine, and so is the duty
 -- that keeps someone on.
+--
+-- A seat spot (153, PlaceableTCSeatSpot) is a standing spot with a chair:
+-- it's in the same assignment, and whoever's on it is shown sitting
+-- (TCSeatedFigure, posed on the chair's seat) instead of standing. A
+-- sitter doesn't turn to face the player.
 
 TCIdleStaff = {}
 
@@ -207,7 +212,8 @@ end
 
 -- Who should stand where right now: workerId -> { worker, spot }, spot
 -- being { key, placeable, x, y, z, yaw, keptFor (120: set of ids, or nil
--- if open) }.
+-- if open), seat (153: PlaceableTCSeatSpot.getSeat's, or nil on a standing
+-- spot) }.
 function TCIdleStaff.getWanted()
     local wanted = {}
     local mission = g_currentMission
@@ -225,7 +231,8 @@ function TCIdleStaff.getWanted()
                 local farmId = placeable:getOwnerFarmId()
                 spotsByFarm[farmId] = spotsByFarm[farmId] or {}
                 local key = TCIdleStaff.getSpotKey(x, z)
-                spotsByFarm[farmId][key] = { key = key, placeable = placeable, x = x, y = y, z = z, yaw = yaw }
+                spotsByFarm[farmId][key] = { key = key, placeable = placeable, x = x, y = y, z = z, yaw = yaw,
+                    seat = PlaceableTCSeatSpot.getSeat(placeable) }
             end
         end
     end
@@ -348,7 +355,11 @@ local function setFigureVisible(figure, isVisible)
     end
 end
 
+-- A sitter hangs from the chair's own nodes, so only a stander is placed.
 local function placeModel(figure)
+    if figure.spot.seat ~= nil then
+        return
+    end
     figure.graphics:setModelPosition(figure.spot.x, figure.spot.y, figure.spot.z)
     figure.graphics:setModelYaw(figure.yaw)
 end
@@ -359,6 +370,11 @@ function TCIdleStaff.loadModel(id, figure, noStyle)
     local style = TCWorkerAppearance.getPlayerStyle(figure.person)
     if style == nil then
         noStyle[id] = true
+        return
+    end
+
+    if figure.spot.seat ~= nil then
+        TCIdleStaff.loadSeatedModel(id, figure, noStyle, style)
         return
     end
 
@@ -387,6 +403,27 @@ function TCIdleStaff.loadModel(id, figure, noStyle)
             noStyle[id] = true
         end
     end, nil, nil, true)
+end
+
+-- 153: the same for someone sitting on a seat spot's chair.
+function TCIdleStaff.loadSeatedModel(id, figure, noStyle, style)
+    local seat = figure.spot.seat
+    local graphics = TCSeatedFigure.new(seat.node, seat.type)
+    figure.graphics = graphics
+    figure.isReady = false
+    figure.isVisible = false
+    graphics:load(style, function(isLoaded)
+        if figure.graphics ~= graphics then
+            return
+        end
+        if isLoaded then
+            figure.isReady = true
+        else
+            TCLog.warning("TheContractor: couldn't load the look of #%d (%s) to sit them down", id,
+                figure.person.name)
+            noStyle[id] = true
+        end
+    end)
 end
 
 function TCIdleStaff.freeModel(figure)
@@ -503,9 +540,13 @@ function TCIdleStaff.updateModel(id, figure, noStyle, dt, cx, cy, cz)
             setFigureVisible(figure, false)
         else
             setFigureVisible(figure, true)
-            figure.graphics:defaultAllParameters()
-            figure.graphics:update(dt)
-            updateFacing(figure, dt)
+            if figure.spot.seat ~= nil then
+                figure.graphics:update(dt)
+            else
+                figure.graphics:defaultAllParameters()
+                figure.graphics:update(dt)
+                updateFacing(figure, dt)
+            end
         end
     end
 end
@@ -560,12 +601,15 @@ function TCIdleStaff.describe(farmId)
         cx, cy, cz = getWorldTranslation(camera)
     end
 
-    local spotCount, keptCount = 0, 0
+    local spotCount, seatCount, keptCount = 0, 0, 0
     if mission.placeableSystem ~= nil then
         for _, placeable in ipairs(mission.placeableSystem.placeables) do
             if PlaceableTCStandingSpot.isSpot(placeable) and not placeable.isDeleted and
                     placeable:getOwnerFarmId() == farmId then
                 spotCount = spotCount + 1
+                if PlaceableTCSeatSpot.isSeat(placeable) then
+                    seatCount = seatCount + 1
+                end
                 if TCIdleStaff.getKeptFor(mission.TheContractor, farmId, placeable) ~= nil then
                     keptCount = keptCount + 1
                 end
@@ -573,8 +617,8 @@ function TCIdleStaff.describe(farmId)
         end
     end
 
-    local lines = { string.format("Farm %d: %d standing spot(s), %d kept for named staff, day %d", farmId,
-        spotCount, keptCount, mission.environment.currentMonotonicDay or 0) }
+    local lines = { string.format("Farm %d: %d standing spot(s), %d seat(s), %d kept for named staff, day %d",
+        farmId, spotCount - seatCount, seatCount, keptCount, mission.environment.currentMonotonicDay or 0) }
     local now = TheContractorWorkingHours.getNow()
     if not TheContractorWorkingHours.isWorkingTime(now) then
         table.insert(lines, string.format("Outside working hours (%02d:00-%02d:00): only staff kept on are about",
@@ -594,7 +638,7 @@ function TCIdleStaff.describe(farmId)
             text = "no spot free"
         else
             local spot = entry.spot
-            text = string.format("wants spot %s%s, %.0f m away", spot.key,
+            text = string.format("wants %s %s%s, %.0f m away", spot.seat ~= nil and "seat" or "spot", spot.key,
                 spot.keptFor ~= nil and " (kept for them)" or "", getDistance(spot, cx, cy, cz))
             if figure == nil then
                 local holder = TCIdleStaff.occupied[spot.key]
@@ -607,17 +651,20 @@ function TCIdleStaff.describe(farmId)
                 end
             elseif figure.spot.key ~= spot.key then
                 text = text .. string.format(", still on spot %s until you look away", figure.spot.key)
-            elseif TCIdleStaff.noStyle[worker.id] then
-                text = text .. ", standing, but their look couldn't be loaded"
-            elseif figure.graphics == nil then
-                text = text .. string.format(", standing, model not loaded (loads within %d m)",
-                    TCIdleStaff.LOAD_DISTANCE)
-            elseif not figure.isReady then
-                text = text .. ", standing, model loading"
-            elseif figure.isVisible then
-                text = text .. ", standing, shown"
             else
-                text = text .. ", standing, hidden (too far)"
+                local doing = figure.spot.seat ~= nil and "sitting" or "standing"
+                if TCIdleStaff.noStyle[worker.id] then
+                    text = text .. string.format(", %s, but their look couldn't be loaded", doing)
+                elseif figure.graphics == nil then
+                    text = text .. string.format(", %s, model not loaded (loads within %d m)", doing,
+                        TCIdleStaff.LOAD_DISTANCE)
+                elseif not figure.isReady then
+                    text = text .. string.format(", %s, model loading", doing)
+                elseif figure.isVisible then
+                    text = text .. string.format(", %s, shown", doing)
+                else
+                    text = text .. string.format(", %s, hidden (too far)", doing)
+                end
             end
         end
         table.insert(lines, string.format("#%d %s - %s", worker.id, worker.name, text))
@@ -627,7 +674,7 @@ end
 
 function TCIdleStaff.registerConsoleCommands()
     TCConsole.register("debug", "standing", {
-        description = "Show who's standing on your standing spots, and why anyone isn't",
+        description = "Show who's standing on your standing spots or sitting on your seats, and why anyone isn't",
         serverOnly = false,
         run = function(farmId)
             return TCIdleStaff.describe(farmId)

@@ -28,6 +28,10 @@
 -- TCStandingSpotFilterEvent. Staff ids never change, so unlike a slot's
 -- machines nothing needs resolving after a load.
 --
+-- Seat spots (153) are standing spots too: their placeable type adds
+-- PlaceableTCSeatSpot (the chair) to this specialization, and keeps the
+-- blocker in physics (#keepBlocker).
+--
 -- Loaded by the base game's placeable specialization manager (modDesc), not
 -- sourced by main.lua.
 
@@ -50,6 +54,8 @@ function PlaceableTCStandingSpot.registerXMLPaths(schema, basePath)
         "Where the worker stands, facing +Z")
     schema:register(XMLValueType.NODE_INDEX, basePath .. ".standingSpot#blockerNode",
         "Player collision, in physics only while someone's standing there")
+    schema:register(XMLValueType.BOOL, basePath .. ".standingSpot#keepBlocker",
+        "Keep the blocker in physics even with nobody there (153's seat spots: the chair's always there)", false)
     schema:setXMLSpecializationType()
 end
 
@@ -76,6 +82,7 @@ function PlaceableTCStandingSpot:onLoad(savegame)
         standNode = xmlFile:getValue("placeable.standingSpot#standNode", nil, self.components, self.i3dMappings),
         blockerNode = xmlFile:getValue("placeable.standingSpot#blockerNode", nil, self.components, self.i3dMappings),
         isBlockerActive = true,
+        keepBlocker = xmlFile:getValue("placeable.standingSpot#keepBlocker", false),
         filter = PlaceableTCStandingSpot.newFilter(),
     }
     self[PlaceableTCStandingSpot.KEY] = data
@@ -103,6 +110,10 @@ function PlaceableTCStandingSpot.setBlockerActive(placeable, isActive)
     local data = placeable[PlaceableTCStandingSpot.KEY]
     if data == nil or data.blockerNode == nil or data.isBlockerActive == isActive or
             not entityExists(data.blockerNode) then
+        return
+    end
+    -- 153: a seat spot's chair is there whether anyone's sitting or not.
+    if not isActive and data.keepBlocker then
         return
     end
     if isActive then

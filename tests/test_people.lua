@@ -20,6 +20,7 @@ local function setup()
     world:load("src/util/TCWorkerAppearance.lua")
     world:load("src/business/FarmerSplit.lua")
     world:load("src/business/Farmers.lua")
+    world:load("src/placeables/PlaceableTCSeatSpot.lua")
     world:load("src/util/TCIdleStaff.lua")
     world:load("src/util/TCYardFarmers.lua")
     TheContractorLogbook = nil

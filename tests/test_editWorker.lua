@@ -12,6 +12,7 @@ local function setup()
     world:load("src/business/Staff.lua")
     world:load("src/placeables/PlaceableTCParkingSlot.lua")
     world:load("src/placeables/PlaceableTCStandingSpot.lua")
+    world:load("src/placeables/PlaceableTCSeatSpot.lua")
     world:load("src/util/TCIdleStaff.lua")
     world:load("src/util/TCConsole.lua")
 

@@ -119,7 +119,7 @@ function TCParkingSlotDialog:onOpen()
     self.rows = (self.adapter.getRows or TCParkingSlotDialog.getRows)(self.adapter, self.slot, self.farmId, filter)
 
     if self.titleText ~= nil then
-        self.titleText:setText(self.adapter.getTitle())
+        self.titleText:setText(self.adapter.getTitle(self.slot))
     end
     self.hintText:setText(self.adapter.getHint(self.slot))
     self.emptyText:setText(g_i18n:getText(self.adapter.emptyKey or "tc_parkingSlot_nothingToPick"))

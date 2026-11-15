@@ -930,6 +930,15 @@
 		<text name="tc_standingSpot_kind_worker" text="Worker"/>
 		<text name="tc_standingSpot_kind_office" text="Office"/>
 		<text name="tc_standingSpot_nothingToPick" text="Your company has no staff yet."/>
+		<text name="tc_seatSpot_name" text="Seat"/>
+		<text name="tc_seatSpot_function" text="A chair for one of your staff to sit on while they've nothing on, facing the arrow. Choose the chair as you place it, and stand by a placed seat to choose who sits there. The arrow is only visible in the construction menu, unless you turn on Show parking slots (Right Ctrl+P)."/>
+		<text name="tc_seatSpot_activate" text="Choose who sits here"/>
+		<text name="tc_seatSpot_dialogTitle" text="Seat"/>
+		<text name="tc_seatSpot_dialogHint" text="Tick staff to keep this seat for them. Only they will sit here, and they use it before any open seat or standing spot. Tick nobody to let anyone sit here."/>
+		<text name="tc_config_seatType" text="Chair"/>
+		<text name="tc_seatType_woodenChair" text="Wooden chair"/>
+		<text name="tc_seatType_rockingChair" text="Rocking chair"/>
+		<text name="tc_seatType_lobbyArmchair" text="Armchair"/>
 		<text name="tc_yardCentre_name" text="Yard Centre Marker"/>
 		<text name="tc_yardCentre_function" text="Marks where a farmer's yard really is, so the farmer stands around here. Place it on open ground in a yard that no player owns, one per yard (host or admin only). Mark a farmland as a yard first from its box on the map. Only visible in the construction menu, unless you turn on Show parking slots (Right Ctrl+P)."/>
 		<text name="tc_yardCentre_noPermission" text="Only the host or an admin can mark a yard's centre"/>
