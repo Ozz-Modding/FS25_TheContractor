@@ -453,6 +453,22 @@ function TheContractor:loadMap()
     TheContractorDrivers.installHooks()
 
     g_gui:loadProfiles(TheContractor.dir .. "src/gui/guiProfiles.xml")
+    -- The help pages' icons (modDesc's helpLines, tcHelpIcons.<page>).
+    -- g_overlayManager outlives a savegame, so a second load in the same
+    -- session finds them there already (and vanilla would warn).
+    if g_overlayManager.textureConfigs == nil or g_overlayManager.textureConfigs.tcHelpIcons == nil then
+        g_overlayManager:addTextureConfigFile(TheContractor.dir .. "xml/helpIcons.xml", "tcHelpIcons")
+        -- Vanilla joins the config's <filename> (../images/helpIcons.dds)
+        -- onto the config's folder as it stands, so put the plain path in.
+        local config = g_overlayManager.textureConfigs ~= nil and g_overlayManager.textureConfigs.tcHelpIcons or nil
+        if config ~= nil then
+            local imageFilename = TheContractor.dir .. "images/helpIcons.dds"
+            config.imageFilename = imageFilename
+            for _, slice in pairs(config.slices or {}) do
+                slice.filename = imageFilename
+            end
+        end
+    end
     TCAdvertisingDialog.register()
     TCDriverPickerDialog.register()
     TCEditPersonDialog.register()

@@ -1704,5 +1704,373 @@
 		<text name="tc_supplies_condition" text="Condition"/>
 		<text name="tc_supplies_chipUsed" text="Used"/>
 		<text name="tc_supplies_chipNew" text="New"/>
+		<!-- Help pages (modDesc's helpLines) -->
+		<text name="tc_help_cat_start" text="Getting started"/>
+		<text name="tc_help_company_title" text="Starting a company"/>
+		<text name="tc_help_company_1" text="The Contractor turns your farm into an agricultural contracting business. The base game's contracts are switched off: work comes from the local farmers instead, as job offers to your company."/>
+		<text name="tc_help_company_2_title" text="Creating it"/>
+		<text name="tc_help_company_2" text="Open the in-game menu and go to the Contractor page. On the Overview tab, choose Create Company and give it a name. There's a small fee. Each farm has its own company, so in multiplayer every farm runs its own business."/>
+		<text name="tc_help_company_3_title" text="First steps"/>
+		<text name="tc_help_company_3" text="Hire a few workers from the People tab, or plan to do the work yourself. Check Finances, Overheads to make sure you have the insurance you need. Then buy some advertising from the Overview tab to get your name known. Offers arrive in the Inbox."/>
+		<text name="tc_help_company_4_title" text="Around the yard"/>
+		<text name="tc_help_company_4" text="From the construction menu's Contractor tab, place parking slots for machines coming back from jobs, and standing spots or seats where idle staff wait. Without parking slots, machines back from a job have nowhere to go."/>
+		<text name="tc_help_company_5_title" text="Your stock"/>
+		<text name="tc_help_company_5" text="Jobs take seed, fertiliser, herbicide, lime and diesel from your own farm's stock, so keep some in. The Supplies tab shows what you have."/>
+		<text name="tc_help_menu_title" text="The Contractor menu"/>
+		<text name="tc_help_menu_1" text="Everything is run from the Contractor page of the in-game menu. Its tabs are along the top, and each tab's actions are in the button bar at the bottom: they act on the highlighted row."/>
+		<text name="tc_help_menu_2_title" text="Overview"/>
+		<text name="tc_help_menu_2" text="Your company, its reputation and rank, your advertising, the jobs under way and the Important board: anything that needs your attention, such as machines waiting for parking or jobs on hold."/>
+		<text name="tc_help_menu_3_title" text="Inbox, Jobs and People"/>
+		<text name="tc_help_menu_3" text="Inbox holds job offers and messages that ask you something. Jobs lists the work you've taken on and is where you allocate it. People has your staff, the candidates you could hire and the area's farmers."/>
+		<text name="tc_help_menu_4_title" text="Finances, Logbook and Supplies"/>
+		<text name="tc_help_menu_4" text="Finances has your invoices, cash flow and overheads. Logbook records every finished job and every machine's history. Supplies shows the stock your jobs draw on."/>
+		<text name="tc_help_menu_5_title" text="Auction and Workshop"/>
+		<text name="tc_help_menu_5" text="The Auction tab only appears while a machinery auction is on its field. The Workshop tab is only there with Advanced Damage System installed, for customers' machines you're repairing."/>
+		<text name="tc_help_reputation_title" text="Reputation and advertising"/>
+		<text name="tc_help_reputation_1" text="Reputation is what the area thinks of your company. It brings more offers, bigger fields and better rates, and it unlocks bigger adverts. It never fades, but it can't fall below zero."/>
+		<text name="tc_help_reputation_2_title" text="How it moves"/>
+		<text name="tc_help_reputation_2" text="Every completed job earns reputation, and the better the job's quality the more it earns: only a perfect job gets the full reward. Failed jobs, claims, accidents and complaints knock it back."/>
+		<text name="tc_help_reputation_3_title" text="Ranks"/>
+		<text name="tc_help_reputation_3" text="Your rank follows your reputation, from Unknown Contractor through Local, Established, Regional and Renowned to Prestigious Contractor. Each step is a good deal further than the last. The Overview shows how close the next rank is."/>
+		<text name="tc_help_reputation_4_title" text="Advertising"/>
+		<text name="tc_help_reputation_4" text="Buy a campaign from the Overview tab, for 1 to 12 months. A local newspaper is open to anyone; regional and national magazines and online ads unlock as your rank grows. Adverts bring more offers, not bigger ones, and they work better the better known you are."/>
+		<text name="tc_help_reputation_5_title" text="Running campaigns"/>
+		<text name="tc_help_reputation_5" text="You can only run one campaign at a time. Buying the same one again isn't possible until it ends, and buying a different one replaces it at once: the days left on the old one are lost."/>
+		<text name="tc_help_offers_title" text="Job offers and the Inbox"/>
+		<text name="tc_help_offers_1" text="Job offers arrive in the Inbox, with a notification. Each shows the field, what's to be done, when it's due, the price and the customer. Offers are matched to the machines you own, and the Equipment needed list says whether you have each one."/>
+		<text name="tc_help_offers_2_title" text="Answering an offer"/>
+		<text name="tc_help_offers_2" text="Accept it, Decline it, or make a Counter Offer. Leaving an offer to run out, or turning it down, wears down your relationship with that customer."/>
+		<text name="tc_help_offers_3_title" text="Negotiating"/>
+		<text name="tc_help_offers_3" text="A counter offer can be accepted, met with a counter of their own, or end the talks. Push too hard and they walk away. A customer who thinks well of you gives more ground."/>
+		<text name="tc_help_offers_4_title" text="Booked ahead"/>
+		<text name="tc_help_offers_4" text="Some offers are for crops that aren't ready yet, such as a harvest. They show the day the work can start, and can't be allocated before then."/>
+		<text name="tc_help_offers_5_title" text="Messages"/>
+		<text name="tc_help_offers_5" text="Messages ask you something: an insurance renewal, a holiday request, a pay review, a claim. Each has its own buttons. Most have a reply-by date; leaving one unanswered has a result of its own, which the message explains."/>
+		<text name="tc_help_settings_title" text="Settings"/>
+		<text name="tc_help_settings_1" text="The mod's settings are in the game's own Settings page, under The Contractor. Only the host or an admin can change most of them, and they apply to everyone on the server."/>
+		<text name="tc_help_settings_2_title" text="Business"/>
+		<text name="tc_help_settings_2" text="Job pay rate scales what new offers pay (100% is half the base game's contract pay); business costs such as insurance, training, claims and fines scale with it, but staff pay doesn't. Late/unpaid invoices switches customers paying late on or off. Random events can be Normal, Rare or Off."/>
+		<text name="tc_help_settings_3_title" text="People"/>
+		<text name="tc_help_settings_3" text="Staff name style picks where new staff's names come from. Farmer retirements (off by default) lets farmers retire and hand their farm on. With Advanced Damage System there are also your usual repair margins, for repair zones and field breakdowns."/>
+		<text name="tc_help_settings_4_title" text="Just for you"/>
+		<text name="tc_help_settings_4" text="Show parking slots and Job progress bars are your own preferences and aren't shared. Right Ctrl+P shows or hides the parking slot markings at any time."/>
+		<text name="tc_help_settings_5_title" text="Console"/>
+		<text name="tc_help_settings_5" text="Type tcHelp in the developer console for the mod's commands, for tailoring your game. They're listed in the mod's documentation."/>
+		<text name="tc_help_cat_jobs" text="Jobs"/>
+		<text name="tc_help_jobTypes_title" text="Kinds of work"/>
+		<text name="tc_help_jobTypes_1" text="Offers cover all the base game's field work: harvesting, mowing, tedding, baling, wrapping, cultivating, plowing, sowing and planting, fertilising, spraying herbicide, weeding, hoeing, stone picking and spreading lime."/>
+		<text name="tc_help_jobTypes_2_title" text="Harvest and haul"/>
+		<text name="tc_help_jobTypes_2" text="The crop belongs to the customer and has to reach the selling point named in the offer. It takes two workers, one harvesting and one hauling, or you can do the lot yourself. The crop can't be unloaded anywhere but there."/>
+		<text name="tc_help_jobTypes_3_title" text="Bales"/>
+		<text name="tc_help_jobTypes_3" text="Bale and deliver means baling the straw and taking the bales to a buyer; only you can do it. Deliver straw means collecting bales already on the field and delivering them."/>
+		<text name="tc_help_jobTypes_4_title" text="Other work"/>
+		<text name="tc_help_jobTypes_4" text="Some jobs come from things that happen: clearing fly-tipping or fallen trees, plowing up a field joyriders have torn up, or helping a farmer out. These are covered in their own pages."/>
+		<text name="tc_help_jobTypes_5_title" text="Who can do it"/>
+		<text name="tc_help_jobTypes_5" text="The offer's Crew row says whether a worker can do it, whether it takes two, or whether it's yours alone. Herbicide work needs a worker with a spraying certificate."/>
+		<text name="tc_help_planning_title" text="The Jobs tab"/>
+		<text name="tc_help_planning_1" text="The Jobs tab lists everything you've taken on. Ready now shows work that can be done today, soonest due first. Upcoming shows work that isn't ready yet, such as a harvest, by the day it can start."/>
+		<text name="tc_help_planning_2_title" text="Job Details"/>
+		<text name="tc_help_planning_2" text="Job Details shows the job's crew, equipment, status and progress. The Allocation column shows who's on each job."/>
+		<text name="tc_help_planning_3_title" text="On the map"/>
+		<text name="tc_help_planning_3" text="A job that's due has the game's flashing contract circle on its field, so you can find it. While your job is on a field, the farmer leaves it to you."/>
+		<text name="tc_help_planning_4_title" text="Progress"/>
+		<text name="tc_help_planning_4" text="Progress is read from the field itself, whoever is driving. Job progress bars on screen can be shown for your own jobs, all of them or none (Settings)."/>
+		<text name="tc_help_planning_5_title" text="Due dates"/>
+		<text name="tc_help_planning_5" text="A job not finished by the end of its due day fails. See Quality, pay and failed jobs."/>
+		<text name="tc_help_allocating_title" text="Allocating a crew"/>
+		<text name="tc_help_allocating_1" text="To get a job done, highlight it on the Jobs tab and choose Allocate. Pick a worker (or Do It Myself) and the machines to take: a tractor and implement, a harvester and header, and for harvest and haul a haulage tractor and trailer."/>
+		<text name="tc_help_allocating_2_title" text="Warnings"/>
+		<text name="tc_help_allocating_2" text="The dialog warns you about anything wrong: a worker short of the skill the job needs (expect lower quality and extra wear), no certificate, missing supplies, a machine that needs emptying or a service first. Machines that are busy, in use or still on their way back can't be picked."/>
+		<text name="tc_help_allocating_3_title" text="Off they go"/>
+		<text name="tc_help_allocating_3" text="A hired worker drives the base game's AI helper out to the field, does the work and comes back. While they're away, the machines are out of the yard and can't be used or sold."/>
+		<text name="tc_help_allocating_4_title" text="Stuck workers"/>
+		<text name="tc_help_allocating_4" text="A worker who gets stuck is reset and sent off again. If that doesn't work, you're told it needs your attention."/>
+		<text name="tc_help_allocating_5_title" text="Unallocating"/>
+		<text name="tc_help_allocating_5" text="Unallocate in Job Details takes the crew off. The work done stays done and the job goes back to waiting for a crew. If they'd already left, they and their machines need time to come back first."/>
+		<text name="tc_help_doItYourself_title" text="Doing it yourself"/>
+		<text name="tc_help_doItYourself_1" text="Choose Do It Myself when allocating to drive a job yourself, with your own choice of machines. Some jobs are for you alone, and you're treated as fully skilled and certified."/>
+		<text name="tc_help_doItYourself_2_title" text="The field"/>
+		<text name="tc_help_doItYourself_2" text="As with a base game contract, your machines only work the job's field while the job's on. Once it's finished, the field stays open to you for ten minutes so you can tidy up the last bits."/>
+		<text name="tc_help_doItYourself_3_title" text="Your company's drivers"/>
+		<text name="tc_help_doItYourself_3" text="With a company, a vehicle driven by an AI helper, AutoDrive, Courseplay or Follow Me needs one of your staff behind the wheel. Starting one asks you to pick an idle worker. They're already on a salary, so there's no hourly helper wage, and driving gives them experience."/>
+		<text name="tc_help_doItYourself_4_title" text="Machines on a job"/>
+		<text name="tc_help_doItYourself_4" text="Machines out on a contract job can't be driven by AI helpers, AutoDrive, Courseplay or Follow Me until they're back."/>
+		<text name="tc_help_quality_title" text="Quality, pay and failed jobs"/>
+		<text name="tc_help_quality_1" text="Every finished job gets a quality score, shown in the completion notification and the Logbook. Quality decides how much reputation the job earns and how the customer feels about you."/>
+		<text name="tc_help_quality_2_title" text="What makes quality"/>
+		<text name="tc_help_quality_2" text="Skill to spare for the work, the crew's morale, the machines' condition, a clean run without getting stuck, and a bit of luck on the day. A worker short of the skill needed does a poorer job and wears the machines harder. 100% is rare."/>
+		<text name="tc_help_quality_3_title" text="Getting paid"/>
+		<text name="tc_help_quality_3" text="A finished job is invoiced at the agreed price, and the customer pays later: see Invoices and late payers. With late invoices switched off, it's paid straight away."/>
+		<text name="tc_help_quality_4_title" text="Coming home"/>
+		<text name="tc_help_quality_4" text="After the work, the crew and machines take a while to come back and wash down: less for a quick worker. Then the machines are parked in your parking slots, and a careless worker may bring them back dirty."/>
+		<text name="tc_help_quality_5_title" text="Failed jobs"/>
+		<text name="tc_help_quality_5" text="A job not done by its due day fails: reputation is lost (less if most of it was done), the customer thinks less of you, and the crew and machines come home. A customer let down badly may complain."/>
+		<text name="tc_help_supplies_title" text="Supplies and diesel"/>
+		<text name="tc_help_supplies_1" text="Jobs draw seed, fertiliser, herbicide, lime and diesel from your own farm's stock: your storage and pallets. A hired worker's machines are refuelled from your diesel too."/>
+		<text name="tc_help_supplies_2_title" text="Running out"/>
+		<text name="tc_help_supplies_2" text="With nothing of a supply in stock, a job that needs it is put on hold, and the Overview says so. It starts again by itself once you've restocked."/>
+		<text name="tc_help_supplies_3_title" text="The Supplies tab"/>
+		<text name="tc_help_supplies_3" text="Supplies shows every supply your jobs draw on: what's in stock, in storage and on pallets, how much room you have, and which jobs are waiting for it."/>
+		<text name="tc_help_supplies_4_title" text="Advanced Damage System"/>
+		<text name="tc_help_supplies_4" text="With Advanced Damage System, Supplies also lists its oils, coolant, grease and parts packs, and your spare parts."/>
+		<text name="tc_help_logbook_title" text="The Logbook"/>
+		<text name="tc_help_logbook_1" text="The Logbook keeps the business's records. Jobs lists every completed and failed job; Vehicles lists every machine and what it's been doing."/>
+		<text name="tc_help_logbook_2_title" text="A job's log"/>
+		<text name="tc_help_logbook_2" text="Who did it, which machines they took and the state each came back in, how the time went (travel, fieldwork, return and wash), the fuel and supplies used, and the money: the price, an estimate of labour and wear, any claim, and the margin left."/>
+		<text name="tc_help_logbook_3_title" text="A vehicle's log"/>
+		<text name="tc_help_logbook_3" text="Who had it, when, for how long, and its condition before and after, for jobs, staff drivers and your own driving. Sort by most hours or most faults to spot the machines that cost you."/>
+		<text name="tc_help_logbook_4_title" text="Filters"/>
+		<text name="tc_help_logbook_4" text="Filter jobs to completed or failed ones, and sort vehicles by name, last used, hours or faults."/>
+		<text name="tc_help_cat_staff" text="Staff"/>
+		<text name="tc_help_hiring_title" text="Hiring and the roster"/>
+		<text name="tc_help_hiring_1" text="The People tab's Candidates view lists people looking for work. New ones come and others leave over time, and in multiplayer every farm hires from the same pool."/>
+		<text name="tc_help_hiring_2_title" text="Hiring"/>
+		<text name="tc_help_hiring_2" text="Each candidate has a monthly salary. Hire them and the first month is paid at once; after that it's charged at the start of every month while they're on your roster, whatever they're doing."/>
+		<text name="tc_help_hiring_3_title" text="What to look at"/>
+		<text name="tc_help_hiring_3" text="Work speed, tractor experience (small, medium and large), skill at each kind of work, cleanliness, and age. Younger staff have more room to grow."/>
+		<text name="tc_help_hiring_4_title" text="Your Staff"/>
+		<text name="tc_help_hiring_4" text="The Your Staff view shows each worker's status (idle, assigned, at home, sick, on holiday and so on), their current job, morale and pay. Manage opens everything you can do for a worker."/>
+		<text name="tc_help_hours_title" text="Working hours and breaks"/>
+		<text name="tc_help_hours_1" text="Field staff work from 08:00 to 18:00. Outside those hours they're at home: they can't be given jobs or drive for you."/>
+		<text name="tc_help_hours_2_title" text="Overtime"/>
+		<text name="tc_help_hours_2" text="A crew still out on a job at 18:00 finishes it, on overtime at one and a half times their hourly pay. It's paid with the next month's salaries."/>
+		<text name="tc_help_hours_3_title" text="Stay late and call back"/>
+		<text name="tc_help_hours_3" text="From Manage, ask someone to stay late until a time you choose, or call them back in once they've gone home (they arrive about 25 minutes later). They're paid overtime for every hour of it, whether you give them work or not. Send home ends it."/>
+		<text name="tc_help_hours_4_title" text="Breaks"/>
+		<text name="tc_help_hours_4" text="Staff take a 15 minute morning break, a 30 minute lunch and a 15 minute afternoon break, each when they're free within its window. Someone out working all day misses them, and missed breaks, lunch especially, hurt their morale."/>
+		<text name="tc_help_skills_title" text="Skills, growth and training"/>
+		<text name="tc_help_skills_1" text="Each worker has a work speed, experience on small, medium and large tractors, and a skill for each kind of work: harvesting, baling, grassland, tillage, seeding, planting, crop care and haulage."/>
+		<text name="tc_help_skills_2_title" text="What skill does"/>
+		<text name="tc_help_skills_2" text="Skill sets how fast they work, the quality they reach and how hard they are on the machines. A worker below the skill a job needs can still do it, but expect lower quality and extra wear."/>
+		<text name="tc_help_skills_3_title" text="Growth"/>
+		<text name="tc_help_skills_3" text="Workers improve with experience, on jobs and when driving for you, up to their potential. Young workers grow most; past middle age they barely grow at all. Happy staff grow faster."/>
+		<text name="tc_help_skills_4_title" text="Spraying certificate"/>
+		<text name="tc_help_skills_4" text="Herbicide work needs a spraying certificate. Once a worker's crop care is good enough, book them a course from Manage, or say yes when they ask. It costs money and days away, then an assessment; a fail can be retaken. Trade association members get a discount."/>
+		<text name="tc_help_morale_title" text="Morale, bonuses and pay"/>
+		<text name="tc_help_morale_1" text="Every worker has a morale, shown as Happy, Content, Unsettled or Unhappy. Low morale means poorer work and, at worst, a worker who quits. High morale means they learn faster."/>
+		<text name="tc_help_morale_2_title" text="What moves it"/>
+		<text name="tc_help_morale_2" text="Their workload (sat idle or worked off their feet both wear on them), missed breaks, pay below what they expect, refused requests and a colleague being let go bring it down. Bonuses, rises, approved holidays and a good month bring it up. Some people take knocks harder than others, and anyone can go through a rough patch."/>
+		<text name="tc_help_morale_3_title" text="Bonuses"/>
+		<text name="tc_help_morale_3" text="Give a one-off bonus from Manage at any time. Each August your staff ask about a harvest bonus: saying no, or not answering, goes down badly."/>
+		<text name="tc_help_morale_4_title" text="Pay"/>
+		<text name="tc_help_morale_4" text="Pay is fixed when you hire and is never cut. As workers grow their worth rises, and now and then they ask for a rise: agree, meet them halfway or refuse. You can also give a rise from Manage. A rise is permanent and starts from the next month."/>
+		<text name="tc_help_absence_title" text="Sickness, holidays and injuries"/>
+		<text name="tc_help_absence_1" text="Staff fall ill now and then and are off for a few days. A health and safety programme makes it rarer and shorter; without one, sickness can bring a workplace inspection and a fine."/>
+		<text name="tc_help_absence_2_title" text="Injuries"/>
+		<text name="tc_help_absence_2" text="Accidents happen at work too: a worker hurt in the yard or out on a job is off for a few days. Someone hurt on a job sees it through first."/>
+		<text name="tc_help_absence_3_title" text="Holidays"/>
+		<text name="tc_help_absence_3" text="Each worker gets a month's worth of days off a year. They ask through the Inbox, showing who else is off then. Approving pleases them; declining, or not answering, upsets them. After two refusals in a year they book it anyway."/>
+		<text name="tc_help_absence_4_title" text="Never mid-job"/>
+		<text name="tc_help_absence_4" text="Sickness, holidays and training never take anyone off a job: they finish it first. Planned absences show on the Overview's Important board."/>
+		<text name="tc_help_leaving_title" text="Leaving, retirement and rivals"/>
+		<text name="tc_help_leaving_1" text="Staff don't stay forever. Retirements and resignations show on the Overview, and leavers go at the start of the month named."/>
+		<text name="tc_help_leaving_2_title" text="Retirement"/>
+		<text name="tc_help_leaving_2" text="From 50, a worker may decide to retire on their birthday, more likely the older they get and certain by 65. They give six months' notice. Unhappy staff are likelier to go early."/>
+		<text name="tc_help_leaving_3_title" text="Quitting"/>
+		<text name="tc_help_leaving_3" text="A very unhappy worker may hand in a month's notice. A bonus while they're working their notice won't change their mind."/>
+		<text name="tc_help_leaving_4_title" text="Rivals"/>
+		<text name="tc_help_leaving_4" text="In the run-up to harvest, a rival contractor may offer one of your best workers more money. Match the offer and they stay, or do nothing and they'll most likely take it."/>
+		<text name="tc_help_leaving_5_title" text="Letting someone go"/>
+		<text name="tc_help_leaving_5" text="Release ends a worker's job straight away. You pay notice, and after two years' service redundancy too, both by length of service. The rest of your staff won't like it."/>
+		<text name="tc_help_office_title" text="The office administrator"/>
+		<text name="tc_help_office_1" text="An office administrator handles invoicing and credit control. Hire one from the People tab: they're paid a monthly salary like any worker, but they never go out on jobs."/>
+		<text name="tc_help_office_2_title" text="What they do"/>
+		<text name="tc_help_office_2" text="Invoices sent while they're employed are paid sooner, and fewer are paid late or not at all. Insurance claims go in straight away and settle sooner."/>
+		<text name="tc_help_office_3_title" text="With Advanced Damage System"/>
+		<text name="tc_help_office_3" text="They also run your own workshop as its advisor: more vehicles worked on at once, and faster, the higher their level. Train them up a level at a time, for a fee and a few days away."/>
+		<text name="tc_help_looks_title" text="Names, looks and portraits"/>
+		<text name="tc_help_looks_1" text="Every worker has their own name and look, and a live portrait on the People tab."/>
+		<text name="tc_help_looks_2_title" text="Editing a worker"/>
+		<text name="tc_help_looks_2" text="Manage, Edit name and look renames a worker and opens the game's wardrobe to change how they look. Farmers and the local official can be edited the same way."/>
+		<text name="tc_help_looks_3_title" text="Name style"/>
+		<text name="tc_help_looks_3" text="The Staff name style setting picks where new people's names come from: British, Irish, American, French, German, Dutch, Scandinavian, Spanish, Italian, Polish, a European mix or a mix of all. People already named keep their names."/>
+		<text name="tc_help_cat_money" text="Money"/>
+		<text name="tc_help_invoices_title" text="Invoices and late payers"/>
+		<text name="tc_help_invoices_1" text="Finished jobs are invoiced, and customers pay later: usually on time, sometimes late, and now and then never. The Finances tab lists what you're owed, when it's due and what's overdue."/>
+		<text name="tc_help_invoices_2_title" text="Overdue invoices"/>
+		<text name="tc_help_invoices_2" text="You can't tell a late payer from one who'll never pay. An overdue invoice can be written off, or pursued. One still unpaid six months after it was due is written off by itself."/>
+		<text name="tc_help_invoices_3_title" text="Pursuing a debt"/>
+		<text name="tc_help_invoices_3" text="With legal expenses insurance, pursuing is free and likelier to work; without it a solicitor charges a fee, paid whatever happens. Expect an answer in a month or two. Pursuing a customer doesn't help your relationship with them."/>
+		<text name="tc_help_invoices_4_title" text="Cash flow"/>
+		<text name="tc_help_invoices_4" text="The Finances tab also shows this year's totals and a forecast: invoices by due date, against wages and overheads, which are charged at the start of each month."/>
+		<text name="tc_help_invoices_5_title" text="Switching it off"/>
+		<text name="tc_help_invoices_5" text="With the Late/unpaid invoices setting off, jobs are paid in full as soon as they're done."/>
+		<text name="tc_help_overheads_title" text="Overheads and liability"/>
+		<text name="tc_help_overheads_1" text="Overheads are your business's recurring costs, on the Finances tab's Overheads view. Each runs for a year at a time, paid up front (12% cheaper) or monthly. You're asked about each renewal in the Inbox; unanswered, it renews as it is."/>
+		<text name="tc_help_overheads_2_title" text="Employer's liability"/>
+		<text name="tc_help_overheads_2" text="Required by law once you employ anyone. It starts by itself and is priced by your headcount."/>
+		<text name="tc_help_overheads_3_title" text="Public liability"/>
+		<text name="tc_help_overheads_3" text="Covers claims for damage your work does: a botched job, a road accident, spray drift or a spilt load. You pay an excess per claim and the insurer the rest. Without it you pay every claim in full, and each claim raises the premium for three years."/>
+		<text name="tc_help_overheads_4_title" text="Health and safety"/>
+		<text name="tc_help_overheads_4" text="PPE, first aid and training, per worker. Staff are sick less and recover sooner, injuries are rarer, and you avoid inspection fines."/>
+		<text name="tc_help_overheads_5_title" text="Cancelling"/>
+		<text name="tc_help_overheads_5" text="Cancelled policies aren't refunded: cover runs to the end of what's paid for, then stops."/>
+		<text name="tc_help_machineryInsurance_title" text="Machinery insurance"/>
+		<text name="tc_help_machineryInsurance_1" text="Machinery insurance covers your machines against theft, at Basic, Standard or Comprehensive cover. The premium is a share of your fleet's value."/>
+		<text name="tc_help_machineryInsurance_2_title" text="Making a claim"/>
+		<text name="tc_help_machineryInsurance_2" text="If a stolen machine is never found, an insured farm can claim for it. Submit the claim from the Inbox; the insurer settles in a month or two, sooner with an office administrator. Cover is judged on the day of the theft, so taking it out afterwards doesn't help."/>
+		<text name="tc_help_machineryInsurance_3_title" text="Levels of cover"/>
+		<text name="tc_help_machineryInsurance_3" text="Higher cover pays out more of the machine's value with a smaller excess. Comprehensive also lends you a courtesy vehicle until the claim settles."/>
+		<text name="tc_help_machineryInsurance_4_title" text="Courtesy vehicles"/>
+		<text name="tc_help_machineryInsurance_4" text="A similar machine, at one of your parking slots or the shop. Use it as your own, jobs included: it costs nothing but fuel and can't be sold. The insurer takes it back when the claim settles."/>
+		<text name="tc_help_association_title" text="Trade association and legal cover"/>
+		<text name="tc_help_association_1" text="Two more optional overheads, on the Finances tab's Overheads view."/>
+		<text name="tc_help_association_2_title" text="Agricultural Contractors' Association"/>
+		<text name="tc_help_association_2" text="Membership earns you more reputation for every job, a discount on certification courses, and cheaper legal cover."/>
+		<text name="tc_help_association_3_title" text="Legal expenses insurance"/>
+		<text name="tc_help_association_3" text="Pursues overdue invoices for free, with better odds of recovering the money than a solicitor. Joining or leaving the association reprices it for the rest of the year."/>
+		<text name="tc_help_cat_yard" text="Your yard"/>
+		<text name="tc_help_parking_title" text="Parking slots"/>
+		<text name="tc_help_parking_1" text="Machines back from a job are parked in parking slots you place from the construction menu's Contractor tab. Vehicle slots take tractors, loaders and self-propelled machines; implement slots take implements and trailers; harvester slots take harvesters. They come in three sizes and face the arrow."/>
+		<text name="tc_help_parking_2_title" text="Choosing what parks where"/>
+		<text name="tc_help_parking_2" text="Stand in a placed slot and press the activate key to keep it for some kinds of machine or particular machines. They go there first, and to an unfiltered slot of the same type when it's full."/>
+		<text name="tc_help_parking_3_title" text="No room"/>
+		<text name="tc_help_parking_3" text="A machine with no free slot of its kind waits, and the Inbox offers to send it to the shop instead. Place more slots, clear the ones you have, or send it."/>
+		<text name="tc_help_parking_4_title" text="Seeing them"/>
+		<text name="tc_help_parking_4" text="Slots are only visible in the construction menu, unless you turn on Show parking slots in the settings or press Right Ctrl+P."/>
+		<text name="tc_help_spots_title" text="Standing spots and seats"/>
+		<text name="tc_help_spots_1" text="Idle staff wait in the yard on standing spots, or on seats (a wooden chair, rocking chair or armchair, chosen as you place it), from the construction menu's Contractor tab. Each faces its arrow."/>
+		<text name="tc_help_spots_2_title" text="Keeping one for someone"/>
+		<text name="tc_help_spots_2" text="Stand by a placed spot or seat and press the activate key to keep it for particular staff. Only they use it, and they use it first."/>
+		<text name="tc_help_spots_3_title" text="Weather"/>
+		<text name="tc_help_spots_3" text="In rain, snow or hail only spots and seats indoors are used."/>
+		<text name="tc_help_spots_4_title" text="Farmers' yards"/>
+		<text name="tc_help_spots_4" text="Placed in a farmer's yard that no player owns (host or admin only), a spot or seat is for that yard's farmer instead."/>
+		<text name="tc_help_signs_title" text="Signs and your logo"/>
+		<text name="tc_help_signs_1" text="Show off your company with the freestanding Company Sign or a Company Wall Sign (1.5 m or 3 m square, at 1, 3 or 6 m up), from the construction menu's Contractor tab."/>
+		<text name="tc_help_signs_2_title" text="Your logo"/>
+		<text name="tc_help_signs_2" text="Save a square logo.dds (or logo.png) in Documents, My Games, FarmingSimulator2025, modSettings, FS25_TheContractor. It shows on the Overview and your signs. The README there explains sizes and formats, and how to give one save its own logo."/>
+		<text name="tc_help_signs_3_title" text="Your own designs"/>
+		<text name="tc_help_signs_3" text="In single-player, square images in that folder's signs folder become designs you can pick when placing a sign. Reload the save to see new ones."/>
+		<text name="tc_help_signs_4_title" text="Multiplayer"/>
+		<text name="tc_help_signs_4" text="Your logo is read from your own PC, so it only shows on your own farm's signs. Other players see their own logo, or the default."/>
+		<text name="tc_help_signs_5_title" text="Disposal skip"/>
+		<text name="tc_help_signs_5" text="The Contractor tab also has a disposal skip, for fly-tipped junk and old parts: drop each piece in or beside it and it's taken away for a small fee."/>
+		<text name="tc_help_cat_farmers" text="Farmers"/>
+		<text name="tc_help_people_title" text="The People tab"/>
+		<text name="tc_help_people_1" text="The land you don't own belongs to the area's farmers, and your work comes from them. The People tab's Others view lists them and the local official."/>
+		<text name="tc_help_people_2_title" text="The farmers"/>
+		<text name="tc_help_people_2" text="Each has their own fields and perhaps a yard, and the view shows what you've done for them, what they've paid, and how they feel about you. When you buy or sell land, it leaves or joins a nearby farmer."/>
+		<text name="tc_help_people_3_title" text="The local official"/>
+		<text name="tc_help_people_3" text="Work that belongs to no farmer, such as clearing fallen trees or roadside fly-tipping, comes from the local official."/>
+		<text name="tc_help_people_4_title" text="Editing"/>
+		<text name="tc_help_people_4" text="Rename a farmer or change their look with Edit, and change their machines with Machines. Changes are for everyone on the server."/>
+		<text name="tc_help_people_5_title" text="The community changes"/>
+		<text name="tc_help_people_5" text="Now and then a farmer lets a field go to a neighbour. With the Farmer retirements setting on, a farmer may also retire and hand everything to a successor, who starts out with half the trust you'd built."/>
+		<text name="tc_help_relationships_title" text="Relationships"/>
+		<text name="tc_help_relationships_1" text="Each farmer's relationship with you is their own view, from your dealings with them: Excellent, Good, Neutral, Poor or Fallen out. It decides how often they offer you work and how far they'll move when you negotiate."/>
+		<text name="tc_help_relationships_2_title" text="What moves it"/>
+		<text name="tc_help_relationships_2" text="Good work builds it, and poor work wears it down. Failed jobs, turned-down or ignored offers, walking out of a negotiation and pursuing their debts all cost you. Without repeat work it drifts back to neutral each month."/>
+		<text name="tc_help_relationships_3_title" text="Falling out"/>
+		<text name="tc_help_relationships_3" text="A farmer who's fallen out with you offers nothing until it mends, a little each month. They tell the neighbours, too: those nearby think less of you, and so does the trade."/>
+		<text name="tc_help_relationships_4_title" text="Complaints"/>
+		<text name="tc_help_relationships_4" text="After a failed or poor job that leaves them unhappy, a farmer may complain. It's a warning: let them down again and you may lose them."/>
+		<text name="tc_help_farmerYards_title" text="Farmers' yards"/>
+		<text name="tc_help_farmerYards_1" text="Farms on the map that no player owns are farmers' yards, worked out from their buildings. In daylight, a farmer stands about in their yard."/>
+		<text name="tc_help_farmerYards_2_title" text="Setting a yard"/>
+		<text name="tc_help_farmerYards_2" text="The host or an admin can mark a farmland as a farmer's yard, or rule one out, from its box on the in-game map. A Yard Centre Marker (construction menu) sets where the yard's middle really is."/>
+		<text name="tc_help_farmerYards_3_title" text="Dressing it"/>
+		<text name="tc_help_farmerYards_3" text="Standing spots and seats placed in a farmer's yard are for that farmer (host or admin only)."/>
+		<text name="tc_help_farmerMachines_title" text="Farmers' machines"/>
+		<text name="tc_help_farmerMachines_1" text="Every farmer has their own machines: tractors, a combine and header, a trailer, and with a yard a telehandler and bale fork. They only come out when a job needs them, and it's the same machine every time, a little older."/>
+		<text name="tc_help_farmerMachines_2_title" text="Changing their models"/>
+		<text name="tc_help_farmerMachines_2" text="Machines on a farmer in the People tab lets you change the model for each of their machines. A new model is a new machine, with no age."/>
+		<text name="tc_help_farmerMachines_3_title" text="Where you'll see them"/>
+		<text name="tc_help_farmerMachines_3" text="A farmer's machine breaks down, needs a part fitted, runs out of diesel, or is lent to you for a job in their yard. While one is out, nobody else can ask for it."/>
+		<text name="tc_help_yardJobs_title" text="Helping a farmer out"/>
+		<text name="tc_help_yardJobs_1" text="Some farmers call on you for a hand with something other than fieldwork. These are always yours to do yourself."/>
+		<text name="tc_help_yardJobs_2_title" text="Bales to the yard"/>
+		<text name="tc_help_yardJobs_2" text="A farmer short of hay, straw or silage asks for some of your bales. Put them on the ground in the area marked in their yard (it's on your map); their telehandler and bale fork wait beside it if you want them. Bales over the order are paid as extra."/>
+		<text name="tc_help_yardJobs_3_title" text="Selling a load"/>
+		<text name="tc_help_yardJobs_3" text="A farmer's driver is off, and their trailer stands full in the yard. Bring a tractor, take it to the selling point named and tip it. You're paid for the haulage; the crop's money is theirs. A load that goes astray is claimed for."/>
+		<text name="tc_help_yardJobs_4_title" text="Emergency refuel"/>
+		<text name="tc_help_yardJobs_4" text="A farmer's machine has run dry on their field. Bring diesel from your own stock, however you like, and fill it up today. They pay for the diesel and your trouble."/>
+		<text name="tc_help_cat_auctions" text="Machinery auctions"/>
+		<text name="tc_help_auctionSale_title" text="The sale"/>
+		<text name="tc_help_auctionSale_1" text="About once a year, sometimes twice, a farmer holds a machinery auction on one of their fields, always in spring or autumn. It's announced two to four months ahead in the Inbox, with a reminder a week before and another on the day. Signs go up around the area and the field is marked on the map."/>
+		<text name="tc_help_auctionSale_2_title" text="The day"/>
+		<text name="tc_help_auctionSale_2" text="The lots are set out on the field at midnight, and a crowd comes and goes through the day. Viewing and bidding run from 08:00. Each lot's bidding closes at its own time from 17:00, and the last at 18:00."/>
+		<text name="tc_help_auctionSale_3_title" text="The catalogue"/>
+		<text name="tc_help_auctionSale_3" text="On the sale day the Auction tab lists every lot: its machine, hours, guide price and closing time."/>
+		<text name="tc_help_auctionSale_4_title" text="Called off"/>
+		<text name="tc_help_auctionSale_4" text="If the field is bought or changes hands, the auction is cancelled."/>
+		<text name="tc_help_auctionBidding_title" text="Viewing and bidding"/>
+		<text name="tc_help_auctionBidding_1" text="Walk up to a lot and press the activate key to view it: its model and attachments, hours, age, configuration and guide price. Anyone can bid, with or without a company."/>
+		<text name="tc_help_auctionBidding_2_title" text="Bids"/>
+		<text name="tc_help_auctionBidding_2" text="Each farm can leave one sealed bid on a lot, of at least 70% of its guide, and change or withdraw it until the lot closes. The highest bid at closing wins and pays exactly what it bid. Bid around the guide for a fair chance; local buyers are bidding too."/>
+		<text name="tc_help_auctionBidding_3_title" text="Paying"/>
+		<text name="tc_help_auctionBidding_3" text="Money is checked as each lot closes. Win a lot you can't pay for and it goes to the next bidder, and you're charged a fee. The lot card warns you when your open bids add up to more than you have."/>
+		<text name="tc_help_auctionBidding_4_title" text="Collecting"/>
+		<text name="tc_help_auctionBidding_4" text="A won lot is yours to drive away. Collect it before midnight, or it's delivered to your parking, or the shop if your parking's full."/>
+		<text name="tc_help_auctionAttend_title" text="Going to the auction"/>
+		<text name="tc_help_auctionAttend_1" text="Every company is asked along, as an Attend Auction job on the Jobs tab for the sale day. Turning up is all it takes, and missing it costs nothing."/>
+		<text name="tc_help_auctionAttend_2_title" text="Lot inspections"/>
+		<text name="tc_help_auctionAttend_2" text="With Advanced Damage System, farmers may ask you to look a lot over for them before they bid. See Auction lot inspections."/>
+		<text name="tc_help_cat_workshop" text="Workshop (Advanced Damage System)"/>
+		<text name="tc_help_workshopTrades_title" text="Workshop staff"/>
+		<text name="tc_help_workshopTrades_1" text="With Advanced Damage System, your own staff run its workshop. Field workers may have workshop trades, mechanic, electrician, bodyworker or storekeeper, at level 1 to 3, shown on the People tab."/>
+		<text name="tc_help_workshopTrades_2_title" text="Working in the workshop"/>
+		<text name="tc_help_workshopTrades_2" text="From Manage, set a worker to work in the workshop in one of their trades. They do it whenever they aren't out on a job; while they're away, that trade's work waits. Only one worker per trade."/>
+		<text name="tc_help_workshopTrades_3_title" text="Training"/>
+		<text name="tc_help_workshopTrades_3" text="Manage, Workshop training books a worker on a course to learn a trade or raise one a level. Your office administrator is the workshop's advisor."/>
+		<text name="tc_help_workshopTrades_4_title" text="Careless workers"/>
+		<text name="tc_help_workshopTrades_4" text="A careless or under-skilled worker can cause breakdowns on the machines they take out. A machine overdue for its service won't be taken out by a worker until it's seen to."/>
+		<text name="tc_help_repairContracts_title" text="Repair zones and quotes"/>
+		<text name="tc_help_repairContracts_1" text="Place repair zones from the construction menu (one, three or six tractor bays, or a harvester bay). Customers bring their machines there for a repair or a service, each with an offer in the Inbox."/>
+		<text name="tc_help_repairContracts_2_title" text="Inspect first"/>
+		<text name="tc_help_repairContracts_2" text="Inspect the machine (a tool box will do, or bring it into the workshop) to find what's wrong. Nothing else can be done to it until a price is agreed. The Workshop tab then lists each fault, the ways to fix it, whether your kit covers it, and your cheapest plan."/>
+		<text name="tc_help_repairContracts_3_title" text="Quoting"/>
+		<text name="tc_help_repairContracts_3" text="Choose Negotiate on the offer and pick your margin. The customer says yes or takes the machine away. A fair price earns more reputation; a steep one costs some, and a name for overcharging means fewer customers for a while."/>
+		<text name="tc_help_repairContracts_4_title" text="Doing the work"/>
+		<text name="tc_help_repairContracts_4" text="The Workshop tab's checklist shows what's left. The job's done, and paid, once every fault it came in with is fixed (or everything on a service list done) before its due day. A machine left worse than it came isn't paid for, and the owner may claim."/>
+		<text name="tc_help_repairContracts_5_title" text="Old parts"/>
+		<text name="tc_help_repairContracts_5" text="Parts you take off go in a disposal skip, for a small fee."/>
+		<text name="tc_help_breakdowns_title" text="Breakdowns and favours"/>
+		<text name="tc_help_breakdowns_1" text="A farmer's machine can break down out on a field or in their yard, and they want it fixed where it stands, today. It's marked on your map."/>
+		<text name="tc_help_breakdowns_2_title" text="Field breakdowns"/>
+		<text name="tc_help_breakdowns_2" text="Go out and inspect it, then quote from the Inbox as for a repair zone job. Some faults need only a tool box; others need a mobile workshop. Without the kit you can still take it on, but a hired mobile workshop does that part at their price."/>
+		<text name="tc_help_breakdowns_3_title" text="Favours"/>
+		<text name="tc_help_breakdowns_3" text="A farmer may ask you to fit a new part, such as a battery or an air filter, to one of their machines. There's no price to agree: take a part from your stock or buy one, fit it by hand before the day's out, and they pay back its list price. It's done for the goodwill."/>
+		<text name="tc_help_lotInspections_title" text="Auction lot inspections"/>
+		<text name="tc_help_lotInspections_1" text="On an auction's sale day, a farmer with their eye on a lot may ask you to look it over before they bid."/>
+		<text name="tc_help_lotInspections_2_title" text="Doing it"/>
+		<text name="tc_help_lotInspections_2" text="Give the lot a standard inspection before its bidding closes; a quick visual one doesn't count. The offer says which lot and when it closes."/>
+		<text name="tc_help_cat_events" text="Things that happen"/>
+		<text name="tc_help_theft_title" text="Theft"/>
+		<text name="tc_help_theft_1" text="Random events can be made rarer or switched off in the settings."/>
+		<text name="tc_help_theft_2_title" text="Stolen machines"/>
+		<text name="tc_help_theft_2" text="Now and then one of your parked vehicles is stolen, never an implement, and never one in use. It's reported to the police. Later it's either found, knocked about and dirty, and comes back to your parking, or written off for good. With machinery insurance you can claim for it."/>
+		<text name="tc_help_theft_3_title" text="Anti-theft systems"/>
+		<text name="tc_help_theft_3" text="With Advanced Damage System, a vehicle fitted with its anti-theft system is less likely to be taken, more likely to be found, and cheaper to insure."/>
+		<text name="tc_help_theft_4_title" text="Diesel theft"/>
+		<text name="tc_help_theft_4" text="Thieves may drain the yard's diesel tank or siphon a few parked machines overnight. It's found in the morning, and the diesel is simply gone."/>
+		<text name="tc_help_accidents_title" text="Accidents and claims"/>
+		<text name="tc_help_accidents_1" text="When things go wrong on a job, the customer or a stranger may claim against you. With public liability insurance you pay only the excess."/>
+		<text name="tc_help_accidents_2_title" text="Botched jobs"/>
+		<text name="tc_help_accidents_2" text="A careless or under-skilled worker sometimes botches a job: ruts, the wrong rate, scorched crop. The customer claims a few days later, and word gets round. You never botch a job you drive yourself."/>
+		<text name="tc_help_accidents_3_title" text="Road accidents"/>
+		<text name="tc_help_accidents_3" text="On the way back from a job, a crew can have an accident and the machine gets damaged. If your driver was to blame, the other driver claims and your reputation suffers; if not, their insurer pays for your repair, eventually. Skilled drivers in well-kept machines are rarely to blame."/>
+		<text name="tc_help_accidents_4_title" text="Spray drift"/>
+		<text name="tc_help_accidents_4" text="After a hired herbicide job, a neighbour may complain that the spray drifted. It's looked into, and is either dropped or upheld with a claim. A skilled operator who stops when the wind gets up is rarely in the wrong."/>
+		<text name="tc_help_accidents_5_title" text="Tipped trailers"/>
+		<text name="tc_help_accidents_5" text="On harvest and haul, a hauler can tip their trailer in the field and spill the load. Push the trailer back onto its wheels with the activate key and bring it home. The spilt crop is yours to deliver to the customer by the end of tomorrow, unpaid; leave it and they'll be furious, and may claim."/>
+		<text name="tc_help_clearing_title" text="Fly-tipping, fallen trees and joyriders"/>
+		<text name="tc_help_clearing_1" text="Some events turn into work for you, offered in the Inbox."/>
+		<text name="tc_help_clearing_2_title" text="Fly-tipping"/>
+		<text name="tc_help_clearing_2" text="Junk dumped at a field gate or on a roadside verge. Carry each piece to a disposal skip and drop it there; each piece costs a small tipping fee. Roadside pieces are marked on your map."/>
+		<text name="tc_help_clearing_3_title" text="Fallen trees"/>
+		<text name="tc_help_clearing_3" text="After a spell of bad weather, trees may come down across the roads. Clear them with a chainsaw today; the wood is yours to keep or sell. Each tree is marked on your map."/>
+		<text name="tc_help_clearing_4_title" text="Joyriders"/>
+		<text name="tc_help_clearing_4" text="Joyriders tear up a grass field. On a farmer's field you're offered the plowing, and may then be asked to sow it back to grass. On your own field, it's just bad luck."/>
+		<text name="tc_help_clearing_5_title" text="Turning it down"/>
+		<text name="tc_help_clearing_5" text="The council and the farmers remember when you turn this kind of work down."/>
+		<text name="tc_help_news_title" text="Complaints, protests and good news"/>
+		<text name="tc_help_news_1" text="Not everything that happens is bad."/>
+		<text name="tc_help_news_2_title" text="Good news"/>
+		<text name="tc_help_news_2" text="A photo of your work goes round the farming group, a supplier refunds an overcharge, the council refunds your rates: a little reputation or money, out of the blue."/>
+		<text name="tc_help_news_3_title" text="After a good job"/>
+		<text name="tc_help_news_3" text="A pleased farmer may bring your crew tea and bacon butties, pay your invoice on the spot, or a worker may find something clicks and improve."/>
+		<text name="tc_help_news_4_title" text="Protests"/>
+		<text name="tc_help_news_4" text="Once in a while, locals protest on the roads near your farm for a day. The local official warns you the evening before. Take it slowly: crews take longer to get to and from jobs while it's on."/>
 	</texts>
 </l10n>

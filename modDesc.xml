@@ -99,5 +99,786 @@
             <binding device="KB_MOUSE_DEFAULT" input="KEY_rctrl KEY_p" />
         </actionBinding>
     </inputBinding>
+    <!-- In-game help (Help in the in-game menu): text in languages/l10n_en.xml (tc_help_*),
+         page icons in images/helpIcons.dds, sliced by xml/helpIcons.xml (docs/tools/genHelpIcons.py, one slot per page). -->
+    <helpLines>
+        <category title="$l10n_tc_help_cat_start">
+            <page title="$l10n_tc_help_company_title" iconSliceId="tcHelpIcons.company">
+                <paragraph>
+                    <text text="$l10n_tc_help_company_1"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_company_2_title"/>
+                    <text text="$l10n_tc_help_company_2"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_company_3_title"/>
+                    <text text="$l10n_tc_help_company_3"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_company_4_title"/>
+                    <text text="$l10n_tc_help_company_4"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_company_5_title"/>
+                    <text text="$l10n_tc_help_company_5"/>
+                </paragraph>
+            </page>
+            <page title="$l10n_tc_help_menu_title" iconSliceId="tcHelpIcons.menu">
+                <paragraph>
+                    <text text="$l10n_tc_help_menu_1"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_menu_2_title"/>
+                    <text text="$l10n_tc_help_menu_2"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_menu_3_title"/>
+                    <text text="$l10n_tc_help_menu_3"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_menu_4_title"/>
+                    <text text="$l10n_tc_help_menu_4"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_menu_5_title"/>
+                    <text text="$l10n_tc_help_menu_5"/>
+                </paragraph>
+            </page>
+            <page title="$l10n_tc_help_reputation_title" iconSliceId="tcHelpIcons.reputation">
+                <paragraph>
+                    <text text="$l10n_tc_help_reputation_1"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_reputation_2_title"/>
+                    <text text="$l10n_tc_help_reputation_2"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_reputation_3_title"/>
+                    <text text="$l10n_tc_help_reputation_3"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_reputation_4_title"/>
+                    <text text="$l10n_tc_help_reputation_4"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_reputation_5_title"/>
+                    <text text="$l10n_tc_help_reputation_5"/>
+                </paragraph>
+            </page>
+            <page title="$l10n_tc_help_offers_title" iconSliceId="tcHelpIcons.offers">
+                <paragraph>
+                    <text text="$l10n_tc_help_offers_1"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_offers_2_title"/>
+                    <text text="$l10n_tc_help_offers_2"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_offers_3_title"/>
+                    <text text="$l10n_tc_help_offers_3"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_offers_4_title"/>
+                    <text text="$l10n_tc_help_offers_4"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_offers_5_title"/>
+                    <text text="$l10n_tc_help_offers_5"/>
+                </paragraph>
+            </page>
+            <page title="$l10n_tc_help_settings_title" iconSliceId="tcHelpIcons.settings">
+                <paragraph>
+                    <text text="$l10n_tc_help_settings_1"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_settings_2_title"/>
+                    <text text="$l10n_tc_help_settings_2"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_settings_3_title"/>
+                    <text text="$l10n_tc_help_settings_3"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_settings_4_title"/>
+                    <text text="$l10n_tc_help_settings_4"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_settings_5_title"/>
+                    <text text="$l10n_tc_help_settings_5"/>
+                </paragraph>
+            </page>
+        </category>
+        <category title="$l10n_tc_help_cat_jobs">
+            <page title="$l10n_tc_help_jobTypes_title" iconSliceId="tcHelpIcons.jobTypes">
+                <paragraph>
+                    <text text="$l10n_tc_help_jobTypes_1"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_jobTypes_2_title"/>
+                    <text text="$l10n_tc_help_jobTypes_2"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_jobTypes_3_title"/>
+                    <text text="$l10n_tc_help_jobTypes_3"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_jobTypes_4_title"/>
+                    <text text="$l10n_tc_help_jobTypes_4"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_jobTypes_5_title"/>
+                    <text text="$l10n_tc_help_jobTypes_5"/>
+                </paragraph>
+            </page>
+            <page title="$l10n_tc_help_planning_title" iconSliceId="tcHelpIcons.planning">
+                <paragraph>
+                    <text text="$l10n_tc_help_planning_1"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_planning_2_title"/>
+                    <text text="$l10n_tc_help_planning_2"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_planning_3_title"/>
+                    <text text="$l10n_tc_help_planning_3"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_planning_4_title"/>
+                    <text text="$l10n_tc_help_planning_4"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_planning_5_title"/>
+                    <text text="$l10n_tc_help_planning_5"/>
+                </paragraph>
+            </page>
+            <page title="$l10n_tc_help_allocating_title" iconSliceId="tcHelpIcons.allocating">
+                <paragraph>
+                    <text text="$l10n_tc_help_allocating_1"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_allocating_2_title"/>
+                    <text text="$l10n_tc_help_allocating_2"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_allocating_3_title"/>
+                    <text text="$l10n_tc_help_allocating_3"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_allocating_4_title"/>
+                    <text text="$l10n_tc_help_allocating_4"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_allocating_5_title"/>
+                    <text text="$l10n_tc_help_allocating_5"/>
+                </paragraph>
+            </page>
+            <page title="$l10n_tc_help_doItYourself_title" iconSliceId="tcHelpIcons.doItYourself">
+                <paragraph>
+                    <text text="$l10n_tc_help_doItYourself_1"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_doItYourself_2_title"/>
+                    <text text="$l10n_tc_help_doItYourself_2"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_doItYourself_3_title"/>
+                    <text text="$l10n_tc_help_doItYourself_3"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_doItYourself_4_title"/>
+                    <text text="$l10n_tc_help_doItYourself_4"/>
+                </paragraph>
+            </page>
+            <page title="$l10n_tc_help_quality_title" iconSliceId="tcHelpIcons.quality">
+                <paragraph>
+                    <text text="$l10n_tc_help_quality_1"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_quality_2_title"/>
+                    <text text="$l10n_tc_help_quality_2"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_quality_3_title"/>
+                    <text text="$l10n_tc_help_quality_3"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_quality_4_title"/>
+                    <text text="$l10n_tc_help_quality_4"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_quality_5_title"/>
+                    <text text="$l10n_tc_help_quality_5"/>
+                </paragraph>
+            </page>
+            <page title="$l10n_tc_help_supplies_title" iconSliceId="tcHelpIcons.supplies">
+                <paragraph>
+                    <text text="$l10n_tc_help_supplies_1"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_supplies_2_title"/>
+                    <text text="$l10n_tc_help_supplies_2"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_supplies_3_title"/>
+                    <text text="$l10n_tc_help_supplies_3"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_supplies_4_title"/>
+                    <text text="$l10n_tc_help_supplies_4"/>
+                </paragraph>
+            </page>
+            <page title="$l10n_tc_help_logbook_title" iconSliceId="tcHelpIcons.logbook">
+                <paragraph>
+                    <text text="$l10n_tc_help_logbook_1"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_logbook_2_title"/>
+                    <text text="$l10n_tc_help_logbook_2"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_logbook_3_title"/>
+                    <text text="$l10n_tc_help_logbook_3"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_logbook_4_title"/>
+                    <text text="$l10n_tc_help_logbook_4"/>
+                </paragraph>
+            </page>
+        </category>
+        <category title="$l10n_tc_help_cat_staff">
+            <page title="$l10n_tc_help_hiring_title" iconSliceId="tcHelpIcons.hiring">
+                <paragraph>
+                    <text text="$l10n_tc_help_hiring_1"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_hiring_2_title"/>
+                    <text text="$l10n_tc_help_hiring_2"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_hiring_3_title"/>
+                    <text text="$l10n_tc_help_hiring_3"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_hiring_4_title"/>
+                    <text text="$l10n_tc_help_hiring_4"/>
+                </paragraph>
+            </page>
+            <page title="$l10n_tc_help_hours_title" iconSliceId="tcHelpIcons.hours">
+                <paragraph>
+                    <text text="$l10n_tc_help_hours_1"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_hours_2_title"/>
+                    <text text="$l10n_tc_help_hours_2"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_hours_3_title"/>
+                    <text text="$l10n_tc_help_hours_3"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_hours_4_title"/>
+                    <text text="$l10n_tc_help_hours_4"/>
+                </paragraph>
+            </page>
+            <page title="$l10n_tc_help_skills_title" iconSliceId="tcHelpIcons.skills">
+                <paragraph>
+                    <text text="$l10n_tc_help_skills_1"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_skills_2_title"/>
+                    <text text="$l10n_tc_help_skills_2"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_skills_3_title"/>
+                    <text text="$l10n_tc_help_skills_3"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_skills_4_title"/>
+                    <text text="$l10n_tc_help_skills_4"/>
+                </paragraph>
+            </page>
+            <page title="$l10n_tc_help_morale_title" iconSliceId="tcHelpIcons.morale">
+                <paragraph>
+                    <text text="$l10n_tc_help_morale_1"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_morale_2_title"/>
+                    <text text="$l10n_tc_help_morale_2"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_morale_3_title"/>
+                    <text text="$l10n_tc_help_morale_3"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_morale_4_title"/>
+                    <text text="$l10n_tc_help_morale_4"/>
+                </paragraph>
+            </page>
+            <page title="$l10n_tc_help_absence_title" iconSliceId="tcHelpIcons.absence">
+                <paragraph>
+                    <text text="$l10n_tc_help_absence_1"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_absence_2_title"/>
+                    <text text="$l10n_tc_help_absence_2"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_absence_3_title"/>
+                    <text text="$l10n_tc_help_absence_3"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_absence_4_title"/>
+                    <text text="$l10n_tc_help_absence_4"/>
+                </paragraph>
+            </page>
+            <page title="$l10n_tc_help_leaving_title" iconSliceId="tcHelpIcons.leaving">
+                <paragraph>
+                    <text text="$l10n_tc_help_leaving_1"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_leaving_2_title"/>
+                    <text text="$l10n_tc_help_leaving_2"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_leaving_3_title"/>
+                    <text text="$l10n_tc_help_leaving_3"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_leaving_4_title"/>
+                    <text text="$l10n_tc_help_leaving_4"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_leaving_5_title"/>
+                    <text text="$l10n_tc_help_leaving_5"/>
+                </paragraph>
+            </page>
+            <page title="$l10n_tc_help_office_title" iconSliceId="tcHelpIcons.office">
+                <paragraph>
+                    <text text="$l10n_tc_help_office_1"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_office_2_title"/>
+                    <text text="$l10n_tc_help_office_2"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_office_3_title"/>
+                    <text text="$l10n_tc_help_office_3"/>
+                </paragraph>
+            </page>
+            <page title="$l10n_tc_help_looks_title" iconSliceId="tcHelpIcons.looks">
+                <paragraph>
+                    <text text="$l10n_tc_help_looks_1"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_looks_2_title"/>
+                    <text text="$l10n_tc_help_looks_2"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_looks_3_title"/>
+                    <text text="$l10n_tc_help_looks_3"/>
+                </paragraph>
+            </page>
+        </category>
+        <category title="$l10n_tc_help_cat_money">
+            <page title="$l10n_tc_help_invoices_title" iconSliceId="tcHelpIcons.invoices">
+                <paragraph>
+                    <text text="$l10n_tc_help_invoices_1"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_invoices_2_title"/>
+                    <text text="$l10n_tc_help_invoices_2"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_invoices_3_title"/>
+                    <text text="$l10n_tc_help_invoices_3"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_invoices_4_title"/>
+                    <text text="$l10n_tc_help_invoices_4"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_invoices_5_title"/>
+                    <text text="$l10n_tc_help_invoices_5"/>
+                </paragraph>
+            </page>
+            <page title="$l10n_tc_help_overheads_title" iconSliceId="tcHelpIcons.overheads">
+                <paragraph>
+                    <text text="$l10n_tc_help_overheads_1"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_overheads_2_title"/>
+                    <text text="$l10n_tc_help_overheads_2"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_overheads_3_title"/>
+                    <text text="$l10n_tc_help_overheads_3"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_overheads_4_title"/>
+                    <text text="$l10n_tc_help_overheads_4"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_overheads_5_title"/>
+                    <text text="$l10n_tc_help_overheads_5"/>
+                </paragraph>
+            </page>
+            <page title="$l10n_tc_help_machineryInsurance_title" iconSliceId="tcHelpIcons.machineryInsurance">
+                <paragraph>
+                    <text text="$l10n_tc_help_machineryInsurance_1"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_machineryInsurance_2_title"/>
+                    <text text="$l10n_tc_help_machineryInsurance_2"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_machineryInsurance_3_title"/>
+                    <text text="$l10n_tc_help_machineryInsurance_3"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_machineryInsurance_4_title"/>
+                    <text text="$l10n_tc_help_machineryInsurance_4"/>
+                </paragraph>
+            </page>
+            <page title="$l10n_tc_help_association_title" iconSliceId="tcHelpIcons.association">
+                <paragraph>
+                    <text text="$l10n_tc_help_association_1"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_association_2_title"/>
+                    <text text="$l10n_tc_help_association_2"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_association_3_title"/>
+                    <text text="$l10n_tc_help_association_3"/>
+                </paragraph>
+            </page>
+        </category>
+        <category title="$l10n_tc_help_cat_yard">
+            <page title="$l10n_tc_help_parking_title" iconSliceId="tcHelpIcons.parking">
+                <paragraph>
+                    <text text="$l10n_tc_help_parking_1"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_parking_2_title"/>
+                    <text text="$l10n_tc_help_parking_2"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_parking_3_title"/>
+                    <text text="$l10n_tc_help_parking_3"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_parking_4_title"/>
+                    <text text="$l10n_tc_help_parking_4"/>
+                </paragraph>
+            </page>
+            <page title="$l10n_tc_help_spots_title" iconSliceId="tcHelpIcons.spots">
+                <paragraph>
+                    <text text="$l10n_tc_help_spots_1"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_spots_2_title"/>
+                    <text text="$l10n_tc_help_spots_2"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_spots_3_title"/>
+                    <text text="$l10n_tc_help_spots_3"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_spots_4_title"/>
+                    <text text="$l10n_tc_help_spots_4"/>
+                </paragraph>
+            </page>
+            <page title="$l10n_tc_help_signs_title" iconSliceId="tcHelpIcons.signs">
+                <paragraph>
+                    <text text="$l10n_tc_help_signs_1"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_signs_2_title"/>
+                    <text text="$l10n_tc_help_signs_2"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_signs_3_title"/>
+                    <text text="$l10n_tc_help_signs_3"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_signs_4_title"/>
+                    <text text="$l10n_tc_help_signs_4"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_signs_5_title"/>
+                    <text text="$l10n_tc_help_signs_5"/>
+                </paragraph>
+            </page>
+        </category>
+        <category title="$l10n_tc_help_cat_farmers">
+            <page title="$l10n_tc_help_people_title" iconSliceId="tcHelpIcons.people">
+                <paragraph>
+                    <text text="$l10n_tc_help_people_1"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_people_2_title"/>
+                    <text text="$l10n_tc_help_people_2"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_people_3_title"/>
+                    <text text="$l10n_tc_help_people_3"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_people_4_title"/>
+                    <text text="$l10n_tc_help_people_4"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_people_5_title"/>
+                    <text text="$l10n_tc_help_people_5"/>
+                </paragraph>
+            </page>
+            <page title="$l10n_tc_help_relationships_title" iconSliceId="tcHelpIcons.relationships">
+                <paragraph>
+                    <text text="$l10n_tc_help_relationships_1"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_relationships_2_title"/>
+                    <text text="$l10n_tc_help_relationships_2"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_relationships_3_title"/>
+                    <text text="$l10n_tc_help_relationships_3"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_relationships_4_title"/>
+                    <text text="$l10n_tc_help_relationships_4"/>
+                </paragraph>
+            </page>
+            <page title="$l10n_tc_help_farmerYards_title" iconSliceId="tcHelpIcons.farmerYards">
+                <paragraph>
+                    <text text="$l10n_tc_help_farmerYards_1"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_farmerYards_2_title"/>
+                    <text text="$l10n_tc_help_farmerYards_2"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_farmerYards_3_title"/>
+                    <text text="$l10n_tc_help_farmerYards_3"/>
+                </paragraph>
+            </page>
+            <page title="$l10n_tc_help_farmerMachines_title" iconSliceId="tcHelpIcons.farmerMachines">
+                <paragraph>
+                    <text text="$l10n_tc_help_farmerMachines_1"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_farmerMachines_2_title"/>
+                    <text text="$l10n_tc_help_farmerMachines_2"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_farmerMachines_3_title"/>
+                    <text text="$l10n_tc_help_farmerMachines_3"/>
+                </paragraph>
+            </page>
+            <page title="$l10n_tc_help_yardJobs_title" iconSliceId="tcHelpIcons.yardJobs">
+                <paragraph>
+                    <text text="$l10n_tc_help_yardJobs_1"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_yardJobs_2_title"/>
+                    <text text="$l10n_tc_help_yardJobs_2"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_yardJobs_3_title"/>
+                    <text text="$l10n_tc_help_yardJobs_3"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_yardJobs_4_title"/>
+                    <text text="$l10n_tc_help_yardJobs_4"/>
+                </paragraph>
+            </page>
+        </category>
+        <category title="$l10n_tc_help_cat_auctions">
+            <page title="$l10n_tc_help_auctionSale_title" iconSliceId="tcHelpIcons.auctionSale">
+                <paragraph>
+                    <text text="$l10n_tc_help_auctionSale_1"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_auctionSale_2_title"/>
+                    <text text="$l10n_tc_help_auctionSale_2"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_auctionSale_3_title"/>
+                    <text text="$l10n_tc_help_auctionSale_3"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_auctionSale_4_title"/>
+                    <text text="$l10n_tc_help_auctionSale_4"/>
+                </paragraph>
+            </page>
+            <page title="$l10n_tc_help_auctionBidding_title" iconSliceId="tcHelpIcons.auctionBidding">
+                <paragraph>
+                    <text text="$l10n_tc_help_auctionBidding_1"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_auctionBidding_2_title"/>
+                    <text text="$l10n_tc_help_auctionBidding_2"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_auctionBidding_3_title"/>
+                    <text text="$l10n_tc_help_auctionBidding_3"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_auctionBidding_4_title"/>
+                    <text text="$l10n_tc_help_auctionBidding_4"/>
+                </paragraph>
+            </page>
+            <page title="$l10n_tc_help_auctionAttend_title" iconSliceId="tcHelpIcons.auctionAttend">
+                <paragraph>
+                    <text text="$l10n_tc_help_auctionAttend_1"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_auctionAttend_2_title"/>
+                    <text text="$l10n_tc_help_auctionAttend_2"/>
+                </paragraph>
+            </page>
+        </category>
+        <category title="$l10n_tc_help_cat_workshop">
+            <page title="$l10n_tc_help_workshopTrades_title" iconSliceId="tcHelpIcons.workshopTrades">
+                <paragraph>
+                    <text text="$l10n_tc_help_workshopTrades_1"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_workshopTrades_2_title"/>
+                    <text text="$l10n_tc_help_workshopTrades_2"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_workshopTrades_3_title"/>
+                    <text text="$l10n_tc_help_workshopTrades_3"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_workshopTrades_4_title"/>
+                    <text text="$l10n_tc_help_workshopTrades_4"/>
+                </paragraph>
+            </page>
+            <page title="$l10n_tc_help_repairContracts_title" iconSliceId="tcHelpIcons.repairContracts">
+                <paragraph>
+                    <text text="$l10n_tc_help_repairContracts_1"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_repairContracts_2_title"/>
+                    <text text="$l10n_tc_help_repairContracts_2"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_repairContracts_3_title"/>
+                    <text text="$l10n_tc_help_repairContracts_3"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_repairContracts_4_title"/>
+                    <text text="$l10n_tc_help_repairContracts_4"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_repairContracts_5_title"/>
+                    <text text="$l10n_tc_help_repairContracts_5"/>
+                </paragraph>
+            </page>
+            <page title="$l10n_tc_help_breakdowns_title" iconSliceId="tcHelpIcons.breakdowns">
+                <paragraph>
+                    <text text="$l10n_tc_help_breakdowns_1"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_breakdowns_2_title"/>
+                    <text text="$l10n_tc_help_breakdowns_2"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_breakdowns_3_title"/>
+                    <text text="$l10n_tc_help_breakdowns_3"/>
+                </paragraph>
+            </page>
+            <page title="$l10n_tc_help_lotInspections_title" iconSliceId="tcHelpIcons.lotInspections">
+                <paragraph>
+                    <text text="$l10n_tc_help_lotInspections_1"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_lotInspections_2_title"/>
+                    <text text="$l10n_tc_help_lotInspections_2"/>
+                </paragraph>
+            </page>
+        </category>
+        <category title="$l10n_tc_help_cat_events">
+            <page title="$l10n_tc_help_theft_title" iconSliceId="tcHelpIcons.theft">
+                <paragraph>
+                    <text text="$l10n_tc_help_theft_1"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_theft_2_title"/>
+                    <text text="$l10n_tc_help_theft_2"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_theft_3_title"/>
+                    <text text="$l10n_tc_help_theft_3"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_theft_4_title"/>
+                    <text text="$l10n_tc_help_theft_4"/>
+                </paragraph>
+            </page>
+            <page title="$l10n_tc_help_accidents_title" iconSliceId="tcHelpIcons.accidents">
+                <paragraph>
+                    <text text="$l10n_tc_help_accidents_1"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_accidents_2_title"/>
+                    <text text="$l10n_tc_help_accidents_2"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_accidents_3_title"/>
+                    <text text="$l10n_tc_help_accidents_3"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_accidents_4_title"/>
+                    <text text="$l10n_tc_help_accidents_4"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_accidents_5_title"/>
+                    <text text="$l10n_tc_help_accidents_5"/>
+                </paragraph>
+            </page>
+            <page title="$l10n_tc_help_clearing_title" iconSliceId="tcHelpIcons.clearing">
+                <paragraph>
+                    <text text="$l10n_tc_help_clearing_1"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_clearing_2_title"/>
+                    <text text="$l10n_tc_help_clearing_2"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_clearing_3_title"/>
+                    <text text="$l10n_tc_help_clearing_3"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_clearing_4_title"/>
+                    <text text="$l10n_tc_help_clearing_4"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_clearing_5_title"/>
+                    <text text="$l10n_tc_help_clearing_5"/>
+                </paragraph>
+            </page>
+            <page title="$l10n_tc_help_news_title" iconSliceId="tcHelpIcons.news">
+                <paragraph>
+                    <text text="$l10n_tc_help_news_1"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_news_2_title"/>
+                    <text text="$l10n_tc_help_news_2"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_news_3_title"/>
+                    <text text="$l10n_tc_help_news_3"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_news_4_title"/>
+                    <text text="$l10n_tc_help_news_4"/>
+                </paragraph>
+            </page>
+        </category>
+    </helpLines>
     <multiplayer supported="true"/>
 </modDesc>
