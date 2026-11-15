@@ -112,6 +112,7 @@ local function setup()
     world:load("src/business/TippedTrailer.lua")
     world:load("src/business/CropSpill.lua")
     world:load("src/util/TCJoyriderRuts.lua")
+    world:load("src/util/TCSiteClearance.lua")
 
     -- The field: centred on the origin, 120 m square unless a test says.
     world.boundary = { { -60, -60 }, { 60, -60 }, { 60, 60 }, { -60, 60 } }

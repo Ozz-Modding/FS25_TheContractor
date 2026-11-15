@@ -122,6 +122,7 @@ local function setup()
     world:load("src/util/TCJobProgress.lua")
     world:load("src/util/TCDebris.lua")
     world:load("src/util/TCJoyriderRuts.lua")
+    world:load("src/util/TCSiteClearance.lua")
     world:load("src/business/Joyriders.lua")
     world:load("src/business/FlyTipping.lua")
     world:load("src/placeables/PlaceableTCDisposalSkip.lua")
@@ -201,7 +202,7 @@ local function setup()
     world.painted = {}
     FSDensityMapUtil = {
         convertToDensityMapAngle = function() return 0 end,
-        updateCultivatorArea = function(sx, sz, wx, wz, hx, hz)
+        updateWheelDestructionArea = function(sx, sz, wx, wz, hx, hz)
             table.insert(world.painted, { x = (wx + hx) / 2, z = (wz + hz) / 2 })
         end,
         clearDecoArea = function() end,
@@ -333,12 +334,14 @@ test("the pile lands 4-7 m in from the edge by the gate, with ruts in to it, and
     assertEquals(job.deadlineDay, 41)
     assertTrue(TheContractorJobGeneration.isPlayerOnly(job))
 
-    -- The evidence: ruts from the edge in, and the patch under the pile.
+    -- The evidence: tracks from the edge in, and the patch round the pile.
     assertTrue(#world.painted >= 3)
+    local reach = TCSiteClearance.PILE_SIZE / 2 + TCSiteClearance.EDGE_JITTER
     local patch = world.painted[#world.painted]
-    assertTrue(patch.x >= 4 and patch.x <= 7 and math.abs(patch.z) < 1e-6, "the patch is on the spot")
+    assertTrue(patch.x >= 4 - reach and patch.x <= 7 + reach and math.abs(patch.z) <= reach,
+        "the patch is round the spot")
     for _, piece in ipairs(world.painted) do
-        assertTrue(piece.x >= 0 and piece.x <= 7 + 1e-6, "between the edge and the spot")
+        assertTrue(piece.x >= 0 and piece.x <= 7 + reach, "between the edge and the spot")
     end
 
     assertEquals(#world.messages, 1)
@@ -347,6 +350,31 @@ test("the pile lands 4-7 m in from the edge by the gate, with ruts in to it, and
     assertEquals(world.messages[1].args[1], 12, "the field")
     assertEquals(world.messages[1].args[2], 8, "the pieces")
     assertEquals(world.messages[1].payload.jobId, job.id)
+end)
+
+test("156: never a field in a crop too tall to find the pile in, checked again when it happens", function()
+    local world, tc = setup()
+    local field = world:addField({ id = 12 })
+    -- Maize, growing until 6.
+    FruitType.MAIZE = 5
+    g_fruitTypeManager = {
+        getFruitTypeByIndex = function(_, index)
+            if index ~= FruitType.MAIZE then
+                return nil
+            end
+            return { index = index, name = "MAIZE", cutState = 8, minHarvestingGrowthState = 6,
+                maxHarvestingGrowthState = 6, getIsCut = function(_, state) return state == 8 end }
+        end,
+    }
+    field.fieldState = { isValid = true, fruitTypeIndex = FruitType.MAIZE, growthState = 3 }
+    assertEquals(#tc.FlyTipping:getEligibleFields(1), 0)
+
+    field.fieldState.growthState = 6
+    assertEquals(#tc.FlyTipping:getEligibleFields(1), 1, "ripe")
+    field.fieldState.growthState = 3
+    tc.FlyTipping:onDump({ id = 1, farmId = 1, data = { fieldId = 12 } })
+    assertEquals(#world.spawned, 0)
+    assertEquals(#tc.Jobs:getAllJobs(1), 0)
 end)
 
 test("a field without a boundary still gets its pile, in from the gate, and no ruts", function()
@@ -654,6 +682,23 @@ test("completing or missing the job clears what's left", function()
         assertTrue(world.spawned[i].isDeleted)
     end
     assertEquals(job.debrisDisposed, 1, "what was taken still counts")
+end)
+
+test("an accepted job left past its deadline takes what's left of its pile away", function()
+    local world, tc = setup()
+    local _, job = dump(world, tc)
+    assertTrue(tc.Jobs:transitionJobState(1, job.id, TheContractorJob.STATE.ACCEPTED))
+    tc.FlyTipping:disposeDebris(world.spawned[1])
+
+    tc.Logbook = { recordJobMissed = function() end }
+    TCJobMissedEvent = { showNotification = function() end }
+    g_currentMission.environment.currentMonotonicDay = job.deadlineDay + 1
+    tc.Jobs:onDayChanged()
+    assertEquals(job.state, TheContractorJob.STATE.MISSED)
+    assertEquals(#job.debrisIds, 0)
+    for _, debris in ipairs(world.spawned) do
+        assertTrue(debris.isDeleted)
+    end
 end)
 
 test("a job that can't be dated takes its pile back", function()

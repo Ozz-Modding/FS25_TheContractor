@@ -43,7 +43,8 @@ function TCStandingSpotFilterEvent:run(connection)
     end
 
     if g_currentMission:getIsServer() then
-        if spot:getOwnerFarmId() ~= self.farmId then
+        -- 154: a spot in a farmer's yard has no filter.
+        if spot:getOwnerFarmId() ~= self.farmId or TCFarmerYardSpots.isYardSpot(spot) then
             return
         end
         local filter = TCStandingSpotActivatable.sanitise(self.farmId, self.filter)

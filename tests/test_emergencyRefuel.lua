@@ -57,6 +57,7 @@ local function setup()
     world:load("src/util/TCJobSupplies.lua")
     world:load("src/business/FarmerFleet.lua")
     world:load("src/business/YardBales.lua")
+    world:load("src/util/TCSiteClearance.lua")
     world:load("src/business/EmergencyRefuel.lua")
     local tanks = { ["tractor.xml"] = 400, ["combine.xml"] = 1000, ["electric.xml"] = 0 }
     TheContractorEmergencyRefuel.getTankCapacity = function(xml)

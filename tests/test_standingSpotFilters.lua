@@ -19,6 +19,8 @@ local function setup()
     dofile("src/util/TCParkingSlotFilter.lua")
     dofile("src/placeables/PlaceableTCSeatSpot.lua")
     dofile("src/util/TCIdleStaff.lua")
+    dofile("src/util/TCShelter.lua")
+    dofile("src/util/TCFarmerYardSpots.lua")
     dofile("src/util/TCStandingSpotActivatable.lua")
     dofile("src/events/TCStandingSpotFilterEvent.lua")
 

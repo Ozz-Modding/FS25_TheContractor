@@ -920,7 +920,7 @@
 		<text name="tc_parkingSlot_save" text="Save"/>
 		<text name="tc_parkingSlot_clear" text="Clear all"/>
 		<text name="tc_standingSpot_name" text="Standing Spot"/>
-		<text name="tc_standingSpot_function" text="Somewhere for one of your staff to stand while they've nothing on, facing the arrow. Stand by a placed spot to choose who stands there. Only visible in the construction menu, unless you turn on Show parking slots (Right Ctrl+P)."/>
+		<text name="tc_standingSpot_function" text="Somewhere for one of your staff to stand while they've nothing on, facing the arrow. Stand by a placed spot to choose who stands there. Placed in a yard no player owns (host or admin only), it's for the yard's farmer instead. In rain, snow or hail only those indoors are used. Only visible in the construction menu, unless you turn on Show parking slots (Right Ctrl+P)."/>
 		<text name="tc_standingSpot_activate" text="Choose who stands here"/>
 		<text name="tc_standingSpot_dialogTitle" text="Standing Spot"/>
 		<text name="tc_standingSpot_dialogHeading" text="Kept for: %s"/>
@@ -930,8 +930,10 @@
 		<text name="tc_standingSpot_kind_worker" text="Worker"/>
 		<text name="tc_standingSpot_kind_office" text="Office"/>
 		<text name="tc_standingSpot_nothingToPick" text="Your company has no staff yet."/>
+		<text name="tc_standingSpot_yard_noPermission" text="Only the host or an admin can put this in a farmer's yard"/>
+		<text name="tc_standingSpot_yard_notYard" text="You don't own this land, and it isn't a farmer's yard"/>
 		<text name="tc_seatSpot_name" text="Seat"/>
-		<text name="tc_seatSpot_function" text="A chair for one of your staff to sit on while they've nothing on, facing the arrow. Choose the chair as you place it, and stand by a placed seat to choose who sits there. The arrow is only visible in the construction menu, unless you turn on Show parking slots (Right Ctrl+P)."/>
+		<text name="tc_seatSpot_function" text="A chair for one of your staff to sit on while they've nothing on, facing the arrow. Choose the chair as you place it, and stand by a placed seat to choose who sits there. Placed in a yard no player owns (host or admin only), it's for the yard's farmer instead. In rain, snow or hail only those indoors are used. The arrow is only visible in the construction menu, unless you turn on Show parking slots (Right Ctrl+P)."/>
 		<text name="tc_seatSpot_activate" text="Choose who sits here"/>
 		<text name="tc_seatSpot_dialogTitle" text="Seat"/>
 		<text name="tc_seatSpot_dialogHint" text="Tick staff to keep this seat for them. Only they will sit here, and they use it before any open seat or standing spot. Tick nobody to let anyone sit here."/>

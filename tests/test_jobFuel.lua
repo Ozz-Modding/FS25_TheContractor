@@ -69,6 +69,7 @@ end)
 local function setupPlayerJob(x, z, def)
     local world = setup()
     world:load("src/util/TCJoyriderRuts.lua")
+    world:load("src/util/TCSiteClearance.lua")
     TCJoyriderRuts.getFieldBoundary = function(field)
         return field.boundary
     end

@@ -160,11 +160,13 @@ function TheContractorFieldBreakdowns.hasOpenBreakdown(farmId)
     return false
 end
 
--- An NPC's field with no live job on it and a boundary to stand in.
+-- An NPC's field with no live job on it, and no crop a machine would be
+-- lost in (156's TCSiteClearance.isUsableField).
 function TheContractorFieldBreakdowns.isEligibleField(field)
     local fieldId = field ~= nil and field:getId() or nil
     return fieldId ~= nil and field:getOwner() == FarmlandManager.NO_OWNER_FARM_ID and
-        not g_currentMission.TheContractor.Jobs:isFieldProtected(fieldId)
+        not g_currentMission.TheContractor.Jobs:isFieldProtected(fieldId) and
+        TCSiteClearance.isUsableField(field)
 end
 
 function TheContractorFieldBreakdowns.getEligibleFields()
@@ -352,14 +354,14 @@ function TheContractorFieldBreakdowns.pickFarmerSpot(farmer, fieldId, model, ran
     return { x = x, z = z, rotY = rotY, fieldId = fieldId }
 end
 
--- Server, once the machine's there: its ruts in from the edge and the crop
--- round it cleared, so it isn't standing in the middle of the maize.
+-- Server, once the machine's there: its run in from the edge and the crop
+-- round it flattened or cut (156's TCSiteClearance), so it can be seen.
 function TheContractorFieldBreakdowns.clearSpot(entry, model)
     local field = g_fieldManager:getFieldById(entry.fieldId)
     if field == nil or model == nil or entry.x == nil then
         return
     end
-    TCJoyriderRuts.paintMachineSite(field, entry.x, entry.z, entry.rotY or 0, model.width, model.length)
+    TCSiteClearance.paintMachineSite(field, entry.x, entry.z, entry.rotY or 0, model.width, model.length)
 end
 
 -- Stages (server) ---------------------------------------------------------------------

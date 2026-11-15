@@ -14,6 +14,8 @@ local function setup()
     world:load("src/placeables/PlaceableTCStandingSpot.lua")
     world:load("src/placeables/PlaceableTCSeatSpot.lua")
     world:load("src/util/TCIdleStaff.lua")
+    world:load("src/util/TCShelter.lua")
+    world:load("src/util/TCFarmerYardSpots.lua")
     world:load("src/util/TCConsole.lua")
 
     -- Two wardrobe models, one per gender. Building a look is the engine's

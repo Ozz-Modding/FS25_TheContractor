@@ -728,6 +728,10 @@ function TheContractorJobs:missJob(job, noPenalty)
 
     if wasAllocated then
         self:releaseMissedJobResources(job)
+    else
+        -- Nothing to release, but whatever was laid out for it (075's
+        -- fly-tipped pile) still goes.
+        TCFieldPreparation.clearUpAfterJob(job)
     end
     g_currentMission.TheContractor.Inbox:removeMessagesForJob(job.farmId, job.id)
     -- 100: the customer takes their machine back as it is.

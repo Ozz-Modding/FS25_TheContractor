@@ -167,7 +167,8 @@ function TCStandingSpotActivatable.getOwnSpotNear(x, z)
     local best, bestDistance = nil, TCStandingSpotActivatable.ACTIVATE_DISTANCE
     for _, placeable in ipairs(placeableSystem.placeables) do
         if PlaceableTCStandingSpot.isSpot(placeable) and not placeable.isDeleted and
-            not placeable.markedForDeletion and placeable:getOwnerFarmId() == farmId then
+            not placeable.markedForDeletion and placeable:getOwnerFarmId() == farmId and
+            not TCFarmerYardSpots.isYardSpot(placeable) then
             local sx, _, sz = PlaceableTCStandingSpot.getStandPose(placeable)
             if sx ~= nil then
                 local distance = MathUtil.vector2Length(x - sx, z - sz)

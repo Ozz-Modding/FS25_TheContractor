@@ -50,6 +50,7 @@ local function setup()
     world:load("src/business/CropSpill.lua")
     world:load("src/business/JobGeneration.lua")
     world:load("src/util/TCJoyriderRuts.lua")
+    world:load("src/util/TCSiteClearance.lua")
     world:load("src/util/TCFieldAccess.lua")
 
     world.clearedUp = {}

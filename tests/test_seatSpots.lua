@@ -15,6 +15,8 @@ local function setup()
     dofile("src/placeables/PlaceableTCSeatSpot.lua")
     dofile("src/util/TCSeatTypes.lua")
     dofile("src/util/TCIdleStaff.lua")
+    dofile("src/util/TCShelter.lua")
+    dofile("src/util/TCFarmerYardSpots.lua")
 
     -- Nodes are plain tables holding their position.
     entityExists = function() return true end

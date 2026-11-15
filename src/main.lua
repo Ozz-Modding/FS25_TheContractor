@@ -63,8 +63,11 @@ source(TheContractor.dir .. "src/util/TCAINotifications.lua")
 source(TheContractor.dir .. "src/util/TCAIRestart.lua")
 source(TheContractor.dir .. "src/util/TCIdleStaff.lua")
 source(TheContractor.dir .. "src/util/TCYardFarmers.lua")
+source(TheContractor.dir .. "src/util/TCFarmerYardSpots.lua")
+source(TheContractor.dir .. "src/util/TCShelter.lua")
 source(TheContractor.dir .. "src/util/TCYardMapAction.lua")
 source(TheContractor.dir .. "src/util/TCJoyriderRuts.lua")
+source(TheContractor.dir .. "src/util/TCSiteClearance.lua")
 source(TheContractor.dir .. "src/util/TCBinBagSquash.lua")
 source(TheContractor.dir .. "src/util/TCDebris.lua")
 source(TheContractor.dir .. "src/util/TCFigures.lua")
@@ -465,6 +468,8 @@ function TheContractor:loadMap()
     -- 100: repair zone filters, the same way.
     TCRepairZoneActivatable.install()
     TCStandingSpotActivatable.install()
+    -- 155: wet weather sends people standing about indoors.
+    TCShelter.install()
     -- 105: pushing a tipped trailer back onto its wheels.
     TCTippedTrailerActivatable.install()
     -- 138: viewing an auction lot.
@@ -510,6 +515,8 @@ function TheContractor:loadMap()
     self.RepairContracts:startDailyTick()
     -- 110: land changing hands (server).
     self.Farmers:startListening()
+    -- 154: a farmer's yard spots go when a player buys the land (server).
+    TCFarmerYardSpots.startListening()
     -- 137: the auction's schedule and days (server).
     self.Auctions:startListening()
     self.AuctionSale:startListening()
@@ -756,6 +763,8 @@ end
 function TheContractor:onStartMission()
     -- Over any other mod's patch of the same check (TCFieldAccess).
     TCFieldAccess.install()
+    -- 155: the weather's ready by now.
+    TCShelter.refresh()
 
     local tc = g_currentMission.TheContractor
     if tc == nil then return end
@@ -780,6 +789,7 @@ function TheContractor:deleteMap()
     TCParkingSlotActivatable.uninstall()
     TCRepairZoneActivatable.uninstall()
     TCStandingSpotActivatable.uninstall()
+    TCShelter.uninstall()
     TCTippedTrailerActivatable.uninstall()
     TCAuctionLotActivatable.uninstall()
     TCADSUsedLots.uninstall()
@@ -840,6 +850,7 @@ function TheContractor:deleteMap()
     if self.Farmers ~= nil then
         self.Farmers:stopListening()
     end
+    TCFarmerYardSpots.stopListening()
 
     if self.Relationships ~= nil then
         self.Relationships:stopPeriodTick()
