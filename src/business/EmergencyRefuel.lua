@@ -386,7 +386,7 @@ function TheContractorEmergencyRefuel.pickMachine(choices, preferCombine, random
 end
 
 -- The farmer's fields it could happen on: their land, no player's, with no
--- live job on it, in id order.
+-- live job on it and no crop a machine would be lost in (156), in id order.
 function TheContractorEmergencyRefuel.getFields(farmer)
     local held = {}
     for _, farmlandId in ipairs(farmer.farmlandIds or {}) do
@@ -397,7 +397,7 @@ function TheContractorEmergencyRefuel.getFields(farmer)
     for _, field in ipairs(g_fieldManager:getFields()) do
         local farmland = field.getFarmland ~= nil and field:getFarmland() or nil
         if farmland ~= nil and held[farmland:getId()] and field:getOwner() == FarmlandManager.NO_OWNER_FARM_ID and
-                not jobs:isFieldProtected(field:getId()) then
+                not jobs:isFieldProtected(field:getId()) and TCSiteClearance.isUsableField(field) then
             table.insert(result, field)
         end
     end
@@ -562,7 +562,7 @@ function TheContractorEmergencyRefuel:onAsked(incident)
     local capacity = model ~= nil and R.getTankCapacity(machine.xmlFilename) or 0
     local field = g_fieldManager:getFieldById(data.fieldId)
     if model == nil or capacity <= 0 or field == nil or TheContractorFarmerFleet.isAnyOut(farmer, machine) or
-            tc.Jobs:isFieldProtected(data.fieldId) then
+            tc.Jobs:isFieldProtected(data.fieldId) or not TCSiteClearance.isUsableField(field) then
         TCLog.info("TheContractor: farm %d incident %d: farmer #%s's machine #%s or field %s isn't free",
             incident.farmId, incident.id, tostring(data.farmerId), tostring(data.machineId), tostring(data.fieldId))
         return TheContractorRandomEvents.DONE

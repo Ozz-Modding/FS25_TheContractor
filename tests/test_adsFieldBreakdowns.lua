@@ -68,11 +68,11 @@ local function setup(def)
     }
     TCParkingSlotFilter = { getCategoryTitle = function(name) return name end, SUMMARY_MAX_NAMES = 2 }
     TheContractorRandomEvents = { DONE = "done", WAIT = "wait" }
-    -- The ground painted under a placed breakdown (TCJoyriderRuts).
+    -- The ground painted under a placed breakdown (TCSiteClearance).
     world.painted = {}
     FSDensityMapUtil = {
         convertToDensityMapAngle = function() return 0 end,
-        updateCultivatorArea = function(sx, sz, wx, wz, hx, hz)
+        updateWheelDestructionArea = function(sx, sz, wx, wz, hx, hz)
             table.insert(world.painted, { sx = sx, sz = sz, wx = wx, wz = wz, hx = hx, hz = hz })
         end,
         clearDecoArea = function() end,
@@ -263,6 +263,7 @@ local function setup(def)
 
     world:load("src/util/TCVehicleIds.lua")
     world:load("src/util/TCJoyriderRuts.lua")
+    world:load("src/util/TCSiteClearance.lua")
     world:load("src/placeables/PlaceableTCParkingSlot.lua")
     world:load("src/placeables/PlaceableTCRepairZone.lua")
     world:load("src/util/TCADSRepairContracts.lua")
@@ -366,6 +367,30 @@ test("only an NPC's field with no live job, one breakdown at a time, never witho
     assertEquals(world.definition.canTrigger(1), nil)
 end)
 
+test("156: never in a crop too tall to see a machine in, checked again when it happens", function()
+    local world, tc = setup()
+    local field = world:addField({ id = 3 })
+    -- Maize ripe at 8, cut at 10.
+    g_fruitTypeManager = {
+        getFruitTypeByIndex = function(_, index)
+            if index ~= FruitType.MAIZE then
+                return nil
+            end
+            return { index = index, name = "MAIZE", cutState = 10, minHarvestingGrowthState = 8,
+                maxHarvestingGrowthState = 8, getIsCut = function(_, state) return state == 10 end }
+        end,
+    }
+    assertEquals(world.definition.canTrigger(1), nil, "growing maize")
+    field.fieldState.growthState = 8
+    local data = world.definition.canTrigger(1)
+    assertEquals(data.fieldId, 3, "ripe maize can be cut round it")
+
+    -- It's grown back by the time it happens (a new crop): nothing comes.
+    field.fieldState.growthState = 3
+    world.definition.stages[1].run({ id = 1, farmId = 1, data = data })
+    assertEquals(#tc.RepairContracts.arrivals, 0)
+end)
+
 test("the console forces the field service, and refuses anything else", function()
     local world, tc = setup()
     world:addField({ id = 3 })
@@ -421,14 +446,27 @@ test("once it's placed, its ruts in from the edge and the crop round it are clea
         local mx, mz = (call.wx + call.hx) / 2, (call.wz + call.hz) / 2
         assertTrue(mx > 0 and mx < 100 and mz > 0 and mz < 100, "painted on the field")
     end
-    -- The patch is last, on the machine, 2 m bigger than it all round.
-    local patch = world.painted[#world.painted]
+    -- The patch round the machine (3 by 6) leaves it clear all round.
     local data = world.calls.spawned[1]
-    assertNear((patch.wx + patch.hx) / 2, data.x, 0.001)
-    assertNear((patch.wz + patch.hz) / 2, data.z, 0.001)
-    local margin = TCJoyriderRuts.MACHINE_PATCH_MARGIN * 2
-    assertNear(math.sqrt((patch.wx - patch.sx) ^ 2 + (patch.wz - patch.sz) ^ 2), 3 + margin, 0.001)
-    assertNear(math.sqrt((patch.hx - patch.sx) ^ 2 + (patch.hz - patch.sz) ^ 2), 6 + margin, 0.001)
+    local function isPainted(x, z)
+        for _, call in ipairs(world.painted) do
+            local ux, uz = call.wx - call.sx, call.wz - call.sz
+            local vx, vz = call.hx - call.sx, call.hz - call.sz
+            local px, pz = x - call.sx, z - call.sz
+            local det = ux * vz - uz * vx
+            local a, b = (px * vz - pz * vx) / det, (ux * pz - uz * px) / det
+            if a >= 0 and a <= 1 and b >= 0 and b <= 1 then
+                return true
+            end
+        end
+        return false
+    end
+    local dx, dz = math.sin(data.rotY), math.cos(data.rotY)
+    for _, corner in ipairs({ { 1, 1 }, { 1, -1 }, { -1, 1 }, { -1, -1 }, { 0, 0 } }) do
+        local across, along = corner[1] * 1.5, corner[2] * 3
+        assertTrue(isPainted(data.x + dz * across + dx * along, data.z - dx * across + dz * along),
+            "the machine's footprint is clear")
+    end
 end)
 
 test("a spot that's retried leaves nothing painted until the machine's there", function()

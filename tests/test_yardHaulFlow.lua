@@ -185,6 +185,7 @@ local function setup()
 
     world:load("src/util/TCVehicleIds.lua")
     world:load("src/util/TCJoyriderRuts.lua")
+    world:load("src/util/TCSiteClearance.lua")
     world:load("src/placeables/PlaceableTCParkingSlot.lua")
     world:load("src/placeables/PlaceableTCRepairZone.lua")
     world:load("src/util/TCADSRepairContracts.lua")

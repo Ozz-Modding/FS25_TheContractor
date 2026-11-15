@@ -17,6 +17,17 @@
 -- (101, 123) or run dry (127), waits by the machine instead, yard or field,
 -- day or night (getMachineSpot).
 --
+-- 154: a yard with standing or seat spots placed in it (TCFarmerYardSpots)
+-- uses only those: the farmer picks one by the same hash each slot, among
+-- the ones no other farmer has, and the generated spots and the farmhouse
+-- bias are left alone. On a seat they sit (TCSeatedFigure, as staff do);
+-- on either they face its arrow. A placed standing spot's blocker is in
+-- physics while a farmer's on it, and a spot that's gone (its land bought)
+-- takes them off at once.
+--
+-- 155: in wet weather (TCShelter) only indoor spots are in use, placed or
+-- generated, so a farmer with none goes in until it's dry.
+--
 -- Showing them is TCIdleStaff's: a HumanGraphicsComponent from their look,
 -- loaded within LOAD_DISTANCE and freed beyond UNLOAD_DISTANCE, so a map
 -- with many farmers only holds the ones near the player, and nobody
@@ -59,23 +70,26 @@ function TCYardFarmers.getSlot(minutes)
 end
 
 -- Which of a yard's spots (1-based) a farmer stands on in a day's slot, or
--- nil with none.
+-- nil with none. 155: only spots TCShelter lets them use.
 function TCYardFarmers.pickSpot(day, slot, personId, spots)
-    if #spots == 0 then
-        return nil
-    end
-    local nearHouse = {}
+    local usable, nearHouse = {}, {}
     for index, spot in ipairs(spots) do
-        if spot.nearHouse then
-            table.insert(nearHouse, index)
+        if TCShelter.isUsable(spot.x, spot.z) then
+            table.insert(usable, index)
+            if spot.nearHouse then
+                table.insert(nearHouse, index)
+            end
         end
+    end
+    if #usable == 0 then
+        return nil
     end
     local roll = TCYardFarmers.hashSpot(day, slot, personId, "house") % 100
     local pick = TCYardFarmers.hashSpot(day, slot, personId, "spot")
     if #nearHouse > 0 and roll < TCYardFarmers.NEAR_HOUSE_PERCENT then
         return nearHouse[pick % #nearHouse + 1]
     end
-    return pick % #spots + 1
+    return usable[pick % #usable + 1]
 end
 
 -- TCIdleStaff.hash is affine in each character, so from one slot to the
@@ -102,16 +116,41 @@ function TCYardFarmers.getReason(person, yards)
         return string.format("yard %d is owned by a player", farmlandId)
     end
     local entry = yards:getSpots(farmlandId)
-    if entry == nil or #entry.spots == 0 then
+    if (entry == nil or #entry.spots == 0) and #TCYardFarmers.getPlacedSpots(farmlandId) == 0 then
         return string.format("yard %d has no open spots", farmlandId)
     end
     return nil
 end
 
+-- 154: the standing and seat spots placed in the yard on farmlandId, on
+-- the live map (TCFarmerYardSpots.getPlacedSpots).
+function TCYardFarmers.getPlacedSpots(farmlandId)
+    return TCFarmerYardSpots.getPlacedSpots(TCFarmerYardSpots.getMapPlaceables(), farmlandId)
+end
+
+-- 154: which of a yard's placed spots a farmer takes in a day's slot,
+-- among those not in taken (spot key -> true) and in use (155: indoors in
+-- wet weather), or nil if none's free.
+function TCYardFarmers.pickPlacedSpot(day, slot, personId, spots, taken)
+    local free = {}
+    for _, spot in ipairs(spots) do
+        if not taken[spot.key] and TCShelter.isUsable(spot.x, spot.z) then
+            table.insert(free, spot)
+        end
+    end
+    if #free == 0 then
+        return nil
+    end
+    return free[TCYardFarmers.hashSpot(day, slot, personId, "placed") % #free + 1]
+end
+
 -- The spot a farmer stands on in a day's slot: { key, x, y, z, yaw,
--- nearHouse }.
+-- nearHouse }, or nil if none's in use (155: wet weather).
 function TCYardFarmers.getSpot(person, entry, day, slot)
     local index = TCYardFarmers.pickSpot(day, slot, person.id, entry.spots)
+    if index == nil then
+        return nil
+    end
     local point = entry.spots[index]
     local y = getTerrainHeightAtWorldPos(g_terrainNode, point.x, 0, point.z)
     local dx, dz = entry.x - point.x, entry.z - point.z
@@ -245,15 +284,34 @@ function TCYardFarmers.getWanted()
     end
     local slot = TCYardFarmers.getSlot(TheContractorWorkingHours.getNow())
     local day = mission.environment.currentMonotonicDay or 0
+    -- 154: by id, so every machine hands placed spots out in the same order.
+    local farmers = {}
     for _, person in ipairs(tc.Farmers:getFarmers()) do
+        table.insert(farmers, person)
+    end
+    table.sort(farmers, function(a, b) return a.id < b.id end)
+    local placedByYard, takenByYard = {}, {}
+    for _, person in ipairs(farmers) do
         local job, vehicle = TCYardFarmers.getMachineJob(person, tc.Jobs)
         if job ~= nil then
             wanted[person.id] = { person = person, spot = TCYardFarmers.getMachineSpot(person, job, vehicle, tc.Yards) }
         elseif slot ~= nil and TCYardFarmers.getReason(person, tc.Yards) == nil then
-            wanted[person.id] = {
-                person = person,
-                spot = TCYardFarmers.getSpot(person, tc.Yards:getSpots(person.yardFarmlandId), day, slot),
-            }
+            local farmlandId = person.yardFarmlandId
+            placedByYard[farmlandId] = placedByYard[farmlandId] or TCYardFarmers.getPlacedSpots(farmlandId)
+            local placed = placedByYard[farmlandId]
+            if #placed > 0 then
+                takenByYard[farmlandId] = takenByYard[farmlandId] or {}
+                local spot = TCYardFarmers.pickPlacedSpot(day, slot, person.id, placed, takenByYard[farmlandId])
+                if spot ~= nil then
+                    takenByYard[farmlandId][spot.key] = true
+                    wanted[person.id] = { person = person, spot = spot }
+                end
+            else
+                local spot = TCYardFarmers.getSpot(person, tc.Yards:getSpots(farmlandId), day, slot)
+                if spot ~= nil then
+                    wanted[person.id] = { person = person, spot = spot }
+                end
+            end
         end
     end
     return wanted
@@ -291,22 +349,62 @@ function TCYardFarmers.reloadLook(person)
     end
 end
 
+-- 154: a placed spot that's been removed (its land bought).
+local function isPlacedSpotGone(spot)
+    return spot.placeable ~= nil and (spot.placeable.isDeleted or spot.placeable.markedForDeletion)
+end
+
+-- 154: whether the farmer can step onto the spot: any generated one, and a
+-- placed one that's still there with no other farmer on it.
+local function isFree(personId, spot)
+    if spot.placeable == nil then
+        return true
+    end
+    if isPlacedSpotGone(spot) then
+        return false
+    end
+    for otherId, figure in pairs(TCYardFarmers.figures) do
+        if otherId ~= personId and figure.spot.key == spot.key then
+            return false
+        end
+    end
+    return true
+end
+
+function TCYardFarmers.takeOff(personId)
+    local figure = TCYardFarmers.figures[personId]
+    if figure == nil then
+        return
+    end
+    TCIdleStaff.freeModel(figure)
+    TCYardFarmers.figures[personId] = nil
+    if figure.spot.placeable ~= nil and not isPlacedSpotGone(figure.spot) then
+        PlaceableTCStandingSpot.setBlockerActive(figure.spot.placeable, false)
+    end
+end
+
 function TCYardFarmers.updatePerson(personId, entry, dt, camera, cx, cy, cz)
     local figure = TCYardFarmers.figures[personId]
 
-    -- Off their spot once they're not wanted on it and nobody can see it.
-    if figure ~= nil and (entry == nil or entry.spot.key ~= figure.spot.key) and
-            not TCIdleStaff.isSeen(figure.spot, camera, cx, cy, cz) then
-        TCIdleStaff.freeModel(figure)
-        TCYardFarmers.figures[personId] = nil
+    -- Off a placed spot that's gone at once, and off their spot once they're
+    -- not wanted on it and nobody can see it.
+    if figure ~= nil and (isPlacedSpotGone(figure.spot) or
+            ((entry == nil or entry.spot.key ~= figure.spot.key) and
+            not TCIdleStaff.isSeen(figure.spot, camera, cx, cy, cz))) then
+        TCYardFarmers.takeOff(personId)
         figure = nil
     end
 
-    -- Onto the spot they're wanted on once nobody can see it.
-    if figure == nil and entry ~= nil and not TCIdleStaff.isSeen(entry.spot, camera, cx, cy, cz) then
+    -- Onto the spot they're wanted on once nobody can see it (and, a placed
+    -- one, once nobody's on it).
+    if figure == nil and entry ~= nil and not TCIdleStaff.isSeen(entry.spot, camera, cx, cy, cz) and
+            isFree(personId, entry.spot) then
         figure = { person = entry.person, spot = entry.spot, yaw = entry.spot.yaw, graphics = nil, isReady = false,
             isVisible = false }
         TCYardFarmers.figures[personId] = figure
+        if entry.spot.placeable ~= nil then
+            PlaceableTCStandingSpot.setBlockerActive(entry.spot.placeable, true)
+        end
     end
 
     if figure ~= nil then
@@ -346,6 +444,24 @@ end
 
 -- Console ---------------------------------------------------------------------
 
+-- How a farmer wanted on spot stands with it, for describe.
+function TCYardFarmers.describeFigure(person, figure, spot)
+    if figure == nil then
+        return ", not there yet"
+    elseif figure.spot.key ~= spot.key then
+        return string.format(", still on spot %s until you look away", figure.spot.key)
+    elseif TCYardFarmers.noStyle[person.id] then
+        return ", there, but their look couldn't be loaded"
+    elseif figure.graphics == nil then
+        return string.format(", there, model not loaded (loads within %d m)", TCIdleStaff.LOAD_DISTANCE)
+    elseif not figure.isReady then
+        return ", there, model loading"
+    elseif figure.isVisible then
+        return ", there, shown"
+    end
+    return ", there, hidden (too far)"
+end
+
 -- tcDebug farmerStanding: where each farmer is now, and why anyone
 -- isn't in their yard.
 function TCYardFarmers.describe()
@@ -354,6 +470,7 @@ function TCYardFarmers.describe()
     local now = TheContractorWorkingHours.getNow()
     local day = mission.environment.currentMonotonicDay or 0
     local slot = TCYardFarmers.getSlot(now)
+    local wanted = TCYardFarmers.getWanted()
     local lines = {}
     if slot == nil then
         table.insert(lines, string.format("Farmers in their yards, day %d: outside daylight (%02d:00-%02d:00), " ..
@@ -362,6 +479,9 @@ function TCYardFarmers.describe()
         local slotStart = TCYardFarmers.VISIBLE_FROM + slot * TCYardFarmers.SLOT_HOURS
         table.insert(lines, string.format("Farmers in their yards, day %d, %02d:00-%02d:00:", day, slotStart,
             math.min(slotStart + TCYardFarmers.SLOT_HOURS, TCYardFarmers.VISIBLE_TO)))
+    end
+    if TCShelter.isWet then
+        table.insert(lines, "  Wet weather: only spots under cover are in use")
     end
 
     local camera = TCIdleStaff.getCamera()
@@ -396,6 +516,21 @@ function TCYardFarmers.describe()
             if figure ~= nil then
                 text = text .. string.format(", still on spot %s until you look away", figure.spot.key)
             end
+        elseif #TCYardFarmers.getPlacedSpots(person.yardFarmlandId) > 0 then
+            local placed = TCYardFarmers.getPlacedSpots(person.yardFarmlandId)
+            local spot = wanted[person.id] ~= nil and wanted[person.id].spot or nil
+            if spot == nil and TCShelter.isWet then
+                text = string.format("yard %d, indoors out of the weather (none of its %d placed spot(s) is "
+                    .. "under cover, or those that are are taken)", person.yardFarmlandId, #placed)
+            elseif spot == nil then
+                text = string.format("yard %d, all %d placed spot(s) taken by other farmers", person.yardFarmlandId,
+                    #placed)
+            else
+                text = string.format("yard %d, placed %s %s of %d at %.0f, %.0f, %.0f m away", person.yardFarmlandId,
+                    spot.seat ~= nil and "seat" or "spot", spot.key, #placed, spot.x, spot.z,
+                    MathUtil.vector3Length(spot.x - cx, spot.y - cy, spot.z - cz))
+                text = text .. TCYardFarmers.describeFigure(person, figure, spot)
+            end
         else
             local entry = tc.Yards:getSpots(person.yardFarmlandId)
             local nearCount = 0
@@ -403,23 +538,15 @@ function TCYardFarmers.describe()
                 nearCount = nearCount + (point.nearHouse and 1 or 0)
             end
             local spot = TCYardFarmers.getSpot(person, entry, day, slot)
-            text = string.format("yard %d, spot %s of %d (%d near the farmhouse)%s at %.0f, %.0f, %.0f m away",
-                person.yardFarmlandId, spot.key, #entry.spots, nearCount, spot.nearHouse and ", by the house" or "",
-                spot.x, spot.z, MathUtil.vector3Length(spot.x - cx, spot.y - cy, spot.z - cz))
-            if figure == nil then
-                text = text .. ", not there yet"
-            elseif figure.spot.key ~= spot.key then
-                text = text .. string.format(", still on spot %s until you look away", figure.spot.key)
-            elseif TCYardFarmers.noStyle[person.id] then
-                text = text .. ", there, but their look couldn't be loaded"
-            elseif figure.graphics == nil then
-                text = text .. string.format(", there, model not loaded (loads within %d m)", TCIdleStaff.LOAD_DISTANCE)
-            elseif not figure.isReady then
-                text = text .. ", there, model loading"
-            elseif figure.isVisible then
-                text = text .. ", there, shown"
+            if spot == nil then
+                text = string.format("yard %d, indoors out of the weather (none of its %d spots is under cover)",
+                    person.yardFarmlandId, #entry.spots)
             else
-                text = text .. ", there, hidden (too far)"
+                text = string.format("yard %d, spot %s of %d (%d near the farmhouse)%s at %.0f, %.0f, %.0f m away",
+                    person.yardFarmlandId, spot.key, #entry.spots, nearCount,
+                    spot.nearHouse and ", by the house" or "", spot.x, spot.z,
+                    MathUtil.vector3Length(spot.x - cx, spot.y - cy, spot.z - cz))
+                text = text .. TCYardFarmers.describeFigure(person, figure, spot)
             end
         end
         table.insert(lines, string.format("  #%d %s - %s", person.id, person.name, text))

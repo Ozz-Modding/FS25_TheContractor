@@ -22,6 +22,8 @@ local function setup()
     world:load("src/business/Farmers.lua")
     world:load("src/placeables/PlaceableTCSeatSpot.lua")
     world:load("src/util/TCIdleStaff.lua")
+    world:load("src/util/TCShelter.lua")
+    world:load("src/util/TCFarmerYardSpots.lua")
     world:load("src/util/TCYardFarmers.lua")
     TheContractorLogbook = nil
     world:load("src/business/Logbook.lua")

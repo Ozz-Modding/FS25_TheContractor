@@ -42,6 +42,13 @@
 -- it's in the same assignment, and whoever's on it is shown sitting
 -- (TCSeatedFigure, posed on the chair's seat) instead of standing. A
 -- sitter doesn't turn to face the player.
+--
+-- A spot in a farmer's yard (154, TCFarmerYardSpots) is the farmer's, never
+-- the staff's, whoever placed it.
+--
+-- In wet weather (155, TCShelter) only indoor spots are in use: the
+-- assignment just doesn't see the others, so staff move to a free indoor
+-- one (their kept ones first, as ever) or go out of sight.
 
 TCIdleStaff = {}
 
@@ -224,10 +231,12 @@ function TCIdleStaff.getWanted()
 
     local spotsByFarm = {}
     for _, placeable in ipairs(mission.placeableSystem.placeables) do
+        -- 154: a spot in a farmer's yard is the farmer's.
         if PlaceableTCStandingSpot.isSpot(placeable) and not placeable.isDeleted and
-                not placeable.markedForDeletion then
+                not placeable.markedForDeletion and not TCFarmerYardSpots.isYardSpot(placeable) then
             local x, y, z, yaw = PlaceableTCStandingSpot.getStandPose(placeable)
-            if x ~= nil then
+            -- 155: an outdoor spot's out of use in wet weather.
+            if x ~= nil and TCShelter.isUsable(x, z) then
                 local farmId = placeable:getOwnerFarmId()
                 spotsByFarm[farmId] = spotsByFarm[farmId] or {}
                 local key = TCIdleStaff.getSpotKey(x, z)
@@ -605,7 +614,7 @@ function TCIdleStaff.describe(farmId)
     if mission.placeableSystem ~= nil then
         for _, placeable in ipairs(mission.placeableSystem.placeables) do
             if PlaceableTCStandingSpot.isSpot(placeable) and not placeable.isDeleted and
-                    placeable:getOwnerFarmId() == farmId then
+                    placeable:getOwnerFarmId() == farmId and not TCFarmerYardSpots.isYardSpot(placeable) then
                 spotCount = spotCount + 1
                 if PlaceableTCSeatSpot.isSeat(placeable) then
                     seatCount = seatCount + 1
@@ -619,6 +628,9 @@ function TCIdleStaff.describe(farmId)
 
     local lines = { string.format("Farm %d: %d standing spot(s), %d seat(s), %d kept for named staff, day %d",
         farmId, spotCount - seatCount, seatCount, keptCount, mission.environment.currentMonotonicDay or 0) }
+    if TCShelter.isWet then
+        table.insert(lines, "Wet weather: only spots and seats indoors are in use")
+    end
     local now = TheContractorWorkingHours.getNow()
     if not TheContractorWorkingHours.isWorkingTime(now) then
         table.insert(lines, string.format("Outside working hours (%02d:00-%02d:00): only staff kept on are about",

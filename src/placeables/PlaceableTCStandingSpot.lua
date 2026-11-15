@@ -32,6 +32,11 @@
 -- PlaceableTCSeatSpot (the chair) to this specialization, and keeps the
 -- blocker in physics (#keepBlocker).
 --
+-- Farmers' yards (154): a spot can also go on a yard no player owns, by
+-- the host or an admin, for the yard's farmer (TCFarmerYardSpots). Placement
+-- here: on land no player owns, TCFarmerYardSpots' rules; on owned land,
+-- vanilla's.
+--
 -- Loaded by the base game's placeable specialization manager (modDesc), not
 -- sourced by main.lua.
 
@@ -65,6 +70,13 @@ function PlaceableTCStandingSpot.registerSavegameXMLPaths(schema, basePath)
     schema:setXMLSpecializationType()
 end
 
+function PlaceableTCStandingSpot.registerOverwrittenFunctions(placeableType)
+    SpecializationUtil.registerOverwrittenFunction(placeableType, "getIsOnOwnedFarmland",
+        PlaceableTCStandingSpot.getIsOnOwnedFarmland)
+    SpecializationUtil.registerOverwrittenFunction(placeableType, "getCanBePlacedAt",
+        PlaceableTCStandingSpot.getCanBePlacedAt)
+end
+
 function PlaceableTCStandingSpot.registerEventListeners(placeableType)
     SpecializationUtil.registerEventListener(placeableType, "onLoad", PlaceableTCStandingSpot)
     SpecializationUtil.registerEventListener(placeableType, "onFinalizePlacement", PlaceableTCStandingSpot)
@@ -93,6 +105,33 @@ end
 
 function PlaceableTCStandingSpot:onFinalizePlacement()
     PlaceableTCStandingSpot.setBlockerActive(self, false)
+end
+
+-- 154: on land no player owns, the yard rules (TCFarmerYardSpots) decide.
+function PlaceableTCStandingSpot:getCanBePlacedAt(superFunc, x, y, z, farmId)
+    local canPlace, message = superFunc(self, x, y, z, farmId)
+    local data = self[PlaceableTCStandingSpot.KEY]
+    if not canPlace or data == nil then
+        return canPlace, message
+    end
+    local check = TCFarmerYardSpots.getYardCheck(data, x, z)
+    if check ~= nil and check.error ~= nil then
+        return false, g_i18n:getText("tc_standingSpot_yard_" .. check.error)
+    end
+    return canPlace, message
+end
+
+-- 154: a yard placement getCanBePlacedAt allowed (it's asked first) needn't
+-- be on the player's land.
+function PlaceableTCStandingSpot:getIsOnOwnedFarmland(superFunc, x, y, z, rotY)
+    local data = self[PlaceableTCStandingSpot.KEY]
+    if data ~= nil then
+        local check = TCFarmerYardSpots.getYardCheck(data, x, z)
+        if check ~= nil then
+            return check.error == nil
+        end
+    end
+    return superFunc(self, x, y, z, rotY)
 end
 
 function PlaceableTCStandingSpot.isSpot(object)

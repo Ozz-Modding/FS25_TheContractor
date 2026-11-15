@@ -26,18 +26,12 @@
 -- The ruts are never painted PLOWED: plow progress counts PLOWED ground
 -- (TCJobProgress), so plowed ruts would read as work already done.
 --
--- 075 borrows it for fly-tipping's evidence: planDumpSite picks a spot a few
+-- 075 borrows its geometry for fly-tipping: planDumpSite picks a spot a few
 -- metres in from the field's edge (by its gate where it can) and a straight
--- run in to it from outside, and paintDumpSite paints that run's ruts and a
--- churned-up patch where the pile goes, so a player can park at the edge,
--- follow the tracks in and find it.
---
--- 101's field breakdowns use the same plan with their own depth (a broken
--- machine stands within 10 m of the edge, see planDumpSite's depthRange),
--- and paintMachineSite paints its run in and a patch the machine's size,
--- so it isn't left standing in the middle of a crop. Both sites are only
--- painted when the field has a crop standing (hasStandingCrop): the paint
--- is there for clearance, so a harvested or bare field is left alone.
+-- run in to it from outside. 101's field breakdowns use the same plan with
+-- their own depth (a broken machine stands within 10 m of the edge, see
+-- planDumpSite's depthRange) and getRunInPoints for the run in. What's
+-- painted on those sites is TCSiteClearance's (156).
 
 TCJoyriderRuts = {}
 
@@ -581,8 +575,6 @@ TCJoyriderRuts.DUMP_DEPTH = { 4, 7 }
 -- DUMP_ANGLE_SPREAD off square to it.
 TCJoyriderRuts.DUMP_APPROACH = 8
 TCJoyriderRuts.DUMP_ANGLE_SPREAD = math.rad(20)
--- The churned-up patch under the pile, a square this wide.
-TCJoyriderRuts.DUMP_PATCH_SIZE = 5
 -- Random edge points tried after the one by the gate.
 TCJoyriderRuts.DUMP_TRIES = 30
 
@@ -691,21 +683,6 @@ function TCJoyriderRuts.planDumpSite(boundary, gateX, gateZ, random, depthRange)
     return nil
 end
 
--- A rectangle width across and length along heading, centred on (x, z), as
--- one paint piece (see getTrackPieces).
-function TCJoyriderRuts.getPatchPiece(x, z, heading, width, length)
-    local dx, dz = math.sin(heading), math.cos(heading)
-    local nx, nz = dz, -dx
-    local sx, sz = x - dx * length / 2 - nx * width / 2, z - dz * length / 2 - nz * width / 2
-    return { sx, sz, sx + nx * width, sz + nz * width, sx + dx * length, sz + dz * length, heading }
-end
-
--- The churned-up square under the pile, square to the van's heading.
-function TCJoyriderRuts.getDumpPatchPiece(site)
-    local size = TCJoyriderRuts.DUMP_PATCH_SIZE
-    return TCJoyriderRuts.getPatchPiece(site.x, site.z, site.heading, size, size)
-end
-
 -- 101: the run in to a spot already chosen (x, z, facing heading), in
 -- generatePath's point shape: straight back from the spot until it leaves
 -- the field (or MACHINE_RUN_MAX metres), then DUMP_APPROACH more outside.
@@ -756,95 +733,6 @@ local function paintPiece(piece, style, maxAngle)
         FSDensityMapUtil.updateCultivatorArea(sx, sz, wx, wz, hx, hz, false, true, angle, nil, false, true)
     end
     FSDensityMapUtil.clearDecoArea(sx, sz, wx, wz, hx, hz)
-end
-
--- Whether the field has a crop standing on it: a fruit that's come up and
--- not been cut. The dump and machine sites are only painted then - the
--- paint is there to clear room in a crop, so bare ground, stubble or
--- cultivated land is left as it is.
-function TCJoyriderRuts.hasStandingCrop(field)
-    local fieldState = field.getFieldState ~= nil and field:getFieldState() or nil
-    if fieldState == nil or fieldState.fruitTypeIndex == nil or fieldState.fruitTypeIndex == FruitType.UNKNOWN then
-        return false
-    end
-    local fruitType = g_fruitTypeManager:getFruitTypeByIndex(fieldState.fruitTypeIndex)
-    local growthState = fieldState.growthState or 0
-    return fruitType ~= nil and growthState > 0 and not fruitType:getIsCut(growthState)
-end
-
--- A run in's two ruts (inside the field only) and then the patch at its
--- end. Returns the number of rut pieces.
-local function paintRunIn(boundary, points, patch)
-    local style = TCJoyriderRuts.DEFAULT_STYLE
-    local maxAngle = g_currentMission.fieldGroundSystem:getGroundAngleMaxValue()
-    local tracks = TCJoyriderRuts.getWheelTracks(points)
-    local pieceCount = 0
-    for _, track in ipairs({ tracks.left, tracks.right }) do
-        for _, piece in ipairs(TCJoyriderRuts.getTrackPieces(track, boundary)) do
-            paintPiece(piece, style, maxAngle)
-            pieceCount = pieceCount + 1
-        end
-    end
-    paintPiece(patch, style, maxAngle)
-    return pieceCount
-end
-
--- 075: plans a fly-tipping dump site on the field (planDumpSite) and paints
--- the van's ruts in from the edge and the churned patch under the pile, if
--- there's a crop standing (hasStandingCrop). Returns the site, or nil if it
--- can't (not the server, no boundary, nowhere suitable).
-function TCJoyriderRuts.paintDumpSite(field, random)
-    if not g_currentMission:getIsServer() or field == nil then
-        return nil
-    end
-    local boundary = TCJoyriderRuts.getFieldBoundary(field)
-    local gateX, gateZ = nil, nil
-    if field.getTeleportPosition ~= nil then
-        gateX, gateZ = field:getTeleportPosition()
-    end
-    local site = TCJoyriderRuts.planDumpSite(boundary, gateX, gateZ, random)
-    if site == nil then
-        return nil
-    end
-
-    local pieceCount = 0
-    if TCJoyriderRuts.hasStandingCrop(field) then
-        pieceCount = paintRunIn(boundary, site.points, TCJoyriderRuts.getDumpPatchPiece(site))
-    end
-
-    TCLog.info("TheContractor: fly-tipping site on field %s: %.1f m in from the edge at (%.0f, %.0f), %d rut pieces",
-        tostring(field:getId()), site.depth, site.edgeX, site.edgeZ, pieceCount)
-    return site
-end
-
--- 101: a broken-down machine's spot on the field (its centre x, z, facing
--- heading, its width and length): the ruts it made coming in from the edge,
--- and the crop cleared from a patch MACHINE_PATCH_MARGIN bigger than it all
--- round, if there's a crop standing (hasStandingCrop; 0 pieces if not).
--- Returns the number of rut pieces, or nil if it can't (not the server, no
--- boundary).
-TCJoyriderRuts.MACHINE_PATCH_MARGIN = 2
-
-function TCJoyriderRuts.paintMachineSite(field, x, z, heading, width, length)
-    if not g_currentMission:getIsServer() or field == nil then
-        return nil
-    end
-    local boundary = TCJoyriderRuts.getFieldBoundary(field)
-    if #boundary < 3 then
-        return nil
-    end
-    if not TCJoyriderRuts.hasStandingCrop(field) then
-        TCLog.info("TheContractor: breakdown spot on field %s at (%.0f, %.0f), no crop standing, nothing painted",
-            tostring(field:getId()), x, z)
-        return 0
-    end
-    local margin = TCJoyriderRuts.MACHINE_PATCH_MARGIN * 2
-    local patch = TCJoyriderRuts.getPatchPiece(x, z, heading, width + margin, length + margin)
-    local pieceCount = paintRunIn(boundary, TCJoyriderRuts.getRunInPoints(boundary, x, z, heading), patch)
-
-    TCLog.info("TheContractor: breakdown spot on field %s at (%.0f, %.0f), %.1f m from the edge, %d rut pieces",
-        tostring(field:getId()), x, z, TCJoyriderRuts.getDistanceToBoundary(x, z, boundary), pieceCount)
-    return pieceCount
 end
 
 -- Tears up the field. Returns { length, insideLength, pieces, coverage,

@@ -153,7 +153,7 @@ function TheContractorFlyTipping:getEligibleFields(farmId)
     for _, field in ipairs(g_fieldManager:getFields()) do
         local fieldId = field:getId()
         if fieldId ~= nil and field:getOwner() == FarmlandManager.NO_OWNER_FARM_ID and
-            not jobs:isFieldProtected(fieldId) then
+            not jobs:isFieldProtected(fieldId) and TCSiteClearance.isUsableField(field) then
             table.insert(result, field)
         end
     end
@@ -343,6 +343,12 @@ function TheContractorFlyTipping:onDump(incident)
     if field == nil or tc.Jobs:isFieldProtected(data.fieldId) then
         return TheContractorRandomEvents.DONE
     end
+    -- 156: or the crop's grown too tall to find anything in.
+    if not data.roadside and not TCSiteClearance.isUsableField(field) then
+        TCLog.info("TheContractor: farm %d incident %d: field %d's crop is too tall to fly-tip in now",
+            incident.farmId, incident.id, data.fieldId)
+        return TheContractorRandomEvents.DONE
+    end
 
     local count = math.random(TheContractorFlyTipping.MIN_PIECES, TheContractorFlyTipping.MAX_PIECES)
     local x, z
@@ -350,7 +356,7 @@ function TheContractorFlyTipping:onDump(incident)
         -- 148: on the verge, as found. No ruts.
         x, z = data.x, data.z
     else
-        local site = TCJoyriderRuts.paintDumpSite(field)
+        local site = TCSiteClearance.paintDumpSite(field)
         if site ~= nil then
             x, z = site.x, site.z
         else
