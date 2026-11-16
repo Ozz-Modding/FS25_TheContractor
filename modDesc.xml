@@ -7,9 +7,27 @@
         <en>The Contractor</en>
     </title>
     <description>
-        <en><![CDATA[The Contractor
+        <en><![CDATA[Run your farm as an agricultural contracting business. The Contractor switches off the base game's contracts: your work comes from the area's farmers instead, and you run the company that does it.
 
-        TODO: Ensure credit given to Arrow-kb FS25_PlaceableNPCSystem
+Open the new Contractor page in the in-game menu and create your company on the Overview tab. The mod's own Help pages cover every part of it.
+
+Features:
+- Job offers for every kind of field work, plus harvest & haul, straw bale delivery and lime spreading, matched to the machines you own
+- Negotiate prices, invoice your customers, and chase the ones who pay late
+- Reputation and advertising: good work brings more and bigger jobs
+- Hire staff who drive the AI helper to the field, do the work and come home, each with their own skills, growth, pay, morale, working hours, breaks, holidays and live 3D portrait
+- Named farmers own the land you don't, each with their own yard, machines and opinion of you, and they talk to each other
+- Insurance, overheads, compensation claims, a Finances tab with a cash forecast, and a Logbook of every job and machine
+- Job supplies and diesel come from your own farm's stock
+- Placeable parking slots for machines back from jobs, standing spots and seats for idle staff, company signs with your own logo, and a disposal skip
+- Random events: theft, road accidents, spray drift, tipped trailers, fly-tipping, fallen trees, protests and the odd bit of good news
+- Machinery auctions on farmers' fields, with a crowd, lots to view and sealed bids
+- Advanced Damage System support: your staff run its workshop, customers bring their machines in for repair, and farmers call you out to breakdowns
+- Works with FS25_EconomyScale, AutoDrive, Courseplay and Follow Me
+- Full multiplayer support, with every farm running its own company
+
+Credits:
+- The way the mod's people walk and stand about (auction crowds, protesters) takes its idea from FS25_PlaceableNPCSystem by Arrow-kb. Thank you!
 ]]>
         </en>
     </description>
