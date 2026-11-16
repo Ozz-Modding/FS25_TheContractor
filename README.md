@@ -143,4 +143,4 @@ For bug reports, feature requests, or questions, visit the [GitHub Issues page](
 
 ## Credits
 
-- The way the mod's people walk and stand about (auction crowds, protesters) takes its idea from **FS25_PlaceableNPCSystem by Arrow-kb**. Thank you!
+- Thanks to Arrow for his **FS25_PlaceableNPCSystem** - the code was very useful for crowd generation. Thank you!
