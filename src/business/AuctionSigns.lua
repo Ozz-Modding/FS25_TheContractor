@@ -27,7 +27,7 @@ local TheContractorAuctionSigns_mt = Class(TheContractorAuctionSigns)
 
 TheContractorAuctionSigns.MARKER_RADIUS = 12
 
--- The board's designs (TCAuctionSigns.RULES.designs, docs/auction-sign-i3d.md),
+-- The board's designs (TCAuctionSigns.RULES.designs, dev/docs/auction-sign-i3d.md),
 -- the same height, different widths: each one's model, its board's width
 -- and its posts' centres either side (genAuctionSignI3d.py prints them). A
 -- sign saved before there were designs is the first.

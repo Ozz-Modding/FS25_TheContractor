@@ -15,13 +15,13 @@
 -- Vanilla's hands (HandToolHands:getCanPickUpNode) lift any dynamic rigid
 -- body of 200 kg or less that the look ray hits (DYNAMIC_OBJECT is in its
 -- mask). A prop's i3d needs a dynamic root collision, binarized again after
--- the edit (docs/tools/binarize.py) so its .shapes matches (a scenery
+-- the edit (dev/tools/binarize.py) so its .shapes matches (a scenery
 -- prop's static one stays frozen whatever we set at runtime). load() gives
 -- it the DYNAMIC_OBJECT collision preset, and every piece weighs
 -- TCDebris.MASS, whatever density GE gave it.
 --
 -- 147: bin bags, picked for a random pile by weight like the rest, our own model
--- (docs/tools/genBinBagI3d.py) that squashes, stretches and swings as it's
+-- (dev/tools/genBinBagI3d.py) that squashes, stretches and swings as it's
 -- dropped and carried: TCBinBagSquash works the pose out from how the bag
 -- moves, and updateSquash puts it on the bag's nodes, on every machine
 -- that draws it, each for itself.

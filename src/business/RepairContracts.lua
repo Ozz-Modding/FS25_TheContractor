@@ -3,7 +3,7 @@
 -- a job offer. FS25_AdvancedDamageSystem does the vehicle side through
 -- TCADSRepairContracts: it ages and breaks the machine, prices the work,
 -- says what tools it takes and whether the farm has them, and reports when
--- it's done or tampered with. See tickets/100.
+-- it's done or tampered with. See dev/tickets/100.
 --
 -- Arrivals (server): each hour of ARRIVAL_HOURS every empty bay of a farm's
 -- zones may get a customer (ARRIVAL_CHANCE, a day's chance split over those

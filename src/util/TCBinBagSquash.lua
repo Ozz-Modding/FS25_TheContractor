@@ -13,7 +13,7 @@
 --   - a swing about the neck (tiltX, tiltZ), kicked by a change sideways so
 --     the bag lags behind a move and swings back. Only while it's held: on
 --     the ground the swing just settles.
--- The pose (getPose) is for the i3d's two nodes (docs/tools/genBinBagI3d.py):
+-- The pose (getPose) is for the i3d's two nodes (dev/tools/genBinBagI3d.py):
 -- `hang` at the neck takes the swing, `squash` below it the scale, moved so
 -- the bottom stays put on the ground and the neck stays put in the hands.
 --

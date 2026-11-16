@@ -1,7 +1,6 @@
 *.zip
 *.bat
 log.txt
-tickets/
-BRIEF.md
 refs/
-UPDATE.md
+# Private dev repo (Ozz-Modding/FS25_TheContractor-dev): tickets, brief, dev docs, tools
+dev/

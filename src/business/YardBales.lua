@@ -108,7 +108,7 @@ TheContractorYardBales.KIT_GAP = 2
 TheContractorYardBales.COUNT_INTERVAL_MS = 500
 TheContractorYardBales.MAX_RESTING_SPEED = 0.2
 
--- The marking on the ground (docs/tools/genBaleDropAreaI3d.py, made at
+-- The marking on the ground (dev/tools/genBaleDropAreaI3d.py, made at
 -- DROP_WIDTH x DROP_LENGTH), and how often a machine checks which it
 -- should be showing.
 TheContractorYardBales.MARKING_FILENAME = "i3d/baleDropArea.i3d"

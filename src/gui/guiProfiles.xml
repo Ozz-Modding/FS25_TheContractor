@@ -148,7 +148,7 @@
          contracts progress bar (fs25_contractsProgressBarBg is
          anchorTopCenter, so it centres in this box). Own title/value
          profiles rather than fs25_contractsContentTitle, which stretches to
-         its container and reads as centred (see tickets/007's Outcome). -->
+         its container and reads as centred (see dev/tickets/007's Outcome). -->
     <Profile name="tc_progressBox" extends="emptyPanel" with="anchorTopLeft">
         <size value="752px 80px"/>
     </Profile>

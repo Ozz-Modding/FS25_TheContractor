@@ -54,7 +54,7 @@ test("every help page has its own icon slot in the sheet", function()
     for page in getHelpLines():gmatch("<page%s[^>]*>") do
         local sliceId = page:match("iconSliceId=\"tcHelpIcons%.([%w_]+)\"")
         assertTrue(sliceId ~= nil, "a help page has no tcHelpIcons icon: " .. page)
-        assertTrue(slices[sliceId], "no slice for help icon " .. sliceId .. " (run docs/tools/genHelpIcons.py)")
+        assertTrue(slices[sliceId], "no slice for help icon " .. sliceId .. " (run dev/tools/genHelpIcons.py)")
         assertTrue(not seen[sliceId], "two help pages share icon " .. sliceId)
         seen[sliceId] = true
         pages = pages + 1

@@ -230,7 +230,14 @@ test("every subcommand is documented, and every documented one exists", function
     setup()
     local commands = getCommandSet(scanRegistrations())
     local documented = {}
-    for _, doc in ipairs({ "docs/commands.md", "docs/debug-commands.md" }) do
+    local docs = { "docs/commands.md" }
+    -- tcDebug's docs are in the private dev/ repo: a clone without it skips tcDebug.
+    local debugDoc = io.open("dev/docs/debug-commands.md", "r")
+    if debugDoc ~= nil then
+        debugDoc:close()
+        table.insert(docs, "dev/docs/debug-commands.md")
+    end
+    for _, doc in ipairs(docs) do
         for command, name in readFile(doc):gmatch("\n### `(tc%u%a+) (%a+)") do
             local key = command .. " " .. string.lower(name)
             assertTrue(commands[key] ~= nil, doc .. " documents '" .. key .. "', which doesn't exist")
@@ -238,7 +245,8 @@ test("every subcommand is documented, and every documented one exists", function
         end
     end
     for key in pairs(commands) do
-        assertTrue(documented[key], "'" .. key .. "' isn't in docs/commands.md or docs/debug-commands.md")
+        local skipped = debugDoc == nil and string.find(key, "^tcDebug ") ~= nil
+        assertTrue(skipped or documented[key], "'" .. key .. "' isn't in docs/commands.md or dev/docs/debug-commands.md")
     end
 end)
 

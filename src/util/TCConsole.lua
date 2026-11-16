@@ -4,7 +4,7 @@
 -- log, is the one other top-level command. Typing a group on its own (or
 -- with "help") lists its subcommands with their arguments, so players can
 -- find their way around without the docs. docs/commands.md has the detail
--- (docs/debug-commands.md for tcDebug).
+-- (dev/docs/debug-commands.md for tcDebug).
 --
 -- Each subsystem registers its own subcommands at load, from a static
 -- registerConsoleCommands() called in main.lua's loadMap:
