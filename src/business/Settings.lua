@@ -108,8 +108,18 @@ TheContractorSettings.DEFINITIONS.farmerRetirements = {
     default = 2
 }
 
+-- Which of the staff's breaks (131, TheContractorBreaks) they take: all
+-- three, lunch only (no 15 minute morning and afternoon ones), or none. A
+-- break that's off is neither taken nor missed. Saved as the option's number.
+TheContractorSettings.STAFF_BREAKS = { ALL = 1, LUNCH_ONLY = 2, NONE = 3 }
+TheContractorSettings.DEFINITIONS.staffBreaks = {
+    values = { 1, 2, 3 },
+    stringKeys = { "tc_setting_staffBreaks_all", "tc_setting_staffBreaks_lunch", "tc_setting_staffBreaks_none" },
+    default = 1
+}
+
 TheContractorSettings.ITEMS = { "jobPayRate", "lateInvoices", "randomEvents", "nameStyle", "adsWorkshopMargin",
-    "adsFieldMargin", "farmerRetirements" }
+    "adsFieldMargin", "farmerRetirements", "staffBreaks" }
 
 -- 086: whether parking slots show outside the construction menu too. A
 -- display preference, so it's a local item (below). onChanged runs on this
