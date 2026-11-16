@@ -1,6 +1,13 @@
 # The Contractor
 
-Run your farm as an agricultural contracting business in Farming Simulator 25. The Contractor replaces vanilla contracts with its own jobs, staff, farmers and business management.
+Run your farm as an agricultural contracting business in Farming Simulator 25. The Contractor replaces vanilla contracts with its own jobs, staff, farmers and business management. It also brings a great deal of life to the game, with characters and random events.
+
+## Beta notice
+
+This mod is currently in beta testing. Please raise issues on GitHub and provide log.txt and any additional context. The mod is intended to be multiplayer compatible, but only basic testing of this has been done so far.
+Ideas and feedback are very welcome.
+
+Check the in game help menu for more information.
 
 ## Intro video (YouTube)
 
