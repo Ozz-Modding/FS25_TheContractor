@@ -6,7 +6,7 @@
 -- the air filter (TCADSRepairContracts.getStockParts), sold in S/M/L rather
 -- than for one model and fitted by hand, so no tool box is needed. It pays
 -- the part back and earns goodwill (113) more than reputation. See
--- docs/ads-farmer-favours.md.
+-- dev/docs/ads-farmer-favours.md.
 --
 -- The machines are the farmer's fleet (121, TheContractorFarmerFleet): any
 -- of their machines that drives and ADS can take, and isn't out already

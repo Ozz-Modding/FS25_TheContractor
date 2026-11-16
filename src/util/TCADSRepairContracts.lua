@@ -2,7 +2,7 @@
 -- customer's vehicle (age, wear, hidden faults or worn consumables), prices
 -- the work, tells us the tools it needs and whether a farm has them, and
 -- reports when it's done or tampered with. Everything else is ours
--- (TheContractorRepairContracts). See tickets/100-102 and ADS's
+-- (TheContractorRepairContracts). See dev/tickets/100-102 and ADS's
 -- ADS_RepairContracts.lua.
 --
 -- The entry points are looked up once per loadMap (detect), the TCADSStock

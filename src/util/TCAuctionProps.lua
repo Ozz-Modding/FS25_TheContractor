@@ -14,7 +14,7 @@
 -- vehicle driving through a car. Bunting and bales have none.
 --
 -- The vanilla models (traffic cars, a park bin, a square bale) are the base game's own, read from $data; ours come from
--- docs/tools (docs/auction-site-props.md). Anything here is the user's to
+-- dev/tools (dev/docs/auction-site-props.md). Anything here is the user's to
 -- swap.
 
 TCAuctionProps = {}

@@ -100,7 +100,7 @@
         </actionBinding>
     </inputBinding>
     <!-- In-game help (Help in the in-game menu): text in languages/l10n_en.xml (tc_help_*),
-         page icons in images/helpIcons.dds, sliced by xml/helpIcons.xml (docs/tools/genHelpIcons.py, one slot per page). -->
+         page icons in images/helpIcons.dds, sliced by xml/helpIcons.xml (dev/tools/genHelpIcons.py, one slot per page). -->
     <helpLines>
         <category title="$l10n_tc_help_cat_start">
             <page title="$l10n_tc_help_company_title" iconSliceId="tcHelpIcons.company">
