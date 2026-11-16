@@ -142,7 +142,7 @@ tcWorker certify 2 off
 
 ### `tcWorker hours`
 
-Shows the game time and whether it's working hours (08:00 to 18:00), then each of your hired workers: their status (an idle worker shows `atHome`, `comingIn`, `stayingLate` or `onBreak` instead of `idle` when that's where they are), the time they're on duty until if they've been kept on (and when they'll be in, if they've been called back and aren't there yet), their overtime so far this month in minutes and money, and what an hour of overtime costs them now. On the server it also lists today's breaks (`morning`, `lunch`, `afternoon`), each `taken`, `missed`, `excused` (away, or not hired yet, when its time passed) or `-` (still to come), and when the break they're on ends. Read-only, so it also works on a joined client, which shows only the break they're on.
+Shows the game time and whether it's working hours (08:00 to 18:00), then each of your hired workers: their status (an idle worker shows `atHome`, `comingIn`, `stayingLate` or `onBreak` instead of `idle` when that's where they are), the time they're on duty until if they've been kept on (and when they'll be in, if they've been called back and aren't there yet), their overtime so far this month in minutes and money, and what an hour of overtime costs them now. On the server it also lists today's breaks (`morning`, `lunch`, `afternoon`), each `taken`, `missed`, `excused` (away, or not hired yet, when its time passed), `off` (turned off by the Staff breaks setting when its time passed) or `-` (still to come), and when the break they're on ends. Read-only, so it also works on a joined client, which shows only the break they're on.
 
 ```
 Farm 1, 12:20: working hours 08:00-18:00, at work

@@ -114,6 +114,15 @@ function stubs.install()
         return { __index = classTable }
     end
 
+    -- The engine's shallow copy.
+    table.clone = function(source)
+        local copy = {}
+        for key, value in pairs(source) do
+            copy[key] = value
+        end
+        return copy
+    end
+
     Utils = {
         getNoNil = function(value, default)
             if value == nil then

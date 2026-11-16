@@ -7,6 +7,11 @@
 -- order: a later one never starts while an earlier one is still to come.
 -- Office staff (057, 090) take none.
 --
+-- The staffBreaks setting turns the short breaks, or all of them, off
+-- (isEnabled). A break that's off is skipped, so the next one can start, and
+-- when its window closes it's OFF: never missed, so no knock. Turned back on
+-- mid-day, any whose window is still open can be taken.
+--
 -- A worker on a break is still IDLE, but WorkingHours.getState says
 -- ON_BREAK until breakUntil, so they aren't on site: not offered for jobs
 -- or driving, off the standing spots, and unavailable to ADS's workshop,
@@ -47,7 +52,23 @@ TheContractorBreaks.RESULT = {
     TAKEN = "taken",
     MISSED = "missed",
     EXCUSED = "excused",
+    OFF = "off",
 }
+
+-- Whether the staffBreaks setting lets staff take this break.
+function TheContractorBreaks.isEnabled(definition)
+    local tc = g_currentMission.TheContractor
+    local settings = tc ~= nil and tc.Settings or nil
+    if settings == nil then
+        return true
+    end
+    local mode = settings:get("staffBreaks")
+    local MODES = TheContractorSettings.STAFF_BREAKS
+    if mode == MODES.NONE then
+        return false
+    end
+    return mode ~= MODES.LUNCH_ONLY or definition.group == "lunch"
+end
 
 function TheContractorBreaks.new()
     local self = {}
@@ -88,13 +109,19 @@ end
 -- A break whose window has closed without it being taken.
 local function closeBreak(worker, definition)
     local RESULT = TheContractorBreaks.RESULT
+    if not TheContractorBreaks.isEnabled(definition) then
+        worker.breakResults[definition.key] = RESULT.OFF
+        return
+    end
     worker.breakResults[definition.key] = TheContractorWorkingHours.isAway(worker) and RESULT.EXCUSED or RESULT.MISSED
 end
 
--- The next break still to come today (in order), or nil.
+-- The next break still to come today (in order, skipping any that are
+-- off), or nil.
 function TheContractorBreaks.getNextBreak(worker)
     for _, definition in ipairs(TheContractorBreaks.BREAKS) do
-        if worker.breakResults == nil or worker.breakResults[definition.key] == nil then
+        if (worker.breakResults == nil or worker.breakResults[definition.key] == nil) and
+            TheContractorBreaks.isEnabled(definition) then
             return definition
         end
     end
@@ -157,9 +184,10 @@ function TheContractorBreaks:updateWorker(worker, now)
             if minuteOfDay < definition.from then
                 return
             end
+            -- One that's off is skipped, so the next isn't held back by it.
             if minuteOfDay > definition.to then
                 closeBreak(worker, definition)
-            else
+            elseif TheContractorBreaks.isEnabled(definition) then
                 if TheContractorWorkingHours.isAvailable(worker, now) then
                     self:startBreak(worker, definition, now)
                 end

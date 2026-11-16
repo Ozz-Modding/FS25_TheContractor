@@ -50,9 +50,10 @@ TheContractorStaff.FULL_PAY_DAYS = 5
 TheContractorStaff.PENSION_RATE = 0.03
 -- Each rating is paid as rating ^ SALARY_RATING_EXPONENT x its weight, so
 -- the top of the scale costs far more per point than the bottom: a 10 is
--- paid 4x a 5, not 2x. Simulated over the candidate rolls: ~2.1k for the
--- weakest, ~2.55k at the 10th percentile, ~3.05k median, ~3.65k at the 90th
--- and ~4.55k for the best possible worker.
+-- paid 4x a 5, not 2x. Simulated over the candidate rolls: ~2k for the
+-- weakest, ~2.15k at the 10th percentile, ~2.7k median, ~3.45k at the 90th
+-- and ~4.55k for the best possible worker (157: an experienced candidate's
+-- are ~2.55k, ~3.05k and ~3.65k; an under-25's ~2.05k, ~2.2k and ~2.6k).
 TheContractorStaff.SALARY_RATING_EXPONENT = 2
 TheContractorStaff.SALARY_PER_WORK_SPEED = 8
 TheContractorStaff.SALARY_PER_TIER_POINT = 4
@@ -83,6 +84,29 @@ TheContractorStaff.SPECIALISM_MIN = 5
 TheContractorStaff.SPECIALISM_MAX = 10
 TheContractorStaff.SPECIALISMS_MIN = 1
 TheContractorStaff.SPECIALISMS_MAX = 2
+
+-- 157: experience. A candidate's starting stats follow their age: the
+-- figures above are for someone with full experience (EXPERIENCE_FULL_AGE
+-- and over), the YOUNG_ ones for a MIN_AGE school leaver, and every
+-- limit in between is a straight blend (getExperience, blend). So the young
+-- are mostly cheap and unskilled with room to grow (growthPotential), and
+-- the older the candidate the likelier they're good now.
+TheContractorStaff.EXPERIENCE_FULL_AGE = 35
+TheContractorStaff.YOUNG_WORK_SPEED_MAX = 4
+TheContractorStaff.YOUNG_TOP_TIER_WEIGHTS = {
+    { tier = nil, weight = 0.35 },
+    { tier = "small", weight = 0.45 },
+    { tier = "medium", weight = 0.2 },
+    { tier = "large", weight = 0 },
+}
+TheContractorStaff.YOUNG_SKILL_BASE_MAX = 2
+TheContractorStaff.YOUNG_SPECIALISM_MIN = 4
+TheContractorStaff.YOUNG_SPECIALISM_MAX = 6
+TheContractorStaff.YOUNG_SPECIALISMS_MIN = 0
+TheContractorStaff.YOUNG_SPECIALISMS_MAX = 1
+-- 157: ages lean young: the younger of AGE_ROLLS uniform MIN_AGE-MAX_AGE
+-- rolls (two: about 30% under 25, half under 31, 5% over 50).
+TheContractorStaff.AGE_ROLLS = 2
 
 -- Pool lifecycle: seeded up to INITIAL_POOL_SIZE candidates on first ever
 -- load (or if an existing save's pool is found empty, e.g. upgrading a save
@@ -347,18 +371,37 @@ end
 
 -- Stat rolling ------------------------------------------------------------
 
-function TheContractorStaff.rollWorkSpeed()
-    return math.random(1, 10)
+-- 157: 0 for a MIN_AGE candidate, 1 from EXPERIENCE_FULL_AGE on. No age
+-- (a worker from an old save rolled before their age is known) is full.
+function TheContractorStaff.getExperience(age)
+    if age == nil then
+        return 1
+    end
+    local minAge, fullAge = TheContractorStaff.MIN_AGE, TheContractorStaff.EXPERIENCE_FULL_AGE
+    return math.max(0, math.min(1, (age - minAge) / (fullAge - minAge)))
 end
 
-local function rollTopTier()
+-- 157: a limit between its YOUNG_ value (experience 0) and its full one.
+local function blend(young, full, experience)
+    return math.floor(young + (full - young) * experience + 0.5)
+end
+
+function TheContractorStaff.rollWorkSpeed(experience)
+    experience = experience or 1
+    return math.random(1, blend(TheContractorStaff.YOUNG_WORK_SPEED_MAX, TheContractorWorker.MAX_SKILL, experience))
+end
+
+local function rollTopTier(experience)
+    local weights = {}
     local totalWeight = 0
-    for _, entry in ipairs(TheContractorStaff.TOP_TIER_WEIGHTS) do
-        totalWeight = totalWeight + entry.weight
+    for i, entry in ipairs(TheContractorStaff.TOP_TIER_WEIGHTS) do
+        local young = TheContractorStaff.YOUNG_TOP_TIER_WEIGHTS[i].weight
+        weights[i] = young + (entry.weight - young) * experience
+        totalWeight = totalWeight + weights[i]
     end
     local roll = math.random() * totalWeight
-    for _, entry in ipairs(TheContractorStaff.TOP_TIER_WEIGHTS) do
-        roll = roll - entry.weight
+    for i, entry in ipairs(TheContractorStaff.TOP_TIER_WEIGHTS) do
+        roll = roll - weights[i]
         if roll < 0 then
             return entry.tier
         end
@@ -371,9 +414,9 @@ end
 -- one is no better than the size below it, and under the threshold unless
 -- it's the biggest there is - reaching it would have qualified them for the
 -- next size up.
-function TheContractorStaff.rollTierCapability()
+function TheContractorStaff.rollTierCapability(experience)
     local tierCapability = {}
-    local topTier = rollTopTier()
+    local topTier = rollTopTier(experience or 1)
     if topTier == nil then
         return tierCapability
     end
@@ -395,18 +438,24 @@ function TheContractorStaff.rollTierCapability()
     return tierCapability
 end
 
--- 044: see SKILL_BASE_MIN/SPECIALISM_MIN above.
-function TheContractorStaff.rollSkills()
+-- 044: see SKILL_BASE_MIN/SPECIALISM_MIN above, and 157's YOUNG_ limits.
+function TheContractorStaff.rollSkills(experience)
+    experience = experience or 1
+    local S = TheContractorStaff
+    local baseMax = blend(S.YOUNG_SKILL_BASE_MAX, S.SKILL_BASE_MAX, experience)
     local skills = {}
     for _, skill in ipairs(TheContractorWorker.SKILLS) do
-        skills[skill] = math.random(TheContractorStaff.SKILL_BASE_MIN, TheContractorStaff.SKILL_BASE_MAX)
+        skills[skill] = math.random(S.SKILL_BASE_MIN, baseMax)
     end
 
     local remaining = table.clone(TheContractorWorker.SKILLS)
-    local specialisms = math.random(TheContractorStaff.SPECIALISMS_MIN, TheContractorStaff.SPECIALISMS_MAX)
+    local specialisms = math.random(blend(S.YOUNG_SPECIALISMS_MIN, S.SPECIALISMS_MIN, experience),
+        blend(S.YOUNG_SPECIALISMS_MAX, S.SPECIALISMS_MAX, experience))
+    local specialismMin = blend(S.YOUNG_SPECIALISM_MIN, S.SPECIALISM_MIN, experience)
+    local specialismMax = blend(S.YOUNG_SPECIALISM_MAX, S.SPECIALISM_MAX, experience)
     for _ = 1, specialisms do
         local skill = table.remove(remaining, math.random(#remaining))
-        skills[skill] = math.random(TheContractorStaff.SPECIALISM_MIN, TheContractorStaff.SPECIALISM_MAX)
+        skills[skill] = math.max(skills[skill], math.random(specialismMin, specialismMax))
     end
     return skills
 end
@@ -416,8 +465,13 @@ function TheContractorStaff.rollCleanliness()
     return math.random(TheContractorWorker.MIN_CLEANLINESS, TheContractorWorker.MAX_CLEANLINESS)
 end
 
+-- 157: see AGE_ROLLS.
 function TheContractorStaff.rollAge()
-    return math.random(TheContractorStaff.MIN_AGE, TheContractorStaff.MAX_AGE)
+    local age = TheContractorStaff.MAX_AGE
+    for _ = 1, TheContractorStaff.AGE_ROLLS do
+        age = math.min(age, math.random(TheContractorStaff.MIN_AGE, TheContractorStaff.MAX_AGE))
+    end
+    return age
 end
 
 function TheContractorStaff.rollBirthPeriod()
@@ -524,15 +578,17 @@ function TheContractorStaff:addCandidateToPool()
 
     local id = self:takeWorkerId()
 
-    local workSpeed = TheContractorStaff.rollWorkSpeed()
-    local tierCapability = TheContractorStaff.rollTierCapability()
-    local skills = TheContractorStaff.rollSkills()
+    -- 157: age first - the stats follow it.
+    local age = TheContractorStaff.rollAge()
+    local experience = TheContractorStaff.getExperience(age)
+    local workSpeed = TheContractorStaff.rollWorkSpeed(experience)
+    local tierCapability = TheContractorStaff.rollTierCapability(experience)
+    local skills = TheContractorStaff.rollSkills(experience)
     -- 091: only while ADS takes our staff, where they're worth something.
     local adsSkills = TCADSWorkshop.isActive() and TheContractorWorkshop.rollSkills() or {}
     local salary = TheContractorStaff.getSalary(workSpeed, tierCapability, skills, adsSkills)
     local gender = TCWorkerAppearance.rollGender()
     local name = TheContractorStaff.generateName(gender)
-    local age = TheContractorStaff.rollAge()
     local growthPotential = TheContractorStaff.rollGrowthPotential(age)
     local birthPeriod = TheContractorStaff.rollBirthPeriod()
     local sicknessPropensity = TheContractorStaff.rollSicknessPropensity()

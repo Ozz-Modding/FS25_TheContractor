@@ -19,6 +19,11 @@
 		<text name="tc_toolTip_adsFieldMargin" text="Your usual margin on Advanced Damage System breakdowns out in the field, on top of what the cheapest fix costs (parts and labour). The Negotiate dialog starts here, and customers judge your price against it: less earns more reputation, well over it costs reputation."/>
 		<text name="tc_setting_farmerRetirements" text="Farmer retirements"/>
 		<text name="tc_toolTip_farmerRetirements" text="On: now and then a farmer retires and a new person takes over their farm, with its land, yard, machines and your open jobs for them, at half your relationship with the old farmer. Farmers you've renamed or edited can retire too, and are replaced for good. Off: farmers never retire on their own."/>
+		<text name="tc_setting_staffBreaks" text="Staff breaks"/>
+		<text name="tc_toolTip_staffBreaks" text="On: staff take a 15 minute morning break, a 30 minute lunch and a 15 minute afternoon break. Lunch only: just the lunch. Off: no breaks at all. A break that's off is never missed, so it costs no morale. A break already under way still runs its course."/>
+		<text name="tc_setting_staffBreaks_all" text="On"/>
+		<text name="tc_setting_staffBreaks_lunch" text="Lunch only"/>
+		<text name="tc_setting_staffBreaks_none" text="Off"/>
 		<text name="tc_setting_showParkingSlots" text="Show parking slots"/>
 		<text name="tc_toolTip_showParkingSlots" text="Show your parking slots', repair zones' and standing spots' markings outside the construction menu too. Just for you: other players choose their own. Right Ctrl+P switches it by default."/>
 		<text name="tc_setting_jobProgressBars" text="Job progress bars"/>
@@ -1827,7 +1832,7 @@
 		<text name="tc_help_hiring_2_title" text="Hiring"/>
 		<text name="tc_help_hiring_2" text="Each candidate has a monthly salary. Hire them and the first month is paid at once; after that it's charged at the start of every month while they're on your roster, whatever they're doing."/>
 		<text name="tc_help_hiring_3_title" text="What to look at"/>
-		<text name="tc_help_hiring_3" text="Work speed, tractor experience (small, medium and large), skill at each kind of work, cleanliness, and age. Younger staff have more room to grow."/>
+		<text name="tc_help_hiring_3" text="Work speed, tractor experience (small, medium and large), skill at each kind of work, cleanliness, and age. Younger candidates usually know less and ask for less, but have more room to grow; older ones are more likely to be good from the start."/>
 		<text name="tc_help_hiring_4_title" text="Your Staff"/>
 		<text name="tc_help_hiring_4" text="The Your Staff view shows each worker's status (idle, assigned, at home, sick, on holiday and so on), their current job, morale and pay. Manage opens everything you can do for a worker."/>
 		<text name="tc_help_hours_title" text="Working hours and breaks"/>
@@ -1837,7 +1842,7 @@
 		<text name="tc_help_hours_3_title" text="Stay late and call back"/>
 		<text name="tc_help_hours_3" text="From Manage, ask someone to stay late until a time you choose, or call them back in once they've gone home (they arrive about 25 minutes later). They're paid overtime for every hour of it, whether you give them work or not. Send home ends it."/>
 		<text name="tc_help_hours_4_title" text="Breaks"/>
-		<text name="tc_help_hours_4" text="Staff take a 15 minute morning break, a 30 minute lunch and a 15 minute afternoon break, each when they're free within its window. Someone out working all day misses them, and missed breaks, lunch especially, hurt their morale."/>
+		<text name="tc_help_hours_4" text="Staff take a 15 minute morning break, a 30 minute lunch and a 15 minute afternoon break, each when they're free within its window. Someone out working all day misses them, and missed breaks, lunch especially, hurt their morale. The Staff breaks setting can drop the short breaks, or all of them."/>
 		<text name="tc_help_skills_title" text="Skills, growth and training"/>
 		<text name="tc_help_skills_1" text="Each worker has a work speed, experience on small, medium and large tractors, and a skill for each kind of work: harvesting, baling, grassland, tillage, seeding, planting, crop care and haulage."/>
 		<text name="tc_help_skills_2_title" text="What skill does"/>
