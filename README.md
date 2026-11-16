@@ -2,6 +2,10 @@
 
 Run your farm as an agricultural contracting business in Farming Simulator 25. The Contractor replaces vanilla contracts with its own jobs, staff, farmers and business management.
 
+## Intro video (YouTube)
+
+[![Watch the video](https://img.youtube.com/vi/j-U_FkkbQbQ/maxresdefault.jpg)](https://youtu.be/j-U_FkkbQbQ)
+
 ## Getting started
 
 1. Open the in-game menu and go to the new **Contractor** page.
