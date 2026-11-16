@@ -107,6 +107,7 @@ function fakes.installContractor(world)
         onSuppliesLoaded = function(_, job, fillTypeIndex, liters)
             table.insert(world.suppliesLogged, { jobId = job.id, fillTypeIndex = fillTypeIndex, liters = liters })
         end,
+        onTanksFound = function() end,
     }
 
     tc.Notices = TheContractorNotices.new()

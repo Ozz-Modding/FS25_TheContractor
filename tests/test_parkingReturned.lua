@@ -32,6 +32,7 @@ local function setup()
     tc.Notices = { publish = function() return 1 end, remove = function() end }
 
     dofile("src/events/TCParkingNoticeEvent.lua")
+    dofile("src/util/TCFolding.lua")
     dofile("src/business/Parking.lua")
 
     local parking = TheContractorParking.new()

@@ -97,6 +97,7 @@ local function setup()
             parkedByBatch = { [1] = { farmId = 1 }, [2] = { farmId = 2 } },
             messageIdByBatch = { [1] = 7, [2] = 8 },
             noticeByFarm = { [1] = {}, [2] = {} },
+            parkAllByFarm = { [1] = {}, [2] = {} },
         }),
         RandomEvents = make("TheContractorRandomEvents", {
             incidents = { [1] = { farmId = 1 }, [2] = { farmId = 2 } },
@@ -198,6 +199,8 @@ test("the deleted farm's state goes and the other farm's stays", function()
     assertEquals(tc.Parking.messageIdByBatch[1], nil, "batch message")
     assertEquals(tc.Parking.messageIdByBatch[2], 8, "other batch message")
     assertEquals(tc.Parking.noticeByFarm[1], nil, "parking notice")
+    assertEquals(tc.Parking.parkAllByFarm[1], nil, "park all run")
+    assertTrue(tc.Parking.parkAllByFarm[2] ~= nil, "other park all run")
 
     assertEquals(tc.AuctionSale.bids[4][1], nil, "auction bids")
     assertEquals(tc.AuctionSale.bids[5][1], nil, "every lot's")

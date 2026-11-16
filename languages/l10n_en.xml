@@ -974,6 +974,11 @@
 		<text name="tc_parking_allocationRefusedNotification" text="Couldn't allocate: %s is waiting for a parking space and there's no room at the shop to put it."/>
 		<text name="tc_parking_noticeOne" text="1 machine waiting for a free parking space"/>
 		<text name="tc_parking_noticeMany" text="%d machines waiting for a free parking space"/>
+		<text name="tc_parking_parkAllButton" text="Park all"/>
+		<text name="tc_parking_parkAllConfirm" text="Park every machine that isn't already in a parking slot? Anything in use, out on a job or with a driver is left alone, and implements are unhitched to be parked on their own."/>
+		<text name="tc_parking_parkAllParked" text="Machines parked: %s"/>
+		<text name="tc_parking_parkAllNoRoom" text="No free parking slot for %s, so they've been left where they are. Place a vehicle, implement or harvester parking slot to suit, or clear one."/>
+		<text name="tc_parking_parkAllNothing" text="Nothing to park: every free machine is already in a parking slot."/>
 		<text name="tc_allocation_unavailable" text="Unavailable"/>
 		<text name="tc_dispatch_noAttachPoint" text="Couldn't hitch %s to %s - no compatible free attachment point."/>
 		<text name="tc_allocation_selectEquipmentButton" text="Select Equipment"/>
@@ -1634,12 +1639,15 @@
 		<text name="tc_logbook_notRecorded" text="Not recorded"/>
 		<text name="tc_logbook_none" text="None"/>
 		<text name="tc_logbook_loaded" text="From stock"/>
+		<text name="tc_logbook_used" text="Used"/>
+		<text name="tc_logbook_usedValue" text="%s (%s)"/>
 		<text name="tc_logbook_agreedPrice" text="Agreed price"/>
 		<text name="tc_logbook_agreedFromOffered" text="%s (offered %s)"/>
 		<text name="tc_logbook_invoice" text="Invoice"/>
 		<text name="tc_logbook_notInvoiced" text="Not invoiced"/>
 		<text name="tc_logbook_fuel" text="Fuel"/>
 		<text name="tc_logbook_fuelValue" text="%s (%.0f l)"/>
+		<text name="tc_logbook_suppliesCost" text="Supplies (est.)"/>
 		<text name="tc_logbook_labour" text="Labour (est.)"/>
 		<text name="tc_logbook_machineWear" text="Machine wear (est.)"/>
 		<text name="tc_logbook_claim" text="Claim"/>
@@ -1821,7 +1829,7 @@
 		<text name="tc_help_logbook_title" text="The Logbook"/>
 		<text name="tc_help_logbook_1" text="The Logbook keeps the business's records. Jobs lists every completed and failed job; Vehicles lists every machine and what it's been doing."/>
 		<text name="tc_help_logbook_2_title" text="A job's log"/>
-		<text name="tc_help_logbook_2" text="Who did it, which machines they took and the state each came back in, how the time went (travel, fieldwork, return and wash), the fuel and supplies used, and the money: the price, an estimate of labour and wear, any claim, and the margin left."/>
+		<text name="tc_help_logbook_2" text="Who did it, which machines they took and the state each came back in, how the time went (travel, fieldwork, return and wash), the fuel and supplies used, and the money: the price, an estimate of what the supplies, labour and wear cost, any claim, and the margin left."/>
 		<text name="tc_help_logbook_3_title" text="A vehicle's log"/>
 		<text name="tc_help_logbook_3" text="Who had it, when, for how long, and its condition before and after, for jobs, staff drivers and your own driving. Sort by most hours or most faults to spot the machines that cost you."/>
 		<text name="tc_help_logbook_4_title" text="Filters"/>
@@ -1926,7 +1934,7 @@
 		<text name="tc_help_association_3" text="Pursues overdue invoices for free, with better odds of recovering the money than a solicitor. Joining or leaving the association reprices it for the rest of the year."/>
 		<text name="tc_help_cat_yard" text="Your yard"/>
 		<text name="tc_help_parking_title" text="Parking slots"/>
-		<text name="tc_help_parking_1" text="Machines back from a job are parked in parking slots you place from the construction menu's Contractor tab. Vehicle slots take tractors, loaders and self-propelled machines; implement slots take implements and trailers; harvester slots take harvesters. They come in three sizes and face the arrow."/>
+		<text name="tc_help_parking_1" text="Machines back from a job are parked in parking slots you place from the construction menu's Contractor tab. Vehicle slots take tractors, loaders and self-propelled machines; implement slots take implements and trailers; harvester slots take harvesters. They come in three sizes and face the arrow. Machines already about the yard can be parked at once with Park all in the Logbook's Vehicles view: anything free that isn't in a slot yet, unhitched, each in a slot of its kind."/>
 		<text name="tc_help_parking_2_title" text="Choosing what parks where"/>
 		<text name="tc_help_parking_2" text="Stand in a placed slot and press the activate key to keep it for some kinds of machine or particular machines. They go there first, and to an unfiltered slot of the same type when it's full."/>
 		<text name="tc_help_parking_3_title" text="No room"/>

@@ -265,6 +265,22 @@ function TCParking.findSpot(vehicle, farmId, isRandom)
     return nil
 end
 
+-- 159: whether the vehicle already stands in one of farmId's slots that
+-- would take it (getSlotsFor), so park all leaves it be.
+function TCParking.isParked(vehicle, farmId)
+    if vehicle.rootNode == nil then
+        return false
+    end
+    local x, _, z = getWorldTranslation(vehicle.rootNode)
+    for _, slot in ipairs(TCParking.getSlotsFor(vehicle, farmId)) do
+        local area = PlaceableTCParkingSlot.getArea(slot)
+        if area ~= nil and PlaceableTCParkingSlot.isInArea(area, x, z) then
+            return true
+        end
+    end
+    return false
+end
+
 -- A spot at the shop, from the same reset places vanilla's vehicle reset
 -- uses, marked used so the next one doesn't land on it. x, y, z, rotY, or
 -- nil if the shop's full.

@@ -741,6 +741,15 @@ function MenuContractor:initialize()
             self:onClickLogbookOpenJob()
         end
     }
+    -- 159: parks the farm's free machines in its slots, for a farm that had
+    -- them before it placed any.
+    self.btnLogbookParkAll = {
+        inputAction = InputAction.MENU_EXTRA_2,
+        text = g_i18n:getText("tc_parking_parkAllButton"),
+        callback = function()
+            self:onClickLogbookParkAll()
+        end
+    }
 
     self.logbookJobTable:setDataSource(self)
     self.logbookJobTable:setDelegate(self)
@@ -7304,9 +7313,16 @@ function MenuContractor:getLogbookJobRows(entry)
         section("tc_logbook_sectionSupplies")
         for _, supply in ipairs(entry.supplies) do
             local fillTypeIndex = g_fillTypeManager:getFillTypeIndexByName(supply.fillTypeName)
-            row(text("tc_logbook_loaded"), fillTypeIndex ~= nil and
-                TCJobSupplies.formatAmount(fillTypeIndex, supply.liters) or
-                string.format("%s %.0f", supply.fillTypeName, supply.liters))
+            local amount = fillTypeIndex ~= nil and TCJobSupplies.formatAmount(fillTypeIndex, supply.liters) or
+                string.format("%s %.0f", supply.fillTypeName, supply.liters)
+            -- 158: what was used and its cost; an older entry only kept
+            -- what was loaded from stock.
+            if supply.cost ~= nil then
+                row(text("tc_logbook_used"), string.format(text("tc_logbook_usedValue"), amount,
+                    formatMoney(supply.cost)))
+            else
+                row(text("tc_logbook_loaded"), amount)
+            end
         end
     end
 
@@ -7352,6 +7368,11 @@ function MenuContractor:getLogbookJobRows(entry)
 
     row(text("tc_logbook_fuel"), string.format(text("tc_logbook_fuelValue"), formatMoney(entry.fuelCost),
         entry.fuelLiters or 0))
+    -- 158: an estimate at the day's prices; none on an entry from before.
+    local suppliesCost = TheContractorLogbook.getSuppliesCost(entry)
+    if suppliesCost > 0 then
+        row(text("tc_logbook_suppliesCost"), formatMoney(suppliesCost))
+    end
     row(text("tc_logbook_labour"), entry.labourCost ~= nil and formatMoney(entry.labourCost) or
         text("tc_logbook_none"))
     -- ADS machines' wear has no cost (TCVehicleCondition.hasWearCost), so
@@ -7527,6 +7548,9 @@ function MenuContractor:getLogbookButtonInfo()
         if self:getLogbookJumpJobId() ~= nil then
             table.insert(buttons, self.btnLogbookOpenJob)
         end
+        if #TCParking.getSlots(g_currentMission:getFarmId()) > 0 then
+            table.insert(buttons, self.btnLogbookParkAll)
+        end
     else
         table.insert(buttons, self.btnLogbookFilter)
         if self:getLogbookJumpVehicleId() ~= nil then
@@ -7588,6 +7612,15 @@ function MenuContractor:onClickLogbookOpenVehicle()
     self.selectedLogbookVehicleId = vehicleId
     self:refreshLogbookState(g_currentMission:getFarmId(), g_currentMission.TheContractor.Logbook)
     self:setMenuButtonInfoDirty()
+end
+
+-- 159: after a yes, the server parks them one by one and says how it went.
+function MenuContractor:onClickLogbookParkAll()
+    YesNoDialog.show(function(target, clickOk)
+        if clickOk then
+            g_client:getServerConnection():sendEvent(TCParkAllEvent.new(g_currentMission:getFarmId()))
+        end
+    end, self, g_i18n:getText("tc_parking_parkAllConfirm"))
 end
 
 function MenuContractor:onClickLogbookOpenJob()

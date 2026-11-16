@@ -16,6 +16,11 @@
 -- before the next overlap test, so there's no reservation table. A pass
 -- that places nothing backs off to SLOW_INTERVAL_MS.
 --
+-- Folding: each piece is folded (or unfolded) to how it may stand unhitched
+-- (TCFolding) as it joins the queue, and isn't placed until it's done, so
+-- it comes back folded where it may. A piece that hasn't finished after
+-- FOLD_MAX_WAIT_PASSES passes is placed as it is.
+--
 -- A vehicle is in a cooldown or in this queue, never both: returnVehicles
 -- skips anything still in a cooldown, and a cooldown or a fresh dispatch
 -- takes its vehicles out of the queue first (removeVehicles).
@@ -45,6 +50,7 @@ TheContractorParking_mt = Class(TheContractorParking)
 
 TheContractorParking.FAST_INTERVAL_MS = 1000
 TheContractorParking.SLOW_INTERVAL_MS = 5000
+TheContractorParking.FOLD_MAX_WAIT_PASSES = 30
 
 TheContractorParking.MESSAGE_KIND = "parkingWaiting"
 TheContractorParking.SEND_TO_SHOP_ACTION = { key = "sendToShop", textKey = "tc_parking_sendToShopButton" }
@@ -69,6 +75,10 @@ function TheContractorParking.new()
 
     self.intervalMs = TheContractorParking.FAST_INTERVAL_MS
     self.accumulatedMs = 0
+    -- Server only, not saved (159). farmId -> { vehicleIds (still to try,
+    -- in order), parked (names), noRoom (names) }.
+    self.parkAllByFarm = {}
+    self.parkAllAccumulatedMs = 0
     -- Server, from a save until resolveSavedVehicles.
     self.savedEntries = nil
 
@@ -150,6 +160,9 @@ function TheContractorParking:returnVehicles(farmId, vehicleIds)
     self.nextBatchId = self.nextBatchId + 1
 
     TCJobSiteSetup.unhitchVehicles(ids)
+    for _, vehicleId in ipairs(ids) do
+        TCFolding.foldForParking(getVehicle(vehicleId))
+    end
     TCEquipmentVisibility.setVisibleEverywhere(ids, false)
 
     self:applyQueued(entries)
@@ -243,7 +256,11 @@ end
 -- Parking (server-only tick) ----------------------------------------------
 
 function TheContractorParking:update(dt)
-    if not g_currentMission:getIsServer() or self.savedEntries ~= nil or #self.queue == 0 then
+    if not g_currentMission:getIsServer() or self.savedEntries ~= nil then
+        return
+    end
+    self:updateParkAll(dt)
+    if #self.queue == 0 then
         return
     end
 
@@ -253,13 +270,27 @@ function TheContractorParking:update(dt)
     end
     self.accumulatedMs = 0
 
-    local placed = self:runPass()
-    self.intervalMs = placed and TheContractorParking.FAST_INTERVAL_MS or TheContractorParking.SLOW_INTERVAL_MS
+    local placed, isFolding = self:runPass()
+    self.intervalMs = (placed or isFolding) and TheContractorParking.FAST_INTERVAL_MS or
+        TheContractorParking.SLOW_INTERVAL_MS
 end
 
--- Parks the oldest piece that fits. Pieces tried and turned down for the
--- first time are told to their farm, one notification per farm, and their
--- batch gets its inbox message. Returns whether anything was placed.
+-- Whether the entry's piece is still folding for parking (TCFolding), up to
+-- FOLD_MAX_WAIT_PASSES passes. Asked again each pass, which also folds a
+-- piece loaded from a save mid-fold.
+local function isStillFolding(entry, vehicle)
+    if (entry.foldPasses or 0) >= TheContractorParking.FOLD_MAX_WAIT_PASSES or
+        not TCFolding.foldForParking(vehicle) then
+        return false
+    end
+    entry.foldPasses = (entry.foldPasses or 0) + 1
+    return true
+end
+
+-- Parks the oldest piece that fits and has finished folding. Pieces tried
+-- and turned down for the first time are told to their farm, one
+-- notification per farm, and their batch gets its inbox message. Returns
+-- whether anything was placed, and whether anything's still folding.
 function TheContractorParking:runPass()
     local gone = {}
     for _, entry in ipairs(self.queue) do
@@ -273,10 +304,19 @@ function TheContractorParking:runPass()
 
     local newlyStuck = {}
     local placed = false
+    local isFolding = false
     for _, entry in ipairs(self.queue) do
         local vehicle = getVehicle(entry.vehicleId)
-        local x, y, z, rotY = TCParking.findSpot(vehicle, entry.farmId)
-        if x ~= nil then
+        local stillFolding = isStillFolding(entry, vehicle)
+        local x, y, z, rotY = nil, nil, nil, nil
+        if stillFolding then
+            isFolding = true
+        else
+            x, y, z, rotY = TCParking.findSpot(vehicle, entry.farmId)
+        end
+        if stillFolding then
+            -- Waiting for its fold, not stuck.
+        elseif x ~= nil then
             local parked = self.parkedByBatch[entry.batchId] or { farmId = entry.farmId, names = {} }
             table.insert(parked.names, vehicle:getFullName())
             self.parkedByBatch[entry.batchId] = parked
@@ -292,7 +332,7 @@ function TheContractorParking:runPass()
     end
 
     self:tellStuck(newlyStuck)
-    return placed
+    return placed, isFolding
 end
 
 -- One notification per farm naming its newly stuck pieces, and an inbox
@@ -458,6 +498,156 @@ function TheContractorParking:onMessageAction(farmId, message, actionKey)
     end
 end
 
+-- Park all (159) --------------------------------------------------------------
+-- The Logbook's Park all button (TCParkAllEvent): every machine of the farm
+-- that's free and not already standing in a slot that would take it is
+-- parked, for a farm that started with machines and placed its slots after.
+-- One machine a pass, every PARK_ALL_INTERVAL_MS, so physics sees the one
+-- just put down before the next overlap test (as the queue does), biggest
+-- first so the small ones fill the gaps. Unlike a return it never hides
+-- anything: a machine with no room stays where it is. The farm's told once
+-- the run's done. Server only, not saved: a run takes seconds.
+
+TheContractorParking.PARK_ALL_INTERVAL_MS = 250
+
+local function getChain(vehicle)
+    local root = vehicle.getRootVehicle ~= nil and vehicle:getRootVehicle() or vehicle
+    local chain = root ~= nil and root.getChildVehicles ~= nil and root:getChildVehicles() or nil
+    return chain or { vehicle }
+end
+
+-- Whether anything in the vehicle's combination is being used: someone in
+-- it, a helper, AutoDrive or a staff driver on it, or it's locked (out on a
+-- job, in a cooldown or the queue, stolen, an auction lot).
+function TheContractorParking.isChainBusy(vehicle)
+    local drivers = g_currentMission.TheContractor.Drivers
+    for _, chainVehicle in pairs(getChain(vehicle)) do
+        if TCVehicleLock.isLocked(chainVehicle) or
+            (chainVehicle.getIsControlled ~= nil and chainVehicle:getIsControlled()) or
+            TheContractorDrivers.isVehicleDriven(chainVehicle) or
+            (drivers ~= nil and drivers:hasDriver(chainVehicle)) then
+            return true
+        end
+    end
+    return false
+end
+
+-- Whether park all may move the vehicle: one of the farm's own machines
+-- (owned or leased; not a pallet, a train, a customer's or anything else on
+-- a mission), in sight, and nothing in its combination busy.
+function TheContractorParking.isParkable(vehicle, farmId)
+    if vehicle == nil or vehicle.isDeleted or vehicle.isPallet or vehicle.spec_wearable == nil or
+        vehicle.spec_splineVehicle ~= nil or vehicle.getOwnerFarmId == nil or vehicle:getOwnerFarmId() ~= farmId or
+        vehicle.propertyState == VehiclePropertyState.MISSION then
+        return false
+    end
+    local vehicleId = NetworkUtil.getObjectId(vehicle)
+    local tc = g_currentMission.TheContractor
+    if vehicleId == nil or TCEquipmentVisibility.isHidden(vehicleId) or (tc.Theft ~= nil and tc.Theft:isStolen(vehicleId)) or
+        TheContractorRepairContracts.isContractVehicle(vehicle) then
+        return false
+    end
+    return not TheContractorParking.isChainBusy(vehicle)
+end
+
+-- Server: starts a run for the farm (none if one's going). Returns how many
+-- machines it'll try.
+function TheContractorParking:parkAll(farmId)
+    if not g_currentMission:getIsServer() or self.parkAllByFarm[farmId] ~= nil then
+        return 0
+    end
+
+    local candidates = {}
+    for _, vehicle in ipairs(g_currentMission.vehicleSystem.vehicles) do
+        if TheContractorParking.isParkable(vehicle, farmId) and not TCParking.isParked(vehicle, farmId) then
+            local size = vehicle.size or {}
+            table.insert(candidates, { id = NetworkUtil.getObjectId(vehicle), area = (size.width or 0) * (size.length or 0) })
+        end
+    end
+    if #candidates == 0 then
+        self:notify(farmId, "tc_parking_parkAllNothing", "", true)
+        return 0
+    end
+    table.sort(candidates, function(a, b)
+        if a.area ~= b.area then
+            return a.area > b.area
+        end
+        return a.id < b.id
+    end)
+
+    local vehicleIds = {}
+    for _, candidate in ipairs(candidates) do
+        table.insert(vehicleIds, candidate.id)
+    end
+    self.parkAllByFarm[farmId] = { vehicleIds = vehicleIds, parked = {}, noRoom = {} }
+    TCLog.info("TheContractor: farm %d parking all, %d machines to try", farmId, #vehicleIds)
+    return #vehicleIds
+end
+
+function TheContractorParking:updateParkAll(dt)
+    if next(self.parkAllByFarm) == nil then
+        self.parkAllAccumulatedMs = 0
+        return
+    end
+    self.parkAllAccumulatedMs = self.parkAllAccumulatedMs + dt
+    if self.parkAllAccumulatedMs < TheContractorParking.PARK_ALL_INTERVAL_MS then
+        return
+    end
+    self.parkAllAccumulatedMs = 0
+
+    local finished = {}
+    for farmId, run in pairs(self.parkAllByFarm) do
+        if self:parkAllStep(farmId, run) then
+            table.insert(finished, farmId)
+        end
+    end
+    for _, farmId in ipairs(finished) do
+        self:finishParkAll(farmId)
+    end
+end
+
+-- Tries the run's next machine: parked if there's room, left where it is if
+-- not, skipped if it's gone or been taken into use since. Returns whether
+-- the run's done.
+function TheContractorParking:parkAllStep(farmId, run)
+    local vehicleId = table.remove(run.vehicleIds, 1)
+    if vehicleId == nil then
+        return true
+    end
+    local vehicle = getVehicle(vehicleId)
+    if vehicle ~= nil and TheContractorParking.isParkable(vehicle, farmId) and not TCParking.isParked(vehicle, farmId) then
+        local x, y, z, rotY = TCParking.findSpot(vehicle, farmId)
+        if x ~= nil then
+            TCJobSiteSetup.unhitchVehicles({ vehicleId })
+            TCParking.placeVehicle(vehicle, x, y, z, rotY)
+            -- In sight, so it folds where it's put down (TCFolding).
+            TCFolding.foldForParking(vehicle)
+            table.insert(run.parked, vehicle:getFullName())
+            TCLog.info("TheContractor: farm %d parked '%s' (park all)", farmId, vehicle:getFullName())
+        else
+            table.insert(run.noRoom, vehicle:getFullName())
+        end
+    end
+    return #run.vehicleIds == 0
+end
+
+function TheContractorParking:finishParkAll(farmId)
+    local run = self.parkAllByFarm[farmId]
+    self.parkAllByFarm[farmId] = nil
+    if run == nil then
+        return
+    end
+    TCLog.info("TheContractor: farm %d park all done, %d parked, %d with no room", farmId, #run.parked, #run.noRoom)
+    if #run.parked > 0 then
+        self:notify(farmId, "tc_parking_parkAllParked", tostring(#run.parked), true)
+    end
+    if #run.noRoom > 0 then
+        self:notify(farmId, "tc_parking_parkAllNoRoom", table.concat(run.noRoom, ", "))
+    elseif #run.parked == 0 then
+        self:notify(farmId, "tc_parking_parkAllNothing", "", true)
+    end
+end
+
 -- Wire serialization --------------------------------------------------------
 
 function TheContractorParking.writeEntries(streamId, entries)
@@ -513,6 +703,7 @@ function TheContractorParking:forgetFarm(farmId)
         end
     end
     self.noticeByFarm[farmId] = nil
+    self.parkAllByFarm[farmId] = nil
 end
 
 function TheContractorParking:loadFromXMLFile(xmlFile)

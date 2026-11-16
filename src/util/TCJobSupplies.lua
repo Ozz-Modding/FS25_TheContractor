@@ -524,7 +524,11 @@ function TCJobSupplies.topUp(job, onlyBelowRatio, canFill)
     local loaded, fuelLoaded = 0, 0
     local status, statusFillType = nil, nil
 
-    for _, tank in ipairs(TCJobSupplies.getJobTanks(job)) do
+    local tanks = TCJobSupplies.getJobTanks(job)
+    -- 158: what's in them before anything goes in, for what the job used.
+    g_currentMission.TheContractor.Logbook:onTanksFound(job, tanks)
+
+    for _, tank in ipairs(tanks) do
         local vehicle, fillUnitIndex = tank.vehicle, tank.fillUnitIndex
         local level = vehicle:getFillUnitFillLevel(fillUnitIndex)
         local currentFillType = vehicle:getFillUnitFillType(fillUnitIndex)
@@ -541,8 +545,9 @@ function TCJobSupplies.topUp(job, onlyBelowRatio, canFill)
                 if tank.isFuel then
                     fuelLoaded = fuelLoaded + taken
                 end
-                -- 060: the job's supplies, for the logbook. Not diesel:
-                -- the logbook's fuel line has what was burned.
+                -- 060: the job's supplies, for the logbook (158: what's
+                -- left at the end comes off). Not diesel: the logbook's
+                -- fuel line has what was burned.
                 if taken > 0 and not tank.isFuel then
                     g_currentMission.TheContractor.Logbook:onSuppliesLoaded(job, fillTypeIndex, taken)
                 end

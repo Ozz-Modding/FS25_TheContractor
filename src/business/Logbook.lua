@@ -5,8 +5,9 @@
 -- Job entries, one per finished job (completed or missed), farm-scoped and
 -- kept JOB_RETENTION_YEARS: who did it, the machines they took and the
 -- state each came back in, where the time went (travel out, fieldwork,
--- return and wash), fuel, supplies drawn from stock, an estimated labour
--- and wear cost, income, reputation and any claim, and the margin left.
+-- return and wash), fuel, the supplies it used (158) and what they'd cost,
+-- an estimated labour and wear cost, income, reputation and any claim, and
+-- the margin left.
 --
 -- Vehicle entries, kept VEHICLE_RETENTION_YEARS, grouped per vehicle: each
 -- time a job used it, a staff driver (037) drove it, or a player drove one
@@ -17,7 +18,8 @@
 -- were never kept on them. So the server records what it needs as it
 -- happens: the condition each machine set off in when work starts
 -- (onWorkStarted), when a hired worker reached the field (onArrived),
--- supplies loaded (onSuppliesLoaded), all saved per job until it finishes.
+-- supplies used (onTanksFound, onSuppliesLoaded, then what's left in the
+-- tanks taken off), all saved per job until it finishes.
 --
 -- Vehicles (TCVehicleIds): in memory and on the wire a vehicle is its
 -- network object id; the save stores its uniqueId, turned back into an
@@ -82,9 +84,10 @@ function TheContractorLogbook.new()
 
     -- Server-only from here.
     -- pendingByJobId[jobId] = { arrivedAt, start = { [vehicleId] = snapshot },
-    -- supplies = { [fillTypeName] = liters }, playerName, earlierCrew },
-    -- saved. earlierCrew (094): who had the job before it was unallocated,
-    -- as one line of names.
+    -- supplies = { [fillTypeName] = liters }, tanksCounted, playerName,
+    -- earlierCrew }, saved. earlierCrew (094): who had the job before it was
+    -- unallocated, as one line of names. supplies (158): what's been used so
+    -- far, counted as the tanks' contents go in and come out (onTanksFound).
     self.pendingByJobId = {}
     -- Open staff-driver sessions by the bound vehicle's object id (as
     -- Drivers keys them): { farmId, workerId, start, sources }.
@@ -195,6 +198,45 @@ local function getPending(self, job)
     return pending
 end
 
+-- 158: a product the tank is for, in it now: its fill type, or nil.
+local function getTankProduct(tank)
+    local vehicle, fillUnitIndex = tank.vehicle, tank.fillUnitIndex
+    if vehicle:getFillUnitFillLevel(fillUnitIndex) <= 0.001 then
+        return nil
+    end
+    local fillTypeIndex = vehicle:getFillUnitFillType(fillUnitIndex)
+    for _, candidate in ipairs(tank.fillTypes) do
+        if candidate == fillTypeIndex then
+            return fillTypeIndex
+        end
+    end
+    return nil
+end
+
+-- 158: adds (sign 1) or takes off (sign -1) what the job's product tanks
+-- hold. Diesel's left out: the fuel line has what was burned.
+local function addTankLevels(pending, tanks, sign)
+    for _, tank in ipairs(tanks) do
+        local fillTypeIndex = not tank.isFuel and getTankProduct(tank) or nil
+        local name = fillTypeIndex ~= nil and g_fillTypeManager:getFillTypeNameByIndex(fillTypeIndex) or nil
+        if name ~= nil then
+            local level = tank.vehicle:getFillUnitFillLevel(tank.fillUnitIndex)
+            pending.supplies[name] = (pending.supplies[name] or 0) + sign * level
+        end
+    end
+end
+
+-- 158: what's left in the tanks of the crew coming off the job
+-- (unallocated, or it's ended), taken off what it used. The next crew's
+-- tanks are counted afresh (onTanksFound).
+local function takeLeftInTanks(job, pending)
+    if not pending.tanksCounted then
+        return
+    end
+    pending.tanksCounted = nil
+    addTankLevels(pending, TCJobSupplies.getJobTanks(job), -1)
+end
+
 -- From Jobs:markWorkStarted (first call only): the condition each of the
 -- job's machines set off in.
 function TheContractorLogbook:onWorkStarted(job)
@@ -232,6 +274,8 @@ function TheContractorLogbook:onCrewChanged(job)
         end
     end
     local pending = getPending(self, job)
+    -- 158: what's left in the crew's tanks goes with them.
+    takeLeftInTanks(job, pending)
     local crew = table.concat(names, ", ")
     pending.earlierCrew = pending.earlierCrew ~= nil and (pending.earlierCrew .. "; " .. crew) or crew
 end
@@ -260,6 +304,55 @@ function TheContractorLogbook:onSuppliesLoaded(job, fillTypeIndex, liters)
     end
     local pending = getPending(self, job)
     pending.supplies[name] = (pending.supplies[name] or 0) + liters
+end
+
+-- 158: from TCJobSupplies.topUp, before anything goes in: the first time
+-- for this crew, whatever's already in the job's tanks counts as used, as
+-- what's loaded does, until what's left is taken off at the end.
+function TheContractorLogbook:onTanksFound(job, tanks)
+    if not g_currentMission:getIsServer() then
+        return
+    end
+    local pending = getPending(self, job)
+    if pending.tanksCounted then
+        return
+    end
+    pending.tanksCounted = true
+    addTankLevels(pending, tanks, 1)
+end
+
+-- 158: a job's entry's supplies from what it used ({ [fillTypeName] =
+-- liters }): each product, in name order, with what it would cost to buy
+-- today (vanilla's price, so never scaled again - TCEconomyScale). Less
+-- than one litre or piece is nothing.
+function TheContractorLogbook.getSuppliesUsed(supplies)
+    local names = {}
+    for name, liters in pairs(supplies) do
+        if liters >= 1 then
+            table.insert(names, name)
+        end
+    end
+    table.sort(names)
+
+    local economyManager = g_currentMission.economyManager
+    local result = {}
+    for _, name in ipairs(names) do
+        local fillTypeIndex = g_fillTypeManager:getFillTypeIndexByName(name)
+        local price = fillTypeIndex ~= nil and economyManager ~= nil and
+            economyManager:getCostPerLiter(fillTypeIndex) or 0
+        table.insert(result, { fillTypeName = name, liters = supplies[name], cost = supplies[name] * price })
+    end
+    return result
+end
+
+-- 158: what an entry's supplies cost. An entry from before 158 has none
+-- (it only kept what was loaded).
+function TheContractorLogbook.getSuppliesCost(entry)
+    local total = 0
+    for _, supply in ipairs(entry.supplies or {}) do
+        total = total + (supply.cost or 0)
+    end
+    return total
 end
 
 -- Recording a job (server) --------------------------------------------------------
@@ -464,14 +557,8 @@ function TheContractorLogbook:buildJobEntry(job, outcome, reputation)
         end
     end
 
-    local fillTypeNames = {}
-    for name in pairs(pending.supplies) do
-        table.insert(fillTypeNames, name)
-    end
-    table.sort(fillTypeNames)
-    for _, name in ipairs(fillTypeNames) do
-        table.insert(entry.supplies, { fillTypeName = name, liters = pending.supplies[name] })
-    end
+    takeLeftInTanks(job, pending)
+    entry.supplies = TheContractorLogbook.getSuppliesUsed(pending.supplies)
 
     return entry, vehicleUpdates
 end
@@ -948,11 +1035,11 @@ function TheContractorLogbook.countWearCosts(entry)
     return priced, unpriced
 end
 
--- Price earned less fuel, labour, wear and any claim paid. ADS machines'
--- wear has no cost, so it isn't in here (countWearCosts).
+-- Price earned less fuel, supplies (158), labour, wear and any claim paid.
+-- ADS machines' wear has no cost, so it isn't in here (countWearCosts).
 function TheContractorLogbook.getMargin(entry)
-    return (entry.price or 0) - (entry.fuelCost or 0) - (entry.labourCost or 0) - (entry.wearCost or 0) -
-        TheContractorLogbook.getClaimPaid(entry)
+    return (entry.price or 0) - (entry.fuelCost or 0) - TheContractorLogbook.getSuppliesCost(entry) -
+        (entry.labourCost or 0) - (entry.wearCost or 0) - TheContractorLogbook.getClaimPaid(entry)
 end
 
 -- "good"/"warn"/"bad" for a job's margin chip.
@@ -1099,6 +1186,7 @@ function TheContractorLogbook.writeJobEntry(streamId, entry)
     for _, supply in ipairs(entry.supplies) do
         writeString(streamId, supply.fillTypeName)
         streamWriteFloat32(streamId, supply.liters)
+        writeOptionalFloat(streamId, supply.cost)
     end
 
     streamWriteBool(streamId, entry.claim ~= nil)
@@ -1182,7 +1270,8 @@ function TheContractorLogbook.readJobEntry(streamId)
     end
 
     for _ = 1, streamReadUInt8(streamId) do
-        table.insert(entry.supplies, { fillTypeName = readString(streamId), liters = streamReadFloat32(streamId) })
+        table.insert(entry.supplies, { fillTypeName = readString(streamId), liters = streamReadFloat32(streamId),
+            cost = readOptionalFloat(streamId) })
     end
 
     if streamReadBool(streamId) then
@@ -1403,6 +1492,7 @@ local function saveJobEntry(xmlFile, key, entry)
         local supplyKey = string.format("%s.supply(%d)", key, i - 1)
         setXMLString(xmlFile, supplyKey .. "#fillType", supply.fillTypeName)
         setXMLFloat(xmlFile, supplyKey .. "#liters", supply.liters)
+        setOptionalFloat(xmlFile, supplyKey .. "#cost", supply.cost)
     end
 
     if entry.claim ~= nil then
@@ -1522,6 +1612,7 @@ local function loadJobEntry(xmlFile, key)
         table.insert(entry.supplies, {
             fillTypeName = getXMLString(xmlFile, supplyKey .. "#fillType"),
             liters = Utils.getNoNil(getXMLFloat(xmlFile, supplyKey .. "#liters"), 0),
+            cost = getXMLFloat(xmlFile, supplyKey .. "#cost"),
         })
         index = index + 1
     end
@@ -1659,6 +1750,9 @@ function TheContractorLogbook:loadFromXMLFile(xmlFile)
             arrivedAt = getXMLFloat(xmlFile, key .. "#arrivedAt"),
             playerName = getXMLString(xmlFile, key .. "#playerName"),
             earlierCrew = getXMLString(xmlFile, key .. "#earlierCrew"),
+            -- 158: a save from before it counted what was loaded, which
+            -- includes what's in the tanks now.
+            tanksCounted = Utils.getNoNil(getXMLBool(xmlFile, key .. "#tanksCounted"), true),
             start = {},
             -- By uniqueId until resolveSavedVehicles.
             savedStart = {},
@@ -1779,6 +1873,7 @@ function TheContractorLogbook:saveToXmlFile(xmlFile)
         if pending.earlierCrew ~= nil then
             setXMLString(xmlFile, key .. "#earlierCrew", pending.earlierCrew)
         end
+        setXMLBool(xmlFile, key .. "#tanksCounted", pending.tanksCounted == true)
         local startIndex = 0
         for vehicleId, snapshot in pairs(pending.start) do
             local uniqueId = TCVehicleIds.getUniqueId(vehicleId)
@@ -1865,10 +1960,12 @@ function TheContractorLogbook.formatJobEntryText(entry)
         formatOptionalMinutes(entry.travelMinutes), formatOptionalMinutes(entry.fieldMinutes),
         formatOptionalMinutes(entry.returnMinutes)))
     for _, supply in ipairs(entry.supplies) do
-        table.insert(lines, string.format("  Supplies: %s %.0f l", supply.fillTypeName, supply.liters))
+        table.insert(lines, string.format("  Supplies: %s %.0f%s", supply.fillTypeName, supply.liters,
+            supply.cost ~= nil and string.format(" used, %s", formatMoney(supply.cost)) or " loaded"))
     end
-    table.insert(lines, string.format("  Price %s, fuel %s (%.0f l), labour %s, wear %s%s",
+    table.insert(lines, string.format("  Price %s, fuel %s (%.0f l), supplies %s, labour %s, wear %s%s",
         formatMoney(entry.price), formatMoney(entry.fuelCost), entry.fuelLiters or 0,
+        formatMoney(TheContractorLogbook.getSuppliesCost(entry)),
         entry.labourCost ~= nil and formatMoney(entry.labourCost) or "-", formatMoney(entry.wearCost),
         entry.claim ~= nil and string.format(", claim paid %s", formatMoney(entry.claim.paid)) or ""))
     table.insert(lines, string.format("  Margin %s, reputation %s, quality %s", formatMoney(margin),
