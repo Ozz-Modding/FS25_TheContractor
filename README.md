@@ -87,7 +87,7 @@ The mod has its own pages in the in-game menu's **Help**, covering every part of
 - A **Logbook** of every job and every machine's history: who had it, what it was doing, and what state it came back in
 
 ### Equipment
-- Machines out on a job leave the yard and come back to placeable **parking slots** (three sizes, for vehicles or implements, plus a harvester slot). Stand in one and press the activate key to keep it for some kinds of machine or particular machines. They're only visible in the construction menu, unless you turn on Show parking slots in the settings or press Right Ctrl+P
+- Machines out on a job leave the yard and come back to placeable **parking slots** (three sizes, for vehicles or implements, plus an extra large slot for harvesters or implements). Stand in one and press the activate key to keep it for some kinds of machine or particular machines. They're only visible in the construction menu, unless you turn on Show parking slots in the settings or press Right Ctrl+P
 - Machines out on a job can't be sold or driven by anyone else until they're back
 
 ### Machinery auctions

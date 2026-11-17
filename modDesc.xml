@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8" standalone="no" ?>
 <modDesc descVersion="116">
     <author>Ozz</author>
-    <version>0.0.0.1</version>
+    <version>0.0.0.2</version>
     <iconFilename>icon_TheContractor.dds</iconFilename>
     <title>
         <en>The Contractor</en>
@@ -84,6 +84,7 @@ Credits:
         <storeItem xmlFilename="xml/parkingSlotImplement.xml" />
         <storeItem xmlFilename="xml/parkingSlotImplementMedium.xml" />
         <storeItem xmlFilename="xml/parkingSlotImplementLarge.xml" />
+        <storeItem xmlFilename="xml/parkingSlotImplementXL.xml" />
         <storeItem xmlFilename="xml/parkingSlotHarvester.xml" />
         <storeItem xmlFilename="xml/standingSpot.xml" />
         <storeItem xmlFilename="xml/seatSpot.xml" />
