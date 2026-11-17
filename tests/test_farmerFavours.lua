@@ -87,7 +87,7 @@ local function setup(def)
     }
     world:addRelationships()
     -- 129: a miss can leave the customer poor, so they complain.
-    TCCalendar = { getPeriodIndex = function() return 1 end }
+    TCCalendar.getPeriodIndex = function() return 1 end
     tc.Reputation = {
         addReputation = function(_, farmId, delta) table.insert(world.calls.reputation, delta) end,
     }

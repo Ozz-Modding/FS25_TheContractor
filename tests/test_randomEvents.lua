@@ -122,15 +122,25 @@ test("a month carries the same odds at 1, 5 and 28 days per period", function()
     assertNear(TheContractorRandomEvents.getDailyChance(0.02, 0.5, 1), 0.01, 1e-9, "rare halves it")
 end)
 
-test("stage delays are months turned into days, never under a day", function()
-    setup()
+test("stage delays are months on by the calendar, never under a day", function()
     local delay = { 0.5, 1 }
-    assertEquals(TheContractorRandomEvents.getDelayDays(delay, 28, 0), 14, "28 days, shortest")
-    assertEquals(TheContractorRandomEvents.getDelayDays(delay, 28, 1), 28, "28 days, longest")
-    assertEquals(TheContractorRandomEvents.getDelayDays(delay, 1, 0), 1, "1 day, rounded up to a day")
-    assertEquals(TheContractorRandomEvents.getDelayDays(delay, 1, 1), 1, "1 day, longest")
-    assertEquals(TheContractorRandomEvents.getDelayDays({ 1, 2 }, 5, 0), 5, "a full month at 5 days")
-    assertEquals(TheContractorRandomEvents.getDelayDays({ 0.1, 0.35 }, 3, 0), 1, "a short wait is still a day")
+    setup(28)
+    assertEquals(TheContractorRandomEvents.getStageDay(delay, 1, 0), 15, "28 days, shortest")
+    assertEquals(TheContractorRandomEvents.getStageDay(delay, 1, 1), 29, "28 days, longest")
+    setup(1)
+    assertEquals(TheContractorRandomEvents.getStageDay(delay, 1, 0), 2, "1 day, rounded up to a day")
+    assertEquals(TheContractorRandomEvents.getStageDay(delay, 1, 1), 2, "1 day, longest")
+    setup(5)
+    assertEquals(TheContractorRandomEvents.getStageDay({ 1, 2 }, 1, 0), 6, "a full month at 5 days")
+    setup(3)
+    assertEquals(TheContractorRandomEvents.getStageDay({ 0.1, 0.35 }, 1, 0), 2, "a short wait is still a day")
+    -- 161: a wait that runs into a season on a planned change counts that
+    -- season's months: from the last of spring at 1 day, two months on is
+    -- the second month of summer, at its length.
+    setup(1)
+    g_currentMission.environment.currentPeriod = 3
+    g_currentMission.environment.plannedDaysPerPeriod = 4
+    assertEquals(TheContractorRandomEvents.getStageDay({ 2, 2 }, 1, 0), 6, "July 1 of 4")
 end)
 
 test("an incident runs to its first wait, then on through the stages to the end", function()
@@ -678,4 +688,23 @@ test("an event after bad weather isn't rolled daily, and tcEvent list says how i
         randomEvents:rollNewEvents()
     end
     assertEquals(#log + #randomEvents.pendingTriggers, 0, "never from the daily roll")
+end)
+
+test("161: a waiting incident's next stage keeps its date when the days per month change", function()
+    local _, randomEvents = setup(1)
+    registerDummy(randomEvents, {
+        stages = {
+            { key = "found" },
+            { key = "later", delayPeriods = { 4, 4 } },
+        },
+    })
+    local incident = randomEvents:triggerEvent(1, "dummy")
+    -- March 1 at a day a month: July 1 is day 5.
+    assertEquals(incident.nextStageDay, 5)
+
+    -- 2 days a month from summer: June is days 4-5, July 6-7.
+    local before = TCCalendar.getModel()
+    g_currentMission.environment.plannedDaysPerPeriod = 2
+    randomEvents:remapDates(before, TCCalendar.getModel())
+    assertEquals(incident.nextStageDay, 6)
 end)

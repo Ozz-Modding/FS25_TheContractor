@@ -275,6 +275,64 @@ local function getHour()
     return g_currentMission.environment.currentHour or 0
 end
 
+-- 161: an announced auction's sale day moved from one calendar to the other
+-- (to the start of its share of the month), or nil if it stays: none
+-- announced, the lots out already, or the sale's today or gone.
+function TheContractorAuctions.getMovedSaleDay(auction, fromModel, toModel, today)
+    if auction == nil or auction.saleDay <= today or
+            TheContractorAuctions.getStateIndex(auction.state) >= STATE_INDEX[STATE.SET_OUT] then
+        return nil
+    end
+    local saleDay = TCCalendar.remapDay(auction.saleDay, fromModel, toModel, false)
+    return saleDay ~= auction.saleDay and saleDay or nil
+end
+
+-- 161, every machine (TCCalendarChange): the sale moved to the same date.
+-- Each machine moves the date in its own copies of the auction's messages;
+-- the server moves the auction's days (the signs and reminder planned
+-- again around the new sale day, any already been left as they were),
+-- tells the clients, and makes the attend jobs (141) again for the new
+-- day, as the console's sale-day move does.
+function TheContractorAuctions:remapDates(fromModel, toModel)
+    local auction = self.auction
+    local today = getToday()
+    local saleDay = TheContractorAuctions.getMovedSaleDay(auction, fromModel, toModel, today)
+    if saleDay == nil then
+        return
+    end
+
+    local inbox = g_currentMission.TheContractor.Inbox
+    for _, message in pairs(inbox ~= nil and inbox.messagesById or {}) do
+        if message.kind == TheContractorAuctions.KIND and message.payload ~= nil and
+                message.payload.auctionId == auction.id and message.args ~= nil then
+            message.args[1] = string.format("$days_%d_%d", saleDay, saleDay)
+        end
+    end
+
+    if not g_currentMission:getIsServer() then
+        return
+    end
+    local _, _, saleDaysPerPeriod = TCCalendar.getDayInfo(saleDay, toModel)
+    local signsDay, reminderDay = TheContractorAuctions.planDays(auction.announcedDay, saleDay, saleDaysPerPeriod)
+    if auction.signsDay <= today then
+        signsDay = auction.signsDay
+    end
+    if auction.reminderDay ~= nil and auction.reminderDay <= today then
+        reminderDay = auction.reminderDay
+    elseif reminderDay ~= nil and reminderDay <= today then
+        reminderDay = nil
+    end
+    TCLog.info("TheContractor: auction %d moved with the calendar: sale day %d (was %d), signs day %d",
+        auction.id, saleDay, auction.saleDay, signsDay)
+    auction.saleDay = saleDay
+    auction.signsDay = signsDay
+    auction.reminderDay = reminderDay
+    self:advance(today, getHour())
+    self:sync()
+    TCAuctionAttendance.removeJobs(auction.id)
+    TCAuctionAttendance.createDueJobs(auction)
+end
+
 function TheContractorAuctions:onDayChanged()
     if self.auction ~= nil then
         if not self:checkField() then

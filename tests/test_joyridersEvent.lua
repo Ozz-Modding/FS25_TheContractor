@@ -26,12 +26,6 @@ local function setup()
         getSeasonAtDay = function()
             return world.season
         end,
-        getPeriodFromDay = function(_, day)
-            return 5
-        end,
-        getDayInPeriodFromDay = function(_, day)
-            return day % 3 + 1
-        end,
     }
     g_farmManager.getFarmById = function(_, farmId)
         return { farmId = farmId }
@@ -375,7 +369,7 @@ test("createJobOnField dates, prices and flags the job like an offer, without ha
     assertEquals(job.requiredSkillLevel, 3)
     assertEquals(job.deadlineDay, 42)
     assertEquals(job.targetPeriod, 5)
-    assertEquals(job.targetDayInPeriod, 42 % 3 + 1)
+    assertEquals(job.targetDayInPeriod, 3)
     assertEquals(job.price, 5000)
     assertEquals(job.equipmentAvailable, true)
     assertEquals(job.includesHaulage, false)
@@ -403,11 +397,13 @@ test("sameMonth keeps the deadline in the current month, unless it's too late in
     local getDeadlineDay = TheContractorJobGeneration.getDeadlineDay
 
     -- Day 40 is the 2nd of 3 in its month: due by the 3rd (day 41), not day 42.
+    environment.currentDayInPeriod = 2
     assertEquals(getDeadlineDay(tc.JobGeneration, field, plow, false), 42)
     assertEquals(getDeadlineDay(tc.JobGeneration, field, plow, true), 41)
 
     -- On the month's last day it's due that day, with time left.
     environment.currentMonotonicDay = 41
+    environment.currentDayInPeriod = 3
     assertEquals(getDeadlineDay(tc.JobGeneration, field, plow, true), 41)
     -- Too late in that day, it's tomorrow (next month) at the earliest.
     environment.currentHour = 20

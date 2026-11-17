@@ -29,10 +29,13 @@
 -- (108's test every AREA_STEP), centred on one of the yard's synced spots
 -- (114's) facing the yard's middle, with the telehandler's footprint open
 -- beside it. Picked on the server as the offer is made, saved and sent
--- with the job (job.yardDelivery). A map marker (TCJobHotspots) and a
--- marking on the ground (MARKING_FILENAME, a parking slot's striped border
--- as terrain decals, DROP_WIDTH x DROP_LENGTH: keep the two the same) show
--- it while the job's taken on, on the job's farm's machines.
+-- with the job (job.yardDelivery). A map marker (TCJobHotspots, a circle
+-- just covering the area), a marking on the ground (MARKING_FILENAME, a
+-- parking slot's striped border as terrain decals, DROP_WIDTH x
+-- DROP_LENGTH: keep the two the same) and vanilla's bale trigger icon over
+-- its middle (ICON_FILENAME, a trigger marker, so the game's trigger marker
+-- setting hides it: a yard can take in grassland that hides the marking)
+-- show it while the job's taken on, on the job's farm's machines.
 --
 -- The job (JOB_TYPES' yardBales): the farmer is its customer, its field is
 -- only the farmer's nearest one (offField), due in DUE_DAYS, allocated to
@@ -112,6 +115,10 @@ TheContractorYardBales.MAX_RESTING_SPEED = 0.2
 -- DROP_WIDTH x DROP_LENGTH), and how often a machine checks which it
 -- should be showing.
 TheContractorYardBales.MARKING_FILENAME = "i3d/baleDropArea.i3d"
+-- The icon over the area's middle: vanilla's, as over a husbandry's bale
+-- trigger, ICON_GROUND_OFFSET up as vanilla's trigger markers sit.
+TheContractorYardBales.ICON_FILENAME = "$data/shared/assets/marker/markerIconBales.i3d"
+TheContractorYardBales.ICON_GROUND_OFFSET = 0.03
 TheContractorYardBales.MARKING_CHECK_MS = 1000
 
 function TheContractorYardBales.new()
@@ -277,12 +284,16 @@ function TheContractorYardBales.getDeliveryText(job)
     return text
 end
 
--- TCJobHotspots (every machine): the area's centre while it's taken on.
+-- TCJobHotspots (every machine): the area's centre while it's taken on,
+-- the circle as wide as the area's diagonal, so it just covers the area.
 function TheContractorYardBales.getSpot(job)
-    if job.yardDelivery == nil or not isTakenOn(job) then
+    local yard = job.yardDelivery
+    if yard == nil or not isTakenOn(job) then
         return nil
     end
-    return { x = job.yardDelivery.x, z = job.yardDelivery.z }
+    local width = yard.width or TheContractorYardBales.DROP_WIDTH
+    local length = yard.length or TheContractorYardBales.DROP_LENGTH
+    return { x = yard.x, z = yard.z, radius = math.sqrt(width * width + length * length) }
 end
 
 -- What the farm holds (server) ---------------------------------------------------------
@@ -695,7 +706,7 @@ function TheContractorYardBales:onAsked(incident)
     local environment = g_currentMission.environment
     local deadlineDay = environment.currentMonotonicDay + math.random(Y.DUE_DAYS[1], Y.DUE_DAYS[2])
     local job = tc.Jobs:createJob(incident.farmId, Y.JOB_TYPE, field:getId(), 1,
-        environment:getPeriodFromDay(deadlineDay), environment:getDayInPeriodFromDay(deadlineDay),
+        TCCalendar.getPeriodFromDay(deadlineDay), TCCalendar.getDayInPeriodFromDay(deadlineDay),
         Y.getBasePrice(liters, pricePerLiter), true, nil, deadlineDay, false, nil, nil, nil, nil, yard)
     if job == nil then
         return TheContractorRandomEvents.DONE
@@ -956,25 +967,52 @@ function TheContractorYardBales.getWantedMarkings()
     return wanted
 end
 
--- Loads the marking at an area (its centre on the ground, turned to its
--- heading), or nil if it won't load.
-function TheContractorYardBales.loadMarking(area)
-    local filename = Utils.getFilename(TheContractorYardBales.MARKING_FILENAME, TheContractor.dir)
+-- Loads a file's first node into the world at a point, turned to rotY:
+-- node, sharedLoadRequestId, or nil if it won't load.
+local function loadNodeAt(filename, x, y, z, rotY)
     local root, sharedLoadRequestId = g_i3DManager:loadSharedI3DFile(filename, false, false)
     if root == nil or root == 0 then
-        TCLog.warning("TheContractor: could not load the bale drop area marking '%s'", filename)
+        TCLog.warning("TheContractor: could not load the bale drop area's '%s'", filename)
         return nil
     end
     local node = getChildAt(root, 0)
     link(getRootNode(), node)
     delete(root)
+    setTranslation(node, x, y, z)
+    setRotation(node, 0, rotY, 0)
+    return node, sharedLoadRequestId
+end
+
+-- Loads the marking at an area (its centre on the ground, turned to its
+-- heading) and the icon over it, or nil if the marking won't load.
+function TheContractorYardBales.loadMarking(area)
+    local Y = TheContractorYardBales
     local y = getTerrainHeightAtWorldPos(g_terrainNode, area.x, 0, area.z)
-    setTranslation(node, area.x, y, area.z)
-    setRotation(node, 0, area.rotY or 0, 0)
-    return { node = node, sharedLoadRequestId = sharedLoadRequestId, x = area.x, z = area.z, rotY = area.rotY }
+    local node, sharedLoadRequestId = loadNodeAt(Utils.getFilename(Y.MARKING_FILENAME, TheContractor.dir), area.x, y,
+        area.z, area.rotY or 0)
+    if node == nil then
+        return nil
+    end
+    local marking = { node = node, sharedLoadRequestId = sharedLoadRequestId, x = area.x, z = area.z,
+        rotY = area.rotY }
+    marking.iconNode, marking.iconLoadRequestId = loadNodeAt(Utils.getFilename(Y.ICON_FILENAME, nil), area.x,
+        y + Y.ICON_GROUND_OFFSET, area.z, 0)
+    if marking.iconNode ~= nil then
+        g_currentMission:addTriggerMarker(marking.iconNode)
+    end
+    return marking
 end
 
 function TheContractorYardBales.deleteMarking(marking)
+    if marking.iconNode ~= nil then
+        g_currentMission:removeTriggerMarker(marking.iconNode)
+        if entityExists(marking.iconNode) then
+            delete(marking.iconNode)
+        end
+    end
+    if marking.iconLoadRequestId ~= nil then
+        g_i3DManager:releaseSharedI3DFile(marking.iconLoadRequestId)
+    end
     if marking.node ~= nil and entityExists(marking.node) then
         delete(marking.node)
     end

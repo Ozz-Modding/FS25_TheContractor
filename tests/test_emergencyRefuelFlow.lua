@@ -223,7 +223,7 @@ local function setup()
         isPending = function() return false end, sendToShop = function() return {} end }
     world:addRelationships()
     -- 129: a miss can leave the customer poor, so they complain.
-    TCCalendar = { getPeriodIndex = function() return 1 end }
+    TCCalendar.getPeriodIndex = function() return 1 end
     world.reputation = {}
     tc.Reputation = {
         addReputation = function(_, farmId, delta) table.insert(world.reputation, delta) end,

@@ -647,7 +647,7 @@ function TheContractorEmergencyRefuel.emptyTank(vehicle, farmId)
     if level <= 0 then
         return 0
     end
-    return -(vehicle:addFillUnitFillLevel(farmId, consumer.fillUnitIndex, -level, FillType.DIESEL,
+    return -(vehicle:addFillUnitFillLevel(farmId, consumer.fillUnitIndex, -level, consumer.fillType,
         ToolType.UNDEFINED, nil) or 0)
 end
 

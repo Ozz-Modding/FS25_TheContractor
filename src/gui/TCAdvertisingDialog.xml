@@ -9,7 +9,7 @@
 <GUI onOpen="onOpen" onClose="onClose" onCreate="onCreate">
     <GuiElement profile="newLayer"/>
     <Bitmap profile="dialogFullscreenBg" id="dialogBg"/>
-    <GuiElement profile="fs25_dialogBg" id="dialogElement" size="760px 420px">
+    <GuiElement profile="fs25_dialogBg" id="dialogElement" size="760px 450px">
         <ThreePartBitmap profile="fs25_dialogBgMiddle"/>
         <ThreePartBitmap profile="fs25_dialogBgTop"/>
         <ThreePartBitmap profile="fs25_dialogBgBottom"/>
@@ -29,7 +29,8 @@
 
             <Text profile="tc_adDialogInfoText" id="costText" position="0px -205px" text=""/>
             <Text profile="tc_adDialogInfoText" id="effectText" position="0px -245px" text=""/>
-            <Text profile="tc_adDialogInfoText" id="statusText" position="0px -285px" text=""/>
+            <!-- Two lines: what buying does, and what it runs alongside. -->
+            <Text profile="tc_adDialogInfoText" id="statusText" position="0px -285px" size="680px 60px" textMaxNumLines="2" text=""/>
         </GuiElement>
 
         <BoxLayout profile="fs25_dialogButtonBox">

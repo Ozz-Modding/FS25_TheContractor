@@ -32,6 +32,8 @@ local function setup()
         new = function()
             local hotspot = {}
             function hotspot:setField(field) self.field = field end
+            function hotspot:setWorldRadius(radius) self.radius = radius end
+            function hotspot:setWorldPosition(x, z) self.x, self.z = x, z end
             function hotspot:delete() self.deleted = true end
             return hotspot
         end,
@@ -217,4 +219,21 @@ test("106: a spill's job is marked where the spill lies, not on its field", func
 
     spillJob.state = TheContractorJob.STATE.COMPLETED
     assertEquals(TCJobHotspots.getSpotPositions(1)[spillJob.id], nil, "gone once it's done")
+end)
+
+test("124: a spot sets its own circle's size, or gets a breakdown's", function()
+    local world = setup()
+    local spillJob = world:addJob({ fieldId = 2, state = TheContractorJob.STATE.ALLOCATED })
+    spillJob.spill = { x = 120, z = -40 }
+    local yardJob = world:addJob({ fieldId = 3, state = TheContractorJob.STATE.ALLOCATED })
+    yardJob.yardDelivery = {}
+    TheContractorYardBales = { getSpot = function() return { x = 10, z = 20, radius = 17 } end }
+
+    TCJobHotspots.refreshMachines()
+    local spill = TCJobHotspots.machineHotspotsByJobId[spillJob.id]
+    local yard = TCJobHotspots.machineHotspotsByJobId[yardJob.id]
+    assertEquals(spill.radius, TCJobHotspots.MACHINE_RADIUS)
+    assertEquals(yard.radius, 17)
+    assertEquals(yard.x, 10)
+    assertEquals(yard.z, 20)
 end)

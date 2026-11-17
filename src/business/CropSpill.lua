@@ -268,8 +268,8 @@ function TheContractorCropSpill:spill(farmId, sourceJob, trailer, data, incident
 
     local environment = g_currentMission.environment
     local deadlineDay = environment.currentMonotonicDay + 1
-    local job = tc.Jobs:createJob(farmId, T.JOB_TYPE, sourceJob.fieldId, 1, environment:getPeriodFromDay(deadlineDay),
-        environment:getDayInPeriodFromDay(deadlineDay), 0, true, sourceJob.fruitTypeName, deadlineDay, true, station,
+    local job = tc.Jobs:createJob(farmId, T.JOB_TYPE, sourceJob.fieldId, 1, TCCalendar.getPeriodFromDay(deadlineDay),
+        TCCalendar.getDayInPeriodFromDay(deadlineDay), 0, true, sourceJob.fruitTypeName, deadlineDay, true, station,
         nil, nil, spill)
     if job == nil then
         return nil

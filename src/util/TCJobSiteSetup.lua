@@ -25,12 +25,18 @@
 -- Server-only: vehicle positions and VehicleAttachEvent both replicate to
 -- clients by themselves.
 --
--- Going home: before anything moves, any non-job implement hitched to a
--- job vehicle is unhitched and left in the yard (detachForeignImplements),
--- so nothing that isn't part of the job ever leaves it. Once the job's
--- done, the equipment goes to 062's parking return queue (Parking.lua),
--- which unhitches every piece (unhitchVehicles) and parks each one in a
--- free parking slot. Nothing is re-hitched.
+-- Before anything moves, any non-job implement hitched to a job vehicle is
+-- unhitched (detachForeignImplements), so nothing that isn't part of the
+-- job ever leaves the yard, and the dispatch has each one parked in a free
+-- parking slot if there's room, else left where it stood. A ballast weight
+-- (TCBallast) is the exception: it stays on unless a job implement needs
+-- its hitch (a front mower where the front weight is), and goes out and
+-- comes back with its machine.
+--
+-- Going home: once the job's done, the equipment goes to 062's parking
+-- return queue (Parking.lua), which unhitches every piece but its weights
+-- (unhitchVehicles) and parks each one in a free parking slot. Nothing is
+-- re-hitched.
 
 TCJobSiteSetup = {}
 
@@ -145,14 +151,8 @@ function TCJobSiteSetup.hitchImplement(attacher, implement, farmId)
     return true
 end
 
--- Server-only. Returns the operating vehicle on success, or nil plus the
--- reason's l10n key and its args (TCDispatchFailedEvent.REASON_KEYS).
-function TCJobSiteSetup.rigAndPlace(job)
-    local field = g_fieldManager:getFieldById(job.fieldId)
-    if field == nil then
-        return nil, "tc_dispatch_noVehicleReady", {}
-    end
-
+-- The job's equipment that still exists, and a set of it.
+local function getJobVehicles(job)
     local vehicles = {}
     local isJobVehicle = {}
     for _, vehicleId in ipairs(job.assignedEquipmentIds) do
@@ -162,21 +162,21 @@ function TCJobSiteSetup.rigAndPlace(job)
             isJobVehicle[vehicle] = true
         end
     end
+    return vehicles, isJobVehicle
+end
 
+-- Plans every hitch of the job's equipment, moving nothing. Returns the
+-- plans (each with its implement, and the occupant it would unhitch) and
+-- the operating vehicle; or nil plus the reason's l10n key and its args
+-- (TCDispatchFailedEvent.REASON_KEYS).
+function TCJobSiteSetup.planHitches(job)
+    local vehicles, isJobVehicle = getJobVehicles(job)
     local operatingVehicle = pickOperatingVehicle(vehicles)
     if operatingVehicle == nil then
         return nil, "tc_dispatch_noVehicleReady", {}
     end
 
-    -- Hidden equipment is out of physics; teleporting and hitching both
-    -- need it back in (it stays invisible until the dispatch reveals it).
-    for _, vehicle in ipairs(vehicles) do
-        vehicle:addToPhysics()
-    end
-
-    -- Plan every hitch before moving anything, so a job that can't be
-    -- rigged fails without leaving equipment half-unhitched. Multiple
-    -- passes let a header find a trailed harvester that's itself only
+    -- Multiple passes let a header find a trailed harvester that's itself only
     -- hitched earlier in the same plan.
     -- Seed tanks (a seeder's front hopper, 032) are planned last, so the
     -- seeder gets first pick of the (preferred) rear linkage and the tank
@@ -233,12 +233,48 @@ function TCJobSiteSetup.rigAndPlace(job)
         end
         remaining = unplanned
     end
+    return plans, operatingVehicle
+end
+
+-- Server-only. Returns the operating vehicle on success, or nil plus the
+-- reason's l10n key and its args (TCDispatchFailedEvent.REASON_KEYS).
+function TCJobSiteSetup.rigAndPlace(job)
+    local field = g_fieldManager:getFieldById(job.fieldId)
+    if field == nil then
+        return nil, "tc_dispatch_noVehicleReady", {}
+    end
+
+    -- Plan every hitch before moving anything, so a job that can't be
+    -- rigged fails without leaving equipment half-unhitched.
+    local plans, operatingVehicle, reasonArgs = TCJobSiteSetup.planHitches(job)
+    if plans == nil then
+        return nil, operatingVehicle, reasonArgs
+    end
+
+    -- Hidden equipment is out of physics; teleporting and hitching both
+    -- need it back in (it stays invisible until the dispatch reveals it).
+    -- Weights go in after their machines, so their joints are rebuilt.
+    local vehicles = getJobVehicles(job)
+    for _, vehicle in ipairs(vehicles) do
+        vehicle:addToPhysics()
+    end
+    for _, vehicle in ipairs(vehicles) do
+        for _, weight in ipairs(TCBallast.getWeights(vehicle)) do
+            weight:addToPhysics()
+        end
+    end
 
     -- Unhitch: foreign occupants of joints we need (left in the yard), and
-    -- job implements from wherever they're currently hitched.
+    -- job implements from wherever they're currently hitched. A weight was
+    -- only kept on because no plan needed its hitch at dispatch, so this
+    -- shouldn't meet one; if it does, it's hidden with its machine, so it's
+    -- shown where it's left.
     for _, plan in ipairs(plans) do
         if plan.occupant ~= nil then
             plan.attacher:detachImplementByObject(plan.occupant)
+            if TCBallast.isWeight(plan.occupant) then
+                TCEquipmentVisibility.setVisibleEverywhere({ NetworkUtil.getObjectId(plan.occupant) }, true)
+            end
         end
     end
     for _, plan in ipairs(plans) do
@@ -295,46 +331,55 @@ function TCJobSiteSetup.selectJobSeed(job)
     return changed
 end
 
--- Going home ----------------------------------------------------------------
-
-local function resolveJobVehicles(job)
-    local vehicles = {}
-    for _, vehicleId in ipairs(job.assignedEquipmentIds) do
-        local vehicle = NetworkUtil.getObject(vehicleId)
-        if vehicle ~= nil then
-            table.insert(vehicles, vehicle)
-        end
-    end
-    return vehicles
-end
+-- Leaving and going home ----------------------------------------------------
 
 -- Server-only. Unhitches anything that isn't part of the job from the job's
--- equipment, where it stands - it stays in the yard.
+-- equipment, where it stands - it stays in the yard - except a weight
+-- whose hitch no job implement needs (planHitches), which goes along.
+-- Returns the ids of what it unhitched, and of anything still hitched to
+-- those (a front loader's bucket), for the dispatch to park.
 function TCJobSiteSetup.detachForeignImplements(job)
-    local vehicles = resolveJobVehicles(job)
-    local isJobVehicle = {}
-    for _, vehicle in ipairs(vehicles) do
-        isJobVehicle[vehicle] = true
+    local vehicles, isJobVehicle = getJobVehicles(job)
+
+    local isNeededHitch = {}
+    for _, plan in ipairs(TCJobSiteSetup.planHitches(job) or {}) do
+        if plan.occupant ~= nil then
+            isNeededHitch[plan.occupant] = true
+        end
+    end
+
+    local detached = {}
+    local function addWithChildren(object)
+        table.insert(detached, NetworkUtil.getObjectId(object))
+        if object.getAttachedImplements ~= nil then
+            for _, implement in ipairs(object:getAttachedImplements()) do
+                addWithChildren(implement.object)
+            end
+        end
     end
 
     for _, vehicle in ipairs(vehicles) do
         if vehicle.getAttachedImplements ~= nil then
             local foreign = {}
             for _, implement in ipairs(vehicle:getAttachedImplements()) do
-                if not isJobVehicle[implement.object] then
-                    table.insert(foreign, implement.object)
+                local object = implement.object
+                if not isJobVehicle[object] and (isNeededHitch[object] or not TCBallast.isWeight(object)) then
+                    table.insert(foreign, object)
                 end
             end
             for _, object in ipairs(foreign) do
                 vehicle:detachImplementByObject(object)
+                addWithChildren(object)
             end
         end
     end
+    return detached
 end
 
 -- Server-only. Unhitches every vehicle id from whatever it's hitched to,
 -- and anything hitched to it, so each piece stands alone and can be parked
--- by itself (062). Works on hidden equipment too.
+-- by itself (062) - except its ballast weights, which stay on and are
+-- parked with it. Works on hidden equipment too.
 function TCJobSiteSetup.unhitchVehicles(vehicleIds)
     for _, vehicleId in ipairs(vehicleIds) do
         local vehicle = NetworkUtil.getObject(vehicleId)
@@ -346,7 +391,9 @@ function TCJobSiteSetup.unhitchVehicles(vehicleIds)
             if vehicle.getAttachedImplements ~= nil then
                 local implements = {}
                 for _, implement in ipairs(vehicle:getAttachedImplements()) do
-                    table.insert(implements, implement.object)
+                    if not TCBallast.isWeight(implement.object) then
+                        table.insert(implements, implement.object)
+                    end
                 end
                 for _, object in ipairs(implements) do
                     vehicle:detachImplementByObject(object)

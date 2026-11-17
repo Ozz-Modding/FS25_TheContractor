@@ -33,8 +33,8 @@ TheContractorJobs.MIN_COMPLETION_REPUTATION_REWARD = 1
 TheContractorJobs.REPUTATION_ZERO_QUALITY = 50
 
 -- A job's field work counts as "finished" once 019's completionPercentage
--- (0-100 scale, already normalized against AbstractMission.SUCCESS_FACTOR by
--- TCJobProgress) reaches this.
+-- (0-100 scale, already normalized against the fieldWorkDone setting by
+-- TCJobProgress.getSuccessFactor) reaches this.
 TheContractorJobs.COMPLETION_THRESHOLD_PERCENTAGE = 100
 
 -- 076: that threshold leaves a strip unworked (vanilla's SUCCESS_FACTOR
@@ -172,10 +172,11 @@ end
 -- readyDay (132) is the first day the job can be worked (Job.readyDay), nil
 -- for ready now. auctionId (141) is an attend job's auction (Job.auctionId).
 -- lotInspection (152) is an auction lot to inspect's (TCLotInspections).
+-- offerSource is what brought an hourly-roll offer (Job.offerSource).
 function TheContractorJobs:createJob(farmId, jobType, fieldId, requiredSkillLevel, targetPeriod, targetDayInPeriod,
                                       price, equipmentAvailable, fruitTypeName, deadlineDay, includesHaulage,
                                       deliveryStation, startState, workshop, spill, yardDelivery, yardHaul, refuel,
-                                      readyDay, auctionId, lotInspection)
+                                      readyDay, auctionId, lotInspection, offerSource)
     if not g_currentMission:getIsServer() then
         return nil
     end
@@ -209,6 +210,7 @@ function TheContractorJobs:createJob(farmId, jobType, fieldId, requiredSkillLeve
     job.refuel = refuel
     job.auctionId = auctionId
     job.lotInspection = lotInspection
+    job.offerSource = offerSource
     -- 110: after workshop, spill, the yard jobs, a refuel and a lot
     -- inspection, which decide it.
     local farmers = g_currentMission.TheContractor.Farmers
@@ -651,12 +653,141 @@ end
 -- period/dayInPeriod, today included. Assumes it's within the coming year,
 -- which is all a yearless period/day can express.
 function TheContractorJobs.getNextOccurrenceDay(period, dayInPeriod)
-    local environment = g_currentMission.environment
-    local daysPerPeriod = environment.daysPerPeriod
-    local yearLength = daysPerPeriod * Environment.PERIODS_IN_YEAR
-    local nowIndex = (environment.currentPeriod - 1) * daysPerPeriod + environment.currentDayInPeriod
-    local targetIndex = (period - 1) * daysPerPeriod + math.min(dayInPeriod, daysPerPeriod)
-    return environment.currentMonotonicDay + (targetIndex - nowIndex) % yearLength
+    return TCCalendar.getNextOccurrenceDay(period, dayInPeriod)
+end
+
+-- Calendar changes (160) ------------------------------------------------------
+-- A job's deadline and ready day are monotonic days. When the days per month
+-- changes, TCCalendarChange has every live job's days moved to the same date
+-- (remapDates, on every machine), with its target date and a workshop
+-- offer's expiry; its offer messages move through the Inbox's own
+-- remapDates. An attend-the-auction job (141) follows its auction's day
+-- instead (TheContractorAuctions:remapDates).
+
+local function isDatedJob(job)
+    return not job:isTerminal() and job.auctionId == nil
+end
+
+-- Every machine: each live job's days moved from one calendar to the other.
+-- Its deadline keeps the end of its share of the month, its ready day the
+-- start (TCCalendar.remapDay), never past the deadline. Its target date is
+-- read off the new calendar as given, not this machine's, which may not
+-- have taken the change up yet.
+function TheContractorJobs:remapDates(fromModel, toModel)
+    for _, farmJobs in pairs(self.jobsByFarm) do
+        for _, job in pairs(farmJobs) do
+            if isDatedJob(job) then
+                local deadlineDay = TCCalendar.remapDay(job.deadlineDay, fromModel, toModel, true)
+                local readyDay = TCCalendar.remapDay(job.readyDay, fromModel, toModel, false)
+                if deadlineDay ~= nil and readyDay ~= nil and readyDay > deadlineDay then
+                    readyDay = deadlineDay
+                end
+                if deadlineDay ~= job.deadlineDay or readyDay ~= job.readyDay then
+                    TCLog.info("TheContractor: farm %d job %d dates moved: due day %s, ready day %s", job.farmId,
+                        job.id, tostring(deadlineDay), tostring(readyDay))
+                end
+                job.deadlineDay = deadlineDay
+                job.readyDay = readyDay
+                if deadlineDay ~= nil then
+                    local periodIndex, dayInPeriod = TCCalendar.getDayInfo(deadlineDay, toModel)
+                    job.targetPeriod = (periodIndex - 1) % Environment.PERIODS_IN_YEAR + 1
+                    job.targetDayInPeriod = dayInPeriod
+                end
+                -- 100: a workshop offer lapses the day before its job's due.
+                if job.workshop ~= nil and job.workshop.offerExpiresDay ~= nil then
+                    job.workshop.offerExpiresDay = TCCalendar.remapDay(job.workshop.offerExpiresDay, fromModel,
+                        toModel, true)
+                end
+            end
+        end
+    end
+end
+
+local function makeDatesChange(job, deadlineDay, readyDay)
+    if deadlineDay ~= nil and readyDay ~= nil and readyDay > deadlineDay then
+        readyDay = deadlineDay
+    end
+    if deadlineDay == job.deadlineDay and readyDay == job.readyDay then
+        return nil
+    end
+    return {
+        farmId = job.farmId,
+        jobId = job.id,
+        deadlineDay = deadlineDay,
+        readyDay = readyDay,
+        targetPeriod = deadlineDay ~= nil and TCCalendar.getPeriodFromDay(deadlineDay) or job.targetPeriod,
+        targetDayInPeriod = deadlineDay ~= nil and TCCalendar.getDayInPeriodFromDay(deadlineDay) or
+            job.targetDayInPeriod,
+    }
+end
+
+-- A save from before 160 has no calendar for its jobs, so a job dated before
+-- a change still has its old day. Its target date (worked out with its
+-- deadline, at the days per period of the time) says what was agreed: a job
+-- whose deadline's no longer in its target month gets the end of that month
+-- (its next one, if it's within half a year; one further off has gone by,
+-- so it's left alone). The day within the month can't be told apart from a
+-- change, so it's only the month that's put right.
+function TheContractorJobs:getLegacyDateRepairs()
+    local today = g_currentMission.environment.currentMonotonicDay
+    local currentIndex = TCCalendar.getPeriodIndex()
+    local changes = {}
+    for _, farmJobs in pairs(self.jobsByFarm) do
+        for _, job in pairs(farmJobs) do
+            if isDatedJob(job) and job.deadlineDay ~= nil and job.deadlineDay >= today and job.targetPeriod ~= nil and
+                    TCCalendar.getPeriodFromDay(job.deadlineDay) ~= job.targetPeriod then
+                local monthsAhead = (job.targetPeriod - TCCalendar.getPeriodFromDay(today)) %
+                    Environment.PERIODS_IN_YEAR
+                if monthsAhead <= Environment.PERIODS_IN_YEAR / 2 then
+                    local deadlineDay = TCCalendar.getMonotonicDay(currentIndex + monthsAhead, math.huge)
+                    local change = makeDatesChange(job, deadlineDay, job.readyDay)
+                    if change ~= nil then
+                        table.insert(changes, change)
+                    end
+                end
+            end
+        end
+    end
+    table.sort(changes, function(a, b) return a.jobId < b.jobId end)
+    return changes
+end
+
+-- Server, first update after loading a save from before 160
+-- (TCCalendarChange.update): its jobs' months put right, and the clients
+-- told.
+function TheContractorJobs:repairLegacyDates()
+    local changes = self:getLegacyDateRepairs()
+    if #changes == 0 then
+        return
+    end
+    for _, change in ipairs(changes) do
+        TCLog.info("TheContractor: farm %d job %d put back in its month: due day %d", change.farmId, change.jobId,
+            change.deadlineDay)
+    end
+    self:applyJobDates(changes)
+    if g_server ~= nil then
+        g_server:broadcastEvent(TCJobDatesChangedEvent.new(changes))
+    end
+end
+
+-- Every machine: a job's new deadline, ready day and target date, and its
+-- offer messages' expiry with them (the day after the deadline,
+-- Inbox:getJobExpiryDay).
+function TheContractorJobs:applyJobDates(changes)
+    local inbox = g_currentMission.TheContractor.Inbox
+    for _, change in ipairs(changes) do
+        local job = self:getJob(change.farmId, change.jobId)
+        if job ~= nil then
+            local oldDeadlineDay = job.deadlineDay
+            job.deadlineDay = change.deadlineDay
+            job.readyDay = change.readyDay
+            job.targetPeriod = change.targetPeriod
+            job.targetDayInPeriod = change.targetDayInPeriod
+            if inbox ~= nil then
+                inbox:moveJobExpiry(change.farmId, change.jobId, oldDeadlineDay, change.deadlineDay)
+            end
+        end
+    end
 end
 
 -- Reputation loss scales down by whatever completion progress the job had
@@ -1663,6 +1794,8 @@ function TheContractorJobs.writeJob(streamId, job)
     streamWriteInt32(streamId, job.auctionId or 0)
     -- 152.
     TCLotInspections.writeStream(streamId, job.lotInspection)
+    -- "" stands in for no offer source.
+    streamWriteString(streamId, job.offerSource or "")
 end
 
 -- 100: what a client needs of a workshop job (the uniqueIds stay on the
@@ -1861,6 +1994,8 @@ function TheContractorJobs.readJob(streamId)
     local auctionId = streamReadInt32(streamId)
     job.auctionId = auctionId ~= 0 and auctionId or nil
     job.lotInspection = TCLotInspections.readStream(streamId)
+    local offerSource = streamReadString(streamId)
+    job.offerSource = offerSource ~= "" and offerSource or nil
 
     return job
 end
@@ -2026,6 +2161,7 @@ function TheContractorJobs:loadFromXMLFile(xmlFile)
             job.auctionId = getXMLInt(xmlFile, jobKey .. "#auctionId")
             -- 152.
             job.lotInspection = TCLotInspections.loadFromXML(xmlFile, jobKey .. ".lotInspection")
+            job.offerSource = getXMLString(xmlFile, jobKey .. "#offerSource")
 
             self.jobsByFarm[farmId] = self.jobsByFarm[farmId] or {}
             self.jobsByFarm[farmId][id] = job
@@ -2370,6 +2506,9 @@ function TheContractorJobs:saveToXmlFile(xmlFile)
             end
             if job.lotInspection ~= nil then
                 TCLotInspections.saveToXML(xmlFile, jobKey .. ".lotInspection", job.lotInspection)
+            end
+            if job.offerSource ~= nil then
+                setXMLString(xmlFile, jobKey .. "#offerSource", job.offerSource)
             end
 
             if job.assignedWorkerId ~= nil then

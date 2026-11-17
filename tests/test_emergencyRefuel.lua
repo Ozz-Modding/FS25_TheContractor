@@ -120,8 +120,9 @@ local function setup()
     end
 
     -- The machine out on the field: a 400 l diesel tank with level in it.
-    function world:addMachine(job, level)
-        local vehicle = self:addVehicle({ dieselUsagePerHour = 10, dieselCapacity = 400, dieselLevel = level })
+    function world:addMachine(job, level, fillType)
+        local vehicle = self:addVehicle({ dieselUsagePerHour = 10, dieselCapacity = 400, dieselLevel = level,
+            dieselFillType = fillType })
         job.refuel.machineVehicleId = vehicle.id
         return vehicle
     end
@@ -384,4 +385,15 @@ test("the logbook: the litres asked for, what was in the tank as it ended, and t
     assertTrue(delivery.machineName ~= nil)
     assertEquals(TheContractorEmergencyRefuel.getLogbookDelivery(TheContractorJob.new(2, 1, "plow", 4, 1, 1, 1, 1)),
         nil)
+end)
+
+test("with FS25_RedDiesel: a red machine's tank is emptied, and filling it with red finishes the job", function()
+    local world = setup()
+    local red = world:addFillType("RED_DIESEL", "Red diesel")
+    local job = world:addRefuelJob({})
+    local machine = world:addMachine(job, 400, red)
+    assertEquals(TheContractorEmergencyRefuel.emptyTank(machine, 1), 400, "emptied")
+    assertEquals(TheContractorEmergencyRefuel.getCompletion(job), 0, "out of fuel")
+    machine:addFillUnitFillLevel(1, 1, 100, red)
+    assertEquals(TheContractorEmergencyRefuel.getCompletion(job), 1, "done at a quarter")
 end)

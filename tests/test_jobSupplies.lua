@@ -263,3 +263,20 @@ test("a storage handing pallets out isn't drawn on", function()
     assertEquals(storedLevels(rack), "1000", "untouched")
     assertEquals(rack.spec_objectStorage.infosDirty, 0, "not marked")
 end)
+
+test("with FS25_RedDiesel: a red tractor is topped up with red from stock, never white", function()
+    local world = setup()
+    local red = world:addFillType("RED_DIESEL", "Red diesel")
+    local tractor = world:addVehicle({ name = "Tractor", dieselUsagePerHour = 40, dieselCapacity = 400,
+        dieselLevel = 90, dieselFillType = red })
+    local white = world:addStorage({ levels = { [FillType.DIESEL] = 1000 } })
+    local redTank = world:addStorage({ levels = { [red] = 250 } })
+    world:addJob({ workerId = 3, vehicles = { tractor }, working = true })
+
+    poll()
+
+    assertEquals(tractor.fillUnits[1].level, 340, "tank")
+    assertEquals(tractor.fillUnits[1].fillType, red, "red")
+    assertEquals(redTank:getFillLevel(red), 0, "red stock")
+    assertEquals(white:getFillLevel(FillType.DIESEL), 1000, "white stock")
+end)

@@ -43,6 +43,7 @@ local function setup()
 
     dofile("src/placeables/PlaceableTCParkingSlot.lua")
     dofile("src/util/TCEquipmentClass.lua")
+    dofile("src/util/TCBallast.lua")
     dofile("src/util/TCVehicleIds.lua")
     dofile("src/util/TCParking.lua")
     dofile("src/util/TCParkingSlotFilter.lua")

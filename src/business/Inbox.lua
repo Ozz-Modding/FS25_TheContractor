@@ -316,6 +316,32 @@ function TheContractorInbox:getJobExpiryDay(farmId, kind, payload)
     return job.deadlineDay + 1
 end
 
+-- 161, every machine (TCCalendarChange): every message's expiry moved to the
+-- same date. A message is gone on its expiry day, so it's the last day it's
+-- there that keeps its date (to the end of its share of the month). A job
+-- offer's (the day after its deadline) so moves just as its job's deadline.
+function TheContractorInbox:remapDates(fromModel, toModel)
+    for _, message in pairs(self.messagesById) do
+        if message.expiresDay ~= nil then
+            message.expiresDay = TCCalendar.remapDay(message.expiresDay - 1, fromModel, toModel, true) + 1
+        end
+    end
+end
+
+-- 160, every machine: a job's dates moved with the calendar, so its offer
+-- messages, expiring the day after its old deadline (getJobExpiryDay), move
+-- with it.
+function TheContractorInbox:moveJobExpiry(farmId, jobId, oldDeadlineDay, newDeadlineDay)
+    if oldDeadlineDay == nil or newDeadlineDay == nil then
+        return
+    end
+    for _, message in ipairs(self:getMessages(farmId)) do
+        if message.expiresDay == oldDeadlineDay + 1 and self:getMessageJobId(message.kind, message.payload) == jobId then
+            message.expiresDay = newDeadlineDay + 1
+        end
+    end
+end
+
 -- Server: the job's been taken on or is over, so its offer messages go.
 function TheContractorInbox:removeMessagesForJob(farmId, jobId)
     for _, message in ipairs(self:getMessages(farmId)) do

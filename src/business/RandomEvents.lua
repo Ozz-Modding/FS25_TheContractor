@@ -208,13 +208,14 @@ function TheContractorRandomEvents.getDailyChance(ratePerPeriod, multiplier, day
     return math.min(1, math.max(0, ratePerPeriod * multiplier / math.max(1, daysPerPeriod)))
 end
 
--- A stage's wait in days: delayPeriods { min, max } months at daysPerPeriod,
--- roll (0-1) picking within the range, never under a day.
-function TheContractorRandomEvents.getDelayDays(delayPeriods, daysPerPeriod, roll)
+-- The day a stage's wait from `today` ends: delayPeriods { min, max }
+-- months, roll (0-1) picking within the range, on by the calendar (161: a
+-- planned days-per-month change allowed for), never under a day.
+function TheContractorRandomEvents.getStageDay(delayPeriods, today, roll)
     local minPeriods = delayPeriods[1] or 0
     local maxPeriods = delayPeriods[2] or minPeriods
     local periods = minPeriods + (maxPeriods - minPeriods) * roll
-    return math.max(1, math.floor(periods * daysPerPeriod + 0.5))
+    return math.max(today + 1, TCCalendar.addMonths(today, periods))
 end
 
 local function getToday()
@@ -609,13 +610,22 @@ function TheContractorRandomEvents:goToStage(incident, stageKey)
     self:enterStage(incident, stageIndex)
 end
 
+-- 161, every machine (TCCalendarChange): a waiting incident's next stage
+-- moved to the same date, to the start of its share of the month.
+function TheContractorRandomEvents:remapDates(fromModel, toModel)
+    for _, incident in pairs(self.incidents) do
+        if incident.nextStageDay ~= nil and incident.nextStageDay > 0 then
+            incident.nextStageDay = TCCalendar.remapDay(incident.nextStageDay, fromModel, toModel, false)
+        end
+    end
+end
+
 function TheContractorRandomEvents:enterStage(incident, stageIndex)
     local stage = self.eventTypes[incident.eventType].stages[stageIndex]
     incident.stage = stage.key
 
     if stage.delayPeriods ~= nil then
-        incident.nextStageDay = getToday() +
-            TheContractorRandomEvents.getDelayDays(stage.delayPeriods, getDaysPerPeriod(), math.random())
+        incident.nextStageDay = TheContractorRandomEvents.getStageDay(stage.delayPeriods, getToday(), math.random())
         self:commitIncident(incident)
         return
     end

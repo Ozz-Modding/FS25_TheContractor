@@ -222,3 +222,18 @@ test("each load carted burns a round trip from the haulage rig only", function()
     assertEquals(dieselLevel(combine), 400, "combine untouched")
     assertNear(job.fuelUsedLiters, expected * 2, 0.0001, "job liters")
 end)
+
+test("with FS25_RedDiesel: a red tractor burns red, at red's price", function()
+    local world = setup()
+    local red = world:addFillType("RED_DIESEL", "Red diesel")
+    world.fuelPrices = { [red] = 0.8 }
+    local tractor = world:addVehicle({ dieselUsagePerHour = 40, dieselLevel = 400, dieselFillType = red })
+    local job = world:addJob({ workerId = 3, vehicles = { tractor }, state = TheContractorJob.STATE.ALLOCATED })
+    local expected = expectedTravelLiters(40, 1.5)
+
+    TCJobFuel.burnTravelFuel(job)
+
+    assertNear(400 - tractor.fillUnits[1].level, expected, 0.0001, "burned")
+    assertEquals(tractor.fillUnits[1].fillType, red, "still red")
+    assertNear(job.fuelCost, expected * 0.8, 0.0001, "red's price")
+end)

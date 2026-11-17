@@ -133,11 +133,12 @@ local function getPositions(span, size, step)
     return positions
 end
 
--- A vehicle's footprint size with clearance, and its height.
+-- A vehicle's footprint size with clearance, and its height. Weights it
+-- carries (TCBallast) are parked on it, so they're in it.
 local function getFootprint(vehicle)
-    local size = vehicle.size or {}
-    return (size.width or 3) + TCParking.CLEARANCE, (size.length or 5) + TCParking.CLEARANCE,
-        size.widthOffset or 0, size.lengthOffset or 0, size.height or TCParking.DEFAULT_HEIGHT
+    local width, length, widthOffset, lengthOffset, height = TCBallast.getFootprint(vehicle, 3, 5,
+        TCParking.DEFAULT_HEIGHT)
+    return width + TCParking.CLEARANCE, length + TCParking.CLEARANCE, widthOffset, lengthOffset, height
 end
 
 local function shuffle(list)
@@ -306,8 +307,12 @@ end
 -- Puts a hidden vehicle down and reveals it on every machine. Its position
 -- replicates to clients by itself.
 function TCParking.placeVehicle(vehicle, x, y, z, rotY)
+    -- Its weights go with it (setAbsolutePosition moves only the vehicle),
+    -- and back into physics as it's revealed.
+    local weights = TCBallast.captureOffsets(vehicle)
     vehicle:removeFromPhysics()
     vehicle:setAbsolutePosition(x, y, z, 0, rotY, 0)
+    TCBallast.restoreOffsets(vehicle, weights)
     TCEquipmentVisibility.setVisibleEverywhere({ NetworkUtil.getObjectId(vehicle) }, true)
 end
 

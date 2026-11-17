@@ -80,7 +80,9 @@ function TCSupplyStock.getSupplyFillTypes(farmId)
     local list, seen = {}, {}
     local machines = getFarmMachines(farmId)
 
-    addFillType(list, seen, FillType.DIESEL)
+    for _, fillTypeIndex in ipairs(TCJobSupplies.getDieselFillTypes()) do
+        addFillType(list, seen, fillTypeIndex)
+    end
     addFillType(list, seen, TCEquipmentClass.SEED_TANK_FILL_TYPE)
     for _, vehicle in ipairs(machines) do
         if vehicle.spec_sowingMachine ~= nil then

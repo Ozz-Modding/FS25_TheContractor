@@ -37,6 +37,11 @@ local function setup(def)
         currentMonotonicDay = world.today,
         dayTime = 0,
         daysPerPeriod = 1,
+        -- TCCalendar's: today's period as the day's below.
+        currentYear = 1,
+        currentPeriod = (world.today - 1) % 12 + 1,
+        plannedDaysPerPeriod = 1,
+        currentDayInPeriod = 1,
         getPeriodFromDay = function(_, day) return (day - 1) % 12 + 1 end,
         getDayInPeriodFromDay = function() return 1 end,
     }

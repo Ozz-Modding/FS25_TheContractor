@@ -5,7 +5,7 @@ TheContractor.SaveKey = "TheContractor"
 -- Published on every machine whenever one of our events is received or the
 -- server broadcasts one: something the menu shows may have changed, so an
 -- open menu redraws (MenuContractor:onDataUpdated). See
--- TheContractor.installDataUpdatedHooks.
+-- src/util/TCDataUpdated.lua.
 MessageType.TC_DATA_UPDATED = nextMessageTypeId()
 
 source(TheContractor.dir .. "src/util/TCLog.lua")
@@ -17,12 +17,14 @@ source(TheContractor.dir .. "src/util/DisableVanillaContracts.lua")
 source(TheContractor.dir .. "src/util/TCFreezeNPCFieldwork.lua")
 source(TheContractor.dir .. "src/util/TCFarmlandOwner.lua")
 source(TheContractor.dir .. "src/util/TCEquipmentClass.lua")
+source(TheContractor.dir .. "src/util/TCBallast.lua")
 source(TheContractor.dir .. "src/util/TCCropPrediction.lua")
 source(TheContractor.dir .. "src/util/TCJobProgress.lua")
 source(TheContractor.dir .. "src/util/TCJobFuel.lua")
 source(TheContractor.dir .. "src/util/TCEquipmentVisibility.lua")
 source(TheContractor.dir .. "src/util/TCFieldPreparation.lua")
 source(TheContractor.dir .. "src/util/TCFieldAccess.lua")
+source(TheContractor.dir .. "src/util/TCJobFieldMask.lua")
 source(TheContractor.dir .. "src/util/TCVehicleLock.lua")
 source(TheContractor.dir .. "src/util/TCJobSiteSetup.lua")
 source(TheContractor.dir .. "src/util/TCFolding.lua")
@@ -45,6 +47,7 @@ source(TheContractor.dir .. "src/util/TCStandingSpotActivatable.lua")
 source(TheContractor.dir .. "src/util/TCJobConsequences.lua")
 source(TheContractor.dir .. "src/util/TCVehicleCondition.lua")
 source(TheContractor.dir .. "src/util/TCVehicleIds.lua")
+source(TheContractor.dir .. "src/util/TCDataUpdated.lua")
 source(TheContractor.dir .. "src/util/TCStoreConfigurations.lua")
 source(TheContractor.dir .. "src/util/TCWorkerFieldSpeed.lua")
 source(TheContractor.dir .. "src/util/TCAutoDrive.lua")
@@ -52,6 +55,7 @@ source(TheContractor.dir .. "src/util/TCCourseplay.lua")
 source(TheContractor.dir .. "src/util/TCFollowMe.lua")
 source(TheContractor.dir .. "src/util/TCEconomyScale.lua")
 source(TheContractor.dir .. "src/util/TCCalendar.lua")
+source(TheContractor.dir .. "src/util/TCCalendarChange.lua")
 source(TheContractor.dir .. "src/util/TCSignImages.lua")
 source(TheContractor.dir .. "src/util/TCCompanyLogo.lua")
 -- Now, not in loadMap: the signs' store items list signs/ before the map
@@ -178,6 +182,8 @@ source(TheContractor.dir .. "src/events/TCJobProgressEvent.lua")
 source(TheContractor.dir .. "src/events/TCJobSupplyStatusEvent.lua")
 source(TheContractor.dir .. "src/events/TCJobMissedEvent.lua")
 source(TheContractor.dir .. "src/events/TCJobRemovedEvent.lua")
+source(TheContractor.dir .. "src/events/TCJobDatesChangedEvent.lua")
+source(TheContractor.dir .. "src/events/TCCalendarChangedEvent.lua")
 source(TheContractor.dir .. "src/events/TCConsoleEvent.lua")
 source(TheContractor.dir .. "src/events/TCRespondToJobOfferEvent.lua")
 source(TheContractor.dir .. "src/events/TCCounterOfferEvent.lua")
@@ -420,6 +426,7 @@ function TheContractor:loadMap()
 
     -- Module-level caches outlive a savegame; start each load clean.
     TCFieldAccess.reset()
+    TCJobFieldMask.reset()
     TCEquipmentVisibility.reset()
     TCVehicleLock.reset()
     TCHaulage.reset()
@@ -503,6 +510,10 @@ function TheContractor:loadMap()
     menuContractor:initialize()
 
     self.MenuContractor = menuContractor
+
+    -- 160/161: booked days follow the calendar. Before the load, which
+    -- reads the calendar they were booked under.
+    TCCalendarChange.install()
 
     self:loadFromXMLFile()
 
@@ -641,6 +652,7 @@ function TheContractor:loadFromXMLFile()
     self.AuctionSigns:loadFromXMLFile(xmlFile)
     self.Auctions:loadFromXMLFile(xmlFile)
     self.AuctionSale:loadFromXMLFile(xmlFile)
+    TCCalendarChange.loadFromXMLFile(xmlFile)
 
     delete(xmlFile)
 end
@@ -733,6 +745,7 @@ function TheContractor:saveToXmlFile()
     tc.AuctionSigns:saveToXmlFile(xmlFile)
     tc.Auctions:saveToXmlFile(xmlFile)
     tc.AuctionSale:saveToXmlFile(xmlFile)
+    TCCalendarChange.saveToXmlFile(xmlFile)
 
     saveXMLFile(xmlFile)
     delete(xmlFile)
@@ -916,6 +929,8 @@ function TheContractor:deleteMap()
     TCYardFarmers.reset()
     -- 088: the due jobs' map markers.
     TCJobHotspots.reset()
+    -- Live jobs' fields on the mission map (it goes with the map).
+    TCJobFieldMask.reset()
     -- Player-driven jobs' HUD progress bars.
     TCJobHud.reset()
     -- 134: an auction crowd goes with the map.
@@ -927,6 +942,7 @@ function TheContractor:deleteMap()
 
     TCConsole.uninstall()
     TCFarmDeletion.uninstall()
+    TCCalendarChange.uninstall()
 
     if g_currentMission ~= nil and g_currentMission.TheContractor == self then
         g_currentMission.TheContractor = nil
@@ -944,6 +960,8 @@ function TheContractor:update(dt)
     TCJobProgress.update(dt)
     TCEquipmentVisibility.update(dt)
     TCFieldAccess.update(dt)
+    -- Live jobs' fields on vanilla's mission map: no growth or tramlines.
+    TCJobFieldMask.update(dt)
     TCVehicleLock.update(dt)
     TCHaulage.update(dt)
     TCFieldPreparation.update(dt)
@@ -962,6 +980,10 @@ function TheContractor:update(dt)
     if self.Jobs ~= nil then
         self.Jobs:update(dt)
     end
+
+    -- 160/161: the first update after a load checks the calendar (server),
+    -- after Jobs has filled in an old save's missing deadlines.
+    TCCalendarChange.update()
 
     if self.Cooldown ~= nil then
         self.Cooldown:update(dt)
@@ -1074,36 +1096,8 @@ function TheContractor:draw()
     TCProtestCrowd.draw()
 end
 
--- Every one of our events tells the menu its data may have changed
--- (TC_DATA_UPDATED): on the machine that receives it (after its readStream
--- has run it), and on the server as it broadcasts one, since a broadcast
--- doesn't loop back to the host (src/events/README.md). So a remote client's
--- menu catches up when the server's answer lands, and the host's when the
--- server changes something on its own. Our events are the ones registered
--- with a TC name; each is marked so the broadcast hook can tell them apart.
-function TheContractor.publishDataUpdated()
-    g_messageCenter:publish(MessageType.TC_DATA_UPDATED)
-end
-
-function TheContractor.installDataUpdatedHooks()
-    for className, eventClass in pairs(EventIds.eventClasses) do
-        if string.sub(className, 1, 2) == "TC" and rawget(eventClass, "tcPublishesDataUpdated") == nil then
-            eventClass.readStream = Utils.appendedFunction(eventClass.readStream, TheContractor.publishDataUpdated)
-            eventClass.tcPublishesDataUpdated = true
-        end
-    end
-
-    if not Server.tcDataUpdatedHookInstalled then
-        Server.broadcastEvent = Utils.appendedFunction(Server.broadcastEvent, function(_, event)
-            if event ~= nil and event.tcPublishesDataUpdated then
-                TheContractor.publishDataUpdated()
-            end
-        end)
-        Server.tcDataUpdatedHookInstalled = true
-    end
-end
-
-TheContractor.installDataUpdatedHooks()
+-- After every event file: TC_DATA_UPDATED for each of ours.
+TCDataUpdated.install()
 TheContractor.installSaveHook()
 TheContractor.installInitialClientStateHook()
 TheContractor.installStartMissionHook()

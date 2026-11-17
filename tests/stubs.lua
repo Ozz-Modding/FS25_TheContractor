@@ -267,7 +267,11 @@ function stubs.install()
     g_currentMission = {
         missionInfo = { helperBuyFuel = true, helperBuySeeds = true, helperBuyFertilizer = true, fuelUsage = 2 },
         economyManager = {
+            -- world.fuelPrices: a fill type's own price (FS25_RedDiesel's).
             getCostPerLiter = function(_, fillTypeIndex)
+                if world.fuelPrices ~= nil and world.fuelPrices[fillTypeIndex] ~= nil then
+                    return world.fuelPrices[fillTypeIndex]
+                end
                 return world.dieselPrice
             end,
         },
@@ -310,9 +314,11 @@ function stubs.install()
 
     -- def: { name, farmId, isPallet, isAIActive, fuelStep,
     --        fillUnits = { { capacity, level, fillType, supported = {...} }... },
-    --        dieselUsagePerHour, dieselCapacity, dieselLevel }
+    --        dieselUsagePerHour, dieselCapacity, dieselLevel, dieselFillType }
     -- The diesel tank, if any, is added as the last fill unit with a
     -- Motorized diesel consumer, the way vanilla vehicles have one.
+    -- dieselFillType (default DIESEL) is its fuel: FS25_RedDiesel's
+    -- RED_DIESEL keys the consumer and the tank by that instead.
     function world:addVehicle(def)
         local vehicle = {
             name = def.name or "Vehicle",
@@ -334,20 +340,21 @@ function stubs.install()
         end
 
         if def.dieselUsagePerHour ~= nil then
+            local fuel = def.dieselFillType or FillType.DIESEL
             table.insert(vehicle.fillUnits, {
                 capacity = def.dieselCapacity or 400,
                 level = def.dieselLevel or def.dieselCapacity or 400,
-                fillType = FillType.DIESEL,
-                lastValidFillType = FillType.DIESEL,
-                supported = toSet({ FillType.DIESEL }),
+                fillType = fuel,
+                lastValidFillType = fuel,
+                supported = toSet({ fuel }),
             })
             local consumer = {
                 fillUnitIndex = #vehicle.fillUnits,
-                fillType = FillType.DIESEL,
+                fillType = fuel,
                 usage = def.dieselUsagePerHour / 3600000,
                 permanentConsumption = true,
             }
-            vehicle.spec_motorized = { consumers = { consumer }, consumersByFillType = { [FillType.DIESEL] = consumer } }
+            vehicle.spec_motorized = { consumers = { consumer }, consumersByFillType = { [fuel] = consumer } }
         end
 
         vehicle.spec_fillUnit = { fillUnits = vehicle.fillUnits }
@@ -510,6 +517,9 @@ function stubs.install()
     -- Every src/ file logs through it. On, so world.logs gets the info lines.
     world:load("src/util/TCLog.lua")
     TCLog.enabled = true
+
+    -- Every date a job or event books goes through it (160).
+    world:load("src/util/TCCalendar.lua")
 
     -- Every vehicle spawned from a store item loads through it.
     world:load("src/util/TCStoreConfigurations.lua")

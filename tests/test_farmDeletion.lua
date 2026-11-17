@@ -51,8 +51,7 @@ local function setup()
         Company = make("TheContractorCompany", { companyNames = { [1] = "Old Co", [2] = "Other Co" } }),
         Reputation = make("TheContractorReputation", { scores = { [1] = 40, [2] = 10 } }),
         Advertising = make("TheContractorAdvertising", {
-            activeLevel = { [1] = "localNewspaper", [2] = "localNewspaper" },
-            expiresOnDay = { [1] = 20, [2] = 30 },
+            campaigns = { [1] = { localNewspaper = 20 }, [2] = { localNewspaper = 30 } },
         }),
         JobGeneration = make("TheContractorJobGeneration", { lastOfferDayByFarm = { [1] = 5, [2] = 6 } }),
         Jobs = make("TheContractorJobs", {
@@ -153,8 +152,8 @@ test("the deleted farm's state goes and the other farm's stays", function()
     assertEquals(tc.Company.companyNames[2], "Other Co", "other company")
     assertEquals(tc.Reputation.scores[1], nil, "reputation")
     assertEquals(tc.Reputation.scores[2], 10, "other reputation")
-    assertEquals(tc.Advertising.activeLevel[1], nil, "advert")
-    assertEquals(tc.Advertising.expiresOnDay[2], 30, "other advert")
+    assertEquals(tc.Advertising.campaigns[1], nil, "advert")
+    assertEquals(tc.Advertising.campaigns[2].localNewspaper, 30, "other advert")
     assertEquals(tc.JobGeneration.lastOfferDayByFarm[1], nil, "offer day")
 
     assertEquals(tc.Jobs.jobsByFarm[1], nil, "jobs")

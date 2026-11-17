@@ -12,6 +12,7 @@ local function setup(chance)
     g_currentMission.environment = { currentMonotonicDay = 10, daysPerPeriod = 3 }
     local generation = TheContractorJobGeneration.new()
     generation.getHourlyChance = function() return chance or 0 end
+    generation.getOfferSource = function() return "reputation" end
     generation.offers = 0
     generation.canOffer = true
     generation.tryGenerateJob = function(self)

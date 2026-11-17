@@ -433,17 +433,18 @@ end
 
 function TheContractorJobGeneration:rollForFarm(farmId, hour)
     local hourWeight = (TheContractorJobGeneration.HOUR_WEIGHTS[hour] or 1) * TheContractorJobGeneration.HOUR_WEIGHT_SCALE
-    if math.random() <= self:getHourlyChance(farmId) * hourWeight then
-        self:generateForFarm(farmId)
+    local roll = math.random()
+    if roll <= self:getHourlyChance(farmId) * hourWeight then
+        self:generateForFarm(farmId, self:getOfferSource(farmId, roll / hourWeight))
     end
 
     if self:isFloorDue(farmId, hour) then
-        self:generateForFarm(farmId)
+        self:generateForFarm(farmId, "reputation")
     end
 end
 
-function TheContractorJobGeneration:generateForFarm(farmId)
-    local job = self:tryGenerateJob(farmId)
+function TheContractorJobGeneration:generateForFarm(farmId, offerSource)
+    local job = self:tryGenerateJob(farmId, nil, offerSource)
     if job ~= nil then
         self.lastOfferDayByFarm[farmId] = g_currentMission.environment.currentMonotonicDay
     end
@@ -462,8 +463,25 @@ function TheContractorJobGeneration:isFloorDue(farmId, hour)
         math.random() < TheContractorJobGeneration.FLOOR_FIRST_HOUR_CHANCE
 end
 
-function TheContractorJobGeneration:getHourlyChance(farmId)
+-- The hourly chance reputation alone gives, before the daysPerPeriod
+-- division (see getHourlyChance).
+function TheContractorJobGeneration.getReputationChance(farmId)
     local standing = g_currentMission.TheContractor.Reputation:getStanding(farmId)
+    return TheContractorJobGeneration.BASE_HOURLY_CHANCE + standing *
+        (TheContractorJobGeneration.REPUTATION_MAX_HOURLY_CHANCE - TheContractorJobGeneration.BASE_HOURLY_CHANCE)
+end
+
+-- What advertising adds to the hourly chance once MAX_HOURLY_CHANCE has had
+-- its say (before the daysPerPeriod division): a bonus of advertisingBonus
+-- on top of reputation's. 0 when reputation alone is at the cap.
+function TheContractorJobGeneration.getAdvertisingChance(farmId, advertisingBonus)
+    local reputationChance = math.min(TheContractorJobGeneration.MAX_HOURLY_CHANCE,
+        TheContractorJobGeneration.getReputationChance(farmId))
+    return math.min(TheContractorJobGeneration.MAX_HOURLY_CHANCE, reputationChance + advertisingBonus) -
+        reputationChance
+end
+
+function TheContractorJobGeneration:getHourlyChance(farmId)
     local advertisingBonus = g_currentMission.TheContractor.Advertising:getChanceBonus(farmId)
     local daysPerPeriod = g_currentMission.environment.daysPerPeriod
 
@@ -473,10 +491,34 @@ function TheContractorJobGeneration:getHourlyChance(farmId)
     -- month gets 24 rolls, a 5-day month gets 120. Dividing by daysPerPeriod
     -- keeps the *expected number of jobs per month* roughly constant across
     -- that setting instead of scaling up with it.
-    local chance = TheContractorJobGeneration.BASE_HOURLY_CHANCE + standing *
-        (TheContractorJobGeneration.REPUTATION_MAX_HOURLY_CHANCE - TheContractorJobGeneration.BASE_HOURLY_CHANCE) +
-        advertisingBonus
+    local chance = TheContractorJobGeneration.getReputationChance(farmId) + advertisingBonus
     return math.min(TheContractorJobGeneration.MAX_HOURLY_CHANCE, chance) / daysPerPeriod
+end
+
+-- Which part of the hourly chance a hit fell in, from the same roll that
+-- made it (scaled back to getHourlyChance's terms): reputation's share of
+-- the chance comes first, then each running campaign's bonus in LEVELS
+-- order, all under MAX_HOURLY_CHANCE. A roll in reputation's share is an
+-- offer that would have come that hour with no adverts running
+-- ("reputation"); one past it came only because of the adverts, and is
+-- the campaign's whose share it fell in. At the cap a campaign's share is
+-- cut short (the later ones first), and one with nothing left gets none.
+function TheContractorJobGeneration:getOfferSource(farmId, chanceRoll)
+    local daysPerPeriod = g_currentMission.environment.daysPerPeriod
+    local roll = chanceRoll * daysPerPeriod
+    local limit = math.min(TheContractorJobGeneration.MAX_HOURLY_CHANCE,
+        TheContractorJobGeneration.getReputationChance(farmId))
+    if roll <= limit then
+        return "reputation"
+    end
+
+    for _, campaign in ipairs(g_currentMission.TheContractor.Advertising:getCampaignBonuses(farmId)) do
+        limit = math.min(TheContractorJobGeneration.MAX_HOURLY_CHANCE, limit + campaign.bonus)
+        if roll <= limit then
+            return campaign.levelKey
+        end
+    end
+    return "reputation"
 end
 
 -- Picks a job type + eligible field (pickJobType/pickField), works out its
@@ -490,7 +532,7 @@ end
 -- one type and always prefers a field the farm can fulfill, falling back
 -- to any of the type's fields - same rules otherwise, so a forced offer is
 -- still one the generator could have made on its own.
-function TheContractorJobGeneration:tryGenerateJob(farmId, onlyJobType)
+function TheContractorJobGeneration:tryGenerateJob(farmId, onlyJobType, offerSource)
     local options = self:getJobTypeOptions(farmId, onlyJobType)
     local preferFulfillable = onlyJobType ~= nil or
         math.random() < TheContractorJobGeneration.FULFILLABLE_TYPE_SHARE
@@ -550,11 +592,11 @@ function TheContractorJobGeneration:tryGenerateJob(farmId, onlyJobType)
         jobType, field:getId(), price, price / math.max(field:getAreaHa() or 1, 0.01), settings:get("jobPayRate"),
         settings:getJobPayMultiplier())
 
-    local environment = g_currentMission.environment
     return g_currentMission.TheContractor.Jobs:createJob(farmId, jobType, field:getId(), requiredSkillLevel,
-        environment:getPeriodFromDay(deadlineDay), environment:getDayInPeriodFromDay(deadlineDay), price,
+        TCCalendar.getPeriodFromDay(deadlineDay), TCCalendar.getDayInPeriodFromDay(deadlineDay), price,
         equipmentAvailable, fruitTypeName, deadlineDay, deliveryStation ~= nil, deliveryStation,
-        TheContractorJobGeneration.getFieldStartState(field, jobDef), nil, nil, nil, nil, nil, readyDay)
+        TheContractorJobGeneration.getFieldStartState(field, jobDef), nil, nil, nil, nil, nil, readyDay, nil, nil,
+        offerSource)
 end
 
 -- 072: a job of this type on this field, offered now, for work something
@@ -581,9 +623,8 @@ function TheContractorJobGeneration:createJobOnField(farmId, jobType, field, sam
         TheContractorJobGeneration.getFruitTypeIndexByName(fruitTypeName))
     local price = self:estimatePrice(field, jobDef, farmId, requiredSkillLevel, nil, itemCount)
 
-    local environment = g_currentMission.environment
     return g_currentMission.TheContractor.Jobs:createJob(farmId, jobType, field:getId(), requiredSkillLevel,
-        environment:getPeriodFromDay(deadlineDay), environment:getDayInPeriodFromDay(deadlineDay), price,
+        TCCalendar.getPeriodFromDay(deadlineDay), TCCalendar.getDayInPeriodFromDay(deadlineDay), price,
         equipmentAvailable, fruitTypeName, deadlineDay, false, nil,
         TheContractorJobGeneration.getFieldStartState(field, jobDef), nil, nil, nil, nil, nil, readyDay)
 end
@@ -1096,7 +1137,7 @@ function TheContractorJobGeneration:getDeadlineDay(field, jobDef, sameMonth)
 
     local desired = earliest + math.random(0, TheContractorJobGeneration.MAX_EXTRA_DAYS)
     if sameMonth then
-        local monthEnd = today + environment.daysPerPeriod - environment:getDayInPeriodFromDay(today)
+        local monthEnd = today + environment.daysPerPeriod - environment.currentDayInPeriod
         desired = math.max(earliest, math.min(desired, monthEnd))
     end
 
@@ -1127,11 +1168,10 @@ function TheContractorJobGeneration:isDoableOnDay(field, jobDef, day)
     end
 
     if jobDef.seasonRule ~= nil then
-        local environment = g_currentMission.environment
-        if environment:getSeasonAtDay(day) == Season.WINTER then
+        if TCCalendar.getSeasonAtDay(day) == Season.WINTER then
             return false
         end
-        local period = environment:getPeriodFromDay(day)
+        local period = TCCalendar.getPeriodFromDay(day)
         if jobDef.seasonRule == "noWinterOrEarlySpring" and
             (period == SeasonPeriod.EARLY_SPRING or period == SeasonPeriod.MID_SPRING) then
             return false
@@ -1144,7 +1184,7 @@ function TheContractorJobGeneration:isDoableOnDay(field, jobDef, day)
             local fruitType = g_fruitTypeManager:getFruitTypeByIndex(plannedFruitTypeIndex)
             if fruitType ~= nil then
                 return fruitType:getIsPlantableInPeriod(g_currentMission.missionInfo.growthMode,
-                    g_currentMission.environment:getPeriodFromDay(day))
+                    TCCalendar.getPeriodFromDay(day))
             end
         end
     end

@@ -133,6 +133,7 @@ local function setup()
         new = function()
             local data = {}
             function data:setStoreItem(storeItem) self.storeItem = storeItem end
+            function data:setConfigurations(configurations) self.configurations = configurations end
             function data:setIgnoreShopOffset() end
             function data:setPosition(x, y, z) self.x, self.z = x, z end
             function data:setRotation(_, ry) self.rotY = ry end
@@ -219,10 +220,12 @@ local function setup()
     world.players = {}
     TheContractorFallenTree = { getPlayerPositions = function() return world.players end }
     TheContractorJobGeneration.isGrass = function() return false end
-    -- The trailer as the store describes it.
+    -- The trailer as the store describes it: a grain body that isn't its
+    -- default.
     TheContractorYardHaul.getTrailerSpec = function(xml)
         return xml == "trailer.xml" and
-            { capacity = 20000, fillTypes = { [FillType.WHEAT] = true, [world.barley] = true } } or nil
+            { capacity = 20000, fillTypes = { [FillType.WHEAT] = true, [world.barley] = true },
+                configurations = { fillUnit = 2 } } or nil
     end
     -- No ADS at all.
     TCADSRepairContracts.getEnv = function() return nil end
@@ -248,7 +251,7 @@ local function setup()
         isPending = function() return false end, sendToShop = function() return {} end }
     world:addRelationships()
     -- 129: a miss can leave the customer poor, so they complain.
-    TCCalendar = { getPeriodIndex = function() return 1 end }
+    TCCalendar.getPeriodIndex = function() return 1 end
     world.reputation = {}
     tc.Reputation = {
         addReputation = function(_, farmId, delta) table.insert(world.reputation, delta) end,
@@ -367,6 +370,7 @@ test("accepted: the player's at once, the trailer comes out to its spot full, an
     local haul = job.yardHaul
     assertEquals(job.state, TheContractorJob.STATE.ALLOCATED)
     assertEquals(world.spawned[1].storeItem.xmlFilename, "trailer.xml")
+    assertEquals(world.spawned[1].configurations.fillUnit, 2, "in its grain configuration")
     assertEquals(world.spawned[1].propertyState, VehiclePropertyState.MISSION)
     assertEquals(world.spawned[1].farmId, 1, "the player's farm, so the sale's routed to the job")
     assertEquals(trailer.fillUnits[1].level, haul.liters)
@@ -533,6 +537,7 @@ test("a load: the trailer's kept by uniqueId, and a job taken on without it send
     tc.YardHaul:resolveSavedVehicles()
     assertEquals(#tc.RepairContracts.arrivals, 1)
     assertEquals(tc.RepairContracts.arrivals[1].jobId, job.id)
+    assertEquals(tc.RepairContracts.arrivals[1].configurations.fillUnit, 2, "in its grain configuration again")
 
     tc.RepairContracts:update(TheContractorRepairContracts.PLACE_CHECK_MS)
     local trailer = world:finishLoad()

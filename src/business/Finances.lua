@@ -263,16 +263,15 @@ function TheContractorFinances:invoiceJob(job)
         return
     end
 
-    local environment = g_currentMission.environment
-    local today = environment.currentMonotonicDay
-    local daysPerPeriod = environment.daysPerPeriod
+    local today = g_currentMission.environment.currentMonotonicDay
     -- 057: credit control, if they employ an office administrator.
     local administrator = g_currentMission.TheContractor.Office
 
-    -- At least a day, so even a prompt payer pays on a later day tick.
-    local delayDays = math.max(1, rollDelayPeriods(administrator:getDelayWeights(job.farmId)) * daysPerPeriod +
-        math.random(0, daysPerPeriod - 1))
-    local dueDay = today + delayDays
+    -- Some day in the month the delay lands in, by the calendar (161: a
+    -- planned days-per-month change allowed for). At least a day, so even a
+    -- prompt payer pays on a later day tick.
+    local dueFrom = TCCalendar.addMonths(today, rollDelayPeriods(administrator:getDelayWeights(job.farmId)))
+    local dueDay = math.max(today + 1, dueFrom + math.random(0, TCCalendar.getDaysPerPeriodOn(dueFrom) - 1))
 
     local habit = g_currentMission.TheContractor.Farmers:getPayHabit(job.customerId)
     local isBadDebt = math.random() < administrator:getBadDebtChance(job.farmId) * habit.badDebtMultiplier
@@ -280,8 +279,8 @@ function TheContractorFinances:invoiceJob(job)
         math.random() < administrator:getLatePayerChance(job.farmId) * habit.latePayerMultiplier
     local paymentDay = nil
     if isLate then
-        paymentDay = dueDay + math.random(TheContractorFinances.LATE_MIN_PERIODS * daysPerPeriod,
-            TheContractorFinances.LATE_MAX_PERIODS * daysPerPeriod)
+        paymentDay = math.random(TCCalendar.addMonths(dueDay, TheContractorFinances.LATE_MIN_PERIODS),
+            TCCalendar.addMonths(dueDay, TheContractorFinances.LATE_MAX_PERIODS))
     elseif not isBadDebt then
         paymentDay = dueDay
     end
@@ -309,6 +308,25 @@ function TheContractorFinances:invoiceJob(job)
     TCLog.info("TheContractor: farm %d invoice %d for job %d: %.0f due day %d (%s, a %s payer)", invoice.farmId,
         invoice.id, invoice.jobId, amount, dueDay,
         isBadDebt and "bad debt" or (isLate and ("late, pays day " .. paymentDay) or "on time"), habit.key)
+end
+
+-- 161, every machine (TCCalendarChange): an unsettled invoice's days
+-- moved to the same dates - its due day (and the job's copy, shown in its
+-- summary), and on the server the day it'll really be paid and the day a
+-- pursuit resolves - each to the end of its share of the month.
+function TheContractorFinances:remapDates(fromModel, toModel)
+    local jobs = g_currentMission.TheContractor.Jobs
+    for _, invoice in pairs(self.invoicesById) do
+        if invoice.settledDay == nil then
+            invoice.dueDay = TCCalendar.remapDay(invoice.dueDay, fromModel, toModel, true)
+            invoice.paymentDay = TCCalendar.remapDay(invoice.paymentDay, fromModel, toModel, true)
+            invoice.pursuitResolveDay = TCCalendar.remapDay(invoice.pursuitResolveDay, fromModel, toModel, true)
+            local job = jobs ~= nil and jobs:getJob(invoice.farmId, invoice.jobId) or nil
+            if job ~= nil and job.invoiceDueDay ~= nil then
+                job.invoiceDueDay = invoice.dueDay
+            end
+        end
+    end
 end
 
 function TheContractorFinances:applyInvoiceIssued(invoice)
@@ -445,12 +463,11 @@ function TheContractorFinances:requestPursuit(farmId, invoiceId)
         self:addToYearStats(farmId, "legal", fee)
     end
 
-    local environment = g_currentMission.environment
-    local today = environment.currentMonotonicDay
+    local today = g_currentMission.environment.currentMonotonicDay
     invoice.pursuitStartDay = today
     invoice.pursuitFee = fee
-    invoice.pursuitResolveDay = today + math.random(TheContractorFinances.PURSUIT_MIN_PERIODS * environment.daysPerPeriod,
-        TheContractorFinances.PURSUIT_MAX_PERIODS * environment.daysPerPeriod)
+    invoice.pursuitResolveDay = math.random(TCCalendar.addMonths(today, TheContractorFinances.PURSUIT_MIN_PERIODS),
+        TCCalendar.addMonths(today, TheContractorFinances.PURSUIT_MAX_PERIODS))
     self:setInvoiceStatus(invoice, TheContractorFinances.STATUS.PURSUING)
     -- 113: the customer won't thank you for the solicitor's letter.
     tc.Relationships:onInvoicePursued(farmId, tc.Jobs:getJob(farmId, invoice.jobId))

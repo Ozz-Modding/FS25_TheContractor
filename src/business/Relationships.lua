@@ -146,6 +146,14 @@ end
 
 -- Queries (every machine) -------------------------------------------------------
 
+-- A farm's score with a customer, MIN_SCORE..MAX_SCORE, 0 if nothing's stored.
+--
+-- PUBLIC API: another mod calls this, through
+-- g_currentMission.TheContractor.Relationships:getScore(farmId, farmer.id),
+-- with the farmer from Farmers:getHolder. Any edit must stay backwards
+-- compatible: keep the name, the access path, the arguments (a farm id and a
+-- person id), a number back on every machine (0 for an unknown pair or a nil
+-- id, never nil) and the -100..100 range. Add, never change.
 function TheContractorRelationships:getScore(farmId, customerId)
     local farmScores = self.scores[farmId]
     return farmScores ~= nil and customerId ~= nil and farmScores[customerId] or 0

@@ -1271,7 +1271,8 @@ function TheContractorRepairContracts:tryPlaceArrival(entry)
 
     local loadingData = VehicleLoadingData.new()
     loadingData:setStoreItem(storeItem)
-    TCStoreConfigurations.apply(loadingData, storeItem)
+    -- 126: a loan can name its configurations (a trailer's grain body).
+    TCStoreConfigurations.applyChosen(loadingData, storeItem, entry.configurations)
     loadingData:setIgnoreShopOffset(true)
     loadingData:setPosition(originX, nil, originZ, TCParking.PLACE_HEIGHT_OFFSET)
     loadingData:setRotation(0, rotY, 0)
@@ -1624,7 +1625,7 @@ function TheContractorRepairContracts:createFavourOffer(entry, vehicle, quote, t
     }
     TheContractorRepairContracts.setAttachment(workshop, entry, attachment)
     local job = g_currentMission.TheContractor.Jobs:createJob(entry.farmId, TheContractorFarmerFavours.JOB_TYPE, 0, 1,
-        environment:getPeriodFromDay(deadlineDay), environment:getDayInPeriodFromDay(deadlineDay),
+        TCCalendar.getPeriodFromDay(deadlineDay), TCCalendar.getDayInPeriodFromDay(deadlineDay),
         math.floor(baseParts + 0.5), true, nil, deadlineDay, false, nil, nil, workshop)
     if job == nil then
         TCADSRepairContracts.release(vehicle)
@@ -1872,9 +1873,8 @@ function TheContractorRepairContracts:createOffer(entry, vehicle, quote, attachm
     }
     TheContractorRepairContracts.setAttachment(workshop, entry, attachment)
 
-    local environment = g_currentMission.environment
     local job = g_currentMission.TheContractor.Jobs:createJob(entry.farmId, TheContractorRepairContracts.JOB_TYPES[entry.kind],
-        0, 1, environment:getPeriodFromDay(deadlineDay), environment:getDayInPeriodFromDay(deadlineDay), price, true,
+        0, 1, TCCalendar.getPeriodFromDay(deadlineDay), TCCalendar.getDayInPeriodFromDay(deadlineDay), price, true,
         nil, deadlineDay, false, nil, nil, workshop)
     if job == nil then
         TCADSRepairContracts.release(vehicle)
@@ -1966,9 +1966,8 @@ function TheContractorRepairContracts:onJobCompleted(job)
     if margin == nil or TheContractorRepairContracts.getJobReaction(job, margin) ~= "ripOff" then
         return
     end
-    local environment = g_currentMission.environment
-    local untilDay = environment.currentMonotonicDay +
-        TheContractorRepairContracts.OVERCHARGE_MONTHS * math.max(environment.daysPerPeriod or 1, 1)
+    local untilDay = TCCalendar.addMonths(g_currentMission.environment.currentMonotonicDay,
+        TheContractorRepairContracts.OVERCHARGE_MONTHS)
     local notices = g_currentMission.TheContractor.Notices
     local previous = self.overcharged[job.farmId]
     if previous ~= nil and previous.noticeId ~= nil then
@@ -1979,6 +1978,14 @@ function TheContractorRepairContracts:onJobCompleted(job)
     self.overcharged[job.farmId] = { untilDay = untilDay, noticeId = noticeId }
     TCLog.info("TheContractor: farm %d job %d finished at a %.0f%% margin: known for overcharging until day %d",
         job.farmId, job.id, margin * 100, untilDay)
+end
+
+-- 161, server (TCCalendarChange): overcharging's end moved to the same
+-- date, the end of its share of the month.
+function TheContractorRepairContracts:remapDates(fromModel, toModel)
+    for _, entry in pairs(self.overcharged) do
+        entry.untilDay = TCCalendar.remapDay(entry.untilDay, fromModel, toModel, true)
+    end
 end
 
 -- Daily: overcharging that's run its course ends, and its notice goes.

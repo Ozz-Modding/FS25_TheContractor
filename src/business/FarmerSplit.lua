@@ -20,9 +20,9 @@
 --   3. Sharing out: a farmer with no land takes the farmland nearest their
 --      start; then, until none is left, the farmer furthest below target
 --      takes the unclaimed farmland nearest their land.
---   4. Balancing: a farmland moves to another farmer whose land is within
---      MAX_SWAP_DISTANCE of it whenever that brings both nearer their
---      targets, until nothing improves.
+--   4. Balancing: a farmland (never a yard start's own) moves to another
+--      farmer whose land is within MAX_SWAP_DISTANCE of it whenever that
+--      brings both nearer their targets, until nothing improves.
 --   5. Yards: a yard that didn't start a farmer (a small one's only way
 --      in, a last resort), the most yard-like first, goes to the farmer
 --      whose land is nearest, if they have no yard and it's within
@@ -270,7 +270,9 @@ local function balance(farmlands, byId, farmers, owners)
         local moved = false
         for _, farmland in ipairs(farmlands) do
             local from = owners[farmland.id]
-            if countKeys(from.farmlandIds) > 1 then
+            -- A yard's own farmland stays with the farmer in the yard (as
+            -- 110's land sales keep it).
+            if countKeys(from.farmlandIds) > 1 and farmland.id ~= from.yardFarmlandId then
                 local fromError = from.acres - from.target
                 local best, bestGain = nil, 0
                 for _, to in ipairs(farmers) do

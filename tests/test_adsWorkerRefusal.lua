@@ -267,10 +267,10 @@ test("once it's serviced the worker carries on", function()
     ads.reasons[tractor] = nil
     TCEquipmentVisibility = { setVisibleEverywhere = function() end }
     TCVehicleLock = { refresh = function() end }
-    g_currentMission.TheContractor.Parking = { removeVehicles = function() end }
+    g_currentMission.TheContractor.Parking = { removeVehicles = function() end, parkMachines = function() end }
     g_currentMission.TheContractor.Jobs.markWorkStarted = function() end
     TCJobConsequences = { recordStartCondition = function() end }
-    TCJobSiteSetup.detachForeignImplements = function() end
+    TCJobSiteSetup.detachForeignImplements = function() return {} end
     dispatch:startJobForWorker(job, true)
 
     assertEquals(job.supplyStatus, nil, "off hold")

@@ -699,3 +699,43 @@ test("a lot-day save comes back on the sale day and carries on to its end", func
     assertEquals(loaded:getAuction(), nil)
     assertEquals(world.siteClears, 1)
 end)
+
+-- 161: the calendar ------------------------------------------------------------------------
+
+test("161: a days-per-month change keeps the sale's date, plans its signs again and moves its messages", function()
+    local world = setup(1)
+    world:addField(5, 7)
+    local tc = g_currentMission.TheContractor
+    tc.Jobs = { jobsByFarm = {} }
+    -- March 1 at a day a month: a sale in July, day 5.
+    local auction = world.auctions:announce({ fieldId = 5, hostId = 7 }, 5)
+    assertEquals(auction.saleDay, 5)
+    assertEquals(getMessages(1)[1].args[1], "$days_5_5")
+    world.events = {}
+
+    -- 2 days a month from summer: June is days 4-5, July 6-7.
+    local before = TCCalendar.getModel()
+    g_currentMission.environment.plannedDaysPerPeriod = 2
+    local after = TCCalendar.getModel()
+    world.auctions:remapDates(before, after)
+
+    auction = world.auctions:getAuction()
+    assertEquals(auction.saleDay, 6)
+    local signsDay, reminderDay = TheContractorAuctions.planDays(1, 6, 2)
+    -- Signs went up on the day it was announced: they stay up.
+    assertEquals(auction.signsDay, math.min(signsDay, 1))
+    assertEquals(auction.reminderDay, reminderDay)
+    assertEquals(getMessages(1)[1].args[1], "$days_6_6")
+    assertTrue(#world.events > 0, "the new days sent to clients")
+end)
+
+test("161: once the lots are out, or on the sale day, the sale stays put", function()
+    local before = { day = 10, periodIndex = 1, dayInPeriod = 1, daysPerPeriod = 1, plannedDaysPerPeriod = 1 }
+    local after = { day = 10, periodIndex = 1, dayInPeriod = 1, daysPerPeriod = 1, plannedDaysPerPeriod = 2 }
+    setup(1)
+    local A = TheContractorAuctions
+    assertEquals(A.getMovedSaleDay({ saleDay = 14, state = A.STATE.ANNOUNCED }, before, after, 10), 15)
+    assertEquals(A.getMovedSaleDay({ saleDay = 14, state = A.STATE.SET_OUT }, before, after, 10), nil)
+    assertEquals(A.getMovedSaleDay({ saleDay = 10, state = A.STATE.SIGNS_UP }, before, after, 10), nil)
+    assertEquals(A.getMovedSaleDay(nil, before, after, 10), nil)
+end)

@@ -287,12 +287,10 @@ function TheContractorProtest:pick(farmId, random)
     local T = TheContractorProtest
     local L = TCProtestLayout
     local tc = g_currentMission.TheContractor
-    local environment = g_currentMission.environment
     local forced = self.consoleNow == true
     local day = forced and getToday() or getToday() + 1
 
-    if not forced and Season ~= nil and environment.getSeasonAtDay ~= nil and
-            environment:getSeasonAtDay(day) == Season.WINTER then
+    if not forced and Season ~= nil and TCCalendar.getSeasonAtDay(day) == Season.WINTER then
         return nil
     end
     if T.hasProtestOn(day) then

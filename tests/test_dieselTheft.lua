@@ -26,12 +26,8 @@ local function setup()
         return { farmId = farmId }
     end
 
-    TCJobSupplies = {
-        getDieselConsumer = function(vehicle)
-            local spec = vehicle.spec_motorized
-            return spec ~= nil and spec.consumersByFillType[FillType.DIESEL] or nil
-        end,
-    }
+    TCJobProgress = { POLL_INTERVAL_MS = 3000 }
+    world:load("src/util/TCJobSupplies.lua")
 
     world:load("src/util/TCCalendar.lua")
     world:load("src/util/TCConsole.lua")
@@ -90,13 +86,13 @@ local function setup()
 
     function world:addParked(def)
         local vehicle = self:addVehicle({ name = def.name, farmId = def.farmId, dieselUsagePerHour = 10,
-            dieselCapacity = def.capacity or 400, dieselLevel = def.level })
+            dieselCapacity = def.capacity or 400, dieselLevel = def.level, dieselFillType = def.fillType })
         table.insert(self.parked, vehicle)
         return vehicle
     end
 
-    function world:addDieselTank(level, farmId)
-        return self:addStorage({ farmId = farmId, levels = { [FillType.DIESEL] = level } })
+    function world:addDieselTank(level, farmId, fillType)
+        return self:addStorage({ farmId = farmId, levels = { [fillType or FillType.DIESEL] = level } })
     end
 
     return world, tc
@@ -227,4 +223,23 @@ test("it's found between 07:00 and 09:00, and nothing's said if there's nothing 
     tc.RandomEvents:firePendingTriggers()
     assertEquals(#world.messages, 1, "no second message")
     assertEquals(next(tc.RandomEvents.incidents), nil, "no incident left open")
+end)
+
+test("with FS25_RedDiesel: a tank of red is drained and red machines siphoned, of red", function()
+    local world, tc = setup()
+    local red = world:addFillType("RED_DIESEL", "Red diesel")
+    local tank = world:addStorage({ levels = { [FillType.DIESEL] = 0, [red] = 1000 } })
+    local incident = tc.RandomEvents:triggerEvent(1, "dieselTheft")
+    assertEquals(incident.data.variant, "tank", "tank")
+    assertEquals(tank:getFillLevel(red), 1000 - incident.data.liters, "the red went")
+    assertEquals(tank:getFillLevel(FillType.DIESEL), 0, "no white touched")
+
+    local world2, tc2 = setup()
+    local red2 = world2:addFillType("RED_DIESEL", "Red diesel")
+    local tractor = world2:addParked({ name = "tractor", level = 300, fillType = red2 })
+    local incident2 = tc2.RandomEvents:triggerEvent(1, "dieselTheft")
+    assertEquals(incident2.data.variant, "siphon", "siphon")
+    assertEquals(incident2.data.vehicleCount, 1, "the red tractor")
+    assertTrue(getDiesel(tractor) < 300, "taken")
+    assertEquals(tractor.fillUnits[1].fillType, red2, "still red")
 end)

@@ -79,10 +79,11 @@
                 <RoundCorner profile="tc_panel" position="30px -340px" size="800px 290px"/>
                 <Text profile="tc_sectionTitle" text="$l10n_tc_overview_businessHeading" position="54px -356px" size="752px 24px"/>
                 <Bitmap profile="tc_divider" position="54px -384px" size="752px 1px"/>
-                <BoxLayout profile="tc_detailRows" id="overviewBusinessRows" position="54px -392px" size="752px 200px">
-                    <GuiElement profile="tc_detailRow" size="752px 34px">
+                <BoxLayout profile="tc_detailRows" id="overviewBusinessRows" position="54px -392px" size="752px 210px">
+                    <!-- Campaigns stack: one line each, up to all four levels. -->
+                    <GuiElement profile="tc_detailRowTall" size="752px 94px">
                         <Text profile="tc_detailLabel" text="$l10n_tc_detail_advertising" position="0px 0px"/>
-                        <Text profile="tc_detailValue" id="textAdvertisingStatus" text="" position="220px 0px" size="532px 34px"/>
+                        <Text profile="tc_detailValueTall" id="textAdvertisingStatus" text="" position="220px -9px" size="532px 84px" textMaxNumLines="4"/>
                         <Bitmap profile="tc_detailRowDivider"/>
                     </GuiElement>
                     <GuiElement profile="tc_detailRow" size="752px 34px">
@@ -193,6 +194,12 @@
                         <RoundCorner profile="tc_chip" id="inboxDetailRelationshipChip" position="220px -7px" size="96px 20px"/>
                         <Text profile="tc_chipText" id="inboxDetailRelationshipChipText" position="220px -7px" size="96px 20px"/>
                         <Text profile="tc_detailValue" id="inboxDetailCustomer" text="" position="326px 0px" size="304px 34px"/>
+                        <Bitmap profile="tc_detailRowDivider"/>
+                    </GuiElement>
+                    <!-- Only for an offer from the hourly roll: word of mouth, or the advert it came through. -->
+                    <GuiElement profile="tc_detailRow" id="inboxRowSource" size="752px 34px">
+                        <Text profile="tc_detailLabel" text="$l10n_tc_detail_offerSource" position="0px 0px"/>
+                        <Text profile="tc_detailValue" id="inboxDetailSource" text="" position="220px 0px" size="410px 34px"/>
                         <Bitmap profile="tc_detailRowDivider"/>
                     </GuiElement>
                     <GuiElement profile="tc_detailRow" size="752px 34px">

@@ -99,41 +99,179 @@ end
 -- which month and day a monotonic day falls on: days before the next season
 -- starts use daysPerPeriod, days from then on use plannedDaysPerPeriod (the
 -- only future value that can be known).
+--
+-- Vanilla's Environment:getPeriodFromDay/getDayInPeriodFromDay/
+-- getSeasonAtDay use today's days per period for every day, so they're wrong
+-- for any day after a planned change (160): use getPeriodFromDay,
+-- getDayInPeriodFromDay and getSeasonAtDay below for any day but today.
+--
+-- Every helper below works on a calendar "model" (getModel): today's
+-- monotonic day, period index and day in it, and both days-per-period
+-- values. The model defaults to the live environment. A saved or older one
+-- is how 160's remapDay moves a booked day when the calendar changes.
 
--- How many days from today the next season starts (1 = tomorrow).
-function TCCalendar.getDaysUntilNextSeason()
+-- The live calendar, as a model.
+function TCCalendar.getModel()
     local environment = g_currentMission.environment
-    local dayInSeason = ((environment.currentPeriod - 1) % 3) * environment.daysPerPeriod +
-        environment.currentDayInPeriod
-    return environment.daysPerPeriod * 3 - dayInSeason + 1
+    return {
+        day = environment.currentMonotonicDay,
+        periodIndex = TCCalendar.getPeriodIndex(),
+        dayInPeriod = environment.currentDayInPeriod,
+        daysPerPeriod = environment.daysPerPeriod,
+        plannedDaysPerPeriod = environment.plannedDaysPerPeriod or environment.daysPerPeriod,
+    }
+end
+
+local function getPeriodOfIndex(periodIndex)
+    return (periodIndex - 1) % Environment.PERIODS_IN_YEAR + 1
+end
+
+-- How many days from the model's today the next season starts (1 =
+-- tomorrow).
+function TCCalendar.getDaysUntilNextSeason(model)
+    model = model or TCCalendar.getModel()
+    local dayInSeason = ((getPeriodOfIndex(model.periodIndex) - 1) % 3) * model.daysPerPeriod + model.dayInPeriod
+    return model.daysPerPeriod * 3 - dayInSeason + 1
+end
+
+local function getNextSeasonPeriodIndex(model)
+    return model.periodIndex - (getPeriodOfIndex(model.periodIndex) - 1) % 3 + 3
+end
+
+-- The days per period a period index runs at: today's up to the next
+-- season, the planned value from then on.
+function TCCalendar.getDaysPerPeriodOfPeriodIndex(periodIndex, model)
+    model = model or TCCalendar.getModel()
+    if periodIndex < getNextSeasonPeriodIndex(model) then
+        return model.daysPerPeriod
+    end
+    return model.plannedDaysPerPeriod
 end
 
 -- For a monotonic day from today on: its period index, its day in that
 -- period, and the days per period in force on it. Days before today are
 -- worked out at today's days per period, which is wrong for anything before
 -- the last change - don't rely on them.
-function TCCalendar.getDayInfo(monotonicDay)
-    local environment = g_currentMission.environment
-    local offset = monotonicDay - environment.currentMonotonicDay
-    local untilNextSeason = TCCalendar.getDaysUntilNextSeason()
+function TCCalendar.getDayInfo(monotonicDay, model)
+    model = model or TCCalendar.getModel()
+    local offset = monotonicDay - model.day
+    local untilNextSeason = TCCalendar.getDaysUntilNextSeason(model)
 
     if offset < untilNextSeason then
-        local daysPerPeriod = environment.daysPerPeriod
-        local dayIndex = environment.currentDayInPeriod - 1 + offset
+        local daysPerPeriod = model.daysPerPeriod
+        local dayIndex = model.dayInPeriod - 1 + offset
         local periodOffset = math.floor(dayIndex / daysPerPeriod)
-        return TCCalendar.getPeriodIndex() + periodOffset, dayIndex - periodOffset * daysPerPeriod + 1, daysPerPeriod
+        return model.periodIndex + periodOffset, dayIndex - periodOffset * daysPerPeriod + 1, daysPerPeriod
     end
 
-    local daysPerPeriod = environment.plannedDaysPerPeriod
-    local nextSeasonPeriodIndex = TCCalendar.getPeriodIndex() - (environment.currentPeriod - 1) % 3 + 3
+    local daysPerPeriod = model.plannedDaysPerPeriod
     local dayIndex = offset - untilNextSeason
     local periodOffset = math.floor(dayIndex / daysPerPeriod)
-    return nextSeasonPeriodIndex + periodOffset, dayIndex - periodOffset * daysPerPeriod + 1, daysPerPeriod
+    return getNextSeasonPeriodIndex(model) + periodOffset, dayIndex - periodOffset * daysPerPeriod + 1, daysPerPeriod
+end
+
+-- getDayInfo the other way round: the monotonic day a period index's day
+-- falls on (clamped into the period). Before today for a day already gone.
+function TCCalendar.getMonotonicDay(periodIndex, dayInPeriod, model)
+    model = model or TCCalendar.getModel()
+    local nextSeasonPeriodIndex = getNextSeasonPeriodIndex(model)
+    if periodIndex < nextSeasonPeriodIndex then
+        local day = math.max(1, math.min(dayInPeriod, model.daysPerPeriod))
+        return model.day + (periodIndex - model.periodIndex) * model.daysPerPeriod + day - model.dayInPeriod
+    end
+    local day = math.max(1, math.min(dayInPeriod, model.plannedDaysPerPeriod))
+    return model.day + TCCalendar.getDaysUntilNextSeason(model) +
+        (periodIndex - nextSeasonPeriodIndex) * model.plannedDaysPerPeriod + day - 1
+end
+
+-- The period (1 to 12) a monotonic day falls in.
+function TCCalendar.getPeriodFromDay(monotonicDay)
+    return getPeriodOfIndex((TCCalendar.getDayInfo(monotonicDay)))
+end
+
+function TCCalendar.getDayInPeriodFromDay(monotonicDay)
+    local _, dayInPeriod = TCCalendar.getDayInfo(monotonicDay)
+    return dayInPeriod
+end
+
+-- The season a monotonic day falls in (Season.SPRING for periods 1 to 3,
+-- and so on), as vanilla's getSeasonAtDay.
+function TCCalendar.getSeasonAtDay(monotonicDay)
+    local seasons = { Season.SPRING, Season.SUMMER, Season.AUTUMN, Season.WINTER }
+    return seasons[math.floor((TCCalendar.getPeriodFromDay(monotonicDay) - 1) / 3) + 1]
+end
+
+-- The next monotonic day the calendar reads period/dayInPeriod, today
+-- included, within the coming year.
+function TCCalendar.getNextOccurrenceDay(period, dayInPeriod, model)
+    model = model or TCCalendar.getModel()
+    local periodIndex = model.periodIndex + (period - getPeriodOfIndex(model.periodIndex)) % Environment.PERIODS_IN_YEAR
+    local day = TCCalendar.getMonotonicDay(periodIndex, dayInPeriod, model)
+    if day < model.day then
+        day = TCCalendar.getMonotonicDay(periodIndex + Environment.PERIODS_IN_YEAR, dayInPeriod, model)
+    end
+    return day
+end
+
+-- 161: the day `months` months after a day from today on, by the calendar
+-- (so a planned change is allowed for): whole months land on the same share
+-- of the month (the 2nd of 4 becomes the 1st of 2), and a fraction of a
+-- month is that share of the month landed in, rounded. Never before `day`.
+function TCCalendar.addMonths(day, months, model)
+    model = model or TCCalendar.getModel()
+    local periodIndex, dayInPeriod, daysPerPeriod = TCCalendar.getDayInfo(day, model)
+    local whole = math.floor(months)
+    local targetIndex = periodIndex + whole
+    local targetDaysPerPeriod = TCCalendar.getDaysPerPeriodOfPeriodIndex(targetIndex, model)
+    local targetDay = math.floor((dayInPeriod - 1) * targetDaysPerPeriod / daysPerPeriod) + 1
+    local result = TCCalendar.getMonotonicDay(targetIndex, targetDay, model) +
+        math.floor((months - whole) * targetDaysPerPeriod + 0.5)
+    return math.max(day, result)
+end
+
+-- 160: a day booked under one calendar (fromModel) moved to the same date
+-- under another (toModel, default the live one), after the days per period
+-- changed or was planned to. Its day in the month keeps its share of the
+-- month: a deadline (isEnd) the end of that share, so it's never cut short
+-- (Oct 1 of 1 becomes Oct 2 of 2), anything else the start of it. A day
+-- before today stays as it is, and nothing moves to before today.
+function TCCalendar.remapDay(day, fromModel, toModel, isEnd)
+    toModel = toModel or TCCalendar.getModel()
+    if day == nil or day < toModel.day or day < fromModel.day then
+        return day
+    end
+
+    local periodIndex, dayInPeriod, daysPerPeriod = TCCalendar.getDayInfo(day, fromModel)
+    local newDaysPerPeriod = TCCalendar.getDaysPerPeriodOfPeriodIndex(periodIndex, toModel)
+    local newDayInPeriod = dayInPeriod
+    if newDaysPerPeriod ~= daysPerPeriod then
+        if isEnd then
+            newDayInPeriod = math.ceil(dayInPeriod * newDaysPerPeriod / daysPerPeriod)
+        else
+            newDayInPeriod = math.floor((dayInPeriod - 1) * newDaysPerPeriod / daysPerPeriod) + 1
+        end
+    end
+    return math.max(toModel.day, TCCalendar.getMonotonicDay(periodIndex, newDayInPeriod, toModel))
 end
 
 function TCCalendar.getDaysPerPeriodOn(monotonicDay)
     local _, _, daysPerPeriod = TCCalendar.getDayInfo(monotonicDay)
     return daysPerPeriod
+end
+
+-- 160: whether two models put every day from the later one's today on the
+-- same date, so nothing booked needs moving.
+function TCCalendar.isSameCalendar(a, b)
+    local from = a.day <= b.day and a or b
+    local to = from == a and b or a
+    local fromIndex, fromDay, fromDaysPerPeriod = TCCalendar.getDayInfo(to.day, from)
+    if fromIndex ~= to.periodIndex or fromDay ~= to.dayInPeriod or fromDaysPerPeriod ~= to.daysPerPeriod then
+        return false
+    end
+    -- After this season both run at a single value.
+    local afterSeason = to.day + TCCalendar.getDaysUntilNextSeason(to)
+    local _, _, laterDaysPerPeriod = TCCalendar.getDayInfo(afterSeason, from)
+    return laterDaysPerPeriod == to.plannedDaysPerPeriod
 end
 
 -- The monotonic day the current year ends on. A year always ends at the end

@@ -38,3 +38,49 @@ function TCStoreConfigurations.apply(loadingData, storeItem)
         loadingData:setConfigurations(configurations)
     end
 end
+
+-- The configurations to load storeItem with one configuration chosen
+-- (configName = index): with sets, a copy of the first set that allows it
+-- (the default set first; a set that doesn't name configName allows any),
+-- with configName set; nil if no set does. With no sets, { configName =
+-- index }, the rest left to the game's defaults.
+function TCStoreConfigurations.getSetWith(storeItem, configName, index)
+    local sets = storeItem ~= nil and storeItem.configurationSets or nil
+    if sets == nil or #sets == 0 then
+        return { [configName] = index }
+    end
+    local ordered = {}
+    for _, set in ipairs(sets) do
+        if set.isDefault then
+            table.insert(ordered, 1, set)
+        else
+            table.insert(ordered, set)
+        end
+    end
+    for _, set in ipairs(ordered) do
+        local named = set.configurations ~= nil and set.configurations[configName] or nil
+        if named == nil or named == index then
+            local configurations = {}
+            for name, value in pairs(set.configurations or {}) do
+                configurations[name] = value
+            end
+            configurations[configName] = index
+            return configurations
+        end
+    end
+    return nil
+end
+
+-- Sets loadingData's configurations: the given ones (a copy) if any, else
+-- the default set's (apply). Call after setStoreItem.
+function TCStoreConfigurations.applyChosen(loadingData, storeItem, configurations)
+    if configurations == nil then
+        TCStoreConfigurations.apply(loadingData, storeItem)
+        return
+    end
+    local copy = {}
+    for name, value in pairs(configurations) do
+        copy[name] = value
+    end
+    loadingData:setConfigurations(copy)
+end

@@ -133,15 +133,39 @@ local function addTank(tanks, vehicle, fillUnitIndex, fillTypes, consumableType)
     return tank
 end
 
+-- FS25_RedDiesel's fuel. That mod moves every farm machine's diesel
+-- consumer onto it (re-keyed in consumersByFillType, its tank taking only
+-- red), leaving road vehicles on DIESEL.
+TCJobSupplies.RED_DIESEL_NAME = "RED_DIESEL"
+
+-- The fuels a diesel engine can run on: DIESEL, then RED_DIESEL when
+-- FS25_RedDiesel is loaded.
+function TCJobSupplies.getDieselFillTypes()
+    local result = { FillType.DIESEL }
+    local red = g_fillTypeManager:getFillTypeIndexByName(TCJobSupplies.RED_DIESEL_NAME)
+    if red ~= nil and red ~= FillType.DIESEL then
+        table.insert(result, red)
+    end
+    return result
+end
+
 -- 063: a motorised vehicle's diesel consumer (its fillUnitIndex is the
--- tank), or nil if it doesn't run on diesel. TCJobFuel's travel burn uses
--- it too.
+-- tank, its fillType the fuel it takes: DIESEL or RED_DIESEL), or nil if
+-- it doesn't run on diesel. Anything that adds to or takes from the tank
+-- uses consumer.fillType, never FillType.DIESEL. TCJobFuel's travel burn
+-- uses it too.
 function TCJobSupplies.getDieselConsumer(vehicle)
     local spec = vehicle.spec_motorized
     if spec == nil or spec.consumersByFillType == nil then
         return nil
     end
-    return spec.consumersByFillType[FillType.DIESEL]
+    for _, fillTypeIndex in ipairs(TCJobSupplies.getDieselFillTypes()) do
+        local consumer = spec.consumersByFillType[fillTypeIndex]
+        if consumer ~= nil then
+            return consumer
+        end
+    end
+    return nil
 end
 
 local function addFuelTank(tanks, vehicle)
@@ -149,7 +173,7 @@ local function addFuelTank(tanks, vehicle)
     if consumer == nil then
         return
     end
-    local tank = addTank(tanks, vehicle, consumer.fillUnitIndex, { FillType.DIESEL })
+    local tank = addTank(tanks, vehicle, consumer.fillUnitIndex, { consumer.fillType })
     if tank ~= nil then
         tank.isFuel = true
     end

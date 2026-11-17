@@ -605,10 +605,22 @@ function TCJobProgress.getCompletion(job)
         state.currentPartitionIndex = 1
     end
 
-    -- Same SUCCESS_FACTOR headroom AbstractFieldMission:getCompletion applies
-    -- (100% coverage is never actually reachable pixel-for-pixel) clamped so
-    -- a job can't report over 100% once it clears that bar.
-    return math.min(1, state.fieldPercentageDone / AbstractMission.SUCCESS_FACTOR)
+    -- Headroom like AbstractFieldMission:getCompletion's SUCCESS_FACTOR
+    -- (100% coverage is never actually reachable pixel-for-pixel), clamped
+    -- so a job can't report over 100% once it clears that bar.
+    return math.min(1, state.fieldPercentageDone / TCJobProgress.getSuccessFactor())
+end
+
+-- The share of a field that counts as all of it: the fieldWorkDone
+-- setting (synced, so every machine agrees), or vanilla's SUCCESS_FACTOR
+-- before the settings exist.
+function TCJobProgress.getSuccessFactor()
+    local tc = g_currentMission.TheContractor
+    local settings = tc ~= nil and tc.Settings or nil
+    if settings ~= nil and settings:get("fieldWorkDone") ~= nil then
+        return settings:getFieldWorkDoneFactor()
+    end
+    return AbstractMission.SUCCESS_FACTOR
 end
 
 -- Drops cached scan state for a job. Callers don't have to call this

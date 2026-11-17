@@ -224,3 +224,10 @@ test("pallets in an object storage get a row named after it", function()
     assertTrue(supply.pallets[2].isStored and not supply.pallets[1].isStored, "stored flag")
     assertEquals(supply.capacity, nil, "a pallet storage adds no capacity")
 end)
+
+test("with FS25_RedDiesel: red diesel is listed after diesel", function()
+    local world = setup()
+    world:addFillType("RED_DIESEL", "Red diesel")
+    assertEquals(names(TCSupplyStock.getSupplyFillTypes(1)),
+        "DIESEL,RED_DIESEL,SEEDS,FERTILIZER,LIQUIDFERTILIZER,MANURE,LIQUIDMANURE,HERBICIDE")
+end)

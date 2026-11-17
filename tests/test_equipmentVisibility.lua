@@ -3,6 +3,8 @@
 
 local function setup()
     local world = stubs.install()
+    world:load("src/util/TCEquipmentClass.lua")
+    world:load("src/util/TCBallast.lua")
     world:load("src/util/TCEquipmentVisibility.lua")
     TCEquipmentVisibility.reset()
     return world

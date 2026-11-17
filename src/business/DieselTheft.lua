@@ -88,23 +88,27 @@ local function randomBetween(min, max)
     return min + math.random() * (max - min)
 end
 
--- The farm's fullest storage holding diesel, and how much is in it, or nil.
--- Storages only, not IBC pallets.
+-- The farm's fullest storage holding diesel (or FS25_RedDiesel's red),
+-- how much is in it and which, or nil. Storages only, not IBC pallets.
 function TheContractorDieselTheft.getTank(farmId)
-    local best, bestLevel = nil, 0
+    local best, bestLevel, bestFillType = nil, 0, nil
     for _, storage in pairs(g_currentMission.storageSystem:getStorages()) do
         if storage.getOwnerFarmId ~= nil and storage:getOwnerFarmId() == farmId and
-                storage.getIsFillTypeSupported ~= nil and storage:getIsFillTypeSupported(FillType.DIESEL) then
-            local level = storage:getFillLevel(FillType.DIESEL) or 0
-            if level > bestLevel then
-                best, bestLevel = storage, level
+                storage.getIsFillTypeSupported ~= nil then
+            for _, fillType in ipairs(TCJobSupplies.getDieselFillTypes()) do
+                if storage:getIsFillTypeSupported(fillType) then
+                    local level = storage:getFillLevel(fillType) or 0
+                    if level > bestLevel then
+                        best, bestLevel, bestFillType = storage, level, fillType
+                    end
+                end
             end
         end
     end
     if best == nil or bestLevel < TheContractorDieselTheft.TANK_MIN_LITERS then
         return nil, 0
     end
-    return best, bestLevel
+    return best, bestLevel, bestFillType
 end
 
 -- The farm's parked machines that could be siphoned: { vehicle,
@@ -120,7 +124,8 @@ function TheContractorDieselTheft:getSiphonable(farmId)
         if consumer ~= nil then
             local level = vehicle:getFillUnitFillLevel(consumer.fillUnitIndex) or 0
             if level >= TheContractorDieselTheft.SIPHON_MIN_LITERS then
-                table.insert(result, { vehicle = vehicle, fillUnitIndex = consumer.fillUnitIndex, level = level })
+                table.insert(result, { vehicle = vehicle, fillUnitIndex = consumer.fillUnitIndex,
+                    fillType = consumer.fillType, level = level })
             end
         end
     end
@@ -155,13 +160,13 @@ end
 
 -- Litres taken from the tank.
 function TheContractorDieselTheft.drainTank(farmId)
-    local storage, level = TheContractorDieselTheft.getTank(farmId)
+    local storage, level, fillType = TheContractorDieselTheft.getTank(farmId)
     if storage == nil then
         return 0
     end
     local share = randomBetween(TheContractorDieselTheft.TANK_SHARE_MIN, TheContractorDieselTheft.TANK_SHARE_MAX)
     local taken = math.floor(math.min(level * share, TheContractorDieselTheft.TANK_MAX_LITERS))
-    storage:setFillLevel(level - taken, FillType.DIESEL)
+    storage:setFillLevel(level - taken, fillType)
     return taken
 end
 
@@ -177,7 +182,7 @@ function TheContractorDieselTheft:siphonVehicles(farmId)
         local share = randomBetween(TheContractorDieselTheft.SIPHON_SHARE_MIN,
             TheContractorDieselTheft.SIPHON_SHARE_MAX)
         local applied = candidate.vehicle:addFillUnitFillLevel(farmId, candidate.fillUnitIndex,
-            -math.floor(candidate.level * share), FillType.DIESEL, ToolType.UNDEFINED, nil)
+            -math.floor(candidate.level * share), candidate.fillType, ToolType.UNDEFINED, nil)
         taken = taken + math.abs(applied or 0)
         count = count + 1
     end

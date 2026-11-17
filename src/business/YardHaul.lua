@@ -28,8 +28,9 @@
 -- with 035.
 --
 -- The trailer: accepting the job brings it out through 100's queue (a loan
--- arrival, no ADS) to its yard spot, where the server fills it
--- (fillTrailer). It's a contract vehicle (not sold, not on our lists),
+-- arrival, no ADS) to its yard spot, in its grain configuration (one that
+-- takes BENCHMARK_FILL_TYPE_NAME, getTrailerSpec: never a flatbed), where
+-- the server fills it (fillTrailer). It's a contract vehicle (not sold, not on our lists),
 -- never locked for driving, and the farmer collects it once the job's over
 -- and nobody's towing it or can see it (queueLoanCollection's whenUnseen).
 --
@@ -81,6 +82,9 @@ TheContractorYardHaul.TRIGGER_HOURS = { 7, 14 }
 TheContractorYardHaul.LOAD_SHARE = { 0.9, 1.0 }
 TheContractorYardHaul.LITER_STEP = 100
 TheContractorYardHaul.MIN_LITERS = 2000
+-- A trailer will do only in a configuration that takes this (a grain
+-- body, not a flatbed): getTrailerSpec.
+TheContractorYardHaul.BENCHMARK_FILL_TYPE_NAME = "WHEAT"
 
 -- Due this many days from today (a range).
 TheContractorYardHaul.DUE_DAYS = { 2, 3 }
@@ -272,39 +276,110 @@ end
 
 -- The trailer (server) ----------------------------------------------------------------------
 
--- A trailer model's capacity and what it carries, from its vehicle XML as
--- vanilla's PalletSpawner reads a pallet's: { capacity (litres, its biggest
--- fill unit in any configuration), fillTypes (fillTypeIndex -> true) }, or
--- nil if the store hasn't got it or the XML won't load. Not the shop's
--- specs: those are in the unit the shop shows (a trailer's m3). Kept per
--- model for the session (specCache). Engine side, replaced in the tests.
+-- A trailer model's grain configuration and what it carries in it: {
+-- capacity (litres, its biggest fill unit), fillTypes (fillTypeIndex ->
+-- true), configurations (what it's spawned with: queueTrailer) }, or nil
+-- and why not. The grain configuration is a fill unit configuration that
+-- takes BENCHMARK_FILL_TYPE_NAME: the default one if it does, else the
+-- first that does and that a configuration set allows. A trailer that's a
+-- flatbed by default with a grain body to choose comes out with the grain
+-- body; one with no grain body won't do. Read from its vehicle XML as
+-- vanilla's FillUnit.getFillTypeNamesFromXML does, configuration by
+-- configuration. Not the shop's specs: those are in the unit the shop
+-- shows (a trailer's m3). Kept per model for the session (specCache).
 local specCache = {}
 
 function TheContractorYardHaul.getTrailerSpec(xmlFilename)
-    if xmlFilename == nil or g_storeManager:getItemByXMLFilename(xmlFilename) == nil then
-        return nil
+    local storeItem = xmlFilename ~= nil and g_storeManager:getItemByXMLFilename(xmlFilename) or nil
+    if storeItem == nil then
+        return nil, "not in the store"
     end
-    if specCache[xmlFilename] ~= nil then
-        return specCache[xmlFilename] or nil
+    if specCache[xmlFilename] == nil then
+        local configs = TheContractorYardHaul.readFillUnitConfigurations(xmlFilename)
+        local spec, problem = nil, "its XML won't load"
+        if configs ~= nil then
+            spec, problem = TheContractorYardHaul.chooseGrainConfiguration(configs, storeItem)
+        end
+        specCache[xmlFilename] = spec or { problem = problem }
     end
-    local xmlFile = XMLFile ~= nil and FillUnit ~= nil and FillUnit.getCapacityFromXml ~= nil and
-        FillUnit.getFillTypeNamesFromXML ~= nil and XMLFile.load("tcYardHaulTrailer", xmlFilename, Vehicle.xmlSchema)
-        or nil
+    local cached = specCache[xmlFilename]
+    if cached.problem ~= nil then
+        return nil, cached.problem
+    end
+    return cached
+end
+
+-- A vehicle XML's fill unit configurations, in order: a list of {
+-- capacity, fillTypes (fillTypeIndex -> true) }, or nil if it won't load.
+-- Engine side, replaced in the tests.
+function TheContractorYardHaul.readFillUnitConfigurations(xmlFilename)
+    local xmlFile = XMLFile ~= nil and Vehicle ~= nil and
+        XMLFile.load("tcYardHaulTrailer", xmlFilename, Vehicle.xmlSchema) or nil
     if xmlFile == nil then
-        specCache[xmlFilename] = false
         return nil
     end
-    local capacity = FillUnit.getCapacityFromXml(xmlFile) or 0
-    local names = FillUnit.getFillTypeNamesFromXML(xmlFile)
+    local configs = {}
+    local rootName = xmlFile:getRootName()
+    xmlFile:iterate(rootName .. ".fillUnit.fillUnitConfigurations.fillUnitConfiguration", function(_, key)
+        local capacity, names, categoryNames = 0, {}, {}
+        xmlFile:iterate(key .. ".fillUnits.fillUnit", function(_, fillUnitKey)
+            local unitCapacity = xmlFile:getValue(fillUnitKey .. "#capacity")
+            if unitCapacity == nil or unitCapacity > 0 then
+                capacity = math.max(capacity, unitCapacity or 0)
+                local unitNames = xmlFile:getValue(fillUnitKey .. "#fillTypes")
+                local unitCategoryNames = xmlFile:getValue(fillUnitKey .. "#fillTypeCategories")
+                if unitNames ~= nil then
+                    table.insert(names, unitNames)
+                end
+                if unitCategoryNames ~= nil then
+                    table.insert(categoryNames, unitCategoryNames)
+                end
+            end
+        end)
+        local indices = g_fillTypeManager:getFillTypesByCategoryNames(
+            #categoryNames > 0 and table.concat(categoryNames, " ") or nil, nil, {})
+        indices = g_fillTypeManager:getFillTypesByNames(#names > 0 and table.concat(names, " ") or nil, nil, indices)
+        local fillTypes = {}
+        for _, fillTypeIndex in ipairs(indices or {}) do
+            fillTypes[fillTypeIndex] = true
+        end
+        table.insert(configs, { capacity = capacity, fillTypes = fillTypes })
+    end)
     xmlFile:delete()
-    local indices = g_fillTypeManager:getFillTypesByCategoryNames(names.fillTypeCategoryNames, nil, {})
-    indices = g_fillTypeManager:getFillTypesByNames(names.fillTypeNames, nil, indices)
-    local fillTypes = {}
-    for _, fillTypeIndex in ipairs(indices or {}) do
-        fillTypes[fillTypeIndex] = true
+    return configs
+end
+
+-- The grain configuration of configs (readFillUnitConfigurations) for
+-- storeItem: the spec (getTrailerSpec), or nil and why not.
+function TheContractorYardHaul.chooseGrainConfiguration(configs, storeItem)
+    local benchmark = g_fillTypeManager:getFillTypeIndexByName(TheContractorYardHaul.BENCHMARK_FILL_TYPE_NAME)
+    local items = storeItem.configurations ~= nil and storeItem.configurations.fillUnit or nil
+    local default = 1
+    if items ~= nil and ConfigurationUtil ~= nil and ConfigurationUtil.getDefaultConfigIdFromItems ~= nil then
+        default = ConfigurationUtil.getDefaultConfigIdFromItems(items)
     end
-    specCache[xmlFilename] = { capacity = capacity, fillTypes = fillTypes }
-    return specCache[xmlFilename]
+    local order = { default }
+    for index = 1, #configs do
+        if index ~= default then
+            table.insert(order, index)
+        end
+    end
+    local anyGrain = false
+    for _, index in ipairs(order) do
+        local config = configs[index]
+        local selectable = items == nil or items[index] == nil or items[index].isSelectable ~= false
+        if config ~= nil and selectable and benchmark ~= nil and config.fillTypes[benchmark] then
+            anyGrain = true
+            local configurations = TCStoreConfigurations.getSetWith(storeItem, "fillUnit", index)
+            if configurations ~= nil then
+                return { capacity = config.capacity, fillTypes = config.fillTypes, configurations = configurations }
+            end
+        end
+    end
+    if anyGrain then
+        return nil, "no configuration set allows its grain body"
+    end
+    return nil, string.format("no configuration takes %s", TheContractorYardHaul.BENCHMARK_FILL_TYPE_NAME)
 end
 
 -- At unload: models can change with the mods loaded.
@@ -319,10 +394,12 @@ function TheContractorYardHaul.getFreeTrailer(farmer)
     local problems = {}
     for _, machine in ipairs(F.getMachinesByRole(farmer, F.ROLE.TRAILER)) do
         local model = F.getSizeModel(machine.xmlFilename)
-        local spec = model ~= nil and TheContractorYardHaul.getTrailerSpec(machine.xmlFilename) or nil
-        local problem = nil
+        local spec, problem = nil, "not in the store"
+        if model ~= nil then
+            spec, problem = TheContractorYardHaul.getTrailerSpec(machine.xmlFilename)
+        end
         if spec == nil then
-            problem = "not in the store"
+            problem = problem or "not in the store"
         elseif spec.capacity < TheContractorYardHaul.MIN_LITERS then
             problem = string.format("capacity %.0f l", spec.capacity)
         elseif F.isAnyOut(farmer, machine) then
@@ -673,7 +750,7 @@ function TheContractorYardHaul:onAsked(incident)
     local deadlineDay = environment.currentMonotonicDay + math.random(Y.DUE_DAYS[1], Y.DUE_DAYS[2])
     local price = Y.getBasePrice(Y.getDistance(x, z, station), tc.Settings:getJobPayMultiplier())
     local job = tc.Jobs:createJob(incident.farmId, Y.JOB_TYPE, field:getId(), 1,
-        environment:getPeriodFromDay(deadlineDay), environment:getDayInPeriodFromDay(deadlineDay), price, true, nil,
+        TCCalendar.getPeriodFromDay(deadlineDay), TCCalendar.getDayInPeriodFromDay(deadlineDay), price, true, nil,
         deadlineDay, true, station, nil, nil, nil, nil, haul)
     if job == nil then
         return TheContractorRandomEvents.DONE
@@ -708,8 +785,13 @@ function TheContractorYardHaul:queueTrailer(job)
             tostring(haul.farmerId))
         return
     end
-    tc.RepairContracts:queueLoanArrival(job.farmId, job.id, farmer, machine, model,
+    local entry = tc.RepairContracts:queueLoanArrival(job.farmId, job.id, farmer, machine, model,
         { x = haul.x, z = haul.z, rotY = haul.rotY, yardFarmlandId = haul.yardFarmlandId }, nil, "YardHaul")
+    -- In its grain configuration, not its default (a flatbed, maybe).
+    local spec = TheContractorYardHaul.getTrailerSpec(machine.xmlFilename)
+    if entry ~= nil and spec ~= nil then
+        entry.configurations = spec.configurations
+    end
 end
 
 -- RepairContracts: whether a loan arrival is still wanted (its job taken on,

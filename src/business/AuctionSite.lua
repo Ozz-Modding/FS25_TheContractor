@@ -854,7 +854,11 @@ function TheContractorAuctionSite.applyCondition(vehicle, lot)
         vehicle:setDirtAmount(lot.dirt)
     end
     if vehicle.getConsumerFillUnitIndex ~= nil then
-        for _, fillType in ipairs({ FillType.DIESEL, FillType.ELECTRICCHARGE, FillType.METHANE }) do
+        -- TCJobSupplies' diesels: a farm machine runs on FS25_RedDiesel's red.
+        local fuels = TCJobSupplies.getDieselFillTypes()
+        table.insert(fuels, FillType.ELECTRICCHARGE)
+        table.insert(fuels, FillType.METHANE)
+        for _, fillType in ipairs(fuels) do
             local fillUnitIndex = fillType ~= nil and vehicle:getConsumerFillUnitIndex(fillType) or nil
             if fillUnitIndex ~= nil then
                 local capacity = vehicle:getFillUnitCapacity(fillUnitIndex)

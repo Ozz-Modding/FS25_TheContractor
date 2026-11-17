@@ -190,37 +190,142 @@ test("the litres: 90-100% of the trailer's capacity, in whole steps", function()
     assertEquals(TheContractorYardHaul.getLoadLiters(17777, fixed(0.5)) % TheContractorYardHaul.LITER_STEP, 0)
 end)
 
-test("the trailer's spec: its biggest fill unit in litres from its XML, and what it carries, read once", function()
+-- The real getTrailerSpec, with the store item and the XML's fill unit
+-- configurations (each { capacity, fillTypes }) faked.
+local function realSpec(world, storeItem, configs)
+    dofile("src/business/YardHaul.lua")
+    TheContractorYardHaul.clearSpecCache()
+    g_storeManager = { getItemByXMLFilename = function(_, xml) return xml == "trailer.xml" and storeItem or nil end }
+    world.xmlReads = 0
+    TheContractorYardHaul.readFillUnitConfigurations = function()
+        world.xmlReads = world.xmlReads + 1
+        return configs
+    end
+end
+
+local function grain(world, capacity)
+    return { capacity = capacity, fillTypes = { [FillType.WHEAT] = true, [world.barley] = true } }
+end
+local function flatbed()
+    return { capacity = 0, fillTypes = {} }
+end
+
+test("the trailer's spec: each fill unit configuration's capacity and fill types, from its XML", function()
     local world = setup()
-    g_storeManager = { getItemByXMLFilename = function(_, xml) return xml == "big.xml" and { xmlFilename = xml } or nil end }
+    dofile("src/business/YardHaul.lua")
     Vehicle = { xmlSchema = {} }
-    world.xmlLoads = 0
-    XMLFile = { load = function(_, filename)
-        world.xmlLoads = world.xmlLoads + 1
-        return { filename = filename, delete = function() end }
-    end }
-    FillUnit = {
-        getCapacityFromXml = function(xmlFile) return xmlFile.filename == "big.xml" and 30000 or 0 end,
-        getFillTypeNamesFromXML = function() return { fillTypeNames = "wheat potato", fillTypeCategoryNames = "BULK" } end,
+    -- Config 1: a flatbed's empty unit. Config 2: a grain body (BULK) and a
+    -- potato unit by name.
+    local root = "vehicle.fillUnit.fillUnitConfigurations.fillUnitConfiguration"
+    local values = {
+        [root .. "(0).fillUnits.fillUnit(0)#capacity"] = 0,
+        [root .. "(1).fillUnits.fillUnit(0)#capacity"] = 18000,
+        [root .. "(1).fillUnits.fillUnit(0)#fillTypeCategories"] = "BULK",
+        [root .. "(1).fillUnits.fillUnit(1)#capacity"] = 24000,
+        [root .. "(1).fillUnits.fillUnit(1)#fillTypes"] = "potato",
     }
+    local counts = {
+        [root] = 2,
+        [root .. "(0).fillUnits.fillUnit"] = 1,
+        [root .. "(1).fillUnits.fillUnit"] = 2,
+    }
+    world.deletedXml = false
+    XMLFile = { load = function()
+        return {
+            getRootName = function() return "vehicle" end,
+            getValue = function(_, key) return values[key] end,
+            iterate = function(_, path, closure)
+                for i = 0, (counts[path] or 0) - 1 do
+                    if closure(i + 1, path .. "(" .. i .. ")") == false then
+                        return
+                    end
+                end
+            end,
+            delete = function() world.deletedXml = true end,
+        }
+    end }
     g_fillTypeManager.getFillTypesByCategoryNames = function(_, names, warning, list)
-        table.insert(list, world.barley)
+        if names == "BULK" then
+            table.insert(list, FillType.WHEAT)
+            table.insert(list, world.barley)
+        end
         return list
     end
     g_fillTypeManager.getFillTypesByNames = function(_, names, warning, list)
-        for name in string.gmatch(names, "%S+") do
+        for name in string.gmatch(names or "", "%S+") do
             table.insert(list, FillType[string.upper(name)])
         end
         return list
     end
-    dofile("src/business/YardHaul.lua")
-    TheContractorYardHaul.clearSpecCache()
-    local spec = TheContractorYardHaul.getTrailerSpec("big.xml")
-    assertEquals(spec.capacity, 30000)
-    assertTrue(spec.fillTypes[FillType.WHEAT] and spec.fillTypes[FillType.POTATO] and spec.fillTypes[world.barley])
-    TheContractorYardHaul.getTrailerSpec("big.xml")
-    assertEquals(world.xmlLoads, 1, "kept for the session")
+    local configs = TheContractorYardHaul.readFillUnitConfigurations("trailer.xml")
+    assertEquals(#configs, 2)
+    assertEquals(configs[1].capacity, 0)
+    assertEquals(next(configs[1].fillTypes), nil, "the flatbed carries nothing")
+    assertEquals(configs[2].capacity, 24000)
+    assertTrue(configs[2].fillTypes[FillType.WHEAT] and configs[2].fillTypes[world.barley] and
+        configs[2].fillTypes[FillType.POTATO])
+    assertTrue(world.deletedXml)
+end)
+
+test("the trailer's spec: a flatbed by default with a grain body to choose comes out with the grain body", function()
+    local world = setup()
+    realSpec(world, { xmlFilename = "trailer.xml" }, { flatbed(), grain(world, 18000) })
+    local spec = TheContractorYardHaul.getTrailerSpec("trailer.xml")
+    assertEquals(spec.capacity, 18000)
+    assertTrue(spec.fillTypes[FillType.WHEAT])
+    assertEquals(spec.configurations.fillUnit, 2)
+    TheContractorYardHaul.getTrailerSpec("trailer.xml")
+    assertEquals(world.xmlReads, 1, "kept for the session")
+end)
+
+test("the trailer's spec: the default configuration if it's a grain body, not a bigger one", function()
+    local world = setup()
+    local storeItem = { xmlFilename = "trailer.xml", configurations = { fillUnit = {
+        { isDefault = false }, { isDefault = true }, {} } } }
+    ConfigurationUtil = { getDefaultConfigIdFromItems = function(items)
+        for index, item in ipairs(items) do
+            if item.isDefault then return index end
+        end
+        return 1
+    end }
+    realSpec(world, storeItem, { grain(world, 30000), grain(world, 15000), flatbed() })
+    local spec = TheContractorYardHaul.getTrailerSpec("trailer.xml")
+    ConfigurationUtil = nil
+    assertEquals(spec.configurations.fillUnit, 2)
+    assertEquals(spec.capacity, 15000)
+end)
+
+test("the trailer's spec: no configuration that takes wheat, or none a set allows, and it won't do", function()
+    local world = setup()
+    realSpec(world, { xmlFilename = "trailer.xml" },
+        { flatbed(), { capacity = 20000, fillTypes = { [FillType.POTATO] = true } } })
+    assertEquals(TheContractorYardHaul.getTrailerSpec("trailer.xml"), nil)
+    local farmer = { id = 1, machines = { { id = 1, role = "trailer", xmlFilename = "trailer.xml", fitted = {} } } }
+    assertEquals(TheContractorYardHaul.getFreeTrailer(farmer), nil, "the farmer's flatbed never brings an offer")
+
+    -- A grain body no configuration set pairs.
+    realSpec(world, { xmlFilename = "trailer.xml", configurationSets = {
+        { isDefault = true, configurations = { fillUnit = 1, design = 1 } },
+    } }, { flatbed(), grain(world, 18000) })
+    assertEquals(TheContractorYardHaul.getTrailerSpec("trailer.xml"), nil)
+end)
+
+test("the trailer's spec: with configuration sets, the whole set that pairs the grain body", function()
+    local world = setup()
+    realSpec(world, { xmlFilename = "trailer.xml", configurationSets = {
+        { isDefault = true, configurations = { fillUnit = 1, design = 1 } },
+        { configurations = { fillUnit = 2, design = 3 } },
+    } }, { flatbed(), grain(world, 18000) })
+    local spec = TheContractorYardHaul.getTrailerSpec("trailer.xml")
+    assertEquals(spec.configurations.fillUnit, 2)
+    assertEquals(spec.configurations.design, 3)
+end)
+
+test("the trailer's spec: a model not in the store won't do, and its XML isn't read", function()
+    local world = setup()
+    realSpec(world, { xmlFilename = "trailer.xml" }, { grain(world, 18000) })
     assertEquals(TheContractorYardHaul.getTrailerSpec("nothing.xml"), nil)
+    assertEquals(world.xmlReads, 0)
 end)
 
 test("the roll: a farmer with a yard, the trailer free and room for it, never one fallen out with", function()

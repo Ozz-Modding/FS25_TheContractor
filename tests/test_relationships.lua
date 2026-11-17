@@ -22,7 +22,9 @@ local function setup()
     }
     world.events = {}
     g_server = { broadcastEvent = function(_, event) table.insert(world.events, event) end }
-    g_currentMission.environment = { currentMonotonicDay = 10, daysPerPeriod = 1 }
+    Environment = { PERIODS_IN_YEAR = 12 }
+    g_currentMission.environment = { currentMonotonicDay = 10, daysPerPeriod = 1, plannedDaysPerPeriod = 1,
+        currentYear = 1, currentPeriod = 1, currentDayInPeriod = 1 }
 
     world:load("src/business/Negotiation.lua")
     world:load("src/business/Job.lua")
@@ -32,7 +34,7 @@ local function setup()
     world.standing = 0
     tc.Reputation = { getStanding = function() return world.standing end }
     -- 129: a miss can leave the customer poor, so they complain.
-    TCCalendar = { getPeriodIndex = function() return 1 end }
+    TCCalendar.getPeriodIndex = function() return 1 end
     g_fieldManager = { getFieldById = function() return nil end }
     tc.Inbox = { removeMessagesForJob = function() end, postMessage = function() end }
     tc.Jobs = TheContractorJobs.new()
@@ -261,7 +263,7 @@ local function setupInvoices()
     world:load("src/business/Farmers.lua")
     TCInvoiceIssuedEvent = { new = function() return {} end }
     TCFinanceYearStatsEvent = { new = function() return {} end }
-    TCCalendar = { getDisplayYear = function() return 1 end }
+    TCCalendar.getDisplayYear = function() return 1 end
     tc.Settings = { get = function() return true end }
     tc.Office = {
         getDelayWeights = function() return TheContractorFinances.DELAY_WEIGHTS end,

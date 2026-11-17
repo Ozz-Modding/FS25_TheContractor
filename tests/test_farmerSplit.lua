@@ -341,3 +341,30 @@ test("117: a declared yard goes to a farmer without one however far, and its lan
     assertEquals(2, #liveFarmlands)
     assertEquals(nil, live.owners[2])
 end)
+
+test("balancing never moves a yard's own farmland away from the farmer in the yard", function()
+    setup()
+    -- Random 5 x 5 maps with yards scattered on them; before the fix, the
+    -- balancing handed some yard starts' farmland to a neighbour.
+    local checked = 0
+    for seed = 1, 40 do
+        local random = TheContractorFarmerSplit.newRandom(seed * 7919)
+        local farmlands = grid(5, 5, function()
+            return 5 + math.floor(random() * 75)
+        end)
+        local yards = {}
+        for _, farmland in ipairs(farmlands) do
+            if random() < 0.3 then
+                table.insert(yards, { farmlandId = farmland.id, x = farmland.x + 50, z = farmland.z, buildings = 6 })
+            end
+        end
+        local result = TheContractorFarmerSplit.split(farmlands, yards, 50, seed)
+        for _, farmer in ipairs(result.farmers) do
+            if farmer.yardFarmlandId ~= nil and result.owners[farmer.yardFarmlandId] ~= nil then
+                assertEquals(farmer.index, result.owners[farmer.yardFarmlandId])
+                checked = checked + 1
+            end
+        end
+    end
+    assertTrue(checked > 0)
+end)

@@ -131,6 +131,12 @@ function TheContractorFarmers:getFarmers()
 end
 
 -- The farmer holding a farmland, or nil.
+--
+-- PUBLIC API: another mod calls this, through
+-- g_currentMission.TheContractor.Farmers:getHolder(farmlandId). Any edit must
+-- stay backwards compatible: keep the name, the access path, the argument (a
+-- vanilla farmland id), the nil when no farmer holds it, and the returned
+-- person's `id` (what it passes to Relationships:getScore). Add, never change.
 function TheContractorFarmers:getHolder(farmlandId)
     for _, person in pairs(self.people) do
         for _, id in ipairs(person.farmlandIds) do

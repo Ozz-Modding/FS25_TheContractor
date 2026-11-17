@@ -18,6 +18,8 @@ local function setup()
     GuiTopDownCursor = { getHitPlaceable = function() return nil end }
 
     dofile("src/placeables/PlaceableTCParkingSlot.lua")
+    dofile("src/util/TCEquipmentClass.lua")
+    dofile("src/util/TCBallast.lua")
     dofile("src/util/TCParking.lua")
     g_currentMission.placeableSystem = { placeables = {} }
 end

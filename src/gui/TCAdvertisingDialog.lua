@@ -1,8 +1,9 @@
 -- Advertising purchase dialog (027): one modal replacing 012's three
 -- per-level bottom-bar buttons. Two MultiTextOptions (ad level, duration in
 -- periods) plus live cost / effectiveness / status lines, and a Buy button
--- that's disabled while the chosen combination can't be bought (already
--- running, tier locked or not affordable). Shape follows FS25_RealisticLivestock's
+-- that's disabled while the chosen combination can't be bought (tier locked
+-- or not affordable). Campaigns stack: a running one can be extended, and
+-- a new one runs alongside the others. Shape follows FS25_RealisticLivestock's
 -- RLFilterConditionDialog: a MessageDialog subclass loaded once via
 -- g_gui:loadGui, opened through a static show(), elements resolved by id in
 -- onGuiSetupFinished. Opened from MenuContractor's Overview tab via the
@@ -62,19 +63,27 @@ function TCAdvertisingDialog:onOpen()
     local advertising = g_currentMission.TheContractor.Advertising
 
     -- Default to the biggest level the farm has unlocked that isn't
-    -- already running (that one can't be bought again until it lapses).
+    -- already running, or the biggest unlocked if they all are. Running
+    -- ones say so in the picker (buying one extends it).
     self.levelIndex = 1
+    local biggestUnlocked = 1
     local levelTexts = {}
     for i, levelDef in ipairs(TheContractorAdvertising.LEVELS) do
         local name = g_i18n:getText("tc_advertising_" .. levelDef.key)
         if advertising:isUnlocked(self.farmId, levelDef.key) then
-            table.insert(levelTexts, name)
-            if not advertising:isRunning(self.farmId, levelDef.key) then
+            biggestUnlocked = i
+            if advertising:isRunning(self.farmId, levelDef.key) then
+                table.insert(levelTexts, string.format(g_i18n:getText("tc_advertising_dialog_levelRunning"), name))
+            else
+                table.insert(levelTexts, name)
                 self.levelIndex = i
             end
         else
             table.insert(levelTexts, string.format(g_i18n:getText("tc_advertising_dialog_levelLocked"), name))
         end
+    end
+    if advertising:isRunning(self.farmId, TheContractorAdvertising.LEVELS[self.levelIndex].key) then
+        self.levelIndex = biggestUnlocked
     end
     self.levelOption:setTexts(levelTexts)
     self.levelOption:setState(self.levelIndex)
@@ -99,6 +108,28 @@ function TCAdvertisingDialog.formatDuration(durationPeriods)
     return string.format(g_i18n:getText("tc_advertising_dialog_durationMany"), durationPeriods)
 end
 
+-- A running campaign's time left (TheContractorAdvertising:
+-- getMonthsRemaining), also used by the Overview tab.
+function TCAdvertisingDialog.formatMonthsLeft(months)
+    if months <= 0 then
+        return g_i18n:getText("tc_advertising_endsThisMonth")
+    elseif months == 1 then
+        return g_i18n:getText("tc_advertising_monthLeft")
+    end
+    return string.format(g_i18n:getText("tc_advertising_monthsLeft"), months)
+end
+
+-- How long a new campaign would run: the months paid for, after the rest of
+-- this month if it's underway (TheContractorAdvertising:
+-- getExpiryAfterPurchase).
+function TCAdvertisingDialog.formatRunsFor(durationPeriods)
+    local duration = TCAdvertisingDialog.formatDuration(durationPeriods)
+    if TheContractorAdvertising.isMonthUnderway() then
+        return string.format(g_i18n:getText("tc_advertising_dialog_runsForAfterThisMonth"), duration)
+    end
+    return string.format(g_i18n:getText("tc_advertising_dialog_runsFor"), duration)
+end
+
 function TCAdvertisingDialog:getSelection()
     local levelDef = TheContractorAdvertising.LEVELS[self.levelIndex]
     local durationPeriods = TheContractorAdvertising.DURATION_PERIODS[self.durationIndex]
@@ -115,8 +146,26 @@ function TCAdvertisingDialog:onClickDuration(state)
     self:refresh()
 end
 
--- Live cost preview plus one status line explaining what buying would do
--- (or why it can't be bought).
+-- The other running campaigns' names, "Local Newspaper and Online Ads", or
+-- nil if there are none.
+function TCAdvertisingDialog.getOtherCampaignNames(advertising, farmId, levelKey)
+    local names = {}
+    for _, campaign in ipairs(advertising:getCampaigns(farmId)) do
+        if campaign.levelKey ~= levelKey then
+            table.insert(names, g_i18n:getText("tc_advertising_" .. campaign.levelKey))
+        end
+    end
+    if #names == 0 then
+        return nil
+    elseif #names == 1 then
+        return names[1]
+    end
+    local last = table.remove(names)
+    return string.format(g_i18n:getText("tc_advertising_dialog_namesAnd"), table.concat(names, ", "), last)
+end
+
+-- Live cost preview, how well the campaign would work, and a status line
+-- explaining what buying would do (or why it can't be bought).
 function TCAdvertisingDialog:refresh()
     local advertising = g_currentMission.TheContractor.Advertising
     local farmId = self.farmId
@@ -126,27 +175,38 @@ function TCAdvertisingDialog:refresh()
     self.costText:setText(string.format(g_i18n:getText("tc_advertising_dialog_cost"),
         g_i18n:formatMoney(TheContractorAdvertising.getCostPerPeriod(levelDef), 0, true, true), g_i18n:formatMoney(cost, 0, true, true)))
 
-    self.effectText:setText(string.format(g_i18n:getText("tc_advertising_dialog_effect"),
-        math.floor(advertising:getEffectiveness(farmId) * 100 + 0.5)))
+    -- Stacked campaigns can reach the most offers adverts can bring, past
+    -- which a new one adds less, or nothing.
+    local addedShare = advertising:getAddedShare(farmId, levelDef.key)
+    if addedShare <= 0.005 then
+        self.effectText:setText(g_i18n:getText("tc_advertising_dialog_effectNone"))
+    elseif addedShare < 0.995 then
+        self.effectText:setText(string.format(g_i18n:getText("tc_advertising_dialog_effectPart"),
+            math.floor(addedShare * 100 + 0.5)))
+    else
+        self.effectText:setText(string.format(g_i18n:getText("tc_advertising_dialog_effect"),
+            math.floor(advertising:getEffectiveness(farmId) * 100 + 0.5)))
+    end
 
-    local activeLevel = advertising:getActiveLevel(farmId)
-    local daysRemaining = advertising:getDaysRemaining(farmId)
-    local newDaysRemaining = TheContractorAdvertising.getExpiryAfterPurchase(durationPeriods)
-        - g_currentMission.environment.currentDay
+    local duration = TCAdvertisingDialog.formatDuration(durationPeriods)
+    local otherNames = TCAdvertisingDialog.getOtherCampaignNames(advertising, farmId, levelDef.key)
 
     local status
-    if advertising:isRunning(farmId, levelDef.key) then
-        status = string.format(g_i18n:getText("tc_advertising_dialog_alreadyRunning"), daysRemaining)
-    elseif not advertising:isUnlocked(farmId, levelDef.key) then
+    if not advertising:isUnlocked(farmId, levelDef.key) then
         status = string.format(g_i18n:getText("tc_advertising_dialog_locked"),
             g_i18n:getText("tc_reputationTier_" .. levelDef.requiredTier))
     elseif not advertising:canAfford(farmId, levelDef.key, durationPeriods) then
         status = g_i18n:getText("tc_advertising_dialog_cannotAfford")
-    elseif activeLevel ~= nil then
-        status = string.format(g_i18n:getText("tc_advertising_dialog_replaces"),
-            g_i18n:getText("tc_advertising_" .. activeLevel), daysRemaining, newDaysRemaining)
+    elseif advertising:isRunning(farmId, levelDef.key) then
+        local newExpiry = advertising:getExpiryAfterPurchase(farmId, levelDef.key, durationPeriods)
+        status = string.format(g_i18n:getText("tc_advertising_dialog_extends"),
+            TCAdvertisingDialog.formatMonthsLeft(advertising:getMonthsRemaining(farmId, levelDef.key)), duration,
+            TCAdvertisingDialog.formatMonthsLeft(TheContractorAdvertising.getMonthsUntil(newExpiry)))
     else
-        status = string.format(g_i18n:getText("tc_advertising_dialog_runsFor"), newDaysRemaining)
+        status = TCAdvertisingDialog.formatRunsFor(durationPeriods)
+        if otherNames ~= nil then
+            status = status .. " " .. string.format(g_i18n:getText("tc_advertising_dialog_alongside"), otherNames)
+        end
     end
     self.statusText:setText(status)
 

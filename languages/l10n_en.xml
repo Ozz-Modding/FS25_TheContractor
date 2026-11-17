@@ -24,6 +24,8 @@
 		<text name="tc_setting_staffBreaks_all" text="On"/>
 		<text name="tc_setting_staffBreaks_lunch" text="Lunch only"/>
 		<text name="tc_setting_staffBreaks_none" text="Off"/>
+		<text name="tc_setting_fieldWorkDone" text="Field work done at"/>
+		<text name="tc_toolTip_fieldWorkDone" text="How much of the field a job's field work has to cover before it counts as done and shows 100%. 98% is the base game's contract standard; lower finishes jobs sooner, leaving more of the field unworked. Jobs that count bales, pieces or deliveries aren't affected. A change applies to jobs under way too."/>
 		<text name="tc_setting_showParkingSlots" text="Show parking slots"/>
 		<text name="tc_toolTip_showParkingSlots" text="Show your parking slots', repair zones' and standing spots' markings outside the construction menu too. Just for you: other players choose their own. Right Ctrl+P switches it by default."/>
 		<text name="tc_setting_jobProgressBars" text="Job progress bars"/>
@@ -76,6 +78,9 @@
 		<text name="tc_detail_supplies" text="Supplies"/>
 		<text name="tc_detail_messageType" text="Type"/>
 		<text name="tc_detail_from" text="From"/>
+		<text name="tc_detail_offerSource" text="Found you through"/>
+		<text name="tc_offerSource_reputation" text="Word of mouth"/>
+		<text name="tc_offerSource_advert" text="Your %s advert"/>
 		<text name="tc_detail_received" text="Received"/>
 		<text name="tc_detail_replyBy" text="Reply by"/>
 		<text name="tc_inbox_equipmentHeading" text="Equipment needed"/>
@@ -187,7 +192,10 @@
 		<text name="tc_reputationTier_renownedContractor" text="Renowned Contractor"/>
 		<text name="tc_reputationTier_prestigiousContractor" text="Prestigious Contractor"/>
 		<text name="tc_advertising_none" text="None"/>
-		<text name="tc_advertising_active" text="%s - %d days left"/>
+		<text name="tc_advertising_active" text="%s - %s"/>
+		<text name="tc_advertising_monthLeft" text="1 full month left"/>
+		<text name="tc_advertising_monthsLeft" text="%d full months left"/>
+		<text name="tc_advertising_endsThisMonth" text="ends this month"/>
 		<text name="tc_advertising_buyButton" text="Buy Advertising"/>
 		<text name="tc_advertising_localNewspaper" text="Local Newspaper"/>
 		<text name="tc_advertising_regionalMagazine" text="Regional Magazine"/>
@@ -198,15 +206,20 @@
 		<text name="tc_advertising_dialog_durationLabel" text="Duration"/>
 		<text name="tc_advertising_dialog_buy" text="Buy"/>
 		<text name="tc_advertising_dialog_levelLocked" text="%s (locked)"/>
+		<text name="tc_advertising_dialog_levelRunning" text="%s (running)"/>
 		<text name="tc_advertising_dialog_durationOne" text="1 month"/>
 		<text name="tc_advertising_dialog_durationMany" text="%d months"/>
 		<text name="tc_advertising_dialog_cost" text="%s per month, %s in total"/>
 		<text name="tc_advertising_dialog_effect" text="At your reputation, adverts work at %d%% of their full effect."/>
+		<text name="tc_advertising_dialog_effectPart" text="Your adverts are near the most offers adverts can bring: this one would add only %d%% of its effect."/>
+		<text name="tc_advertising_dialog_effectNone" text="Your adverts already bring the most offers adverts can: this one would add nothing."/>
 		<text name="tc_advertising_dialog_locked" text="Needs %s reputation."/>
 		<text name="tc_advertising_dialog_cannotAfford" text="You can't afford this."/>
-		<text name="tc_advertising_dialog_runsFor" text="Runs for %d days."/>
-		<text name="tc_advertising_dialog_alreadyRunning" text="This campaign is already running (%d days left). You can buy it again once it ends."/>
-		<text name="tc_advertising_dialog_replaces" text="Replaces your %s campaign (%d days left). Runs for %d days."/>
+		<text name="tc_advertising_dialog_runsFor" text="Runs for %s."/>
+		<text name="tc_advertising_dialog_runsForAfterThisMonth" text="Runs for the rest of this month, then %s."/>
+		<text name="tc_advertising_dialog_extends" text="Already running (%s). Buying %s more extends it: %s."/>
+		<text name="tc_advertising_dialog_alongside" text="Runs alongside your %s, and their effects add up."/>
+		<text name="tc_advertising_dialog_namesAnd" text="%s and %s"/>
 		<text name="tc_moneyType_advertising" text="Advertising"/>
 		<text name="finance_tcAdvertising" text="Advertising"/>
 		<text name="tc_jobType_harvest" text="Harvest"/>
@@ -1748,7 +1761,7 @@
 		<text name="tc_help_reputation_4_title" text="Advertising"/>
 		<text name="tc_help_reputation_4" text="Buy a campaign from the Overview tab, for 1 to 12 months. A local newspaper is open to anyone; regional and national magazines and online ads unlock as your rank grows. Adverts bring more offers, not bigger ones, and they work better the better known you are."/>
 		<text name="tc_help_reputation_5_title" text="Running campaigns"/>
-		<text name="tc_help_reputation_5" text="You can only run one campaign at a time. Buying the same one again isn't possible until it ends, and buying a different one replaces it at once: the days left on the old one are lost."/>
+		<text name="tc_help_reputation_5" text="Campaigns stack: you can run several at once, and their effects add up, though there's a limit to how many offers adverts can bring, and the buy dialog tells you when a campaign would add less. Buying one that's already running extends it. A campaign runs in whole months; a new one bought partway through a month also runs for the rest of that month at no extra cost. An offer that only came because of an advert says which one under Found you through; Word of mouth means it would have come anyway."/>
 		<text name="tc_help_offers_title" text="Job offers and the Inbox"/>
 		<text name="tc_help_offers_1" text="Job offers arrive in the Inbox, with a notification. Each shows the field, what's to be done, when it's due, the price and the customer. Offers are matched to the machines you own, and the Equipment needed list says whether you have each one."/>
 		<text name="tc_help_offers_2_title" text="Answering an offer"/>
@@ -1762,7 +1775,7 @@
 		<text name="tc_help_settings_title" text="Settings"/>
 		<text name="tc_help_settings_1" text="The mod's settings are in the game's own Settings page, under The Contractor. Only the host or an admin can change most of them, and they apply to everyone on the server."/>
 		<text name="tc_help_settings_2_title" text="Business"/>
-		<text name="tc_help_settings_2" text="Job pay rate scales what new offers pay (100% is half the base game's contract pay); business costs such as insurance, training, claims and fines scale with it, but staff pay doesn't. Late/unpaid invoices switches customers paying late on or off. Random events can be Normal, Rare or Off."/>
+		<text name="tc_help_settings_2" text="Job pay rate scales what new offers pay (100% is half the base game's contract pay); business costs such as insurance, training, claims and fines scale with it, but staff pay doesn't. Late/unpaid invoices switches customers paying late on or off. Random events can be Normal, Rare or Off. Field work done at sets how much of a field a job has to cover to count as finished (98% by default, as base game contracts)."/>
 		<text name="tc_help_settings_3_title" text="People"/>
 		<text name="tc_help_settings_3" text="Staff name style picks where new staff's names come from. Farmer retirements (off by default) lets farmers retire and hand their farm on. With Advanced Damage System there are also your usual repair margins, for repair zones and field breakdowns."/>
 		<text name="tc_help_settings_4_title" text="Just for you"/>
@@ -1787,9 +1800,9 @@
 		<text name="tc_help_planning_3_title" text="On the map"/>
 		<text name="tc_help_planning_3" text="A job that's due has the game's flashing contract circle on its field, so you can find it. While your job is on a field, the farmer leaves it to you."/>
 		<text name="tc_help_planning_4_title" text="Progress"/>
-		<text name="tc_help_planning_4" text="Progress is read from the field itself, whoever is driving. Job progress bars on screen can be shown for your own jobs, all of them or none (Settings)."/>
+		<text name="tc_help_planning_4" text="Progress is read from the field itself, whoever is driving, and reaches 100% once the share set by Field work done at (98% by default) is worked. Job progress bars on screen can be shown for your own jobs, all of them or none (Settings)."/>
 		<text name="tc_help_planning_5_title" text="Due dates"/>
-		<text name="tc_help_planning_5" text="A job not finished by the end of its due day fails. See Quality, pay and failed jobs."/>
+		<text name="tc_help_planning_5" text="A job not finished by the end of its due day fails. See Quality, pay and failed jobs. Changing the days per month keeps every job's date: a job due in October is still due in October."/>
 		<text name="tc_help_allocating_title" text="Allocating a crew"/>
 		<text name="tc_help_allocating_1" text="To get a job done, highlight it on the Jobs tab and choose Allocate. Pick a worker (or Do It Myself) and the machines to take: a tractor and implement, a harvester and header, and for harvest and haul a haulage tractor and trailer."/>
 		<text name="tc_help_allocating_2_title" text="Warnings"/>
@@ -1934,7 +1947,7 @@
 		<text name="tc_help_association_3" text="Pursues overdue invoices for free, with better odds of recovering the money than a solicitor. Joining or leaving the association reprices it for the rest of the year."/>
 		<text name="tc_help_cat_yard" text="Your yard"/>
 		<text name="tc_help_parking_title" text="Parking slots"/>
-		<text name="tc_help_parking_1" text="Machines back from a job are parked in parking slots you place from the construction menu's Contractor tab. Vehicle slots take tractors, loaders and self-propelled machines; implement slots take implements and trailers; harvester slots take harvesters. They come in three sizes and face the arrow. Machines already about the yard can be parked at once with Park all in the Logbook's Vehicles view: anything free that isn't in a slot yet, unhitched, each in a slot of its kind."/>
+		<text name="tc_help_parking_1" text="Machines back from a job are parked in parking slots you place from the construction menu's Contractor tab. Vehicle slots take tractors, loaders and self-propelled machines; implement slots take implements and trailers; harvester slots take harvesters. They come in three sizes and face the arrow. Machines already about the yard can be parked at once with Park all in the Logbook's Vehicles view: anything free that isn't in a slot yet, unhitched, each in a slot of its kind. Ballast weights stay on their machine and are parked with it. When a worker takes a tractor out on a job, anything on it the job doesn't use (a front loader, say) is taken off and parked if there's a free slot, or left where it stood if not; a weight stays on unless the job needs its hitch."/>
 		<text name="tc_help_parking_2_title" text="Choosing what parks where"/>
 		<text name="tc_help_parking_2" text="Stand in a placed slot and press the activate key to keep it for some kinds of machine or particular machines. They go there first, and to an unfiltered slot of the same type when it's full."/>
 		<text name="tc_help_parking_3_title" text="No room"/>
@@ -1993,7 +2006,7 @@
 		<text name="tc_help_yardJobs_title" text="Helping a farmer out"/>
 		<text name="tc_help_yardJobs_1" text="Some farmers call on you for a hand with something other than fieldwork. These are always yours to do yourself."/>
 		<text name="tc_help_yardJobs_2_title" text="Bales to the yard"/>
-		<text name="tc_help_yardJobs_2" text="A farmer short of hay, straw or silage asks for some of your bales. Put them on the ground in the area marked in their yard (it's on your map); their telehandler and bale fork wait beside it if you want them. Bales over the order are paid as extra."/>
+		<text name="tc_help_yardJobs_2" text="A farmer short of hay, straw or silage asks for some of your bales. Put them on the ground in the area marked in their yard, under a bale icon (it's on your map); their telehandler and bale fork wait beside it if you want them. Bales over the order are paid as extra."/>
 		<text name="tc_help_yardJobs_3_title" text="Selling a load"/>
 		<text name="tc_help_yardJobs_3" text="A farmer's driver is off, and their trailer stands full in the yard. Bring a tractor, take it to the selling point named and tip it. You're paid for the haulage; the crop's money is theirs. A load that goes astray is claimed for."/>
 		<text name="tc_help_yardJobs_4_title" text="Emergency refuel"/>

@@ -10,9 +10,10 @@
 -- setMonthEngineState: the period that just ended applies its own
 -- growthMapping right as the new period begins) — so walking that table
 -- forward from the field's live growth state is a legitimate estimate. But
--- it is only an estimate: player action (mowing, destruction, weeds) or a
--- mid-game daysPerPeriod change between now and the target date can
--- invalidate it. Callers (011) must re-validate against live field state at
+-- it is only an estimate: player action (mowing, destruction, weeds) can
+-- invalidate it. Its days come from TCCalendar, so a days-per-period change
+-- already planned is allowed for, and 160 moves a job's dates if one's
+-- planned later. Callers (011) must re-validate against live field state at
 -- job generation time, and again at allocation time, not just cache this
 -- result.
 
@@ -59,7 +60,7 @@ function TCCropPrediction.getEstimatedHarvestReadyDate(field)
     end
 
     local environment = g_currentMission.environment
-    local daysUntilPeriodBoundary = environment.daysPerPeriod - environment.currentDayInPeriod + 1
+    local periodIndex = TCCalendar.getPeriodIndex()
 
     local walkPeriod = environment.currentPeriod
     local state = fieldState.growthState
@@ -79,13 +80,10 @@ function TCCropPrediction.getEstimatedHarvestReadyDate(field)
         walkPeriod = walkPeriod % Environment.PERIODS_IN_YEAR + 1
 
         if fruitType:getIsHarvestReady(state) then
-            local daysFromNow = daysUntilPeriodBoundary + (periodsWalked - 1) * environment.daysPerPeriod
-            local absoluteDay = environment.currentMonotonicDay + daysFromNow
-
             return {
-                period = environment:getPeriodFromDay(absoluteDay),
-                dayInPeriod = environment:getDayInPeriodFromDay(absoluteDay),
-                absoluteDay = absoluteDay,
+                period = walkPeriod,
+                dayInPeriod = 1,
+                absoluteDay = TCCalendar.getMonotonicDay(periodIndex + periodsWalked, 1),
             }
         end
     end
@@ -111,8 +109,7 @@ function TCCropPrediction.isHarvestReadyOnDay(field, absoluteDay)
         return false
     end
 
-    local environment = g_currentMission.environment
-    local today = environment.currentMonotonicDay
+    local today = g_currentMission.environment.currentMonotonicDay
     local state = fieldState.growthState
 
     if absoluteDay <= today then
@@ -132,8 +129,8 @@ function TCCropPrediction.isHarvestReadyOnDay(field, absoluteDay)
     end
 
     for day = today + 1, absoluteDay do
-        if environment:getDayInPeriodFromDay(day) == 1 then
-            local periodInfo = growthData.periods[environment:getPeriodFromDay(day - 1)]
+        if TCCalendar.getDayInPeriodFromDay(day) == 1 then
+            local periodInfo = growthData.periods[TCCalendar.getPeriodFromDay(day - 1)]
             local nextState = periodInfo ~= nil and periodInfo.growthMapping ~= nil and periodInfo.growthMapping[state] or nil
             if nextState == nil then
                 return false

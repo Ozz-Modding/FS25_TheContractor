@@ -55,7 +55,7 @@ FSBaseMission.sendInitialClientState = Utils.appendedFunction(FSBaseMission.send
 
 ## The menu catching up
 
-Every one of our events publishes `MessageType.TC_DATA_UPDATED` on the machine that receives it (after its `readStream` has run it), and the server publishes it as it broadcasts one (`TheContractor.installDataUpdatedHooks` in `main.lua`, which finds them by their `TC` class name: nothing to add per event). An open `MenuContractor` redraws the visible tab on the next free frame (`onDataUpdated`, `refreshOpenTab`), keeping its view and selection.
+Every one of our events publishes `MessageType.TC_DATA_UPDATED` on the machine that receives it (after its `readStream` has run it), and the server publishes it as it broadcasts one (`src/util/TCDataUpdated.lua`, which finds them in vanilla's event registry under our mod's name: a mod's `InitEventClass` files each as `<modName>.<className>`. Nothing to add per event). An open `MenuContractor` redraws the visible tab on the next free frame (`onDataUpdated`, `refreshOpenTab`), keeping its view and selection.
 
 So a menu action sends its request and draws what it has; it never has to read the answer straight after `sendEvent` (on a remote client the answer hasn't arrived). An answer it has to react to (an InfoDialog, a transcript line) is kept as a pending request and checked in `checkPendingResponses` (the repair quote, accept and counter-offer are the pattern).
 

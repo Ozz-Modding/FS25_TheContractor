@@ -259,6 +259,27 @@ test("the ready day survives a save", function()
     assertEquals(loaded:getJob(1, 2).readyDay, nil)
 end)
 
+-- What brought an offer (Job.offerSource) rides on the same stream and save.
+test("the offer source streams and survives a save, and its absence too", function()
+    local world, tc = setup()
+    local fromAdvert = addAcceptedJob(tc, 1, "harvest", nil)
+    fromAdvert.offerSource = "localNewspaper"
+    addAcceptedJob(tc, 2, "plow", nil)
+
+    local stream = world:newStream()
+    TheContractorJobs.writeJob(stream, tc.Jobs:getJob(1, 1))
+    TheContractorJobs.writeJob(stream, tc.Jobs:getJob(1, 2))
+    assertEquals(TheContractorJobs.readJob(stream).offerSource, "localNewspaper")
+    assertEquals(TheContractorJobs.readJob(stream).offerSource, nil)
+
+    local xmlFile = {}
+    tc.Jobs:saveToXmlFile(xmlFile)
+    local loaded = TheContractorJobs.new()
+    loaded:loadFromXMLFile(xmlFile)
+    assertEquals(loaded:getJob(1, 1).offerSource, "localNewspaper")
+    assertEquals(loaded:getJob(1, 2).offerSource, nil)
+end)
+
 -- Older saves --------------------------------------------------------------------
 
 test("an older save's unready harvest is given its predicted ready day", function()

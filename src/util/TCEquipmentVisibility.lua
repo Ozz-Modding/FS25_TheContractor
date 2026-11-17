@@ -7,7 +7,10 @@
 -- (YardInventory:hideVehicle/placeVehicleInYard): vehicle:removeFromPhysics()
 -- + vehicle:setVisibility(false) to hide, the reverse to bring it back.
 -- Deliberately skips UEY's detachVehicle step - our equipment stays
--- farm-owned and attached as-is.
+-- farm-owned and attached as-is. A ballast weight hitched to a vehicle
+-- (TCBallast) is hidden and revealed with it, the vehicle going back into
+-- physics first so the weight's joint is rebuilt; the engine wouldn't take
+-- it along by itself.
 --
 -- Hiding/revealing is local rendering/physics state the base game never
 -- networks on its own (unlike a vehicle's position), so every machine has
@@ -69,6 +72,11 @@ function TCEquipmentVisibility.hideVehicle(vehicle)
     vehicle:removeFromPhysics()
     vehicle:setVisibility(false)
     TCEquipmentVisibility.setHotspotHidden(vehicle, true)
+    for _, weight in ipairs(TCBallast.getWeights(vehicle)) do
+        weight:removeFromPhysics()
+        weight:setVisibility(false)
+        TCEquipmentVisibility.setHotspotHidden(weight, true)
+    end
 end
 
 function TCEquipmentVisibility.revealVehicle(vehicle)
@@ -84,6 +92,18 @@ function TCEquipmentVisibility.revealVehicle(vehicle)
     vehicle:setVisibility(true)
     vehicle:addToPhysics()
     TCEquipmentVisibility.setHotspotHidden(vehicle, false)
+    -- After the vehicle, so each weight's joint is rebuilt as it goes in.
+    for _, weight in ipairs(TCBallast.getWeights(vehicle)) do
+        -- A joining client may still have the weight waiting to be hidden.
+        local weightId = NetworkUtil.getObjectId(weight)
+        if weightId ~= nil then
+            pendingByVehicleId[weightId] = nil
+        end
+        weight:removeFromPhysics()
+        weight:setVisibility(true)
+        weight:addToPhysics()
+        TCEquipmentVisibility.setHotspotHidden(weight, false)
+    end
 end
 
 -- Map hotspots: a hidden vehicle's would stay on the map where it stood.
@@ -119,10 +139,18 @@ end
 local function setVisible(vehicleIds, isVisible)
     local isServer = g_currentMission:getIsServer()
     for _, vehicleId in ipairs(vehicleIds) do
+        local vehicle = getReadyVehicle(vehicleId)
         if isServer then
             hiddenVehicleIds[vehicleId] = not isVisible or nil
+            -- Its weights too, so a client joining mid-job hides them even
+            -- before it has the attachment.
+            for _, weight in ipairs(vehicle ~= nil and TCBallast.getWeights(vehicle) or {}) do
+                local weightId = NetworkUtil.getObjectId(weight)
+                if weightId ~= nil then
+                    hiddenVehicleIds[weightId] = not isVisible or nil
+                end
+            end
         end
-        local vehicle = getReadyVehicle(vehicleId)
         if vehicle ~= nil then
             pendingByVehicleId[vehicleId] = nil
             if isVisible then

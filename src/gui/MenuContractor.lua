@@ -63,8 +63,7 @@ end
 
 -- An absolute (monotonic) day, as formatTargetDate shows a job's due date.
 local function formatMonotonicDay(day)
-    local environment = g_currentMission.environment
-    return formatTargetDate(environment:getPeriodFromDay(day), environment:getDayInPeriodFromDay(day))
+    return formatTargetDate(TCCalendar.getPeriodFromDay(day), TCCalendar.getDayInPeriodFromDay(day))
 end
 
 -- A date with its year, for a day whose year is known (a completed job's,
@@ -1078,7 +1077,7 @@ function MenuContractor:update(dt)
     end
 end
 
--- TC_DATA_UPDATED, while the menu's open (see TheContractor.publishDataUpdated).
+-- TC_DATA_UPDATED, while the menu's open (see TCDataUpdated).
 function MenuContractor:onDataUpdated()
     self.isDataDirty = true
 end
@@ -2837,6 +2836,9 @@ function MenuContractor:updateInboxDetails()
     self.inboxDetailCustomer:setText(customer ~= nil and MenuContractor.getCustomerText(customer) or "")
     setChip(self.inboxDetailRelationshipChip, self.inboxDetailRelationshipChipText,
         MenuContractor.getRelationshipChip(customer))
+    local sourceText = MenuContractor.getOfferSourceText(job)
+    self.inboxRowSource:setVisible(sourceText ~= nil)
+    self.inboxDetailSource:setText(sourceText or "")
 
     -- 100: a customer's machine in a repair zone.
     self.inboxRowSkill:setVisible(not job:isWorkshop())
@@ -2959,6 +2961,20 @@ function MenuContractor:updateInboxWorkshopDetails(job)
     self.inboxNegotiationBox:setVisible(latestMessage ~= nil)
 
     self.inboxDetailRows:invalidateLayout()
+end
+
+-- How an hourly-roll offer found the company (Job.offerSource): word of
+-- mouth, or the advert campaign it came through. nil for any other job.
+function MenuContractor.getOfferSourceText(job)
+    if job.offerSource == nil then
+        return nil
+    elseif job.offerSource == "reputation" then
+        return g_i18n:getText("tc_offerSource_reputation")
+    elseif TheContractorAdvertising.LEVELS_BY_KEY[job.offerSource] == nil then
+        return nil
+    end
+    return string.format(g_i18n:getText("tc_offerSource_advert"),
+        g_i18n:getText("tc_advertising_" .. job.offerSource))
 end
 
 -- What a workshop job's work is, in a sentence: 116's favour names the part.
@@ -4065,6 +4081,10 @@ function MenuContractor:getJobDetailRows(job)
         -- 113: its own row, since a chip sits where the value would.
         local chipText, chipTone = MenuContractor.getRelationshipChip(customer)
         add(g_i18n:getText("tc_people_detailRelationship"), "", chipText, chipTone)
+    end
+    local sourceText = MenuContractor.getOfferSourceText(job)
+    if sourceText ~= nil then
+        add(g_i18n:getText("tc_detail_offerSource"), sourceText)
     end
     -- 132: a future harvest's ready day.
     local readyDay = job:getFutureReadyDay()
@@ -8079,13 +8099,18 @@ function MenuContractor:updateSupplyDetails()
     setChip(self.suppliesDetailChip, self.suppliesDetailChipText, chipText, chipTone)
 end
 
+-- Every running campaign (they stack), one line each.
 function MenuContractor:refreshAdvertisingState(farmId, advertising)
-    local activeLevel = advertising:getActiveLevel(farmId)
-    if activeLevel ~= nil then
-        self.textAdvertisingStatus:setText(string.format(g_i18n:getText("tc_advertising_active"),
-            g_i18n:getText("tc_advertising_" .. activeLevel), advertising:getDaysRemaining(farmId)))
-    else
+    local lines = {}
+    for _, campaign in ipairs(advertising:getCampaigns(farmId)) do
+        table.insert(lines, string.format(g_i18n:getText("tc_advertising_active"),
+            g_i18n:getText("tc_advertising_" .. campaign.levelKey),
+            TCAdvertisingDialog.formatMonthsLeft(TheContractorAdvertising.getMonthsUntil(campaign.expiresOnMonth))))
+    end
+    if #lines == 0 then
         self.textAdvertisingStatus:setText(g_i18n:getText("tc_advertising_none"))
+    else
+        self.textAdvertisingStatus:setText(table.concat(lines, "\n"))
     end
 end
 

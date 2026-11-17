@@ -197,9 +197,12 @@ test("none in winter, on an auction's day or on another farm's protest day", fun
     local world, tc = setup()
     setUpFarm(world)
     world.season = Season.WINTER
+    -- December: the protest's own day's season comes from the calendar.
+    g_currentMission.environment.currentPeriod = 10
     assertEquals(tc.RandomEvents:triggerEvent(1, "protest"), nil, "winter")
 
     world.season = Season.SUMMER
+    g_currentMission.environment.currentPeriod = 5
     world.auction = { saleDay = 41 }
     assertEquals(tc.RandomEvents:triggerEvent(1, "protest"), nil, "the sale day")
     world.auction = { saleDay = 45 }

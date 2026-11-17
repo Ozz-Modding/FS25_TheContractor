@@ -64,6 +64,8 @@ local function setup()
 
     dofile("src/events/TCParkingNoticeEvent.lua")
     dofile("src/util/TCFolding.lua")
+    dofile("src/util/TCEquipmentClass.lua")
+    dofile("src/util/TCBallast.lua")
     dofile("src/business/Parking.lua")
 
     local parking = TheContractorParking.new()
@@ -246,4 +248,52 @@ test("a machine that folds is folded once it's put down", function()
 
     assertEquals(cultivator.foldDirection, 1)
     assertTrue(cultivator.foldedAfterPlacing, "folded where it was put")
+end)
+
+-- A weight on its machine is parked with it, never pulled off on its own.
+test("a weight hitched to a machine isn't parked by itself", function()
+    local world, parking = setup()
+    world.freeSpots = 10
+    local tractor = addMachine(world, { name = "Tractor" })
+    local weight = addMachine(world, { name = "Weight" })
+    weight.typeName = "weight"
+    function weight:getAttacherVehicle() return tractor end
+
+    assertEquals(parking:parkAll(1), 1)
+    runAll(parking)
+
+    assertEquals(table.concat(world.placed, ","), tostring(tractor.id))
+end)
+
+-- A dispatch's run: what it unhitched is parked if there's room, left if
+-- not, and nobody's told either way.
+test("a quiet run parks what it's given and tells nobody", function()
+    local world, parking = setup()
+    world.freeSpots = 1
+    local loader = addMachine(world, { name = "Loader" })
+    local bucket = addMachine(world, { name = "Bucket" })
+
+    assertEquals(parking:parkMachines(1, { loader.id, bucket.id }, true), 2)
+    runAll(parking)
+
+    assertEquals(table.concat(world.placed, ","), tostring(loader.id))
+    assertTrue(not bucket.inSlot, "no room, left where it is")
+    assertEquals(#world.told, 0)
+    assertEquals(parking.parkAllByFarm[1], nil, "run over")
+end)
+
+test("park all joins a quiet run and the farm's told about the lot", function()
+    local world, parking = setup()
+    world.freeSpots = 10
+    local loader = addMachine(world, { name = "Loader" })
+    addMachine(world, { name = "Trailer" })
+
+    parking:parkMachines(1, { loader.id }, true)
+    assertEquals(parking:parkAll(1), 1, "only the machine not already in the run")
+    assertEquals(parking:parkAll(1), 0, "a loud run is running now")
+    runAll(parking)
+
+    assertEquals(#world.placed, 2)
+    assertEquals(toldKeys(world), "tc_parking_parkAllParked")
+    assertEquals(world.told[1].arg, "2")
 end)

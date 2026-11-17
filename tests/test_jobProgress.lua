@@ -116,3 +116,77 @@ test("a job that counts objects is only refreshed on the poll", function()
     TCJobProgress.update(16)
     assertEquals(lookups, 2, "not every frame")
 end)
+
+-- The fieldWorkDone setting: the share of the field that counts as all of
+-- it, so a field worked to the setting reads 100%.
+local function scanWholeField(world, job)
+    TCJobProgress.update(TCJobProgress.POLL_INTERVAL_MS)
+    for _ = 1, 39 do
+        TCJobProgress.update(16)
+    end
+    return job.completionPercentage
+end
+
+local function installSettings(world, fieldWorkDone)
+    -- Settings.lua reads vanilla's on/off texts as it loads.
+    local getText = g_i18n.getText
+    g_i18n.getText = function(i18n, key)
+        if key == "ui_on" or key == "ui_off" then
+            return key
+        end
+        return getText(i18n, key)
+    end
+    world:load("src/business/Settings.lua")
+    g_i18n.getText = getText
+    local settings = TheContractorSettings.new()
+    if fieldWorkDone ~= nil then
+        settings:set("fieldWorkDone", fieldWorkDone)
+    end
+    g_currentMission.TheContractor.Settings = settings
+    return settings
+end
+
+test("by default a field counts as done at vanilla's 98%", function()
+    local world = setup()
+    local settings = installSettings(world)
+    assertEquals(settings:get("fieldWorkDone"), 98)
+    local job = addJob(world, "cultivate")
+    for i = 1, 40 do
+        world.partitionDone[i] = i <= 20
+    end
+    assertNear(scanWholeField(world, job), 50 / 0.98, 1e-6)
+end)
+
+test("a lower fieldWorkDone finishes the field sooner", function()
+    local world = setup()
+    installSettings(world, 80)
+    local job = addJob(world, "cultivate")
+    for i = 1, 40 do
+        world.partitionDone[i] = i <= 32
+    end
+    assertNear(scanWholeField(world, job), 100, 1e-6)
+end)
+
+test("fieldWorkDone never goes past what the options offer", function()
+    local world = setup()
+    local settings = installSettings(world, 100)
+    assertEquals(settings:get("fieldWorkDone"), 98, "100% isn't reachable, so the nearest option")
+    settings:set("fieldWorkDone", 50)
+    assertEquals(settings:get("fieldWorkDone"), 75)
+end)
+
+test("a job that counts objects ignores fieldWorkDone", function()
+    local world = setup()
+    installSettings(world, 75)
+    local job = addJob(world, "baleWrap")
+    job.workTotal = 4
+    job.spawnedBaleIds = { "a", "b", "c", "d" }
+    local states = { a = 1, b = 1, c = 1, d = 0 }
+    g_currentMission.itemSystem = {
+        getItemByUniqueId = function(_, id)
+            return { wrappingState = states[id], getIsMounted = function() return false end }
+        end,
+    }
+    TCJobProgress.update(TCJobProgress.POLL_INTERVAL_MS)
+    assertTrue(job.completionPercentage < 100, "three of four bales isn't done")
+end)

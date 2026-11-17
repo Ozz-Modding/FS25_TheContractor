@@ -234,8 +234,10 @@ function TheContractorDispatch:startJobForWorker(job, skipTransport)
     -- queue - it's hidden already, and the dispatch moves it to the field.
     g_currentMission.TheContractor.Parking:removeVehicles(job:getAllEquipmentIds())
 
-    -- Leave anything that isn't part of the job behind in the yard.
-    TCJobSiteSetup.detachForeignImplements(job)
+    -- Leave anything that isn't part of the job behind in the yard (bar a
+    -- weight nothing needs the hitch of), parked if there's room.
+    local detachedIds = TCJobSiteSetup.detachForeignImplements(job)
+    g_currentMission.TheContractor.Parking:parkMachines(job.farmId, detachedIds, true)
 
     if #job.haulageEquipmentIds > 0 then
         TCEquipmentVisibility.setVisibleEverywhere(job.haulageEquipmentIds, false)

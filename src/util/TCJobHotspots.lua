@@ -24,8 +24,9 @@
 -- on, following it if it's moved. One per job. 106: a spilt crop's job gets
 -- one on the spill, not its field, and 107's fallen trees one on each
 -- tree's road until that road's clear. 124: bales to a farmer's yard get
--- one on the drop area, 126's load to sell one on the farmer's trailer,
--- following it, and 127's refuel one on the machine run dry.
+-- one just covering the drop area, 126's load to sell one on the
+-- farmer's trailer, following it, and 127's refuel one on the machine run
+-- dry.
 
 TCJobHotspots = {}
 
@@ -35,7 +36,8 @@ TCJobHotspots.hotspotsByFieldId = {}
 TCJobHotspots.machineHotspotsByJobId = {}
 TCJobHotspots.accumulatedMs = 0
 
--- 101: a breakdown's circle (metres), tighter than a field's.
+-- 101: a breakdown's circle (metres), tighter than a field's. Vanilla's
+-- "radius" is the circle's width. A spot can set its own (124's drop area).
 TCJobHotspots.MACHINE_RADIUS = 25
 
 local function isTakenOn(state)
@@ -115,8 +117,8 @@ function TCJobHotspots.getBreakdownMachines(farmId)
     return machines
 end
 
--- jobId -> { x, z } for each circle that isn't a field's: 101's breakdowns
--- (on the machine), 106's spills (on the spill, while it's taken on),
+-- jobId -> { x, z, radius? } for each circle that isn't a field's: 101's
+-- breakdowns (on the machine), 106's spills (on the spill, while it's taken on),
 -- 124's drop areas, 126's trailers and 127's machines run dry (likewise),
 -- and 152's auction lots to inspect.
 -- 107's fallen trees have one per tree still on its road, keyed
@@ -167,10 +169,10 @@ function TCJobHotspots.refreshMachines()
         local hotspot = TCJobHotspots.machineHotspotsByJobId[jobId]
         if hotspot == nil then
             hotspot = AbstractFieldMissionHotspot.new()
-            hotspot:setWorldRadius(TCJobHotspots.MACHINE_RADIUS)
             g_currentMission:addMapHotspot(hotspot)
             TCJobHotspots.machineHotspotsByJobId[jobId] = hotspot
         end
+        hotspot:setWorldRadius(position.radius or TCJobHotspots.MACHINE_RADIUS)
         hotspot:setWorldPosition(position.x, position.z)
     end
 end

@@ -22,6 +22,8 @@ local function setup()
     world:load("src/util/TCLotInspections.lua")
     FieldGroundType = {}
     world:load("src/util/TCFieldPreparation.lua")
+    TCJobProgress = { POLL_INTERVAL_MS = 3000 }
+    world:load("src/util/TCJobSupplies.lua")
     world:load("src/business/AuctionSite.lua")
     world:load("src/events/TCAuctionSiteEvent.lua")
     world:load("src/util/TCAuctionLotActivatable.lua")

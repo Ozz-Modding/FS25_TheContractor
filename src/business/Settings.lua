@@ -118,8 +118,24 @@ TheContractorSettings.DEFINITIONS.staffBreaks = {
     default = 1
 }
 
+-- How much of a field a job's field work has to cover to count as done
+-- (TCJobProgress): 98% is vanilla's AbstractMission.SUCCESS_FACTOR, the bar
+-- before this setting. 100% isn't offered: full coverage pixel for pixel is
+-- never reachable. Jobs that count bales, pieces or deliveries ignore it.
+do
+    local values, strings, defaultIndex = percentOptions(75, 95, 5, nil)
+    table.insert(values, 98)
+    table.insert(strings, "98%")
+    defaultIndex = #values
+    TheContractorSettings.DEFINITIONS.fieldWorkDone = {
+        values = values,
+        strings = strings,
+        default = defaultIndex
+    }
+end
+
 TheContractorSettings.ITEMS = { "jobPayRate", "lateInvoices", "randomEvents", "nameStyle", "adsWorkshopMargin",
-    "adsFieldMargin", "farmerRetirements", "staffBreaks" }
+    "adsFieldMargin", "farmerRetirements", "staffBreaks", "fieldWorkDone" }
 
 -- 086: whether parking slots show outside the construction menu too. A
 -- display preference, so it's a local item (below). onChanged runs on this
@@ -309,6 +325,11 @@ end
 function TheContractorSettings:getADSMargin(isFieldBreakdown)
     local id = isFieldBreakdown and "adsFieldMargin" or "adsWorkshopMargin"
     return self.values[id] / 100
+end
+
+-- The share of a field (0-1) a job's field work counts as done at.
+function TheContractorSettings:getFieldWorkDoneFactor()
+    return self.values.fieldWorkDone / 100
 end
 
 -- 048: the multiplier on a new job's price. FS25_EconomyScale's factor

@@ -82,7 +82,6 @@ local function burnDrive(job, vehicleIds, miles)
     local mission = g_currentMission
     local driveMs = miles * TCJobFuel.METERS_PER_MILE / (TCJobFuel.TRAVEL_SPEED_KMH / 3.6) * 1000
     local factor = getFuelUsageFactor() * TCJobFuel.TRAVEL_LOAD
-    local pricePerLiter = mission.economyManager:getCostPerLiter(FillType.DIESEL)
     local ranDry = false
 
     for _, vehicleId in ipairs(vehicleIds) do
@@ -92,11 +91,11 @@ local function burnDrive(job, vehicleIds, miles)
             local level = vehicle:getFillUnitFillLevel(consumer.fillUnitIndex)
             local liters = math.min(level, consumer.usage * factor * driveMs)
             if liters > 0 then
-                vehicle:addFillUnitFillLevel(job.farmId, consumer.fillUnitIndex, -liters, FillType.DIESEL,
+                vehicle:addFillUnitFillLevel(job.farmId, consumer.fillUnitIndex, -liters, consumer.fillType,
                     ToolType.UNDEFINED, nil)
                 g_farmManager:updateFarmStats(job.farmId, "fuelUsage", liters)
                 job.fuelUsedLiters = job.fuelUsedLiters + liters
-                job.fuelCost = job.fuelCost + liters * pricePerLiter
+                job.fuelCost = job.fuelCost + liters * mission.economyManager:getCostPerLiter(consumer.fillType)
             end
             if vehicle:getFillUnitFillLevel(consumer.fillUnitIndex) <= 0.001 then
                 ranDry = true
@@ -174,7 +173,10 @@ function TCJobFuel.recordUsage(vehicle, liters)
         return
     end
 
-    local pricePerLiter = mission.economyManager:getCostPerLiter(FillType.DIESEL)
+    -- The fuel it burns (FS25_RedDiesel's is cheaper).
+    local consumer = TCJobSupplies.getDieselConsumer(vehicle)
+    local pricePerLiter = mission.economyManager:getCostPerLiter(consumer ~= nil and consumer.fillType or
+        FillType.DIESEL)
     if vehicle.getIsAIActive ~= nil and vehicle:getIsAIActive() and mission.missionInfo.helperBuyFuel then
         pricePerLiter = pricePerLiter * TCJobFuel.HELPER_FUEL_PRICE_MULTIPLIER
     end

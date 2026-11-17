@@ -507,6 +507,11 @@ end
 -- first so the small ones fill the gaps. Unlike a return it never hides
 -- anything: a machine with no room stays where it is. The farm's told once
 -- the run's done. Server only, not saved: a run takes seconds.
+--
+-- A dispatch uses the same run (parkMachines, quietly) for what it unhitched
+-- from a job's tractor and left in the yard (a front loader, its bucket),
+-- so that's parked if there's room and left where it stood if not. A quiet
+-- run tells nobody; park all joining one makes it tell.
 
 TheContractorParking.PARK_ALL_INTERVAL_MS = 250
 
@@ -541,6 +546,10 @@ function TheContractorParking.isParkable(vehicle, farmId)
         vehicle.propertyState == VehiclePropertyState.MISSION then
         return false
     end
+    -- A weight on its machine stays on, and is parked with it.
+    if TCBallast.isHitchedWeight(vehicle) then
+        return false
+    end
     local vehicleId = NetworkUtil.getObjectId(vehicle)
     local tc = g_currentMission.TheContractor
     if vehicleId == nil or TCEquipmentVisibility.isHidden(vehicleId) or (tc.Theft ~= nil and tc.Theft:isStolen(vehicleId)) or
@@ -550,10 +559,12 @@ function TheContractorParking.isParkable(vehicle, farmId)
     return not TheContractorParking.isChainBusy(vehicle)
 end
 
--- Server: starts a run for the farm (none if one's going). Returns how many
--- machines it'll try.
+-- Server: starts a run for the farm (none if one's going, unless it's a
+-- dispatch's quiet one, which it joins). Returns how many machines it'll
+-- try.
 function TheContractorParking:parkAll(farmId)
-    if not g_currentMission:getIsServer() or self.parkAllByFarm[farmId] ~= nil then
+    local run = self.parkAllByFarm[farmId]
+    if not g_currentMission:getIsServer() or (run ~= nil and not run.isQuiet) then
         return 0
     end
 
@@ -565,7 +576,11 @@ function TheContractorParking:parkAll(farmId)
         end
     end
     if #candidates == 0 then
-        self:notify(farmId, "tc_parking_parkAllNothing", "", true)
+        if run ~= nil then
+            run.isQuiet = false
+        else
+            self:notify(farmId, "tc_parking_parkAllNothing", "", true)
+        end
         return 0
     end
     table.sort(candidates, function(a, b)
@@ -579,9 +594,40 @@ function TheContractorParking:parkAll(farmId)
     for _, candidate in ipairs(candidates) do
         table.insert(vehicleIds, candidate.id)
     end
-    self.parkAllByFarm[farmId] = { vehicleIds = vehicleIds, parked = {}, noRoom = {} }
-    TCLog.info("TheContractor: farm %d parking all, %d machines to try", farmId, #vehicleIds)
-    return #vehicleIds
+    local count = self:parkMachines(farmId, vehicleIds, false)
+    TCLog.info("TheContractor: farm %d parking all, %d machines to try", farmId, count)
+    return count
+end
+
+-- Server: adds machines to the farm's run, starting one if there's none,
+-- each tried as park all tries them. A quiet run (a dispatch's) tells the
+-- farm nothing when it's done; it stops being quiet if anything loud joins.
+-- Returns how many were added (any already in the run aren't).
+function TheContractorParking:parkMachines(farmId, vehicleIds, isQuiet)
+    if not g_currentMission:getIsServer() or #vehicleIds == 0 then
+        return 0
+    end
+    local run = self.parkAllByFarm[farmId]
+    if run == nil then
+        run = { vehicleIds = {}, parked = {}, noRoom = {}, isQuiet = isQuiet == true }
+        self.parkAllByFarm[farmId] = run
+    elseif not isQuiet then
+        run.isQuiet = false
+    end
+
+    local inRun = {}
+    for _, vehicleId in ipairs(run.vehicleIds) do
+        inRun[vehicleId] = true
+    end
+    local count = 0
+    for _, vehicleId in ipairs(vehicleIds) do
+        if not inRun[vehicleId] then
+            inRun[vehicleId] = true
+            table.insert(run.vehicleIds, vehicleId)
+            count = count + 1
+        end
+    end
+    return count
 end
 
 function TheContractorParking:updateParkAll(dt)
@@ -638,6 +684,9 @@ function TheContractorParking:finishParkAll(farmId)
         return
     end
     TCLog.info("TheContractor: farm %d park all done, %d parked, %d with no room", farmId, #run.parked, #run.noRoom)
+    if run.isQuiet then
+        return
+    end
     if #run.parked > 0 then
         self:notify(farmId, "tc_parking_parkAllParked", tostring(#run.parked), true)
     end

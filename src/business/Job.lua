@@ -331,6 +331,14 @@ function TheContractorJob.new(id, farmId, jobType, fieldId, requiredSkillLevel, 
     -- clients (where ADS's log stood, server only).
     self.lotInspection = nil
 
+    -- How an offer from the hourly roll found the company: "reputation"
+    -- (it would have come without any advert, or the daily floor's) or the
+    -- advert campaign's level key (TheContractorAdvertising.LEVELS) whose
+    -- share of the roll it fell in (TheContractorJobGeneration:
+    -- getOfferSource). nil for every other job (random events, the console).
+    -- Saved and sent to clients.
+    self.offerSource = nil
+
     return self
 end
 

@@ -536,6 +536,9 @@ test("the marking: one on each of the farm's drop areas while the job's taken on
     g_client = {}
     TheContractor.dir = ""
     world.loaded, world.released, world.nodes = {}, {}, {}
+    world.triggerMarkers = {}
+    function g_currentMission:addTriggerMarker(node) world.triggerMarkers[node] = true end
+    function g_currentMission:removeTriggerMarker(node) world.triggerMarkers[node] = nil end
     g_i3DManager = {
         loadSharedI3DFile = function(_, filename)
             table.insert(world.loaded, filename)
@@ -549,9 +552,9 @@ test("the marking: one on each of the farm's drop areas while the job's taken on
     link = function() end
     delete = function(node) node.live = false end
     entityExists = function(node) return node.live == true end
-    setTranslation = function(node, x, y, z) node.x, node.z = x, z end
+    setTranslation = function(node, x, y, z) node.x, node.y, node.z = x, y, z end
     setRotation = function(node, _, ry) node.rotY = ry end
-    getTerrainHeightAtWorldPos = function() return 0 end
+    getTerrainHeightAtWorldPos = function() return 7 end
     g_terrainNode = 1
 
     local job = world:addYardJob({ state = TheContractorJob.STATE.OFFERED, x = 40, z = 50, rotY = 0.5 })
@@ -563,16 +566,42 @@ test("the marking: one on each of the farm's drop areas while the job's taken on
     job.state = TheContractorJob.STATE.ALLOCATED
     yardBales:refreshMarkings()
     yardBales:refreshMarkings()
-    assertEquals(#world.loaded, 1, "one, loaded once")
+    assertEquals(#world.loaded, 2, "the marking and its icon, loaded once")
     assertEquals(world.loaded[1], TheContractorYardBales.MARKING_FILENAME)
+    assertEquals(world.loaded[2], TheContractorYardBales.ICON_FILENAME)
     local node = yardBales.markings[job.id].node
     assertEquals(node.x, 40)
+    assertEquals(node.y, 7)
     assertEquals(node.z, 50)
     assertEquals(node.rotY, 0.5)
+    local icon = yardBales.markings[job.id].iconNode
+    assertEquals(icon.x, 40)
+    assertNear(icon.y, 7 + TheContractorYardBales.ICON_GROUND_OFFSET, 0.0001)
+    assertEquals(icon.z, 50)
+    assertTrue(world.triggerMarkers[icon], "the icon is a trigger marker, so the game's setting hides it")
 
     job.state = TheContractorJob.STATE.COMPLETED
     yardBales:refreshMarkings()
     assertTrue(not node.live)
-    assertEquals(world.released[1], 1)
+    assertTrue(not icon.live)
+    assertEquals(world.triggerMarkers[icon], nil)
+    assertEquals(#world.released, 2)
     assertEquals(yardBales.markings[job.id], nil)
+end)
+
+-- The map marker -------------------------------------------------------------------------------
+
+test("the map marker: on the area's centre, as wide as its diagonal, only while it's taken on", function()
+    local world = setup()
+    local job = world:addYardJob({ state = TheContractorJob.STATE.OFFERED, x = 40, z = 50 })
+    assertEquals(TheContractorYardBales.getSpot(job), nil, "not for an offer")
+
+    job.state = TheContractorJob.STATE.ACCEPTED
+    local spot = TheContractorYardBales.getSpot(job)
+    assertEquals(spot.x, 40)
+    assertEquals(spot.z, 50)
+    assertNear(spot.radius, math.sqrt(12 * 12 + 12 * 12), 0.0001)
+
+    job.state = TheContractorJob.STATE.COMPLETED
+    assertEquals(TheContractorYardBales.getSpot(job), nil)
 end)
