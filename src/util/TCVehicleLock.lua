@@ -20,6 +20,13 @@
 --
 -- Selling one is refused too (SellVehicleEvent hook below): the shop's
 -- garage list still offers equipment that's hidden away on a job.
+--
+-- Nor can it be got into (Player.requestToEnterVehicle hook below), and a
+-- player found sitting in one is put out on the next refresh. Hiding a
+-- machine puts its driver out, but only at that moment: a player who got in
+-- afterwards (FS25 puts a player back into the vehicle they were saved in,
+-- which can land after a resumed job has hidden it again) rode along
+-- invisibly with the job.
 
 TCVehicleLock = {}
 
@@ -152,6 +159,49 @@ function TCVehicleLock.refresh()
     end
 
     lockedVehicleIds = shouldLock
+
+    TCVehicleLock.leaveLockedVehicle()
+end
+
+-- Each machine puts its own player out (leaveVehicle sends vanilla's
+-- VehicleLeaveEvent), as TCEquipmentVisibility.hideVehicle does.
+function TCVehicleLock.leaveLockedVehicle()
+    local player = g_localPlayer
+    if player == nil or player.getCurrentVehicle == nil then
+        return
+    end
+    local vehicle = player:getCurrentVehicle()
+    if vehicle ~= nil and TCVehicleLock.isLocked(vehicle) then
+        TCLog.info("TheContractor: put the player out of '%s', which is locked", vehicle:getFullName())
+        player:leaveVehicle()
+    end
+end
+
+-- Getting in, by any route (the enter prompt, the map, a passenger seat,
+-- the vehicle a save put the player back in), with the same warning as
+-- trying to drive one.
+local function refuseLocked(vehicle)
+    local reason = vehicle ~= nil and lockedVehicleIds[NetworkUtil.getObjectId(vehicle)] or nil
+    if reason == nil then
+        return false
+    end
+    g_currentMission:showBlinkingWarning(g_i18n:getText(reason), 2000)
+    return true
+end
+
+function TCVehicleLock.requestToEnterVehicle(player, superFunc, vehicle, ...)
+    if refuseLocked(vehicle) then
+        return
+    end
+    return superFunc(player, vehicle, ...)
+end
+
+if Player ~= nil and not Player.tcVehicleLockHookInstalled then
+    Player.requestToEnterVehicle = Utils.overwrittenFunction(Player.requestToEnterVehicle,
+        TCVehicleLock.requestToEnterVehicle)
+    Player.requestToEnterVehicleAsPassenger = Utils.overwrittenFunction(Player.requestToEnterVehicleAsPassenger,
+        TCVehicleLock.requestToEnterVehicle)
+    Player.tcVehicleLockHookInstalled = true
 end
 
 function TCVehicleLock.update(dt)

@@ -363,6 +363,7 @@ function stubs.install()
         end
 
         function vehicle:getName() return self.name end
+        function vehicle:getFullName() return self.name end
         function vehicle:getOwnerFarmId() return self.farmId end
         function vehicle:getIsAIActive() return self.isAIActive == true end
         function vehicle:getFillUnitCapacity(index) return self.fillUnits[index].capacity end

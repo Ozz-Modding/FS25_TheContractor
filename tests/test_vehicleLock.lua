@@ -2,7 +2,8 @@
 -- or on hold), in a cooldown, waiting to be parked or stolen can't be sold.
 -- The server refuses the SellVehicleEvent with vanilla's "in use" reply;
 -- anything else sells as normal. It also drops out of the Tab cycle without
--- vanilla's saved isTabbable flag changing.
+-- vanilla's saved isTabbable flag changing, and nobody can get in or stay
+-- in.
 
 local STATE = { ALLOCATED = "allocated", IN_PROGRESS = "in_progress", COMPLETED = "completed" }
 
@@ -20,6 +21,20 @@ local function setup()
     end
     VehiclePropertyState = { OWNED = 1 }
     TheContractorJob = { STATE = STATE }
+
+    -- Vanilla's enter requests, reduced to recording what got through.
+    world.entered, world.warnings = {}, {}
+    Player = {}
+    function Player:requestToEnterVehicle(vehicle)
+        table.insert(world.entered, vehicle.id)
+    end
+    function Player:requestToEnterVehicleAsPassenger(vehicle, seatIndex)
+        table.insert(world.entered, vehicle.id)
+    end
+    function g_currentMission:showBlinkingWarning(text)
+        table.insert(world.warnings, text)
+    end
+    g_localPlayer = nil
 
     world.jobs, world.cooldown, world.parking, world.stolen = {}, {}, {}, {}
     local tc = g_currentMission.TheContractor
@@ -251,4 +266,75 @@ test("the reply arriving on the client goes straight to vanilla", function()
     SellVehicleEvent.run({ vehicle = tractor }, connection)
 
     assertEquals(#world.sold, 1, "passed through")
+end)
+
+-- Getting in -------------------------------------------------------------------
+
+-- The local player, sitting in whatever they're put in.
+local function addPlayer(world)
+    local player = setmetatable({ left = 0 }, { __index = Player })
+    function player:getCurrentVehicle() return self.vehicle end
+    function player:leaveVehicle()
+        self.left = self.left + 1
+        self.vehicle = nil
+    end
+    g_localPlayer = player
+    return player
+end
+
+test("a hired worker's machine can't be got into, driver's seat or passenger's", function()
+    local world = setup()
+    local tractor = addEnterable(world, "Tractor")
+    addJob(world, STATE.IN_PROGRESS, 7, { tractor })
+    TCVehicleLock.refresh()
+    local player = addPlayer(world)
+
+    player:requestToEnterVehicle(tractor)
+    player:requestToEnterVehicleAsPassenger(tractor, 1)
+
+    assertEquals(#world.entered, 0, "refused")
+    assertEquals(#world.warnings, 2, "told why each time")
+end)
+
+test("a free machine and a player's own job's get in as normal", function()
+    local world = setup()
+    local free = addEnterable(world, "Free")
+    local own = addEnterable(world, "Own")
+    addJob(world, STATE.IN_PROGRESS, nil, { own })
+    TCVehicleLock.refresh()
+    local player = addPlayer(world)
+
+    player:requestToEnterVehicle(free)
+    player:requestToEnterVehicle(own)
+
+    assertEquals(#world.entered, 2, "both entered")
+    assertEquals(#world.warnings, 0)
+end)
+
+-- The reload case: put back in the machine before the lock knew of it.
+test("a player found in a locked machine is put out on the next refresh", function()
+    local world = setup()
+    local tractor = addEnterable(world, "Tractor")
+    local player = addPlayer(world)
+    player.vehicle = tractor
+    addJob(world, STATE.IN_PROGRESS, 7, { tractor })
+
+    TCVehicleLock.refresh()
+    assertEquals(player.left, 1, "put out")
+    assertEquals(player.vehicle, nil)
+
+    TCVehicleLock.refresh()
+    assertEquals(player.left, 1, "once")
+end)
+
+test("a player in a free machine or their own job's stays in it", function()
+    local world = setup()
+    local own = addEnterable(world, "Own")
+    addJob(world, STATE.IN_PROGRESS, nil, { own })
+    local player = addPlayer(world)
+    player.vehicle = own
+
+    TCVehicleLock.refresh()
+
+    assertEquals(player.left, 0, "left alone")
 end)
