@@ -783,6 +783,32 @@ test("ADS saying done completes an accepted job: invoiced, reputation, logged, c
     assertEquals(#tc.RepairContracts.removals, 1)
 end)
 
+test("a finished job's machine is collected an hour later, not at once", function()
+    local world, tc = setup()
+    local job, vehicle = makeOffer(world, tc)
+    tc.Jobs:transitionJobState(1, job.id, TheContractorJob.STATE.ACCEPTED)
+    tc.RepairContracts:resolveSavedVehicles()
+    local environment = g_currentMission.environment
+    environment.dayTime = 23 * 60 * 60 * 1000 + 30 * 60 * 1000
+
+    world.status[vehicle.id] = "done"
+    world.listener(vehicle, { state = "done" })
+    assertEquals(job.state, TheContractorJob.STATE.COMPLETED)
+    tc.RepairContracts:update(TheContractorRepairContracts.PLACE_CHECK_MS)
+    assertTrue(not vehicle.isDeleted, "still there just after")
+
+    -- Past midnight, but not yet the hour.
+    environment.currentMonotonicDay = environment.currentMonotonicDay + 1
+    environment.dayTime = 29 * 60 * 1000
+    tc.RepairContracts:update(TheContractorRepairContracts.PLACE_CHECK_MS)
+    assertTrue(not vehicle.isDeleted, "a minute short")
+
+    environment.dayTime = 30 * 60 * 1000
+    tc.RepairContracts:update(TheContractorRepairContracts.PLACE_CHECK_MS)
+    assertTrue(vehicle.isDeleted, "collected once the hour's up")
+    assertEquals(#tc.RepairContracts.removals, 0)
+end)
+
 test("reputation by kind: a service least, a repair more, a field breakdown most", function()
     setup()
     local function base(kind, severity)
@@ -1112,7 +1138,7 @@ test("the queue, collections and claims survive a save", function()
     local repairContracts = tc.RepairContracts
     repairContracts:queueArrival(1, zone, 2, ADS_KIND.MAINTENANCE, 3)
     table.insert(repairContracts.removals, { farmId = 1, vehicleId = 7, uniqueId = "v7", zoneUniqueId = "zone1",
-        bayIndex = 3, waitMs = 0 })
+        bayIndex = 3, waitMs = 0, collectAfter = 1234.5 })
     table.insert(repairContracts.pendingClaims, { farmId = 1, jobId = 4, vehicleName = "Fendt", amount = 900,
         notifyDay = 12 })
 
@@ -1125,6 +1151,7 @@ test("the queue, collections and claims survive a save", function()
     assertEquals(loaded.arrivals[1].severity, 3)
     assertEquals(loaded.arrivals[1].bayIndex, 2)
     assertEquals(loaded.removals[1].uniqueId, "v7")
+    assertEquals(loaded.removals[1].collectAfter, 1234.5)
     assertEquals(loaded.pendingClaims[1].amount, 900)
 end)
 

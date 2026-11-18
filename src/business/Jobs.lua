@@ -1703,7 +1703,8 @@ function TheContractorJobs:completeWorkshopJob(job)
         g_server:broadcastEvent(TCJobCompletedEvent.new(job))
     end
 
-    g_currentMission.TheContractor.RepairContracts:queueCollection(job)
+    g_currentMission.TheContractor.RepairContracts:queueCollection(job,
+        TheContractorRepairContracts.COLLECT_DELAY_HOURS)
 end
 
 -- Wire serialization, shared by TCJobCreatedEvent and initial client state.

@@ -188,6 +188,9 @@ TheContractorRepairContracts.PREPARE_RETRIES = 3
 TheContractorRepairContracts.CLEARANCE = 0.5
 -- 126: a whenUnseen collection waits until no player is this close (metres).
 TheContractorRepairContracts.UNSEEN_DISTANCE = 150
+-- A finished job's machine is collected this many game hours after it's
+-- done, not at once.
+TheContractorRepairContracts.COLLECT_DELAY_HOURS = 1
 -- 124, 126: who a loan arrival is handed to (a TheContractor field), when
 -- it doesn't say.
 TheContractorRepairContracts.DEFAULT_LOAN_OWNER = "YardBales"
@@ -2008,8 +2011,9 @@ end
 
 -- Server: the customer comes for their machine (an offer turned down or
 -- lapsed, or a job finished or missed). The contract comes off now; the
--- machine goes on the next look at the queue.
-function TheContractorRepairContracts:queueCollection(job)
+-- machine goes on the next look at the queue, or (delayHours) once that
+-- many game hours have passed.
+function TheContractorRepairContracts:queueCollection(job, delayHours)
     local workshop = job.workshop
     if workshop == nil then
         return
@@ -2023,6 +2027,10 @@ function TheContractorRepairContracts:queueCollection(job)
             return
         end
     end
+    local collectAfter = nil
+    if delayHours ~= nil and delayHours > 0 then
+        collectAfter = TheContractorJobs.getGameMinutes() + delayHours * 60
+    end
     table.insert(self.removals, {
         farmId = job.farmId,
         vehicleId = workshop.vehicleId,
@@ -2032,6 +2040,7 @@ function TheContractorRepairContracts:queueCollection(job)
         -- 121: a farmer's machine is theirs again once it's gone.
         farmerId = workshop.farmerId,
         machineId = workshop.machineId,
+        collectAfter = collectAfter,
     })
     -- 121: and its attachment, wherever it's been left.
     if workshop.attachmentId ~= nil and workshop.attachmentId ~= 0 then
@@ -2041,6 +2050,7 @@ function TheContractorRepairContracts:queueCollection(job)
             uniqueId = workshop.attachmentUniqueId,
             farmerId = workshop.farmerId,
             machineId = workshop.attachmentMachineId,
+            collectAfter = collectAfter,
         })
     end
 end
@@ -2102,6 +2112,10 @@ function TheContractorRepairContracts:tryCollect(entry)
     local vehicle = entry.vehicleId ~= nil and entry.vehicleId ~= 0 and NetworkUtil.getObject(entry.vehicleId) or nil
     if vehicle == nil or vehicle.isDeleted then
         removeFrom(self.removals, entry)
+        return
+    end
+    -- Not before its time (a finished job's machine waits a while).
+    if entry.collectAfter ~= nil and TheContractorJobs.getGameMinutes() < entry.collectAfter then
         return
     end
     -- Not from under someone driving it (121: or the machine it's hitched to).
@@ -2385,6 +2399,7 @@ function TheContractorRepairContracts:loadFromXMLFile(xmlFile)
             machineId = getXMLInt(xmlFile, key .. "#machineId"),
             -- 126.
             whenUnseen = getXMLBool(xmlFile, key .. "#whenUnseen") == true or nil,
+            collectAfter = getXMLFloat(xmlFile, key .. "#collectAfter"),
         })
         index = index + 1
     end
@@ -2517,6 +2532,9 @@ function TheContractorRepairContracts:saveToXmlFile(xmlFile)
             end
             if entry.whenUnseen then
                 setXMLBool(xmlFile, key .. "#whenUnseen", true)
+            end
+            if entry.collectAfter ~= nil then
+                setXMLFloat(xmlFile, key .. "#collectAfter", entry.collectAfter)
             end
             index = index + 1
         end

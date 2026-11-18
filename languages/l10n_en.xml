@@ -2049,7 +2049,7 @@
 		<text name="tc_help_repairContracts_3_title" text="Quoting"/>
 		<text name="tc_help_repairContracts_3" text="Choose Negotiate on the offer and pick your margin. The customer says yes or takes the machine away. A fair price earns more reputation; a steep one costs some, and a name for overcharging means fewer customers for a while."/>
 		<text name="tc_help_repairContracts_4_title" text="Doing the work"/>
-		<text name="tc_help_repairContracts_4" text="The Workshop tab's checklist shows what's left. The job's done, and paid, once every fault it came in with is fixed (or everything on a service list done) before its due day. A machine left worse than it came isn't paid for, and the owner may claim."/>
+		<text name="tc_help_repairContracts_4" text="The Workshop tab's checklist shows what's left. The job's done, and paid, once every fault it came in with is fixed (or everything on a service list done) before its due day, and the owner comes for it an hour later. A machine left worse than it came isn't paid for, and the owner may claim."/>
 		<text name="tc_help_repairContracts_5_title" text="Old parts"/>
 		<text name="tc_help_repairContracts_5" text="Parts you take off go in a disposal skip, for a small fee."/>
 		<text name="tc_help_breakdowns_title" text="Breakdowns and favours"/>

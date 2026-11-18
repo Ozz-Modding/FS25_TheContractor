@@ -183,6 +183,22 @@ test("a weight on the hitch a job implement needs comes off for parking", functi
     assertEquals(idList(detached), tostring(weight.id))
 end)
 
+test("a rear implement takes the rear hitch even when something foreign is on it", function()
+    local world = setup()
+    local tractor = addTractor(world)
+    local leftOn = addMachine(world, { name = "Plough", category = "PLOWS" })
+    hitch(tractor, leftOn, REAR)
+    local mower = addMachine(world, { name = "Rear mower", category = "MOWERS" })
+
+    local plans = TCJobSiteSetup.planHitches(jobWith(tractor, mower))
+
+    assertEquals(#plans, 1)
+    assertEquals(plans[1].jointIndex, REAR, "rear, not the free front")
+    assertEquals(plans[1].occupant, leftOn, "the plough comes off")
+    local detached = TCJobSiteSetup.detachForeignImplements(jobWith(tractor, mower))
+    assertEquals(idList(detached), tostring(leftOn.id), "and is parked")
+end)
+
 test("split up for parking, a machine keeps its weight", function()
     local world = setup()
     local tractor = addTractor(world)

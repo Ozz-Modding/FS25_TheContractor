@@ -15,8 +15,8 @@
 -- Joint matching follows vanilla's own attach-range search
 -- (AttacherJoints.updateVehiclesInAttachRange): same jointType, and
 -- AttacherJoints.getAttacherJointCompatibility (subtypes, forced direction,
--- brand/vehicle restrictions). Rear joints are preferred over front. If the
--- only compatible joint is occupied by something that isn't part of the
+-- brand/vehicle restrictions). Rear joints are preferred over front, even
+-- an occupied rear over a free front. If the chosen joint is occupied by something that isn't part of the
 -- job (e.g. a different implement left hitched), that occupant is unhitched
 -- and left behind in the yard.
 --
@@ -41,11 +41,14 @@
 TCJobSiteSetup = {}
 
 -- Rear hitch (attacherJointDirection -1) beats front for implements that
--- could go either way.
+-- could go either way, even when something foreign has to come off the
+-- rear: most rear implements (a rear mower) don't force their direction,
+-- so a free front hitch would take them backwards. A free joint only
+-- breaks a tie between joints facing the same way.
 local function scoreJoint(attacherJoint, needsDetach)
-    local score = needsDetach and 0 or 2
+    local score = needsDetach and 0 or 1
     if attacherJoint.attacherJointDirection == -1 then
-        score = score + 1
+        score = score + 2
     end
     return score
 end
