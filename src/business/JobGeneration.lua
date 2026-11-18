@@ -566,7 +566,8 @@ function TheContractorJobGeneration:tryGenerateJob(farmId, onlyJobType, offerSou
     -- depends on how far that is.
     local deliveryStation = nil
     if jobDef.deliveryOnly then
-        deliveryStation = TCHaulage.findBaleDeliveryStation(TheContractorJobGeneration.getStrawFillType(fruitTypeIndex))
+        deliveryStation = TCHaulage.findBaleDeliveryStation(TheContractorJobGeneration.getStrawFillType(fruitTypeIndex),
+            farmId)
         if deliveryStation == nil then
             return nil
         end
@@ -577,10 +578,10 @@ function TheContractorJobGeneration:tryGenerateJob(farmId, onlyJobType, offerSou
         math.random() < TheContractorJobGeneration.HAULAGE_CHANCE then
         if jobDef.cropDependent then
             deliveryStation = TCHaulage.findDeliveryStation(g_fruitTypeManager:getFillTypeIndexByFruitTypeIndex(
-                fruitTypeIndex))
+                fruitTypeIndex), farmId)
         elseif jobDef.deliversBales then
             deliveryStation = TCHaulage.findBaleDeliveryStation(TheContractorJobGeneration.getStrawFillType(
-                fruitTypeIndex))
+                fruitTypeIndex), farmId)
         end
         if deliveryStation ~= nil then
             price = math.floor(price * TheContractorJobGeneration.HAULAGE_PRICE_MULTIPLIER)
@@ -959,7 +960,7 @@ function TheContractorJobGeneration:getCandidateFields(farmId, jobDef)
         return candidates
     end
     -- 067: nowhere on the map takes straw bales, so nowhere to deliver to.
-    if jobDef.deliveryOnly and TCHaulage.findBaleDeliveryStation(FillType.STRAW) == nil then
+    if jobDef.deliveryOnly and TCHaulage.findBaleDeliveryStation(FillType.STRAW, farmId) == nil then
         return candidates
     end
 
@@ -1408,8 +1409,8 @@ function TheContractorJobGeneration.registerConsoleCommands()
             if jobDef.requiresLime and not TheContractorJobGeneration.getLimeRequired() then
                 return string.format("No %s job possible: lime isn't required on this save", jobType)
             end
-            if jobDef.deliveryOnly and TCHaulage.findBaleDeliveryStation(FillType.STRAW) == nil then
-                return string.format("No %s job possible: no selling point on this map takes straw bales", jobType)
+            if jobDef.deliveryOnly and TCHaulage.findBaleDeliveryStation(FillType.STRAW, farmId) == nil then
+                return string.format("No %s job possible: no selling point on this map takes straw bales from this farm", jobType)
             end
             local candidates = #tc.JobGeneration:getCandidateFields(farmId, jobDef)
             if candidates == 0 then

@@ -492,14 +492,15 @@ end
 -- What's sold: { fillTypeIndex, station }, or nil. One of the fill types
 -- the trailer carries and a selling point buys: the farmer's own crops
 -- (fieldFillTypes) first, else the fallbacks. forcedFillTypeIndex (the
--- console) narrows it to that one.
-function TheContractorYardHaul.pickLoad(fieldFillTypes, spec, forcedFillTypeIndex, random)
+-- console) narrows it to that one. farmId: the farm that would deliver it
+-- (162), nil for any.
+function TheContractorYardHaul.pickLoad(fieldFillTypes, spec, forcedFillTypeIndex, random, farmId)
     local function candidatesFrom(fillTypeIndices)
         local candidates = {}
         for _, fillTypeIndex in ipairs(fillTypeIndices) do
             if spec.fillTypes[fillTypeIndex] and
                     (forcedFillTypeIndex == nil or forcedFillTypeIndex == fillTypeIndex) then
-                local station = TCHaulage.findDeliveryStation(fillTypeIndex)
+                local station = TCHaulage.findDeliveryStation(fillTypeIndex, farmId)
                 if station ~= nil then
                     table.insert(candidates, { fillTypeIndex = fillTypeIndex, station = station })
                 end
@@ -627,7 +628,7 @@ function TheContractorYardHaul:pickRequest(farmId)
     local forced = self.forcedFillTypeName ~= nil and g_fillTypeManager:getFillTypeIndexByName(self.forcedFillTypeName)
         or nil
     local fieldFillTypes = Y.getFieldFillTypes(farmer)
-    local load = Y.pickLoad(fieldFillTypes, trailer.spec, forced, math.random)
+    local load = Y.pickLoad(fieldFillTypes, trailer.spec, forced, math.random, farmId)
     if load == nil then
         local fieldNames = {}
         for _, fillTypeIndex in ipairs(fieldFillTypes) do
@@ -719,7 +720,7 @@ function TheContractorYardHaul:onAsked(incident)
     local farmer = tc.Farmers:getPerson(data.farmerId)
     local trailer = farmer ~= nil and not farmer.isOfficial and Y.getFreeTrailer(farmer) or nil
     local fillTypeIndex = g_fillTypeManager:getFillTypeIndexByName(data.fillTypeName)
-    local station = fillTypeIndex ~= nil and TCHaulage.findDeliveryStation(fillTypeIndex) or nil
+    local station = fillTypeIndex ~= nil and TCHaulage.findDeliveryStation(fillTypeIndex, incident.farmId) or nil
     if trailer == nil or station == nil or not trailer.spec.fillTypes[fillTypeIndex] then
         TCLog.info("TheContractor: farm %d incident %d: farmer #%s has no trailer free, or nowhere buys %s",
             incident.farmId, incident.id, tostring(data.farmerId), tostring(data.fillTypeName))

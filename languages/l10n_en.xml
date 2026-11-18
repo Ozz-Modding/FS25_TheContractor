@@ -1787,7 +1787,7 @@
 		<text name="tc_help_jobTypes_title" text="Kinds of work"/>
 		<text name="tc_help_jobTypes_1" text="Offers cover all the base game's field work: harvesting, mowing, tedding, baling, wrapping, cultivating, plowing, sowing and planting, fertilising, spraying herbicide, weeding, hoeing, stone picking and spreading lime."/>
 		<text name="tc_help_jobTypes_2_title" text="Harvest and haul"/>
-		<text name="tc_help_jobTypes_2" text="The crop belongs to the customer and has to reach the selling point named in the offer. It takes two workers, one harvesting and one hauling, or you can do the lot yourself. The crop can't be unloaded anywhere but there."/>
+		<text name="tc_help_jobTypes_2" text="The crop belongs to the customer and has to reach the selling point named in the offer (if your farm can't unload there by the time the job starts, it moves to the best-paying one you can). It takes two workers, one harvesting and one hauling, or you can do the lot yourself. The crop can't be unloaded anywhere but there."/>
 		<text name="tc_help_jobTypes_3_title" text="Bales"/>
 		<text name="tc_help_jobTypes_3" text="Bale and deliver means baling the straw and taking the bales to a buyer; only you can do it. Deliver straw means collecting bales already on the field and delivering them."/>
 		<text name="tc_help_jobTypes_4_title" text="Other work"/>

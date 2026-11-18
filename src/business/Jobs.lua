@@ -506,10 +506,15 @@ end
 -- machine (server via TCHaulage, or a client receiving TCJobDeliveryEvent)
 -- is applying it. Tells the farm's player once the delivery terms are met,
 -- since from then on their loads sell as normal.
-function TheContractorJobs:applyJobDelivery(farmId, jobId, deliveredLiters, requiredLiters)
+function TheContractorJobs:applyJobDelivery(farmId, jobId, deliveredLiters, requiredLiters, stationName)
     local job = self:getJob(farmId, jobId)
     if job == nil then
         return
+    end
+
+    -- 162: the station can change when delivery starts; nil leaves it.
+    if stationName ~= nil then
+        job.deliveryStationName = stationName
     end
 
     local wasDelivered = job.requiredLiters > 0 and job.deliveredLiters >= job.requiredLiters

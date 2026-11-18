@@ -236,7 +236,8 @@ function TheContractorCropSpill:spill(farmId, sourceJob, trailer, data, incident
     if not T.canTip(fillTypeIndex) then
         return noSpill("%s can't lie on the ground", tostring(fillTypeName))
     end
-    local station = TCHaulage.resolveDeliveryStation(sourceJob) or TCHaulage.findDeliveryStation(fillTypeIndex)
+    local station = TCHaulage.resolveDeliveryStation(sourceJob) or
+        TCHaulage.findDeliveryStation(fillTypeIndex, sourceJob.farmId)
     if station == nil then
         return noSpill("nowhere takes %s", tostring(fillTypeName))
     end

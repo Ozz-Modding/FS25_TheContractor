@@ -213,7 +213,7 @@ Offers your farm a job of the given type right now, through the normal job gener
 
 - No `jobType` prints the usage, which lists the types (so does `tcJob types`).
 - Job types (case-insensitive): `harvest`, `cultivate`, `sow`, `plow`, `mow`, `tedder`, `bale`, `baleWrap`, `strawDelivery`, `fertilize`, `herbicide`, `weed`, `hoe`, `stonePick`, `lime`, plus `repair`, `maintenance` and `parts` (see below).
-- A `harvest` offer, or a `bale` offer on a straw crop, sometimes includes delivery (Harvest & Haul, Bale & Deliver), just as a generated offer would. `strawDelivery` is only possible when a selling point on the map takes straw bales.
+- A `harvest` offer, or a `bale` offer on a straw crop, sometimes includes delivery (Harvest & Haul, Bale & Deliver), just as a generated offer would. `strawDelivery` is only possible when a selling point on the map takes straw bales from the farm. Delivery always goes to the best-paying selling point the farm can actually unload at.
 - It picks a field your farm has the equipment for when it can, and falls back to any eligible field otherwise.
 - It fails only when the generator itself couldn't offer that type right now, and the output says why. Examples are harvest in winter, weeding on a save with weeds off, lime on a save that doesn't require it, or a crop whose ready date can't be predicted. Use `tcJob availability` to see which types have work available.
 

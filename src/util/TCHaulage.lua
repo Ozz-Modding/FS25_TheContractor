@@ -68,14 +68,48 @@ end
 
 -- Delivery station ------------------------------------------------------------
 
--- The selling point paying most for the crop, the same pick vanilla's
--- harvest contracts make. nil if nothing on the map takes it.
-function TCHaulage.findDeliveryStation(fillTypeIndex)
-    if fillTypeIndex == nil or fillTypeIndex == FillType.UNKNOWN then
-        return nil
+-- Whether a farm may unload at a station at all: the check a tipping
+-- trailer meets (Dischargeable:getCanDischargeToObject, through the unload
+-- trigger) and SellingStation:addFillLevelFromTool's storage access. A
+-- selling point that stores what it's given (a farm silo some mod has made
+-- a selling point, a factory) refuses a farm without access to its storage,
+-- and a tip there falls back to the ground, which on land the farm doesn't
+-- own is "no access to this land". No check to make: allowed.
+local function isFarmAllowed(station, farmId)
+    if farmId == nil or station.getIsFillAllowedFromFarm == nil then
+        return true
     end
-    local station = HarvestMission.getSellingStationWithHighestPrice(fillTypeIndex)
-    return station
+    return station:getIsFillAllowedFromFarm(farmId) == true
+end
+
+-- A trigger only bales, logs or pallets go into, never a tipped load.
+local function isItemTrigger(trigger)
+    if trigger.isa == nil then
+        return false
+    end
+    for _, class in ipairs({ BaleUnloadTrigger, WoodUnloadTrigger, PalletUnloadTrigger }) do
+        if class ~= nil and trigger:isa(class) then
+            return true
+        end
+    end
+    return false
+end
+
+-- Whether one of a station's unload triggers takes a tipped load of this
+-- fill type: the station accepting it isn't enough, a trigger can be
+-- narrower (its own fillTypes). A station with no trigger list to go on
+-- is taken at its word.
+local function hasBulkTriggerFor(station, fillTypeIndex)
+    if station.unloadTriggers == nil then
+        return true
+    end
+    for _, trigger in ipairs(station.unloadTriggers) do
+        if not isItemTrigger(trigger) and trigger.getIsFillTypeSupported ~= nil and
+            trigger:getIsFillTypeSupported(fillTypeIndex) then
+            return true
+        end
+    end
+    return false
 end
 
 -- Whether one of a station's unload triggers is a bale trigger that takes
@@ -96,21 +130,28 @@ local function hasBaleTriggerFor(station, fillTypeIndex)
     return false
 end
 
--- 067: the selling point paying most for the fill type that has a bale
--- trigger taking it - HarvestMission.getSellingStationWithHighestPrice's
--- pick, among the stations bales can actually be tipped into. Bales sold
--- there go through SellingStation:addFillLevelFromTool like any load, so
--- the same tracker counts them. nil if nowhere takes them.
-function TCHaulage.findBaleDeliveryStation(fillTypeIndex)
-    if fillTypeIndex == nil or fillTypeIndex == FillType.UNKNOWN then
-        return nil
+-- 162: whether farmId can deliver fillTypeIndex to station - as a tipped
+-- load, or as bales (asBales). farmId nil: any farm, so only the triggers
+-- are checked.
+function TCHaulage.canFarmDeliver(station, farmId, fillTypeIndex, asBales)
+    if station == nil or not isFarmAllowed(station, farmId) then
+        return false
     end
+    if asBales then
+        return hasBaleTriggerFor(station, fillTypeIndex)
+    end
+    return hasBulkTriggerFor(station, fillTypeIndex)
+end
 
+-- The best-paying selling point for the fill type that farmId can deliver
+-- to - vanilla's harvest contract criteria (an owned placeable's selling
+-- point allowing missions and accepting the fill type) plus canFarmDeliver.
+local function findBestStation(fillTypeIndex, farmId, asBales)
     local bestStation, bestPrice = nil, 0
     for _, station in pairs(g_currentMission.storageSystem:getUnloadingStations()) do
         if station.owningPlaceable ~= nil and station.isSellingPoint and station.allowMissions and
             station.acceptedFillTypes ~= nil and station.acceptedFillTypes[fillTypeIndex] and
-            hasBaleTriggerFor(station, fillTypeIndex) then
+            TCHaulage.canFarmDeliver(station, farmId, fillTypeIndex, asBales) then
             local price = station:getEffectiveFillTypePrice(fillTypeIndex)
             if price > bestPrice then
                 bestStation, bestPrice = station, price
@@ -118,6 +159,37 @@ function TCHaulage.findBaleDeliveryStation(fillTypeIndex)
         end
     end
     return bestStation
+end
+
+-- The selling point paying most for the crop, the same pick vanilla's
+-- harvest contracts make (so a mod steering that pick steers ours), unless
+-- farmId can't deliver there (162): then the best of the ones it can. nil
+-- if nothing on the map takes it.
+function TCHaulage.findDeliveryStation(fillTypeIndex, farmId)
+    if fillTypeIndex == nil or fillTypeIndex == FillType.UNKNOWN then
+        return nil
+    end
+    local station = HarvestMission.getSellingStationWithHighestPrice(fillTypeIndex)
+    if station == nil or TCHaulage.canFarmDeliver(station, farmId, fillTypeIndex, false) then
+        return station
+    end
+    TCLog.info("TheContractor: farm %s can't unload %s at '%s', the best price - looking further",
+        tostring(farmId), tostring(g_fillTypeManager:getFillTypeNameByIndex(fillTypeIndex)),
+        tostring(station:getName()))
+    return findBestStation(fillTypeIndex, farmId, false)
+end
+
+-- 067: the selling point paying most for the fill type that has a bale
+-- trigger taking it - HarvestMission.getSellingStationWithHighestPrice's
+-- pick, among the stations bales can actually be tipped into (by farmId,
+-- 162). Bales sold there go through SellingStation:addFillLevelFromTool
+-- like any load, so the same tracker counts them. nil if nowhere takes
+-- them.
+function TCHaulage.findBaleDeliveryStation(fillTypeIndex, farmId)
+    if fillTypeIndex == nil or fillTypeIndex == FillType.UNKNOWN then
+        return nil
+    end
+    return findBestStation(fillTypeIndex, farmId, true)
 end
 
 -- What a job delivers: the crop on a harvest job, straw on a bale job
@@ -137,6 +209,16 @@ function TCHaulage.getDeliveryFillType(job)
         return TheContractorJobGeneration.getStrawFillType(fruitTypeIndex)
     end
     return g_fruitTypeManager:getFillTypeIndexByFruitTypeIndex(fruitTypeIndex)
+end
+
+-- Whether the job's delivery is bales (067's bale & deliver and straw
+-- delivery) rather than a tipped load.
+function TCHaulage.deliversBales(job)
+    if job.spill ~= nil or job.yardHaul ~= nil then
+        return false
+    end
+    local jobDef = TheContractorJobGeneration.JOB_TYPES[job.jobType]
+    return jobDef ~= nil and (jobDef.deliversBales == true or jobDef.deliveryOnly == true)
 end
 
 -- Remembers a station on the job the way vanilla saves one (owning
@@ -294,16 +376,33 @@ local function registerTracker(job)
         return true
     end
 
-    local station = TCHaulage.resolveDeliveryStation(job)
-    if station == nil then
-        TCLog.warning("TheContractor: job %d delivery station '%s' can't be found", job.id,
-            tostring(job.deliveryStationName))
-        return false
-    end
-
     local fillTypeIndex = TCHaulage.getDeliveryFillType(job)
     if fillTypeIndex == nil then
         return false
+    end
+
+    local station = TCHaulage.resolveDeliveryStation(job)
+    -- 162: a station the farm can't unload at (or one that's gone) is
+    -- swapped for the best one it can, so a job picked before 162, or one
+    -- whose station has changed hands since, can still be done.
+    local asBales = TCHaulage.deliversBales(job)
+    if station == nil or not TCHaulage.canFarmDeliver(station, job.farmId, fillTypeIndex, asBales) then
+        local replacement
+        if asBales then
+            replacement = TCHaulage.findBaleDeliveryStation(fillTypeIndex, job.farmId)
+        else
+            replacement = TCHaulage.findDeliveryStation(fillTypeIndex, job.farmId)
+        end
+        if replacement == nil then
+            TCLog.warning("TheContractor: job %d can't be delivered to '%s' and nowhere else takes it", job.id,
+                tostring(job.deliveryStationName))
+            return false
+        end
+        TCLog.info("TheContractor: job %d delivery moved from '%s' to '%s', which farm %d can unload at", job.id,
+            tostring(job.deliveryStationName), tostring(replacement:getName()), job.farmId)
+        TCHaulage.setDeliveryStation(job, replacement)
+        dirtyJobIds[job.id] = true
+        station = replacement
     end
 
     local tracker = TCDeliveryTracker.new(job, station, fillTypeIndex)
@@ -533,7 +632,7 @@ local function syncDeliveryProgress()
         local job = jobs:getJobById(jobId)
         if job ~= nil and g_server ~= nil then
             g_server:broadcastEvent(TCJobDeliveryEvent.new(job.farmId, job.id, job.deliveredLiters,
-                job.requiredLiters))
+                job.requiredLiters, job.deliveryStationName))
         end
     end
     dirtyJobIds = {}
