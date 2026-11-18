@@ -134,6 +134,9 @@ local function hitch(plan, implement)
     implement:addToPhysics()
 
     attacher:attachImplement(implement, plan.inputIndex, plan.jointIndex, false, nil, false, true)
+    -- Manual Attach pulls the PTO and hoses off a hitch made before the AI
+    -- starts; nobody's there to connect them by hand.
+    TCManualAttach.connectAll(attacher, implement)
 end
 
 -- 121, server-only: hitches a newly loaded implement to a machine (a
