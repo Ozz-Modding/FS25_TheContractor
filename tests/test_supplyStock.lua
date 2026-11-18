@@ -231,3 +231,27 @@ test("with FS25_RedDiesel: red diesel is listed after diesel", function()
     assertEquals(names(TCSupplyStock.getSupplyFillTypes(1)),
         "DIESEL,RED_DIESEL,SEEDS,FERTILIZER,LIQUIDFERTILIZER,MANURE,LIQUIDMANURE,HERBICIDE")
 end)
+
+test("with FS25_SoilFertilizer: the mod's products only show while the farm has some or a job's held for one",
+    function()
+        local world = setup()
+        local uan = world:addFillType("UAN32", "UAN-32")
+        local urea = world:addFillType("UREA", "Urea")
+        local an = world:addFillType("AN", "Ammonium nitrate")
+        TheContractorJobGeneration.JOB_TYPES.fertilize.modSupplyFillTypeNames = { "UAN32", "UREA", "AN" }
+        assertEquals(names(TCSupplyStock.getSupplyFillTypes(1)),
+            "DIESEL,SEEDS,FERTILIZER,LIQUIDFERTILIZER,MANURE,LIQUIDMANURE,UAN32,UREA,AN,HERBICIDE", "all supplies")
+
+        world:addVehicle({ name = "UAN tank", isPallet = true,
+            fillUnits = { { capacity = 1000, level = 800, fillType = uan } } })
+        local job = world:addJob({ workerId = 3, vehicles = {} })
+        job.state = TheContractorJob.STATE.IN_PROGRESS
+        job.supplyStatus = TCJobSupplies.STATUS.NO_STOCK
+        job.supplyFillTypeName = "AN"
+
+        local supplies = TCSupplyStock.getSupplies(1)
+        assertEquals(findSupply(supplies, uan).amount, 800, "UAN32 in stock")
+        assertEquals(findSupply(supplies, urea), nil, "no urea, no row")
+        assertEquals(#findSupply(supplies, an).heldJobs, 1, "AN held for")
+        assertTrue(findSupply(supplies, FillType.HERBICIDE) ~= nil, "a job's own product always shows")
+    end)

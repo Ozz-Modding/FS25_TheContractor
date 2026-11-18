@@ -280,3 +280,64 @@ test("with FS25_RedDiesel: a red tractor is topped up with red from stock, never
     assertEquals(redTank:getFillLevel(red), 0, "red stock")
     assertEquals(white:getFillLevel(FillType.DIESEL), 1000, "white stock")
 end)
+
+-- FS25_SoilFertilizer: a fertilize job's sprayer works with that mod's
+-- products (JOB_TYPES' modSupplyFillTypeNames) as well as vanilla's.
+local function addSoilFertilizerJobType(world)
+    local uan = world:addFillType("UAN32", "UAN-32")
+    fakes.JOB_TYPES.fertilize = { implementSpec = "spec_sprayer", supplyFillTypeNames = { "FERTILIZER" },
+        modSupplyFillTypeNames = { "UAN32", "NOT_LOADED" } }
+    TCEquipmentClass.isJobImplement = function(vehicle)
+        return vehicle.spec_sprayer ~= nil
+    end
+    return uan
+end
+
+local function addSprayer(world, level, fillType, supported)
+    local sprayer = world:addVehicle({ name = "Sprayer", fillUnits = { { capacity = 1000, level = level,
+        fillType = fillType, supported = supported } } })
+    sprayer.spec_sprayer = { fillUnitIndex = 1 }
+    return sprayer
+end
+
+test("with FS25_SoilFertilizer: a job's products are its own, then the other mod's the game knows", function()
+    local world = setup()
+    local uan = addSoilFertilizerJobType(world)
+    local products = TCJobSupplies.getProductFillTypes(fakes.JOB_TYPES.fertilize)
+    assertEquals(#products, 2, "count")
+    assertEquals(products[1], FillType.FERTILIZER, "own first")
+    assertEquals(products[2], uan, "then the mod's")
+    assertEquals(TCJobSupplies.getProductFillTypes(fakes.JOB_TYPES.plough), nil, "no products")
+    assertTrue(TCJobSupplies.isModProduct(uan), "UAN32 is the mod's")
+    assertEquals(TCJobSupplies.isModProduct(FillType.FERTILIZER), false, "fertilizer is a job's own")
+end)
+
+test("with FS25_SoilFertilizer: a sprayer holding the mod's product isn't wrongly filled, and is topped up with it",
+    function()
+        local world = setup()
+        local uan = addSoilFertilizerJobType(world)
+        local sprayer = addSprayer(world, 100, uan, { FillType.FERTILIZER, uan })
+        local storage = world:addStorage({ levels = { [uan] = 2000, [FillType.FERTILIZER] = 5000 } })
+        local job = world:addJob({ jobType = "fertilize", vehicles = { sprayer } })
+
+        local loaded, status = TCJobSupplies.topUp(job)
+
+        assertEquals(status, nil, "status")
+        assertEquals(loaded, 900, "loaded")
+        assertEquals(sprayer.fillUnits[1].fillType, uan, "kept on UAN32")
+        assertEquals(storage:getFillLevel(uan), 1100, "UAN32 stock")
+        assertEquals(storage:getFillLevel(FillType.FERTILIZER), 5000, "fertilizer stock")
+    end)
+
+test("with FS25_SoilFertilizer: an empty sprayer takes whichever product the farm has most of", function()
+    local world = setup()
+    local uan = addSoilFertilizerJobType(world)
+    local sprayer = addSprayer(world, 0, nil, { FillType.FERTILIZER, uan })
+    world:addStorage({ levels = { [uan] = 3000, [FillType.FERTILIZER] = 500 } })
+    local job = world:addJob({ jobType = "fertilize", vehicles = { sprayer } })
+
+    TCJobSupplies.topUp(job)
+
+    assertEquals(sprayer.fillUnits[1].fillType, uan, "UAN32")
+    assertEquals(sprayer.fillUnits[1].level, 1000, "full")
+end)

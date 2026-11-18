@@ -24,6 +24,10 @@ TheContractorJobGeneration_mt = Class(TheContractorJobGeneration)
 --                    header/harvester matching lives in TCEquipmentClass.
 --                    getMissingEquipment). weederType/supplyFillTypeNames
 --                    narrow it further (TCEquipmentClass.isJobImplement).
+--                    modSupplyFillTypeNames are more products, ones only
+--                    other mods add: they do the job just the same, but the
+--                    Supplies tab and the Inbox only name them when the farm
+--                    has some (TCJobSupplies.getProductFillTypes).
 --                    excludedSpecs rules out an implement that carries the
 --                    spec but does other work: a plow with a packer has
 --                    spec_cultivator (vanilla's PlowPacker needs it), but
@@ -136,6 +140,19 @@ TheContractorJobGeneration_mt = Class(TheContractorJobGeneration)
 -- 1.07 ha (2.65 acre) field, the rest scaled from it by the same ratios as
 -- rewardPerHa (REPUTATION_PER_REWARD), since those already reflect how
 -- slow/laborious each job is.
+-- FS25_SoilFertilizer's products, by the job they do (JOB_TYPES'
+-- modSupplyFillTypeNames). That mod sprays its fertilisers as vanilla's
+-- fertilizer and its liquid lime as lime, so they finish our jobs the same
+-- way. Its crop protection (insecticide, fungicide and their mixes) does
+-- nothing to weeds, and gypsum is no fertiliser, so they're left out. Names
+-- the game doesn't know (the mod not loaded) are skipped.
+TheContractorJobGeneration.SOIL_FERTILIZER_PRODUCTS = {
+    fertilize = { "UAN32", "UAN28", "ANHYDROUS", "STARTER", "LIQUID_UREA", "LIQUID_AMS", "LIQUID_MAP", "LIQUID_DAP",
+        "LIQUID_POTASH", "UREA", "AN", "AMS", "MAP", "DAP", "POTASH", "POLIFOSKA", "COMPOST", "BIOSOLIDS",
+        "CHICKEN_MANURE", "PELLETIZED_MANURE" },
+    lime = { "LIQUIDLIME" },
+}
+
 TheContractorJobGeneration.JOB_TYPES = {
     harvest = { cropDependent = true, recordsCrop = true, rewardPerHa = 2500, reputationPerHa = 8.5,
         skill = "harvesting",
@@ -165,7 +182,8 @@ TheContractorJobGeneration.JOB_TYPES = {
         playerOnly = true, noEquipment = true, deliversBales = true, deliveryOnly = true, reputationPerHa = 5.1,
         skill = "haulage" },
     fertilize = { implementSpec = "spec_sprayer", vanillaMission = FertilizeMission, startState = "sprayLevel",
-        supplyFillTypeNames = { "FERTILIZER", "LIQUIDFERTILIZER", "MANURE", "LIQUIDMANURE" }, seasonRule = "noWinter",
+        supplyFillTypeNames = { "FERTILIZER", "LIQUIDFERTILIZER", "MANURE", "LIQUIDMANURE" },
+        modSupplyFillTypeNames = TheContractorJobGeneration.SOIL_FERTILIZER_PRODUCTS.fertilize, seasonRule = "noWinter",
         rewardPerHa = 1500, reputationPerHa = 5.1, skill = "cropCare",
         workAreaTypes = { "SPRAYER" } },
     herbicide = { implementSpec = "spec_sprayer", vanillaMission = HerbicideMission, startState = "weedState",
@@ -186,7 +204,8 @@ TheContractorJobGeneration.JOB_TYPES = {
     -- 149: a lime spreader is a sprayer that takes lime. Paid twice
     -- fertilize's, as lime costs far more to spread a hectare with; the
     -- work's fertilize's, so the reputation is too.
-    lime = { implementSpec = "spec_sprayer", supplyFillTypeNames = { "LIME" }, requiresLime = true,
+    lime = { implementSpec = "spec_sprayer", supplyFillTypeNames = { "LIME" },
+        modSupplyFillTypeNames = TheContractorJobGeneration.SOIL_FERTILIZER_PRODUCTS.lime, requiresLime = true,
         seasonRule = "noWinter", rewardPerHa = 3000, reputationPerHa = 5.1, skill = "cropCare",
         workAreaTypes = { "SPRAYER" } },
     -- 075: clearing a fly-tipped pile by hand. A piece pays what a bale

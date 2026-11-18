@@ -211,9 +211,8 @@ function TCEquipmentClass.isJobImplement(vehicle, jobDef, fruitTypeIndex)
         if fillUnitIndex == nil or vehicle.getFillUnitSupportsFillType == nil then
             return false
         end
-        for _, fillTypeName in ipairs(jobDef.supplyFillTypeNames) do
-            local fillTypeIndex = g_fillTypeManager:getFillTypeIndexByName(fillTypeName)
-            if fillTypeIndex ~= nil and vehicle:getFillUnitSupportsFillType(fillUnitIndex, fillTypeIndex) then
+        for _, fillTypeIndex in ipairs(TCJobSupplies.getProductFillTypes(jobDef)) do
+            if vehicle:getFillUnitSupportsFillType(fillUnitIndex, fillTypeIndex) then
                 return true
             end
         end

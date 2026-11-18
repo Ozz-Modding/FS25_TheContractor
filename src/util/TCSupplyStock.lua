@@ -5,10 +5,12 @@
 --
 -- The supplies are the ones TCJobSupplies actually draws, never a list of
 -- our own: diesel, the seed tank fill type and the seed of every sowing
--- machine the farm owns, every job type's products (JOB_TYPES'
--- supplyFillTypeNames), and whatever the farm's consumable holders (bale
+-- machine the farm owns, every job type's products (TCJobSupplies.
+-- getProductFillTypes), and whatever the farm's consumable holders (bale
 -- net, twine, wrap film) take. A supply the farm has none of still gets a
--- row.
+-- row, except another mod's product (TCJobSupplies.isModProduct -
+-- FS25_SoilFertilizer's twenty-odd fertilisers), which only shows while
+-- the farm has some or a job's held for it.
 --
 -- Amounts are counted the way TCJobSupplies.getFarmStock counts them
 -- (storages, then pallets). Capacity is only storage: for each of the
@@ -96,8 +98,8 @@ function TCSupplyStock.getSupplyFillTypes(farmId)
     end
     table.sort(jobTypeKeys)
     for _, key in ipairs(jobTypeKeys) do
-        for _, name in ipairs(TheContractorJobGeneration.JOB_TYPES[key].supplyFillTypeNames or {}) do
-            addFillType(list, seen, g_fillTypeManager:getFillTypeIndexByName(name))
+        for _, fillTypeIndex in ipairs(TCJobSupplies.getProductFillTypes(TheContractorJobGeneration.JOB_TYPES[key]) or {}) do
+            addFillType(list, seen, fillTypeIndex)
         end
     end
 
@@ -324,7 +326,10 @@ function TCSupplyStock.getSupplies(farmId)
 
     local supplies = {}
     for _, fillTypeIndex in ipairs(fillTypes) do
-        table.insert(supplies, buildSupply(farmId, fillTypeIndex, placeableByStorage, entriesByFillType[fillTypeIndex]))
+        local supply = buildSupply(farmId, fillTypeIndex, placeableByStorage, entriesByFillType[fillTypeIndex])
+        if supply.amount > 0 or #supply.heldJobs > 0 or not TCJobSupplies.isModProduct(fillTypeIndex) then
+            table.insert(supplies, supply)
+        end
     end
     return supplies
 end

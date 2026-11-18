@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8" standalone="no" ?>
 <modDesc descVersion="116">
     <author>Ozz</author>
-    <version>0.0.0.3</version>
+    <version>0.0.0.4</version>
     <iconFilename>icon_TheContractor.dds</iconFilename>
     <title>
         <en>The Contractor</en>
@@ -345,6 +345,10 @@ Credits:
                 <paragraph>
                     <title text="$l10n_tc_help_supplies_4_title"/>
                     <text text="$l10n_tc_help_supplies_4"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_supplies_5_title"/>
+                    <text text="$l10n_tc_help_supplies_5"/>
                 </paragraph>
             </page>
             <page title="$l10n_tc_help_logbook_title" iconSliceId="tcHelpIcons.logbook">

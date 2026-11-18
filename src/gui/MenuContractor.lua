@@ -3132,17 +3132,28 @@ function MenuContractor:getJobCrewText(job)
 end
 
 -- Supplies (032): the products a job would draw from the farm's stock
--- with this equipment, and whether the farm has any of them.
+-- with this equipment, and whether the farm has any of them. Another mod's
+-- product (TCJobSupplies.isModProduct) is only named when the farm has
+-- some, or the row would list twenty-odd of FS25_SoilFertilizer's.
 local function getSupplyStock(job, vehicles)
     local jobDef = TheContractorJobGeneration.JOB_TYPES[job.jobType]
     local farmId = g_currentMission:getFarmId()
-    local entries, anyInStock = {}, false
+    local entries, modEntries, anyInStock = {}, {}, false
     for _, fillTypeIndex in ipairs(TCJobSupplies.getRequiredFillTypes(jobDef, vehicles)) do
         local stock = TCJobSupplies.getFarmStock(farmId, fillTypeIndex)
-        table.insert(entries, { fillTypeIndex = fillTypeIndex, stock = stock })
+        local entry = { fillTypeIndex = fillTypeIndex, stock = stock }
+        if stock > 0 or not TCJobSupplies.isModProduct(fillTypeIndex) then
+            table.insert(entries, entry)
+        else
+            table.insert(modEntries, entry)
+        end
         if stock > 0 then
             anyInStock = true
         end
+    end
+    -- Equipment that only takes the other mod's products still names them.
+    if #entries == 0 then
+        entries = modEntries
     end
     return entries, anyInStock
 end

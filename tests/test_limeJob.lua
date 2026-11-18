@@ -129,6 +129,8 @@ test("done with a spreader that takes lime, not one that only takes fertilizer",
     local world = setup()
     world:addFillType("LIME", "Lime")
     world:load("src/util/TCEquipmentClass.lua")
+    TCJobProgress = { POLL_INTERVAL_MS = 3000 }
+    world:load("src/util/TCJobSupplies.lua")
     local function spreader(fillTypes)
         local supported = {}
         for _, fillTypeIndex in ipairs(fillTypes) do
@@ -142,6 +144,11 @@ test("done with a spreader that takes lime, not one that only takes fertilizer",
 
     assertTrue(TCEquipmentClass.isJobImplement(spreader({ FillType.FERTILIZER, FillType.LIME }), lime()))
     assertEquals(TCEquipmentClass.isJobImplement(spreader({ FillType.FERTILIZER }), lime()), false)
+
+    -- FS25_SoilFertilizer's liquid lime: a sprayer that takes it can lime.
+    local liquidLime = world:addFillType("LIQUIDLIME", "Liquid lime")
+    assertTrue(TCEquipmentClass.isJobImplement(spreader({ FillType.LIQUIDFERTILIZER, liquidLime }), lime()))
+    assertEquals(TCEquipmentClass.isJobImplement(spreader({ FillType.LIQUIDFERTILIZER }), lime()), false)
 end)
 
 test("measured by the ground limed to the full level", function()

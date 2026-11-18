@@ -11,7 +11,7 @@
 --             from: a seeder's seed hopper, or the separate seed tank
 --             (front hopper) feeding a seeder that has none of its own
 --             (TCEquipmentClass.isSeedTank), a sprayer's tank (taking one of
---             the job's products - JOB_TYPES' supplyFillTypeNames), and any
+--             the job's products - getProductFillTypes), and any
 --             consumable holder (Consumable spec - a baler's net/twine, a
 --             wrapper's film) on the job's implement. A hired worker's job
 --             also has each of its machines' diesel tanks (063) - see
@@ -96,15 +96,53 @@ local function getJobDef(job)
     return TheContractorJobGeneration.JOB_TYPES[job.jobType]
 end
 
-local function resolveFillTypeNames(names)
-    local result = {}
+local function resolveFillTypeNames(names, result, seen)
     for _, name in ipairs(names) do
         local fillTypeIndex = g_fillTypeManager:getFillTypeIndexByName(name)
-        if fillTypeIndex ~= nil then
+        if fillTypeIndex ~= nil and not seen[fillTypeIndex] then
+            seen[fillTypeIndex] = true
             table.insert(result, fillTypeIndex)
         end
     end
     return result
+end
+
+-- The fill types a job type's sprayer can do it with: its own products
+-- (JOB_TYPES' supplyFillTypeNames), then the ones other mods add
+-- (modSupplyFillTypeNames - FS25_SoilFertilizer's), skipping any the game
+-- doesn't know. nil for a job type with no products.
+function TCJobSupplies.getProductFillTypes(jobDef)
+    if jobDef == nil or jobDef.supplyFillTypeNames == nil then
+        return nil
+    end
+    local result, seen = {}, {}
+    resolveFillTypeNames(jobDef.supplyFillTypeNames, result, seen)
+    resolveFillTypeNames(jobDef.modSupplyFillTypeNames or {}, result, seen)
+    return result
+end
+
+-- Whether a fill type is only some job type's product from another mod
+-- (modSupplyFillTypeNames), never one of a job type's own: those are only
+-- named to the player when the farm has some.
+function TCJobSupplies.isModProduct(fillTypeIndex)
+    local name = g_fillTypeManager:getFillTypeNameByIndex(fillTypeIndex)
+    if name == nil then
+        return false
+    end
+    local isMod = false
+    for _, jobDef in pairs(TheContractorJobGeneration.JOB_TYPES) do
+        for _, own in ipairs(jobDef.supplyFillTypeNames or {}) do
+            if own == name then
+                return false
+            end
+        end
+        for _, other in ipairs(jobDef.modSupplyFillTypeNames or {}) do
+            if other == name then
+                isMod = true
+            end
+        end
+    end
+    return isMod
 end
 
 -- The job's product fill types this fill unit takes.
@@ -186,8 +224,7 @@ function TCJobSupplies.getTanks(jobDef, vehicles)
         return tanks
     end
 
-    local productFillTypes = jobDef.supplyFillTypeNames ~= nil and resolveFillTypeNames(jobDef.supplyFillTypeNames) or
-        nil
+    local productFillTypes = TCJobSupplies.getProductFillTypes(jobDef)
 
     for _, vehicle in ipairs(vehicles) do
         -- A separate seed tank (front hopper) feeding a seeder with no

@@ -1840,6 +1840,8 @@
 		<text name="tc_help_supplies_3" text="Supplies shows every supply your jobs draw on: what's in stock, in storage and on pallets, how much room you have, and which jobs are waiting for it."/>
 		<text name="tc_help_supplies_4_title" text="Advanced Damage System"/>
 		<text name="tc_help_supplies_4" text="With Advanced Damage System, Supplies also lists its oils, coolant, grease and parts packs, and your spare parts."/>
+		<text name="tc_help_supplies_5_title" text="Soil &amp; Fertilizer"/>
+		<text name="tc_help_supplies_5" text="With Realistic Farming's Soil &amp; Fertilizer, fertilising jobs can also use its fertilisers (UAN, urea, ammonium nitrate, compost and the rest) and lime jobs its liquid lime. They're listed in Supplies whenever you have some in stock. Its insecticides, fungicides and gypsum aren't used: they don't do the work these jobs are for."/>
 		<text name="tc_help_logbook_title" text="The Logbook"/>
 		<text name="tc_help_logbook_1" text="The Logbook keeps the business's records. Jobs lists every completed and failed job; Vehicles lists every machine and what it's been doing."/>
 		<text name="tc_help_logbook_2_title" text="A job's log"/>
