@@ -95,6 +95,9 @@ TheContractorRelationships.DECLINE_REASON = {
     DECLINED = "declined",
     LAPSED = "lapsed",
     WALKED_AWAY = "walkedAway",
+    -- A player farm bought the field: the farmer can't want the work any
+    -- more, and nobody's to blame (Jobs:endJobsOnBoughtField).
+    LAND_SOLD = "landSold",
 }
 
 -- The bands shown on the chip, highest first: the first whose minScore the
@@ -262,6 +265,9 @@ end
 -- Server, from Jobs:onJobDeclined. reason: a DECLINE_REASON (nil: declined).
 function TheContractorRelationships:onJobDeclined(job, reason)
     local T = TheContractorRelationships
+    if reason == T.DECLINE_REASON.LAND_SOLD then
+        return
+    end
     local loss = T.DECLINED_LOSS
     if reason == T.DECLINE_REASON.LAPSED then
         loss = T.LAPSED_LOSS

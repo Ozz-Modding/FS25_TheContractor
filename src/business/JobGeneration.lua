@@ -951,16 +951,15 @@ function TheContractorJobGeneration:rollRequiredSkillLevel(farmId)
     return math.random(minLevel, maxLevel)
 end
 
--- Candidates are fields the farm *doesn't* own — this is a contracting
--- business, the whole point is getting hired to work land that isn't
--- yours, not your own fields — that qualify for the job type right now
--- (isFieldEligible). That's deliberately not narrowed to "owned by some
--- other farm": vanilla's own field contract missions only ever target
--- unowned farmland (see Reference/FS25_Lua/missions/field/
--- AbstractFieldMission.lua's validate(), `not self.field:getHasOwner()`),
--- and in a typical save that's the *only* non-player-owned land that
--- exists — excluding it too (as an earlier version of this method did)
--- meant zero eligible fields and no jobs ever generated. Picked fresh each
+-- Candidates are fields nobody owns (an NPC's, a farmer's from 110) that
+-- qualify for the job type right now (isFieldEligible): this is a
+-- contracting business, hired to work the farmers' land, as vanilla's own
+-- field contracts only ever target unowned farmland (Reference/FS25_Lua/
+-- missions/field/AbstractFieldMission.lua's validate(),
+-- `not self.field:getHasOwner()`). Never the farm's own fields, and never
+-- another player farm's in multiplayer: its customer would be nobody (the
+-- official stands in) and the job would be work on a friend's land they
+-- never asked for. Picked fresh each
 -- roll against live field state, not cached, so it can't go stale between
 -- rolls. A field with a live job on it (any farm's, offers included) is
 -- left out: the job freezes vanilla's NPC fieldwork there (034), so the
@@ -986,7 +985,7 @@ function TheContractorJobGeneration:getCandidateFields(farmId, jobDef)
     local tc = g_currentMission.TheContractor
     local jobs = tc.Jobs
     for _, field in ipairs(g_fieldManager:getFields()) do
-        if field:getOwner() ~= farmId and not jobs:isFieldProtected(field:getId()) and
+        if field:getOwner() == FarmlandManager.NO_OWNER_FARM_ID and not jobs:isFieldProtected(field:getId()) and
             TheContractorJobGeneration.isFieldEligible(field, jobDef) and
             not tc.Relationships:refuses(farmId, tc.Farmers:getCustomerIdForField(field:getId())) then
             table.insert(candidates, field)

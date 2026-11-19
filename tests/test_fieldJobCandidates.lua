@@ -104,12 +104,13 @@ test("a field whose job has ended is a candidate again", function()
     assertEquals(candidateIds(), "1,2,3")
 end)
 
-test("the farm's own fields are still left out", function()
+test("only fields nobody owns are candidates: never the farm's own or another player's", function()
     local world = setup()
-    world:addField(1, 1)
-    world:addField(2, 2)
+    world:addField(1, 1)   -- ours
+    world:addField(2, 2)   -- another player farm's (MP)
+    world:addField(3)      -- a farmer's
 
-    assertEquals(candidateIds(), "2")
+    assertEquals(candidateIds(), "3")
 end)
 
 -- Vanilla only re-reads a field's cached state once a period (or when its
