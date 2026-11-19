@@ -11,11 +11,23 @@ local function setup()
     world:load("src/business/Farmers.lua")
     world:load("src/business/FarmerFleet.lua")
 
-    -- The store: { xml, category, specs, combinations (xmls or { category }) }.
+    -- The store: { xml, category, specs, combinations (xmls or { category }),
+    -- jointTypes }. A model's file holds only its input attacher joints:
+    -- jointTypes, or a tractor's drawbar for anything with a trailer.
     world.items = {}
-    function world:addItem(xml, category, specs, combinations)
+    world.xmlFiles = {}
+    loadXMLFile = function(_, filename) return world.xmlFiles[filename] end
+    delete = function() end
+    function world:addItem(xml, category, specs, combinations, jointTypes)
         local item = { xmlFilename = xml, categoryName = category, categoryNames = { category }, name = xml,
             specs = { combinations = {} }, specializations = specs }
+        jointTypes = jointTypes or (specs ~= nil and specs.trailer ~= nil and { "trailer" }) or {}
+        local file = {}
+        for i, jointType in ipairs(jointTypes) do
+            file[string.format("vehicle.attachable.inputAttacherJoints.inputAttacherJoint(%d)#jointType", i - 1)] =
+                jointType
+        end
+        self.xmlFiles[xml] = file
         for _, combination in ipairs(combinations or {}) do
             if type(combination) == "table" then
                 table.insert(item.specs.combinations, { filterCategories = combination })
@@ -279,6 +291,35 @@ test("125: a machine that's out, or one the store hasn't got, is left until next
     TheContractorFarmerFleet.getMachine(farmer, 3).xmlFilename = "modGrab.xml"
     assertEquals(TheContractorFarmerFleet.enforceManifest(farmer, catalog, always(0.5)), 0)
     assertEquals(TheContractorFarmerFleet.getMachine(farmer, 3).xmlFilename, "modGrab.xml")
+end)
+
+test("125: a farmer's trailer is one a tractor can tow, never a hooklift container or a semitrailer", function()
+    local world = setup()
+    world:addItem("tipper.xml", "TRAILERS", { trailer = true })
+    world:addItem("lowTipper.xml", "TRAILERS", { trailer = true }, nil, { "trailerLow" })
+    world:addItem("container.xml", "TRAILERS", { trailer = true }, nil, { "hookLift" })
+    world:addItem("semi.xml", "TRAILERS", { trailer = true }, nil, { "semitrailer" })
+    world:addItem("either.xml", "TRAILERS", { trailer = true }, nil, { "hookLift", "trailer" })
+    local catalog = TheContractorFarmerFleet.buildCatalog()
+    local found = {}
+    for _, model in ipairs(catalog.byRole.trailer) do
+        table.insert(found, model.xmlFilename)
+    end
+    assertEquals(table.concat(found, ","), "either.xml,lowTipper.xml,tipper.xml")
+    -- A model whose file can't be read never meets it.
+    assertTrue(not TheContractorFarmerFleet.meetsManifest("trailer", "missing.xml", { trailer = true }))
+end)
+
+test("125: a farmer's container from before becomes a towable trailer under the same id", function()
+    local world = setup()
+    world:addItem("tipper.xml", "TRAILERS", { trailer = true })
+    world:addItem("container.xml", "TRAILERS", { trailer = true }, nil, { "hookLift" })
+    local catalog = TheContractorFarmerFleet.buildCatalog()
+    local farmer = world:addFarmer(1, 40, 77, {
+        { id = 4, role = "trailer", xmlFilename = "container.xml", seed = 9, fitted = {} },
+    })
+    assertEquals(TheContractorFarmerFleet.enforceManifest(farmer, catalog, always(0.5)), 1)
+    assertEquals(TheContractorFarmerFleet.getMachine(farmer, 4).xmlFilename, "tipper.xml")
 end)
 
 -- The recipe ---------------------------------------------------------------------------------
