@@ -328,18 +328,72 @@ TheContractorFarmerFleet.REQUIREMENT = {
     -- A spike takes any bale (124's yard job needs one). A bale grab, the
     -- other kind, often takes only round bales.
     SPIKE = "spike",
+    -- A tractor can tow it: a hooklift container or a semitrailer is a
+    -- trailer too, but needs a truck the player may not have.
+    TOWABLE = "towable",
 }
 local REQUIREMENT = TheContractorFarmerFleet.REQUIREMENT
 
 TheContractorFarmerFleet.MANIFEST = {
     [ROLE.BALE_FORK] = { REQUIREMENT.SPIKE },
+    [ROLE.TRAILER] = { REQUIREMENT.TOWABLE },
 }
+
+-- The joint types a tractor's hitch takes (vanilla's AttacherJoints names).
+TheContractorFarmerFleet.TOW_JOINT_TYPES = { trailer = true, trailerLow = true }
+
+local jointTypesCache = {}
+
+-- The joint types (a set of names) a model attaches by as it's bought: its
+-- own input attacher joints and its first input attacher configuration's.
+-- Read from the model's file, once per session; nil if it can't be read.
+function TheContractorFarmerFleet.getInputJointTypes(xmlFilename)
+    if xmlFilename == nil then
+        return nil
+    end
+    if jointTypesCache[xmlFilename] ~= nil then
+        return jointTypesCache[xmlFilename] or nil
+    end
+    local xmlFile = loadXMLFile ~= nil and loadXMLFile("tcFleetModel", xmlFilename) or nil
+    if xmlFile == nil or xmlFile == 0 then
+        jointTypesCache[xmlFilename] = false
+        return nil
+    end
+    local jointTypes = {}
+    local function readJoints(baseKey)
+        local i = 0
+        while true do
+            local key = string.format("%s.inputAttacherJoint(%d)", baseKey, i)
+            if not hasXMLProperty(xmlFile, key) then
+                break
+            end
+            local jointType = getXMLString(xmlFile, key .. "#jointType")
+            if jointType ~= nil then
+                jointTypes[jointType] = true
+            end
+            i = i + 1
+        end
+    end
+    readJoints("vehicle.attachable.inputAttacherJoints")
+    readJoints("vehicle.attachable.inputAttacherJointConfigurations.inputAttacherJointConfiguration(0)")
+    delete(xmlFile)
+    jointTypesCache[xmlFilename] = jointTypes
+    return jointTypes
+end
 
 -- Whether a model meets one requirement: (xmlFilename, specs).
 TheContractorFarmerFleet.REQUIREMENT_CHECKS = {
     [REQUIREMENT.SPIKE] = function(xmlFilename, specs)
         return specs.dynamicMountAttacher ~= nil and specs.baleGrab == nil and specs.shovel == nil and
             specs.logGrab == nil and string.find(string.lower(xmlFilename or ""), "bale", 1, true) ~= nil
+    end,
+    [REQUIREMENT.TOWABLE] = function(xmlFilename, specs)
+        for jointType in pairs(TheContractorFarmerFleet.getInputJointTypes(xmlFilename) or {}) do
+            if TheContractorFarmerFleet.TOW_JOINT_TYPES[jointType] then
+                return true
+            end
+        end
+        return false
     end,
 }
 
@@ -480,6 +534,7 @@ end
 -- Every load (the store can change between sessions).
 function TheContractorFarmerFleet.clearCatalog()
     catalogCache = nil
+    jointTypesCache = {}
 end
 
 local function pickFrom(list, random)
