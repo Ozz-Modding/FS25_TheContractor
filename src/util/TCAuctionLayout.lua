@@ -37,6 +37,7 @@ TCAuctionLayout.LAYOUT = {
     entranceSpace = 30,   -- the car park and food area, at the entrance end
     endAisle = 8,         -- the cross aisle at the far end
     pointSpacing = 8,     -- between an aisle polyline's points
+    openLaneSpacing = 30, -- 163: between the walking lanes of a site with no lots
 }
 
 -- A field that can hold a sale (rankCandidates).
@@ -330,6 +331,64 @@ function TCAuctionLayout.layOut(polygon, entrance, lots, options)
         uTo = reserveTo, vFrom = reserveV1, vTo = reserveV2 }
     result.nearEdge, result.farEdge = nearEdge, farEdge
     result.aisleWidth, result.endAisle = layout.aisleWidth, layout.endAisle
+    return result
+end
+
+-- 163: a site with no lots (pure), for a day out that isn't a sale: the
+-- same frame as layOut's (the largest rectangle, the entrance space at the
+-- entrance's end, a cross aisle at the far end), with walking lanes along
+-- the rectangle in place of the rows' aisles, openLaneSpacing apart and
+-- centred across it, so the crowd has somewhere to walk. Returns layOut's
+-- shape with no rows and nothing placed, or nil when the polygon holds no
+-- rectangle.
+function TCAuctionLayout.layOutOpen(polygon, entrance, options)
+    local layout = copyLayout(options)
+    local rect = TCAuctionCrowd.findLargestRect(polygon, layout)
+    if rect == nil then
+        return nil
+    end
+    local nearSign = -1
+    if entrance ~= nil then
+        local eu = TCAuctionLayout.toLocal(rect, entrance.x, entrance.z)
+        nearSign = eu >= 0 and 1 or -1
+    end
+    local halfU, halfV = rect.halfU, rect.halfV
+    local nearEdge = nearSign * (halfU - layout.entranceSpace)
+    local farEdge = -nearSign * (halfU - layout.endAisle)
+    local result = {
+        rect = rect,
+        placed = {},
+        placedCount = 0,
+        unplaced = {},
+        rows = {},
+        aisles = {},
+        aisleStrips = {},
+        walkways = {},
+        nearSign = nearSign,
+        lotsFrom = math.min(nearEdge, farEdge),
+        lotsTo = math.max(nearEdge, farEdge),
+        nearEdge = nearEdge,
+        farEdge = farEdge,
+        aisleWidth = layout.aisleWidth,
+        endAisle = layout.endAisle,
+    }
+    -- The lanes, each a full aisle wide, kept inside the rectangle.
+    local usable = 2 * halfV - layout.aisleWidth
+    local count = usable >= 0 and math.floor(usable / layout.openLaneSpacing) + 1 or 0
+    local first = -(count - 1) * layout.openLaneSpacing * 0.5
+    local aisleEnd = farEdge - nearSign * layout.endAisle * 0.5
+    for i = 1, count do
+        local v = first + (i - 1) * layout.openLaneSpacing
+        table.insert(result.aisleStrips, { vFrom = v - layout.aisleWidth * 0.5, vTo = v + layout.aisleWidth * 0.5 })
+        table.insert(result.aisles, { points = polyline(rect, nearEdge, v, aisleEnd, v, layout.pointSpacing) })
+        local x1, z1 = toWorld(rect, nearEdge, v)
+        local x2, z2 = toWorld(rect, aisleEnd, v)
+        table.insert(result.walkways, { x1 = x1, z1 = z1, x2 = x2, z2 = z2, halfWidth = layout.aisleWidth * 0.5 })
+    end
+    local reserveFrom = nearSign > 0 and halfU - layout.entranceSpace or -halfU
+    local reserveTo = nearSign > 0 and halfU or -halfU + layout.entranceSpace
+    result.reserve = { corners = boxCorners(rect, reserveFrom, -halfV, reserveTo, halfV), uFrom = reserveFrom,
+        uTo = reserveTo, vFrom = -halfV, vTo = halfV }
     return result
 end
 

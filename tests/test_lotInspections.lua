@@ -58,6 +58,7 @@ local function setup()
     world:load("src/util/TCAuctionAttendance.lua")
     world:load("src/util/TCADSUsedLots.lua")
     world:load("src/util/TCLotInspections.lua")
+    world:load("src/business/EventDay.lua")
     world:load("src/business/Auctions.lua")
     world:load("src/events/TCJobCreatedEvent.lua")
     world:load("src/events/TCJobStateChangedEvent.lua")
@@ -185,11 +186,11 @@ local function setup()
     tc.AuctionSigns = { month = 0, signs = {} }
 
     tc.Auctions = TheContractorAuctions.new()
-    tc.Auctions.auction = {
-        id = 4, fieldId = SALE_FIELD, hostFarmerId = HOST_ID, announcedDay = 1, signsDay = 1, saleDay = 25,
+    tc.Auctions.event = {
+        id = 4, fieldId = SALE_FIELD, hostFarmerId = HOST_ID, announcedDay = 1, signsDay = 1, day = 25,
         state = TheContractorAuctions.STATE.SET_OUT,
     }
-    world.auction = tc.Auctions.auction
+    world.auction = tc.Auctions.event
     return world, tc
 end
 

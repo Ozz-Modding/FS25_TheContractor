@@ -84,6 +84,7 @@ source(TheContractor.dir .. "src/util/TCAuctionLayout.lua")
 source(TheContractor.dir .. "src/util/TCAuctionScene.lua")
 source(TheContractor.dir .. "src/util/TCAuctionProps.lua")
 source(TheContractor.dir .. "src/util/TCAuctionSigns.lua")
+source(TheContractor.dir .. "src/util/TCShowSite.lua")
 source(TheContractor.dir .. "src/util/TCAuctionAttendance.lua")
 source(TheContractor.dir .. "src/util/TCLotInspections.lua")
 source(TheContractor.dir .. "src/util/TCAuctionLotHud.lua")
@@ -169,7 +170,11 @@ source(TheContractor.dir .. "src/business/EmergencyRefuel.lua")
 source(TheContractor.dir .. "src/business/FarmerLandChanges.lua")
 source(TheContractor.dir .. "src/business/AuctionSite.lua")
 source(TheContractor.dir .. "src/business/AuctionSigns.lua")
+source(TheContractor.dir .. "src/business/PublicEvents.lua")
+source(TheContractor.dir .. "src/business/EventDay.lua")
 source(TheContractor.dir .. "src/business/Auctions.lua")
+source(TheContractor.dir .. "src/business/OpenDay.lua")
+source(TheContractor.dir .. "src/business/ShowSite.lua")
 source(TheContractor.dir .. "src/business/AuctionSale.lua")
 source(TheContractor.dir .. "src/events/TCInitialClientStateEvent.lua")
 source(TheContractor.dir .. "src/events/TCSettingsEvent.lua")
@@ -276,6 +281,7 @@ source(TheContractor.dir .. "src/events/TCAuctionSignsEvent.lua")
 source(TheContractor.dir .. "src/events/TCAuctionBidEvent.lua")
 source(TheContractor.dir .. "src/events/TCAuctionBidsEvent.lua")
 source(TheContractor.dir .. "src/events/TCAuctionEvent.lua")
+source(TheContractor.dir .. "src/events/TCEventDayEvent.lua")
 
 -- The top-level Contractor page itself stays always-visible (see Company.lua
 -- and MenuContractor's Overview tab): "Create Company" has to live somewhere
@@ -415,9 +421,18 @@ function TheContractor:loadMap()
     self.AuctionSite = TheContractorAuctionSite.new()
     -- 136: its roadside signs (spike).
     self.AuctionSigns = TheContractorAuctionSigns.new()
+    -- 163: the public days out, one at a time whatever the kind.
+    self.PublicEvents = TheContractorPublicEvents.new()
     -- 137: the machinery auction, server-wide.
     self.Auctions = TheContractorAuctions.new()
     self.Auctions:register(self.Inbox)
+    self.PublicEvents:registerKind(self.Auctions)
+    -- 163: the open day, a day out with no lots (tcDebug only).
+    self.OpenDay = TheContractorOpenDay.new()
+    self.OpenDay:register(self.Inbox)
+    self.PublicEvents:registerKind(self.OpenDay)
+    -- 164: the show's site, a showground and ploughing plots (spike).
+    self.ShowSite = TheContractorShowSite.new()
     -- 139: bids and the sale.
     self.AuctionSale = TheContractorAuctionSale.new()
     self.AuctionSale:register(self.Inbox)
@@ -549,6 +564,7 @@ function TheContractor:loadMap()
     TCFarmerYardSpots.startListening()
     -- 137: the auction's schedule and days (server).
     self.Auctions:startListening()
+    self.OpenDay:startListening()
     self.AuctionSale:startListening()
     -- 113: relationships drift back towards neutral (server).
     self.Relationships:startPeriodTick()
@@ -582,6 +598,8 @@ function TheContractor:loadMap()
     TheContractorAuctionSite.registerConsoleCommands()
     TheContractorAuctionSigns.registerConsoleCommands()
     TheContractorAuctions.registerConsoleCommands()
+    TheContractorOpenDay.registerConsoleCommands()
+    TheContractorShowSite.registerConsoleCommands()
     TCLotInspections.registerConsoleCommands()
     TheContractorRepairContracts.registerConsoleCommands()
     TheContractorYards.registerConsoleCommands()
@@ -652,6 +670,8 @@ function TheContractor:loadFromXMLFile()
     self.AuctionSite:loadFromXMLFile(xmlFile)
     self.AuctionSigns:loadFromXMLFile(xmlFile)
     self.Auctions:loadFromXMLFile(xmlFile)
+    self.OpenDay:loadFromXMLFile(xmlFile)
+    self.ShowSite:loadFromXMLFile(xmlFile)
     self.AuctionSale:loadFromXMLFile(xmlFile)
     TCCalendarChange.loadFromXMLFile(xmlFile)
 
@@ -745,6 +765,8 @@ function TheContractor:saveToXmlFile()
     tc.AuctionSite:saveToXmlFile(xmlFile)
     tc.AuctionSigns:saveToXmlFile(xmlFile)
     tc.Auctions:saveToXmlFile(xmlFile)
+    tc.OpenDay:saveToXmlFile(xmlFile)
+    tc.ShowSite:saveToXmlFile(xmlFile)
     tc.AuctionSale:saveToXmlFile(xmlFile)
     TCCalendarChange.saveToXmlFile(xmlFile)
 
@@ -916,6 +938,10 @@ function TheContractor:deleteMap()
         self.Auctions:stopListening()
         self.Auctions:delete()
     end
+    if self.OpenDay ~= nil then
+        self.OpenDay:stopListening()
+        self.OpenDay:delete()
+    end
     -- 126: trailer models read for this session.
     if TheContractorYardHaul ~= nil then
         TheContractorYardHaul.clearSpecCache()
@@ -1046,6 +1072,9 @@ function TheContractor:update(dt)
     if self.Auctions ~= nil then
         self.Auctions:update(dt)
     end
+    if self.OpenDay ~= nil then
+        self.OpenDay:update(dt)
+    end
 
     if self.Drivers ~= nil then
         self.Drivers:update(dt)
@@ -1092,6 +1121,10 @@ function TheContractor:draw()
     -- 135: an auction site's layout, as debug lines (the server's own).
     if self.AuctionSite ~= nil then
         self.AuctionSite:draw()
+    end
+    -- 164: the show site's plan, while the console's drawing it.
+    if self.ShowSite ~= nil then
+        self.ShowSite:draw()
     end
     -- 151: tcDebug protestShow's block outlines.
     TCProtestCrowd.draw()

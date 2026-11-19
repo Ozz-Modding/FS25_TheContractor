@@ -1266,9 +1266,10 @@ function TheContractorJobs:isFieldProtected(fieldId)
     if auctionSite ~= nil and auctionSite:isFieldInUse(fieldId) then
         return true
     end
-    -- 137: and an auction's, from its announcement until it's over.
-    local auctions = tc ~= nil and tc.Auctions or nil
-    if auctions ~= nil and auctions:isFieldInUse(fieldId) then
+    -- 137: and an auction's (163: any day out's), from its announcement
+    -- until it's over.
+    local publicEvents = tc ~= nil and tc.PublicEvents or nil
+    if publicEvents ~= nil and publicEvents:isFieldInUse(fieldId) then
         return true
     end
     return self:hasLiveJob(fieldId)

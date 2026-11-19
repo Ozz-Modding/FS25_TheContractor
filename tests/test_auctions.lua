@@ -30,6 +30,8 @@ local function setup(daysPerPeriod)
     world:load("src/util/TCAuctionAttendance.lua")
     world:load("src/util/TCADSUsedLots.lua")
     world:load("src/util/TCLotInspections.lua")
+    world:load("src/business/PublicEvents.lua")
+    world:load("src/business/EventDay.lua")
     world:load("src/business/Auctions.lua")
     world:load("src/events/TCAuctionEvent.lua")
 
@@ -147,6 +149,9 @@ local function setup(daysPerPeriod)
     local auctions = TheContractorAuctions.new()
     auctions:register(tc.Inbox)
     tc.Auctions = auctions
+    -- 163: the auction's one kind of day out among others.
+    tc.PublicEvents = TheContractorPublicEvents.new()
+    tc.PublicEvents:registerKind(auctions)
     world.auctions = auctions
     return world
 end
@@ -214,12 +219,12 @@ test("over many years: about one a year, sometimes two, one at a time, every sal
             assertEquals(before, nil, "never two at a time")
             announced = announced + 1
             lastId = auction.id
-            local periodIndex = TCCalendar.getDayInfo(auction.saleDay)
+            local periodIndex = TCCalendar.getDayInfo(auction.day)
             local period = (periodIndex - 1) % 12 + 1
             assertTrue(TheContractorAuctions.SALE_PERIODS[period], "sale in period " .. period)
             local months = periodIndex - TCCalendar.getPeriodIndex()
             assertTrue(months >= 2 and months <= 4, "announced " .. months .. " months ahead")
-            local year = math.floor((auction.saleDay - 1) / 12) + 1
+            local year = math.floor((auction.day - 1) / 12) + 1
             salesInYear[year] = (salesInYear[year] or 0) + 1
         end
     end
@@ -251,7 +256,7 @@ test("an auction ending or called off starts the wait again, and the wait's save
     world:addField(5, 7)
     world.candidates = { { fieldId = 5, problems = {} } }
     world.auctions:consoleStart(5, 2)
-    local saleDay = world.auctions:getAuction().saleDay
+    local saleDay = world.auctions:getAuction().day
     -- The sale day, then over at its midnight.
     for _ = 1, 3 do
         nextDay(world)
@@ -323,7 +328,7 @@ test("the console's field must be free of any live job and held by a farmer", fu
     local auction = world.auctions:getAuction()
     assertEquals(auction.fieldId, 5)
     assertEquals(auction.hostFarmerId, 7)
-    assertEquals(auction.saleDay, 21)
+    assertEquals(auction.day, 21)
     assertEquals(auction.entrance.x, 5)
 end)
 
@@ -350,7 +355,7 @@ end)
 test("the state by day and hour", function()
     setup()
     local A = TheContractorAuctions
-    local auction = { signsDay = 20, saleDay = 30 }
+    local auction = { signsDay = 20, day = 30 }
     assertEquals(A.getStateFor(auction, 19, 12), A.STATE.ANNOUNCED)
     assertEquals(A.getStateFor(auction, 20, 0), A.STATE.SIGNS_UP)
     assertEquals(A.getStateFor(auction, 30, 0), A.STATE.SET_OUT)
@@ -445,7 +450,7 @@ test("the console's sale day puts the lots out now", function()
     g_currentMission.environment.currentHour = TheContractorAuctions.SALE_HOUR - 1
     world.auctions:consoleSaleDay()
     local auction = world.auctions:getAuction()
-    assertEquals(auction.saleDay, 1)
+    assertEquals(auction.day, 1)
     assertEquals(auction.state, TheContractorAuctions.STATE.SET_OUT)
     assertEquals(#world.siteStarts, 1)
     assertEquals(#world.signMonths, 1, "the signs went up on the way")
@@ -646,7 +651,7 @@ test("the auction survives a save and load at any state, and a joining client ge
     local loaded = TheContractorAuctions.new()
     loaded:loadFromXMLFile(xmlFile)
     local copy = loaded:getAuction()
-    for _, key in ipairs({ "id", "fieldId", "hostFarmerId", "announcedDay", "signsDay", "reminderDay", "saleDay",
+    for _, key in ipairs({ "id", "fieldId", "hostFarmerId", "announcedDay", "signsDay", "reminderDay", "day",
             "state" }) do
         assertEquals(copy[key], auction[key], key)
     end
@@ -658,7 +663,7 @@ test("the auction survives a save and load at any state, and a joining client ge
     loaded:writeInitialClientState(stream)
     local client = TheContractorAuctions.new()
     client:readInitialClientState(stream)
-    for _, key in ipairs({ "id", "fieldId", "hostFarmerId", "signsDay", "reminderDay", "saleDay", "state" }) do
+    for _, key in ipairs({ "id", "fieldId", "hostFarmerId", "signsDay", "reminderDay", "day", "state" }) do
         assertEquals(client:getAuction()[key], auction[key], key)
     end
     assertEquals(client:getAuction().entrance.z, 6)
@@ -709,7 +714,7 @@ test("161: a days-per-month change keeps the sale's date, plans its signs again 
     tc.Jobs = { jobsByFarm = {} }
     -- March 1 at a day a month: a sale in July, day 5.
     local auction = world.auctions:announce({ fieldId = 5, hostId = 7 }, 5)
-    assertEquals(auction.saleDay, 5)
+    assertEquals(auction.day, 5)
     assertEquals(getMessages(1)[1].args[1], "$days_5_5")
     world.events = {}
 
@@ -720,7 +725,7 @@ test("161: a days-per-month change keeps the sale's date, plans its signs again 
     world.auctions:remapDates(before, after)
 
     auction = world.auctions:getAuction()
-    assertEquals(auction.saleDay, 6)
+    assertEquals(auction.day, 6)
     local signsDay, reminderDay = TheContractorAuctions.planDays(1, 6, 2)
     -- Signs went up on the day it was announced: they stay up.
     assertEquals(auction.signsDay, math.min(signsDay, 1))
@@ -734,8 +739,8 @@ test("161: once the lots are out, or on the sale day, the sale stays put", funct
     local after = { day = 10, periodIndex = 1, dayInPeriod = 1, daysPerPeriod = 1, plannedDaysPerPeriod = 2 }
     setup(1)
     local A = TheContractorAuctions
-    assertEquals(A.getMovedSaleDay({ saleDay = 14, state = A.STATE.ANNOUNCED }, before, after, 10), 15)
-    assertEquals(A.getMovedSaleDay({ saleDay = 14, state = A.STATE.SET_OUT }, before, after, 10), nil)
-    assertEquals(A.getMovedSaleDay({ saleDay = 10, state = A.STATE.SIGNS_UP }, before, after, 10), nil)
+    assertEquals(A.getMovedSaleDay({ day = 14, state = A.STATE.ANNOUNCED }, before, after, 10), 15)
+    assertEquals(A.getMovedSaleDay({ day = 14, state = A.STATE.SET_OUT }, before, after, 10), nil)
+    assertEquals(A.getMovedSaleDay({ day = 10, state = A.STATE.SIGNS_UP }, before, after, 10), nil)
     assertEquals(A.getMovedSaleDay(nil, before, after, 10), nil)
 end)

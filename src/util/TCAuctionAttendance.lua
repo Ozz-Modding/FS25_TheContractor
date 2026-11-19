@@ -59,16 +59,16 @@ function TCAuctionAttendance.isDue(auction, today, hour)
     if auction == nil then
         return false
     end
-    if today > auction.saleDay or (today == auction.saleDay and hour >= TheContractorAuctions.SALE_END_HOUR) then
+    if today > auction.day or (today == auction.day and hour >= TheContractorAuctions.SALE_END_HOUR) then
         return false
     end
-    local salePeriodIndex = TCCalendar.getDayInfo(auction.saleDay)
+    local salePeriodIndex = TCCalendar.getDayInfo(auction.day)
     return TCCalendar.getDayInfo(today) >= salePeriodIndex
 end
 
 -- Whether it's sale hours on the sale day: when turning up counts.
 function TCAuctionAttendance.isSaleHours(auction, today, hour)
-    return auction ~= nil and today == auction.saleDay and hour >= TheContractorAuctions.SALE_HOUR and
+    return auction ~= nil and today == auction.day and hour >= TheContractorAuctions.SALE_HOUR and
         hour <= TheContractorAuctions.SALE_END_HOUR
 end
 
@@ -88,16 +88,16 @@ function TCAuctionAttendance.createJobFor(farmId, auction)
             TCAuctionAttendance.getJob(farmId, auction.id) ~= nil then
         return nil
     end
-    local periodIndex, dayInPeriod = TCCalendar.getDayInfo(auction.saleDay)
+    local periodIndex, dayInPeriod = TCCalendar.getDayInfo(auction.day)
     local period = (periodIndex - 1) % Environment.PERIODS_IN_YEAR + 1
     local job = tc.Jobs:createJob(farmId, TCAuctionAttendance.JOB_TYPE, auction.fieldId, 1, period, dayInPeriod, 0,
-        true, nil, auction.saleDay, false, nil, nil, nil, nil, nil, nil, nil, auction.saleDay, auction.id)
+        true, nil, auction.day, false, nil, nil, nil, nil, nil, nil, nil, auction.day, auction.id)
     if job == nil then
         return nil
     end
     tc.Jobs:transitionJobState(farmId, job.id, TheContractorJob.STATE.ACCEPTED)
     TCLog.info("TheContractor: farm %d job %d: attend auction %d on field %d, day %d", farmId, job.id, auction.id,
-        auction.fieldId, auction.saleDay)
+        auction.fieldId, auction.day)
     return job
 end
 

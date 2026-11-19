@@ -235,7 +235,7 @@ function TCLotInspections.offer(farmId, farmer, lot, vehicle, auction)
     local today = environment.currentMonotonicDay
     local job = tc.Jobs:createJob(farmId, TCLotInspections.JOB_TYPE, auction.fieldId, 1,
         environment:getPeriodFromDay(today), environment:getDayInPeriodFromDay(today), price, true, nil,
-        auction.saleDay, false, nil, nil, nil, nil, nil, nil, nil, nil, nil, inspection)
+        auction.day, false, nil, nil, nil, nil, nil, nil, nil, nil, nil, inspection)
     if job == nil then
         return nil
     end
@@ -319,7 +319,7 @@ end
 -- start closing and they haven't been made. Tried again later if the lots
 -- aren't out yet.
 function TCLotInspections.offerIfDue(auction, today, hour)
-    if auction.inspectionsOffered or today ~= auction.saleDay or hour < TCLotInspections.OFFER_HOUR or
+    if auction.inspectionsOffered or today ~= auction.day or hour < TCLotInspections.OFFER_HOUR or
             hour >= TheContractorAuctionSite.CLOSE_HOURS[1] then
         return
     end

@@ -754,3 +754,48 @@ test("lots are numbered as they're walked: row by row, each row from the entranc
         assertTrue(lastRow > 1, "more than one row to walk")
     end
 end)
+
+-- 163: a site with no lots ---------------------------------------------------------------------
+
+test("163: an open site has walking lanes along it, inside the rectangle, apart, and nothing placed", function()
+    setup()
+    local layout = TCAuctionLayout.layOutOpen(rectPolygon(0, 0, 300, 160), { x = 320, z = 80 })
+    local rect = layout.rect
+    assertEquals(#layout.rows, 0)
+    assertEquals(layout.placedCount, 0)
+    assertTrue(#layout.walkways >= 3, "lanes across a wide field")
+    assertEquals(#layout.walkways, #layout.aisleStrips)
+    local spacing = TCAuctionLayout.LAYOUT.openLaneSpacing
+    for i, walkway in ipairs(layout.walkways) do
+        for _, point in ipairs({ { walkway.x1, walkway.z1 }, { walkway.x2, walkway.z2 } }) do
+            local u, v = TCAuctionLayout.toLocal(rect, point[1], point[2])
+            assertTrue(math.abs(u) <= rect.halfU + 0.01, "lane " .. i .. " along the rectangle")
+            assertTrue(math.abs(v) + walkway.halfWidth <= rect.halfV + 0.01, "lane " .. i .. " inside it")
+        end
+        if i > 1 then
+            local _, v1 = TCAuctionLayout.toLocal(rect, layout.walkways[i - 1].x1, layout.walkways[i - 1].z1)
+            local _, v2 = TCAuctionLayout.toLocal(rect, walkway.x1, walkway.z1)
+            assertNear(math.abs(v2 - v1), spacing, 0.01)
+        end
+        -- From the entrance's space out to the far cross aisle.
+        local u1 = TCAuctionLayout.toLocal(rect, walkway.x1, walkway.z1)
+        assertNear(u1, layout.nearEdge, 0.01)
+    end
+    -- The entrance's space is at the entrance's end, the whole width.
+    assertEquals(layout.nearSign, 1)
+    assertNear(layout.reserve.vTo - layout.reserve.vFrom, 2 * rect.halfV, 0.01)
+end)
+
+test("163: an open site's lanes are centred, and a strip too narrow for a lane has none", function()
+    setup()
+    local layout = TCAuctionLayout.layOutOpen(rectPolygon(0, 0, 300, 160), nil)
+    local sum = 0
+    for _, walkway in ipairs(layout.walkways) do
+        local _, v = TCAuctionLayout.toLocal(layout.rect, walkway.x1, walkway.z1)
+        sum = sum + v
+    end
+    assertNear(sum / #layout.walkways, 0, 0.01)
+    local narrow = TCAuctionLayout.layOutOpen(rectPolygon(0, 0, 300, 160), nil, { aisleWidth = 500 })
+    assertEquals(#narrow.walkways, 0)
+    assertEquals(TCAuctionLayout.layOutOpen(rectPolygon(0, 0, 2, 2), nil), nil)
+end)

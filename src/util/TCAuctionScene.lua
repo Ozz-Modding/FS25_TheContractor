@@ -32,6 +32,13 @@
 --
 -- Picks (which bays have cars, which car, which way round) come from the
 -- scene's seed through hash, never math.random, so every machine agrees.
+--
+-- 163: a scene dressed for another kind of day than the auction (its
+-- dressing, a kind's KIND; nil is the auction) has the shared dressing
+-- only: the car park, the food area, the toilets, bunting and bales, and
+-- their signs. Everything that says "auction" (the gate's sign, the sale
+-- office and its closing hours, the boards about bidding and lots, the
+-- rows' lot signs) is the auction's alone.
 
 TCAuctionScene = {}
 
@@ -196,10 +203,15 @@ end
 -- The blocks that go beside the lane, in the order they're placed, and
 -- how wide each is along the side.
 TCAuctionScene.BLOCKS = {
-    { key = "office", width = 6 },
+    { key = "office", width = 6, auctionOnly = true },
     { key = "food", width = 17 },
     { key = "toilets", width = 6 },
 }
+
+-- Whether a scene's dressed as the auction (163).
+function TCAuctionScene.isAuctionDressing(scene)
+    return scene.dressing == nil or scene.dressing == "auction"
+end
 
 -- Which side each block goes (pure): the office on the side with more room
 -- (nearest the gate), then each block on whichever side has the most room
@@ -237,6 +249,7 @@ function TCAuctionScene.layOut(scene)
     if scene == nil or scene.reserve == nil then
         return result
     end
+    local isAuction = TCAuctionScene.isAuctionDressing(scene)
     local frame = frameOf(scene)
     local reserve = scene.reserve
     local seed = scene.seed or 0
@@ -302,7 +315,13 @@ function TCAuctionScene.layOut(scene)
     for i, side in ipairs(sides) do
         side.used = TCAuctionScene.GATE_ROOM[i]
     end
-    local blocks = TCAuctionScene.packBlocks(sides, TCAuctionScene.BLOCKS)
+    local wantedBlocks = {}
+    for _, block in ipairs(TCAuctionScene.BLOCKS) do
+        if isAuction or not block.auctionOnly then
+            table.insert(wantedBlocks, block)
+        end
+    end
+    local blocks = TCAuctionScene.packBlocks(sides, wantedBlocks)
 
     -- A point a along a side from its lane edge.
     local function sideV(side, a)
@@ -316,8 +335,10 @@ function TCAuctionScene.layOut(scene)
     -- The gate: its sign beside the lane on the first side, facing the road;
     -- the sold-as-seen board on the other; two stacks of bales each side,
     -- end on to the lane.
-    add("gateSign", 1.2, sideV(sides[1], 2.5), outwardYaw, { face = TCAuctionScene.FACES.GATE })
-    add("board", 2.8, sideV(sides[2], 2.0), outwardYaw, { board = TCAuctionScene.BOARDS.SOLD_AS_SEEN })
+    if isAuction then
+        add("gateSign", 1.2, sideV(sides[1], 2.5), outwardYaw, { face = TCAuctionScene.FACES.GATE })
+        add("board", 2.8, sideV(sides[2], 2.0), outwardYaw, { board = TCAuctionScene.BOARDS.SOLD_AS_SEEN })
+    end
     for _, side in ipairs(sides) do
         for k, d in ipairs({ 1.3, 2.7 }) do
             -- Stacked BALE_STACK high, each a little askew.
@@ -343,8 +364,10 @@ function TCAuctionScene.layOut(scene)
     end
 
     -- Boards into the lots, at the lane's inner end, facing the way in.
-    add("board", usable - 0.6, sideV(sides[1], 1.2), outwardYaw, { board = TCAuctionScene.BOARDS.STOP_FAFFING })
-    add("board", usable - 0.6, sideV(sides[2], 1.2), outwardYaw, { board = TCAuctionScene.BOARDS.KEEP_CLOSE })
+    if isAuction then
+        add("board", usable - 0.6, sideV(sides[1], 1.2), outwardYaw, { board = TCAuctionScene.BOARDS.STOP_FAFFING })
+        add("board", usable - 0.6, sideV(sides[2], 1.2), outwardYaw, { board = TCAuctionScene.BOARDS.KEEP_CLOSE })
+    end
 
     -- The sale office by the gate: a gazebo, the closing hours facing the
     -- lane, and the gate's handful of people in front of it.
@@ -425,7 +448,7 @@ function TCAuctionScene.layOut(scene)
                 parkingSigned = true
                 add("sign", rowsAt[1] + bayDepth * 0.5 + 1.2, sideV(side, from + 0.8), towardLane(side),
                     { face = TCAuctionScene.FACES.PARKING })
-                if #rowsAt > 1 then
+                if #rowsAt > 1 and isAuction then
                     add("board", rowsAt[1] + bayDepth * 0.5 + 1.2, sideV(side, from + 2.6), towardLane(side),
                         { board = TCAuctionScene.BOARDS.CAREFUL_OWNER })
                 end

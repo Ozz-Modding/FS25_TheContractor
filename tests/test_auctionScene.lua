@@ -431,3 +431,45 @@ test("car picks follow their weights", function()
     -- A van (weight 1) about half as often as a car (weight 2).
     assertTrue(counts[17] < counts[1])
 end)
+
+-- 163: dressed for another kind of day ----------------------------------------------------------
+
+test("163: a day out that isn't a sale has the shared dressing and nothing that says auction", function()
+    setup()
+    local polygon = rectPolygon(0, 0, 400, 220)
+    local entrance = { x = 420, z = 90 }
+    local layout = TCAuctionLayout.layOutOpen(polygon, entrance)
+    local scene = TCAuctionLayout.getScene(layout, entrance, 1234)
+    scene.dressing = "openDay"
+    local dressed = TCAuctionScene.layOut(scene)
+    local props = dressed.props
+    assertEquals(count(props, "foodVan"), 1)
+    assertEquals(count(props, "toilet"), 3)
+    assertTrue(count(props, "bunting") >= 4)
+    assertTrue(count(props, "car") >= 10)
+    assertEquals(count(props, "gateSign"), 0)
+    assertEquals(count(props, "office"), 0)
+    local boards, faces = {}, {}
+    for _, prop in ipairs(props) do
+        if prop.board ~= nil then
+            boards[prop.board] = true
+        end
+        if prop.face ~= nil then
+            faces[prop.face] = true
+        end
+    end
+    assertTrue(boards[TCAuctionScene.BOARDS.FOOD_MENU], "the food's menu")
+    for _, board in ipairs({ "SOLD_AS_SEEN", "STOP_FAFFING", "KEEP_CLOSE", "CAREFUL_OWNER" }) do
+        assertTrue(not boards[TCAuctionScene.BOARDS[board]], board)
+    end
+    for _, face in ipairs({ "food", "parking", "toilets" }) do
+        assertTrue(faces[face], face)
+    end
+    for _, face in ipairs({ "gate", "hours", "lots" }) do
+        assertTrue(not faces[face], face)
+    end
+
+    -- The auction's own scene keeps all of it.
+    scene.dressing = nil
+    assertEquals(count(TCAuctionScene.layOut(scene).props, "gateSign"), 1)
+end)

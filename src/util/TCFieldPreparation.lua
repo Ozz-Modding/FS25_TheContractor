@@ -180,9 +180,24 @@ function TCFieldPreparation.snapshotField(field)
     }
 end
 
+-- 164: a part of a field to paint, as vanilla's density map polygon, from
+-- world points { x, z } (a field's polygon cut along a line). nil with
+-- fewer than three.
+function TCFieldPreparation.makeArea(points)
+    if points == nil or #points < 3 then
+        return nil
+    end
+    local area = DensityMapPolygon.new()
+    for _, point in ipairs(points) do
+        area:addPolygonPoint(point.x, point.z)
+    end
+    return area
+end
+
 -- 143: the field as short grass (vanilla GRASS at its cut state, no weeds),
 -- the rest of its state left as it is. Server. Returns whether it was done.
-function TCFieldPreparation.putDownGrass(field)
+-- area (164): only that part of it (makeArea's), else the whole field.
+function TCFieldPreparation.putDownGrass(field, area)
     local fruitType = g_fruitTypeManager:getFruitTypeByName("GRASS")
     if field == nil or fruitType == nil or fruitType.cutState == nil then
         TCLog.warning("TheContractor: no GRASS crop to put field %s down to",
@@ -191,11 +206,58 @@ function TCFieldPreparation.putDownGrass(field)
     end
     local task = FieldUpdateTask.new()
     task:setField(field)
+    if area ~= nil then
+        task:setArea(area)
+    end
     task:setGroundAngle(field:getAngle())
     task:clearHeight()
     task:setWeedState(0)
     task:setFruit(fruitType.index, fruitType.cutState)
     task:setGroundType(fruitType.harvestGroundType or FieldGroundType.GRASS_CUT)
+    g_fieldManager:addFieldUpdateTask(task, true)
+    return true
+end
+
+-- 164: the crop a ploughing match's stubble is of: the field's own (by
+-- name, from its snapshot) if it has a cut state, else wheat's. Returns
+-- the fruit type, or nil if there's neither.
+function TCFieldPreparation.getStubbleCrop(fruitTypeName)
+    local fruitType = fruitTypeName ~= nil and fruitTypeName ~= "UNKNOWN" and
+        g_fruitTypeManager:getFruitTypeByName(fruitTypeName) or nil
+    if fruitType ~= nil and fruitType.cutState ~= nil and fruitType.cutState > 0 then
+        return fruitType
+    end
+    fruitType = g_fruitTypeManager:getFruitTypeByName("WHEAT")
+    if fruitType ~= nil and fruitType.cutState ~= nil then
+        return fruitType
+    end
+    return nil
+end
+
+-- 164: even stubble for a ploughing match: a crop (getStubbleCrop's) at its
+-- cut state on its harvested ground, with no weeds, stones or anything
+-- worked into it, so nothing's ploughed or cultivated. area: only that
+-- part of the field (makeArea's), else all of it. Server. Returns whether
+-- it was done.
+function TCFieldPreparation.putDownStubble(field, fruitTypeName, area)
+    local fruitType = TCFieldPreparation.getStubbleCrop(fruitTypeName)
+    if field == nil or fruitType == nil then
+        TCLog.warning("TheContractor: no crop to put field %s down to stubble",
+            field ~= nil and tostring(field:getId()) or "?")
+        return false
+    end
+    local task = FieldUpdateTask.new()
+    task:setField(field)
+    if area ~= nil then
+        task:setArea(area)
+    end
+    task:setGroundAngle(field:getAngle())
+    task:clearHeight()
+    task:setWeedState(0)
+    task:setStoneLevel(0)
+    task:setFruit(fruitType.index, fruitType.cutState)
+    task:setGroundType(fruitType.harvestGroundType or FieldGroundType.SOWN)
+    task:setStubbleShredLevel(0)
     g_fieldManager:addFieldUpdateTask(task, true)
     return true
 end

@@ -296,8 +296,8 @@ function TheContractorProtest:pick(farmId, random)
     if T.hasProtestOn(day) then
         return nil
     end
-    local auctions = tc.Auctions
-    if auctions ~= nil and L.clashesWithAuction(day, auctions:getAuction(), TheContractorAuctions.COLLECTION_DAYS) then
+    -- 163: never on a day out's crowd day (an auction's, whatever the kind).
+    if tc.PublicEvents ~= nil and tc.PublicEvents:clashesWithCrowdDay(day) then
         return nil
     end
 

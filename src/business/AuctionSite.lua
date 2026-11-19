@@ -107,6 +107,9 @@ TheContractorAuctionSite.UPRIGHT_ATTEMPTS = 1
 -- second (139).
 TheContractorAuctionSite.CLOSE_HOURS = { 17, 18 }
 
+-- 163: the kind of day a site's for when none's named (the auction's KIND).
+TheContractorAuctionSite.DEFAULT_KIND = "auction"
+
 -- 139: a lot's result as everyone sees it.
 TheContractorAuctionSite.RESULT = { OPEN = 0, LOCAL = 1, FARM = 2 }
 
@@ -365,7 +368,7 @@ function TheContractorAuctionSite:getSaleDay()
     local auctions = g_currentMission.TheContractor.Auctions
     local auction = auctions ~= nil and auctions:getAuction() or nil
     if auction ~= nil and self.fieldId ~= 0 and auction.fieldId == self.fieldId then
-        return auction.saleDay
+        return auction.day
     end
     return nil
 end
@@ -466,9 +469,10 @@ end
 -- Why a field can't be a site at all (nil if it can): the console's words.
 -- A field with any live job is refused, whatever its dates (137: an
 -- auction's field must be free of work from its announcement, so no job
--- can run into its sale day). forAuctionId: the auction (137) the site's
--- for, whose own field it may be; any other auction's field is refused.
-function TheContractorAuctionSite.getFieldRefusal(field, forAuctionId)
+-- can run into its sale day). forEventId: the event day (137's auction, or
+-- 163's other kinds: forKind, the auction if nil) the site's for, whose own
+-- field it may be; any other event's field is refused.
+function TheContractorAuctionSite.getFieldRefusal(field, forEventId, forKind)
     if field:getOwner() ~= FarmlandManager.NO_OWNER_FARM_ID then
         return "a farm owns it"
     end
@@ -476,9 +480,13 @@ function TheContractorAuctionSite.getFieldRefusal(field, forAuctionId)
     if tc.Jobs:hasLiveJob(field:getId()) then
         return "it has a live job"
     end
-    local auction = tc.Auctions ~= nil and tc.Auctions:getAuction() or nil
-    if auction ~= nil and auction.fieldId == field:getId() and auction.id ~= forAuctionId then
-        return "an auction's announced on it"
+    local publicEvents = tc.PublicEvents
+    local kind, event = nil, nil
+    if publicEvents ~= nil then
+        kind, event = publicEvents:getEventOnField(field:getId())
+    end
+    if event ~= nil and not (kind.KIND == (forKind or TheContractorAuctionSite.DEFAULT_KIND) and event.id == forEventId) then
+        return string.format("%s's announced on it", kind:getArticleName())
     end
     return nil
 end
@@ -700,6 +708,54 @@ function TheContractorAuctionSite:start(fieldId, lotCount, auctionId)
     end
     table.insert(lines, "Rows red, aisles green, the entrance's space blue, the entrance yellow (this machine). 'tcDebug auctionSite' for progress.")
     return table.concat(lines, "\n")
+end
+
+-- 163: puts bare ground on a field for a day out with no lots (another
+-- kind of event day than the auction): the field's rectangle laid out
+-- open (TCAuctionLayout.layOutOpen: the entrance space, walking lanes over
+-- the rest), its scene dressed as that kind is (dressing: its KIND), and
+-- the ground made ready as for a sale (143). eventId: the event it's for,
+-- whose protected field it is. Returns the text to print; self.site is set
+-- if it went up.
+function TheContractorAuctionSite:startOpen(fieldId, dressing, eventId)
+    if self.site ~= nil then
+        return string.format("There's a site on field %d already.", self.site.fieldId)
+    end
+    local field = g_fieldManager:getFieldById(fieldId)
+    if field == nil then
+        return string.format("No field %d.", fieldId)
+    end
+    local refusal = TheContractorAuctionSite.getFieldRefusal(field, eventId, dressing)
+    if refusal ~= nil then
+        return string.format("Field %d can't be a site: %s.", fieldId, refusal)
+    end
+    local polygon = TCAuctionCrowd.getFieldPolygon(field)
+    local entrance = TCAuctionLayout.findEntrance(polygon, TheContractorFallenTree.sampleRoads(),
+        TCAuctionLayout.RULES.entranceReach)
+    local layout = TCAuctionLayout.layOutOpen(polygon, entrance)
+    if layout == nil then
+        return string.format("Field %d has no room.", fieldId)
+    end
+    local scene = TCAuctionLayout.getScene(layout, entrance, math.random(1, 1000000000))
+    scene.dressing = dressing
+    local site = {
+        fieldId = fieldId,
+        entrance = entrance,
+        lots = {},
+        planned = 0,
+        unplaced = 0,
+        layout = layout,
+        walkways = layout.walkways,
+        scene = scene,
+        isSpawning = false,
+    }
+    self.site = site
+    self.queue = {}
+    local ground = TheContractorAuctionSite.prepareGround(site, field)
+    TCLog.info("TheContractor: open site (%s) on field %d, %d walkway(s), ground %s", tostring(dressing), fieldId,
+        #site.walkways, ground)
+    self:sync()
+    return string.format("Open site on field %d: %d walkway(s), ground %s.", fieldId, #site.walkways, ground)
 end
 
 function TheContractorAuctionSite:spawnNext()
@@ -1309,6 +1365,10 @@ local RESERVE_FLOATS = { "uFrom", "uTo", "vFrom", "vTo" }
 
 function TheContractorAuctionSite.saveScene(xmlFile, key, scene)
     setXMLInt(xmlFile, key .. "#seed", scene.seed or 0)
+    -- 163: dressed as another kind of day than the auction.
+    if scene.dressing ~= nil then
+        setXMLString(xmlFile, key .. "#dressing", scene.dressing)
+    end
     setXMLInt(xmlFile, key .. "#nearSign", scene.nearSign)
     for _, name in ipairs(SCENE_FLOATS) do
         setXMLFloat(xmlFile, key .. "#" .. name, scene[name] or 0)
@@ -1340,7 +1400,8 @@ function TheContractorAuctionSite.loadScene(xmlFile, key)
     if seed == nil or nearSign == nil then
         return nil
     end
-    local scene = { seed = seed, nearSign = nearSign >= 0 and 1 or -1, reserve = {}, rows = {} }
+    local scene = { seed = seed, nearSign = nearSign >= 0 and 1 or -1, reserve = {}, rows = {},
+        dressing = getXMLString(xmlFile, key .. "#dressing") }
     for _, name in ipairs(SCENE_FLOATS) do
         scene[name] = getXMLFloat(xmlFile, key .. "#" .. name)
         if scene[name] == nil then

@@ -593,7 +593,16 @@ local function refusalWorld(world)
     world.auction = nil
     local tc = g_currentMission.TheContractor
     tc.Jobs = { hasLiveJob = function(_, fieldId) return world.liveJobs[fieldId] == true end }
-    tc.Auctions = { getAuction = function() return world.auction end }
+    -- 163: the auction (or world.eventKind's day), as tc.PublicEvents has it.
+    tc.PublicEvents = {
+        getEventOnField = function(_, fieldId)
+            if world.auction ~= nil and world.auction.fieldId == fieldId then
+                local key = world.eventKind or "auction"
+                return { KIND = key, getArticleName = function() return "a " .. key end }, world.auction
+            end
+            return nil, nil
+        end,
+    }
     local function field(id, owner)
         return { getId = function() return id end, getOwner = function() return owner or 0 end }
     end
@@ -617,6 +626,54 @@ test("an auction's field is its own site, and no other's", function()
     assertTrue(TheContractorAuctionSite.getFieldRefusal(field(4)) ~= nil, "the console's spike")
     assertTrue(TheContractorAuctionSite.getFieldRefusal(field(4), 2) ~= nil)
     assertEquals(TheContractorAuctionSite.getFieldRefusal(field(6)), nil)
+end)
+
+test("163: another kind of day's field is its own site, never an auction's with the same id", function()
+    local world = setup()
+    local field = refusalWorld(world)
+    world.eventKind = "openDay"
+    world.auction = { id = 3, fieldId = 4 }
+    assertEquals(TheContractorAuctionSite.getFieldRefusal(field(4), 3, "openDay"), nil)
+    assertTrue(TheContractorAuctionSite.getFieldRefusal(field(4), 3) ~= nil, "an auction's site")
+    assertTrue(TheContractorAuctionSite.getFieldRefusal(field(4), 3, "show") ~= nil, "another kind's")
+end)
+
+test("163: an open site: walking lanes, a scene dressed for its day, the ground made ready, cleared as any", function()
+    local world = setup()
+    refusalWorld(world)
+    world.eventKind = "openDay"
+    world.auction = { id = 2, fieldId = 6 }
+    local field = { getId = function() return 6 end, getOwner = function() return 0 end }
+    g_fieldManager = { getFieldById = function(_, id) return id == 6 and field or nil end }
+    TCAuctionCrowd.getFieldPolygon = function()
+        return { { x = 0, z = 0 }, { x = 300, z = 0 }, { x = 300, z = 160 }, { x = 0, z = 160 } }
+    end
+    TheContractorFallenTree = { sampleRoads = function() return {} end }
+    TheContractorJoyriders = { isGrassField = function() return true end }
+    world.cut = 0
+    TCFieldPreparation.cutGrass = function() world.cut = world.cut + 1 return true end
+
+    world.site:startOpen(6, "openDay", 2)
+    local site = world.site.site
+    assertTrue(site ~= nil, "it went up")
+    assertEquals(#site.lots, 0)
+    assertTrue(#site.walkways > 0)
+    assertEquals(world.cut, 1, "the grass cut, as for a sale")
+    assertTrue(world.site:isFieldInUse(6))
+    assertEquals(world.site:getScene().dressing, "openDay")
+    assertEquals(#world.site:getScene().rows, 0)
+    local sent = world.events[#world.events]
+    assertEquals(sent.fieldId, 6)
+    assertEquals(#sent.walkways, #site.walkways)
+
+    world.site:clear()
+    assertTrue(not world.site:isFieldInUse(6))
+    assertEquals(world.site:getScene(), nil)
+
+    -- Not on an auction's own field.
+    world.eventKind = nil
+    world.site:startOpen(6, "openDay", 2)
+    assertEquals(world.site.site, nil)
 end)
 
 -- 138: the lots as everyone sees them ------------------------------------------------------------
@@ -781,9 +838,9 @@ test("the auction on the site's own field sets the state now", function()
     g_currentMission.TheContractor.Auctions = { getAuction = function() return world.auction end }
     world.auction = nil
     assertEquals(site:getLotStateNow(site:getLot(1)), S.OPEN, "no auction: the console's site")
-    world.auction = { fieldId = 7, saleDay = 40 }
+    world.auction = { fieldId = 7, day = 40 }
     assertEquals(site:getLotStateNow(site:getLot(1)), S.CLOSED, "past 17:24 on the day")
-    world.auction = { fieldId = 8, saleDay = 40 }
+    world.auction = { fieldId = 8, day = 40 }
     assertEquals(site:getLotStateNow(site:getLot(1)), S.OPEN, "another field's auction")
 end)
 
@@ -893,6 +950,42 @@ test("140: the site's scene goes to every machine, a joining client and the save
     g_currentMission.TheContractor.AuctionSite = world.site
     world.site:sync()
     assertEquals(world.site:getScene(), nil)
+end)
+
+test("163: a scene's dressing goes to every machine, a joining client and the save", function()
+    local world = setup()
+    local scene = makeScene()
+    scene.dressing = "openDay"
+    world.site.site = { fieldId = 6, lots = {}, planned = 0, unplaced = 0, isSpawning = false, walkways = {},
+        scene = scene }
+    world.site:sync()
+    local stream = world:newStream()
+    world.events[#world.events]:writeStream(stream)
+    local client = TheContractorAuctionSite.new()
+    g_currentMission.TheContractor.AuctionSite = client
+    TCAuctionSiteEvent.emptyNew():readStream(stream, { getIsServer = function() return true end })
+    assertEquals(client:getScene().dressing, "openDay")
+    assertScene(client:getScene())
+
+    local initial = world:newStream()
+    world.site:writeInitialClientState(initial)
+    local joining = TheContractorAuctionSite.new()
+    joining:readInitialClientState(initial)
+    assertEquals(joining:getScene().dressing, "openDay")
+
+    local xmlFile = {}
+    world.site:saveToXmlFile(xmlFile)
+    local loaded = TheContractorAuctionSite.new()
+    loaded:loadFromXMLFile(xmlFile)
+    assertEquals(loaded:getScene().dressing, "openDay")
+
+    -- The auction's own: none, all the way.
+    world.site.site.scene = makeScene()
+    world.site:sync()
+    stream = world:newStream()
+    world.events[#world.events]:writeStream(stream)
+    TCAuctionSiteEvent.emptyNew():readStream(stream, { getIsServer = function() return true end })
+    assertEquals(client:getScene().dressing, nil)
 end)
 
 test("140: a site saved before the scene loads without one", function()

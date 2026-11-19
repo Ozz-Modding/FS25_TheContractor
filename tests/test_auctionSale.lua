@@ -66,7 +66,7 @@ local function setup()
     g_currentMission.environment = { currentMonotonicDay = 40, currentHour = 17, currentMinute = 30 }
 
     -- The auction on field 5, its field a 100 m square.
-    world.auction = { id = 3, fieldId = 5, saleDay = 40 }
+    world.auction = { id = 3, fieldId = 5, day = 40 }
     local tc = g_currentMission.TheContractor
     tc.Auctions = { getAuction = function() return world.auction end }
     g_fieldManager = { getFieldById = function(_, id) return { id = id } end }

@@ -353,18 +353,6 @@ function TCProtestLayout.layOut(groups, seed)
     return people
 end
 
--- The auction ---------------------------------------------------------------------------------
-
--- Whether a protest on protestDay can go ahead given the auction (Auctions'
--- { saleDay }, or nil): never on a day the auction's crowd is up, the sale
--- day to collectionDays after it.
-function TCProtestLayout.clashesWithAuction(protestDay, auction, collectionDays)
-    if auction == nil or auction.saleDay == nil then
-        return false
-    end
-    return protestDay >= auction.saleDay and protestDay <= auction.saleDay + (collectionDays or 0)
-end
-
 -- The groups in an incident's flat data (data.groupCount, then g<n>_x,
 -- _z, _dirX, _dirZ, _count), and back.
 TCProtestLayout.GROUP_KEYS = { "x", "z", "dirX", "dirZ", "count", "paired" }

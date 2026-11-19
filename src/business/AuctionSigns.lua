@@ -19,6 +19,10 @@
 --     that). Every machine with a map has a marker on each.
 --   Saving: the month and the spots in TheContractor.xml, so they stay up
 --     over a load.
+--   Faces (163): the signs are up for one public day out at a time
+--     (tc.PublicEvents), whatever its kind, and show that kind's face
+--     (FACES, by its KIND). A kind with no art of its own yet shows the
+--     auction's.
 --
 -- Server-wide, not a farm's: nothing to forget when a farm is deleted.
 
@@ -36,6 +40,12 @@ TheContractorAuctionSigns.DESIGNS = {
     [2] = { filename = "i3d/auctionSign2.i3d", width = 2.25, postX = 0.725 },
 }
 TheContractorAuctionSigns.DEFAULT_DESIGN = 1
+-- 163: each kind of day's own boards, by its KIND: a model for each design
+-- (the same sizes as DESIGNS'). A kind not here shows the auction's.
+TheContractorAuctionSigns.DEFAULT_FACE = "auction"
+TheContractorAuctionSigns.FACES = {
+    auction = { [1] = TheContractorAuctionSigns.DESIGNS[1].filename, [2] = TheContractorAuctionSigns.DESIGNS[2].filename },
+}
 -- Every design's posts (genAuctionSignI3d.py's POST and POST_Z): their
 -- cross-section and their middle behind the board.
 TheContractorAuctionSigns.POST_SIZE = 0.1
@@ -54,6 +64,15 @@ TheContractorAuctionSigns.MAX_ROAD_HEIGHT_GAP = 1.5
 function TheContractorAuctionSigns.getDesign(sign)
     return TheContractorAuctionSigns.DESIGNS[sign.design] or
         TheContractorAuctionSigns.DESIGNS[TheContractorAuctionSigns.DEFAULT_DESIGN]
+end
+
+-- 163: a sign's model file for a face (a kind's KIND; nil: the auction's).
+function TheContractorAuctionSigns.getModelFilename(sign, face)
+    local files = TheContractorAuctionSigns.FACES[face or TheContractorAuctionSigns.DEFAULT_FACE] or
+        TheContractorAuctionSigns.FACES[TheContractorAuctionSigns.DEFAULT_FACE]
+    local design = TheContractorAuctionSigns.DESIGNS[sign.design] ~= nil and sign.design or
+        TheContractorAuctionSigns.DEFAULT_DESIGN
+    return files[design] or TheContractorAuctionSigns.getDesign(sign).filename
 end
 
 -- The posts' feet in a design's own x and z: each post's four corners. The
@@ -111,6 +130,8 @@ function TheContractorAuctionSigns.new()
     -- offset, junctionX/Z and busyMetres too).
     self.month = 0
     self.signs = {}
+    -- 163: whose they are (a kind's KIND, its face), nil while none are up.
+    self.face = nil
     -- Every machine: the loaded models ({ node, sharedLoadRequestId }) and
     -- map markers, rebuilt on the next update after the signs change (the
     -- terrain's there by then).
@@ -126,10 +147,12 @@ end
 
 -- Every machine ------------------------------------------------------------------------------
 
--- The signs as the server sent them (TCAuctionSignsEvent).
-function TheContractorAuctionSigns:applySync(month, signs)
+-- The signs as the server sent them (TCAuctionSignsEvent). face: the
+-- kind's they are (nil: the auction's).
+function TheContractorAuctionSigns:applySync(month, signs, face)
     self.month = month or 0
     self.signs = signs or {}
+    self.face = self.month ~= 0 and (face or TheContractorAuctionSigns.DEFAULT_FACE) or nil
     self.isDirty = true
 end
 
@@ -176,8 +199,8 @@ function TheContractorAuctionSigns.getBaseHeight(sign)
 end
 
 -- A sign's model at its spot, or nil if it won't load.
-function TheContractorAuctionSigns.loadModel(sign)
-    local filename = Utils.getFilename(TheContractorAuctionSigns.getDesign(sign).filename, TheContractor.dir)
+function TheContractorAuctionSigns.loadModel(sign, face)
+    local filename = Utils.getFilename(TheContractorAuctionSigns.getModelFilename(sign, face), TheContractor.dir)
     local root, sharedLoadRequestId = g_i3DManager:loadSharedI3DFile(filename, false, false)
     if root == nil or root == 0 then
         TCLog.warning("TheContractor: could not load the auction sign '%s'", filename)
@@ -197,7 +220,7 @@ function TheContractorAuctionSigns:rebuild()
         return
     end
     for _, sign in ipairs(self.signs) do
-        local model = TheContractorAuctionSigns.loadModel(sign)
+        local model = TheContractorAuctionSigns.loadModel(sign, self.face)
         if model ~= nil then
             table.insert(self.models, model)
         end
@@ -229,9 +252,9 @@ end
 
 -- Server: the signs to this machine and every client.
 function TheContractorAuctionSigns:sync()
-    self:applySync(self.month, self.signs)
+    self:applySync(self.month, self.signs, self.face)
     if g_server ~= nil then
-        g_server:broadcastEvent(TCAuctionSignsEvent.new(self.month, self.signs))
+        g_server:broadcastEvent(TCAuctionSignsEvent.new(self.month, self.signs, self.face))
     end
 end
 
@@ -323,8 +346,9 @@ function TheContractorAuctionSigns.isSpotClear(candidate)
 end
 
 -- Puts signs up at the map's best junctions for a sale in a month (1 to
--- 12: kept with them, not shown), replacing any. Returns the text to print.
-function TheContractorAuctionSigns:place(month)
+-- 12: kept with them, not shown), replacing any. face (163): the kind of
+-- day they're for (its KIND; nil: the auction). Returns the text to print.
+function TheContractorAuctionSigns:place(month, face)
     local started = getTimeSec()
     local splines = TheContractorAuctionSigns.sampleRoads()
     local mapId = g_currentMission.missionInfo ~= nil and g_currentMission.missionInfo.mapId or nil
@@ -334,6 +358,7 @@ function TheContractorAuctionSigns:place(month)
 
     self.month = month
     self.signs = result.signs
+    self.face = face or TheContractorAuctionSigns.DEFAULT_FACE
     self:sync()
     TCLog.info("TheContractor: %d auction sign(s) in %.0f ms", #result.signs, tookMs)
 
@@ -387,6 +412,7 @@ function TheContractorAuctionSigns:clear()
     local count = #self.signs
     self.month = 0
     self.signs = {}
+    self.face = nil
     self:sync()
     return string.format("%d auction sign(s) taken down.", count)
 end
@@ -411,6 +437,7 @@ function TheContractorAuctionSigns:saveToXmlFile(xmlFile)
     end
     local key = TheContractor.SaveKey .. ".auctionSigns"
     setXMLInt(xmlFile, key .. "#month", self.month)
+    setXMLString(xmlFile, key .. "#face", self.face or TheContractorAuctionSigns.DEFAULT_FACE)
     for i, sign in ipairs(self.signs) do
         local signKey = string.format("%s.sign(%d)", key, i - 1)
         setXMLFloat(xmlFile, signKey .. "#x", sign.x)
@@ -452,11 +479,11 @@ function TheContractorAuctionSigns:loadFromXMLFile(xmlFile)
         end
         i = i + 1
     end
-    self:applySync(month, signs)
+    self:applySync(month, signs, getXMLString(xmlFile, key .. "#face"))
 end
 
 function TheContractorAuctionSigns:writeInitialClientState(streamId, connection)
-    TCAuctionSignsEvent.writeSigns(streamId, self.month, self.signs)
+    TCAuctionSignsEvent.writeSigns(streamId, self.month, self.signs, self.face)
 end
 
 function TheContractorAuctionSigns:readInitialClientState(streamId, connection)

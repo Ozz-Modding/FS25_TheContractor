@@ -370,16 +370,6 @@ test("about a third of placards are chalkboards, the rest card; nobody without o
     assertNear(chalk / placards, TCProtestLayout.CHALK_SHARE, 0.08, "share")
 end)
 
-test("never on a day the auction's crowd is up", function()
-    setup()
-    local auction = { saleDay = 50 }
-    assertTrue(TCProtestLayout.clashesWithAuction(50, auction, 0), "sale day")
-    assertTrue(not TCProtestLayout.clashesWithAuction(51, auction, 0), "the day after")
-    assertTrue(TCProtestLayout.clashesWithAuction(51, auction, 1), "a collection day")
-    assertTrue(not TCProtestLayout.clashesWithAuction(49, auction, 0), "the day before")
-    assertTrue(not TCProtestLayout.clashesWithAuction(50, nil, 0), "no auction")
-end)
-
 test("groups go into the incident's flat data and back", function()
     setup()
     local groups = {

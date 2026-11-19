@@ -52,6 +52,8 @@ local function setup()
     world:load("src/business/JobGeneration.lua")
     world:load("src/business/Allocation.lua")
     world:load("src/util/TCAuctionAttendance.lua")
+    world:load("src/business/PublicEvents.lua")
+    world:load("src/business/EventDay.lua")
     world:load("src/business/Auctions.lua")
     world:load("src/events/TCJobCreatedEvent.lua")
     world:load("src/events/TCJobStateChangedEvent.lua")
@@ -137,11 +139,14 @@ local function setup()
 
     -- The auction: sale day 25 (period 3, day 5), signs up already.
     tc.Auctions = TheContractorAuctions.new()
-    tc.Auctions.auction = {
-        id = 4, fieldId = SALE_FIELD, hostFarmerId = HOST_ID, announcedDay = 1, signsDay = 1, saleDay = 25,
+    tc.Auctions.event = {
+        id = 4, fieldId = SALE_FIELD, hostFarmerId = HOST_ID, announcedDay = 1, signsDay = 1, day = 25,
         state = TheContractorAuctions.STATE.SIGNS_UP,
     }
-    world.auction = tc.Auctions.auction
+    world.auction = tc.Auctions.event
+    -- 163: the auction protects its field as one kind of day out.
+    tc.PublicEvents = TheContractorPublicEvents.new()
+    tc.PublicEvents:registerKind(tc.Auctions)
     return world, tc
 end
 
@@ -209,7 +214,7 @@ end)
 
 test("an announcement in the sale's month makes them at once", function()
     local world, tc = setup()
-    tc.Auctions.auction = nil
+    tc.Auctions.event = nil
     tc.Inbox.postMessage = function() end
     tc.AuctionSigns.place = function() end
     TheContractorInbox = { DISMISS_ACTION = { key = "dismiss" } }
@@ -230,7 +235,7 @@ test("a company set up mid-month gets one, but not once the sale's over", functi
     setTime(25, TheContractorAuctions.SALE_END_HOUR)
     TCAuctionAttendance.onCompanyCreated(5)
     assertEquals(#attendJobs(tc, 5), 0, "the last lot's closed")
-    tc.Auctions.auction = nil
+    tc.Auctions.event = nil
     TCAuctionAttendance.onCompanyCreated(6)
     assertEquals(#attendJobs(tc, 6), 0, "no auction")
 end)

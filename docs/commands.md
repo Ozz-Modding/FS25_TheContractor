@@ -641,7 +641,7 @@ tcYard set 30 auto
 
 The machinery auction (137) and its sale (139). One is announced now and then by itself (about one a year, now and then two, never within 3 months of the last one ending, for a sale in spring or autumn, 2 to 4 months ahead); this shows it or makes one happen. One started here counts as the last one when it ends.
 
-The auction, if there's one: its id, field, host farmer and state (`announced`, `signsUp`, `setOut`, `onSale` or `collection`), the day it was announced, the day its signs go up, its reminder day and its sale day, its entrance, and once the signs are up (136) each sign's position (world x, z, as `tcDebug auctionSigns` lists them). `tcAuction start` and `tcDebug auctionDay` print the same, so the signs' positions are in the log as soon as they're up. Server only.
+The auction, if there's one: its id, field, host farmer and state (`announced`, `signsUp`, `setOut`, `on` (on sale) or `after` (collection)), the day it was announced, the day its signs go up, its reminder day and its sale day, its entrance, and once the signs are up (136) each sign's position (world x, z, as `tcDebug auctionSigns` lists them). `tcAuction start` and `tcDebug auctionDay` print the same, so the signs' positions are in the log as soon as they're up. Server only.
 
 ```
 tcAuction status

@@ -27,7 +27,7 @@
 
 TCCalendarChange = {}
 
-TCCalendarChange.SUBSYSTEMS = { "Jobs", "Inbox", "Finances", "RandomEvents", "RepairContracts", "Auctions" }
+TCCalendarChange.SUBSYSTEMS = { "Jobs", "Inbox", "Finances", "RandomEvents", "RepairContracts", "PublicEvents" }
 
 TCCalendarChange.FIELDS = { "day", "periodIndex", "dayInPeriod", "daysPerPeriod", "plannedDaysPerPeriod" }
 

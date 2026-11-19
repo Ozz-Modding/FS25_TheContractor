@@ -1,7 +1,8 @@
 -- Server -> clients (137): the machinery auction, whole, each time it's
 -- announced, changes state, or is over or cancelled (nil). Each machine
 -- protects its field, shows its marker and puts the crowd up from it
--- (TheContractorAuctions:applySync).
+-- (TheContractorEventDay:applySync). Written as every event day is (163,
+-- TheContractorEventDay.writeEvent).
 
 TCAuctionEvent = {}
 local TCAuctionEvent_mt = Class(TCAuctionEvent, Event)
@@ -21,46 +22,12 @@ end
 
 -- Also the auction's part of the initial client state.
 function TCAuctionEvent.writeAuction(streamId, auction)
-    if not streamWriteBool(streamId, auction ~= nil) then
-        return
-    end
-    streamWriteInt32(streamId, auction.id)
-    streamWriteInt32(streamId, auction.fieldId)
-    streamWriteInt32(streamId, auction.hostFarmerId)
-    streamWriteInt32(streamId, auction.announcedDay)
-    streamWriteInt32(streamId, auction.signsDay)
-    streamWriteInt32(streamId, auction.reminderDay or -1)
-    streamWriteInt32(streamId, auction.saleDay)
-    streamWriteUInt8(streamId, TheContractorAuctions.getStateIndex(auction.state))
-    if streamWriteBool(streamId, auction.entrance ~= nil) then
-        streamWriteFloat32(streamId, auction.entrance.x)
-        streamWriteFloat32(streamId, auction.entrance.z)
-    end
+    TheContractorEventDay.writeEvent(streamId, auction)
 end
 
 -- Returns the auction, or nil.
 function TCAuctionEvent.readAuction(streamId)
-    if not streamReadBool(streamId) then
-        return nil
-    end
-    local auction = {
-        id = streamReadInt32(streamId),
-        fieldId = streamReadInt32(streamId),
-        hostFarmerId = streamReadInt32(streamId),
-        announcedDay = streamReadInt32(streamId),
-        signsDay = streamReadInt32(streamId),
-        reminderDay = streamReadInt32(streamId),
-        saleDay = streamReadInt32(streamId),
-    }
-    if auction.reminderDay < 0 then
-        auction.reminderDay = nil
-    end
-    auction.state = TheContractorAuctions.STATE_ORDER[streamReadUInt8(streamId)] or
-        TheContractorAuctions.STATE.ANNOUNCED
-    if streamReadBool(streamId) then
-        auction.entrance = { x = streamReadFloat32(streamId), z = streamReadFloat32(streamId) }
-    end
-    return auction
+    return TheContractorEventDay.readEvent(streamId)
 end
 
 function TCAuctionEvent:writeStream(streamId, connection)

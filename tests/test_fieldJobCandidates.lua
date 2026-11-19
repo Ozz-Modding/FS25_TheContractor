@@ -156,7 +156,8 @@ test("137: an announced auction's field gets no job from the announcement until 
     end
     local tc = g_currentMission.TheContractor
     local auction = { fieldId = 2 }
-    tc.Auctions = {
+    -- 163: as tc.PublicEvents answers for every kind of day out.
+    tc.PublicEvents = {
         isFieldInUse = function(_, fieldId) return auction ~= nil and auction.fieldId == fieldId end,
     }
     assertEquals(candidateIds(), "1,3")

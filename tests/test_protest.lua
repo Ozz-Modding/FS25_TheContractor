@@ -42,6 +42,7 @@ local function setup()
     world:load("src/util/TCAuctionScene.lua")
     world:load("src/util/TCProtestLayout.lua")
     world:load("src/business/Protest.lua")
+    world:load("src/business/PublicEvents.lua")
 
     TCRandomEventIncidentEvent = {
         new = function(incident, isClosed)
@@ -55,13 +56,14 @@ local function setup()
     TheContractorFallenTree = {
         sampleRoads = function() return world.roads end,
     }
-    TheContractorAuctions = { COLLECTION_DAYS = 0 }
     TheContractorInbox = { DISMISS_ACTION = { key = "dismiss", textKey = "tc_inbox_dismiss" } }
 
     local tc = g_currentMission.TheContractor
     tc.Settings = TheContractorSettings.new()
     tc.Company = { companyNames = { [1] = "Test Contracting", [2] = "Other Lot" } }
-    tc.Auctions = { getAuction = function() return world.auction end }
+    -- 163: the auction, one kind of day out.
+    tc.PublicEvents = TheContractorPublicEvents.new()
+    tc.PublicEvents:registerKind({ KIND = "auction", AFTER_DAYS = 0, getEvent = function() return world.auction end })
     tc.Farmers = {
         getOfficial = function() return { id = 77, name = "The Official" } end,
         getPerson = function(_, id) return id == 77 and { id = 77, name = "The Official" } or nil end,
@@ -203,9 +205,9 @@ test("none in winter, on an auction's day or on another farm's protest day", fun
 
     world.season = Season.SUMMER
     g_currentMission.environment.currentPeriod = 5
-    world.auction = { saleDay = 41 }
+    world.auction = { day = 41 }
     assertEquals(tc.RandomEvents:triggerEvent(1, "protest"), nil, "the sale day")
-    world.auction = { saleDay = 45 }
+    world.auction = { day = 45 }
     world:addBuilding(2, 0, 20)
     assertTrue(tc.RandomEvents:triggerEvent(2, "protest") ~= nil, "another day's fine")
     assertEquals(tc.RandomEvents:triggerEvent(1, "protest"), nil, "another farm's protest day")

@@ -8205,7 +8205,7 @@ local function getAuctionArgs(auction)
     local host = tc.Farmers ~= nil and tc.Farmers:getPerson(auction.hostFarmerId) or nil
     local field = g_fieldManager:getFieldById(auction.fieldId)
     return host ~= nil and host.name or g_i18n:getText("tc_inbox_customerUnknown"),
-        field ~= nil and field:getName() or tostring(auction.fieldId), formatMonotonicDay(auction.saleDay)
+        field ~= nil and field:getName() or tostring(auction.fieldId), formatMonotonicDay(auction.day)
 end
 
 -- What the tab was last drawn from: redrawn when a lot comes out, closes or

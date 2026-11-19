@@ -593,3 +593,60 @@ test("a spot's clear space is as wide as its design's board", function()
     assertNear(TheContractorAuctionSigns.DESIGNS[1].width / 2 + margin, widths[1], 0.001)
     assertNear(TheContractorAuctionSigns.DESIGNS[2].width / 2 + margin, widths[2], 0.001)
 end)
+
+-- 163: whose signs they are --------------------------------------------------------------------
+
+test("163: the signs carry the kind of day they're for, to clients, a joining one and the save", function()
+    local world = setupGame()
+    world.signs.month, world.signs.signs, world.signs.face = 6, SIGNS, "openDay"
+    world.signs:sync()
+    local stream = world:newStream()
+    world.events[#world.events]:writeStream(stream)
+    local client = TheContractorAuctionSigns.new()
+    g_currentMission.TheContractor.AuctionSigns = client
+    TCAuctionSignsEvent.emptyNew():readStream(stream, { getIsServer = function() return true end })
+    assertEquals(client.face, "openDay")
+    sameSpots(SIGNS, client.signs)
+
+    local initial = world:newStream()
+    world.signs:writeInitialClientState(initial)
+    local joining = TheContractorAuctionSigns.new()
+    joining:readInitialClientState(initial)
+    assertEquals(joining.face, "openDay")
+
+    local xmlFile = {}
+    world.signs:saveToXmlFile(xmlFile)
+    local loaded = TheContractorAuctionSigns.new()
+    loaded:loadFromXMLFile(xmlFile)
+    assertEquals(loaded.face, "openDay")
+
+    -- Taken down: nobody's.
+    world.signs:clear()
+    assertEquals(world.signs.face, nil)
+end)
+
+test("163: signs saved before faces, or put up with none named, are the auction's", function()
+    local world = setupGame()
+    world.signs:applySync(7, SIGNS)
+    assertEquals(world.signs.face, TheContractorAuctionSigns.DEFAULT_FACE)
+    local xmlFile = {}
+    setXMLInt(xmlFile, "TheContractor.auctionSigns#month", 5)
+    setXMLFloat(xmlFile, "TheContractor.auctionSigns.sign(0)#x", 1)
+    setXMLFloat(xmlFile, "TheContractor.auctionSigns.sign(0)#z", 2)
+    local loaded = TheContractorAuctionSigns.new()
+    loaded:loadFromXMLFile(xmlFile)
+    assertEquals(loaded.face, TheContractorAuctionSigns.DEFAULT_FACE)
+end)
+
+test("163: a kind's face is its own boards; a kind with none yet shows the auction's", function()
+    local world = setupGame()
+    TheContractorAuctionSigns.FACES.testDay = { [1] = "i3d/testDay1.i3d", [2] = "i3d/testDay2.i3d" }
+    world.signs:applySync(7, SIGNS, "testDay")
+    world.signs:update(16)
+    assertEquals(world.loaded[1].filename, "i3d/testDay2.i3d")
+    assertEquals(world.loaded[2].filename, "i3d/testDay1.i3d")
+    world.signs:applySync(7, SIGNS, "openDay")
+    world.signs:update(16)
+    assertEquals(world.loaded[3].filename, TheContractorAuctionSigns.DESIGNS[2].filename)
+    TheContractorAuctionSigns.FACES.testDay = nil
+end)

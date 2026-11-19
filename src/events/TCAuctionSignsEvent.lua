@@ -16,17 +16,20 @@ function TCAuctionSignsEvent.emptyNew()
     return Event.new(TCAuctionSignsEvent_mt)
 end
 
--- month: 0 for none up. signs: { x, z, yaw, design }.
-function TCAuctionSignsEvent.new(month, signs)
+-- month: 0 for none up. signs: { x, z, yaw, design }. face (163): the kind
+-- of day they're for (its KIND), nil for the auction's.
+function TCAuctionSignsEvent.new(month, signs, face)
     local self = TCAuctionSignsEvent.emptyNew()
     self.month = month or 0
     self.signs = signs or {}
+    self.face = face
     return self
 end
 
 -- Also the signs' part of the initial client state.
-function TCAuctionSignsEvent.writeSigns(streamId, month, signs)
+function TCAuctionSignsEvent.writeSigns(streamId, month, signs, face)
     streamWriteUIntN(streamId, month or 0, TCAuctionSignsEvent.MONTH_BITS)
+    streamWriteString(streamId, face or "")
     streamWriteInt32(streamId, #(signs or {}))
     for _, sign in ipairs(signs or {}) do
         streamWriteFloat32(streamId, sign.x)
@@ -36,9 +39,10 @@ function TCAuctionSignsEvent.writeSigns(streamId, month, signs)
     end
 end
 
--- Returns month, signs.
+-- Returns month, signs, face (nil: the auction's).
 function TCAuctionSignsEvent.readSigns(streamId)
     local month = streamReadUIntN(streamId, TCAuctionSignsEvent.MONTH_BITS)
+    local face = streamReadString(streamId)
     local count = streamReadInt32(streamId)
     local signs = {}
     for _ = 1, count do
@@ -49,15 +53,15 @@ function TCAuctionSignsEvent.readSigns(streamId)
             design = streamReadUIntN(streamId, TCAuctionSignsEvent.DESIGN_BITS),
         })
     end
-    return month, signs
+    return month, signs, face ~= "" and face or nil
 end
 
 function TCAuctionSignsEvent:writeStream(streamId, connection)
-    TCAuctionSignsEvent.writeSigns(streamId, self.month, self.signs)
+    TCAuctionSignsEvent.writeSigns(streamId, self.month, self.signs, self.face)
 end
 
 function TCAuctionSignsEvent:readStream(streamId, connection)
-    self.month, self.signs = TCAuctionSignsEvent.readSigns(streamId)
+    self.month, self.signs, self.face = TCAuctionSignsEvent.readSigns(streamId)
     self:run(connection)
 end
 
@@ -68,6 +72,6 @@ function TCAuctionSignsEvent:run(connection)
     end
     local signs = g_currentMission.TheContractor ~= nil and g_currentMission.TheContractor.AuctionSigns or nil
     if signs ~= nil then
-        signs:applySync(self.month, self.signs)
+        signs:applySync(self.month, self.signs, self.face)
     end
 end

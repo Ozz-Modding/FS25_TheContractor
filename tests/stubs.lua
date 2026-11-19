@@ -110,7 +110,11 @@ function stubs.install()
         modTexts = {},
     }
 
-    Class = function(classTable)
+    -- As the engine's: a base class's members are found through the class.
+    Class = function(classTable, baseClass)
+        if baseClass ~= nil then
+            setmetatable(classTable, { __index = baseClass })
+        end
         return { __index = classTable }
     end
 

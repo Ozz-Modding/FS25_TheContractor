@@ -84,6 +84,8 @@ function TCAuctionSiteEvent.writeScene(streamId, scene)
         return
     end
     streamWriteInt32(streamId, scene.seed or 0)
+    -- 163: the kind of day it's dressed for ("": the auction).
+    streamWriteString(streamId, scene.dressing or "")
     for _, key in ipairs({ "cx", "cz", "angle", "halfV", "nearEdge", "farEdge", "aisleWidth", "endAisle", "gateV" }) do
         streamWriteFloat32(streamId, scene[key] or 0)
     end
@@ -114,6 +116,8 @@ function TCAuctionSiteEvent.readScene(streamId)
         return nil
     end
     local scene = { seed = streamReadInt32(streamId) }
+    local dressing = streamReadString(streamId)
+    scene.dressing = dressing ~= "" and dressing or nil
     for _, key in ipairs({ "cx", "cz", "angle", "halfV", "nearEdge", "farEdge", "aisleWidth", "endAisle", "gateV" }) do
         scene[key] = streamReadFloat32(streamId)
     end

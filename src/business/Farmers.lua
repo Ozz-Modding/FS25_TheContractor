@@ -958,10 +958,9 @@ function TheContractorFarmers:replacePersonReferences(oldId, newId)
             replace(message.payload)
         end
     end
-    -- 137: an auction's host.
-    local auction = tc.Auctions ~= nil and tc.Auctions:getAuction() or nil
-    if auction ~= nil and auction.hostFarmerId == oldId then
-        auction.hostFarmerId = newId
+    -- 137: an auction's host (163: any day out's).
+    if tc.PublicEvents ~= nil then
+        tc.PublicEvents:replaceHost(oldId, newId)
     end
     -- 100's queue (the server's only).
     if tc.RepairContracts ~= nil then
