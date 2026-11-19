@@ -44,6 +44,10 @@ TheContractorJobs.COMPLETION_THRESHOLD_PERCENTAGE = 100
 -- and the bales the job leaves are only cleared up once it's over.
 TheContractorJobs.GRACE_PERIOD_MS = 10 * 60 * 1000
 
+-- How long the notice of a job called off because a player farm bought its
+-- field stays on the board (endJobsOnBoughtField).
+TheContractorJobs.LAND_SOLD_NOTICE_MONTHS = 1
+
 -- Quality score (029, reworked by 080), 0-100, set on completion
 -- (calculateQualityScore). A hired crew's score is the product of five
 -- factors, each 0-1, so 100 needs every one of them at its best:
@@ -417,7 +421,8 @@ end
 function TheContractorJobs:onJobDeclined(job, reason)
     g_currentMission.TheContractor.Relationships:onJobDeclined(job, reason)
     local jobDef = TheContractorJobGeneration.JOB_TYPES[job.jobType]
-    if jobDef ~= nil and jobDef.declineReputation ~= nil then
+    if jobDef ~= nil and jobDef.declineReputation ~= nil and
+            reason ~= TheContractorRelationships.DECLINE_REASON.LAND_SOLD then
         g_currentMission.TheContractor.Reputation:addReputation(job.farmId, -jobDef.declineReputation)
     end
     TCFieldPreparation.clearUpAfterJob(job)
@@ -615,10 +620,67 @@ function TheContractorJobs:startDailyTick()
     end
 
     g_messageCenter:subscribe(MessageType.DAY_CHANGED, self.onDayChanged, self)
+    g_messageCenter:subscribe(MessageType.FARMLAND_OWNER_CHANGED, self.onFarmlandOwnerChanged, self)
 end
 
 function TheContractorJobs:stopDailyTick()
     g_messageCenter:unsubscribe(MessageType.DAY_CHANGED, self)
+    g_messageCenter:unsubscribe(MessageType.FARMLAND_OWNER_CHANGED, self)
+end
+
+-- Server: a farmland changed hands. Bought by a player farm (a friend's
+-- farm in multiplayer, or the job's own), its fields are no farmer's any
+-- more, so every job on them ends (endJobsOnBoughtField). Land sold back to
+-- nobody leaves jobs alone: generation only offers work there anyway.
+function TheContractorJobs:onFarmlandOwnerChanged(farmlandId, farmId, loadFromSavegame)
+    if loadFromSavegame or farmId == nil or farmId == FarmlandManager.NO_OWNER_FARM_ID or g_fieldManager == nil then
+        return
+    end
+    for _, field in ipairs(g_fieldManager:getFields()) do
+        local farmland = field.getFarmland ~= nil and field:getFarmland() or nil
+        if farmland ~= nil and farmland:getId() == farmlandId then
+            self:endJobsOnBoughtField(field:getId(), farmId)
+        end
+    end
+end
+
+-- Server: every live job on a field a player farm has just bought, any
+-- farm's, ends with nothing lost on either side: an offer is withdrawn
+-- (declined, LAND_SOLD: no knock to the customer or the reputation), and a
+-- job taken on is called off as a miss without penalty, its crew and
+-- machines brought back, with a notice saying why. Only work on the field
+-- itself: a job whose field only names where it is (JOB_TYPES' offField: a
+-- farmer's yard, a road, an auction lot), a spilt load's clean-up (106, on
+-- the road) and an auction's attend job (141, the auction answers for its
+-- field itself, Auctions:checkField) carry on.
+function TheContractorJobs:endJobsOnBoughtField(fieldId, buyerFarmId)
+    local jobs = {}
+    for _, farmJobs in pairs(self.jobsByFarm) do
+        for _, job in pairs(farmJobs) do
+            local jobDef = TheContractorJobGeneration.JOB_TYPES[job.jobType]
+            if job.fieldId == fieldId and not job:isTerminal() and job.auctionId == nil and job.spill == nil and
+                    not (jobDef ~= nil and jobDef.offField) then
+                table.insert(jobs, job)
+            end
+        end
+    end
+    table.sort(jobs, function(a, b) return a.id < b.id end)
+
+    local buyer = g_farmManager ~= nil and g_farmManager:getFarmById(buyerFarmId) or nil
+    local buyerName = buyer ~= nil and buyer.name or tostring(buyerFarmId)
+    for _, job in ipairs(jobs) do
+        TCLog.info("TheContractor: farm %d bought field %d, ending farm %d job %d (%s, %s)", buyerFarmId, fieldId,
+            job.farmId, job.id, job.jobType, job.state)
+        if job.state == TheContractorJob.STATE.OFFERED or job.state == TheContractorJob.STATE.NEGOTIATING then
+            self:transitionJobState(job.farmId, job.id, TheContractorJob.STATE.DECLINED, nil,
+                TheContractorRelationships.DECLINE_REASON.LAND_SOLD)
+        else
+            self:missJob(job, true, true)
+            g_currentMission.TheContractor.Notices:publish(job.farmId, string.format(
+                g_i18n:getText("tc_job_landSoldNotice"), g_i18n:getText("tc_jobType_" .. job:getTypeLabel()),
+                job:getLocationText(), buyerName), TheContractorJobs.LAND_SOLD_NOTICE_MONTHS)
+        end
+    end
 end
 
 -- A job is due by the end of its deadlineDay (absolute monotonic day), so
@@ -803,8 +865,9 @@ end
 -- Dispatch:onAIJobStopped -> completeJob and no-ops there, rather than
 -- racing a payout.
 -- noPenalty (100): a workshop job whose machine ADS stopped managing ends
--- with nothing lost.
-function TheContractorJobs:missJob(job, noPenalty)
+-- with nothing lost. quiet: no "job failed" notification, for a job called
+-- off that says why itself (endJobsOnBoughtField's notice).
+function TheContractorJobs:missJob(job, noPenalty, quiet)
     -- 141: a reminder (JOB_TYPES' noConsequences) just ends.
     if TheContractorJobs.hasNoConsequences(job) then
         self:endWithoutConsequences(job, TheContractorJob.STATE.MISSED)
@@ -875,10 +938,11 @@ function TheContractorJobs:missJob(job, noPenalty)
         g_currentMission.TheContractor.RepairContracts:queueCollection(job)
     end
 
-    TCJobMissedEvent.showNotification(job.farmId, job.jobType, job.fieldId, job:getTypeLabel())
-
-    if g_server ~= nil then
-        g_server:broadcastEvent(TCJobMissedEvent.new(job.farmId, job.jobType, job.fieldId, job:getTypeLabel()))
+    if not quiet then
+        TCJobMissedEvent.showNotification(job.farmId, job.jobType, job.fieldId, job:getTypeLabel())
+        if g_server ~= nil then
+            g_server:broadcastEvent(TCJobMissedEvent.new(job.farmId, job.jobType, job.fieldId, job:getTypeLabel()))
+        end
     end
 
     TCLog.info("TheContractor: farm %d job %d missed its deadline (%s, field %d, %.0f%% done, penalty -%d reputation)",

@@ -353,6 +353,7 @@
 		<text name="tc_unallocate_problemSpill" text="A spill is yours to clear up: it can't be unallocated."/>
 		<text name="tc_logbook_earlierCrew" text="Earlier crew"/>
 		<text name="tc_job_missedNotification" text="Job failed: %s on Field %s wasn't done by its deadline."/>
+		<text name="tc_job_landSoldNotice" text="Job called off: %s on Field %s. %s has bought the land, so the work's no longer wanted. Nothing's lost on either side."/>
 		<text name="tc_dispatch_noVehicleReady" text="None of the allocated equipment can be driven by the worker (is it free, and can it do this job?)."/>
 		<text name="tc_dispatch_failedNotification" text="Could not dispatch %s on Field %s: %s"/>
 		<text name="tc_watchdog_retriedNotification" text="Your worker got stuck on a %s job on Field %s - reset and dispatched again."/>
