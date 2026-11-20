@@ -54,6 +54,7 @@
 		<text name="tc_header_logbook" text="Logbook"/>
 		<text name="tc_header_supplies" text="Supplies"/>
 		<text name="tc_header_auction" text="Auction"/>
+		<text name="tc_header_show" text="Show"/>
 		<text name="tc_header_workshop" text="Workshop"/>
 		<text name="tc_overview_companyHeading" text="Company"/>
 		<text name="tc_overview_businessHeading" text="Business"/>
@@ -240,6 +241,7 @@
 		<text name="tc_jobType_yardHaul" text="Sell a Load"/>
 		<text name="tc_jobType_emergencyRefuel" text="Emergency Refuel"/>
 		<text name="tc_jobType_attendAuction" text="Attend Auction"/>
+		<text name="tc_jobType_attendShow" text="Attend Show"/>
 		<text name="tc_jobType_lotInspection" text="Lot Inspection"/>
 		<text name="tc_jobType_flyTipping" text="Clear Fly-tipping"/>
 		<text name="tc_jobType_flyTippingRoadside" text="Clear Roadside Fly-tipping"/>
@@ -382,6 +384,8 @@
 		<text name="finance_tcWasteDisposal" text="Tipping fees"/>
 		<text name="tc_moneyType_auctionPurchase" text="Machinery auctions"/>
 		<text name="finance_tcAuctionPurchase" text="Machinery auctions"/>
+		<text name="tc_moneyType_showPrizes" text="Show prizes"/>
+		<text name="finance_tcShowPrizes" text="Show prizes"/>
 		<text name="tc_staff_viewRoster" text="Your Staff"/>
 		<text name="tc_staff_viewCandidates" text="Candidates"/>
 		<text name="tc_staff_viewOthers" text="Others"/>
@@ -582,6 +586,41 @@
 		<text name="tc_auction_today_body" text="%s's machinery auction on Field %s is today, %s. The lots are out on the field: viewing and bidding from 08:00, each lot closing at its own time from 17:00."/>
 		<text name="tc_auction_cancelled_title" text="Machinery auction cancelled"/>
 		<text name="tc_auction_cancelled_body" text="%s's machinery auction on Field %s, due on %s, has been called off."/>
+		<text name="tc_show_mapName" text="County show"/>
+		<text name="tc_show_announced_title" text="County show announced"/>
+		<text name="tc_show_announced_body" text="%s is hosting this year's county show on Field %s on %s: livestock classes on the showground and a ploughing match next door, with stands and food. Gates open at 08:00, judging starts at 10:00, the ploughing runs from 11:00 to 15:00 and the results are at 16:00. Anyone may come. In the show's month, the Show tab has the timetable. Look out for the signs round the area."/>
+		<text name="tc_show_entriesClosing_title" text="County show entries closing soon"/>
+		<text name="tc_show_entriesClosing_body" text="Entries for %s's county show on Field %s, on %s, close a week before the day. Enter on the Show tab."/>
+		<text name="tc_show_reminder_title" text="County show coming up"/>
+		<text name="tc_show_reminder_body" text="A reminder: %s's county show on Field %s is on %s. Entries are now closed. Gates open at 08:00, judging at 10:00, the ploughing match from 11:00 to 15:00, results at 16:00."/>
+		<text name="tc_show_today_title" text="County show today"/>
+		<text name="tc_show_today_body" text="%s's county show on Field %s is today, %s. Gates open at 08:00, judging at 10:00, the ploughing match from 11:00 to 15:00, results at 16:00."/>
+		<text name="tc_show_results_title" text="County show results"/>
+		<text name="tc_show_results_body" text="The results are in from %s's county show on Field %s, %s. Your company placed %s time(s) and won %s in prize money. The full results are on the Show tab."/>
+		<text name="tc_show_resultsNotice" text="County show: placed %d time(s), %s in prize money."/>
+		<text name="tc_show_cancelled_title" text="County show cancelled"/>
+		<text name="tc_show_cancelled_body" text="%s's county show on Field %s, due on %s, has been called off."/>
+		<text name="tc_show_tabSummary" text="%s's county show, Field %s, %s."/>
+		<text name="tc_show_tabPloughField" text="The ploughing match is on Field %s."/>
+		<text name="tc_show_tabOver" text="This year's county show is over."/>
+		<text name="tc_show_columnTime" text="Time"/>
+		<text name="tc_show_columnWhat" text="What's on"/>
+		<text name="tc_show_timetable_gatesOpen" text="Gates open"/>
+		<text name="tc_show_timetable_judging" text="Livestock judging"/>
+		<text name="tc_show_timetable_ploughing" text="Ploughing match"/>
+		<text name="tc_show_timetable_results" text="Results and prizes"/>
+		<text name="tc_show_timetable_gatesClose" text="Gates close"/>
+		<text name="tc_show_stateDone" text="Done"/>
+		<text name="tc_show_stateNow" text="On now"/>
+		<text name="tc_show_resultsTitle" text="Results, %s"/>
+		<text name="tc_show_lastResultsTitle" text="Last show's results, %s"/>
+		<text name="tc_show_resultsNoneTitle" text="Results"/>
+		<text name="tc_show_resultsNone" text="No placings to report."/>
+		<text name="tc_show_resultsAt" text="The results are given out at %02d:00 on the day."/>
+		<text name="tc_show_placing1" text="1st"/>
+		<text name="tc_show_placing2" text="2nd"/>
+		<text name="tc_show_placing3" text="3rd"/>
+		<text name="tc_show_placing4" text="%dth"/>
 		<text name="tc_auction_catalogueNone" text="The machinery auction is over."/>
 		<text name="tc_auction_catalogueSettingOut" text="The lots are being set out on the field. The catalogue fills in as they arrive."/>
 		<text name="tc_auction_catalogueSummary" text="%s's machinery auction, Field %s, %s. Viewing from 08:00; bidding on each lot closes at its own time from 17:00. Bids are made at the lot itself."/>
@@ -656,6 +695,12 @@
 		<text name="tc_attendAuction_lotsNotOut" text="Set out on the morning of the sale"/>
 		<text name="tc_attendAuction_detailHost" text="Held by"/>
 		<text name="tc_attendAuction_detailSaleDay" text="Sale day"/>
+		<text name="tc_attendShow_summaryLine" text="Went to the county show on Field %s"/>
+		<text name="tc_attendShow_completedReport" text="Went along to the show. Nothing was paid or owed for going."/>
+		<text name="tc_attendShow_detailGates" text="Gates"/>
+		<text name="tc_attendShow_gates" text="%02d:00 to %02d:00"/>
+		<text name="tc_attendShow_detailShowDay" text="Show day"/>
+		<text name="tc_attendShow_note" text="Livestock judging at %02d:00, the ploughing match from %02d:00 to %02d:00 and the results at %02d:00. Turning up is all it takes, and missing it costs nothing."/>
 		<text name="tc_attendAuction_note" text="Viewing and bidding from %02d:00; each lot's bidding closes at its own time between %02d:00 and %02d:00. Turning up is all it takes, and missing it costs nothing."/>
 		<text name="tc_lotInspection_lot" text="Lot %d"/>
 		<text name="tc_lotInspection_location" text="Lot %d at the auction on Field %s"/>
@@ -1753,7 +1798,7 @@
 		<text name="tc_help_menu_4_title" text="Finances, Logbook and Supplies"/>
 		<text name="tc_help_menu_4" text="Finances has your invoices, cash flow and overheads. Logbook records every finished job and every machine's history. Supplies shows the stock your jobs draw on."/>
 		<text name="tc_help_menu_5_title" text="Auction and Workshop"/>
-		<text name="tc_help_menu_5" text="The Auction tab only appears while a machinery auction is on its field. The Workshop tab is only there with Advanced Damage System installed, for customers' machines you're repairing."/>
+		<text name="tc_help_menu_5" text="The Auction tab only appears while a machinery auction is on its field, and the Show tab in the county show's month. The Workshop tab is only there with Advanced Damage System installed, for customers' machines you're repairing."/>
 		<text name="tc_help_reputation_title" text="Reputation and advertising"/>
 		<text name="tc_help_reputation_1" text="Reputation is what the area thinks of your company. It brings more offers, bigger fields and better rates, and it unlocks bigger adverts. It never fades, but it can't fall below zero."/>
 		<text name="tc_help_reputation_2_title" text="How it moves"/>
@@ -2015,6 +2060,17 @@
 		<text name="tc_help_yardJobs_3" text="A farmer's driver is off, and their trailer stands full in the yard. Bring a tractor, take it to the selling point named and tip it. You're paid for the haulage; the crop's money is theirs. A load that goes astray is claimed for."/>
 		<text name="tc_help_yardJobs_4_title" text="Emergency refuel"/>
 		<text name="tc_help_yardJobs_4" text="A farmer's machine has run dry on their field. Bring diesel from your own stock, however you like, and fill it up today. They pay for the diesel and your trouble."/>
+		<text name="tc_help_cat_show" text="Agricultural show"/>
+		<text name="tc_help_show_title" text="The county show"/>
+		<text name="tc_help_show_1" text="Every year, in late summer after the harvest, a farmer hosts the county show on their land: livestock classes on a grass showground and a ploughing match on stubble next door, all on one day. It's announced two or three months ahead in the Inbox, with a reminder a week before and another on the day. Signs go up around the area a month before and the site is marked on the map. There's never an auction and a show at the same time."/>
+		<text name="tc_help_show_2_title" text="The day"/>
+		<text name="tc_help_show_2" text="The site is set out at midnight: the showground put down to grass with a ring, pens, stands and trailer lines, and the ploughing ground to stubble. Gates open at 08:00, judging starts at 10:00, the ploughing match runs from 11:00 to 15:00 and the results are given out at 16:00. Gates close at 18:00, and at midnight the farmer's land is put back exactly as it was."/>
+		<text name="tc_help_show_3_title" text="The Show tab"/>
+		<text name="tc_help_show_3" text="In the show's month the Show tab has the day's timetable and the results, this year's once they're in and last year's before."/>
+		<text name="tc_help_show_4_title" text="Prizes"/>
+		<text name="tc_help_show_4" text="Placings win a little prize money and, more usefully, reputation and the host farmer's goodwill. Results come by Inbox and a notice."/>
+		<text name="tc_help_show_5_title" text="Going along"/>
+		<text name="tc_help_show_5" text="Every company is asked along, as an Attend Show job on the Jobs tab for the show day. Turning up anywhere on the site in the show's hours is all it takes, and missing it costs nothing. If the farmer's land changes hands, the show is cancelled."/>
 		<text name="tc_help_cat_auctions" text="Machinery auctions"/>
 		<text name="tc_help_auctionSale_title" text="The sale"/>
 		<text name="tc_help_auctionSale_1" text="About once a year, sometimes twice, a farmer holds a machinery auction on one of their fields, always in spring or autumn. It's announced two to four months ahead in the Inbox, with a reminder a week before and another on the day. Signs go up around the area and the field is marked on the map."/>

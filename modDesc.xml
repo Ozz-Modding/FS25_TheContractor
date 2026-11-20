@@ -762,6 +762,29 @@ Credits:
                 </paragraph>
             </page>
         </category>
+        <category title="$l10n_tc_help_cat_show">
+            <page title="$l10n_tc_help_show_title" iconSliceId="tcHelpIcons.show">
+                <paragraph>
+                    <text text="$l10n_tc_help_show_1"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_show_2_title"/>
+                    <text text="$l10n_tc_help_show_2"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_show_3_title"/>
+                    <text text="$l10n_tc_help_show_3"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_show_4_title"/>
+                    <text text="$l10n_tc_help_show_4"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_show_5_title"/>
+                    <text text="$l10n_tc_help_show_5"/>
+                </paragraph>
+            </page>
+        </category>
         <category title="$l10n_tc_help_cat_workshop">
             <page title="$l10n_tc_help_workshopTrades_title" iconSliceId="tcHelpIcons.workshopTrades">
                 <paragraph>

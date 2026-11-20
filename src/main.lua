@@ -85,6 +85,9 @@ source(TheContractor.dir .. "src/util/TCAuctionScene.lua")
 source(TheContractor.dir .. "src/util/TCAuctionProps.lua")
 source(TheContractor.dir .. "src/util/TCAuctionSigns.lua")
 source(TheContractor.dir .. "src/util/TCShowSite.lua")
+source(TheContractor.dir .. "src/util/TCShowScene.lua")
+source(TheContractor.dir .. "src/util/TCRealisticLivestock.lua")
+source(TheContractor.dir .. "src/util/TCShowAnimals.lua")
 source(TheContractor.dir .. "src/util/TCAuctionAttendance.lua")
 source(TheContractor.dir .. "src/util/TCLotInspections.lua")
 source(TheContractor.dir .. "src/util/TCAuctionLotHud.lua")
@@ -175,6 +178,7 @@ source(TheContractor.dir .. "src/business/EventDay.lua")
 source(TheContractor.dir .. "src/business/Auctions.lua")
 source(TheContractor.dir .. "src/business/OpenDay.lua")
 source(TheContractor.dir .. "src/business/ShowSite.lua")
+source(TheContractor.dir .. "src/business/Show.lua")
 source(TheContractor.dir .. "src/business/AuctionSale.lua")
 source(TheContractor.dir .. "src/events/TCInitialClientStateEvent.lua")
 source(TheContractor.dir .. "src/events/TCSettingsEvent.lua")
@@ -282,6 +286,7 @@ source(TheContractor.dir .. "src/events/TCAuctionBidEvent.lua")
 source(TheContractor.dir .. "src/events/TCAuctionBidsEvent.lua")
 source(TheContractor.dir .. "src/events/TCAuctionEvent.lua")
 source(TheContractor.dir .. "src/events/TCEventDayEvent.lua")
+source(TheContractor.dir .. "src/events/TCShowEvent.lua")
 
 -- The top-level Contractor page itself stays always-visible (see Company.lua
 -- and MenuContractor's Overview tab): "Create Company" has to live somewhere
@@ -433,6 +438,10 @@ function TheContractor:loadMap()
     self.PublicEvents:registerKind(self.OpenDay)
     -- 164: the show's site, a showground and ploughing plots (spike).
     self.ShowSite = TheContractorShowSite.new()
+    -- 165: the agricultural show, once a year on 164's site.
+    self.Show = TheContractorShow.new()
+    self.Show:register(self.Inbox)
+    self.PublicEvents:registerKind(self.Show)
     -- 139: bids and the sale.
     self.AuctionSale = TheContractorAuctionSale.new()
     self.AuctionSale:register(self.Inbox)
@@ -465,6 +474,8 @@ function TheContractor:loadMap()
     -- 135: whether ADS can give auction lots a history; 152: lots are for
     -- sale to ADS, so any farm may inspect one.
     TCADSUsedLots.detect()
+    -- 166: what of FS25_RealisticLivestock the show's judge can read.
+    TCRealisticLivestock.detect()
     -- 100/101: service vehicle mods' workshops list customers' machines.
     TCServiceVehicleMods.install()
 
@@ -565,6 +576,7 @@ function TheContractor:loadMap()
     -- 137: the auction's schedule and days (server).
     self.Auctions:startListening()
     self.OpenDay:startListening()
+    self.Show:startListening()
     self.AuctionSale:startListening()
     -- 113: relationships drift back towards neutral (server).
     self.Relationships:startPeriodTick()
@@ -600,6 +612,8 @@ function TheContractor:loadMap()
     TheContractorAuctions.registerConsoleCommands()
     TheContractorOpenDay.registerConsoleCommands()
     TheContractorShowSite.registerConsoleCommands()
+    TheContractorShow.registerConsoleCommands()
+    TCShowAnimals.registerConsoleCommands()
     TCLotInspections.registerConsoleCommands()
     TheContractorRepairContracts.registerConsoleCommands()
     TheContractorYards.registerConsoleCommands()
@@ -672,6 +686,7 @@ function TheContractor:loadFromXMLFile()
     self.Auctions:loadFromXMLFile(xmlFile)
     self.OpenDay:loadFromXMLFile(xmlFile)
     self.ShowSite:loadFromXMLFile(xmlFile)
+    self.Show:loadFromXMLFile(xmlFile)
     self.AuctionSale:loadFromXMLFile(xmlFile)
     TCCalendarChange.loadFromXMLFile(xmlFile)
 
@@ -767,6 +782,7 @@ function TheContractor:saveToXmlFile()
     tc.Auctions:saveToXmlFile(xmlFile)
     tc.OpenDay:saveToXmlFile(xmlFile)
     tc.ShowSite:saveToXmlFile(xmlFile)
+    tc.Show:saveToXmlFile(xmlFile)
     tc.AuctionSale:saveToXmlFile(xmlFile)
     TCCalendarChange.saveToXmlFile(xmlFile)
 
@@ -938,6 +954,10 @@ function TheContractor:deleteMap()
         self.Auctions:stopListening()
         self.Auctions:delete()
     end
+    if self.Show ~= nil then
+        self.Show:stopListening()
+        self.Show:delete()
+    end
     if self.OpenDay ~= nil then
         self.OpenDay:stopListening()
         self.OpenDay:delete()
@@ -1071,6 +1091,9 @@ function TheContractor:update(dt)
     -- machine).
     if self.Auctions ~= nil then
         self.Auctions:update(dt)
+    end
+    if self.Show ~= nil then
+        self.Show:update(dt)
     end
     if self.OpenDay ~= nil then
         self.OpenDay:update(dt)

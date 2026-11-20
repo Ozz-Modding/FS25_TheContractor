@@ -5,6 +5,10 @@
 --
 --   One at a time: no kind announces while another has one, from its
 --     announcement until it's cleared up (getOtherEvent).
+--   Held months (165): a kind that must have its day each year (the show)
+--     names the months it's announced in (HOLDS_PERIODS); while it's due
+--     to be announced, no other kind's roll announces in them
+--     (getHoldingKind), so an auction can't take the show's year.
 --   Its field's protected (isFieldInUse, for Jobs:isFieldProtected): no
 --     jobs generated, no NPC fieldwork (034), no random event put down.
 --   No protest (151) on a day its crowd's up (clashesWithCrowdDay).
@@ -61,6 +65,19 @@ function TheContractorPublicEvents:getOtherEvent(ownKind)
     return nil, nil
 end
 
+-- Server (165): the kind holding this month (a seasonal period, and its
+-- absolute index) for its own announcement, if it's another's and it's
+-- due (TheContractorEventDay:isDueToRoll); nil if none.
+function TheContractorPublicEvents:getHoldingKind(ownKind, period, periodIndex)
+    for _, kind in ipairs(self.kinds) do
+        if kind ~= ownKind and kind.HOLDS_PERIODS ~= nil and kind.HOLDS_PERIODS[period] and
+                kind:isDueToRoll(periodIndex) then
+            return kind
+        end
+    end
+    return nil
+end
+
 -- The kind and event on a field, if any.
 function TheContractorPublicEvents:getEventOnField(fieldId)
     for _, kind in ipairs(self.kinds) do
@@ -105,6 +122,10 @@ function TheContractorPublicEvents:replaceHost(oldId, newId)
         if event ~= nil and event.hostFarmerId == oldId then
             event.hostFarmerId = newId
             count = count + 1
+        end
+        -- 165: anything else of a farmer's the kind keeps (the show's results).
+        if kind.replacePerson ~= nil then
+            count = count + kind:replacePerson(oldId, newId)
         end
     end
     return count

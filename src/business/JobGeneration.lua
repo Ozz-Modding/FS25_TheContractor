@@ -268,8 +268,14 @@ TheContractorJobGeneration.JOB_TYPES = {
     -- as the sale's month begins; done by turning up, and missing it costs
     -- nothing. Its field is the sale's (the due-job circle goes there) and
     -- its customer the host, for show. No ground work, so no workAreaTypes.
+    -- eventKind (165): the public day out it's for (a TheContractorEventDay
+    -- kind's KIND); the job's auctionId is that day's id.
     attendAuction = { playerOnly = true, noEquipment = true, noReward = true, noJobEvents = true,
-        noConsequences = true, noAllocation = true },
+        noConsequences = true, noAllocation = true, eventKind = "auction" },
+    -- 165: go to the agricultural show on its day, as attendAuction does for
+    -- the auction (TCAuctionAttendance, with the show's kind).
+    attendShow = { playerOnly = true, noEquipment = true, noReward = true, noJobEvents = true,
+        noConsequences = true, noAllocation = true, eventKind = "show" },
     -- 152: an ADS standard inspection of a tractor lot at the auction, for a
     -- farmer thinking of bidding (TCLotInspections). On the sale's field
     -- (offField: the marker's on the lot), the player's as it's accepted,

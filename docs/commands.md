@@ -13,6 +13,7 @@ You type these into the developer console. You don't need cheats on. Each group 
 | `tcFarmer` | The map's farmers: who they are, their machines, your relationships, a new land split |
 | `tcYard` | Farm yards: list them, check a farmland, mark them on the map, override detection |
 | `tcAuction` | The machinery auction: see it, announce one, call it off |
+| `tcShow` | The agricultural show: see it, announce one, call it off |
 | `tcLog` | Toggles the mod's detailed log ([below](#tclog)) |
 
 Testing tools that aren't part of the game (spikes, forced rolls, readouts of hidden state) are a separate group, `tcDebug`, for development only. It only appears with a marker file in place.
@@ -690,6 +691,55 @@ Auction site candidates (grass, bare or harvested, nobody's farm, no live job, 1
   field 12 (Tom Hughes): 6.40 ha, 120 of 120 lots fit, slope steepest 4.1%, average 1.2%, rise 3.0 m, road 14 m from the edge - can hold the sale
   field 31: 2.10 ha, 22 of 120 lots fit, slope steepest 2.0%, average 0.8%, rise 1.1 m, road 40 m from the edge - too small
 1 of 2 candidates can hold the sale (64 fields on the map), checked in 410 ms.
+```
+
+## Show — `tcShow`
+
+### `tcShow status`
+
+The agricultural show (165). One is announced every year by itself, two or three months ahead, for a day in late summer; this shows it or makes one happen. One started here counts as that year's when it ends.
+
+The show, if there's one: its id, its showground's field, host farmer and state (`announced`, `signsUp`, `setOut`, `on` or `after`), the day it was announced, the day its signs go up, its reminder day, its day with the timetable and the day entries close, its entrance, the ploughing match's field if it's on a second one, and once the signs are up each sign's position (world x, z). With none, the last show's results if there are any. Server only.
+
+```
+tcShow status
+```
+
+```
+Show 1 on field 12, held by Tom Hargreaves: signsUp.
+  Announced May 2, Year 2; signs up July 10, Year 2; reminder August 3, Year 2; the day August 10, Year 2 (gatesOpen 08:00, judging 10:00, ploughing 11:00-15:00, results 16:00, gatesClose 18:00); entries close August 3, Year 2.
+  Entrance at 512, -88.
+```
+
+### `tcShow start [fieldId|auto] [days]`
+
+Announces one now, ignoring the season and the monthly roll. Its site is the best one `tcShow fields` lists (one farmer's field split into a showground and ploughing ground, or two fields side by side), its day 2 to 3 months ahead. The signs go up a month before the day, or at once if it's nearer. Every company farm gets the message, and every player the map marker. If the day's in this month, every company farm gets its Attend Show job at once; otherwise on the first day of the show's month.
+- `<fieldId>`: on that one field instead, split into the showground at its road end and the ploughing ground past it. No farm may own it, a farmer must hold it, it can't have a live job, and it must be big enough for the showground (120 x 60 m) and at least 4 plots; it doesn't need a road near or flat ground.
+- `auto`: the site picked as above, so `[days]` can be given without a field.
+- `[days]`: the day that many days from today (at least 1).
+
+There's only ever one public day out at a time: `start` refuses while there's a show or an auction. The show is saved, and a player joining gets it.
+
+```
+tcShow start
+tcShow start 12
+tcShow start auto 3
+```
+
+### `tcShow cancel`
+
+Calls it off: the site's put back to how it was if it's been dressed, everything on it is cleared away, the signs come down, the fields are free again, and every company farm is told. Any Attend Show job not yet done is taken away.
+
+```
+tcShow cancel
+```
+
+### `tcShow fields`
+
+The fields, and pairs of fields side by side, that could hold the show, best first: what `tcShow start` picks from. The same list as `tcDebug showSite` with no arguments: for each, its area, how many ploughing plots fit and the steepest, the showground's steepest slope, how far its road is, and either "can hold the show" or what's wrong. One field comes before a pair. Server only.
+
+```
+tcShow fields
 ```
 
 ## Log — `tcLog`

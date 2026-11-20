@@ -45,6 +45,8 @@ TheContractorAuctionSigns.DEFAULT_DESIGN = 1
 TheContractorAuctionSigns.DEFAULT_FACE = "auction"
 TheContractorAuctionSigns.FACES = {
     auction = { [1] = TheContractorAuctionSigns.DESIGNS[1].filename, [2] = TheContractorAuctionSigns.DESIGNS[2].filename },
+    -- 165: the county show's (placeholder art, dev/tools/genShowSignArt.py).
+    show = { [1] = "i3d/showSign1.i3d", [2] = "i3d/showSign2.i3d" },
 }
 -- Every design's posts (genAuctionSignI3d.py's POST and POST_Z): their
 -- cross-section and their middle behind the board.

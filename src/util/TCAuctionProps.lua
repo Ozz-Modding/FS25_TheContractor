@@ -40,6 +40,22 @@ TCAuctionProps.MODELS = {
     sign = { filename = "i3d/auctionSiteSign.i3d", isMod = true, collision = true },
     gateSign = { filename = "i3d/auctionGateSign.i3d", isMod = true, collision = true },
     board = { filename = "i3d/auctionBoard.i3d", isMod = true, collision = true },
+    -- 165: the show's arena (TCShowScene). childName: only that node of the
+    -- file is used (found by name anywhere below its root), the rest
+    -- thrown away: a fence placeable's one panel or post, a cone's look
+    -- without its loose body. Base game candidates, the user's to swap:
+    --   hurdle, hurdlePost: the US red steel rail fence's panel (3 m, its
+    --     origin at its start, running along its own z) and post;
+    --   cone: the US traffic cone's look (no collision: it'd be knocked
+    --     about as a loose body);
+    --   stand: our own sale office gazebo, as a trade stand.
+    hurdle = { filename = "$data/placeables/brandless/fences/US/fence10/fence10.i3d", childName = "panel01",
+        originZ = 1.5, collision = true },
+    hurdlePost = { filename = "$data/placeables/brandless/fences/US/fence10/fence10.i3d", childName = "pole01",
+        collision = true },
+    cone = { filename = "$data/maps/mapUS/textures/props/trafficCone.i3d", childName = "visual_lod" },
+    stand = { filename = "i3d/auctionGazebo.i3d", isMod = true, collision = true },
+    showGateSign = { filename = "i3d/showGateSign.i3d", isMod = true, collision = true },
 }
 -- The bale's straw (vanilla's straw bale texture, as Bale's STRAW fill type).
 TCAuctionProps.BALE_STRAW = "$data/objects/bales/squarebales/squarebale120/fillTypes/straw_diffuse.dds"
@@ -368,10 +384,21 @@ function TCAuctionProps.onModelLoaded(_, root, failedReason, args)
         return
     end
     active.loading = nil
-    local node = getChildAt(root, 0)
+    local prop, model = entry.prop, args.model
+    local node = nil
+    if model.childName ~= nil then
+        node = TCAuctionProps.findNode(root, model.childName)
+        if node == nil then
+            TCLog.warning("TheContractor: auction prop '%s' has no node '%s'", tostring(args.filename),
+                model.childName)
+            delete(root)
+            return
+        end
+    else
+        node = getChildAt(root, 0)
+    end
     link(getRootNode(), node)
     delete(root)
-    local prop, model = entry.prop, args.model
     if prop.kind == "bale" then
         node = TCAuctionProps.takeBaleVisual(node)
     end
@@ -383,6 +410,17 @@ function TCAuctionProps.onModelLoaded(_, root, failedReason, args)
         end
         entry.node = node
     end
+end
+
+-- 165: the first node named name below root (depth first), or nil.
+function TCAuctionProps.findNode(root, name)
+    local found = nil
+    eachNode(root, function(node)
+        if found == nil and node ~= root and getName(node) == name then
+            found = node
+        end
+    end)
+    return found
 end
 
 -- A bale's look without its body: the visual, out from under the dynamic

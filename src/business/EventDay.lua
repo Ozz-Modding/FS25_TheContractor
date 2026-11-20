@@ -143,16 +143,21 @@ function TheContractorEventDay.isOnTheField(state)
 end
 
 -- A message's args (client): the host's name as it is now, the field's
--- name, then the date as posted.
+-- name, then the date as posted, then (165) any more args it was posted
+-- with.
 function TheContractorEventDay.getMessageArgs(message)
     local farmers = g_currentMission.TheContractor.Farmers
     local host = farmers ~= nil and farmers:getPerson(message.payload.farmerId) or nil
     local field = g_fieldManager ~= nil and g_fieldManager:getFieldById(message.payload.fieldId) or nil
-    return {
+    local args = {
         host ~= nil and host.name or g_i18n:getText("tc_inbox_customerUnknown"),
         field ~= nil and field:getName() or tostring(message.payload.fieldId),
         message.args[1] or "",
     }
+    for i = 2, #message.args do
+        table.insert(args, message.args[i])
+    end
+    return args
 end
 
 -- The schedule (pure) ---------------------------------------------------------------------
@@ -265,6 +270,12 @@ function TheContractorEventDay:planDaysFor(announcedDay, day, daysPerPeriod)
 end
 
 -- Hooks (a kind fills in what it needs) ---------------------------------------------------
+
+-- Server (165): a new event made from its site (pickSite's or
+-- getFieldSite's), before it's announced: anything else the kind keeps on
+-- it.
+function TheContractorEventDay:initEvent(event, site)
+end
 
 -- Server: just announced (its messages and marker sent).
 function TheContractorEventDay:onAnnounced(event)
@@ -427,9 +438,28 @@ function TheContractorEventDay:onFarmlandOwnerChanged(farmlandId, farmId, loadFr
     end
 end
 
--- Server: the month's roll. Returns the event announced, or nil.
+-- Whether the kind could be announced in a month (an absolute period
+-- index): it rolls, has none, and its gap since the last is over. A save's
+-- first counts as having had one just long enough ago.
+function TheContractorEventDay:isDueToRoll(periodIndex)
+    if self.event ~= nil or self.ANNOUNCE_CHANCE_BASE == nil then
+        return false
+    end
+    local lastEnded = self.lastEndedPeriodIndex or (periodIndex - self.MIN_GAP_MONTHS)
+    return TheContractorEventDay.getChanceAfter(periodIndex - lastEnded, self.MIN_GAP_MONTHS,
+        self.ANNOUNCE_CHANCE_BASE, self.ANNOUNCE_CHANCE_STEP) > 0
+end
+
+-- Server: the month's roll. Returns the event announced, or nil. 165: never
+-- in a month another kind holds for its own announcement (HOLDS_PERIODS).
 function TheContractorEventDay:rollAnnouncement(random)
     if self.event ~= nil or self.ANNOUNCE_CHANCE_BASE == nil or self:getOtherEvent() ~= nil then
+        return nil
+    end
+    local publicEvents = g_currentMission.TheContractor.PublicEvents
+    if publicEvents ~= nil and publicEvents.getHoldingKind ~= nil and
+            publicEvents:getHoldingKind(self, g_currentMission.environment.currentPeriod,
+                TCCalendar.getPeriodIndex()) ~= nil then
         return nil
     end
     local periodIndex = TCCalendar.getPeriodIndex()
@@ -538,6 +568,7 @@ function TheContractorEventDay:announce(site, day, random)
         state = STATE.ANNOUNCED,
         entrance = site.entrance ~= nil and { x = site.entrance.x, z = site.entrance.z } or nil,
     }
+    self:initEvent(event, site)
     self.nextId = self.nextId + 1
     self.event = event
     TCLog.info("TheContractor: %s %d announced on field %d (host %d) for day %d, signs day %d", self.NAME, event.id,

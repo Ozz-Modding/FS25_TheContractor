@@ -463,9 +463,11 @@ function TheContractorJob:getSummaryText()
         return string.format(g_i18n:getText("tc_repair_summaryLine"), self:getTypeText(),
             self.workshop.vehicleName or "?")
     end
-    -- 141: just went along.
+    -- 141: just went along (165: to the auction or the show).
     if self.auctionId ~= nil then
-        return string.format(g_i18n:getText("tc_attendAuction_summaryLine"), self:getLocationText())
+        local key = TCAuctionAttendance.getJobKind(self) == "show" and "tc_attendShow_summaryLine" or
+            "tc_attendAuction_summaryLine"
+        return string.format(g_i18n:getText(key), self:getLocationText())
     end
     -- 124, 126: to or from a farmer's yard, no field.
     if self:isYardJob() then

@@ -39,9 +39,12 @@
             <Button profile="fs25_subCategorySelectorTabbedTab" id="subCategoryTabs[8]" text="$l10n_tc_header_auction" onClick="onClickAuction">
                 <ThreePartBitmap profile="fs25_subCategorySelectorTabbedTabBg" name="background"/>
             </Button>
-            <!-- 100: last, so hiding it without ADS leaves the other tabs'
-                 indices alone (MenuContractor:onFrameOpen). -->
+            <!-- 100: hidden without ADS (MenuContractor.isSubCategoryShown). -->
             <Button profile="fs25_subCategorySelectorTabbedTab" id="subCategoryTabs[9]" text="$l10n_tc_header_workshop" onClick="onClickWorkshop">
+                <ThreePartBitmap profile="fs25_subCategorySelectorTabbedTabBg" name="background"/>
+            </Button>
+            <!-- 165: the agricultural show, in its month. -->
+            <Button profile="fs25_subCategorySelectorTabbedTab" id="subCategoryTabs[10]" text="$l10n_tc_header_show" onClick="onClickShow">
                 <ThreePartBitmap profile="fs25_subCategorySelectorTabbedTabBg" name="background"/>
             </Button>
         </BoxLayout>
@@ -1318,6 +1321,56 @@
                         <Slider profile="fs25_listSlider" dataElementId="workshopDetailTable"/>
                     </ThreePartBitmap>
                 </GuiElement>
+            </GuiElement>
+        </GuiElement>
+
+        <!-- Show (165) ===================================================== -->
+        <GuiElement profile="fs25_subCategorySelectorTabbedContainer" id="subCategoryPages[10]">
+            <!-- Whose show, where and when. Not gated on a company: anyone can go. -->
+            <Text profile="tc_panelNote" id="showSummaryText" text="" position="40px -14px" size="576px 44px" textMaxNumLines="2"/>
+
+            <!-- The day's timetable, each entry done, on now or to come. -->
+            <GuiElement id="showTimetableContainer" position="40px -64px">
+                <GuiElement profile="tc_tableHeaderRow" position="0px 0px" size="600px 30px">
+                    <Button profile="tc_tableHeader" position="14px 0px" text="$l10n_tc_show_columnTime" handleFocus="false"/>
+                    <Button profile="tc_tableHeader" position="140px 0px" text="$l10n_tc_show_columnWhat" handleFocus="false"/>
+                    <Bitmap profile="tc_tableHeaderDivider"/>
+                </GuiElement>
+                <SmoothList id="showTimetableTable" profile="tc_table" position="0px -36px" size="600px 530px">
+                    <ListItem profile="tc_tableListItem">
+                        <RoundCorner profile="tc_tableRowSurface"/>
+                        <Bitmap profile="tc_tableRowAccent"/>
+                        <Text profile="tc_listRowCellLeft" position="14px 0px" size="120px 32px" name="time"/>
+                        <Text profile="tc_listRowValue" position="140px 0px" size="330px 32px" name="text"/>
+                        <RoundCorner profile="tc_rowChip" position="478px 0px" size="104px 20px" name="chip"/>
+                        <Text profile="tc_rowChipText" position="478px 0px" size="104px 20px" name="chipText"/>
+                    </ListItem>
+                </SmoothList>
+                <ThreePartBitmap profile="tc_slider_box" position="610px -36px" size="6px 530px">
+                    <Slider profile="fs25_listSlider" dataElementId="showTimetableTable"/>
+                </ThreePartBitmap>
+            </GuiElement>
+
+            <!-- The results: this show's once they're in, the last one's before. -->
+            <GuiElement id="showResultsBox" position="680px -20px">
+                <RoundCorner profile="tc_panel" position="0px 0px" size="800px 610px"/>
+                <Text profile="tc_panelHeading" id="showResultsTitle" text="" position="24px -16px" size="752px 32px"/>
+                <Bitmap profile="tc_divider" position="24px -56px" size="752px 1px"/>
+                <Text profile="tc_emptyStateText" id="showResultsEmptyText" text="" position="24px -80px" size="740px 60px" textMaxNumLines="2"/>
+                <SmoothList id="showResultsTable" profile="tc_table" position="24px -66px" size="740px 530px">
+                    <ListItem profile="tc_tableListItem">
+                        <RoundCorner profile="tc_tableRowSurface" name="surface"/>
+                        <Bitmap profile="tc_tableRowAccent"/>
+                        <Text profile="tc_listRowSection" position="14px 0px" size="700px 32px" name="section"/>
+                        <Text profile="tc_listRowCellLeft" position="14px 0px" size="60px 32px" name="placing"/>
+                        <Text profile="tc_listRowValue" position="80px 0px" size="250px 32px" name="entrant"/>
+                        <Text profile="tc_listRowLabel" position="336px 0px" size="250px 32px" name="who"/>
+                        <Text profile="tc_listRowCellRight" position="590px 0px" size="130px 32px" name="prize"/>
+                    </ListItem>
+                </SmoothList>
+                <ThreePartBitmap profile="tc_slider_box" position="770px -66px" size="6px 530px">
+                    <Slider profile="fs25_listSlider" dataElementId="showResultsTable"/>
+                </ThreePartBitmap>
             </GuiElement>
         </GuiElement>
     </GuiElement>

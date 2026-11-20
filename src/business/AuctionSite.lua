@@ -715,9 +715,14 @@ end
 -- open (TCAuctionLayout.layOutOpen: the entrance space, walking lanes over
 -- the rest), its scene dressed as that kind is (dressing: its KIND), and
 -- the ground made ready as for a sale (143). eventId: the event it's for,
--- whose protected field it is. Returns the text to print; self.site is set
--- if it went up.
-function TheContractorAuctionSite:startOpen(fieldId, dressing, eventId)
+-- whose protected field it is. options (165), any of: rect (lay out in
+-- this rectangle, not the field's largest: the show's showground),
+-- entrance (the road point to use), keepGround (leave the ground alone:
+-- the show dresses its own, 164), getWalkways(scene) (the crowd's walks
+-- from the scene, in place of the open lanes). Returns the text to print;
+-- self.site is set if it went up.
+function TheContractorAuctionSite:startOpen(fieldId, dressing, eventId, options)
+    options = options or {}
     if self.site ~= nil then
         return string.format("There's a site on field %d already.", self.site.fieldId)
     end
@@ -730,14 +735,22 @@ function TheContractorAuctionSite:startOpen(fieldId, dressing, eventId)
         return string.format("Field %d can't be a site: %s.", fieldId, refusal)
     end
     local polygon = TCAuctionCrowd.getFieldPolygon(field)
-    local entrance = TCAuctionLayout.findEntrance(polygon, TheContractorFallenTree.sampleRoads(),
+    local entrance = options.entrance or TCAuctionLayout.findEntrance(polygon, TheContractorFallenTree.sampleRoads(),
         TCAuctionLayout.RULES.entranceReach)
-    local layout = TCAuctionLayout.layOutOpen(polygon, entrance)
+    local layout
+    if options.rect ~= nil then
+        layout = TCAuctionLayout.layOutOpenRect(options.rect, entrance)
+    else
+        layout = TCAuctionLayout.layOutOpen(polygon, entrance)
+    end
     if layout == nil then
         return string.format("Field %d has no room.", fieldId)
     end
     local scene = TCAuctionLayout.getScene(layout, entrance, math.random(1, 1000000000))
     scene.dressing = dressing
+    if options.getWalkways ~= nil then
+        layout.walkways = options.getWalkways(scene)
+    end
     local site = {
         fieldId = fieldId,
         entrance = entrance,
@@ -751,7 +764,10 @@ function TheContractorAuctionSite:startOpen(fieldId, dressing, eventId)
     }
     self.site = site
     self.queue = {}
-    local ground = TheContractorAuctionSite.prepareGround(site, field)
+    local ground = "kept"
+    if not options.keepGround then
+        ground = TheContractorAuctionSite.prepareGround(site, field)
+    end
     TCLog.info("TheContractor: open site (%s) on field %d, %d walkway(s), ground %s", tostring(dressing), fieldId,
         #site.walkways, ground)
     self:sync()

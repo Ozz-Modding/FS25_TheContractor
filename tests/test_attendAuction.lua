@@ -424,3 +424,43 @@ test("its auction survives a save", function()
     assertEquals(copy.readyDay, 25)
     assertEquals(copy.state, TheContractorJob.STATE.ACCEPTED)
 end)
+
+-- 165: the show's attend job ------------------------------------------------------------
+
+test("the show's job is its own: its type, found and taken away by its kind, not the auction's", function()
+    local world, tc = setup()
+    -- A show numbered as the auction is (each kind counts its own), on the
+    -- same day, with later hours.
+    local show = {
+        KIND = "show", NAME = "show", ATTEND_JOB_TYPE = "attendShow", START_HOUR = 8, END_HOUR = 18,
+        event = { id = 4, fieldId = 3, hostFarmerId = HOST_ID, day = 25 },
+        getEvent = function(self) return self.event end,
+        getSiteFieldIds = function(self, event) return { event.fieldId } end,
+    }
+    tc.PublicEvents:registerKind(show)
+    reachSaleMonth(world, tc)
+    TCAuctionAttendance.createDueJobs(show.event, show)
+    local job = TCAuctionAttendance.getJob(1, 4, show)
+    assertTrue(job ~= nil)
+    assertEquals(job.jobType, "attendShow")
+    assertEquals(TCAuctionAttendance.getJobKind(job), "show")
+    assertEquals(TCAuctionAttendance.getJob(1, 4).jobType, "attendAuction", "the auction's is another")
+
+    -- A company set up now gets both.
+    world.companyFarms = { 1, 2, 3 }
+    TCAuctionAttendance.onCompanyCreated(3)
+    assertEquals(#attendJobs(tc, 3), 2)
+
+    -- Someone on the show's field in its hours: the show's job done only.
+    world.players = { { farmId = 1, x = 50, z = 50 } }
+    setTime(25, 9)
+    TCAuctionAttendance.checkAttendance(show.event, show)
+    assertEquals(job.state, TheContractorJob.STATE.COMPLETED)
+    assertEquals(TCAuctionAttendance.getJob(1, 4).state, TheContractorJob.STATE.ACCEPTED)
+
+    -- Calling the auction off leaves the show's jobs.
+    TCAuctionAttendance.removeJobs(4)
+    assertTrue(TCAuctionAttendance.getJob(2, 4, show) ~= nil)
+    TCAuctionAttendance.removeJobs(4, show)
+    assertEquals(TCAuctionAttendance.getJob(2, 4, show), nil)
+end)

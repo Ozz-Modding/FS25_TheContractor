@@ -38,7 +38,9 @@
 -- only: the car park, the food area, the toilets, bunting and bales, and
 -- their signs. Everything that says "auction" (the gate's sign, the sale
 -- office and its closing hours, the boards about bidding and lots, the
--- rows' lot signs) is the auction's alone.
+-- rows' lot signs) is the auction's alone. 165: the show's (dressing
+-- "show") adds its own gate sign, and its arena past the entrance space
+-- (TCShowScene: the ring, pens, stands and trailer lines).
 
 TCAuctionScene = {}
 
@@ -75,6 +77,8 @@ TCAuctionScene.SIZES = {
     bale = { width = 1.2, length = 0.5 },
     sign = { width = 1.6, length = 0.3 },
     gateSign = { width = 3.0, length = 0.3 },
+    -- 165: the show's gate sign, the auction's board with its own face.
+    showGateSign = { width = 3.0, length = 0.3 },
     board = { width = 1.4, length = 0.7 },
 }
 
@@ -338,6 +342,8 @@ function TCAuctionScene.layOut(scene)
     if isAuction then
         add("gateSign", 1.2, sideV(sides[1], 2.5), outwardYaw, { face = TCAuctionScene.FACES.GATE })
         add("board", 2.8, sideV(sides[2], 2.0), outwardYaw, { board = TCAuctionScene.BOARDS.SOLD_AS_SEEN })
+    elseif TCShowScene ~= nil and TCShowScene.isShowDressing(scene) then
+        add("showGateSign", 1.2, sideV(sides[1], 2.5), outwardYaw)
     end
     for _, side in ipairs(sides) do
         for k, d in ipairs({ 1.3, 2.7 }) do
@@ -516,6 +522,16 @@ function TCAuctionScene.layOut(scene)
     local midU = (scene.nearEdge + scene.farEdge) * 0.5
     local mx, mz = toWorld(scene, midU, (reserve.vFrom + reserve.vTo) * 0.5)
     table.insert(result.sounds, { x = mx, z = mz })
+
+    -- 165: the show's arena (TCShowScene), past the entrance space.
+    if TCShowScene ~= nil and TCShowScene.isShowDressing(scene) then
+        local show = TCShowScene.layOut(scene)
+        for _, key in ipairs({ "props", "spots", "sounds" }) do
+            for _, item in ipairs(show[key]) do
+                table.insert(result[key], item)
+            end
+        end
+    end
     return result
 end
 

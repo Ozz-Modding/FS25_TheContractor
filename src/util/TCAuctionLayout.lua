@@ -347,6 +347,13 @@ function TCAuctionLayout.layOutOpen(polygon, entrance, options)
     if rect == nil then
         return nil
     end
+    return TCAuctionLayout.layOutOpenRect(rect, entrance, options)
+end
+
+-- 165: the same in a rectangle given (the show's showground, 164), not the
+-- field's largest. rect: { cx, cz, angle, halfU, halfV }.
+function TCAuctionLayout.layOutOpenRect(rect, entrance, options)
+    local layout = copyLayout(options)
     local nearSign = -1
     if entrance ~= nil then
         local eu = TCAuctionLayout.toLocal(rect, entrance.x, entrance.z)

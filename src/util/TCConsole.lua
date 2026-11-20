@@ -73,6 +73,7 @@ TCConsole.GROUPS = {
     { key = "farmer", command = "tcFarmer", description = "The map's farmers: who they are, their machines, your relationships, a new land split" },
     { key = "yard", command = "tcYard", description = "Farm yards: list them, check a farmland, mark them on the map, override detection" },
     { key = "auction", command = "tcAuction", description = "The machinery auction: see it, announce one, call it off" },
+    { key = "show", command = "tcShow", description = "The agricultural show: see it, announce one, call it off" },
     { key = "debug", command = "tcDebug", description = "Testing tools: spikes, forced rolls and hidden state", debugOnly = true },
 }
 

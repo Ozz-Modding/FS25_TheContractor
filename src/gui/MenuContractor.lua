@@ -1,6 +1,7 @@
--- Top-level "Contractor" in-game menu page: nine sub-tabs (Overview, Inbox,
--- Jobs, Staff, Finances, Logbook, Supplies, Auction, and Workshop while
--- FS25_AdvancedDamageSystem is loaded). Structure mirrors FS25_RedTape/src/gui/MenuRedTape.lua's own
+-- Top-level "Contractor" in-game menu page: ten sub-tabs (Overview, Inbox,
+-- Jobs, Staff, Finances, Logbook, Supplies, Auction on an auction's sale
+-- day, Workshop while FS25_AdvancedDamageSystem is loaded, and Show in the
+-- agricultural show's month). Structure mirrors FS25_RedTape/src/gui/MenuRedTape.lua's own
 -- top-level page + subCategory-tab pattern.
 
 MenuContractor = {}
@@ -27,6 +28,8 @@ MenuContractor.SUB_CATEGORY = {
     -- 100: ADS repair contracts being worked on. Kept last: it's hidden
     -- without ADS, which only works for the last tab (onFrameOpen).
     WORKSHOP = 9,
+    -- 165: the agricultural show, in its month: timetable and results.
+    SHOW = 10,
 }
 
 -- How often, at most, the open tab redraws for data from the server
@@ -43,6 +46,7 @@ MenuContractor.HEADER_SLICES = {
     [MenuContractor.SUB_CATEGORY.SUPPLIES] = "gui.icon_ingameMenu_productionChains",
     [MenuContractor.SUB_CATEGORY.AUCTION] = "gui.icon_ingameMenu_map",
     [MenuContractor.SUB_CATEGORY.WORKSHOP] = "gui.icon_ingameMenu_options",
+    [MenuContractor.SUB_CATEGORY.SHOW] = "gui.icon_ingameMenu_animals",
 }
 
 MenuContractor.HEADER_TITLES = {
@@ -55,6 +59,7 @@ MenuContractor.HEADER_TITLES = {
     [MenuContractor.SUB_CATEGORY.SUPPLIES] = "tc_header_supplies",
     [MenuContractor.SUB_CATEGORY.AUCTION] = "tc_header_auction",
     [MenuContractor.SUB_CATEGORY.WORKSHOP] = "tc_header_workshop",
+    [MenuContractor.SUB_CATEGORY.SHOW] = "tc_header_show",
 }
 
 local function formatTargetDate(period, dayInPeriod)
@@ -809,6 +814,23 @@ function MenuContractor:initialize()
     self.auctionTable:setDelegate(self)
     self.auctionDetailTable:setDataSource(self)
     self.auctionDetailTable:setDelegate(self)
+
+    -- Show (165): the day's timetable and the results, read only. Show on
+    -- map while there's a show.
+    self.showTimetableRows = {}
+    self.showResultRows = {}
+    self.btnShowShowOnMap = {
+        inputAction = InputAction.MENU_ACTIVATE,
+        text = g_i18n:getText("tc_auction_showOnMap"),
+        callback = function()
+            self:onClickShowShowOnMap()
+        end
+    }
+    self.menuButtonInfoShow = { self.btnBack, self.btnNextPage, self.btnPrevPage, self.btnShowShowOnMap }
+    self.showTimetableTable:setDataSource(self)
+    self.showTimetableTable:setDelegate(self)
+    self.showResultsTable:setDataSource(self)
+    self.showResultsTable:setDelegate(self)
 end
 
 function MenuContractor:getMenuButtonInfo()
@@ -907,12 +929,17 @@ function MenuContractor:getMenuButtonInfo()
         return self.menuButtonInfoAuction
     end
 
+    if state == MenuContractor.SUB_CATEGORY.SHOW and MenuContractor.getShow() ~= nil then
+        return self.menuButtonInfoShow
+    end
+
     return self.menuButtonInfo[state]
 end
 
 -- Which tabs are shown: the Workshop only with ADS (100), the Auction only
--- on an auction's sale day, while its lots are out (138). Every other tab
--- always, its content gated instead.
+-- on an auction's sale day, while its lots are out (138), the Show only in
+-- the show's month (or its results' month, 165). Every other tab always,
+-- its content gated instead.
 function MenuContractor.isSubCategoryShown(category)
     local S = MenuContractor.SUB_CATEGORY
     if category == S.WORKSHOP then
@@ -920,6 +947,9 @@ function MenuContractor.isSubCategoryShown(category)
     elseif category == S.AUCTION then
         local auction = MenuContractor.getAuction()
         return auction ~= nil and TheContractorAuctions.isOnTheField(auction.state)
+    elseif category == S.SHOW then
+        local tc = g_currentMission.TheContractor
+        return tc ~= nil and tc.Show ~= nil and tc.Show:isTabShown()
     end
     return true
 end
@@ -1124,6 +1154,8 @@ function MenuContractor:refreshOpenTab()
             self:refreshWorkshopState(farmId)
         elseif state == S.AUCTION then
             self:refreshAuctionState()
+        elseif state == S.SHOW then
+            self:refreshShowState()
         end
     end
     self:updateWorkerPortrait()
@@ -1362,8 +1394,9 @@ function MenuContractor:refreshCompanyState()
     self.placeholderWorkshop:setVisible(not hasCompany)
     self.placeholderWorkshop:setText(lockedText)
 
-    -- 138: with or without a company.
+    -- 138: with or without a company. 165: the show too.
     self:refreshAuctionState()
+    self:refreshShowState()
 end
 
 -- Overview tab's last-job line (029): the most recent completion summary,
@@ -3348,6 +3381,10 @@ function MenuContractor:getNumberOfItemsInSection(list, section)
         return #self.auctionLots
     elseif list == self.auctionDetailTable then
         return #self.auctionDetailRows
+    elseif list == self.showTimetableTable then
+        return #self.showTimetableRows
+    elseif list == self.showResultsTable then
+        return #self.showResultRows
     elseif list == self.inboxMessageTable then
         return #self.inboxMessages
     end
@@ -3402,6 +3439,12 @@ function MenuContractor:populateCellForItemInSection(list, section, index, cell)
         return
     elseif list == self.auctionDetailTable then
         self:populateAuctionDetailCell(index, cell)
+        return
+    elseif list == self.showTimetableTable then
+        self:populateShowTimetableCell(index, cell)
+        return
+    elseif list == self.showResultsTable then
+        self:populateShowResultCell(index, cell)
         return
     end
 
@@ -3800,9 +3843,11 @@ function MenuContractor:updateCompletedJobReport()
         self.jobsCompletedReport:setText("")
         return
     end
-    -- 141: there's nothing to report of going to an auction.
+    -- 141: there's nothing to report of going to an auction (165: or the show).
     if job.auctionId ~= nil then
-        self.jobsCompletedReport:setText(g_i18n:getText("tc_attendAuction_completedReport"))
+        local key = TCAuctionAttendance.getJobKind(job) == "show" and "tc_attendShow_completedReport" or
+            "tc_attendAuction_completedReport"
+        self.jobsCompletedReport:setText(g_i18n:getText(key))
         return
     end
 
@@ -5465,9 +5510,13 @@ function MenuContractor:updateJobDetails()
     self.jobsDetailTitle:setText(job:getDisplayTitle())
     self.jobsLabelPrice:setText(g_i18n:getText("tc_jobDetails_price"))
     self.jobsLabelDue:setText(g_i18n:getText("tc_jobDetails_due"))
-    -- 141: an auction to go to has its own rows.
+    -- 141: an auction to go to has its own rows (165: the show its own).
     if job.auctionId ~= nil then
-        self:updateAttendAuctionDetails(job)
+        if TCAuctionAttendance.getJobKind(job) == "show" then
+            self:updateAttendShowDetails(job)
+        else
+            self:updateAttendAuctionDetails(job)
+        end
         return
     end
 
@@ -5531,6 +5580,29 @@ function MenuContractor:updateAttendAuctionDetails(job)
     local closeHours = TheContractorAuctionSite.CLOSE_HOURS
     self.jobsDetailNote:setText(string.format(g_i18n:getText("tc_attendAuction_note"), TheContractorAuctions.SALE_HOUR,
         closeHours[1], closeHours[2]))
+end
+
+-- 165: the show to go to: where, who's holding it, the day and its
+-- timetable.
+function MenuContractor:updateAttendShowDetails(job)
+    self.jobsLabelPlace:setText(g_i18n:getText("tc_jobDetails_field"))
+    self.jobsDetailPlace:setText(job:getLocationText())
+
+    self.jobsLabelCrew:setText(g_i18n:getText("tc_attendShow_detailGates"))
+    self.jobsDetailCrew:setText(string.format(g_i18n:getText("tc_attendShow_gates"), TheContractorShow.START_HOUR,
+        TheContractorShow.END_HOUR))
+
+    self.jobsLabelPrice:setText(g_i18n:getText("tc_attendAuction_detailHost"))
+    self.jobsDetailPrice:setText(job:getCustomerName() or "-")
+
+    self.jobsRowReady:setVisible(false)
+    self.jobsLabelDue:setText(g_i18n:getText("tc_attendShow_detailShowDay"))
+    self.jobsDetailDue:setText(formatDueWithDaysLeft(job))
+    self.jobsDetailRows:invalidateLayout()
+
+    local T = TheContractorShow.TIMETABLE
+    self.jobsDetailNote:setText(string.format(g_i18n:getText("tc_attendShow_note"), T[2].hour, T[3].hour,
+        T[3].toHour, T[4].hour))
 end
 
 -- Why there's no Allocate yet (132), and a harvest & haul's selling point
@@ -8392,6 +8464,158 @@ function MenuContractor:onClickAuctionShowOnMap()
     end
 end
 
+-- Show (165) -------------------------------------------------------------------
+
+-- The show announced or under way (every machine's synced copy), or nil.
+function MenuContractor.getShow()
+    local tc = g_currentMission.TheContractor
+    return tc ~= nil and tc.Show ~= nil and tc.Show:getEvent() or nil
+end
+
+-- "1st", "2nd", "3rd", then "4th" and on (each placing's own key).
+local function getPlacingText(placing)
+    return string.format(g_i18n:getText("tc_show_placing" .. math.min(placing, 4)), placing)
+end
+
+-- A placing's farm or farmer, by name.
+local function getPlacingWho(placing)
+    if placing.farmId ~= nil and placing.farmId > 0 then
+        local farm = g_farmManager:getFarmById(placing.farmId)
+        return farm ~= nil and farm.name or "-"
+    end
+    local farmers = g_currentMission.TheContractor.Farmers
+    local person = farmers ~= nil and placing.farmerId ~= nil and placing.farmerId > 0 and
+        farmers:getPerson(placing.farmerId) or nil
+    return person ~= nil and person.name or "-"
+end
+
+-- Every farm's, company or not, in the show's month (isSubCategoryShown):
+-- the summary, the day's timetable and the results (this year's once
+-- they're in, last year's before).
+function MenuContractor:refreshShowState()
+    if self.showSummaryText == nil then
+        return
+    end
+    local tc = g_currentMission.TheContractor
+    local show = tc.Show
+    local event = MenuContractor.getShow()
+    local results = show ~= nil and show:getResults() or nil
+    local today = g_currentMission.environment.currentMonotonicDay
+
+    if event ~= nil then
+        local host = tc.Farmers ~= nil and tc.Farmers:getPerson(event.hostFarmerId) or nil
+        local field = g_fieldManager:getFieldById(event.fieldId)
+        local summary = string.format(g_i18n:getText("tc_show_tabSummary"),
+            host ~= nil and host.name or g_i18n:getText("tc_inbox_customerUnknown"),
+            field ~= nil and field:getName() or tostring(event.fieldId), formatMonotonicDay(event.day))
+        if event.ploughFieldId ~= nil and event.ploughFieldId ~= event.fieldId then
+            local ploughField = g_fieldManager:getFieldById(event.ploughFieldId)
+            summary = summary .. " " .. string.format(g_i18n:getText("tc_show_tabPloughField"),
+                ploughField ~= nil and ploughField:getName() or tostring(event.ploughFieldId))
+        end
+        self.showSummaryText:setText(summary)
+    else
+        self.showSummaryText:setText(g_i18n:getText("tc_show_tabOver"))
+    end
+
+    -- The timetable, each entry's state on the day.
+    local rows = {}
+    local hour = g_currentMission.environment.currentHour or 0
+    local states = TheContractorShow.getTimetableStates(TheContractorShow.TIMETABLE, today,
+        event ~= nil and event.day or today - 1, hour)
+    for i, entry in ipairs(TheContractorShow.TIMETABLE) do
+        local time = string.format("%02d:00", entry.hour)
+        if entry.toHour ~= nil then
+            time = string.format("%02d:00-%02d:00", entry.hour, entry.toHour)
+        end
+        table.insert(rows, { time = time, text = g_i18n:getText("tc_show_timetable_" .. entry.key), state = states[i] })
+    end
+    self.showTimetableRows = rows
+    self.showTimetableTable:reloadData()
+
+    -- The results: this show's once given, the last show's before.
+    local resultRows = {}
+    local isThisShow = results ~= nil and event ~= nil and results.showId == event.id
+    if results ~= nil then
+        local titleKey = isThisShow and "tc_show_resultsTitle" or "tc_show_lastResultsTitle"
+        if event == nil then
+            titleKey = "tc_show_resultsTitle"
+        end
+        self.showResultsTitle:setText(string.format(g_i18n:getText(titleKey), formatMonotonicDay(results.day)))
+        local lastTitle = nil
+        for _, placing in ipairs(results.placings) do
+            if placing.titleKey ~= lastTitle then
+                lastTitle = placing.titleKey
+                local title = placing.titleKey ~= "" and g_i18n:getText(placing.titleKey) or "-"
+                table.insert(resultRows, { section = title })
+            end
+            table.insert(resultRows, { placing = placing })
+        end
+    else
+        self.showResultsTitle:setText(g_i18n:getText("tc_show_resultsNoneTitle"))
+    end
+    self.showResultRows = resultRows
+    self.showResultsTable:reloadData()
+    self.showResultsEmptyText:setVisible(#resultRows == 0)
+    local emptyKey = "tc_show_resultsNone"
+    if event ~= nil and not isThisShow then
+        emptyKey = "tc_show_resultsAt"
+    end
+    self.showResultsEmptyText:setText(string.format(g_i18n:getText(emptyKey), TheContractorShow.RESULTS_HOUR))
+end
+
+-- A timetable entry's chip: done or on now (nothing for one to come).
+local SHOW_STATE_CHIPS = {
+    done = { key = "tc_show_stateDone", tone = "neutral" },
+    now = { key = "tc_show_stateNow", tone = "good" },
+}
+
+function MenuContractor:populateShowTimetableCell(index, cell)
+    local row = self.showTimetableRows[index]
+    if row == nil then
+        return
+    end
+    cell:getAttribute("time"):setText(row.time)
+    cell:getAttribute("text"):setText(row.text)
+    local chip = SHOW_STATE_CHIPS[row.state]
+    setChip(cell:getAttribute("chip"), cell:getAttribute("chipText"),
+        chip ~= nil and g_i18n:getText(chip.key) or nil, chip ~= nil and chip.tone or nil)
+end
+
+function MenuContractor:populateShowResultCell(index, cell)
+    local row = self.showResultRows[index]
+    if row == nil then
+        return
+    end
+    local isSection = row.section ~= nil
+    cell:getAttribute("surface"):setVisible(not isSection)
+    cell:getAttribute("section"):setVisible(isSection)
+    cell:getAttribute("section"):setText(row.section or "")
+    for _, name in ipairs({ "placing", "entrant", "who", "prize" }) do
+        cell:getAttribute(name):setVisible(not isSection)
+    end
+    if isSection then
+        return
+    end
+    local placing = row.placing
+    cell:getAttribute("placing"):setText(getPlacingText(placing.placing))
+    cell:getAttribute("entrant"):setText(placing.entrant or "")
+    cell:getAttribute("who"):setText(getPlacingWho(placing))
+    -- What a farm was paid; a farmer's prize as it stands.
+    local amount = placing.paid
+    if placing.farmId == nil or placing.farmId <= 0 then
+        amount = TheContractorShow.scalePrize(placing.prize or 0)
+    end
+    cell:getAttribute("prize"):setText(g_i18n:formatMoney(amount or 0, 0, true, true))
+end
+
+function MenuContractor:onClickShowShowOnMap()
+    local show = g_currentMission.TheContractor.Show
+    if show ~= nil and show:getEvent() ~= nil then
+        show:showOnMap()
+    end
+end
+
 -- Level/duration choice, cost preview and the funds/tier checks all live in
 -- TCAdvertisingDialog (027), which sends the purchase event itself.
 function MenuContractor:onClickBuyAdvertising()
@@ -8451,6 +8675,11 @@ end
 
 function MenuContractor:onClickWorkshop()
     self:setSubCategory(MenuContractor.SUB_CATEGORY.WORKSHOP)
+    self:setMenuButtonInfoDirty()
+end
+
+function MenuContractor:onClickShow()
+    self:setSubCategory(MenuContractor.SUB_CATEGORY.SHOW)
     self:setMenuButtonInfoDirty()
 end
 

@@ -31,7 +31,10 @@
 --     showground green, the ploughing ground's edge and the dividing line
 --     yellow, the plots white, the entrance a yellow post.
 --
--- 165 calls dress at midnight before the day and restore at midnight after.
+-- 165: the show (tc.Show) owns the site from its announcement: it keeps its
+-- plan here (setPlan), calls dress at midnight before the day and clear
+-- (restore, then drop) at midnight after or when it's called off. While it
+-- does, the console's spike leaves the site alone.
 -- Server-wide, not a farm's: nothing to forget when a farm is deleted.
 
 TheContractorShowSite = {}
@@ -74,9 +77,10 @@ local function getHolder(field)
 end
 
 -- Why a field can't be part of a show site at all (nil if it can): the
--- console's words.
-function TheContractorShowSite.getFieldRefusal(field)
-    local refusal = TheContractorAuctionSite.getFieldRefusal(field)
+-- console's words. forEventId (165): the show it's for, whose own field it
+-- may be.
+function TheContractorShowSite.getFieldRefusal(field, forEventId)
+    local refusal = TheContractorAuctionSite.getFieldRefusal(field, forEventId, forEventId ~= nil and "show" or nil)
     if refusal ~= nil then
         return refusal
     end
@@ -218,8 +222,8 @@ function TheContractorShowSite:pickBest()
 end
 
 -- Server: a plan on a field, or on two (the showground's first). Returns
--- the candidate, or nil and why not.
-function TheContractorShowSite:planOn(fieldId, ploughFieldId)
+-- the candidate, or nil and why not. forEventId: the show it's for (165).
+function TheContractorShowSite:planOn(fieldId, ploughFieldId, forEventId)
     local roads = TheContractorFallenTree.sampleRoads()
     local shapes = {}
     for _, id in ipairs({ fieldId, ploughFieldId or false }) do
@@ -228,7 +232,7 @@ function TheContractorShowSite:planOn(fieldId, ploughFieldId)
             if field == nil then
                 return nil, string.format("No field %d.", id)
             end
-            local refusal = TheContractorShowSite.getFieldRefusal(field)
+            local refusal = TheContractorShowSite.getFieldRefusal(field, forEventId)
             if refusal ~= nil then
                 return nil, string.format("Field %d can't be part of a show site: %s.", id, refusal)
             end
@@ -247,6 +251,21 @@ function TheContractorShowSite:planOn(fieldId, ploughFieldId)
 end
 
 -- Dressing and putting back (server) -----------------------------------------------------------
+
+-- 165: the show's plan, not yet dressed (replacing any the console made).
+function TheContractorShowSite:setPlan(plan)
+    if self.site ~= nil and self.site.dressed then
+        self:restore()
+    end
+    self.site = { plan = plan, dressed = false }
+    self.debugVisible = false
+end
+
+-- 165: whether the show has the site (the console's spike keeps off it).
+local function isShowsSite()
+    local show = g_currentMission.TheContractor.Show
+    return show ~= nil and show:getEvent() ~= nil
+end
 
 -- The site's fields, the showground's first (once each).
 function TheContractorShowSite.getFieldIds(plan)
@@ -589,6 +608,9 @@ function TheContractorShowSite.registerConsoleCommands()
             local showSite = g_currentMission.TheContractor.ShowSite
             if args[1] == nil then
                 return showSite:getListText()
+            end
+            if isShowsSite() then
+                return "The show has the site: 'tcShow cancel' first."
             end
             local action = string.lower(args[1])
             if action == "dress" or action == "restore" or action == "clear" then
