@@ -181,14 +181,15 @@ end
 -- Whether `vehicle` is the implement a non-harvest job type needs (032):
 -- it carries the job's implementSpec and none of its excludedSpecs (a plow
 -- with a packer isn't a cultivator), and on top of that a weeder has to be
--- the right kind (a hoe for hoeing, a tine weeder for weeding - vanilla's
--- WeedMission/HoeMission tell them apart by Weeder's isHoeWeeder), and a
+-- able to do the job (canWeed), and a
 -- sprayer has to take one of the job's products (fertilizer, herbicide or
 -- lime - the same sprayer spec covers fertilizer and lime spreaders, manure
 -- spreaders and slurry tankers). A sowing machine has to take the job's crop
 -- (canSowFruit): a grain drill can't put in parsnips, nor a potato planter
 -- wheat. fruitTypeIndex nil means "any crop", as for canCutFruit.
-function TCEquipmentClass.isJobImplement(vehicle, jobDef, fruitTypeIndex)
+-- standingCrop (getStandingCrop) is the crop on the job's field right now,
+-- nil when that isn't known (a job type check at generation).
+function TCEquipmentClass.isJobImplement(vehicle, jobDef, fruitTypeIndex, standingCrop)
     if jobDef.implementSpec == nil or vehicle[jobDef.implementSpec] == nil then
         return false
     end
@@ -203,7 +204,7 @@ function TCEquipmentClass.isJobImplement(vehicle, jobDef, fruitTypeIndex)
     end
 
     if jobDef.weederType ~= nil then
-        return (vehicle.spec_weeder.isHoeWeeder == true) == (jobDef.weederType == "hoe")
+        return TCEquipmentClass.canWeed(vehicle, jobDef, standingCrop)
     end
 
     if jobDef.implementSpec == "spec_sprayer" and jobDef.supplyFillTypeNames ~= nil then
@@ -220,6 +221,70 @@ function TCEquipmentClass.isJobImplement(vehicle, jobDef, fruitTypeIndex)
     end
 
     return true
+end
+
+-- Whether a weeder can do a weed or hoe job. The job's own kind (a tine
+-- weeder for weeding, a hoe for hoeing - vanilla's WeedMission/HoeMission
+-- tell them apart by Weeder's isHoeWeeder) always can: the job was offered
+-- for a crop that kind can work. The other kind can when it kills every
+-- weed state the job's own kind does (the weed system's weeder
+-- replacements: a hoe clears all a tine weeder does, not the other way
+-- round) and, with the standing crop known, the crop is at a stage that
+-- kind can work: past it the tool leaves the weeds standing
+-- (FSDensityMapUtil.updateWeederArea: the crop at or below the tool's last
+-- allowed stage, or cut). A hoe's stages and a tine weeder's differ per
+-- crop (a hoe stops earlier in cereals, later in sugar beet).
+function TCEquipmentClass.canWeed(vehicle, jobDef, standingCrop)
+    local isHoe = vehicle.spec_weeder.isHoeWeeder == true
+    local jobIsHoe = jobDef.weederType == "hoe"
+    if isHoe == jobIsHoe then
+        return true
+    end
+
+    local weedSystem = g_currentMission ~= nil and g_currentMission.weedSystem or nil
+    if weedSystem == nil or weedSystem.getWeederReplacements == nil then
+        return false
+    end
+    local jobReplacements = weedSystem:getWeederReplacements(jobIsHoe)
+    local toolReplacements = weedSystem:getWeederReplacements(isHoe)
+    if jobReplacements == nil or jobReplacements.weed == nil or toolReplacements == nil or
+        toolReplacements.weed == nil then
+        return false
+    end
+    for state, target in pairs(jobReplacements.weed.replacements) do
+        if target == 0 and toolReplacements.weed.replacements[state] ~= 0 then
+            return false
+        end
+    end
+
+    if standingCrop ~= nil and standingCrop.fruitTypeIndex ~= nil and
+        standingCrop.fruitTypeIndex ~= FruitType.UNKNOWN then
+        local fruitType = g_fruitTypeManager:getFruitTypeByIndex(standingCrop.fruitTypeIndex)
+        if fruitType ~= nil then
+            local maxState = isHoe and fruitType.maxWeederHoeState or fruitType.maxWeederState
+            local growthState = standingCrop.growthState or 0
+            return growthState <= (maxState or 0) or growthState == fruitType.cutState
+        end
+    end
+    return true
+end
+
+-- The crop standing on a weed or hoe job's field right now, as
+-- { fruitTypeIndex, growthState } for canWeed; nil for any other job type,
+-- or a field that can't be found. Read from the density map at the field's
+-- centre, as the field's own state is (FieldState:update), since vanilla
+-- only keeps that up to date on the server and the menu asks on clients.
+function TCEquipmentClass.getStandingCrop(jobDef, fieldId)
+    if jobDef == nil or jobDef.weederType == nil or fieldId == nil then
+        return nil
+    end
+    local field = g_fieldManager:getFieldById(fieldId)
+    if field == nil or field.posX == nil or field.posZ == nil then
+        return nil
+    end
+    local state = FieldState.new()
+    state:update(field.posX, field.posZ)
+    return { fruitTypeIndex = state.fruitTypeIndex, growthState = state.growthState }
 end
 
 -- Whether a sowing machine can put in this crop: it's in the machine's own
@@ -280,7 +345,7 @@ end
 -- What part a vehicle can play in a job, or nil if none:
 -- "harvester" | "header" | "implement" | "seedTank" | "tractor". jobDef is
 -- a TheContractorJobGeneration.JOB_TYPES entry.
-function TCEquipmentClass.getJobRole(vehicle, jobDef, fruitTypeIndex)
+function TCEquipmentClass.getJobRole(vehicle, jobDef, fruitTypeIndex, standingCrop)
     if jobDef.cropDependent then
         if TCEquipmentClass.canHarvestFruit(vehicle, fruitTypeIndex) then
             return "harvester"
@@ -288,7 +353,7 @@ function TCEquipmentClass.getJobRole(vehicle, jobDef, fruitTypeIndex)
         if TCEquipmentClass.canCutFruit(vehicle, fruitTypeIndex) then
             return "header"
         end
-    elseif TCEquipmentClass.isJobImplement(vehicle, jobDef, fruitTypeIndex) then
+    elseif TCEquipmentClass.isJobImplement(vehicle, jobDef, fruitTypeIndex, standingCrop) then
         return "implement"
     elseif jobDef.implementSpec == "spec_sowingMachine" and TCEquipmentClass.isSeedTank(vehicle) then
         return "seedTank"
@@ -301,7 +366,8 @@ function TCEquipmentClass.getJobRole(vehicle, jobDef, fruitTypeIndex)
 end
 
 -- Which required pieces are missing from `vehicles` for a job of this
--- type/crop. Returns a list of requirement keys, in display order — empty
+-- type/crop (and standingCrop, see isJobImplement). Returns a list of
+-- requirement keys, in display order — empty
 -- means the set covers the job:
 --   "cutter"    harvest: nothing that can cut this crop
 --   "harvester" harvest: nothing that can harvest this crop (canHarvestFruit)
@@ -316,7 +382,7 @@ end
 --               tractors (a front hopper needs front linkage)
 -- See getMissingEquipmentText for the player-facing wording. A job type
 -- that needs nothing (067's noEquipment) is never missing anything.
-function TCEquipmentClass.getMissingEquipment(vehicles, jobDef, fruitTypeIndex)
+function TCEquipmentClass.getMissingEquipment(vehicles, jobDef, fruitTypeIndex, standingCrop)
     if jobDef.noEquipment then
         return {}
     end
@@ -348,7 +414,7 @@ function TCEquipmentClass.getMissingEquipment(vehicles, jobDef, fruitTypeIndex)
                     hasSelfPropelledHarvester = true
                 end
             end
-        elseif TCEquipmentClass.isJobImplement(vehicle, jobDef, fruitTypeIndex) then
+        elseif TCEquipmentClass.isJobImplement(vehicle, jobDef, fruitTypeIndex, standingCrop) then
             hasImplement = true
             if TCEquipmentClass.isSelfPropelled(vehicle) then
                 hasSelfPropelledImplement = true
