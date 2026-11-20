@@ -1046,6 +1046,7 @@ function TheContractorJobs:unallocateJob(farmId, jobId)
     if not job:isPlayerDriven() then
         job.requiredLiters = 0
         job.deliveredLiters = 0
+        job.harvestedLiters = nil
     end
 
     job.assignedWorkerId = nil
@@ -2177,6 +2178,7 @@ function TheContractorJobs:loadFromXMLFile(xmlFile)
             job.deliveryStationName = getXMLString(xmlFile, jobKey .. ".delivery#stationName")
             job.requiredLiters = Utils.getNoNil(getXMLFloat(xmlFile, jobKey .. ".delivery#requiredLiters"), 0)
             job.deliveredLiters = Utils.getNoNil(getXMLFloat(xmlFile, jobKey .. ".delivery#deliveredLiters"), 0)
+            job.harvestedLiters = getXMLFloat(xmlFile, jobKey .. ".delivery#harvestedLiters")
             job.workStartedAt = getXMLFloat(xmlFile, jobKey .. ".summary#workStartedAt")
             job.completedAt = getXMLFloat(xmlFile, jobKey .. ".summary#completedAt")
             job.fuelUsedLiters = Utils.getNoNil(getXMLFloat(xmlFile, jobKey .. ".summary#fuelUsedLiters"), 0)
@@ -2616,6 +2618,9 @@ function TheContractorJobs:saveToXmlFile(xmlFile)
                 end
                 setXMLFloat(xmlFile, jobKey .. ".delivery#requiredLiters", job.requiredLiters)
                 setXMLFloat(xmlFile, jobKey .. ".delivery#deliveredLiters", job.deliveredLiters)
+                if job.harvestedLiters ~= nil then
+                    setXMLFloat(xmlFile, jobKey .. ".delivery#harvestedLiters", job.harvestedLiters)
+                end
             end
 
             -- Completion summary (029) - written once work has started, so

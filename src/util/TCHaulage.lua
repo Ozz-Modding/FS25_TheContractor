@@ -44,9 +44,15 @@ TCHaulage = {}
 
 TCHaulage.AUTO_EMPTY_FILL_RATIO = 0.75
 
--- Share of the field's expected yield that has to be delivered - vanilla
--- HarvestMission's own success factor, allowing for losses and headlands.
+-- Share of the litres expected that has to be delivered - vanilla
+-- HarvestMission's own success factor, allowing for losses and headlands
+-- (a part-bale left in the baler, a bale that rolled off).
 TCHaulage.DELIVERY_SUCCESS_FACTOR = 0.93
+
+-- A harvest's crop (getHarvestDeliveryTarget): its target ends up measured
+-- from what was actually threshed, so all that's allowed for is what stays
+-- behind in the machines and the odd spill.
+TCHaulage.HARVEST_SUCCESS_FACTOR = 0.97
 
 -- Auto-empty checks and delivery-progress syncing share TCJobProgress's
 -- cadence - nothing to gain checking fill levels more often than that.
@@ -273,13 +279,23 @@ local function getSpawnedBaleLiters(job)
     return liters
 end
 
+-- Whether a job's delivery is a harvest's crop, cut by the player's own
+-- combine (not a bale job's straw, a spill or a farmer's load).
+function TCHaulage.isHarvestDelivery(job)
+    if job.spill ~= nil or job.yardHaul ~= nil or not job:needsPlayerDelivery() then
+        return false
+    end
+    local jobDef = TheContractorJobGeneration.JOB_TYPES[job.jobType]
+    return jobDef ~= nil and jobDef.cropDependent == true and not jobDef.deliversBales and not jobDef.deliveryOnly
+end
+
 -- Litres the job has to deliver, or nil while that isn't known yet: a
 -- bale job's straw is the windrow it's baling, a straw delivery's the
 -- bales laid out for it, and both are only there once its field's been
 -- laid out (TCFieldPreparation, which calls startDelivery again when it
--- has). Harvest's is the field's expected yield. Always less
--- DELIVERY_SUCCESS_FACTOR, for what's lost along the way (headlands, a
--- part-bale left in the baler, a bale that rolled off).
+-- has). Harvest's is the field's expected yield, less
+-- HARVEST_SUCCESS_FACTOR, until the field's cut (applyHarvestedTarget);
+-- the rest less DELIVERY_SUCCESS_FACTOR, for what's lost along the way.
 function TCHaulage.getRequiredLiters(job)
     local jobDef = TheContractorJobGeneration.JOB_TYPES[job.jobType]
     if jobDef == nil then
@@ -307,6 +323,9 @@ function TCHaulage.getRequiredLiters(job)
     end
     if liters == nil then
         return nil
+    end
+    if TCHaulage.isHarvestDelivery(job) then
+        return liters * TCHaulage.HARVEST_SUCCESS_FACTOR
     end
     return liters * TCHaulage.DELIVERY_SUCCESS_FACTOR
 end
@@ -427,6 +446,9 @@ function TCHaulage.startDelivery(job)
     end
     g_currentMission.TheContractor.Jobs:applyJobDelivery(job.farmId, job.id, 0, required)
     dirtyJobIds[job.id] = true
+    if TCHaulage.isHarvestDelivery(job) then
+        job.harvestedLiters = 0
+    end
 
     if registerTracker(job) then
         TCLog.info("TheContractor: job %d needs %.0f l delivered to %s", job.id, required,
@@ -451,6 +473,9 @@ function TCHaulage.resumeDelivery(job)
         local remaining = math.clamp(1 - job.completionPercentage / 100, 0, 1)
         g_currentMission.TheContractor.Jobs:applyJobDelivery(job.farmId, job.id, 0, required * remaining)
         dirtyJobIds[job.id] = true
+        if TCHaulage.isHarvestDelivery(job) then
+            job.harvestedLiters = 0
+        end
     end
 
     if job.deliveredLiters < job.requiredLiters then
@@ -624,6 +649,89 @@ if Dischargeable ~= nil and Dischargeable.getCanDischargeToObject ~= nil and
     Dischargeable.tcUnloadLockInstalled = true
 end
 
+-- Harvested litres ------------------------------------------------------------
+--
+-- The expected yield is vanilla's formula, and it's only right where the
+-- yield is vanilla's. Precision Farming works its own out (nitrogen, pH,
+-- the soil's yield potential) everywhere but a vanilla contract's field
+-- (getMissionAtWorldPosition, which finds nothing on ours), so a harvest
+-- could come out well short of it with nothing left to cut. Combine damage
+-- and other yield mods do the same. So what a player-driven harvest has to
+-- deliver ends up measured from what their combines actually threshed on
+-- the job's land (job.harvestedLiters, server-only and saved): once the
+-- field's cut, the target comes down to HARVEST_SUCCESS_FACTOR of that,
+-- never up. Until then it stays the estimate, so the tracker can't call
+-- the terms met between two loads. nil harvestedLiters: not counted from
+-- the start (a save from before this), so the estimate stands.
+
+-- Server-only, from Combine:addCutterArea: litres that just went into a
+-- combine, of outputFillType. Counted to the farm's harvest job whose crop
+-- that is, if the combine's on its land.
+function TCHaulage.onHarvested(combine, liters, outputFillType)
+    if liters == nil or liters <= 0 or combine.rootNode == nil then
+        return
+    end
+    local tc = g_currentMission ~= nil and g_currentMission.TheContractor or nil
+    if tc == nil or tc.Jobs == nil or not g_currentMission:getIsServer() then
+        return
+    end
+    for _, job in ipairs(tc.Jobs:getAllJobs(combine:getOwnerFarmId())) do
+        if job.harvestedLiters ~= nil and isActiveJob(job) and TCHaulage.isHarvestDelivery(job) and
+            TCHaulage.getDeliveryFillType(job) == outputFillType then
+            local field = g_fieldManager:getFieldById(job.fieldId)
+            local farmland = field ~= nil and field:getFarmland() or nil
+            if farmland ~= nil and isOnFarmland(combine, farmland.id) then
+                job.harvestedLiters = job.harvestedLiters + liters
+                return
+            end
+        end
+    end
+end
+
+-- The target once the field's cut: HARVEST_SUCCESS_FACTOR of what was
+-- threshed, if that's below the estimate. nil: leave it as it is.
+function TCHaulage.getHarvestedTarget(job)
+    if job.harvestedLiters == nil or job.harvestedLiters <= 0 or job.requiredLiters <= 0 or
+        job.completionPercentage < TheContractorJobs.COMPLETION_THRESHOLD_PERCENTAGE then
+        return nil
+    end
+    local target = job.harvestedLiters * TCHaulage.HARVEST_SUCCESS_FACTOR
+    if target >= job.requiredLiters then
+        return nil
+    end
+    return target
+end
+
+local function applyHarvestedTargets()
+    local jobs = g_currentMission.TheContractor.Jobs
+    for _, farm in ipairs(g_farmManager:getFarms()) do
+        for _, job in ipairs(jobs:getAllJobs(farm.farmId)) do
+            if isActiveJob(job) and TCHaulage.isHarvestDelivery(job) then
+                local target = TCHaulage.getHarvestedTarget(job)
+                if target ~= nil then
+                    TCLog.info("TheContractor: job %d threshed %.0f l, so needs %.0f l delivered, not %.0f l", job.id,
+                        job.harvestedLiters, target, job.requiredLiters)
+                    jobs:applyJobDelivery(job.farmId, job.id, math.min(job.deliveredLiters, target), target)
+                    dirtyJobIds[job.id] = true
+                    if job.deliveredLiters >= target then
+                        TCHaulage.stopDelivery(job)
+                    end
+                end
+            end
+        end
+    end
+end
+
+if Combine ~= nil and Combine.addCutterArea ~= nil and not Combine.tcHarvestCountInstalled then
+    Combine.addCutterArea = Utils.overwrittenFunction(Combine.addCutterArea,
+        function(vehicle, superFunc, area, liters, inputFruitType, outputFillType, ...)
+            local applied = superFunc(vehicle, area, liters, inputFruitType, outputFillType, ...)
+            TCHaulage.onHarvested(vehicle, applied, outputFillType)
+            return applied
+        end)
+    Combine.tcHarvestCountInstalled = true
+end
+
 -- Update ----------------------------------------------------------------------
 
 local function syncDeliveryProgress()
@@ -656,5 +764,6 @@ function TCHaulage.update(dt)
     accumulatedMs = 0
 
     autoEmptyHarvesters()
+    applyHarvestedTargets()
     syncDeliveryProgress()
 end

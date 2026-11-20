@@ -473,6 +473,9 @@ local function initializePartitions(state, field)
     local regionPerPartition = (maxZ - minZ) / numPartitions
     local currentMinZ = minZ
 
+    -- Each band's rounded up to a whole row, so on a shallow field the
+    -- rows can run out before numPartitions: stop there, as vanilla does,
+    -- rather than add empty bands.
     for i = 1, numPartitions do
         local currentMaxZ = i == numPartitions and maxZ or math.min(math.ceil(currentMinZ + regionPerPartition), maxZ)
         table.insert(state.partitions, {
@@ -484,6 +487,9 @@ local function initializePartitions(state, field)
             maxZ = currentMaxZ,
         })
         currentMinZ = currentMaxZ
+        if currentMinZ >= maxZ then
+            break
+        end
     end
 end
 
@@ -527,7 +533,11 @@ end
 --                    over what was spawned
 --   remainingArea    WeedMission/HoeMission:updateFieldPercentageDone - 1
 --                    minus the weed area left over what there was
-local function updateFieldPercentageDone(state, totalArea, job)
+-- Less vanilla's fallback of counting every band's whole area as done when
+-- the band just read was empty: an empty band (a gap in the field's shape)
+-- read the whole field as done for that frame, and a job could complete on
+-- it.
+local function updateFieldPercentageDone(state, job)
     local sumPixels = 0
     local areaDone = 0
     local areaTotal = 0
@@ -538,11 +548,7 @@ local function updateFieldPercentageDone(state, totalArea, job)
             allCalculated = false
         end
         sumPixels = sumPixels + partition.sumPixels
-        if totalArea > 0 then
-            areaDone = areaDone + partition.area
-        else
-            areaDone = areaDone + partition.totalArea
-        end
+        areaDone = areaDone + partition.area
         areaTotal = areaTotal + partition.totalArea
     end
 
@@ -598,7 +604,7 @@ function TCJobProgress.getCompletion(job)
         partition.totalArea = totalArea
     end
 
-    updateFieldPercentageDone(state, totalArea or 0, job)
+    updateFieldPercentageDone(state, job)
 
     state.currentPartitionIndex = state.currentPartitionIndex + 1
     if state.currentPartitionIndex > #state.partitions then

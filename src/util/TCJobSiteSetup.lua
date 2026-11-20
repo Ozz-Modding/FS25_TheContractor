@@ -15,7 +15,9 @@
 -- Joint matching follows vanilla's own attach-range search
 -- (AttacherJoints.updateVehiclesInAttachRange): same jointType, and
 -- AttacherJoints.getAttacherJointCompatibility (subtypes, forced direction,
--- brand/vehicle restrictions). Rear joints are preferred over front, even
+-- brand/vehicle restrictions), and never a joint that would leave an AI
+-- implement facing backwards (wouldFaceBackwards: a rear mower on the
+-- front linkage). Rear joints are preferred over front, even
 -- an occupied rear over a free front. If the chosen joint is occupied by something that isn't part of the
 -- job (e.g. a different implement left hitched), that occupant is unhitched
 -- and left behind in the yard.
@@ -51,6 +53,45 @@ local function scoreJoint(attacherJoint, needsDetach)
         score = score + 2
     end
     return score
+end
+
+-- A vehicle's forward in world space, allowing for a root that's modelled
+-- facing backwards (yRotationOffset), as vanilla's own AI checks do.
+local function getForward(node, yRotationOffset)
+    local dirX, dirZ = 0, 1
+    if yRotationOffset ~= nil and yRotationOffset ~= 0 then
+        dirX, dirZ = MathUtil.getDirectionFromYRotation(yRotationOffset)
+    end
+    return localDirectionToWorld(node, dirX, 0, dirZ)
+end
+
+-- Whether hitching `implement` by `inputJoint` to `attacherJoint` would
+-- leave it facing against its attacher: the attachment joint lines the
+-- input joint's node up with the joint's transform, so a rear mower on a
+-- front linkage ends up facing backwards. Vanilla's AI stops at once on
+-- that (AIFieldWorker's "Tool attached incorrectly") for any implement
+-- that needs root alignment, and XML rarely says which way a three-point
+-- implement goes (forcedAttachingDirection is mostly left unset), so it's
+-- worked out from the nodes. Works whatever way the pieces are parked:
+-- only directions relative to each vehicle's own root are compared.
+local function wouldFaceBackwards(attacher, attacherJoint, implement, inputJoint)
+    if implement.getAINeedsRootAlignment == nil or not implement:getAINeedsRootAlignment() then
+        return false
+    end
+    if attacherJoint.jointTransform == nil or inputJoint.node == nil or implement.rootNode == nil then
+        return false
+    end
+    -- The implement's forward, in its input joint's frame...
+    local rx, ry, rz = getForward(implement.rootNode, implement.yRotationOffset)
+    local lx, ly, lz = worldDirectionToLocal(inputJoint.node, rx, ry, rz)
+    -- ...is where it'll point once that frame is the attacher joint's.
+    local wx, _, wz = localDirectionToWorld(attacherJoint.jointTransform, lx, ly, lz)
+    local attacherNode = attacher.rootNode
+    if attacher.getAIDirectionNode ~= nil then
+        attacherNode = attacher:getAIDirectionNode() or attacherNode
+    end
+    local fx, _, fz = getForward(attacherNode, attacher.yRotationOffset)
+    return wx * fx + wz * fz < 0
 end
 
 local function pickOperatingVehicle(vehicles)
@@ -89,7 +130,8 @@ local function findJoint(attacher, implement, claimedJoints, isJobVehicle, farmI
             if occupant == nil or not isJobVehicle[occupant] then
                 for inputIndex, inputJoint in ipairs(implement:getInputAttacherJoints()) do
                     if inputJoint.jointType == attacherJoint.jointType and
-                        AttacherJoints.getAttacherJointCompatibility(attacher, attacherJoint, implement, inputJoint) then
+                        AttacherJoints.getAttacherJointCompatibility(attacher, attacherJoint, implement, inputJoint) and
+                        not wouldFaceBackwards(attacher, attacherJoint, implement, inputJoint) then
                         local score = scoreJoint(attacherJoint, occupant ~= nil)
                         if best == nil or score > best.score then
                             best = {
