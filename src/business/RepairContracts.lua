@@ -1254,7 +1254,12 @@ function TheContractorRepairContracts:tryPlaceArrival(entry)
             return
         elseif entry.loan then
             -- 124: its spot is beside the job's area; it waits for it to
-            -- clear.
+            -- clear. 180: unless its owner has somewhere else for it (126's
+            -- trailer: another spot in the yard).
+            local owner = TheContractorRepairContracts.getLoanOwner(entry)
+            if owner ~= nil and owner.retryLoanSpot ~= nil then
+                owner:retryLoanSpot(entry, model)
+            end
             return
         elseif entry.favour then
             -- 116: somewhere else on their yard or fields.

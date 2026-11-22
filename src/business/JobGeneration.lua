@@ -56,6 +56,14 @@ TheContractorJobGeneration_mt = Class(TheContractorJobGeneration)
 --   seasonRule       vanilla's own seasonal cut-off (isAvailableForField's
 --                    environment block), applied to future days too
 --                    (isDoableOnDay): "noWinter", or "noWinterOrEarlySpring".
+--   needsGrowingCrop 179: only a crop that's still growing (vanilla's
+--                    getIsGrowing). Vanilla's herbicide spraying
+--                    (FSDensityMapUtil.updateHerbicideArea) never touches
+--                    the weeds in a ripe or withered crop, but its
+--                    HerbicideMission.isAvailableForField lets a withered
+--                    one through, so such a job could never be done. At
+--                    allocation a crop that's moved on since the offer goes
+--                    back to its last growing state (TCFieldPreparation).
 --   requiresWeeds    only when the save has weeds switched on (vanilla's
 --                    weed missions' canRun). requiresStones likewise for
 --                    stones.
@@ -187,7 +195,8 @@ TheContractorJobGeneration.JOB_TYPES = {
         rewardPerHa = 1500, reputationPerHa = 5.1, skill = "cropCare",
         workAreaTypes = { "SPRAYER" } },
     herbicide = { implementSpec = "spec_sprayer", vanillaMission = HerbicideMission, startState = "weedState",
-        supplyFillTypeNames = { "HERBICIDE" }, seasonRule = "noWinter", requiresWeeds = true, rewardPerHa = 1500,
+        supplyFillTypeNames = { "HERBICIDE" }, seasonRule = "noWinter", requiresWeeds = true, needsGrowingCrop = true,
+        rewardPerHa = 1500,
         reputationPerHa = 5.1, skill = "cropCare", certification = "spraying",
         workAreaTypes = { "SPRAYER" } },
     weed = { implementSpec = "spec_weeder", weederType = "weed", vanillaMission = WeedMission,
@@ -1053,7 +1062,31 @@ function TheContractorJobGeneration.isFieldEligible(field, jobDef)
     if jobDef.requiresLime then
         return TheContractorJobGeneration.needsLime(fieldState)
     end
+    if jobDef.needsGrowingCrop and not TheContractorJobGeneration.isCropGrowing(fieldState) then
+        return false
+    end
     return TheContractorJobGeneration.isVanillaAvailable(field, jobDef)
+end
+
+-- 179: whether the field's crop is still growing (vanilla's getIsGrowing:
+-- sown, not yet ready, preparing or withered).
+function TheContractorJobGeneration.isCropGrowing(fieldState)
+    local fruitType = g_fruitTypeManager:getFruitTypeByIndex(fieldState.fruitTypeIndex)
+    return fruitType ~= nil and fieldState.growthState ~= nil and fruitType.getIsGrowing ~= nil and
+        fruitType:getIsGrowing(fieldState.growthState)
+end
+
+-- 179: a crop's last growing state, the same bound getIsGrowing uses (the
+-- state before it's ready, or before it's prepared for harvest), or nil.
+function TheContractorJobGeneration.getLastGrowingState(fruitType)
+    local last = fruitType.minHarvestingGrowthState - 1
+    if fruitType.minPreparingGrowthState ~= nil and fruitType.minPreparingGrowthState >= 0 then
+        last = math.min(last, fruitType.minPreparingGrowthState - 1)
+    end
+    if last < 1 then
+        return nil
+    end
+    return last
 end
 
 -- 149: whether lime matters on this save: the platform keeps a lime level

@@ -44,9 +44,15 @@ TCHaulage = {}
 
 TCHaulage.AUTO_EMPTY_FILL_RATIO = 0.75
 
--- Share of the field's expected yield that has to be delivered - vanilla
--- HarvestMission's own success factor, allowing for losses and headlands.
+-- Share of the litres expected that has to be delivered - vanilla
+-- HarvestMission's own success factor, allowing for losses and headlands
+-- (a part-bale left in the baler, a bale that rolled off).
 TCHaulage.DELIVERY_SUCCESS_FACTOR = 0.93
+
+-- A harvest's crop (getHarvestDeliveryTarget): its target ends up measured
+-- from what was actually threshed, so all that's allowed for is what stays
+-- behind in the machines and the odd spill.
+TCHaulage.HARVEST_SUCCESS_FACTOR = 0.97
 
 -- Auto-empty checks and delivery-progress syncing share TCJobProgress's
 -- cadence - nothing to gain checking fill levels more often than that.
@@ -82,6 +88,37 @@ local function isFarmAllowed(station, farmId)
     return station:getIsFillAllowedFromFarm(farmId) == true
 end
 
+-- 176: whether a station is a real selling point the farm may use, not
+-- scenery. A placeable owned by nobody (AccessHandler.NOBODY, the farm 15
+-- maps give to decorative or locked buildings, such as a farm's biogas
+-- plant with no usable triggers) never is, nor one owned by another farm
+-- the job's farm can't use (canFarmAccessOtherId, which allows everyone's
+-- (0), its own and a farm it contracts for). Nor a station hidden from the
+-- Prices menu (hideFromPricesMenu: vanilla's for a production still under
+-- construction, a map's for an extension that's not a selling point of its
+-- own), since the player couldn't look its price up either.
+local function isUsableStation(station, farmId)
+    if station.hideFromPricesMenu then
+        return false
+    end
+    local placeable = station.owningPlaceable
+    if placeable == nil or placeable.getOwnerFarmId == nil then
+        return true
+    end
+    local ownerFarmId = placeable:getOwnerFarmId()
+    if ownerFarmId == nil then
+        return true
+    end
+    if AccessHandler ~= nil and ownerFarmId == AccessHandler.NOBODY then
+        return false
+    end
+    local accessHandler = g_currentMission.accessHandler
+    if farmId == nil or accessHandler == nil or accessHandler.canFarmAccessOtherId == nil then
+        return true
+    end
+    return accessHandler:canFarmAccessOtherId(farmId, ownerFarmId) == true
+end
+
 -- A trigger only bales, logs or pallets go into, never a tipped load.
 local function isItemTrigger(trigger)
     if trigger.isa == nil then
@@ -95,52 +132,81 @@ local function isItemTrigger(trigger)
     return false
 end
 
--- Whether one of a station's unload triggers takes a tipped load of this
--- fill type: the station accepting it isn't enough, a trigger can be
--- narrower (its own fillTypes). A station with no trigger list to go on
--- is taken at its word.
-local function hasBulkTriggerFor(station, fillTypeIndex)
-    if station.unloadTriggers == nil then
-        return true
-    end
-    for _, trigger in ipairs(station.unloadTriggers) do
+-- The first of a station's unload triggers that takes a tipped load of
+-- this fill type: the station accepting it isn't enough, a trigger can be
+-- narrower (its own fillTypes).
+local function findBulkTrigger(station, fillTypeIndex)
+    for _, trigger in ipairs(station.unloadTriggers or {}) do
         if not isItemTrigger(trigger) and trigger.getIsFillTypeSupported ~= nil and
             trigger:getIsFillTypeSupported(fillTypeIndex) then
-            return true
+            return trigger
         end
     end
-    return false
+    return nil
 end
 
--- Whether one of a station's unload triggers is a bale trigger that takes
+-- Whether a tipped load of this fill type has a trigger to go into. A
+-- station with no trigger list to go on is taken at its word.
+local function hasBulkTriggerFor(station, fillTypeIndex)
+    return station.unloadTriggers == nil or findBulkTrigger(station, fillTypeIndex) ~= nil
+end
+
+-- The first of a station's unload triggers that's a bale trigger taking
 -- bales of this fill type - BaleUnloadTrigger:getIsBaleSupportedByUnloadTrigger's
 -- own checks, less the bale itself.
-local function hasBaleTriggerFor(station, fillTypeIndex)
+local function findBaleTrigger(station, fillTypeIndex)
     if BaleUnloadTrigger == nil then
-        return false
+        return nil
     end
     for _, trigger in ipairs(station.unloadTriggers or {}) do
         if trigger.isa ~= nil and trigger:isa(BaleUnloadTrigger) and
             (trigger.supportedFillTypes == nil or trigger.supportedFillTypes[fillTypeIndex] ~= nil) and
             trigger:getIsFillTypeAllowed(fillTypeIndex) and trigger:getIsFillTypeSupported(fillTypeIndex) and
             trigger:getIsToolTypeAllowed(ToolType.BALE) then
-            return true
+            return trigger
         end
     end
-    return false
+    return nil
 end
 
 -- 162: whether farmId can deliver fillTypeIndex to station - as a tipped
 -- load, or as bales (asBales). farmId nil: any farm, so only the triggers
 -- are checked.
+-- 176: and the station is a real one the farm may use (isUsableStation).
 function TCHaulage.canFarmDeliver(station, farmId, fillTypeIndex, asBales)
-    if station == nil or not isFarmAllowed(station, farmId) then
+    if station == nil or not isUsableStation(station, farmId) or not isFarmAllowed(station, farmId) then
         return false
     end
     if asBales then
-        return hasBaleTriggerFor(station, fillTypeIndex)
+        return findBaleTrigger(station, fillTypeIndex) ~= nil
     end
     return hasBulkTriggerFor(station, fillTypeIndex)
+end
+
+-- 176: where on the map a load of this fill type goes into station: the
+-- trigger that takes it (a bale trigger's triggerNode, a tipping trigger's
+-- exactFillRootNode), not the placeable's own map marker, which on a
+-- station with several unloading points (a farmers' market's grain point
+-- and bale point) can be the wrong one. The station's root node if no
+-- trigger has a node to go by. x, z, or nil.
+function TCHaulage.getDropPosition(station, fillTypeIndex, asBales)
+    if station == nil then
+        return nil
+    end
+    local node
+    if asBales then
+        local trigger = findBaleTrigger(station, fillTypeIndex)
+        node = trigger ~= nil and trigger.triggerNode or nil
+    else
+        local trigger = findBulkTrigger(station, fillTypeIndex)
+        node = trigger ~= nil and (trigger.exactFillRootNode or trigger.aiNode) or nil
+    end
+    node = node or station.rootNode
+    if node == nil then
+        return nil
+    end
+    local x, _, z = getWorldTranslation(node)
+    return x, z
 end
 
 -- The best-paying selling point for the fill type that farmId can deliver
@@ -232,6 +298,28 @@ function TCHaulage.setDeliveryStation(job, station)
     job.deliveryStationUniqueId = placeable:getUniqueId()
     job.deliveryStationIndex = g_currentMission.storageSystem:getPlaceableUnloadingStationIndex(placeable, station)
     job.deliveryStationName = station:getName()
+    -- 176: worked out again from the new station when it's next asked for.
+    job.deliverySpot = nil
+end
+
+-- 176: { x, z } of the job's drop point (getDropPosition), for its map
+-- marker (TCJobHotspots), or nil. The server works it out from the station
+-- when first asked (it's never saved) and it rides on the job snapshot and
+-- TCJobDeliveryEvent; a client only ever has what it was sent.
+function TCHaulage.getDeliverySpot(job)
+    if job.deliverySpot ~= nil or not g_currentMission:getIsServer() then
+        return job.deliverySpot
+    end
+    local fillTypeIndex = TCHaulage.getDeliveryFillType(job)
+    local station = TCHaulage.resolveDeliveryStation(job)
+    if fillTypeIndex == nil or station == nil then
+        return nil
+    end
+    local x, z = TCHaulage.getDropPosition(station, fillTypeIndex, TCHaulage.deliversBales(job))
+    if x ~= nil then
+        job.deliverySpot = { x = x, z = z }
+    end
+    return job.deliverySpot
 end
 
 function TCHaulage.resolveDeliveryStation(job)
@@ -273,13 +361,23 @@ local function getSpawnedBaleLiters(job)
     return liters
 end
 
+-- Whether a job's delivery is a harvest's crop, cut by the player's own
+-- combine (not a bale job's straw, a spill or a farmer's load).
+function TCHaulage.isHarvestDelivery(job)
+    if job.spill ~= nil or job.yardHaul ~= nil or not job:needsPlayerDelivery() then
+        return false
+    end
+    local jobDef = TheContractorJobGeneration.JOB_TYPES[job.jobType]
+    return jobDef ~= nil and jobDef.cropDependent == true and not jobDef.deliversBales and not jobDef.deliveryOnly
+end
+
 -- Litres the job has to deliver, or nil while that isn't known yet: a
 -- bale job's straw is the windrow it's baling, a straw delivery's the
 -- bales laid out for it, and both are only there once its field's been
 -- laid out (TCFieldPreparation, which calls startDelivery again when it
--- has). Harvest's is the field's expected yield. Always less
--- DELIVERY_SUCCESS_FACTOR, for what's lost along the way (headlands, a
--- part-bale left in the baler, a bale that rolled off).
+-- has). Harvest's is the field's expected yield, less
+-- HARVEST_SUCCESS_FACTOR, until the field's cut (applyHarvestedTarget);
+-- the rest less DELIVERY_SUCCESS_FACTOR, for what's lost along the way.
 function TCHaulage.getRequiredLiters(job)
     local jobDef = TheContractorJobGeneration.JOB_TYPES[job.jobType]
     if jobDef == nil then
@@ -307,6 +405,9 @@ function TCHaulage.getRequiredLiters(job)
     end
     if liters == nil then
         return nil
+    end
+    if TCHaulage.isHarvestDelivery(job) then
+        return liters * TCHaulage.HARVEST_SUCCESS_FACTOR
     end
     return liters * TCHaulage.DELIVERY_SUCCESS_FACTOR
 end
@@ -371,6 +472,35 @@ function TCDeliveryTracker:onDeleteSellingStation(station)
     end
 end
 
+-- 162: a station the farm can't unload at (or one that's gone) is swapped
+-- for the best one it can, so a job picked before 162, or one whose
+-- station has changed hands since, can still be done. 176: likewise one
+-- that's scenery (isUsableStation). The station to deliver to, or nil if
+-- nowhere takes it (the job keeps its station).
+local function moveToUsableStation(job, fillTypeIndex)
+    local station = TCHaulage.resolveDeliveryStation(job)
+    local asBales = TCHaulage.deliversBales(job)
+    if station ~= nil and TCHaulage.canFarmDeliver(station, job.farmId, fillTypeIndex, asBales) then
+        return station
+    end
+    local replacement
+    if asBales then
+        replacement = TCHaulage.findBaleDeliveryStation(fillTypeIndex, job.farmId)
+    else
+        replacement = TCHaulage.findDeliveryStation(fillTypeIndex, job.farmId)
+    end
+    if replacement == nil then
+        TCLog.warning("TheContractor: job %d can't be delivered to '%s' and nowhere else takes it", job.id,
+            tostring(job.deliveryStationName))
+        return nil
+    end
+    TCLog.info("TheContractor: job %d delivery moved from '%s' to '%s', which farm %d can unload at", job.id,
+        tostring(job.deliveryStationName), tostring(replacement:getName()), job.farmId)
+    TCHaulage.setDeliveryStation(job, replacement)
+    dirtyJobIds[job.id] = true
+    return replacement
+end
+
 local function registerTracker(job)
     if trackersByJobId[job.id] ~= nil then
         return true
@@ -381,28 +511,9 @@ local function registerTracker(job)
         return false
     end
 
-    local station = TCHaulage.resolveDeliveryStation(job)
-    -- 162: a station the farm can't unload at (or one that's gone) is
-    -- swapped for the best one it can, so a job picked before 162, or one
-    -- whose station has changed hands since, can still be done.
-    local asBales = TCHaulage.deliversBales(job)
-    if station == nil or not TCHaulage.canFarmDeliver(station, job.farmId, fillTypeIndex, asBales) then
-        local replacement
-        if asBales then
-            replacement = TCHaulage.findBaleDeliveryStation(fillTypeIndex, job.farmId)
-        else
-            replacement = TCHaulage.findDeliveryStation(fillTypeIndex, job.farmId)
-        end
-        if replacement == nil then
-            TCLog.warning("TheContractor: job %d can't be delivered to '%s' and nowhere else takes it", job.id,
-                tostring(job.deliveryStationName))
-            return false
-        end
-        TCLog.info("TheContractor: job %d delivery moved from '%s' to '%s', which farm %d can unload at", job.id,
-            tostring(job.deliveryStationName), tostring(replacement:getName()), job.farmId)
-        TCHaulage.setDeliveryStation(job, replacement)
-        dirtyJobIds[job.id] = true
-        station = replacement
+    local station = moveToUsableStation(job, fillTypeIndex)
+    if station == nil then
+        return false
     end
 
     local tracker = TCDeliveryTracker.new(job, station, fillTypeIndex)
@@ -427,6 +538,9 @@ function TCHaulage.startDelivery(job)
     end
     g_currentMission.TheContractor.Jobs:applyJobDelivery(job.farmId, job.id, 0, required)
     dirtyJobIds[job.id] = true
+    if TCHaulage.isHarvestDelivery(job) then
+        job.harvestedLiters = 0
+    end
 
     if registerTracker(job) then
         TCLog.info("TheContractor: job %d needs %.0f l delivered to %s", job.id, required,
@@ -451,6 +565,9 @@ function TCHaulage.resumeDelivery(job)
         local remaining = math.clamp(1 - job.completionPercentage / 100, 0, 1)
         g_currentMission.TheContractor.Jobs:applyJobDelivery(job.farmId, job.id, 0, required * remaining)
         dirtyJobIds[job.id] = true
+        if TCHaulage.isHarvestDelivery(job) then
+            job.harvestedLiters = 0
+        end
     end
 
     if job.deliveredLiters < job.requiredLiters then
@@ -478,6 +595,15 @@ local function resumeDeliveriesAfterLoad()
             if job:needsPlayerDelivery() and job.deliveredLiters < job.requiredLiters and
                 (job.state == TheContractorJob.STATE.ALLOCATED or job.state == TheContractorJob.STATE.IN_PROGRESS) then
                 registerTracker(job)
+            elseif job.deliveryStationUniqueId ~= nil and (job.state == TheContractorJob.STATE.OFFERED or
+                job.state == TheContractorJob.STATE.NEGOTIATING or job.state == TheContractorJob.STATE.ACCEPTED) then
+                -- 176: an offer or a job not yet started that points at
+                -- scenery moves now, not only once its delivery starts, so
+                -- its name and map marker are right from the start.
+                local fillTypeIndex = TCHaulage.getDeliveryFillType(job)
+                if fillTypeIndex ~= nil then
+                    moveToUsableStation(job, fillTypeIndex)
+                end
             end
         end
     end
@@ -624,6 +750,89 @@ if Dischargeable ~= nil and Dischargeable.getCanDischargeToObject ~= nil and
     Dischargeable.tcUnloadLockInstalled = true
 end
 
+-- Harvested litres ------------------------------------------------------------
+--
+-- The expected yield is vanilla's formula, and it's only right where the
+-- yield is vanilla's. Precision Farming works its own out (nitrogen, pH,
+-- the soil's yield potential) everywhere but a vanilla contract's field
+-- (getMissionAtWorldPosition, which finds nothing on ours), so a harvest
+-- could come out well short of it with nothing left to cut. Combine damage
+-- and other yield mods do the same. So what a player-driven harvest has to
+-- deliver ends up measured from what their combines actually threshed on
+-- the job's land (job.harvestedLiters, server-only and saved): once the
+-- field's cut, the target comes down to HARVEST_SUCCESS_FACTOR of that,
+-- never up. Until then it stays the estimate, so the tracker can't call
+-- the terms met between two loads. nil harvestedLiters: not counted from
+-- the start (a save from before this), so the estimate stands.
+
+-- Server-only, from Combine:addCutterArea: litres that just went into a
+-- combine, of outputFillType. Counted to the farm's harvest job whose crop
+-- that is, if the combine's on its land.
+function TCHaulage.onHarvested(combine, liters, outputFillType)
+    if liters == nil or liters <= 0 or combine.rootNode == nil then
+        return
+    end
+    local tc = g_currentMission ~= nil and g_currentMission.TheContractor or nil
+    if tc == nil or tc.Jobs == nil or not g_currentMission:getIsServer() then
+        return
+    end
+    for _, job in ipairs(tc.Jobs:getAllJobs(combine:getOwnerFarmId())) do
+        if job.harvestedLiters ~= nil and isActiveJob(job) and TCHaulage.isHarvestDelivery(job) and
+            TCHaulage.getDeliveryFillType(job) == outputFillType then
+            local field = g_fieldManager:getFieldById(job.fieldId)
+            local farmland = field ~= nil and field:getFarmland() or nil
+            if farmland ~= nil and isOnFarmland(combine, farmland.id) then
+                job.harvestedLiters = job.harvestedLiters + liters
+                return
+            end
+        end
+    end
+end
+
+-- The target once the field's cut: HARVEST_SUCCESS_FACTOR of what was
+-- threshed, if that's below the estimate. nil: leave it as it is.
+function TCHaulage.getHarvestedTarget(job)
+    if job.harvestedLiters == nil or job.harvestedLiters <= 0 or job.requiredLiters <= 0 or
+        job.completionPercentage < TheContractorJobs.COMPLETION_THRESHOLD_PERCENTAGE then
+        return nil
+    end
+    local target = job.harvestedLiters * TCHaulage.HARVEST_SUCCESS_FACTOR
+    if target >= job.requiredLiters then
+        return nil
+    end
+    return target
+end
+
+local function applyHarvestedTargets()
+    local jobs = g_currentMission.TheContractor.Jobs
+    for _, farm in ipairs(g_farmManager:getFarms()) do
+        for _, job in ipairs(jobs:getAllJobs(farm.farmId)) do
+            if isActiveJob(job) and TCHaulage.isHarvestDelivery(job) then
+                local target = TCHaulage.getHarvestedTarget(job)
+                if target ~= nil then
+                    TCLog.info("TheContractor: job %d threshed %.0f l, so needs %.0f l delivered, not %.0f l", job.id,
+                        job.harvestedLiters, target, job.requiredLiters)
+                    jobs:applyJobDelivery(job.farmId, job.id, math.min(job.deliveredLiters, target), target)
+                    dirtyJobIds[job.id] = true
+                    if job.deliveredLiters >= target then
+                        TCHaulage.stopDelivery(job)
+                    end
+                end
+            end
+        end
+    end
+end
+
+if Combine ~= nil and Combine.addCutterArea ~= nil and not Combine.tcHarvestCountInstalled then
+    Combine.addCutterArea = Utils.overwrittenFunction(Combine.addCutterArea,
+        function(vehicle, superFunc, area, liters, inputFruitType, outputFillType, ...)
+            local applied = superFunc(vehicle, area, liters, inputFruitType, outputFillType, ...)
+            TCHaulage.onHarvested(vehicle, applied, outputFillType)
+            return applied
+        end)
+    Combine.tcHarvestCountInstalled = true
+end
+
 -- Update ----------------------------------------------------------------------
 
 local function syncDeliveryProgress()
@@ -632,7 +841,7 @@ local function syncDeliveryProgress()
         local job = jobs:getJobById(jobId)
         if job ~= nil and g_server ~= nil then
             g_server:broadcastEvent(TCJobDeliveryEvent.new(job.farmId, job.id, job.deliveredLiters,
-                job.requiredLiters, job.deliveryStationName))
+                job.requiredLiters, job.deliveryStationName, TCHaulage.getDeliverySpot(job)))
         end
     end
     dirtyJobIds = {}
@@ -656,5 +865,6 @@ function TCHaulage.update(dt)
     accumulatedMs = 0
 
     autoEmptyHarvesters()
+    applyHarvestedTargets()
     syncDeliveryProgress()
 end

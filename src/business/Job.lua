@@ -204,6 +204,10 @@ function TheContractorJob.new(id, farmId, jobType, fieldId, requiredSkillLevel, 
     -- Server-authoritative, synced via TCJobDeliveryEvent.
     self.requiredLiters = 0
     self.deliveredLiters = 0
+    -- Server-only: what the player's combines have threshed on the job's
+    -- land, for a harvest's target (TCHaulage, "Harvested litres"). nil
+    -- until its delivery starts.
+    self.harvestedLiters = nil
 
     -- Completion summary (029), all server-authoritative and sent to
     -- clients in the job snapshot. workStartedAt/completedAt are absolute

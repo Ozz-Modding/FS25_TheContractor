@@ -665,6 +665,17 @@ function TCFieldPreparation.prepareFieldForJob(job)
         applyFieldState(field, fieldState)
     elseif jobType == "herbicide" then
         fieldState.weedState = job.startState or fieldState.weedState
+        -- 179: a crop that's ripened or withered since the offer takes no
+        -- herbicide, so it goes back to its last growing state.
+        local fruitType = g_fruitTypeManager:getFruitTypeByIndex(fieldState.fruitTypeIndex)
+        if fruitType ~= nil and not TheContractorJobGeneration.isCropGrowing(fieldState) then
+            local growthState = TheContractorJobGeneration.getLastGrowingState(fruitType)
+            if growthState ~= nil then
+                TCLog.info("TheContractor: job %d's crop on field %d had moved on (growth %d), back to %d to spray",
+                    job.id, job.fieldId, fieldState.growthState or -1, growthState)
+                fieldState.growthState = growthState
+            end
+        end
         applyFieldState(field, fieldState)
     elseif jobType == "lime" then
         -- 149: out of lime all over, so the job's measured against the

@@ -1767,8 +1767,22 @@ function MenuContractor:populateStaffCell(index, cell)
     local status = TheContractorWorkingHours.getDisplayStatus(worker)
     setChip(cell:getAttribute("statusChip"), cell:getAttribute("statusChipText"),
         g_i18n:getText("tc_staff_status_" .. status), getWorkerStatusTone(status))
-    cell:getAttribute("col5"):setText(jobLine or "")
+    cell:getAttribute("col5"):setText(jobLine or self:getDutyNoteText(worker) or "")
     setADSChip(cell, worker)
+end
+
+-- 178: TheContractorWorkingHours.getDutyNote as text ("In at 19:25, on
+-- until 22:00"), or nil.
+function MenuContractor:getDutyNoteText(worker)
+    local key, times = TheContractorWorkingHours.getDutyNote(worker)
+    if key == nil then
+        return nil
+    end
+    local formatted = {}
+    for i, minutes in ipairs(times) do
+        formatted[i] = TheContractorWorkingHours.formatTime(minutes)
+    end
+    return string.format(g_i18n:getText(key), unpack(formatted))
 end
 
 function MenuContractor:updateStaffDetails()
@@ -1862,6 +1876,8 @@ function MenuContractor:updateStaffDetails()
             jobLine = string.format(g_i18n:getText("tc_staff_detailOnBreak"),
                 TheContractorWorkingHours.formatTime(worker.breakUntil))
         end
+        -- 178: when someone called back will be in, and until when they're on.
+        jobLine = jobLine or self:getDutyNoteText(worker)
         self.staffDetailJob:setText(jobLine or g_i18n:getText("tc_staff_detailJobNone"))
         self.staffDetailRetirementLabel:setText(g_i18n:getText(worker.isQuitting and "tc_detail_quitting" or
             "tc_detail_retiring"))

@@ -101,9 +101,10 @@ function TheContractorAllocation:getEligibleImplements(farmId, job)
     end
 
     local fruitTypeIndex = job:getFruitTypeIndex()
+    local standingCrop = TCEquipmentClass.getStandingCrop(jobDef, job.fieldId)
     for _, vehicle in ipairs(g_currentMission.vehicleSystem.vehicles) do
         if isOwnedByFarm(vehicle, farmId) then
-            local role = TCEquipmentClass.getJobRole(vehicle, jobDef, fruitTypeIndex)
+            local role = TCEquipmentClass.getJobRole(vehicle, jobDef, fruitTypeIndex, standingCrop)
             if role ~= nil and role ~= "tractor" and self:isVehicleFree(farmId, vehicle) then
                 table.insert(result, { vehicle = vehicle, role = role })
             end
@@ -146,8 +147,9 @@ function TheContractorAllocation:getMissingEquipment(farmId, job)
     end
 
     local fruitTypeIndex = job:getFruitTypeIndex()
-    return TCEquipmentClass.getMissingEquipment(owned, jobDef, fruitTypeIndex),
-        TCEquipmentClass.getMissingEquipment(free, jobDef, fruitTypeIndex)
+    local standingCrop = TCEquipmentClass.getStandingCrop(jobDef, job.fieldId)
+    return TCEquipmentClass.getMissingEquipment(owned, jobDef, fruitTypeIndex, standingCrop),
+        TCEquipmentClass.getMissingEquipment(free, jobDef, fruitTypeIndex, standingCrop)
 end
 
 -- Missing-equipment keys for a specific chosen set of vehicle ids. On top
@@ -173,7 +175,8 @@ function TheContractorAllocation:getMissingFromSelection(job, equipmentIds)
         end
     end
 
-    local missing = TCEquipmentClass.getMissingEquipment(vehicles, jobDef, fruitTypeIndex)
+    local missing = TCEquipmentClass.getMissingEquipment(vehicles, jobDef, fruitTypeIndex,
+        TCEquipmentClass.getStandingCrop(jobDef, job.fieldId))
     if cutterCount > 1 then
         table.insert(missing, "extraCutter")
     end

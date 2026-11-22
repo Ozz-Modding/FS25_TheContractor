@@ -215,6 +215,39 @@ test("call back: in 25 minutes after the call, until the time picked", function(
     assertTrue(TheContractorWorkingHours.isAvailable(worker), "in")
 end)
 
+-- 178: the Staff tab says when someone called back will be in, and until
+-- when anyone kept on is on.
+test("the duty note: in at and until while called back, until once there, nothing without a duty", function()
+    local world, tc = setup()
+    local worker = addWorker(tc, 1)
+    assertEquals(TheContractorWorkingHours.getDutyNote(worker, world:at(1, 19, 0)), nil, "nothing booked")
+
+    tc.WorkingHours:requestDuty(1, 1, "call", DAY + 22 * 60)
+    local key, times = TheContractorWorkingHours.getDutyNote(worker, world:at(1, 19, 10))
+    assertEquals(key, "tc_staff_detailComingIn", "on the way in")
+    assertEquals(times[1], DAY + 19 * 60 + 25, "in at 19:25")
+    assertEquals(times[2], DAY + 22 * 60, "until 22:00")
+
+    key, times = TheContractorWorkingHours.getDutyNote(worker, world:at(1, 19, 25))
+    assertEquals(key, "tc_staff_detailOnUntil", "in now")
+    assertEquals(times[1], DAY + 22 * 60)
+
+    worker.status = TheContractorWorker.STATUS.ASSIGNED
+    assertEquals(TheContractorWorkingHours.getDutyNote(worker, world:at(1, 20, 0)), nil, "their job says it")
+    worker.status = TheContractorWorker.STATUS.IDLE
+    assertEquals(TheContractorWorkingHours.getDutyNote(worker, world:at(1, 22, 0)), nil, "gone home")
+end)
+
+test("the duty note for someone asked to stay late before the day ends", function()
+    local world, tc = setup()
+    local worker = addWorker(tc, 1)
+    world:at(1, 15, 0)
+    tc.WorkingHours:requestDuty(1, 1, "stay", DAY + 20 * 60)
+    local key, times = TheContractorWorkingHours.getDutyNote(worker, world:at(1, 16, 0))
+    assertEquals(key, "tc_staff_detailOnUntil")
+    assertEquals(times[1], DAY + 20 * 60)
+end)
+
 test("nothing's offered just before morning, and times never pass 08:00", function()
     local world, tc = setup()
     local worker = addWorker(tc, 1)

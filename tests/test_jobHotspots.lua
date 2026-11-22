@@ -237,3 +237,38 @@ test("124: a spot sets its own circle's size, or gets a breakdown's", function()
     assertEquals(yard.x, 10)
     assertEquals(yard.z, 20)
 end)
+
+-- 176: a delivery the player makes themselves gets a circle on its drop
+-- point while the job's marked and the delivery isn't done.
+test("176: a player's delivery is marked on its drop point until it's delivered", function()
+    local world = setup()
+    TCHaulage = {
+        getDeliverySpot = function(job)
+            return job.deliverySpot
+        end,
+    }
+    local job = world:addJob({ fieldId = 1, state = TheContractorJob.STATE.ALLOCATED })
+    job.includesHaulage = true
+    job.deliveryStationName = "Market"
+    job.deliverySpot = { x = 40, z = -12 }
+    job.requiredLiters = 5000
+    job.deliveredLiters = 0
+
+    local spot = TCJobHotspots.getSpotPositions(1)[job.id .. "_delivery"]
+    assertEquals(spot.x, 40)
+    assertEquals(spot.z, -12)
+    assertEquals(spot.radius, TCJobHotspots.DELIVERY_RADIUS)
+
+    job.deliveredLiters = 5000
+    assertEquals(TCJobHotspots.getSpotPositions(1)[job.id .. "_delivery"], nil, "delivered")
+
+    job.deliveredLiters = 0
+    job.assignedWorkerId = 3
+    assertEquals(TCJobHotspots.getSpotPositions(1)[job.id .. "_delivery"], nil, "a hired crew delivers it")
+
+    job.assignedWorkerId = nil
+    job.state = TheContractorJob.STATE.ACCEPTED
+    job.deadlineDay = 40
+    assertEquals(TCJobHotspots.getSpotPositions(1)[job.id .. "_delivery"], nil, "accepted, not due this month")
+    TCHaulage = nil
+end)

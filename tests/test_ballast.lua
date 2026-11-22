@@ -17,6 +17,14 @@ local function installTransforms()
         local dx, dz = wx - node.x, wz - node.z
         return dx * c - dz * s, wy - node.y, dx * s + dz * c
     end
+    function localDirectionToWorld(node, lx, ly, lz)
+        local c, s = math.cos(node.ry), math.sin(node.ry)
+        return lx * c + lz * s, ly, -lx * s + lz * c
+    end
+    function worldDirectionToLocal(node, dx, dy, dz)
+        local c, s = math.cos(node.ry), math.sin(node.ry)
+        return dx * c - dz * s, dy, dx * s + dz * c
+    end
     function worldRotationToLocal(node, rx, ry, rz) return rx, ry - node.ry, rz end
     function localRotationToWorld(node, rx, ry, rz) return rx, ry + node.ry, rz end
 end
@@ -39,6 +47,10 @@ local function setup()
     world:load("src/util/TCEquipmentClass.lua")
     world:load("src/util/TCBallast.lua")
     world:load("src/util/TCEquipmentVisibility.lua")
+    -- No hitching mods loaded: their compatibility does nothing.
+    TheContractorDrivers = { getModEnv = function() return nil end }
+    world:load("src/util/TCManualAttach.lua")
+    world:load("src/util/TCAttachImplementsManually.lua")
     world:load("src/util/TCJobSiteSetup.lua")
     TCEquipmentVisibility.reset()
     world.physicsLog = {}
@@ -197,6 +209,54 @@ test("a rear implement takes the rear hitch even when something foreign is on it
     assertEquals(plans[1].occupant, leftOn, "the plough comes off")
     local detached = TCJobSiteSetup.detachForeignImplements(jobWith(tractor, mower))
     assertEquals(idList(detached), tostring(leftOn.id), "and is parked")
+end)
+
+-- Hitches with real frames: the attachment lines the implement's input
+-- joint node up with the attacher joint's transform. Here the rear
+-- linkage's transform points backwards and the front's forwards, so a rear
+-- implement's input node faces back towards the tractor (half a turn from
+-- its root) and a front one's faces the same way as its root.
+local function addFramedTractor(world)
+    local tractor = addTractor(world)
+    tractor.joints[FRONT].jointTransform = { x = 0, y = 0, z = 0, ry = 0 }
+    tractor.joints[REAR].jointTransform = { x = 0, y = 0, z = 0, ry = math.pi }
+    return tractor
+end
+
+-- Parked at an angle, to show only each machine's own frame counts.
+local function addAIMower(world, name, isFront)
+    local mower = addMachine(world, { name = name, category = "MOWERS", ry = 0.7 })
+    local inputNode = { x = 0, y = 0, z = 0, ry = mower.rootNode.ry + (isFront and 0 or math.pi) }
+    function mower:getInputAttacherJoints() return { { jointType = "implement", node = inputNode } } end
+    function mower:getAINeedsRootAlignment() return true end
+    return mower
+end
+
+test("a front and a rear mower each take the hitch they face forward on, whichever is planned first", function()
+    local world = setup()
+    local tractor = addFramedTractor(world)
+    local frontMower = addAIMower(world, "Front mower", true)
+    local rearMower = addAIMower(world, "Rear mower", false)
+
+    local plans = TCJobSiteSetup.planHitches(jobWith(tractor, frontMower, rearMower))
+
+    assertEquals(#plans, 2)
+    assertEquals(plans[1].implement, frontMower)
+    assertEquals(plans[1].jointIndex, FRONT, "front mower not taken backwards on the rear")
+    assertEquals(plans[2].implement, rearMower)
+    assertEquals(plans[2].jointIndex, REAR)
+end)
+
+test("a rear mower is never put on the front linkage, so a second one can't be rigged", function()
+    local world = setup()
+    local tractor = addFramedTractor(world)
+    local first = addAIMower(world, "Rear mower 1", false)
+    local second = addAIMower(world, "Rear mower 2", false)
+
+    local plans, reasonKey = TCJobSiteSetup.planHitches(jobWith(tractor, first, second))
+
+    assertEquals(plans, nil)
+    assertEquals(reasonKey, "tc_dispatch_noAttachPoint")
 end)
 
 test("split up for parking, a machine keeps its weight", function()

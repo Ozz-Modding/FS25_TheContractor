@@ -53,6 +53,12 @@
 TheContractorYardHaul = {}
 TheContractorYardHaul_mt = Class(TheContractorYardHaul)
 
+-- 180: the trailer's map circle (metres across), tight enough to be on it.
+TheContractorYardHaul.TRAILER_MARKER_RADIUS = 12
+-- 180: how often (real ms) a trailer whose yard spot is taken looks for
+-- another one.
+TheContractorYardHaul.SPOT_RETRY_MS = 5000
+
 TheContractorYardHaul.EVENT_TYPE = "yardHaul"
 TheContractorYardHaul.JOB_TYPE = "yardHaul"
 TheContractorYardHaul.MESSAGE_KIND = "yardHaul"
@@ -231,12 +237,13 @@ function TheContractorYardHaul.getSpot(job)
     if haul == nil or not isTakenOn(job) then
         return nil
     end
+    local radius = TheContractorYardHaul.TRAILER_MARKER_RADIUS
     local trailer = TheContractorYardHaul.getTrailer(haul)
     if trailer ~= nil and trailer.rootNode ~= nil then
         local x, _, z = getWorldTranslation(trailer.rootNode)
-        return { x = x, z = z }
+        return { x = x, z = z, radius = radius }
     end
-    return { x = haul.x, z = haul.z }
+    return { x = haul.x, z = haul.z, radius = radius }
 end
 
 -- The trailer, if it's out (every machine that has it).
@@ -800,6 +807,34 @@ end
 function TheContractorYardHaul:isLoanWanted(entry)
     local job = g_currentMission.TheContractor.Jobs:getJob(entry.farmId, entry.jobId)
     return job ~= nil and job.yardHaul ~= nil and isTakenOn(job) and (job.yardHaul.trailerVehicleId or 0) == 0
+end
+
+-- 180, RepairContracts: the trailer's yard spot isn't clear (a player's
+-- tractor parked on it, waiting for the trailer, kept it from ever coming
+-- out). Every SPOT_RETRY_MS, another spot in the yard. The job's spot moves
+-- with it on the server (a load sends for it there); clients' markers
+-- follow the trailer once it's out.
+function TheContractorYardHaul:retryLoanSpot(entry, model)
+    local now = g_time or 0
+    if entry.spotRetryAt ~= nil and now < entry.spotRetryAt then
+        return false
+    end
+    entry.spotRetryAt = now + TheContractorYardHaul.SPOT_RETRY_MS
+    local tc = g_currentMission.TheContractor
+    local job = tc.Jobs:getJob(entry.farmId, entry.jobId)
+    local farmer = tc.Farmers:getPerson(entry.farmerId)
+    if job == nil or job.yardHaul == nil or farmer == nil then
+        return false
+    end
+    local x, z, rotY = TheContractorYardHaul.pickSpot(farmer, model, math.random)
+    if x == nil then
+        return false
+    end
+    entry.x, entry.z, entry.rotY = x, z, rotY
+    job.yardHaul.x, job.yardHaul.z, job.yardHaul.rotY = x, z, rotY
+    TCLog.info("TheContractor: farm %d job %d: the trailer's spot was taken, trying %.0f, %.0f", entry.farmId,
+        entry.jobId, x, z)
+    return true
 end
 
 -- RepairContracts: the trailer's in place. It's filled with what's still

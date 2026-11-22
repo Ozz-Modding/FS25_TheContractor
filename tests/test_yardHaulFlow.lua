@@ -384,6 +384,64 @@ test("accepted: the player's at once, the trailer comes out to its spot full, an
     assertEquals(#tc.RepairContracts.arrivals, 0)
 end)
 
+-- 180: a player's tractor parked on the trailer's spot kept it from ever
+-- coming out. Now it tries another spot in the yard.
+test("the trailer's spot taken: it comes out on another spot in the yard, and its circle follows it", function()
+    local world, tc = setup()
+    tc.Yards.getSpots = function(_, farmlandId)
+        return farmlandId == 50 and { x = 0, z = 0, spots = { { x = 0, z = 30 }, { x = 30, z = 0 } } } or nil
+    end
+    local job = world:offer()
+    local haul = job.yardHaul
+    local blockedX, blockedZ = haul.x, haul.z
+    TCParking.isAreaClear = function(x, z)
+        return math.abs(x - blockedX) > 5 or math.abs(z - blockedZ) > 5
+    end
+
+    tc.Jobs:transitionJobState(1, job.id, TheContractorJob.STATE.ACCEPTED)
+    g_time = 0
+    for _ = 1, 20 do
+        tc.RepairContracts:update(TheContractorRepairContracts.PLACE_CHECK_MS)
+        if #world.spawned > 0 then
+            break
+        end
+        g_time = g_time + TheContractorYardHaul.SPOT_RETRY_MS
+    end
+    assertEquals(#world.spawned, 1, "out on the other spot")
+    assertTrue(haul.x ~= blockedX or haul.z ~= blockedZ, "the job's spot moved with it")
+
+    local trailer = world:finishLoad()
+    local spot = TheContractorYardHaul.getSpot(job)
+    assertEquals(spot.radius, TheContractorYardHaul.TRAILER_MARKER_RADIUS)
+    assertEquals(spot.x, trailer.rootNode.x, "on the trailer")
+    g_time = nil
+end)
+
+test("the trailer's spot taken and nowhere else: it waits, and only looks again every few seconds", function()
+    local world, tc = setup()
+    local job = world:offer()
+    TCParking.isAreaClear = function() return false end
+    local tries = 0
+    local pickSpot = TheContractorYardHaul.pickSpot
+    TheContractorYardHaul.pickSpot = function(...)
+        tries = tries + 1
+        return pickSpot(...)
+    end
+
+    tc.Jobs:transitionJobState(1, job.id, TheContractorJob.STATE.ACCEPTED)
+    g_time = 0
+    tc.RepairContracts:update(TheContractorRepairContracts.PLACE_CHECK_MS)
+    tc.RepairContracts:update(TheContractorRepairContracts.PLACE_CHECK_MS)
+    assertEquals(tries, 1, "once until the retry time")
+    g_time = TheContractorYardHaul.SPOT_RETRY_MS
+    tc.RepairContracts:update(TheContractorRepairContracts.PLACE_CHECK_MS)
+    assertEquals(tries, 2)
+    assertEquals(#world.spawned, 0)
+    assertEquals(#tc.RepairContracts.arrivals, 1, "still on its way")
+    TheContractorYardHaul.pickSpot = pickSpot
+    g_time = nil
+end)
+
 test("a smaller trailer than the store says: the load is what it holds, and what's to be delivered follows", function()
     local world, tc = setup()
     world.trailerCapacity = 15000

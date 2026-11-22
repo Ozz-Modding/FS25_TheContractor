@@ -190,3 +190,54 @@ test("a job that counts objects ignores fieldWorkDone", function()
     TCJobProgress.update(TCJobProgress.POLL_INTERVAL_MS)
     assertTrue(job.completionPercentage < 100, "three of four bales isn't done")
 end)
+
+-- Reported: a fertilize job's progress jumped between 0 and 100% with
+-- nothing done, then completed. The field's bands are whole rows, so on a
+-- shallow field rounding each one up used the rows up early; the bands
+-- after that were empty, and an empty band read the whole field as done.
+-- Here a field 30 rows deep is split for 40 bands' worth of area.
+local function shallowField(world, rowsDone)
+    local modifier = {}
+    function modifier:setPolygonClipRegion(minZ, maxZ) self.minZ, self.maxZ = minZ, maxZ end
+    function modifier:getPolygonMinMaxZ() return 0, 30 end
+    function modifier:executeGet()
+        world.reads = world.reads + 1
+        local total, done = 0, 0
+        for row = self.minZ + 1, self.maxZ do
+            total = total + 100
+            if row <= rowsDone then
+                done = done + 100
+            end
+        end
+        return done, done, total
+    end
+    DensityMapModifier = { new = function() return modifier end }
+end
+
+test("a shallow field never reads as done with nothing done", function()
+    local world = setup()
+    shallowField(world, 0)
+    local job = addJob(world, "fertilize")
+    job.startState = 0
+
+    local highest = 0
+    TCJobProgress.update(TCJobProgress.POLL_INTERVAL_MS)
+    for _ = 1, 80 do
+        TCJobProgress.update(16)
+        highest = math.max(highest, job.completionPercentage)
+    end
+    assertEquals(highest, 0)
+end)
+
+test("a shallow field's progress is the share of it done", function()
+    local world = setup()
+    shallowField(world, 15)
+    local job = addJob(world, "fertilize")
+    job.startState = 0
+
+    TCJobProgress.update(TCJobProgress.POLL_INTERVAL_MS)
+    for _ = 1, 80 do
+        TCJobProgress.update(16)
+    end
+    assertNear(job.completionPercentage, 50, 1e-9)
+end)

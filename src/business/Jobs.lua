@@ -511,7 +511,7 @@ end
 -- machine (server via TCHaulage, or a client receiving TCJobDeliveryEvent)
 -- is applying it. Tells the farm's player once the delivery terms are met,
 -- since from then on their loads sell as normal.
-function TheContractorJobs:applyJobDelivery(farmId, jobId, deliveredLiters, requiredLiters, stationName)
+function TheContractorJobs:applyJobDelivery(farmId, jobId, deliveredLiters, requiredLiters, stationName, spot)
     local job = self:getJob(farmId, jobId)
     if job == nil then
         return
@@ -520,6 +520,10 @@ function TheContractorJobs:applyJobDelivery(farmId, jobId, deliveredLiters, requ
     -- 162: the station can change when delivery starts; nil leaves it.
     if stationName ~= nil then
         job.deliveryStationName = stationName
+    end
+    -- 176: its drop point, likewise.
+    if spot ~= nil then
+        job.deliverySpot = spot
     end
 
     local wasDelivered = job.requiredLiters > 0 and job.deliveredLiters >= job.requiredLiters
@@ -1046,6 +1050,7 @@ function TheContractorJobs:unallocateJob(farmId, jobId)
     if not job:isPlayerDriven() then
         job.requiredLiters = 0
         job.deliveredLiters = 0
+        job.harvestedLiters = nil
     end
 
     job.assignedWorkerId = nil
@@ -1815,6 +1820,16 @@ function TheContractorJobs.writeJob(streamId, job)
     end
     streamWriteString(streamId, TheContractorJobs.encodeIdList(job.haulageEquipmentIds))
     streamWriteString(streamId, job.deliveryStationName or "")
+    -- 176: the drop point for the job's map marker.
+    local deliverySpot = job.deliverySpot
+    if TCHaulage ~= nil and TCHaulage.getDeliverySpot ~= nil then
+        deliverySpot = TCHaulage.getDeliverySpot(job)
+    end
+    streamWriteBool(streamId, deliverySpot ~= nil)
+    if deliverySpot ~= nil then
+        streamWriteFloat32(streamId, deliverySpot.x)
+        streamWriteFloat32(streamId, deliverySpot.z)
+    end
     streamWriteFloat32(streamId, job.requiredLiters)
     streamWriteFloat32(streamId, job.deliveredLiters)
     streamWriteFloat32(streamId, job.baseOfferedPrice)
@@ -2018,6 +2033,9 @@ function TheContractorJobs.readJob(streamId)
     if deliveryStationName ~= "" then
         job.deliveryStationName = deliveryStationName
     end
+    if streamReadBool(streamId) then
+        job.deliverySpot = { x = streamReadFloat32(streamId), z = streamReadFloat32(streamId) }
+    end
     job.requiredLiters = streamReadFloat32(streamId)
     job.deliveredLiters = streamReadFloat32(streamId)
     job.baseOfferedPrice = streamReadFloat32(streamId)
@@ -2178,6 +2196,7 @@ function TheContractorJobs:loadFromXMLFile(xmlFile)
             job.deliveryStationName = getXMLString(xmlFile, jobKey .. ".delivery#stationName")
             job.requiredLiters = Utils.getNoNil(getXMLFloat(xmlFile, jobKey .. ".delivery#requiredLiters"), 0)
             job.deliveredLiters = Utils.getNoNil(getXMLFloat(xmlFile, jobKey .. ".delivery#deliveredLiters"), 0)
+            job.harvestedLiters = getXMLFloat(xmlFile, jobKey .. ".delivery#harvestedLiters")
             job.workStartedAt = getXMLFloat(xmlFile, jobKey .. ".summary#workStartedAt")
             job.completedAt = getXMLFloat(xmlFile, jobKey .. ".summary#completedAt")
             job.fuelUsedLiters = Utils.getNoNil(getXMLFloat(xmlFile, jobKey .. ".summary#fuelUsedLiters"), 0)
@@ -2617,6 +2636,9 @@ function TheContractorJobs:saveToXmlFile(xmlFile)
                 end
                 setXMLFloat(xmlFile, jobKey .. ".delivery#requiredLiters", job.requiredLiters)
                 setXMLFloat(xmlFile, jobKey .. ".delivery#deliveredLiters", job.deliveredLiters)
+                if job.harvestedLiters ~= nil then
+                    setXMLFloat(xmlFile, jobKey .. ".delivery#harvestedLiters", job.harvestedLiters)
+                end
             end
 
             -- Completion summary (029) - written once work has started, so
