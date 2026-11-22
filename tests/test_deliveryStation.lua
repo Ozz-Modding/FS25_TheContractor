@@ -5,6 +5,9 @@
 -- (HarvestMission.getSellingStationWithHighestPrice) stays first when the
 -- farm can use it; a job already pointing somewhere it can't unload is
 -- moved when its delivery starts.
+-- 176: a station that's scenery (owned by nobody, by another farm, or
+-- hidden from the Prices menu) is never picked, and the job's drop point
+-- (for its map marker) is the trigger that takes the load.
 
 local FARM = 1
 
@@ -105,6 +108,26 @@ local function setup()
             job.requiredLiters = required
         end,
     }
+    -- 176: the map's farm ids; another farm's placeables are off limits
+    -- unless the farm contracts for it.
+    AccessHandler = { EVERYONE = 0, NOBODY = 15 }
+    world.contractingFor = {}
+    g_currentMission.accessHandler = {
+        canFarmAccessOtherId = function(_, farmId, objectFarmId)
+            if objectFarmId == AccessHandler.EVERYONE or objectFarmId == farmId then
+                return true
+            end
+            if objectFarmId == AccessHandler.NOBODY then
+                return false
+            end
+            return world.contractingFor[objectFarmId] == true
+        end,
+    }
+    getWorldTranslation = function(node)
+        return node.x, 0, node.z
+    end
+    world.farms = { { farmId = FARM } }
+
     world.broadcasts = {}
     g_server = {
         broadcastEvent = function(_, event)
@@ -112,8 +135,8 @@ local function setup()
         end,
     }
     TCJobDeliveryEvent = {
-        new = function(farmId, jobId, delivered, required, stationName)
-            return { farmId = farmId, jobId = jobId, stationName = stationName }
+        new = function(farmId, jobId, delivered, required, stationName, spot)
+            return { farmId = farmId, jobId = jobId, stationName = stationName, spot = spot }
         end,
     }
     return world
@@ -121,7 +144,9 @@ end
 
 -- def: { name, price, fillTypes (default WHEAT and STRAW), farms (which
 -- farms may unload; default all), triggerFillTypes (default the station's),
--- trigger ("bulk" default, "bale", "wood", "none"), allowMissions }
+-- trigger ("bulk" default, "bale", "wood", "none"), allowMissions,
+-- 176: owner (the placeable's farm, default 0), hidden (hideFromPricesMenu),
+-- at ({ x, z } of the trigger's node; none without), root ({ x, z }) }
 local function addStation(world, def)
     local fillTypes = {}
     for _, fillTypeIndex in ipairs(def.fillTypes or { FillType.WHEAT, FillType.STRAW }) do
@@ -150,8 +175,14 @@ local function addStation(world, def)
             return toolType == ToolType.BALE
         end,
     }
-    local placeable = { uniqueId = def.name, stations = {} }
+    if kind == "bale" then
+        trigger.triggerNode = def.at
+    else
+        trigger.exactFillRootNode = def.at
+    end
+    local placeable = { uniqueId = def.name, stations = {}, ownerFarmId = def.owner or 0 }
     function placeable:getUniqueId() return self.uniqueId end
+    function placeable:getOwnerFarmId() return self.ownerFarmId end
     local station = {
         name = def.name,
         price = def.price,
@@ -160,6 +191,8 @@ local function addStation(world, def)
         allowMissions = def.allowMissions == nil or def.allowMissions,
         acceptedFillTypes = fillTypes,
         unloadTriggers = kind == "none" and {} or { trigger },
+        hideFromPricesMenu = def.hidden == true,
+        rootNode = def.root,
         missions = {},
         getEffectiveFillTypePrice = function(self)
             return self.price
@@ -295,4 +328,84 @@ test("a job with nowhere it can deliver keeps its station and counts nothing", f
 
     assertEquals(job.deliveryStationUniqueId, "Dryer")
     assertTrue(next(world.placeables.Dryer.stations[1].missions) == nil, "no tracker")
+end)
+
+test("176: a station owned by nobody (farm 15) is never picked, even at the best price", function()
+    local world = setup()
+    addStation(world, { name = "Farm 7's biogas plant", price = 0.95, owner = 15, trigger = "bale" })
+    addStation(world, { name = "Dairy", price = 0.6, trigger = "bale" })
+    addStation(world, { name = "Locked elevator", price = 0.95, owner = 15 })
+    addStation(world, { name = "Elevator", price = 0.9 })
+
+    assertEquals(TCHaulage.findBaleDeliveryStation(FillType.STRAW, FARM).name, "Dairy")
+    assertEquals(TCHaulage.findDeliveryStation(FillType.WHEAT, FARM).name, "Elevator", "vanilla's pick passed over")
+    assertEquals(TCHaulage.findBaleDeliveryStation(FillType.STRAW, nil).name, "Dairy", "with no farm too")
+end)
+
+test("176: a station hidden from the Prices menu is never picked", function()
+    local world = setup()
+    addStation(world, { name = "Extension", price = 0.95, hidden = true, trigger = "bale" })
+    addStation(world, { name = "Dairy", price = 0.6, trigger = "bale" })
+
+    assertEquals(TCHaulage.findBaleDeliveryStation(FillType.STRAW, FARM).name, "Dairy")
+end)
+
+test("176: another farm's station only if the farm contracts for it; its own always", function()
+    local world = setup()
+    addStation(world, { name = "Neighbour's", price = 0.95, owner = 2 })
+    addStation(world, { name = "Own", price = 0.7, owner = FARM })
+    addStation(world, { name = "Elevator", price = 0.6 })
+
+    assertEquals(TCHaulage.findDeliveryStation(FillType.WHEAT, FARM).name, "Own")
+    world.contractingFor[2] = true
+    assertEquals(TCHaulage.findDeliveryStation(FillType.WHEAT, FARM).name, "Neighbour's")
+end)
+
+test("176: the drop point is the trigger that takes the load, not the station", function()
+    local world = setup()
+    local market = addStation(world, { name = "Market", price = 0.6, trigger = "bale",
+        at = { x = 40, z = -12 }, root = { x = 0, z = 0 } })
+    local mill = addStation(world, { name = "Mill", price = 0.6, at = { x = 5, z = 6 }, root = { x = 0, z = 0 } })
+    local bare = addStation(world, { name = "Bare", price = 0.6, root = { x = 9, z = 8 } })
+
+    local x, z = TCHaulage.getDropPosition(market, FillType.STRAW, true)
+    assertEquals(x, 40)
+    assertEquals(z, -12)
+    x, z = TCHaulage.getDropPosition(mill, FillType.WHEAT, false)
+    assertEquals(x, 5)
+    assertEquals(z, 6)
+    x, z = TCHaulage.getDropPosition(bare, FillType.WHEAT, false)
+    assertEquals(x, 9, "no trigger node: the station's own")
+    assertEquals(z, 8)
+end)
+
+test("176: a job's drop point follows its station, and moves with it", function()
+    local world = setup()
+    addStation(world, { name = "Locked bales", price = 0.95, trigger = "bale", farms = {}, at = { x = 1, z = 1 } })
+    addStation(world, { name = "Dairy", price = 0.6, trigger = "bale", at = { x = 70, z = 30 } })
+    local job = addHaulageJob(world, "bale", "Locked bales")
+    assertEquals(TCHaulage.getDeliverySpot(job).x, 1, "before delivery starts")
+
+    TCHaulage.resumeDelivery(job)
+    assertEquals(job.deliveryStationUniqueId, "Dairy")
+    local spot = TCHaulage.getDeliverySpot(job)
+    assertEquals(spot.x, 70)
+    assertEquals(spot.z, 30)
+
+    TCHaulage.update(TCHaulage.POLL_INTERVAL_MS)
+    assertEquals(world.broadcasts[#world.broadcasts].spot, spot, "clients sent the new drop point")
+end)
+
+test("176: an accepted job pointing at scenery is moved once the save has loaded", function()
+    local world = setup()
+    addStation(world, { name = "Farm 7's biogas plant", price = 0.95, owner = 15, trigger = "bale" })
+    addStation(world, { name = "Dairy", price = 0.6, trigger = "bale" })
+    local job = addHaulageJob(world, "bale", "Farm 7's biogas plant")
+    job.state = TheContractorJob.STATE.ACCEPTED
+
+    TCHaulage.update(TCHaulage.POLL_INTERVAL_MS)
+
+    assertEquals(job.deliveryStationUniqueId, "Dairy")
+    assertTrue(next(world.placeables.Dairy.stations[1].missions) == nil, "nothing counted before it starts")
+    assertEquals(world.broadcasts[#world.broadcasts].stationName, "Dairy", "clients told")
 end)

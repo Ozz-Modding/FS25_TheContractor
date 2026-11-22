@@ -134,8 +134,21 @@ do
     }
 end
 
+-- 175: the local labour market candidates come from (TheContractorStaff's
+-- FARMING_SCALE_TIERS): small-scale, mixed or large-scale arable country,
+-- where far more people have driven large tractors. Saved as the option's
+-- number, so a new one goes on the end. Only new candidates follow a
+-- change; anyone already in the pool or hired keeps what they have.
+TheContractorSettings.FARMING_SCALES = { "small", "mixed", "large" }
+TheContractorSettings.DEFINITIONS.farmingScale = {
+    values = { 1, 2, 3 },
+    stringKeys = { "tc_setting_farmingScale_small", "tc_setting_farmingScale_mixed",
+        "tc_setting_farmingScale_large" },
+    default = 2
+}
+
 TheContractorSettings.ITEMS = { "jobPayRate", "lateInvoices", "randomEvents", "nameStyle", "adsWorkshopMargin",
-    "adsFieldMargin", "farmerRetirements", "staffBreaks", "fieldWorkDone" }
+    "adsFieldMargin", "farmerRetirements", "staffBreaks", "fieldWorkDone", "farmingScale" }
 
 -- 086: whether parking slots show outside the construction menu too. A
 -- display preference, so it's a local item (below). onChanged runs on this
@@ -318,6 +331,11 @@ end
 -- The nameStyle setting's style or mix key, for TCNames.generate.
 function TheContractorSettings:getNameStyle()
     return TheContractorSettings.NAME_STYLES[self.values.nameStyle] or TheContractorSettings.NAME_STYLES[1]
+end
+
+-- 175: "small", "mixed" or "large" (FARMING_SCALES).
+function TheContractorSettings:getFarmingScale()
+    return TheContractorSettings.FARMING_SCALES[self.values.farmingScale] or "mixed"
 end
 
 -- 100/102: the benchmark repair contract margin over the cost as a fraction

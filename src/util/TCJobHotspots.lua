@@ -26,7 +26,10 @@
 -- tree's road until that road's clear. 124: bales to a farmer's yard get
 -- one just covering the drop area, 126's load to sell one on the
 -- farmer's trailer, following it, and 127's refuel one on the machine run
--- dry.
+-- dry. 176: a job the player delivers themselves gets one on its drop
+-- point (TCHaulage.getDeliverySpot: the unload trigger that takes the
+-- load, not the station's own map icon, which can be at another of its
+-- unloading points) while it's marked and the delivery isn't done.
 
 TCJobHotspots = {}
 
@@ -39,6 +42,8 @@ TCJobHotspots.accumulatedMs = 0
 -- 101: a breakdown's circle (metres), tighter than a field's. Vanilla's
 -- "radius" is the circle's width. A spot can set its own (124's drop area).
 TCJobHotspots.MACHINE_RADIUS = 25
+-- 176: a drop point's circle, just around the trigger.
+TCJobHotspots.DELIVERY_RADIUS = 15
 
 local function isTakenOn(state)
     return state == TheContractorJob.STATE.ACCEPTED or state == TheContractorJob.STATE.ALLOCATED or
@@ -122,7 +127,7 @@ end
 -- 124's drop areas, 126's trailers and 127's machines run dry (likewise),
 -- and 152's auction lots to inspect.
 -- 107's fallen trees have one per tree still on its road, keyed
--- "<jobId>_<n>".
+-- "<jobId>_<n>". 176's drop points are keyed "<jobId>_delivery".
 function TCJobHotspots.getSpotPositions(farmId)
     local positions = {}
     for jobId, vehicle in pairs(TCJobHotspots.getBreakdownMachines(farmId)) do
@@ -133,7 +138,12 @@ function TCJobHotspots.getSpotPositions(farmId)
     if farmId == nil or farmId == FarmManager.SPECTATOR_FARM_ID or tc == nil or tc.Jobs == nil then
         return positions
     end
+    local lastDayOfMonth = g_currentMission.environment ~= nil and TCJobHotspots.getLastDayOfMonth() or nil
     for _, job in ipairs(tc.Jobs:getAllJobs(farmId)) do
+        local dropSpot = lastDayOfMonth ~= nil and TCJobHotspots.getDropSpot(job, lastDayOfMonth) or nil
+        if dropSpot ~= nil then
+            positions[job.id .. "_delivery"] = dropSpot
+        end
         if job.spill ~= nil and isTakenOn(job.state) then
             positions[job.id] = { x = job.spill.x, z = job.spill.z }
         elseif job.yardDelivery ~= nil then
@@ -156,6 +166,25 @@ function TCJobHotspots.getSpotPositions(farmId)
         end
     end
     return positions
+end
+
+-- 176: the job's drop point circle, or nil: a delivery the farm's player
+-- makes (needsPlayerDelivery) that isn't done yet, on a job marked as its
+-- field would be (isMarked).
+function TCJobHotspots.getDropSpot(job, lastDayOfMonth)
+    if TCHaulage == nil or job.deliveryStationName == nil or not job:needsPlayerDelivery() or
+            not TCJobHotspots.isMarked(job, lastDayOfMonth) then
+        return nil
+    end
+    if job.requiredLiters ~= nil and job.requiredLiters > 0 and job.deliveredLiters ~= nil and
+            job.deliveredLiters >= job.requiredLiters then
+        return nil
+    end
+    local spot = TCHaulage.getDeliverySpot(job)
+    if spot == nil then
+        return nil
+    end
+    return { x = spot.x, z = spot.z, radius = TCJobHotspots.DELIVERY_RADIUS }
 end
 
 function TCJobHotspots.refreshMachines()

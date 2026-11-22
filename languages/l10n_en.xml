@@ -24,6 +24,11 @@
 		<text name="tc_setting_staffBreaks_all" text="On"/>
 		<text name="tc_setting_staffBreaks_lunch" text="Lunch only"/>
 		<text name="tc_setting_staffBreaks_none" text="Off"/>
+		<text name="tc_setting_farmingScale" text="Local farming"/>
+		<text name="tc_toolTip_farmingScale" text="The kind of farming country your candidates come from. Large-scale arable (as on big North American maps) brings many more people who've driven large tractors, and better on them, so they ask for more pay. Small-scale brings more small and medium tractor drivers and fewer large. Only new candidates follow a change."/>
+		<text name="tc_setting_farmingScale_small" text="Small-scale"/>
+		<text name="tc_setting_farmingScale_mixed" text="Mixed"/>
+		<text name="tc_setting_farmingScale_large" text="Large-scale arable"/>
 		<text name="tc_setting_fieldWorkDone" text="Field work done at"/>
 		<text name="tc_toolTip_fieldWorkDone" text="How much of the field a job's field work has to cover before it counts as done and shows 100%. 98% is the base game's contract standard; lower finishes jobs sooner, leaving more of the field unworked. Jobs that count bales, pieces or deliveries aren't affected. A change applies to jobs under way too."/>
 		<text name="tc_setting_showParkingSlots" text="Show parking slots"/>
@@ -501,6 +506,8 @@
 		<text name="tc_staff_detailSalary" text="%s per month"/>
 		<text name="tc_staff_detailJobNone" text="None"/>
 		<text name="tc_staff_detailOnBreak" text="On break until %s"/>
+		<text name="tc_staff_detailComingIn" text="In at %s, on until %s"/>
+		<text name="tc_staff_detailOnUntil" text="On until %s"/>
 		<text name="tc_growth_improved" text="%s improved: %s %d to %d"/>
 		<text name="tc_growth_certified" text="%s is now certified on %s"/>
 		<text name="tc_growth_stat_workSpeed" text="work speed"/>
@@ -1779,7 +1786,7 @@
 		<text name="tc_help_settings_2_title" text="Business"/>
 		<text name="tc_help_settings_2" text="Job pay rate scales what new offers pay (100% is half the base game's contract pay); business costs such as insurance, training, claims and fines scale with it, but staff pay doesn't. Late/unpaid invoices switches customers paying late on or off. Random events can be Normal, Rare or Off. Field work done at sets how much of a field a job has to cover to count as finished (98% by default, as base game contracts)."/>
 		<text name="tc_help_settings_3_title" text="People"/>
-		<text name="tc_help_settings_3" text="Staff name style picks where new staff's names come from. Farmer retirements (off by default) lets farmers retire and hand their farm on. With Advanced Damage System there are also your usual repair margins, for repair zones and field breakdowns."/>
+		<text name="tc_help_settings_3" text="Staff name style picks where new staff's names come from. Local farming sets how many candidates have driven large tractors: Large-scale arable suits big North American style maps, where you need them most (they ask for more pay). Farmer retirements (off by default) lets farmers retire and hand their farm on. With Advanced Damage System there are also your usual repair margins, for repair zones and field breakdowns."/>
 		<text name="tc_help_settings_4_title" text="Just for you"/>
 		<text name="tc_help_settings_4" text="Show parking slots and Job progress bars are your own preferences and aren't shared. Right Ctrl+P shows or hides the parking slot markings at any time."/>
 		<text name="tc_help_settings_5_title" text="Console"/>
@@ -1788,7 +1795,7 @@
 		<text name="tc_help_jobTypes_title" text="Kinds of work"/>
 		<text name="tc_help_jobTypes_1" text="Offers cover all the base game's field work: harvesting, mowing, tedding, baling, wrapping, cultivating, plowing, sowing and planting, fertilising, spraying herbicide, weeding, hoeing, stone picking and spreading lime."/>
 		<text name="tc_help_jobTypes_2_title" text="Harvest and haul"/>
-		<text name="tc_help_jobTypes_2" text="The crop belongs to the customer and has to reach the selling point named in the offer (if your farm can't unload there by the time the job starts, it moves to the best-paying one you can). It takes two workers, one harvesting and one hauling, or you can do the lot yourself. The crop can't be unloaded anywhere but there."/>
+		<text name="tc_help_jobTypes_2" text="The crop belongs to the customer and has to reach the selling point named in the offer (if your farm can't unload there, or it's only scenery, it moves to the best-paying one you can). It takes two workers, one harvesting and one hauling, or you can do the lot yourself. The crop can't be unloaded anywhere but there."/>
 		<text name="tc_help_jobTypes_3_title" text="Bales"/>
 		<text name="tc_help_jobTypes_3" text="Bale and deliver means baling the straw and taking the bales to a buyer; only you can do it. Deliver straw means collecting bales already on the field and delivering them."/>
 		<text name="tc_help_jobTypes_4_title" text="Other work"/>
@@ -1800,7 +1807,7 @@
 		<text name="tc_help_planning_2_title" text="Job Details"/>
 		<text name="tc_help_planning_2" text="Job Details shows the job's crew, equipment, status and progress. The Allocation column shows who's on each job."/>
 		<text name="tc_help_planning_3_title" text="On the map"/>
-		<text name="tc_help_planning_3" text="A job that's due has the game's flashing contract circle on its field, so you can find it. While your job is on a field, the farmer leaves it to you."/>
+		<text name="tc_help_planning_3" text="A job that's due has the game's flashing contract circle on its field, so you can find it. A delivery you make yourself gets a smaller circle on the exact spot to unload at, since a selling point's own map icon can be at a different unloading point (a market's grain pit rather than its bale drop). While your job is on a field, the farmer leaves it to you."/>
 		<text name="tc_help_planning_4_title" text="Progress"/>
 		<text name="tc_help_planning_4" text="Progress is read from the field itself, whoever is driving, and reaches 100% once the share set by Field work done at (98% by default) is worked. Job progress bars on screen can be shown for your own jobs, all of them or none (Settings)."/>
 		<text name="tc_help_planning_5_title" text="Due dates"/>
@@ -1853,7 +1860,7 @@
 		<text name="tc_help_logbook_4" text="Filter jobs to completed or failed ones, and sort vehicles by name, last used, hours or faults."/>
 		<text name="tc_help_cat_staff" text="Staff"/>
 		<text name="tc_help_hiring_title" text="Hiring and the roster"/>
-		<text name="tc_help_hiring_1" text="The People tab's Candidates view lists people looking for work. New ones come and others leave over time, and in multiplayer every farm hires from the same pool."/>
+		<text name="tc_help_hiring_1" text="The People tab's Candidates view lists people looking for work. A few new ones come every month, however long your months are, and others leave; in multiplayer every farm hires from the same pool. The Local farming setting decides how many have driven large tractors."/>
 		<text name="tc_help_hiring_2_title" text="Hiring"/>
 		<text name="tc_help_hiring_2" text="Each candidate has a monthly salary. Hire them and the first month is paid at once; after that it's charged at the start of every month while they're on your roster, whatever they're doing."/>
 		<text name="tc_help_hiring_3_title" text="What to look at"/>
@@ -1865,7 +1872,7 @@
 		<text name="tc_help_hours_2_title" text="Overtime"/>
 		<text name="tc_help_hours_2" text="A crew still out on a job at 18:00 finishes it, on overtime at one and a half times their hourly pay. It's paid with the next month's salaries."/>
 		<text name="tc_help_hours_3_title" text="Stay late and call back"/>
-		<text name="tc_help_hours_3" text="From Manage, ask someone to stay late until a time you choose, or call them back in once they've gone home (they arrive about 25 minutes later). They're paid overtime for every hour of it, whether you give them work or not. Send home ends it."/>
+		<text name="tc_help_hours_3" text="From Manage, ask someone to stay late until a time you choose, or call them back in once they've gone home (they arrive about 25 minutes later). The People tab shows when they'll be in and until when. They're paid overtime for every hour of it, whether you give them work or not. Send home ends it."/>
 		<text name="tc_help_hours_4_title" text="Breaks"/>
 		<text name="tc_help_hours_4" text="Staff take a 15 minute morning break, a 30 minute lunch and a 15 minute afternoon break, each when they're free within its window. Someone out working all day misses them, and missed breaks, lunch especially, hurt their morale. The Staff breaks setting can drop the short breaks, or all of them."/>
 		<text name="tc_help_skills_title" text="Skills, growth and training"/>
@@ -2012,7 +2019,7 @@
 		<text name="tc_help_yardJobs_2_title" text="Bales to the yard"/>
 		<text name="tc_help_yardJobs_2" text="A farmer short of hay, straw or silage asks for some of your bales. Put them on the ground in the area marked in their yard, under a bale icon (it's on your map); their telehandler and bale fork wait beside it if you want them. Bales over the order are paid as extra."/>
 		<text name="tc_help_yardJobs_3_title" text="Selling a load"/>
-		<text name="tc_help_yardJobs_3" text="A farmer's driver is off, and their trailer stands full in the yard. Bring a tractor, take it to the selling point named and tip it. You're paid for the haulage; the crop's money is theirs. A load that goes astray is claimed for."/>
+		<text name="tc_help_yardJobs_3" text="A farmer's driver is off, and their trailer stands full in the yard, under a small circle on your map (the selling point has one too). Bring a tractor, take it to the selling point named and tip it. You're paid for the haulage; the crop's money is theirs. A load that goes astray is claimed for."/>
 		<text name="tc_help_yardJobs_4_title" text="Emergency refuel"/>
 		<text name="tc_help_yardJobs_4" text="A farmer's machine has run dry on their field. Bring diesel from your own stock, however you like, and fill it up today. They pay for the diesel and your trouble."/>
 		<text name="tc_help_cat_auctions" text="Machinery auctions"/>

@@ -226,6 +226,21 @@ function TheContractorWorkingHours.getDisplayStatus(worker, now)
     return worker.status
 end
 
+-- 178: what the Staff tab says about an idle worker's booked hours: the
+-- l10n key and its times, or nil. Called back and not in yet: when they'll
+-- be in and until when. Kept on (staying late, or asked to before the day
+-- ends): until when.
+function TheContractorWorkingHours.getDutyNote(worker, now)
+    now = now or TheContractorWorkingHours.getNow()
+    if not worker:isIdle() or not TheContractorWorkingHours.hasDuty(worker, now) then
+        return nil
+    end
+    if worker.dutyArrive ~= nil and now < worker.dutyArrive then
+        return "tc_staff_detailComingIn", { worker.dutyArrive, worker.dutyUntil }
+    end
+    return "tc_staff_detailOnUntil", { worker.dutyUntil }
+end
+
 -- Office staff (090): in the office during working hours, else at home.
 function TheContractorWorkingHours.isOfficeOpen(now)
     return TheContractorWorkingHours.isWorkingTime(now or TheContractorWorkingHours.getNow())

@@ -151,6 +151,13 @@ local function findJoint(attacher, implement, claimedJoints, isJobVehicle, farmI
     return best
 end
 
+-- Unhitches `object` from `attacher`. 177: with Attach Implements Manually,
+-- a trailer's handbrake goes on, so nothing we leave standing rolls away.
+local function unhitch(attacher, object)
+    attacher:detachImplementByObject(object)
+    TCAttachImplementsManually.onDetached(object)
+end
+
 -- Places `implement` so its input attacher joint sits on the attacher's
 -- joint, facing the attacher's heading, then hitches it without vanilla's
 -- smooth-attach easing (there's nobody watching - it's still hidden).
@@ -180,8 +187,11 @@ local function hitch(plan, implement)
 
     attacher:attachImplement(implement, plan.inputIndex, plan.jointIndex, false, nil, false, true)
     -- Manual Attach pulls the PTO and hoses off a hitch made before the AI
-    -- starts; nobody's there to connect them by hand.
+    -- starts; nobody's there to connect them by hand. 177: Attach
+    -- Implements Manually leaves them (and the top link) off, and a
+    -- trailer's handbrake on.
     TCManualAttach.connectAll(attacher, implement)
+    TCAttachImplementsManually.connectAll(attacher, implement)
 end
 
 -- 121, server-only: hitches a newly loaded implement to a machine (a
@@ -319,7 +329,7 @@ function TCJobSiteSetup.rigAndPlace(job)
     -- shown where it's left.
     for _, plan in ipairs(plans) do
         if plan.occupant ~= nil then
-            plan.attacher:detachImplementByObject(plan.occupant)
+            unhitch(plan.attacher, plan.occupant)
             if TCBallast.isWeight(plan.occupant) then
                 TCEquipmentVisibility.setVisibleEverywhere({ NetworkUtil.getObjectId(plan.occupant) }, true)
             end
@@ -328,7 +338,7 @@ function TCJobSiteSetup.rigAndPlace(job)
     for _, plan in ipairs(plans) do
         local currentAttacher = plan.implement.getAttacherVehicle ~= nil and plan.implement:getAttacherVehicle() or nil
         if currentAttacher ~= nil then
-            currentAttacher:detachImplementByObject(plan.implement)
+            unhitch(currentAttacher, plan.implement)
         end
     end
 
@@ -416,7 +426,7 @@ function TCJobSiteSetup.detachForeignImplements(job)
                 end
             end
             for _, object in ipairs(foreign) do
-                vehicle:detachImplementByObject(object)
+                unhitch(vehicle, object)
                 addWithChildren(object)
             end
         end
@@ -434,7 +444,7 @@ function TCJobSiteSetup.unhitchVehicles(vehicleIds)
         if vehicle ~= nil and not vehicle.isDeleted then
             local attacher = vehicle.getAttacherVehicle ~= nil and vehicle:getAttacherVehicle() or nil
             if attacher ~= nil then
-                attacher:detachImplementByObject(vehicle)
+                unhitch(attacher, vehicle)
             end
             if vehicle.getAttachedImplements ~= nil then
                 local implements = {}
@@ -444,7 +454,7 @@ function TCJobSiteSetup.unhitchVehicles(vehicleIds)
                     end
                 end
                 for _, object in ipairs(implements) do
-                    vehicle:detachImplementByObject(object)
+                    unhitch(vehicle, object)
                 end
             end
         end

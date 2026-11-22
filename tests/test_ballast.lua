@@ -47,6 +47,10 @@ local function setup()
     world:load("src/util/TCEquipmentClass.lua")
     world:load("src/util/TCBallast.lua")
     world:load("src/util/TCEquipmentVisibility.lua")
+    -- No hitching mods loaded: their compatibility does nothing.
+    TheContractorDrivers = { getModEnv = function() return nil end }
+    world:load("src/util/TCManualAttach.lua")
+    world:load("src/util/TCAttachImplementsManually.lua")
     world:load("src/util/TCJobSiteSetup.lua")
     TCEquipmentVisibility.reset()
     world.physicsLog = {}

@@ -74,6 +74,30 @@ TheContractorStaff.TOP_TIER_WEIGHTS = {
     { tier = "large", weight = 0.35 },
 }
 
+-- 175: the farmingScale setting (TheContractorSettings.FARMING_SCALES) picks
+-- the local labour market. MIXED uses TOP_TIER_WEIGHTS and
+-- YOUNG_TOP_TIER_WEIGHTS (below); the others swap in their own pair, so
+-- large-scale arable country (the US) has more large-tractor drivers, young
+-- ones included, and small-scale country fewer. largeRatingRolls: a large
+-- rating is the best of that many rolls (still no better than the medium
+-- one), so large-scale drivers are better on them too. Pay needs nothing
+-- more: getSalary already pays for tractor ratings, so a better market
+-- costs more. Simulated over the candidate rolls (candidates with a large
+-- rating / one of 5 or more / median salary): mixed 22% / 12% / ~2.68k,
+-- large-scale 39% / 30% / ~2.85k, small-scale 10% / 5% / ~2.61k.
+TheContractorStaff.FARMING_SCALE_TIERS = {
+    small = {
+        full = { 0.05, 0.4, 0.4, 0.15 },
+        young = { 0.35, 0.5, 0.15, 0 },
+        largeRatingRolls = 1,
+    },
+    large = {
+        full = { 0.03, 0.12, 0.3, 0.55 },
+        young = { 0.25, 0.35, 0.3, 0.1 },
+        largeRatingRolls = 2,
+    },
+}
+
 -- 044: operation skills. Every skill gets a SKILL_BASE_MIN-SKILL_BASE_MAX
 -- base roll, then SPECIALISMS_MIN-SPECIALISMS_MAX of them, picked at random,
 -- are re-rolled as specialisms (SPECIALISM_MIN-SPECIALISM_MAX), so each
@@ -110,15 +134,20 @@ TheContractorStaff.AGE_ROLLS = 2
 
 -- Pool lifecycle: seeded up to INITIAL_POOL_SIZE candidates on first ever
 -- load (or if an existing save's pool is found empty, e.g. upgrading a save
--- from before this existed — see ensureInitialPool). Each day thereafter,
--- every candidate currently in the pool independently has a
--- POOL_DAILY_REMOVE_CHANCE chance to leave (poached elsewhere/lost
--- interest), and if the pool is under POOL_MAX_SIZE there's a
--- POOL_DAILY_ADD_CHANCE chance a new candidate appears.
-TheContractorStaff.INITIAL_POOL_SIZE = 4
+-- from before this existed — see ensureInitialPool). After that it turns
+-- over by the month, not the day (174), so a short month sees as many new
+-- faces as a long one: POOL_ARRIVALS_PER_MONTH new candidates on average,
+-- spread over the month's days (a 1-day month gets them all at once), while
+-- POOL_MAX_SIZE allows. Each candidate leaves at POOL_LEAVE_RATE per month,
+-- a continuous rate split evenly over the days (getDailyPoolOdds), so they
+-- stay about 1 / POOL_LEAVE_RATE months on average at any month length.
+-- Simulated, the pool holds ~4.7 at 28 days a month, ~5 at 7 and ~7 at 1,
+-- with ~3.8 newcomers a month at any length (before 174 it held ~3.3, with
+-- ~3.5 newcomers in a 7-day month and ~0.5 in a 1-day one).
+TheContractorStaff.INITIAL_POOL_SIZE = 6
 TheContractorStaff.POOL_MAX_SIZE = 8
-TheContractorStaff.POOL_DAILY_ADD_CHANCE = 0.5
-TheContractorStaff.POOL_DAILY_REMOVE_CHANCE = 0.15
+TheContractorStaff.POOL_ARRIVALS_PER_MONTH = 4
+TheContractorStaff.POOL_LEAVE_RATE = 0.8
 
 -- Age and growth (030). Every worker gets a visible age and a hidden pool of
 -- growthPotential points, rolled together at creation: the younger the
@@ -391,12 +420,23 @@ function TheContractorStaff.rollWorkSpeed(experience)
     return math.random(1, blend(TheContractorStaff.YOUNG_WORK_SPEED_MAX, TheContractorWorker.MAX_SKILL, experience))
 end
 
-local function rollTopTier(experience)
+-- 175: the farmingScale setting's key, MIXED without settings (tests, or
+-- before they've loaded).
+function TheContractorStaff.getFarmingScale()
+    local tc = g_currentMission.TheContractor
+    if tc ~= nil and tc.Settings ~= nil and tc.Settings.getFarmingScale ~= nil then
+        return tc.Settings:getFarmingScale()
+    end
+    return "mixed"
+end
+
+local function rollTopTier(experience, scaleTiers)
     local weights = {}
     local totalWeight = 0
     for i, entry in ipairs(TheContractorStaff.TOP_TIER_WEIGHTS) do
-        local young = TheContractorStaff.YOUNG_TOP_TIER_WEIGHTS[i].weight
-        weights[i] = young + (entry.weight - young) * experience
+        local full = scaleTiers ~= nil and scaleTiers.full[i] or entry.weight
+        local young = scaleTiers ~= nil and scaleTiers.young[i] or TheContractorStaff.YOUNG_TOP_TIER_WEIGHTS[i].weight
+        weights[i] = young + (full - young) * experience
         totalWeight = totalWeight + weights[i]
     end
     local roll = math.random() * totalWeight
@@ -413,13 +453,15 @@ end
 -- (reaching the threshold is what qualified them for the next). The top
 -- one is no better than the size below it, and under the threshold unless
 -- it's the biggest there is - reaching it would have qualified them for the
--- next size up.
-function TheContractorStaff.rollTierCapability(experience)
+-- next size up. 175: scale is a farmingScale key (the setting's if nil).
+function TheContractorStaff.rollTierCapability(experience, scale)
     local tierCapability = {}
-    local topTier = rollTopTier(experience or 1)
+    local scaleTiers = TheContractorStaff.FARMING_SCALE_TIERS[scale or TheContractorStaff.getFarmingScale()]
+    local topTier = rollTopTier(experience or 1, scaleTiers)
     if topTier == nil then
         return tierCapability
     end
+    local largeRatingRolls = scaleTiers ~= nil and scaleTiers.largeRatingRolls or 1
 
     local threshold, maxRating = TheContractorStaff.CERTIFY_THRESHOLD, TheContractorWorker.MAX_SKILL
     local below = nil
@@ -429,7 +471,12 @@ function TheContractorStaff.rollTierCapability(experience)
             if TheContractorStaff.getNextTier(tier) ~= nil then
                 cap = math.min(cap, threshold - 1)
             end
-            tierCapability[tier] = math.random(1, cap)
+            local rolls = tier == "large" and largeRatingRolls or 1
+            local rating = 1
+            for _ = 1, rolls do
+                rating = math.max(rating, math.random(1, cap))
+            end
+            tierCapability[tier] = rating
             break
         end
         tierCapability[tier] = math.random(threshold, maxRating)
@@ -669,10 +716,25 @@ function TheContractorStaff:stopDailyTick()
     g_messageCenter:unsubscribe(MessageType.PERIOD_CHANGED, self)
 end
 
-function TheContractorStaff:onDayChanged()
+-- 174: today's share of the month's pool turnover - the expected number of
+-- new candidates and each candidate's chance to leave. Read live, so a
+-- change to the save's days per month applies from the next day.
+function TheContractorStaff.getDailyPoolOdds(daysPerPeriod)
+    daysPerPeriod = math.max(1, daysPerPeriod or 1)
+    local arrivals = TheContractorStaff.POOL_ARRIVALS_PER_MONTH / daysPerPeriod
+    local leaveChance = 1 - math.exp(-TheContractorStaff.POOL_LEAVE_RATE / daysPerPeriod)
+    return arrivals, leaveChance
+end
+
+-- 174: the pool's daily turnover (see POOL_ARRIVALS_PER_MONTH). Leavers go
+-- first, then arrivals: the whole part of today's expected arrivals always
+-- come, the fraction is a roll. addCandidateToPool stops at POOL_MAX_SIZE.
+function TheContractorStaff:updateCandidatePool(daysPerPeriod)
+    local arrivals, leaveChance = TheContractorStaff.getDailyPoolOdds(daysPerPeriod)
+
     local departingIds = {}
     for id in pairs(self.candidatePool) do
-        if math.random() < TheContractorStaff.POOL_DAILY_REMOVE_CHANCE then
+        if math.random() < leaveChance then
             table.insert(departingIds, id)
         end
     end
@@ -680,9 +742,19 @@ function TheContractorStaff:onDayChanged()
         self:removeCandidateFromPool(id)
     end
 
-    if math.random() < TheContractorStaff.POOL_DAILY_ADD_CHANCE then
-        self:addCandidateToPool()
+    local count = math.floor(arrivals)
+    if math.random() < arrivals - count then
+        count = count + 1
     end
+    for _ = 1, count do
+        if self:addCandidateToPool() == nil then
+            break
+        end
+    end
+end
+
+function TheContractorStaff:onDayChanged()
+    self:updateCandidatePool(g_currentMission.environment.daysPerPeriod)
 
     self:updateSickness()
 
