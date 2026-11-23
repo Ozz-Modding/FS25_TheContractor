@@ -1793,7 +1793,7 @@
 		<text name="tc_help_settings_5" text="Type tcHelp in the developer console for the mod's commands, for tailoring your game. They're listed in the mod's documentation."/>
 		<text name="tc_help_cat_jobs" text="Jobs"/>
 		<text name="tc_help_jobTypes_title" text="Kinds of work"/>
-		<text name="tc_help_jobTypes_1" text="Offers cover all the base game's field work: harvesting, mowing, tedding, baling, wrapping, cultivating, plowing, sowing and planting, fertilising, spraying herbicide, weeding, hoeing, stone picking and spreading lime."/>
+		<text name="tc_help_jobTypes_1" text="Offers cover all the base game's field work: harvesting, mowing, tedding, baling, wrapping, cultivating, plowing, sowing and planting, fertilising, spraying herbicide, weeding, hoeing, stone picking and spreading lime. A map's own grasses, such as alfalfa and clover, are mown, tedded and baled like grass, never harvested."/>
 		<text name="tc_help_jobTypes_2_title" text="Harvest and haul"/>
 		<text name="tc_help_jobTypes_2" text="The crop belongs to the customer and has to reach the selling point named in the offer (if your farm can't unload there, or it's only scenery, it moves to the best-paying one you can). It takes two workers, one harvesting and one hauling, or you can do the lot yourself. The crop can't be unloaded anywhere but there."/>
 		<text name="tc_help_jobTypes_3_title" text="Bales"/>

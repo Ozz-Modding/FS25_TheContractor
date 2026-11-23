@@ -56,6 +56,13 @@ TheContractorJobGeneration_mt = Class(TheContractorJobGeneration)
 --   seasonRule       vanilla's own seasonal cut-off (isAvailableForField's
 --                    environment block), applied to future days too
 --                    (isDoableOnDay): "noWinter", or "noWinterOrEarlySpring".
+--   grassWork        181: work on grass, which on a map with its own grasses
+--                    (alfalfa, clover: isGrass) is more than vanilla's
+--                    grass, so the job type has its own availability on
+--                    one (isGrassWorkAvailable): "standing" (mow, tedder:
+--                    grass only, at a harvestable state, as MowMission
+--                    asks) or "cut" (bale: harvest-ready, as BaleMission
+--                    asks; a straw crop still goes by BaleMission).
 --   needsGrowingCrop 179: only a crop that's still growing (vanilla's
 --                    getIsGrowing). Vanilla's herbicide spraying
 --                    (FSDensityMapUtil.updateHerbicideArea) never touches
@@ -175,13 +182,15 @@ TheContractorJobGeneration.JOB_TYPES = {
     plow = { implementSpec = "spec_plow", vanillaMission = PlowMission, rewardPerHa = 2800, reputationPerHa = 9.5,
         skill = "tillage",
         workAreaTypes = { "PLOW" } },
-    mow = { implementSpec = "spec_mower", vanillaMission = MowMission, recordsCrop = true,
+    mow = { implementSpec = "spec_mower", vanillaMission = MowMission, recordsCrop = true, grassWork = "standing",
         seasonRule = "noWinterOrEarlySpring", rewardPerHa = 2500, reputationPerHa = 8.5, skill = "grassland",
         workAreaTypes = { "MOWER" } },
-    tedder = { implementSpec = "spec_tedder", vanillaMission = TedderMission, seasonRule = "noWinterOrEarlySpring",
+    tedder = { implementSpec = "spec_tedder", vanillaMission = TedderMission, recordsCrop = true,
+        grassWork = "standing", seasonRule = "noWinterOrEarlySpring",
         serverMeasured = true, rewardPerHa = 1500, reputationPerHa = 5.1, skill = "grassland",
         workAreaTypes = { "TEDDER" } },
-    bale = { implementSpec = "spec_baler", vanillaMission = BaleMission, recordsCrop = true, seasonRule = "noWinter",
+    bale = { implementSpec = "spec_baler", vanillaMission = BaleMission, recordsCrop = true, grassWork = "cut",
+        seasonRule = "noWinter",
         serverMeasured = true, deliversBales = true, rewardPerHa = 2200, reputationPerHa = 7.5, skill = "baling",
         workAreaTypes = { "BALER" } },
     baleWrap = { implementSpec = "spec_baleWrapper", vanillaMission = BaleWrapMission, seasonRule = "noWinter",
@@ -426,6 +435,7 @@ function TheContractorJobGeneration.new()
     -- Server-only, not saved: the monotonic day each farm last had an offer
     -- from the hourly roll, for the daily floor.
     self.lastOfferDayByFarm = {}
+    TheContractorJobGeneration.clearGrassWindrows()
     return self
 end
 
@@ -1059,7 +1069,44 @@ function TheContractorJobGeneration.isFieldEligible(field, jobDef)
     if jobDef.needsGrowingCrop and not TheContractorJobGeneration.isCropGrowing(fieldState) then
         return false
     end
+    if jobDef.grassWork ~= nil then
+        if TheContractorJobGeneration.isGrass(fieldState.fruitTypeIndex) then
+            return TheContractorJobGeneration.isGrassWorkAvailable(fieldState, jobDef)
+        end
+        if jobDef.grassWork == "standing" then
+            return false
+        end
+    end
     return TheContractorJobGeneration.isVanillaAvailable(field, jobDef)
+end
+
+-- 181: a grassWork job type on a grass field (isGrass), by vanilla's own
+-- rules for grass (MowMission/TedderMission for "standing", BaleMission for
+-- "cut"), which only ever know vanilla's grass: the crop at a state it can
+-- be cut at, and the job's season today (seasonRule).
+function TheContractorJobGeneration.isGrassWorkAvailable(fieldState, jobDef)
+    local fruitType = g_fruitTypeManager:getFruitTypeByIndex(fieldState.fruitTypeIndex)
+    if fruitType == nil or fieldState.growthState == nil then
+        return false
+    end
+    if jobDef.grassWork == "cut" then
+        if not fruitType:getIsHarvestReady(fieldState.growthState) then
+            return false
+        end
+    elseif not fruitType:getIsHarvestable(fieldState.growthState) then
+        return false
+    end
+    local environment = g_currentMission.environment
+    if environment ~= nil and jobDef.seasonRule ~= nil then
+        if environment.currentSeason == Season.WINTER then
+            return false
+        end
+        if jobDef.seasonRule == "noWinterOrEarlySpring" and (environment.currentPeriod == SeasonPeriod.EARLY_SPRING or
+                environment.currentPeriod == SeasonPeriod.MID_SPRING) then
+            return false
+        end
+    end
+    return true
 end
 
 -- 179: whether the field's crop is still growing (vanilla's getIsGrowing:
@@ -1116,13 +1163,80 @@ function TheContractorJobGeneration.needsLime(fieldState)
 end
 
 -- Grass by vanilla's own definition: what its mow contracts cut (grass),
--- plus meadow.
-function TheContractorJobGeneration.isGrass(fruitTypeIndex)
+-- plus meadow. 072's joyriders tear up and resow only this.
+function TheContractorJobGeneration.isVanillaGrass(fruitTypeIndex)
     if fruitTypeIndex == FruitType.MEADOW and FruitType.MEADOW ~= nil then
         return true
     end
     local mowData = TheContractorJobGeneration.getMowMissionData()
     return mowData ~= nil and mowData.fruitTypeIndices[fruitTypeIndex] == true
+end
+
+-- 181: grass, vanilla's and a map's own (alfalfa, clover): mow, tedder and
+-- bale work, never a harvest. Vanilla's grass, or a crop with grass
+-- windrows (getGrassWindrows).
+function TheContractorJobGeneration.isGrass(fruitTypeIndex)
+    return TheContractorJobGeneration.isVanillaGrass(fruitTypeIndex) or
+        TheContractorJobGeneration.getGrassWindrows(fruitTypeIndex) ~= nil
+end
+
+-- 181: fruitTypeIndex -> { fresh, dry } for the crops with grass windrows,
+-- built from the converter tables once they're loaded, for the session.
+local grassWindrows = nil
+
+-- 181: a crop's grass windrows, { fresh, dry } fill type indices, or nil
+-- if it has none. A crop has them when the map's mower turns it into a
+-- windrow (the MOWER fruit type converter: fresh) that the map's tedder
+-- dries into something else (the TEDDER fill type converter: dry), as
+-- grass's GRASS_WINDROW into DRYGRASS_WINDROW, or a map's alfalfa into its
+-- DRYALFALFA_WINDROW. Straw is never tedded into anything else, so a
+-- cereal has none. FS25_MoistureSystem classes grass and hay by the same
+-- tedder converter.
+function TheContractorJobGeneration.getGrassWindrows(fruitTypeIndex)
+    if fruitTypeIndex == nil then
+        return nil
+    end
+    if grassWindrows == nil then
+        local mower = g_fruitTypeManager.getConverterDataByName ~= nil and
+            g_fruitTypeManager:getConverterDataByName("MOWER") or nil
+        local tedder = g_fillTypeManager.getConverterDataByName ~= nil and
+            g_fillTypeManager:getConverterDataByName("TEDDER") or nil
+        if mower == nil or tedder == nil then
+            return nil
+        end
+        local found = {}
+        for index, conversion in pairs(mower) do
+            local fresh = conversion.fillTypeIndex
+            local drying = fresh ~= nil and tedder[fresh] or nil
+            if drying ~= nil and drying.targetFillTypeIndex ~= nil and drying.targetFillTypeIndex ~= fresh then
+                found[index] = { fresh = fresh, dry = drying.targetFillTypeIndex }
+            end
+        end
+        grassWindrows = found
+    end
+    return grassWindrows[fruitTypeIndex]
+end
+
+-- The windrow a crop's baled from once it's cut, or nil: straw, grass's
+-- hay (DRYGRASS_WINDROW, as BaleMission:setFruitType), and 181 a map's own
+-- grass's dry windrow (getGrassWindrows).
+function TheContractorJobGeneration.getBaleWindrowFillType(fruitTypeIndex)
+    if fruitTypeIndex == nil then
+        return nil
+    end
+    local grassWindrows = TheContractorJobGeneration.getGrassWindrows(fruitTypeIndex)
+    if grassWindrows ~= nil then
+        return grassWindrows.dry
+    end
+    if fruitTypeIndex == FruitType.GRASS then
+        return FillType.DRYGRASS_WINDROW
+    end
+    return g_fruitTypeManager:getWindrowFillTypeIndexByFruitTypeIndex(fruitTypeIndex)
+end
+
+-- The table above is built again on the next ask (a new session's types).
+function TheContractorJobGeneration.clearGrassWindrows()
+    grassWindrows = nil
 end
 
 -- MowMission.isAvailableForField reads the mow fruit list its loadMapData

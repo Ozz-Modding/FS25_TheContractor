@@ -178,6 +178,20 @@ function TCEquipmentClass.isCutterCompatible(harvester, cutter)
     return harvester:getIsCutterCompatible(spec.outputFillTypes) and TCEquipmentClass.canHitch(harvester, cutter)
 end
 
+-- 181: whether a baler takes the windrow the crop's baled from
+-- (getBaleWindrowFillType): a map's alfalfa is baled from its own
+-- DRYALFALFA_WINDROW, which a baler only picks up if the map has bales of
+-- it. fruitTypeIndex nil means "any crop"; anything we can't read counts as
+-- taking it.
+function TCEquipmentClass.canBaleFruit(vehicle, fruitTypeIndex)
+    local windrow = TheContractorJobGeneration.getBaleWindrowFillType(fruitTypeIndex)
+    local fillUnitIndex = vehicle.spec_baler ~= nil and vehicle.spec_baler.fillUnitIndex or nil
+    if windrow == nil or fillUnitIndex == nil or vehicle.getFillUnitSupportsFillType == nil then
+        return true
+    end
+    return vehicle:getFillUnitSupportsFillType(fillUnitIndex, windrow) == true
+end
+
 -- Whether `vehicle` is the implement a non-harvest job type needs (032):
 -- it carries the job's implementSpec and none of its excludedSpecs (a plow
 -- with a packer isn't a cultivator), and on top of that a weeder has to be
@@ -201,6 +215,10 @@ function TCEquipmentClass.isJobImplement(vehicle, jobDef, fruitTypeIndex, standi
 
     if jobDef.implementSpec == "spec_sowingMachine" then
         return TCEquipmentClass.canSowFruit(vehicle, fruitTypeIndex)
+    end
+
+    if jobDef.implementSpec == "spec_baler" then
+        return TCEquipmentClass.canBaleFruit(vehicle, fruitTypeIndex)
     end
 
     if jobDef.weederType ~= nil then

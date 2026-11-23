@@ -312,18 +312,16 @@ end
 
 -- Windrow the job's crop leaves once cut: straw, or for grass hay-to-be
 -- (DRYGRASS_WINDROW) - BaleMission:setFruitType. Tedding works fresh grass.
+-- 181: a map's own grass (alfalfa, clover) has its own windrows
+-- (getGrassWindrows): tedding works its fresh one, baling its dry one. A
+-- tedder job from before 181 recorded no crop, and is grass.
 function TCFieldPreparation.getJobWindrowFillType(job)
-    if job.jobType == "tedder" then
-        return FillType.GRASS_WINDROW
-    end
     local fruitTypeIndex = job:getFruitTypeIndex()
-    if fruitTypeIndex == nil then
-        return nil
+    local grassWindrows = TheContractorJobGeneration.getGrassWindrows(fruitTypeIndex)
+    if job.jobType == "tedder" then
+        return grassWindrows ~= nil and grassWindrows.fresh or FillType.GRASS_WINDROW
     end
-    if fruitTypeIndex == FruitType.GRASS then
-        return FillType.DRYGRASS_WINDROW
-    end
-    return g_fruitTypeManager:getWindrowFillTypeIndexByFruitTypeIndex(fruitTypeIndex)
+    return TheContractorJobGeneration.getBaleWindrowFillType(fruitTypeIndex)
 end
 
 local function deleteSpawnedBales(job)
@@ -350,9 +348,14 @@ local function deleteDebris(job)
     job.debrisIds = {}
 end
 
+-- 181: a tedder job records its crop (a map's alfalfa); one from before
+-- didn't, and is grass.
 local function getJobFruitTypeIndex(job)
-    if job.jobType == "tedder" or job.jobType == "baleWrap" then
+    if job.jobType == "baleWrap" then
         return FruitType.GRASS
+    end
+    if job.jobType == "tedder" then
+        return job:getFruitTypeIndex() or FruitType.GRASS
     end
     return job:getFruitTypeIndex()
 end

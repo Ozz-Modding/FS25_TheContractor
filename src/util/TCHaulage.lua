@@ -62,12 +62,23 @@ TCHaulage.POLL_INTERVAL_MS = TCJobProgress.POLL_INTERVAL_MS
 local trackersByJobId = {}
 -- jobId -> true for jobs whose delivery progress changed since last sync
 local dirtyJobIds = {}
+-- jobId -> { liters, loggedLiters }: the job's crop sold by its farm while
+-- its tracker was waiting for it (issue #8's log, sellFillType below).
+local soldWhileDelivering = {}
 local accumulatedMs = 0
 local hasResumedAfterLoad = false
+
+-- Issue #8: a log line each time a tracker's progress passes another
+-- LOG_STEPS'th of the job, and each SOLD_LOG_LITERS of the job's crop sold
+-- for its farm instead of being taken while the tracker's waiting. A tip
+-- arrives a frame at a time, so neither logs every load.
+TCHaulage.LOG_STEPS = 10
+TCHaulage.SOLD_LOG_LITERS = 1000
 
 function TCHaulage.reset()
     trackersByJobId = {}
     dirtyJobIds = {}
+    soldWhileDelivering = {}
     accumulatedMs = 0
     hasResumedAfterLoad = false
 end
@@ -89,14 +100,16 @@ local function isFarmAllowed(station, farmId)
 end
 
 -- 176: whether a station is a real selling point the farm may use, not
--- scenery. A placeable owned by nobody (AccessHandler.NOBODY, the farm 15
--- maps give to decorative or locked buildings, such as a farm's biogas
--- plant with no usable triggers) never is, nor one owned by another farm
--- the job's farm can't use (canFarmAccessOtherId, which allows everyone's
--- (0), its own and a farm it contracts for). Nor a station hidden from the
--- Prices menu (hideFromPricesMenu: vanilla's for a production still under
--- construction, a map's for an extension that's not a selling point of its
--- own), since the player couldn't look its price up either.
+-- scenery. Not one hidden from the Prices menu (hideFromPricesMenu:
+-- vanilla's for a production still under construction, a map's for an
+-- extension that's not a selling point of its own, such as Geistal's farm
+-- biogas plant), since the player couldn't look its price up either. Nor
+-- one owned by another farm the job's farm can't use (canFarmAccessOtherId,
+-- which allows everyone's (0), its own and a farm it contracts for).
+-- Issue #10: one owned by nobody (AccessHandler.NOBODY, farm 15) is fine.
+-- That's what a placeable that comes with its farmland belongs to while
+-- nobody owns the land (Witcombe's bale points), and vanilla sells there all
+-- the same.
 local function isUsableStation(station, farmId)
     if station.hideFromPricesMenu then
         return false
@@ -106,11 +119,8 @@ local function isUsableStation(station, farmId)
         return true
     end
     local ownerFarmId = placeable:getOwnerFarmId()
-    if ownerFarmId == nil then
+    if ownerFarmId == nil or (AccessHandler ~= nil and ownerFarmId == AccessHandler.NOBODY) then
         return true
-    end
-    if AccessHandler ~= nil and ownerFarmId == AccessHandler.NOBODY then
-        return false
     end
     local accessHandler = g_currentMission.accessHandler
     if farmId == nil or accessHandler == nil or accessHandler.canFarmAccessOtherId == nil then
@@ -458,6 +468,13 @@ function TCDeliveryTracker:fillSold(fillDelta)
     g_currentMission.TheContractor.Jobs:applyJobDelivery(job.farmId, job.id, delivered, job.requiredLiters)
     dirtyJobIds[job.id] = true
 
+    local step = job.requiredLiters > 0 and math.floor(TCHaulage.LOG_STEPS * delivered / job.requiredLiters) or 0
+    if step > (self.loggedStep or 0) then
+        self.loggedStep = step
+        TCLog.info("TheContractor: farm %d job %d: %.0f of %.0f l delivered at '%s'", job.farmId, job.id,
+            delivered, job.requiredLiters, tostring(job.deliveryStationName))
+    end
+
     -- Terms met - anything more delivered sells as normal.
     if delivered >= job.requiredLiters then
         TCHaulage.stopDelivery(job)
@@ -578,6 +595,7 @@ end
 -- Server-only. Stops counting deliveries for a job - terms met, or the job
 -- is over. Safe to call for any job.
 function TCHaulage.stopDelivery(job)
+    soldWhileDelivering[job.id] = nil
     local tracker = trackersByJobId[job.id]
     if tracker == nil then
         return
@@ -585,6 +603,40 @@ function TCHaulage.stopDelivery(job)
     trackersByJobId[job.id] = nil
     if tracker.station.missions ~= nil then
         tracker.station.missions[tracker] = nil
+    end
+end
+
+-- Issue #8 (server): the job's crop sold for its farm while its tracker's
+-- still waiting for it, so it wasn't counted for the job. Logged every
+-- SOLD_LOG_LITERS a job, saying whether it was the job's own station (a
+-- load that should have reached the tracker) or another one.
+function TCHaulage.onFillTypeSold(station, farmId, liters, fillTypeIndex, price)
+    for jobId, tracker in pairs(trackersByJobId) do
+        if tracker.farmId == farmId and tracker.fillTypeIndex == fillTypeIndex then
+            local sold = soldWhileDelivering[jobId] or { liters = 0, price = 0, loggedLiters = 0 }
+            soldWhileDelivering[jobId] = sold
+            sold.liters = sold.liters + liters
+            sold.price = sold.price + (price or 0)
+            if sold.loggedLiters == 0 or sold.liters - sold.loggedLiters >= TCHaulage.SOLD_LOG_LITERS then
+                sold.loggedLiters = sold.liters
+                local name = station.getName ~= nil and station:getName() or "?"
+                TCLog.info("TheContractor: farm %d job %d: %.0f l of %s sold at '%s' for %.0f while delivering (%s)",
+                    farmId, jobId, sold.liters, tostring(g_fillTypeManager:getFillTypeNameByIndex(fillTypeIndex)),
+                    tostring(name), sold.price, station == tracker.station and "the job's station, not counted" or
+                    "another station")
+            end
+        end
+    end
+end
+
+if SellingStation ~= nil and SellingStation.sellFillType ~= nil then
+    local sellFillType = SellingStation.sellFillType
+    SellingStation.sellFillType = function(station, farmId, fillDelta, fillTypeIndex, ...)
+        local price = sellFillType(station, farmId, fillDelta, fillTypeIndex, ...)
+        if next(trackersByJobId) ~= nil and fillDelta ~= nil and fillDelta > 0 then
+            TCHaulage.onFillTypeSold(station, farmId, fillDelta, fillTypeIndex, price)
+        end
+        return price
     end
 end
 

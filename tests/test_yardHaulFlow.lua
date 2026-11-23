@@ -474,6 +474,54 @@ test("tipped at the station: the load goes to the job, it's done, and only the f
     assertTrue(world.reputation[1] > 0)
 end)
 
+local function countLogs(world, fragment)
+    local count = 0
+    for _, line in ipairs(world.logs) do
+        if line:find(fragment, 1, true) then
+            count = count + 1
+        end
+    end
+    return count
+end
+
+-- Issue #8's log: progress in tenths, not a line per frame of the tip.
+test("tipped bit by bit: the delivery's logged a tenth at a time", function()
+    local world, tc = setup()
+    local job = world:offer()
+    local trailer = world:acceptAndBringTrailer(job)
+
+    while job.state ~= TheContractorJob.STATE.COMPLETED do
+        tip(world, trailer, 200)
+        world:measure(job)
+    end
+
+    assertEquals(countLogs(world, "l delivered at"), TCHaulage.LOG_STEPS)
+end)
+
+-- Issue #8's log: the job's crop sold for its farm while the tracker's
+-- waiting, every SOLD_LOG_LITERS, and nothing once it's done.
+test("the job's crop sold instead of delivered is logged, a thousand litres at a time", function()
+    SellingStation = { sellFillType = function() return 10 end }
+    local world, tc = setup()
+    local job = world:offer()
+    world:acceptAndBringTrailer(job)
+
+    SellingStation.sellFillType(world.station, 1, 600, FillType.WHEAT)
+    SellingStation.sellFillType(world.station, 1, 600, FillType.WHEAT)
+    assertEquals(countLogs(world, "while delivering"), 1)
+    SellingStation.sellFillType(world.station, 1, 600, FillType.WHEAT)
+    assertEquals(countLogs(world, "while delivering"), 2)
+    -- Another farm's, or another crop: not the job's.
+    SellingStation.sellFillType(world.station, 2, 5000, FillType.WHEAT)
+    SellingStation.sellFillType(world.station, 1, 5000, world.barley)
+    assertEquals(countLogs(world, "while delivering"), 2)
+
+    TCHaulage.stopDelivery(job)
+    SellingStation.sellFillType(world.station, 1, 5000, FillType.WHEAT)
+    assertEquals(countLogs(world, "while delivering"), 2)
+    SellingStation = nil
+end)
+
 test("collected once it's unhitched and nobody's near, not before", function()
     local world, tc = setup()
     local job = world:offer()
