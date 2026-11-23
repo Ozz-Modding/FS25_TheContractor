@@ -67,7 +67,8 @@ local function setup()
         addFieldUpdateTask = function(_, task) table.insert(world.tasks, task) end,
     }
 
-    TheContractorJobGeneration = { isGrass = function(index) return index == FruitType.GRASS end }
+    local function isGrass(index) return index == FruitType.GRASS end
+    TheContractorJobGeneration = { isGrass = isGrass, isVanillaGrass = isGrass }
     world:load("src/business/Joyriders.lua")
     world:load("src/util/TCFieldPreparation.lua")
     world:load("src/util/TCVehicleIds.lua")

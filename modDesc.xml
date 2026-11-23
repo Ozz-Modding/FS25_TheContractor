@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8" standalone="no" ?>
 <modDesc descVersion="116">
     <author>Ozz</author>
-    <version>0.0.0.4</version>
+    <version>0.0.0.5</version>
     <iconFilename>icon_TheContractor.dds</iconFilename>
     <title>
         <en>The Contractor</en>
@@ -112,6 +112,8 @@ Credits:
     <!-- 086: shows/hides parking slots outside the construction menu (TCParking). -->
     <actions>
         <action name="TC_TOGGLE_PARKING_SLOTS" category="SYSTEM" axisType="HALF" ignoreComboMask="false" />
+        <!-- The dev panel (TCDevDialog): no default binding, a player binds it in Controls. -->
+        <action name="TC_OPEN_DEV_PANEL" category="SYSTEM" axisType="HALF" ignoreComboMask="false" />
     </actions>
     <inputBinding>
         <actionBinding action="TC_TOGGLE_PARKING_SLOTS">

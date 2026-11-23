@@ -1,5 +1,6 @@
 TheContractor = {}
 TheContractor.dir = g_currentModDirectory
+TheContractor.modName = g_currentModName
 TheContractor.SaveKey = "TheContractor"
 
 -- Published on every machine whenever one of our events is received or the
@@ -27,6 +28,8 @@ source(TheContractor.dir .. "src/util/TCFieldAccess.lua")
 source(TheContractor.dir .. "src/util/TCJobFieldMask.lua")
 source(TheContractor.dir .. "src/util/TCVehicleLock.lua")
 source(TheContractor.dir .. "src/util/TCJobSiteSetup.lua")
+source(TheContractor.dir .. "src/util/TCHitchExplain.lua")
+source(TheContractor.dir .. "src/util/TCJobReport.lua")
 source(TheContractor.dir .. "src/util/TCFolding.lua")
 source(TheContractor.dir .. "src/util/TCParking.lua")
 source(TheContractor.dir .. "src/util/TCParkingSlotFilter.lua")
@@ -110,6 +113,7 @@ source(TheContractor.dir .. "src/gui/TCParkingSlotDialog.lua")
 source(TheContractor.dir .. "src/gui/TCJobDetailsDialog.lua")
 source(TheContractor.dir .. "src/gui/TCRepairQuoteDialog.lua")
 source(TheContractor.dir .. "src/gui/TCAuctionLotDialog.lua")
+source(TheContractor.dir .. "src/gui/TCDevDialog.lua")
 source(TheContractor.dir .. "src/hud/TCInboxHUD.lua")
 source(TheContractor.dir .. "src/business/Settings.lua")
 source(TheContractor.dir .. "src/business/Reputation.lua")
@@ -191,6 +195,7 @@ source(TheContractor.dir .. "src/events/TCJobTravellingEvent.lua")
 source(TheContractor.dir .. "src/events/TCJobDeliveryEvent.lua")
 source(TheContractor.dir .. "src/events/TCJobProgressEvent.lua")
 source(TheContractor.dir .. "src/events/TCJobSupplyStatusEvent.lua")
+source(TheContractor.dir .. "src/events/TCJobServicedEvent.lua")
 source(TheContractor.dir .. "src/events/TCJobMissedEvent.lua")
 source(TheContractor.dir .. "src/events/TCJobRemovedEvent.lua")
 source(TheContractor.dir .. "src/events/TCJobDatesChangedEvent.lua")
@@ -517,6 +522,8 @@ function TheContractor:loadMap()
     TCRepairQuoteDialog.register()
     -- 138: an auction lot's card.
     TCAuctionLotDialog.register()
+    -- tcDebug dev: the testing dialog (jobs, the hitch test).
+    TCDevDialog.register()
     TCParkingSlotActivatable.install()
     -- 100: repair zone filters, the same way.
     TCRepairZoneActivatable.install()
@@ -621,6 +628,8 @@ function TheContractor:loadMap()
     -- 110: tcFarmer list, with 109's preview.
     TheContractorFarmers.registerConsoleCommands()
     TheContractorRelationships.registerConsoleCommands()
+    TCDevDialog.registerConsoleCommands()
+    TCJobReport.registerConsoleCommands()
     TCConsole.install()
 
     -- A farm deleted in multiplayer takes its company with it (server).

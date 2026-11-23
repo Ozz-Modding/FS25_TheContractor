@@ -7,7 +7,9 @@
 -- findSpot works on any rectangle, not just a one-vehicle slot, so a later
 -- larger yard-area placeable is only a new i3d/xml. Each slot's rectangle
 -- comes from its start/width/height nodes, and a parked vehicle faces from
--- the start edge towards the height node (the slot's arrow). Self-propelled
+-- the start edge towards the height node (the slot's arrow), except an
+-- implement that hitches at its back (a front mower), which is turned round
+-- so its hitch faces the arrow like every other implement's. Self-propelled
 -- harvesters only go in harvester slots, other drivable machines only in
 -- vehicle slots and everything else only in implement slots
 -- (PlaceableTCParkingSlot.SLOT_TYPE), and a slot's filter (086) can narrow
@@ -242,12 +244,39 @@ function TCParking.resolveSavedVehicles()
     end
 end
 
+-- Whether an implement hitches on at its back, as a front mower or a header
+-- does: every hitch it has is behind its origin. Parked facing the slot's
+-- way its hitch would face the start edge, away from every other
+-- implement's, so findSpot turns it round to be driven up to like the rest.
+function TCParking.hitchesAtBack(vehicle)
+    if vehicle.spec_drivable ~= nil or vehicle.rootNode == nil or vehicle.getInputAttacherJoints == nil then
+        return false
+    end
+    local joints = vehicle:getInputAttacherJoints()
+    if joints == nil or #joints == 0 then
+        return false
+    end
+    for _, joint in ipairs(joints) do
+        if joint.node == nil then
+            return false
+        end
+        local _, _, z = localToLocal(joint.node, vehicle.rootNode, 0, 0, 0)
+        if z >= 0 then
+            return false
+        end
+    end
+    return true
+end
+
 -- A free spot for the vehicle in one of farmId's slots of its kind (vehicle,
 -- implement or harvester) whose filter takes it (getSlotsFor): x, y, z, rotY
 -- for setAbsolutePosition, or nil. isRandom (the tcDebug park command) picks
--- a random free spot rather than the first, still in rank order.
+-- a random free spot rather than the first, still in rank order. Every
+-- implement's hitch faces the slot's arrow, so one that hitches at its back
+-- (hitchesAtBack) is parked facing the start edge.
 function TCParking.findSpot(vehicle, farmId, isRandom)
     local width, length, widthOffset, lengthOffset, height = getFootprint(vehicle)
+    local isReversed = TCParking.hitchesAtBack(vehicle)
     for _, slot in ipairs(TCParking.getSlotsFor(vehicle, farmId, isRandom)) do
         local area = PlaceableTCParkingSlot.getArea(slot)
         if area ~= nil then
@@ -255,9 +284,15 @@ function TCParking.findSpot(vehicle, farmId, isRandom)
             if x ~= nil then
                 -- The footprint's centre sits widthOffset to the vehicle's
                 -- right and lengthOffset ahead of its origin (as in
-                -- PlacementUtil.getPlace).
-                local originX = x - area.uX * widthOffset - area.vX * lengthOffset
-                local originZ = z - area.uZ * widthOffset - area.vZ * lengthOffset
+                -- PlacementUtil.getPlace). Turned round, its right and ahead
+                -- are the slot's left and back.
+                local sign = 1
+                if isReversed then
+                    sign = -1
+                    rotY = rotY + math.pi
+                end
+                local originX = x - sign * (area.uX * widthOffset + area.vX * lengthOffset)
+                local originZ = z - sign * (area.uZ * widthOffset + area.vZ * lengthOffset)
                 local y = getTerrainHeightAtWorldPos(g_terrainNode, originX, 0, originZ) + TCParking.PLACE_HEIGHT_OFFSET
                 return originX, y, originZ, rotY
             end

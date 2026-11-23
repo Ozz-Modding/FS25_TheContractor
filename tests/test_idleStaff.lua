@@ -76,8 +76,7 @@ test("idle and cooldown workers stand; anyone away or busy doesn't", function()
     setup()
     local STATUS = TheContractorWorker.STATUS
     assertTrue(TCIdleStaff.isStandingStatus(STATUS.IDLE), "idle")
-    assertTrue(TCIdleStaff.isStandingStatus(STATUS.COOLDOWN), "cooldown")
-    for _, status in ipairs({ STATUS.ASSIGNED, STATUS.DRIVING, STATUS.SICK, STATUS.HOLIDAY, STATUS.TRAINING }) do
+    for _, status in ipairs({ STATUS.COOLDOWN, STATUS.ASSIGNED, STATUS.DRIVING, STATUS.SICK, STATUS.HOLIDAY, STATUS.TRAINING }) do
         assertTrue(not TCIdleStaff.isStandingStatus(status), status)
     end
 end)
@@ -155,8 +154,8 @@ test("each farm's idle workers go on that farm's own spots", function()
     addWorker(3, 6, STATUS.IDLE)
 
     local wanted = TCIdleStaff.getWanted()
-    assertTrue(wanted[1] ~= nil and wanted[2] ~= nil, "farm 1's idle and cooldown workers stand")
-    assertTrue(wanted[1].spot.key ~= wanted[2].spot.key, "on different spots")
+    assertTrue(wanted[1] ~= nil, "farm 1's idle worker stands")
+    assertEquals(wanted[2], nil, "in a cooldown, still out with the machines")
     assertEquals(wanted[1].spot.placeable:getOwnerFarmId(), 1)
     assertEquals(wanted[3], nil, "sick")
     assertEquals(wanted[4], nil, "assigned")
@@ -216,9 +215,9 @@ test("staff are only about during working hours", function()
     assertTrue(not at(0, 0), "midnight")
 end)
 
--- 097: after hours, only those kept on (once they're in) and anyone still
--- in a job's cooldown. The office goes home.
-test("after hours: staff kept on and in cooldown stand, the rest and the office go home", function()
+-- 097: after hours, only those kept on (once they're in). The office goes
+-- home, and anyone in a job's cooldown is still out with the machines.
+test("after hours: staff kept on stand, the rest and the office go home", function()
     setup()
     dofile("src/business/Office.lua")
     for i = 1, 4 do
@@ -240,7 +239,7 @@ test("after hours: staff kept on and in cooldown stand, the rest and the office 
     assertTrue(wanted[1] ~= nil, "staying late")
     assertEquals(wanted[2], nil, "not in yet")
     assertEquals(wanted[3], nil, "gone home")
-    assertTrue(wanted[4] ~= nil, "still in a cooldown")
+    assertEquals(wanted[4], nil, "still in a cooldown")
     assertEquals(wanted[7], nil, "the office has gone home")
 
     g_currentMission.environment.dayTime = (19 * 60 + 30) * 60000

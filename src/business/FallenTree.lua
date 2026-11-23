@@ -15,7 +15,9 @@
 -- incident's or another open one's). Each tree's base is BASE_OFFSET off the road's middle on
 -- one side, and it falls across the road at right angles, ROOM_LENGTH long.
 -- A spot's skipped if it's a bridge (the ground well away from the
--- spline), if the ground rises along the fall line, if anything's in the
+-- spline), if the ground rises along the fall line or slopes along the road
+-- (CROSS_SLOPE_LIMITS: the trunk would roll; the flattest spots are tried
+-- first), if anything's in the
 -- way of the trunk (buildings, walls, standing trees, vehicles, traffic,
 -- players), if a player is within MIN_PLAYER_DISTANCE (so nobody sees it
 -- planted, and every client has the tree before it's cut, below), or if no
@@ -44,8 +46,9 @@
 -- it), a fixed reputation reward. Each tree's road has its own map marker
 -- (TCJobHotspots) until it's clear. Accepting it
 -- allocates it to the farm's players at once (allocateOnAccept). While it's
--- taken on, a loose piece on its site can be chainsawed off the farm's land
--- (SplitShapeManager.getIsShapeCutAllowed, patched below). Every
+-- taken on, a loose piece within CUT_RADIUS of a tree's road can be
+-- chainsawed off the farm's land (SplitShapeManager.getIsShapeCutAllowed,
+-- patched below), however far it's rolled from where it fell. Every
 -- CHECK_INTERVAL_MS the server looks for loose pieces on each tree's road
 -- (ROAD_HALF_WIDTH either side of its middle, ROAD_CLEAR_HALF_LENGTH along
 -- it): none for CLEAR_CHECKS checks in a row and that road's clear (the
@@ -108,6 +111,12 @@ TheContractorFallenTree.MAX_ROAD_HEIGHT_GAP = 1.5
 -- The ground along the fall can't rise more than this over the base's
 -- (the trunk lands about SPAWN_HEIGHT up).
 TheContractorFallenTree.MAX_GROUND_RISE = 0.8
+-- A trunk lying across a slope rolls down it, so the slope along the road
+-- (across the fall), measured CROSS_SLOPE_DISTANCE either side of the fall
+-- line, is kept low: spots up to each limit in turn are tried, the flattest
+-- first, and never steeper than the last.
+TheContractorFallenTree.CROSS_SLOPE_DISTANCE = 4
+TheContractorFallenTree.CROSS_SLOPE_LIMITS = { 0.03, 0.08 }
 TheContractorFallenTree.MIN_PLAYER_DISTANCE = 150
 TheContractorFallenTree.MAX_FIELD_DISTANCE = 2000
 -- Trees' roads at least this far apart, and the rest within MAX_SPREAD of
@@ -125,11 +134,15 @@ TheContractorFallenTree.TRUNK_LENGTH = 200
 -- Planted this long before the cut, so every client has the tree first.
 TheContractorFallenTree.CUT_DELAY_MS = 3000
 
--- The site, from the base along the fall: cutting is allowed on it (and
--- SITE_MARGIN past it), and the council clears it.
+-- The site, from the base along the fall (and SITE_MARGIN past it): the
+-- council clears it.
 TheContractorFallenTree.CORRIDOR_LENGTH = 35
 TheContractorFallenTree.CORRIDOR_HALF_WIDTH = 6
 TheContractorFallenTree.SITE_MARGIN = 3
+-- A loose piece within this of a tree's road can be cut off the farm's
+-- land: the trunk can roll, or be shoved along the road by traffic, off
+-- the corridor it fell in.
+TheContractorFallenTree.CUT_RADIUS = 60
 -- The road itself, which has to be clear.
 TheContractorFallenTree.ROAD_HALF_WIDTH = 4
 TheContractorFallenTree.ROAD_CLEAR_HALF_LENGTH = 8
@@ -429,6 +442,22 @@ function TheContractorFallenTree.isGroundFlatEnough(placement)
     return true
 end
 
+-- The steepest the ground slopes along the road (across the fall) under
+-- the fall line, as rise over run.
+function TheContractorFallenTree.getCrossSlope(placement)
+    local T = TheContractorFallenTree
+    local distance = T.CROSS_SLOPE_DISTANCE
+    local sideX, sideZ = -placement.dirZ * distance, placement.dirX * distance
+    local steepest = 0
+    for along = 0, T.ROOM_LENGTH, T.ROOM_STEP do
+        local x, z = placement.x + placement.dirX * along, placement.z + placement.dirZ * along
+        local y1 = getTerrainHeightAtWorldPos(g_terrainNode, x + sideX, 0, z + sideZ)
+        local y2 = getTerrainHeightAtWorldPos(g_terrainNode, x - sideX, 0, z - sideZ)
+        steepest = math.max(steepest, math.abs(y1 - y2) / (2 * distance))
+    end
+    return steepest
+end
+
 -- Whether nothing's in the trunk's way (ROOM_MASK) along the fall.
 function TheContractorFallenTree.isFallLineClear(placement)
     local T = TheContractorFallenTree
@@ -472,27 +501,40 @@ function TheContractorFallenTree:findRoadSpots(random, count, picked)
     for _, placement in ipairs(picked or {}) do
         table.insert(taken, { x = placement.roadX, z = placement.roadZ })
     end
-    for i = 1, math.min(T.SPOT_TRIES, #samples) do
+    local tries = math.min(T.SPOT_TRIES, #samples)
+    local placements, slopes = {}, {}
+    for i = 1, tries do
         local sample = samples[i]
         local side = random() < 0.5 and -1 or 1
-        local placement = T.getPlacement(sample.x, sample.z, sample.dirX, sample.dirZ, side)
-        local groundY = getTerrainHeightAtWorldPos(g_terrainNode, sample.x, 0, sample.z)
-        if math.abs(groundY - sample.y) <= T.MAX_ROAD_HEIGHT_GAP and
-                (first == nil or isNear(sample.x, sample.z, { { x = first.roadX, z = first.roadZ } }, T.MAX_SPREAD)) and
-                not isNear(sample.x, sample.z, players, T.MIN_PLAYER_DISTANCE) and
-                not isNear(sample.x, sample.z, taken, T.TREE_SEPARATION) and
-                T.isGroundFlatEnough(placement) and T.isFallLineClear(placement) then
-            local field = T.findNearestField(sample.x, sample.z)
-            if field ~= nil then
-                placement.fieldId = field:getId()
-                table.insert(found, placement)
-                table.insert(taken, { x = sample.x, z = sample.z })
-                first = first or placement
-                if #found >= count then
-                    break
+        placements[i] = T.getPlacement(sample.x, sample.z, sample.dirX, sample.dirZ, side)
+    end
+    -- The flattest first: each pass tries the spots up to its limit that an
+    -- earlier one didn't.
+    local previousLimit = -1
+    for _, limit in ipairs(T.CROSS_SLOPE_LIMITS) do
+        for i = 1, tries do
+            local sample, placement = samples[i], placements[i]
+            slopes[i] = slopes[i] or T.getCrossSlope(placement)
+            local groundY = getTerrainHeightAtWorldPos(g_terrainNode, sample.x, 0, sample.z)
+            if slopes[i] > previousLimit and slopes[i] <= limit and
+                    math.abs(groundY - sample.y) <= T.MAX_ROAD_HEIGHT_GAP and
+                    (first == nil or isNear(sample.x, sample.z, { { x = first.roadX, z = first.roadZ } }, T.MAX_SPREAD)) and
+                    not isNear(sample.x, sample.z, players, T.MIN_PLAYER_DISTANCE) and
+                    not isNear(sample.x, sample.z, taken, T.TREE_SEPARATION) and
+                    T.isGroundFlatEnough(placement) and T.isFallLineClear(placement) then
+                local field = T.findNearestField(sample.x, sample.z)
+                if field ~= nil then
+                    placement.fieldId = field:getId()
+                    table.insert(found, placement)
+                    table.insert(taken, { x = sample.x, z = sample.z })
+                    first = first or placement
+                    if #found >= count then
+                        return found
+                    end
                 end
             end
         end
+        previousLimit = limit
     end
     return found
 end
@@ -1006,15 +1048,16 @@ function TheContractorFallenTree.refreshSites()
     sitesByFarm = result
 end
 
--- Whether a point is on the site of a tree of one of the farm's taken-on
--- jobs.
+-- Whether a point is within CUT_RADIUS of the road of a tree of one of the
+-- farm's taken-on jobs: wherever the trunk's rolled or been pushed to.
 function TheContractorFallenTree.isOnSite(farmId, x, z)
     local sites = farmId ~= nil and sitesByFarm[farmId] or nil
     if sites == nil or x == nil or z == nil then
         return false
     end
     for _, tree in ipairs(sites) do
-        if TheContractorFallenTree.isInCorridor(tree, x, z, TheContractorFallenTree.SITE_MARGIN) then
+        if tree.roadX ~= nil and isNear(x, z, { { x = tree.roadX, z = tree.roadZ } },
+                TheContractorFallenTree.CUT_RADIUS) then
             return true
         end
     end
@@ -1047,8 +1090,9 @@ end
 
 -- Cutting on the site ------------------------------------------------------------------
 --
--- Vanilla's check, then (if it said no) a loose piece on the site of one of
--- the farm's taken-on jobs, with the cutTrees permission. A no for any
+-- Vanilla's check, then (if it said no) a loose piece near the road of a
+-- tree of one of the farm's taken-on jobs (isOnSite), with the cutTrees
+-- permission. A no for any
 -- other reason (a yarder using the tree) is overridden too on a site;
 -- there are none on a road. SplitShapeManager outlives any one savegame, so
 -- guard against wrapping it twice.

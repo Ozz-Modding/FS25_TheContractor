@@ -259,6 +259,107 @@ test("a rear mower is never put on the front linkage, so a second one can't be r
     assertEquals(reasonKey, "tc_dispatch_noAttachPoint")
 end)
 
+-- The dev dialog's hitch test (TCHitchExplain): the planner's trace says
+-- what it looked at and why, without changing what it decides.
+
+local function loadHitchExplain(world)
+    world:load("src/util/TCHitchExplain.lua")
+end
+
+local function findJointTrace(attempt, jointIndex)
+    for _, joint in ipairs(attempt.joints) do
+        if joint.jointIndex == jointIndex then
+            return joint
+        end
+    end
+    return nil
+end
+
+test("the trace shows a rear mower kept off the front because it would face backwards", function()
+    local world = setup()
+    local tractor = addFramedTractor(world)
+    local first = addAIMower(world, "Rear mower 1", false)
+    local second = addAIMower(world, "Rear mower 2", false)
+
+    local trace = {}
+    local plans = TCJobSiteSetup.planHitches(jobWith(tractor, first, second), trace)
+
+    assertEquals(plans, nil, "still refused")
+    assertEquals(trace.operatingVehicle, tractor)
+    assertEquals(trace.order[1], first)
+    assertEquals(trace.order[2], second)
+
+    local firstStep = trace.steps[1]
+    assertEquals(firstStep.implement, first)
+    assertEquals(firstStep.plan.jointIndex, REAR)
+    local firstOnTractor = firstStep.attempts[1]
+    assertEquals(firstOnTractor.attacher, tractor)
+    assertEquals(findJointTrace(firstOnTractor, FRONT).inputs[1].backwards, true, "front rejected as backwards")
+    assertTrue(findJointTrace(firstOnTractor, FRONT).inputs[1].facing.dot < 0, "with the facing's numbers")
+    assertEquals(findJointTrace(firstOnTractor, REAR).inputs[1].score, 3, "rear, nothing to take off")
+    assertEquals(findJointTrace(firstOnTractor, LOADER).inputs[1].typeMatch, false, "loader console's type")
+
+    local secondStep = trace.steps[2]
+    assertEquals(secondStep.implement, second)
+    assertEquals(secondStep.plan, nil, "nothing left for the second")
+    assertEquals(findJointTrace(secondStep.attempts[1], REAR).status, "claimed", "the first has the rear")
+    assertEquals(findJointTrace(secondStep.attempts[1], FRONT).inputs[1].backwards, true)
+    assertEquals(secondStep.attempts[2].attacher, first, "then tries what's already planned")
+end)
+
+test("the trace records a foreign machine on a joint and a refused attach", function()
+    local world = setup()
+    local tractor = addTractor(world)
+    local leftOn = addMachine(world, { name = "Plough", category = "PLOWS" })
+    hitch(tractor, leftOn, REAR)
+    local mower = addMachine(world, { name = "Mower", category = "MOWERS" })
+    local refused = addMachine(world, { name = "Header", category = "CUTTERS" })
+    function refused:isAttachAllowed() return false end
+
+    local trace = {}
+    TCJobSiteSetup.planHitches(jobWith(tractor, mower, refused), trace)
+
+    local rear = findJointTrace(trace.steps[1].attempts[1], REAR)
+    assertEquals(rear.occupant, leftOn)
+    assertEquals(rear.inputs[1].score, 2, "rear, but the plough has to come off")
+    assertEquals(trace.steps[2].attempts[1].attachRefused, true)
+end)
+
+test("the hitch test places each mower where the planner would, and the order changes the answer", function()
+    local world = setup()
+    loadHitchExplain(world)
+    local tractor = addFramedTractor(world)
+    local frontMower = addAIMower(world, "Front mower", true)
+    local rearMower = addAIMower(world, "Rear mower", false)
+    -- With nothing to say which way a mower faces, the first takes the rear.
+    local plainA = addMachine(world, { name = "Mower A", category = "MOWERS" })
+    local plainB = addMachine(world, { name = "Mower B", category = "MOWERS" })
+
+    local result = TCHitchExplain.run(tractor, { rearMower, frontMower }, 1)
+    assertTrue(result.plans ~= nil, "planned")
+    assertEquals(result.placements[1].implement, rearMower)
+    assertEquals(result.placements[1].side, "rear")
+    assertEquals(result.placements[2].side, "front")
+    assertEquals(result.placements[2].jointIndex, FRONT)
+
+    local ab = TCHitchExplain.run(tractor, { plainA, plainB }, 1)
+    local ba = TCHitchExplain.run(tractor, { plainB, plainA }, 1)
+    assertEquals(ab.placements[1].side, "rear", "A first: A rear")
+    assertEquals(ab.placements[2].side, "front")
+    assertEquals(ba.placements[1].implement, plainB)
+    assertEquals(ba.placements[1].side, "rear", "B first: B rear")
+
+    -- The reasoning formats for every outcome, a failed plan included.
+    local failed = TCHitchExplain.run(tractor, { rearMower, addAIMower(world, "Rear mower 2", false) }, 1)
+    assertEquals(failed.plans, nil)
+    assertEquals(failed.reasonKey, "tc_dispatch_noAttachPoint")
+    assertEquals(failed.placements[1].side, "rear")
+    assertEquals(failed.placements[2].attacher, nil, "the second isn't placed")
+    for _, run in ipairs({ result, ab, failed }) do
+        assertTrue(#TCHitchExplain.getLines(run, "test") > 0)
+    end
+end)
+
 test("split up for parking, a machine keeps its weight", function()
     local world = setup()
     local tractor = addTractor(world)

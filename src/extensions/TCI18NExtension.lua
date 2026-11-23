@@ -60,3 +60,32 @@ function TCI18NExtension:getText(superFunc, text, modEnv)
 end
 
 I18N.getText = Utils.overwrittenFunction(I18N.getText, TCI18NExtension.getText)
+
+-- Belt and braces for the Finances screen: the patch above only works if
+-- every other I18N.getText wrapper in the chain passes modEnv on, and one
+-- that drops it leaves our rows reading "Missing 'finance_tc...'". So once
+-- vanilla's FinanceStats.new has (re)filled statNamesI18n, put our own names
+-- in straight from our mod's text table (this file's g_i18n is the mod's
+-- own I18N instance), with no getText call to go astray.
+function TCI18NExtension.fillFinanceStatNames()
+    local texts = g_i18n ~= nil and g_i18n.texts or nil
+    if texts == nil or FinanceStats == nil or FinanceStats.statNamesI18n == nil then
+        return
+    end
+
+    for key in pairs(TCI18NExtension.theContractorTexts) do
+        local statName = string.match(key, "^finance_(.+)$")
+        if statName ~= nil and texts[key] ~= nil then
+            FinanceStats.statNamesI18n[statName] = texts[key]
+        end
+    end
+end
+
+-- Wrapped by hand: appendedFunction drops new's return value, and
+-- overwrittenFunction passes a stray self to a plain function.
+local financeStatsNew = FinanceStats.new
+FinanceStats.new = function(...)
+    local stats = financeStatsNew(...)
+    TCI18NExtension.fillFinanceStatNames()
+    return stats
+end

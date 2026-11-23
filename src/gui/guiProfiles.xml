@@ -405,6 +405,25 @@
         <textAlignment value="center" />
         <textColor value="$preset_colorWhite_50" />
     </Profile>
+    <!-- The dev dialog (tcDebug dev, TCDevDialog): one container per page,
+         its children anchorTopCenter like the dialog's own. -->
+    <Profile name="tc_devPage" extends="emptyPanel" with="anchorTopCenter">
+        <size value="920px 350px" />
+    </Profile>
+    <Profile name="tc_devResultText" extends="fs25_dialogText" with="anchorTopCenter">
+        <size value="880px 165px" />
+        <textSize value="15px" />
+        <textAlignment value="left" />
+        <textVerticalAlignment value="top" />
+        <textMaxNumLines value="8" />
+    </Profile>
+    <Profile name="tc_devStatusText" extends="fs25_dialogText" with="anchorTopCenter">
+        <size value="900px 44px" />
+        <textSize value="15px" />
+        <textAlignment value="center" />
+        <textMaxNumLines value="2" />
+        <textColor value="$preset_fs25_colorMainHighlight" />
+    </Profile>
     <Profile name="tc_driverPickerColumn" extends="fs25_dialogText" with="anchorTopCenter">
         <textSize value="16px" />
         <textBold value="true" />

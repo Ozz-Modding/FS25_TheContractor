@@ -1,7 +1,9 @@
--- Idle staff on standing spots (065). Workers with nothing on (idle, or
--- back from a job in a cooldown) are shown standing on their farm's
+-- Idle staff on standing spots (065). Workers with nothing on (idle) are
+-- shown standing on their farm's
 -- Standing Spots (PlaceableTCStandingSpot), one per spot, in their own look
--- (041), playing an idle animation.
+-- (041), playing an idle animation. A worker in a job's cooldown is still
+-- out with the machines (driving back, unloading), so they turn up with
+-- them, as the cooldown ends, not before.
 --
 -- It's only visual, local to each machine with a client, and has no state,
 -- events or saving of its own. Every machine works out the same answer
@@ -33,7 +35,7 @@
 --
 -- They're only about during working hours (097, TheContractorWorkingHours,
 -- game time), or after them while they're kept on (staying late or called
--- back) or still in a job's cooldown. Anyone else goes home as their spot
+-- back). Anyone else goes home as their spot
 -- drops out of view, and turns up again the same way in the morning. The
 -- time of day is vanilla's, synced to every machine, and so is the duty
 -- that keeps someone on.
@@ -73,7 +75,7 @@ local HASH_MODULUS = 2147483647
 -- Assignment (pure, every machine) ---------------------------------------
 
 function TCIdleStaff.isStandingStatus(status)
-    return status == TheContractorWorker.STATUS.IDLE or status == TheContractorWorker.STATUS.COOLDOWN
+    return status == TheContractorWorker.STATUS.IDLE
 end
 
 -- A spot's key: its position in whole decimetres, so every machine names it
@@ -270,12 +272,9 @@ function TCIdleStaff.getWanted()
     return wanted
 end
 
--- Is this worker about the yard now (097): in a job's cooldown, or idle
--- and at work (working hours, or kept on after them).
+-- Is this worker about the yard now (097): idle and at work (working
+-- hours, or kept on after them).
 function TCIdleStaff.isAbout(worker, now)
-    if worker.status == TheContractorWorker.STATUS.COOLDOWN then
-        return true
-    end
     return TCIdleStaff.isStandingStatus(worker.status) and TheContractorWorkingHours.isOnSite(worker, now)
 end
 

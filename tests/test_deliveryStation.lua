@@ -330,16 +330,31 @@ test("a job with nowhere it can deliver keeps its station and counts nothing", f
     assertTrue(next(world.placeables.Dryer.stations[1].missions) == nil, "no tracker")
 end)
 
-test("176: a station owned by nobody (farm 15) is never picked, even at the best price", function()
+-- Issue #10: farm 15 (AccessHandler.NOBODY) is what a placeable that comes
+-- with its farmland belongs to while nobody owns the land (Witcombe's bale
+-- points). Vanilla sells there all the same, so it's no sign of scenery.
+test("a station on land nobody owns (farm 15) is picked like any other", function()
     local world = setup()
-    addStation(world, { name = "Farm 7's biogas plant", price = 0.95, owner = 15, trigger = "bale" })
+    addStation(world, { name = "Meadow Lane Farm Bales", price = 0.95, owner = 15, trigger = "bale" })
     addStation(world, { name = "Dairy", price = 0.6, trigger = "bale" })
-    addStation(world, { name = "Locked elevator", price = 0.95, owner = 15 })
+    addStation(world, { name = "Farm elevator", price = 0.95, owner = 15 })
     addStation(world, { name = "Elevator", price = 0.9 })
 
-    assertEquals(TCHaulage.findBaleDeliveryStation(FillType.STRAW, FARM).name, "Dairy")
-    assertEquals(TCHaulage.findDeliveryStation(FillType.WHEAT, FARM).name, "Elevator", "vanilla's pick passed over")
-    assertEquals(TCHaulage.findBaleDeliveryStation(FillType.STRAW, nil).name, "Dairy", "with no farm too")
+    assertEquals(TCHaulage.findBaleDeliveryStation(FillType.STRAW, FARM).name, "Meadow Lane Farm Bales")
+    assertEquals(TCHaulage.findDeliveryStation(FillType.WHEAT, FARM).name, "Farm elevator")
+    assertEquals(TCHaulage.findBaleDeliveryStation(FillType.STRAW, nil).name, "Meadow Lane Farm Bales", "with no farm too")
+end)
+
+test("issue #10: a job at a station on land nobody owns keeps it, and its delivery's counted", function()
+    local world = setup()
+    addStation(world, { name = "Meadow Lane Farm Bales", price = 0.95, owner = 15, trigger = "bale" })
+    addStation(world, { name = "Dairy", price = 0.6, trigger = "bale" })
+    local job = addHaulageJob(world, "bale", "Meadow Lane Farm Bales")
+
+    TCHaulage.resumeDelivery(job)
+
+    assertEquals(job.deliveryStationUniqueId, "Meadow Lane Farm Bales")
+    assertTrue(next(world.placeables["Meadow Lane Farm Bales"].stations[1].missions) ~= nil, "a tracker's there")
 end)
 
 test("176: a station hidden from the Prices menu is never picked", function()
@@ -398,7 +413,7 @@ end)
 
 test("176: an accepted job pointing at scenery is moved once the save has loaded", function()
     local world = setup()
-    addStation(world, { name = "Farm 7's biogas plant", price = 0.95, owner = 15, trigger = "bale" })
+    addStation(world, { name = "Farm 7's biogas plant", price = 0.95, hidden = true, trigger = "bale" })
     addStation(world, { name = "Dairy", price = 0.6, trigger = "bale" })
     local job = addHaulageJob(world, "bale", "Farm 7's biogas plant")
     job.state = TheContractorJob.STATE.ACCEPTED

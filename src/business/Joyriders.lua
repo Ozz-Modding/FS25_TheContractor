@@ -6,7 +6,9 @@
 -- message, no job.
 --
 -- Which fields (getEligibleFields): grass by vanilla's own definition
--- (TheContractorJobGeneration.isGrass), meadows included, owned by nobody
+-- (TheContractorJobGeneration.isVanillaGrass), meadows included, never a
+-- map's own grass (181: alfalfa, clover), since the field's resown with
+-- grass, owned by nobody
 -- (an NPC's) or by the event's own farm - never another player's farm in
 -- multiplayer - and with no live job for any farm on it. Never in winter.
 --
@@ -82,7 +84,7 @@ end
 function TheContractorJoyriders.isGrassField(field)
     local fieldState = field:getFieldState()
     return fieldState ~= nil and fieldState.isValid and fieldState.fruitTypeIndex ~= nil and
-        TheContractorJobGeneration.isGrass(fieldState.fruitTypeIndex)
+        TheContractorJobGeneration.isVanillaGrass(fieldState.fruitTypeIndex)
 end
 
 -- The fields joyriders could tear up for this farm's event.

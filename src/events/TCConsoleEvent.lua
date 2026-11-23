@@ -63,6 +63,8 @@ function TCConsoleEvent:run(connection)
     if self.isResult then
         if connection:getIsServer() and self.text ~= "" then
             print(self.text)
+            -- The dev dialog shows the answer to what it sent (TCDevDialog).
+            TCConsole.onRemoteResult(self.text)
         end
         return
     end

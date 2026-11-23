@@ -56,6 +56,13 @@ TheContractorJobGeneration_mt = Class(TheContractorJobGeneration)
 --   seasonRule       vanilla's own seasonal cut-off (isAvailableForField's
 --                    environment block), applied to future days too
 --                    (isDoableOnDay): "noWinter", or "noWinterOrEarlySpring".
+--   grassWork        181: work on grass, which on a map with its own grasses
+--                    (alfalfa, clover: isGrass) is more than vanilla's
+--                    grass, so the job type has its own availability on
+--                    one (isGrassWorkAvailable): "standing" (mow, tedder:
+--                    grass only, at a harvestable state, as MowMission
+--                    asks) or "cut" (bale: harvest-ready, as BaleMission
+--                    asks; a straw crop still goes by BaleMission).
 --   needsGrowingCrop 179: only a crop that's still growing (vanilla's
 --                    getIsGrowing). Vanilla's herbicide spraying
 --                    (FSDensityMapUtil.updateHerbicideArea) never touches
@@ -138,6 +145,11 @@ TheContractorJobGeneration_mt = Class(TheContractorJobGeneration)
 --                    load of theirs sold from it (job.yardHaul,
 --                    TheContractorYardHaul). Its missed notification is
 --                    its own (tc_<type>_missedNotification).
+--   offerWeight      how much likelier the type is to be picked for an
+--                    offer than one without (default 1), in both of
+--                    pickJobType's shares. Harvest's is 2: it's one type
+--                    among a dozen with work in autumn, yet the work players
+--                    most want.
 -- A type left out of JOB_TYPE_KEYS (flyTipping, flyTippingRoadside, spillRecovery,
 -- attendAuction, lotInspection, ...) is never
 -- generated, shown by the availability snapshot or created by tcJob: only
@@ -163,7 +175,7 @@ TheContractorJobGeneration.SOIL_FERTILIZER_PRODUCTS = {
 
 TheContractorJobGeneration.JOB_TYPES = {
     harvest = { cropDependent = true, recordsCrop = true, rewardPerHa = 2500, reputationPerHa = 8.5,
-        skill = "harvesting",
+        skill = "harvesting", offerWeight = 2,
         workAreaTypes = { "CUTTER", "COMBINECHOPPER", "COMBINESWATH", "FRUITPREPARER", "TEDDER" } },
     cultivate = { implementSpec = "spec_cultivator", excludedSpecs = { "spec_plow" }, vanillaMission = CultivateMission,
         rewardPerHa = 2300, reputationPerHa = 7.8, skill = "tillage",
@@ -175,13 +187,15 @@ TheContractorJobGeneration.JOB_TYPES = {
     plow = { implementSpec = "spec_plow", vanillaMission = PlowMission, rewardPerHa = 2800, reputationPerHa = 9.5,
         skill = "tillage",
         workAreaTypes = { "PLOW" } },
-    mow = { implementSpec = "spec_mower", vanillaMission = MowMission, recordsCrop = true,
+    mow = { implementSpec = "spec_mower", vanillaMission = MowMission, recordsCrop = true, grassWork = "standing",
         seasonRule = "noWinterOrEarlySpring", rewardPerHa = 2500, reputationPerHa = 8.5, skill = "grassland",
         workAreaTypes = { "MOWER" } },
-    tedder = { implementSpec = "spec_tedder", vanillaMission = TedderMission, seasonRule = "noWinterOrEarlySpring",
+    tedder = { implementSpec = "spec_tedder", vanillaMission = TedderMission, recordsCrop = true,
+        grassWork = "standing", seasonRule = "noWinterOrEarlySpring",
         serverMeasured = true, rewardPerHa = 1500, reputationPerHa = 5.1, skill = "grassland",
         workAreaTypes = { "TEDDER" } },
-    bale = { implementSpec = "spec_baler", vanillaMission = BaleMission, recordsCrop = true, seasonRule = "noWinter",
+    bale = { implementSpec = "spec_baler", vanillaMission = BaleMission, recordsCrop = true, grassWork = "cut",
+        seasonRule = "noWinter",
         serverMeasured = true, deliversBales = true, rewardPerHa = 2200, reputationPerHa = 7.5, skill = "baling",
         workAreaTypes = { "BALER" } },
     baleWrap = { implementSpec = "spec_baleWrapper", vanillaMission = BaleWrapMission, seasonRule = "noWinter",
@@ -432,6 +446,7 @@ function TheContractorJobGeneration.new()
     -- Server-only, not saved: the monotonic day each farm last had an offer
     -- from the hourly roll, for the daily floor.
     self.lastOfferDayByFarm = {}
+    TheContractorJobGeneration.clearGrassWindrows()
     return self
 end
 
@@ -888,11 +903,12 @@ end
 
 -- Fleet-weighted (033): with preferFulfillable (rolled once per hit by
 -- tryGenerateJob, FULFILLABLE_TYPE_SHARE of the time, so re-picks don't
--- dilute the share), evenly among the options with fulfillable fields left,
--- and only from those fields - so a wheat-only combine owner's fulfillable
+-- dilute the share), among the options with fulfillable fields left, and
+-- only from those fields - so a wheat-only combine owner's fulfillable
 -- harvest offer is wheat. Otherwise, or once nothing fulfillable is left,
--- evenly among every option, from all its fields. Returns the option and
--- the fields to pick from, or nil once no option has any fields left.
+-- among every option, from all its fields. Either way by each type's
+-- offerWeight (JOB_TYPES). Returns the option and the fields to pick from,
+-- or nil once no option has any fields left.
 function TheContractorJobGeneration:pickJobType(options, preferFulfillable)
     local fulfillableOptions, anyOptions = {}, {}
     for _, option in ipairs(options) do
@@ -905,14 +921,35 @@ function TheContractorJobGeneration:pickJobType(options, preferFulfillable)
     end
 
     if preferFulfillable and #fulfillableOptions > 0 then
-        local option = fulfillableOptions[math.random(#fulfillableOptions)]
+        local option = TheContractorJobGeneration.pickWeightedOption(fulfillableOptions)
         return option, option.fulfillable
     end
     if #anyOptions == 0 then
         return nil
     end
-    local option = anyOptions[math.random(#anyOptions)]
+    local option = TheContractorJobGeneration.pickWeightedOption(anyOptions)
     return option, option.candidates
+end
+
+-- A job type's offerWeight (JOB_TYPES), 1 if it has none.
+function TheContractorJobGeneration.getOfferWeight(jobDef)
+    return jobDef ~= nil and jobDef.offerWeight or 1
+end
+
+-- One of a non-empty list of options, by its type's offerWeight.
+function TheContractorJobGeneration.pickWeightedOption(options)
+    local total = 0
+    for _, option in ipairs(options) do
+        total = total + TheContractorJobGeneration.getOfferWeight(option.jobDef)
+    end
+    local roll = math.random() * total
+    for _, option in ipairs(options) do
+        roll = roll - TheContractorJobGeneration.getOfferWeight(option.jobDef)
+        if roll <= 0 then
+            return option
+        end
+    end
+    return options[#options]
 end
 
 -- Drops a field with no workable deadline from an option (033), so the
@@ -983,31 +1020,68 @@ end
 -- field whose customer has fallen out with the farm (Relationships:refuses).
 function TheContractorJobGeneration:getCandidateFields(farmId, jobDef)
     local candidates = {}
-    if jobDef.requiresWeeds and not TheContractorJobGeneration.getHasWeeds() then
-        return candidates
-    end
-    if jobDef.requiresStones and g_currentMission.missionInfo.stonesEnabled == false then
-        return candidates
-    end
-    if jobDef.requiresLime and not TheContractorJobGeneration.getLimeRequired() then
-        return candidates
-    end
-    -- 067: nowhere on the map takes straw bales, so nowhere to deliver to.
-    if jobDef.deliveryOnly and TCHaulage.findBaleDeliveryStation(FillType.STRAW, farmId) == nil then
+    if TheContractorJobGeneration.getTypeRejection(farmId, jobDef) ~= nil then
         return candidates
     end
 
-    local tc = g_currentMission.TheContractor
-    local jobs = tc.Jobs
     for _, field in ipairs(g_fieldManager:getFields()) do
-        if field:getOwner() == FarmlandManager.NO_OWNER_FARM_ID and not jobs:isFieldProtected(field:getId()) and
-            TheContractorJobGeneration.isFieldEligible(field, jobDef) and
-            not tc.Relationships:refuses(farmId, tc.Farmers:getCustomerIdForField(field:getId())) then
+        if TheContractorJobGeneration.getFieldRejection(farmId, field, jobDef) == nil then
             table.insert(candidates, field)
         end
     end
 
     return candidates
+end
+
+-- Why no field at all can have a job of this type on this save right now,
+-- as a key, or nil if fields can: "weedsOff", "stonesOff", "limeOff", or
+-- "noStrawBuyer" (067: nowhere on the map takes straw bales, so nowhere to
+-- deliver to).
+-- Console and report wording for getTypeRejection's keys (plain English,
+-- like the console's other output).
+TheContractorJobGeneration.TYPE_REJECTION_TEXTS = {
+    weedsOff = "weeds are off for this save or map",
+    stonesOff = "stones are switched off for this save",
+    limeOff = "lime isn't required on this save",
+    noStrawBuyer = "no selling point on this map takes straw bales from this farm",
+}
+
+function TheContractorJobGeneration.getTypeRejection(farmId, jobDef)
+    if jobDef.requiresWeeds and not TheContractorJobGeneration.getHasWeeds() then
+        return "weedsOff"
+    end
+    if jobDef.requiresStones and g_currentMission.missionInfo.stonesEnabled == false then
+        return "stonesOff"
+    end
+    if jobDef.requiresLime and not TheContractorJobGeneration.getLimeRequired() then
+        return "limeOff"
+    end
+    if jobDef.deliveryOnly and TCHaulage.findBaleDeliveryStation(FillType.STRAW, farmId) == nil then
+        return "noStrawBuyer"
+    end
+    return nil
+end
+
+-- Why a field isn't a candidate for this job type (see getCandidateFields),
+-- as a key, or nil if it is: "owned" (a player farm's), "protected" (a live
+-- job, or an auction or show site), "notEligible" (isFieldEligible) or
+-- "customerRefuses" (113). The type's own checks (getTypeRejection) aren't
+-- repeated here.
+function TheContractorJobGeneration.getFieldRejection(farmId, field, jobDef)
+    local tc = g_currentMission.TheContractor
+    if field:getOwner() ~= FarmlandManager.NO_OWNER_FARM_ID then
+        return "owned"
+    end
+    if tc.Jobs:isFieldProtected(field:getId()) then
+        return "protected"
+    end
+    if not TheContractorJobGeneration.isFieldEligible(field, jobDef) then
+        return "notEligible"
+    end
+    if tc.Relationships:refuses(farmId, tc.Farmers:getCustomerIdForField(field:getId())) then
+        return "customerRefuses"
+    end
+    return nil
 end
 
 -- Re-reads every field's state from the map before the generator checks
@@ -1065,7 +1139,44 @@ function TheContractorJobGeneration.isFieldEligible(field, jobDef)
     if jobDef.needsGrowingCrop and not TheContractorJobGeneration.isCropGrowing(fieldState) then
         return false
     end
+    if jobDef.grassWork ~= nil then
+        if TheContractorJobGeneration.isGrass(fieldState.fruitTypeIndex) then
+            return TheContractorJobGeneration.isGrassWorkAvailable(fieldState, jobDef)
+        end
+        if jobDef.grassWork == "standing" then
+            return false
+        end
+    end
     return TheContractorJobGeneration.isVanillaAvailable(field, jobDef)
+end
+
+-- 181: a grassWork job type on a grass field (isGrass), by vanilla's own
+-- rules for grass (MowMission/TedderMission for "standing", BaleMission for
+-- "cut"), which only ever know vanilla's grass: the crop at a state it can
+-- be cut at, and the job's season today (seasonRule).
+function TheContractorJobGeneration.isGrassWorkAvailable(fieldState, jobDef)
+    local fruitType = g_fruitTypeManager:getFruitTypeByIndex(fieldState.fruitTypeIndex)
+    if fruitType == nil or fieldState.growthState == nil then
+        return false
+    end
+    if jobDef.grassWork == "cut" then
+        if not fruitType:getIsHarvestReady(fieldState.growthState) then
+            return false
+        end
+    elseif not fruitType:getIsHarvestable(fieldState.growthState) then
+        return false
+    end
+    local environment = g_currentMission.environment
+    if environment ~= nil and jobDef.seasonRule ~= nil then
+        if environment.currentSeason == Season.WINTER then
+            return false
+        end
+        if jobDef.seasonRule == "noWinterOrEarlySpring" and (environment.currentPeriod == SeasonPeriod.EARLY_SPRING or
+                environment.currentPeriod == SeasonPeriod.MID_SPRING) then
+            return false
+        end
+    end
+    return true
 end
 
 -- 179: whether the field's crop is still growing (vanilla's getIsGrowing:
@@ -1122,13 +1233,80 @@ function TheContractorJobGeneration.needsLime(fieldState)
 end
 
 -- Grass by vanilla's own definition: what its mow contracts cut (grass),
--- plus meadow.
-function TheContractorJobGeneration.isGrass(fruitTypeIndex)
+-- plus meadow. 072's joyriders tear up and resow only this.
+function TheContractorJobGeneration.isVanillaGrass(fruitTypeIndex)
     if fruitTypeIndex == FruitType.MEADOW and FruitType.MEADOW ~= nil then
         return true
     end
     local mowData = TheContractorJobGeneration.getMowMissionData()
     return mowData ~= nil and mowData.fruitTypeIndices[fruitTypeIndex] == true
+end
+
+-- 181: grass, vanilla's and a map's own (alfalfa, clover): mow, tedder and
+-- bale work, never a harvest. Vanilla's grass, or a crop with grass
+-- windrows (getGrassWindrows).
+function TheContractorJobGeneration.isGrass(fruitTypeIndex)
+    return TheContractorJobGeneration.isVanillaGrass(fruitTypeIndex) or
+        TheContractorJobGeneration.getGrassWindrows(fruitTypeIndex) ~= nil
+end
+
+-- 181: fruitTypeIndex -> { fresh, dry } for the crops with grass windrows,
+-- built from the converter tables once they're loaded, for the session.
+local grassWindrows = nil
+
+-- 181: a crop's grass windrows, { fresh, dry } fill type indices, or nil
+-- if it has none. A crop has them when the map's mower turns it into a
+-- windrow (the MOWER fruit type converter: fresh) that the map's tedder
+-- dries into something else (the TEDDER fill type converter: dry), as
+-- grass's GRASS_WINDROW into DRYGRASS_WINDROW, or a map's alfalfa into its
+-- DRYALFALFA_WINDROW. Straw is never tedded into anything else, so a
+-- cereal has none. FS25_MoistureSystem classes grass and hay by the same
+-- tedder converter.
+function TheContractorJobGeneration.getGrassWindrows(fruitTypeIndex)
+    if fruitTypeIndex == nil then
+        return nil
+    end
+    if grassWindrows == nil then
+        local mower = g_fruitTypeManager.getConverterDataByName ~= nil and
+            g_fruitTypeManager:getConverterDataByName("MOWER") or nil
+        local tedder = g_fillTypeManager.getConverterDataByName ~= nil and
+            g_fillTypeManager:getConverterDataByName("TEDDER") or nil
+        if mower == nil or tedder == nil then
+            return nil
+        end
+        local found = {}
+        for index, conversion in pairs(mower) do
+            local fresh = conversion.fillTypeIndex
+            local drying = fresh ~= nil and tedder[fresh] or nil
+            if drying ~= nil and drying.targetFillTypeIndex ~= nil and drying.targetFillTypeIndex ~= fresh then
+                found[index] = { fresh = fresh, dry = drying.targetFillTypeIndex }
+            end
+        end
+        grassWindrows = found
+    end
+    return grassWindrows[fruitTypeIndex]
+end
+
+-- The windrow a crop's baled from once it's cut, or nil: straw, grass's
+-- hay (DRYGRASS_WINDROW, as BaleMission:setFruitType), and 181 a map's own
+-- grass's dry windrow (getGrassWindrows).
+function TheContractorJobGeneration.getBaleWindrowFillType(fruitTypeIndex)
+    if fruitTypeIndex == nil then
+        return nil
+    end
+    local grassWindrows = TheContractorJobGeneration.getGrassWindrows(fruitTypeIndex)
+    if grassWindrows ~= nil then
+        return grassWindrows.dry
+    end
+    if fruitTypeIndex == FruitType.GRASS then
+        return FillType.DRYGRASS_WINDROW
+    end
+    return g_fruitTypeManager:getWindrowFillTypeIndexByFruitTypeIndex(fruitTypeIndex)
+end
+
+-- The table above is built again on the next ask (a new session's types).
+function TheContractorJobGeneration.clearGrassWindrows()
+    grassWindrows = nil
 end
 
 -- MowMission.isAvailableForField reads the mow fruit list its loadMapData
@@ -1171,6 +1349,29 @@ end
 -- start of the work window, not `earliest`: that's only the offer's
 -- courtesy of a full day, not a limit on when work can begin.
 function TheContractorJobGeneration:getDeadlineDay(field, jobDef, sameMonth)
+    local workStartDay, earliest = self:getWorkWindowStart(field, jobDef)
+    if workStartDay == nil then
+        return nil
+    end
+
+    local environment = g_currentMission.environment
+    local desired = earliest + math.random(0, TheContractorJobGeneration.MAX_EXTRA_DAYS)
+    if sameMonth then
+        local monthEnd = environment.currentMonotonicDay + environment.daysPerPeriod - environment.currentDayInPeriod
+        desired = math.max(earliest, math.min(desired, monthEnd))
+    end
+
+    local lastDoable = self:getLastDoableDay(field, jobDef, workStartDay, desired)
+    if lastDoable == nil or lastDoable < earliest then
+        return nil
+    end
+    return lastDoable, workStartDay
+end
+
+-- getDeadlineDay's work window start and earliest day (see there): today,
+-- or for a harvest whose crop isn't ready yet its predicted ready day. Nil
+-- if that crop's ready day can't be predicted.
+function TheContractorJobGeneration:getWorkWindowStart(field, jobDef)
     local environment = g_currentMission.environment
     local today = environment.currentMonotonicDay
 
@@ -1192,25 +1393,20 @@ function TheContractorJobGeneration:getDeadlineDay(field, jobDef, sameMonth)
             earliest = math.max(earliest, workStartDay)
         end
     end
+    return workStartDay, earliest
+end
 
-    local desired = earliest + math.random(0, TheContractorJobGeneration.MAX_EXTRA_DAYS)
-    if sameMonth then
-        local monthEnd = today + environment.daysPerPeriod - environment.currentDayInPeriod
-        desired = math.max(earliest, math.min(desired, monthEnd))
-    end
-
+-- The last day from fromDay to toDay the job is doable on every day up to
+-- (isDoableOnDay), or nil if it isn't on fromDay.
+function TheContractorJobGeneration:getLastDoableDay(field, jobDef, fromDay, toDay)
     local lastDoable = nil
-    for day = workStartDay, desired do
+    for day = fromDay, toDay do
         if not self:isDoableOnDay(field, jobDef, day) then
             break
         end
         lastDoable = day
     end
-
-    if lastDoable == nil or lastDoable < earliest then
-        return nil
-    end
-    return lastDoable, workStartDay
+    return lastDoable
 end
 
 -- Whether the job could still be carried out on a given absolute day, as
@@ -1457,17 +1653,10 @@ function TheContractorJobGeneration.registerConsoleCommands()
             end
 
             local jobDef = TheContractorJobGeneration.JOB_TYPES[jobType]
-            if jobDef.requiresWeeds and not TheContractorJobGeneration.getHasWeeds() then
-                return string.format("No %s job possible: weeds are off for this save or map", jobType)
-            end
-            if jobDef.requiresStones and g_currentMission.missionInfo.stonesEnabled == false then
-                return string.format("No %s job possible: stones are switched off for this save", jobType)
-            end
-            if jobDef.requiresLime and not TheContractorJobGeneration.getLimeRequired() then
-                return string.format("No %s job possible: lime isn't required on this save", jobType)
-            end
-            if jobDef.deliveryOnly and TCHaulage.findBaleDeliveryStation(FillType.STRAW, farmId) == nil then
-                return string.format("No %s job possible: no selling point on this map takes straw bales from this farm", jobType)
+            local typeRejection = TheContractorJobGeneration.getTypeRejection(farmId, jobDef)
+            if typeRejection ~= nil then
+                return string.format("No %s job possible: %s", jobType,
+                    TheContractorJobGeneration.TYPE_REJECTION_TEXTS[typeRejection])
             end
             local candidates = #tc.JobGeneration:getCandidateFields(farmId, jobDef)
             if candidates == 0 then

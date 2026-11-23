@@ -447,6 +447,16 @@ test("a road spot needs room, flat ground, no bridge, nobody about and a field n
         return math.abs(x) < 7 and 50 or 51
     end
     assertEquals(find(), nil, "the ground rises along the fall")
+
+    -- The road climbing north: the trunk would roll down it.
+    world.groundAt = function(x, z)
+        return 50 + z * 0.1
+    end
+    assertEquals(find(), nil, "a 10% slope along the road")
+    world.groundAt = function(x, z)
+        return 50 + z * 0.05
+    end
+    assertTrue(find() ~= nil, "5%: steep, but no flatter road to have")
     world.groundAt = nil
 
     -- A wall along both verges, 10 m out.
@@ -460,6 +470,20 @@ test("a road spot needs room, flat ground, no bridge, nobody about and a field n
     world.fields = {}
     world:addField(40, 3000, 0)
     assertEquals(find(), nil, "no field within 2 km to name it by")
+end)
+
+test("the flattest road first, so the trunk doesn't roll", function()
+    local world, tc = setup()
+    world.splines = { world.splines[1], world.splines[2] }
+    -- Each road in turn climbing 5% north; the other's the one picked.
+    for _, sloped in ipairs({ 0, 400 }) do
+        world.groundAt = function(x, z)
+            return math.abs(x - sloped) < 100 and 50 + z * 0.05 or 50
+        end
+        local spot = tc.FallenTree:findRoadSpots(rolls({}), 1)[1]
+        assertTrue(spot ~= nil)
+        assertTrue(spot.roadX ~= sloped, "picked the flat road, not the one at " .. sloped)
+    end
 end)
 
 test("2 to 4 trees, each on its own stretch of road, round the first", function()
@@ -671,7 +695,14 @@ test("each tree can be cut off the farm's land only once the job's taken on", fu
     world.hasCutPermission = false
     assertEquals(manager:getIsShapeCutAllowed(x, z, trunks[1], 1), false, "no cutTrees permission")
     world.hasCutPermission = true
-    assertEquals(manager:getIsShapeCutAllowed(first.x + first.dirX * 60, z, trunks[1], 1), false, "off the site")
+    -- Rolled (or pushed by traffic) 40 m along the road, off where it fell.
+    local rolledX = first.roadX + first.roadDirX * 40
+    local rolledZ = first.roadZ + first.roadDirZ * 40
+    assertTrue(not TheContractorFallenTree.isInCorridor(first, rolledX, rolledZ, TheContractorFallenTree.SITE_MARGIN),
+        "out of the corridor it fell in")
+    assertEquals(manager:getIsShapeCutAllowed(rolledX, rolledZ, trunks[1], 1), true, "rolled along the road")
+    assertEquals(manager:getIsShapeCutAllowed(first.roadX + first.roadDirX * 70, first.roadZ + first.roadDirZ * 70,
+        trunks[1], 1), false, "too far from any tree's road")
 end)
 
 test("a marker on each tree's road once it's taken on, gone as that road clears", function()

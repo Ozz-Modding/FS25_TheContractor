@@ -2839,4 +2839,30 @@ function TheContractorJobs.registerConsoleCommands()
             return string.format("Job %d is now %s.", jobId, job.state)
         end,
     })
+
+    -- The dev dialog's Delete (TCDevDialog): a job taken back as if it never
+    -- was (removeJob). One with a crew is unallocated first, so its workers
+    -- and machines come home as they would from the Unallocate button.
+    TCConsole.register("debug", "removeJob", {
+        args = "<jobId>",
+        description = "Delete a job as if it never was (unallocated first if it has a crew)",
+        run = function(farmId, args)
+            local jobId = tonumber(args[1])
+            if jobId == nil then
+                return false
+            end
+            local jobs = g_currentMission.TheContractor.Jobs
+            local job = jobs:getJob(farmId, jobId)
+            if job == nil then
+                return string.format("Farm %d has no job %d. tcJob list all shows their ids.", farmId, jobId)
+            end
+            local STATE = TheContractorJob.STATE
+            if (job.state == STATE.ALLOCATED or job.state == STATE.IN_PROGRESS) and
+                not jobs:forceJobState(farmId, jobId, STATE.ACCEPTED) then
+                return string.format("Job %d couldn't be unallocated, so it's still there.", jobId)
+            end
+            jobs:removeJob(job)
+            return string.format("Job %d removed.", jobId)
+        end,
+    })
 end

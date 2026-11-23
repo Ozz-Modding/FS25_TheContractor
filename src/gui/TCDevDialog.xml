@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="utf-8" standalone="no" ?>
+<!-- The dev dialog (tcDebug dev), see TCDevDialog.lua. Same dialog frame as
+     TCParkingSlotDialog.xml: anchorTopCenter profiles, so x positions are
+     each element's centre relative to its container's top-centre. A page
+     picker at the top, then one page container per page (tc_devPage),
+     shown one at a time. Lists span -440px..440px of their page; the Jobs
+     page's column headings sit over its cells' columns (#id 14px, job 70px,
+     field 380px, state 460px, price 600px, due 740px in from the list's
+     left edge). The texts are set from the Lua: it's a testing tool, so
+     they're plain English like tcDebug's, not l10n. -->
+<GUI onOpen="onOpen" onClose="onClose" onCreate="onCreate">
+    <GuiElement profile="newLayer"/>
+    <Bitmap profile="dialogFullscreenBg" id="dialogBg"/>
+    <GuiElement profile="fs25_dialogBg" id="dialogElement" size="1000px 680px">
+        <ThreePartBitmap profile="fs25_dialogBgMiddle"/>
+        <ThreePartBitmap profile="fs25_dialogBgTop"/>
+        <ThreePartBitmap profile="fs25_dialogBgBottom"/>
+        <GuiElement profile="fs25_dialogContentContainer">
+
+            <Text profile="fs25_dialogTitle" id="dialogTitleElement" position="0px -30px" text="The Contractor: dev"/>
+            <MultiTextOption profile="tc_adDialogPicker" id="pageOption" position="0px -75px" onClick="onClickPage">
+                <Text profile="fs25_multiTextOptionText" width="300px" name="text"/>
+            </MultiTextOption>
+            <Text profile="tc_parkingSlotHint" id="hintText" position="0px -118px" size="900px 40px" text=""/>
+
+            <!-- Jobs -->
+            <GuiElement profile="tc_devPage" id="jobsPage" position="0px -165px">
+                <Text profile="tc_driverPickerColumn" size="50px 28px" position="-401px 0px" text="#"/>
+                <Text profile="tc_driverPickerColumn" size="300px 28px" position="-220px 0px" text="Job"/>
+                <Text profile="tc_driverPickerColumn" size="70px 28px" position="-25px 0px" text="Field"/>
+                <Text profile="tc_driverPickerColumn" size="130px 28px" position="85px 0px" text="State"/>
+                <Text profile="tc_driverPickerColumn" size="130px 28px" position="225px 0px" text="Price"/>
+                <Text profile="tc_driverPickerColumn" size="130px 28px" position="365px 0px" text="Due"/>
+
+                <SmoothList id="jobList" profile="tc_driverPickerList" position="0px -32px" size="880px 315px">
+                    <ListItem profile="tc_tableListItem">
+                        <RoundCorner profile="tc_tableRowSurface"/>
+                        <Bitmap profile="tc_tableRowAccent"/>
+                        <Text profile="tc_listRowCellLeft" position="14px 0px" size="50px 32px" name="id"/>
+                        <Text profile="tc_listRowCellLeft" position="70px 0px" size="300px 32px" name="title"/>
+                        <Text profile="tc_listRowCellLeft" position="380px 0px" size="70px 32px" name="field"/>
+                        <Text profile="tc_listRowCellLeft" position="460px 0px" size="130px 32px" name="state"/>
+                        <Text profile="tc_listRowCellLeft" position="600px 0px" size="130px 32px" name="price"/>
+                        <Text profile="tc_listRowCellLeft" position="740px 0px" size="130px 32px" name="due"/>
+                    </ListItem>
+                </SmoothList>
+                <ThreePartBitmap profile="tc_dialogSlider_box" position="452px -32px" size="6px 315px">
+                    <Slider profile="fs25_listSlider" dataElementId="jobList"/>
+                </ThreePartBitmap>
+                <Text profile="tc_adDialogInfoText" id="jobsEmptyText" position="0px -60px" text="This farm has no jobs."/>
+            </GuiElement>
+
+            <!-- Hitches -->
+            <GuiElement profile="tc_devPage" id="hitchesPage" position="0px -165px">
+                <SmoothList id="vehicleList" profile="tc_driverPickerList" position="0px 0px" size="880px 175px">
+                    <ListItem profile="tc_tableListItem">
+                        <RoundCorner profile="tc_tableRowSurface"/>
+                        <Bitmap profile="tc_tableRowAccent"/>
+                        <RoundCorner profile="tc_rowCheckBox" name="checkBox"/>
+                        <Text profile="tc_listRowCellLeft" position="36px 0px" size="640px 32px" name="name"/>
+                        <RoundCorner profile="tc_rowChip" position="700px 0px" size="160px 20px" name="kindChip"/>
+                        <Text profile="tc_rowChipText" position="700px 0px" size="160px 20px" name="kindChipText"/>
+                    </ListItem>
+                </SmoothList>
+                <ThreePartBitmap profile="tc_dialogSlider_box" position="452px 0px" size="6px 175px">
+                    <Slider profile="fs25_listSlider" dataElementId="vehicleList"/>
+                </ThreePartBitmap>
+                <Text profile="tc_adDialogInfoText" id="vehiclesEmptyText" position="0px -30px" text="This farm owns no tractors or mowers."/>
+                <Text profile="tc_devResultText" id="hitchResultText" position="0px -185px" text=""/>
+            </GuiElement>
+
+            <!-- Reports -->
+            <GuiElement profile="tc_devPage" id="reportsPage" position="0px -165px">
+                <SmoothList id="reportList" profile="tc_driverPickerList" position="0px 0px" size="880px 175px">
+                    <ListItem profile="tc_tableListItem">
+                        <RoundCorner profile="tc_tableRowSurface"/>
+                        <Bitmap profile="tc_tableRowAccent"/>
+                        <Text profile="tc_listRowCellLeft" position="14px 0px" size="840px 32px" name="name"/>
+                    </ListItem>
+                </SmoothList>
+                <ThreePartBitmap profile="tc_dialogSlider_box" position="452px 0px" size="6px 175px">
+                    <Slider profile="fs25_listSlider" dataElementId="reportList"/>
+                </ThreePartBitmap>
+                <Text profile="tc_devResultText" id="reportResultText" position="0px -185px" text=""/>
+            </GuiElement>
+
+            <Text profile="tc_devStatusText" id="statusText" position="0px -525px" text=""/>
+        </GuiElement>
+
+        <BoxLayout profile="fs25_dialogButtonBox">
+            <Button profile="buttonOK" text="OK" onClick="onClickOk" id="okButton"/>
+            <Bitmap profile="fs25_dialogButtonBoxSeparator"/>
+            <Button profile="buttonActivate" text="Activate" onClick="onClickActivate" id="activateButton"/>
+            <Bitmap profile="fs25_dialogButtonBoxSeparator"/>
+            <Button profile="buttonExtra1" text="Extra" onClick="onClickExtra1" id="extraButton"/>
+            <Bitmap profile="fs25_dialogButtonBoxSeparator"/>
+            <Button profile="buttonBack" text="$l10n_button_back" onClick="onClickBack" id="backButton"/>
+        </BoxLayout>
+    </GuiElement>
+</GUI>

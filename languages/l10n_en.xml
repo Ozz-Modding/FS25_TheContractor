@@ -973,6 +973,8 @@
 		<text name="tc_parking_slotsShown" text="Parking slots and standing spots shown"/>
 		<text name="tc_parking_slotsHidden" text="Parking slots and standing spots hidden"/>
 		<text name="input_TC_TOGGLE_PARKING_SLOTS" text="Show/hide parking slots and standing spots"/>
+		<text name="input_TC_OPEN_DEV_PANEL" text="Open The Contractor's dev panel"/>
+		<text name="tc_devPanel_needsDebug" text="The dev panel needs a file called tcDebug.txt in the mod's settings folder (modSettings/FS25_TheContractor), read when a save loads."/>
 		<text name="tc_parkingSlot_activate" text="Set parking slot filter"/>
 		<text name="tc_parkingSlot_dialogTitle" text="Parking Slot Filter"/>
 		<text name="tc_parkingSlot_dialogHeading" text="Takes: %s"/>
@@ -1097,6 +1099,7 @@
 		<text name="tc_supplies_status_wrongFill" text="Tank holds %s - empty it"/>
 		<text name="tc_supplies_status_needsService" text="%s needs a service"/>
 		<text name="tc_supplies_onHold" text="%s on %s is on hold: %s."/>
+		<text name="tc_supplies_serviced" text="%s is serviced: %s on %s will carry on shortly."/>
 		<text name="tc_supplies_or" text=" or "/>
 		<text name="tc_supplies_noticeOne" text="Out of %s: a job is on hold until you restock."/>
 		<text name="tc_supplies_noticeMany" text="Out of %s: %d jobs are on hold until you restock."/>
@@ -1817,7 +1820,7 @@
 		<text name="tc_help_reputation_5_title" text="Running campaigns"/>
 		<text name="tc_help_reputation_5" text="Campaigns stack: you can run several at once, and their effects add up, though there's a limit to how many offers adverts can bring, and the buy dialog tells you when a campaign would add less. Buying one that's already running extends it. A campaign runs in whole months; a new one bought partway through a month also runs for the rest of that month at no extra cost. An offer that only came because of an advert says which one under Found you through; Word of mouth means it would have come anyway."/>
 		<text name="tc_help_offers_title" text="Job offers and the Inbox"/>
-		<text name="tc_help_offers_1" text="Job offers arrive in the Inbox, with a notification. Each shows the field, what's to be done, when it's due, the price and the customer. Offers are matched to the machines you own, and the Equipment needed list says whether you have each one."/>
+		<text name="tc_help_offers_1" text="Job offers arrive in the Inbox, with a notification. Each shows the field, what's to be done, when it's due, the price and the customer. Offers are matched to the machines you own, and the Equipment needed list says whether you have each one. Harvesting comes up more often than other work while there are crops to bring in."/>
 		<text name="tc_help_offers_2_title" text="Answering an offer"/>
 		<text name="tc_help_offers_2" text="Accept it, Decline it, or make a Counter Offer. Leaving an offer to run out, or turning it down, wears down your relationship with that customer."/>
 		<text name="tc_help_offers_3_title" text="Negotiating"/>
@@ -1838,7 +1841,7 @@
 		<text name="tc_help_settings_5" text="Type tcHelp in the developer console for the mod's commands, for tailoring your game. They're listed in the mod's documentation."/>
 		<text name="tc_help_cat_jobs" text="Jobs"/>
 		<text name="tc_help_jobTypes_title" text="Kinds of work"/>
-		<text name="tc_help_jobTypes_1" text="Offers cover all the base game's field work: harvesting, mowing, tedding, baling, wrapping, cultivating, plowing, sowing and planting, fertilising, spraying herbicide, weeding, hoeing, stone picking and spreading lime."/>
+		<text name="tc_help_jobTypes_1" text="Offers cover all the base game's field work: harvesting, mowing, tedding, baling, wrapping, cultivating, plowing, sowing and planting, fertilising, spraying herbicide, weeding, hoeing, stone picking and spreading lime. A map's own grasses, such as alfalfa and clover, are mown, tedded and baled like grass, never harvested."/>
 		<text name="tc_help_jobTypes_2_title" text="Harvest and haul"/>
 		<text name="tc_help_jobTypes_2" text="The crop belongs to the customer and has to reach the selling point named in the offer (if your farm can't unload there, or it's only scenery, it moves to the best-paying one you can). It takes two workers, one harvesting and one hauling, or you can do the lot yourself. The crop can't be unloaded anywhere but there."/>
 		<text name="tc_help_jobTypes_3_title" text="Bales"/>
@@ -2107,7 +2110,7 @@
 		<text name="tc_help_workshopTrades_3_title" text="Training"/>
 		<text name="tc_help_workshopTrades_3" text="Manage, Workshop training books a worker on a course to learn a trade or raise one a level. Your office administrator is the workshop's advisor."/>
 		<text name="tc_help_workshopTrades_4_title" text="Careless workers"/>
-		<text name="tc_help_workshopTrades_4" text="A careless or under-skilled worker can cause breakdowns on the machines they take out. A machine overdue for its service won't be taken out by a worker until it's seen to."/>
+		<text name="tc_help_workshopTrades_4" text="A careless or under-skilled worker can cause breakdowns on the machines they take out. A machine overdue for its service won't be taken out by a worker until it's seen to. Once it is, the worker gives you a minute to finish up and put your tools away before carrying on."/>
 		<text name="tc_help_repairContracts_title" text="Repair zones and quotes"/>
 		<text name="tc_help_repairContracts_1" text="Place repair zones from the construction menu (one, three or six tractor bays, or a harvester bay). Customers bring their machines there for a repair or a service, each with an offer in the Inbox."/>
 		<text name="tc_help_repairContracts_2_title" text="Inspect first"/>
