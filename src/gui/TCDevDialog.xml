@@ -69,6 +69,21 @@
                 <Text profile="tc_devResultText" id="hitchResultText" position="0px -185px" text=""/>
             </GuiElement>
 
+            <!-- Reports -->
+            <GuiElement profile="tc_devPage" id="reportsPage" position="0px -165px">
+                <SmoothList id="reportList" profile="tc_driverPickerList" position="0px 0px" size="880px 175px">
+                    <ListItem profile="tc_tableListItem">
+                        <RoundCorner profile="tc_tableRowSurface"/>
+                        <Bitmap profile="tc_tableRowAccent"/>
+                        <Text profile="tc_listRowCellLeft" position="14px 0px" size="840px 32px" name="name"/>
+                    </ListItem>
+                </SmoothList>
+                <ThreePartBitmap profile="tc_dialogSlider_box" position="452px 0px" size="6px 175px">
+                    <Slider profile="fs25_listSlider" dataElementId="reportList"/>
+                </ThreePartBitmap>
+                <Text profile="tc_devResultText" id="reportResultText" position="0px -185px" text=""/>
+            </GuiElement>
+
             <Text profile="tc_devStatusText" id="statusText" position="0px -525px" text=""/>
         </GuiElement>
 

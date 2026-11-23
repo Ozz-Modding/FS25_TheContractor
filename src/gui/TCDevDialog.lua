@@ -12,6 +12,9 @@
 --            (TCHitchExplain, TCJobSiteSetup.planHitches), moving nothing,
 --            and says which mower goes on the front and which on the rear;
 --            the log has the why.
+--   Reports  the job types, harvest first. Write report writes the
+--            highlighted type's job report (tcDebug jobReport, TCJobReport)
+--            to a file for a player to send in with a bug report.
 --
 -- Everything that changes the game goes through the same console commands
 -- a player would type (TCConsole.dispatch), so it runs on the server and
@@ -30,7 +33,11 @@ local TCDevDialog_mt = Class(TCDevDialog, MessageDialog)
 
 TCDevDialog.PAGE_JOBS = 1
 TCDevDialog.PAGE_HITCHES = 2
-TCDevDialog.PAGE_TITLES = { "Jobs", "Hitches" }
+TCDevDialog.PAGE_REPORTS = 3
+TCDevDialog.PAGE_TITLES = { "Jobs", "Hitches", "Reports" }
+
+-- The Reports page's first rows; every other job type follows.
+TCDevDialog.REPORT_FIRST_TYPES = { "harvest" }
 
 local CHECKBOX_ON_COLOR = { 0.30, 0.62, 0.06, 1 }
 local CHECKBOX_OFF_COLOR = { 0.22, 0.22, 0.23, 1 }
@@ -48,7 +55,7 @@ end
 
 function TCDevDialog.registerConsoleCommands()
     TCConsole.register("debug", "dev", {
-        description = "Open the dev dialog: the farm's jobs (change state, delete, add one) and the hitch test",
+        description = "Open the dev dialog: the farm's jobs (change state, delete, add one), the hitch test and job reports",
         serverOnly = false,
         run = function(farmId)
             if not TCDevDialog.show(farmId) then
@@ -69,6 +76,44 @@ function TCDevDialog.show(farmId)
     return true
 end
 
+-- TC_OPEN_DEV_PANEL (modDesc <actions>, unbound by default: a player binds
+-- it in Controls). It opens the dialog only where tcDebug is installed, as
+-- tcDebug dev does; elsewhere it says what's missing. Registered with the
+-- player's global action events, as TCParking's toggle is.
+function TCDevDialog.onOpenAction()
+    if g_gui == nil or g_gui:getIsGuiVisible() then
+        return
+    end
+    if not TCConsole.debugEnabled then
+        g_currentMission:addIngameNotification(FSBaseMission.INGAME_NOTIFICATION_INFO,
+            g_i18n:getText("tc_devPanel_needsDebug"))
+        return
+    end
+    TCDevDialog.show(g_currentMission:getFarmId())
+end
+
+function TCDevDialog.registerOpenAction(inputComponent, superFunc, ...)
+    superFunc(inputComponent, ...)
+    if InputAction.TC_OPEN_DEV_PANEL == nil then
+        return
+    end
+    local _, eventId = g_inputBinding:registerActionEvent(InputAction.TC_OPEN_DEV_PANEL, TCDevDialog,
+        TCDevDialog.onOpenAction, false, true, false, true)
+    if eventId ~= nil then
+        g_inputBinding:setActionEventTextVisibility(eventId, false)
+    end
+end
+
+-- Installed once: the class outlives a savegame, and the wrapper looks
+-- TCDevDialog up by name when it runs.
+if PlayerInputComponent ~= nil and not PlayerInputComponent.tcDevPanelHookInstalled then
+    PlayerInputComponent.registerGlobalPlayerActionEvents = Utils.overwrittenFunction(
+        PlayerInputComponent.registerGlobalPlayerActionEvents, function(inputComponent, superFunc, ...)
+            TCDevDialog.registerOpenAction(inputComponent, superFunc, ...)
+        end)
+    PlayerInputComponent.tcDevPanelHookInstalled = true
+end
+
 function TCDevDialog.new(target, customMt)
     local self = MessageDialog.new(target, customMt or TCDevDialog_mt)
 
@@ -83,6 +128,9 @@ function TCDevDialog.new(target, customMt)
     self.tractor = nil
     self.mowers = {}
     self.isDirty = false
+    -- Reports: the job types, in the page's order.
+    self.reportTypes = {}
+    self.selectedReportIndex = 1
     -- The New job journey's answers so far.
     self.draft = nil
 
@@ -102,6 +150,9 @@ function TCDevDialog:onGuiSetupFinished()
     self.vehicleList = self:getDescendantById("vehicleList")
     self.vehiclesEmptyText = self:getDescendantById("vehiclesEmptyText")
     self.hitchResultText = self:getDescendantById("hitchResultText")
+    self.reportsPage = self:getDescendantById("reportsPage")
+    self.reportList = self:getDescendantById("reportList")
+    self.reportResultText = self:getDescendantById("reportResultText")
     self.okButton = self:getDescendantById("okButton")
     self.activateButton = self:getDescendantById("activateButton")
     self.extraButton = self:getDescendantById("extraButton")
@@ -110,6 +161,8 @@ function TCDevDialog:onGuiSetupFinished()
     self.jobList:setDelegate(self)
     self.vehicleList:setDataSource(self)
     self.vehicleList:setDelegate(self)
+    self.reportList:setDataSource(self)
+    self.reportList:setDelegate(self)
 end
 
 function TCDevDialog:onOpen()
@@ -123,6 +176,9 @@ function TCDevDialog:onOpen()
     g_messageCenter:subscribe(MessageType.TC_DATA_UPDATED, self.onDataUpdated, self)
     TCConsole.resultListener = function(text)
         self:setStatus(text)
+        if self.page == TCDevDialog.PAGE_REPORTS then
+            self:setReportResult(text)
+        end
         self.isDirty = true
     end
 
@@ -167,9 +223,15 @@ function TCDevDialog:showPage(page)
     self.page = page
     local isJobs = page == TCDevDialog.PAGE_JOBS
     self.jobsPage:setVisible(isJobs)
-    self.hitchesPage:setVisible(not isJobs)
+    self.hitchesPage:setVisible(page == TCDevDialog.PAGE_HITCHES)
+    self.reportsPage:setVisible(page == TCDevDialog.PAGE_REPORTS)
 
-    if isJobs then
+    if page == TCDevDialog.PAGE_REPORTS then
+        self.hintText:setText("Write report saves why this farm is or isn't offered the highlighted job type " ..
+            "to jobReport.txt in the mod's settings folder (the host's, in multiplayer), to send in with a bug report.")
+        self:reloadReports()
+        FocusManager:setFocus(self.reportList)
+    elseif isJobs then
         self.hintText:setText("Every live job this farm has (finished ones aren't listed). Change state offers only the states the job can go to; " ..
             "Delete takes it back as if it never was.")
         self:reloadJobs()
@@ -207,6 +269,9 @@ function TCDevDialog:runCommand(groupKey, args)
     local text = TCConsole.dispatch(group, args)
     if text ~= nil then
         self:setStatus(text)
+        if self.page == TCDevDialog.PAGE_REPORTS then
+            self:setReportResult(text)
+        end
     else
         self:setStatus("Sent to the server...")
     end
@@ -214,7 +279,13 @@ function TCDevDialog:runCommand(groupKey, args)
 end
 
 function TCDevDialog:updateButtons()
-    if self.page == TCDevDialog.PAGE_JOBS then
+    local isReports = self.page == TCDevDialog.PAGE_REPORTS
+    self.activateButton:setVisible(not isReports)
+    self.extraButton:setVisible(not isReports)
+    if isReports then
+        self.okButton:setText("Write report")
+        self.okButton:setDisabled(self.reportTypes[self.selectedReportIndex] == nil)
+    elseif self.page == TCDevDialog.PAGE_JOBS then
         local job = self.jobs[self.selectedJobIndex]
         self.okButton:setText("Change state")
         self.okButton:setDisabled(job == nil)
@@ -234,7 +305,9 @@ function TCDevDialog:updateButtons()
 end
 
 function TCDevDialog:onClickOk()
-    if self.page == TCDevDialog.PAGE_JOBS then
+    if self.page == TCDevDialog.PAGE_REPORTS then
+        self:writeReport()
+    elseif self.page == TCDevDialog.PAGE_JOBS then
         self:changeJobState()
     else
         self:toggleVehicle()
@@ -243,7 +316,9 @@ function TCDevDialog:onClickOk()
 end
 
 function TCDevDialog:onClickActivate()
-    if self.page == TCDevDialog.PAGE_JOBS then
+    if self.page == TCDevDialog.PAGE_REPORTS then
+        return
+    elseif self.page == TCDevDialog.PAGE_JOBS then
         self:startNewJob()
     else
         self:testHitches()
@@ -251,7 +326,9 @@ function TCDevDialog:onClickActivate()
 end
 
 function TCDevDialog:onClickExtra1()
-    if self.page == TCDevDialog.PAGE_JOBS then
+    if self.page == TCDevDialog.PAGE_REPORTS then
+        return
+    elseif self.page == TCDevDialog.PAGE_JOBS then
         self:deleteJob()
     else
         self.tractor = nil
@@ -272,6 +349,8 @@ end
 function TCDevDialog:getNumberOfItemsInSection(list, section)
     if list == self.jobList then
         return #self.jobs
+    elseif list == self.reportList then
+        return #self.reportTypes
     end
     return #self.vehicleRows
 end
@@ -279,6 +358,11 @@ end
 function TCDevDialog:populateCellForItemInSection(list, section, index, cell)
     if list == self.jobList then
         self:populateJobCell(self.jobs[index], cell)
+    elseif list == self.reportList then
+        local jobType = self.reportTypes[index]
+        if jobType ~= nil then
+            cell:getAttribute("name"):setText(string.format("Why am I (not) getting '%s' jobs?", jobType))
+        end
     else
         self:populateVehicleCell(self.vehicleRows[index], cell)
     end
@@ -288,6 +372,8 @@ end
 function TCDevDialog:onListSelectionChanged(list, section, index)
     if list == self.jobList then
         self.selectedJobIndex = index
+    elseif list == self.reportList then
+        self.selectedReportIndex = index
     else
         self.selectedVehicleIndex = index
     end
@@ -521,6 +607,50 @@ function TCDevDialog:createDraftJob()
     local dayInPeriod = TCCalendar.getDayInPeriodFromDay(dueDay)
     self:runCommand("job", { "create", draft.jobType, tostring(draft.fieldId), tostring(draft.skill),
         tostring(draft.price), tostring(period), tostring(dayInPeriod) })
+end
+
+-- Reports ---------------------------------------------------------------------------
+
+-- The job types a report can be written for: REPORT_FIRST_TYPES, then the rest.
+function TCDevDialog.getReportTypes()
+    local types, listed = {}, {}
+    for _, jobType in ipairs(TCDevDialog.REPORT_FIRST_TYPES) do
+        table.insert(types, jobType)
+        listed[jobType] = true
+    end
+    for _, jobType in ipairs(TheContractorJobGeneration.JOB_TYPE_KEYS) do
+        if not listed[jobType] then
+            table.insert(types, jobType)
+        end
+    end
+    return types
+end
+
+function TCDevDialog:reloadReports()
+    self.reportTypes = TCDevDialog.getReportTypes()
+    self.selectedReportIndex = math.min(math.max(self.selectedReportIndex, 1), #self.reportTypes)
+    self.reportList:reloadData()
+    self.reportList:setSelectedIndex(self.selectedReportIndex)
+end
+
+-- The Reports page's answer to a command: the command's own line, plus
+-- what to do with the file once one's written.
+function TCDevDialog:setReportResult(text)
+    text = tostring(text or "")
+    if string.find(text, "^Wrote file to ") ~= nil then
+        text = text .. "\nPlease send that file, with your log.txt, along with your bug report."
+    end
+    self.reportResultText:setText(text)
+end
+
+-- tcDebug jobReport: written where the command runs, the server.
+function TCDevDialog:writeReport()
+    local jobType = self.reportTypes[self.selectedReportIndex]
+    if jobType == nil then
+        return
+    end
+    self.reportResultText:setText("Writing the report...")
+    self:runCommand("debug", { "jobReport", jobType })
 end
 
 -- Hitches ---------------------------------------------------------------------------

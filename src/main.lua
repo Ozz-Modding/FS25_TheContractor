@@ -1,5 +1,6 @@
 TheContractor = {}
 TheContractor.dir = g_currentModDirectory
+TheContractor.modName = g_currentModName
 TheContractor.SaveKey = "TheContractor"
 
 -- Published on every machine whenever one of our events is received or the
@@ -28,6 +29,7 @@ source(TheContractor.dir .. "src/util/TCJobFieldMask.lua")
 source(TheContractor.dir .. "src/util/TCVehicleLock.lua")
 source(TheContractor.dir .. "src/util/TCJobSiteSetup.lua")
 source(TheContractor.dir .. "src/util/TCHitchExplain.lua")
+source(TheContractor.dir .. "src/util/TCJobReport.lua")
 source(TheContractor.dir .. "src/util/TCFolding.lua")
 source(TheContractor.dir .. "src/util/TCParking.lua")
 source(TheContractor.dir .. "src/util/TCParkingSlotFilter.lua")
@@ -595,6 +597,7 @@ function TheContractor:loadMap()
     TheContractorFarmers.registerConsoleCommands()
     TheContractorRelationships.registerConsoleCommands()
     TCDevDialog.registerConsoleCommands()
+    TCJobReport.registerConsoleCommands()
     TCConsole.install()
 
     -- A farm deleted in multiplayer takes its company with it (server).

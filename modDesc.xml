@@ -112,6 +112,8 @@ Credits:
     <!-- 086: shows/hides parking slots outside the construction menu (TCParking). -->
     <actions>
         <action name="TC_TOGGLE_PARKING_SLOTS" category="SYSTEM" axisType="HALF" ignoreComboMask="false" />
+        <!-- The dev panel (TCDevDialog): no default binding, a player binds it in Controls. -->
+        <action name="TC_OPEN_DEV_PANEL" category="SYSTEM" axisType="HALF" ignoreComboMask="false" />
     </actions>
     <inputBinding>
         <actionBinding action="TC_TOGGLE_PARKING_SLOTS">

@@ -145,6 +145,11 @@ TheContractorJobGeneration_mt = Class(TheContractorJobGeneration)
 --                    load of theirs sold from it (job.yardHaul,
 --                    TheContractorYardHaul). Its missed notification is
 --                    its own (tc_<type>_missedNotification).
+--   offerWeight      how much likelier the type is to be picked for an
+--                    offer than one without (default 1), in both of
+--                    pickJobType's shares. Harvest's is 2: it's one type
+--                    among a dozen with work in autumn, yet the work players
+--                    most want.
 -- A type left out of JOB_TYPE_KEYS (flyTipping, flyTippingRoadside, spillRecovery,
 -- attendAuction, lotInspection, ...) is never
 -- generated, shown by the availability snapshot or created by tcJob: only
@@ -170,7 +175,7 @@ TheContractorJobGeneration.SOIL_FERTILIZER_PRODUCTS = {
 
 TheContractorJobGeneration.JOB_TYPES = {
     harvest = { cropDependent = true, recordsCrop = true, rewardPerHa = 2500, reputationPerHa = 8.5,
-        skill = "harvesting",
+        skill = "harvesting", offerWeight = 2,
         workAreaTypes = { "CUTTER", "COMBINECHOPPER", "COMBINESWATH", "FRUITPREPARER", "TEDDER" } },
     cultivate = { implementSpec = "spec_cultivator", excludedSpecs = { "spec_plow" }, vanillaMission = CultivateMission,
         rewardPerHa = 2300, reputationPerHa = 7.8, skill = "tillage",
@@ -892,11 +897,12 @@ end
 
 -- Fleet-weighted (033): with preferFulfillable (rolled once per hit by
 -- tryGenerateJob, FULFILLABLE_TYPE_SHARE of the time, so re-picks don't
--- dilute the share), evenly among the options with fulfillable fields left,
--- and only from those fields - so a wheat-only combine owner's fulfillable
+-- dilute the share), among the options with fulfillable fields left, and
+-- only from those fields - so a wheat-only combine owner's fulfillable
 -- harvest offer is wheat. Otherwise, or once nothing fulfillable is left,
--- evenly among every option, from all its fields. Returns the option and
--- the fields to pick from, or nil once no option has any fields left.
+-- among every option, from all its fields. Either way by each type's
+-- offerWeight (JOB_TYPES). Returns the option and the fields to pick from,
+-- or nil once no option has any fields left.
 function TheContractorJobGeneration:pickJobType(options, preferFulfillable)
     local fulfillableOptions, anyOptions = {}, {}
     for _, option in ipairs(options) do
@@ -909,14 +915,35 @@ function TheContractorJobGeneration:pickJobType(options, preferFulfillable)
     end
 
     if preferFulfillable and #fulfillableOptions > 0 then
-        local option = fulfillableOptions[math.random(#fulfillableOptions)]
+        local option = TheContractorJobGeneration.pickWeightedOption(fulfillableOptions)
         return option, option.fulfillable
     end
     if #anyOptions == 0 then
         return nil
     end
-    local option = anyOptions[math.random(#anyOptions)]
+    local option = TheContractorJobGeneration.pickWeightedOption(anyOptions)
     return option, option.candidates
+end
+
+-- A job type's offerWeight (JOB_TYPES), 1 if it has none.
+function TheContractorJobGeneration.getOfferWeight(jobDef)
+    return jobDef ~= nil and jobDef.offerWeight or 1
+end
+
+-- One of a non-empty list of options, by its type's offerWeight.
+function TheContractorJobGeneration.pickWeightedOption(options)
+    local total = 0
+    for _, option in ipairs(options) do
+        total = total + TheContractorJobGeneration.getOfferWeight(option.jobDef)
+    end
+    local roll = math.random() * total
+    for _, option in ipairs(options) do
+        roll = roll - TheContractorJobGeneration.getOfferWeight(option.jobDef)
+        if roll <= 0 then
+            return option
+        end
+    end
+    return options[#options]
 end
 
 -- Drops a field with no workable deadline from an option (033), so the
@@ -987,31 +1014,68 @@ end
 -- field whose customer has fallen out with the farm (Relationships:refuses).
 function TheContractorJobGeneration:getCandidateFields(farmId, jobDef)
     local candidates = {}
-    if jobDef.requiresWeeds and not TheContractorJobGeneration.getHasWeeds() then
-        return candidates
-    end
-    if jobDef.requiresStones and g_currentMission.missionInfo.stonesEnabled == false then
-        return candidates
-    end
-    if jobDef.requiresLime and not TheContractorJobGeneration.getLimeRequired() then
-        return candidates
-    end
-    -- 067: nowhere on the map takes straw bales, so nowhere to deliver to.
-    if jobDef.deliveryOnly and TCHaulage.findBaleDeliveryStation(FillType.STRAW, farmId) == nil then
+    if TheContractorJobGeneration.getTypeRejection(farmId, jobDef) ~= nil then
         return candidates
     end
 
-    local tc = g_currentMission.TheContractor
-    local jobs = tc.Jobs
     for _, field in ipairs(g_fieldManager:getFields()) do
-        if field:getOwner() == FarmlandManager.NO_OWNER_FARM_ID and not jobs:isFieldProtected(field:getId()) and
-            TheContractorJobGeneration.isFieldEligible(field, jobDef) and
-            not tc.Relationships:refuses(farmId, tc.Farmers:getCustomerIdForField(field:getId())) then
+        if TheContractorJobGeneration.getFieldRejection(farmId, field, jobDef) == nil then
             table.insert(candidates, field)
         end
     end
 
     return candidates
+end
+
+-- Why no field at all can have a job of this type on this save right now,
+-- as a key, or nil if fields can: "weedsOff", "stonesOff", "limeOff", or
+-- "noStrawBuyer" (067: nowhere on the map takes straw bales, so nowhere to
+-- deliver to).
+-- Console and report wording for getTypeRejection's keys (plain English,
+-- like the console's other output).
+TheContractorJobGeneration.TYPE_REJECTION_TEXTS = {
+    weedsOff = "weeds are off for this save or map",
+    stonesOff = "stones are switched off for this save",
+    limeOff = "lime isn't required on this save",
+    noStrawBuyer = "no selling point on this map takes straw bales from this farm",
+}
+
+function TheContractorJobGeneration.getTypeRejection(farmId, jobDef)
+    if jobDef.requiresWeeds and not TheContractorJobGeneration.getHasWeeds() then
+        return "weedsOff"
+    end
+    if jobDef.requiresStones and g_currentMission.missionInfo.stonesEnabled == false then
+        return "stonesOff"
+    end
+    if jobDef.requiresLime and not TheContractorJobGeneration.getLimeRequired() then
+        return "limeOff"
+    end
+    if jobDef.deliveryOnly and TCHaulage.findBaleDeliveryStation(FillType.STRAW, farmId) == nil then
+        return "noStrawBuyer"
+    end
+    return nil
+end
+
+-- Why a field isn't a candidate for this job type (see getCandidateFields),
+-- as a key, or nil if it is: "owned" (a player farm's), "protected" (a live
+-- job, or an auction or show site), "notEligible" (isFieldEligible) or
+-- "customerRefuses" (113). The type's own checks (getTypeRejection) aren't
+-- repeated here.
+function TheContractorJobGeneration.getFieldRejection(farmId, field, jobDef)
+    local tc = g_currentMission.TheContractor
+    if field:getOwner() ~= FarmlandManager.NO_OWNER_FARM_ID then
+        return "owned"
+    end
+    if tc.Jobs:isFieldProtected(field:getId()) then
+        return "protected"
+    end
+    if not TheContractorJobGeneration.isFieldEligible(field, jobDef) then
+        return "notEligible"
+    end
+    if tc.Relationships:refuses(farmId, tc.Farmers:getCustomerIdForField(field:getId())) then
+        return "customerRefuses"
+    end
+    return nil
 end
 
 -- Re-reads every field's state from the map before the generator checks
@@ -1279,6 +1343,29 @@ end
 -- start of the work window, not `earliest`: that's only the offer's
 -- courtesy of a full day, not a limit on when work can begin.
 function TheContractorJobGeneration:getDeadlineDay(field, jobDef, sameMonth)
+    local workStartDay, earliest = self:getWorkWindowStart(field, jobDef)
+    if workStartDay == nil then
+        return nil
+    end
+
+    local environment = g_currentMission.environment
+    local desired = earliest + math.random(0, TheContractorJobGeneration.MAX_EXTRA_DAYS)
+    if sameMonth then
+        local monthEnd = environment.currentMonotonicDay + environment.daysPerPeriod - environment.currentDayInPeriod
+        desired = math.max(earliest, math.min(desired, monthEnd))
+    end
+
+    local lastDoable = self:getLastDoableDay(field, jobDef, workStartDay, desired)
+    if lastDoable == nil or lastDoable < earliest then
+        return nil
+    end
+    return lastDoable, workStartDay
+end
+
+-- getDeadlineDay's work window start and earliest day (see there): today,
+-- or for a harvest whose crop isn't ready yet its predicted ready day. Nil
+-- if that crop's ready day can't be predicted.
+function TheContractorJobGeneration:getWorkWindowStart(field, jobDef)
     local environment = g_currentMission.environment
     local today = environment.currentMonotonicDay
 
@@ -1300,25 +1387,20 @@ function TheContractorJobGeneration:getDeadlineDay(field, jobDef, sameMonth)
             earliest = math.max(earliest, workStartDay)
         end
     end
+    return workStartDay, earliest
+end
 
-    local desired = earliest + math.random(0, TheContractorJobGeneration.MAX_EXTRA_DAYS)
-    if sameMonth then
-        local monthEnd = today + environment.daysPerPeriod - environment.currentDayInPeriod
-        desired = math.max(earliest, math.min(desired, monthEnd))
-    end
-
+-- The last day from fromDay to toDay the job is doable on every day up to
+-- (isDoableOnDay), or nil if it isn't on fromDay.
+function TheContractorJobGeneration:getLastDoableDay(field, jobDef, fromDay, toDay)
     local lastDoable = nil
-    for day = workStartDay, desired do
+    for day = fromDay, toDay do
         if not self:isDoableOnDay(field, jobDef, day) then
             break
         end
         lastDoable = day
     end
-
-    if lastDoable == nil or lastDoable < earliest then
-        return nil
-    end
-    return lastDoable, workStartDay
+    return lastDoable
 end
 
 -- Whether the job could still be carried out on a given absolute day, as
@@ -1565,17 +1647,10 @@ function TheContractorJobGeneration.registerConsoleCommands()
             end
 
             local jobDef = TheContractorJobGeneration.JOB_TYPES[jobType]
-            if jobDef.requiresWeeds and not TheContractorJobGeneration.getHasWeeds() then
-                return string.format("No %s job possible: weeds are off for this save or map", jobType)
-            end
-            if jobDef.requiresStones and g_currentMission.missionInfo.stonesEnabled == false then
-                return string.format("No %s job possible: stones are switched off for this save", jobType)
-            end
-            if jobDef.requiresLime and not TheContractorJobGeneration.getLimeRequired() then
-                return string.format("No %s job possible: lime isn't required on this save", jobType)
-            end
-            if jobDef.deliveryOnly and TCHaulage.findBaleDeliveryStation(FillType.STRAW, farmId) == nil then
-                return string.format("No %s job possible: no selling point on this map takes straw bales from this farm", jobType)
+            local typeRejection = TheContractorJobGeneration.getTypeRejection(farmId, jobDef)
+            if typeRejection ~= nil then
+                return string.format("No %s job possible: %s", jobType,
+                    TheContractorJobGeneration.TYPE_REJECTION_TEXTS[typeRejection])
             end
             local candidates = #tc.JobGeneration:getCandidateFields(farmId, jobDef)
             if candidates == 0 then

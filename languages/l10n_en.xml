@@ -928,6 +928,8 @@
 		<text name="tc_parking_slotsShown" text="Parking slots and standing spots shown"/>
 		<text name="tc_parking_slotsHidden" text="Parking slots and standing spots hidden"/>
 		<text name="input_TC_TOGGLE_PARKING_SLOTS" text="Show/hide parking slots and standing spots"/>
+		<text name="input_TC_OPEN_DEV_PANEL" text="Open The Contractor's dev panel"/>
+		<text name="tc_devPanel_needsDebug" text="The dev panel needs a file called tcDebug.txt in the mod's settings folder (modSettings/FS25_TheContractor), read when a save loads."/>
 		<text name="tc_parkingSlot_activate" text="Set parking slot filter"/>
 		<text name="tc_parkingSlot_dialogTitle" text="Parking Slot Filter"/>
 		<text name="tc_parkingSlot_dialogHeading" text="Takes: %s"/>
@@ -1773,7 +1775,7 @@
 		<text name="tc_help_reputation_5_title" text="Running campaigns"/>
 		<text name="tc_help_reputation_5" text="Campaigns stack: you can run several at once, and their effects add up, though there's a limit to how many offers adverts can bring, and the buy dialog tells you when a campaign would add less. Buying one that's already running extends it. A campaign runs in whole months; a new one bought partway through a month also runs for the rest of that month at no extra cost. An offer that only came because of an advert says which one under Found you through; Word of mouth means it would have come anyway."/>
 		<text name="tc_help_offers_title" text="Job offers and the Inbox"/>
-		<text name="tc_help_offers_1" text="Job offers arrive in the Inbox, with a notification. Each shows the field, what's to be done, when it's due, the price and the customer. Offers are matched to the machines you own, and the Equipment needed list says whether you have each one."/>
+		<text name="tc_help_offers_1" text="Job offers arrive in the Inbox, with a notification. Each shows the field, what's to be done, when it's due, the price and the customer. Offers are matched to the machines you own, and the Equipment needed list says whether you have each one. Harvesting comes up more often than other work while there are crops to bring in."/>
 		<text name="tc_help_offers_2_title" text="Answering an offer"/>
 		<text name="tc_help_offers_2" text="Accept it, Decline it, or make a Counter Offer. Leaving an offer to run out, or turning it down, wears down your relationship with that customer."/>
 		<text name="tc_help_offers_3_title" text="Negotiating"/>
