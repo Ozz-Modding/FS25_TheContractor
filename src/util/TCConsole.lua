@@ -82,6 +82,18 @@ TCConsole.groups = {}
 TCConsole.hints = {}
 TCConsole.installed = false
 TCConsole.debugEnabled = false
+-- function(text), or nil: told each answer the server sends back to a
+-- command this client sent (onRemoteResult), as well as printing it. The
+-- dev dialog sets it while it's open (TCDevDialog).
+TCConsole.resultListener = nil
+
+-- Client: the server's answer to a command sent from here (TCConsoleEvent).
+function TCConsole.onRemoteResult(text)
+    local listener = TCConsole.resultListener
+    if listener ~= nil then
+        listener(text)
+    end
+end
 
 -- Every loadMap, before the subsystems register: drops the last save's entries.
 function TCConsole.reset()

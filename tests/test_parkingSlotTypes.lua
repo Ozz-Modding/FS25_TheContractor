@@ -154,3 +154,49 @@ test("the overlap box is the vehicle's height, standing just off the ground", fu
     installObstacles({ { bottom = -1, top = 5 } })
     assertTrue(TCParking.findSpot(tall, 1) == nil, "blocked by a post")
 end)
+
+-- An implement whose hitches are at these z offsets from its origin (a
+-- hitch node is a plain table holding its z), with its footprint's centre
+-- lengthOffset ahead of its origin.
+local function implementWithHitches(zs, lengthOffset)
+    local joints = {}
+    for _, z in ipairs(zs) do
+        table.insert(joints, { node = { z = z } })
+    end
+    local vehicle = { size = { width = 2.5, length = 3, lengthOffset = lengthOffset or 0 }, rootNode = {} }
+    function vehicle:getInputAttacherJoints() return joints end
+    return vehicle
+end
+
+local function installLocalToLocal()
+    localToLocal = function(node) return 0, 0, node.z end
+end
+
+test("only an implement hitched at its back counts as hitching at its back", function()
+    setup()
+    installLocalToLocal()
+    assertTrue(TCParking.hitchesAtBack(implementWithHitches({ -1 })), "front mower")
+    assertTrue(not TCParking.hitchesAtBack(implementWithHitches({ 1 })), "rear mower")
+    assertTrue(not TCParking.hitchesAtBack(implementWithHitches({ -1, 1 })), "hitches either end")
+    assertTrue(not TCParking.hitchesAtBack(implementWithHitches({})), "no hitch")
+    assertTrue(not TCParking.hitchesAtBack(trailer()), "no attachable spec")
+    local drivable = implementWithHitches({ -1 })
+    drivable.spec_drivable = {}
+    assertTrue(not TCParking.hitchesAtBack(drivable), "a drivable machine")
+end)
+
+test("an implement hitched at its back parks turned round, its footprint in the same place", function()
+    setup()
+    installLocalToLocal()
+    addSlot(1, 0, PlaceableTCParkingSlot.SLOT_TYPE.IMPLEMENT)
+
+    local x, _, rearZ, rearRotY = TCParking.findSpot(implementWithHitches({ 1 }, 0.5), 1)
+    assertNear(2, x, 0.001, "rear implement centred")
+    assertNear(0, rearRotY, 0.001, "rear implement faces the arrow")
+
+    local frontX, _, frontZ, frontRotY = TCParking.findSpot(implementWithHitches({ -1 }, 0.5), 1)
+    assertNear(2, frontX, 0.001, "front implement centred")
+    assertNear(math.pi, frontRotY, 0.001, "front implement faces the start edge")
+    -- Both footprints are centred on the same spot: origin + ahead * offset.
+    assertNear(rearZ + 0.5, frontZ - 0.5, 0.001, "same footprint centre")
+end)
