@@ -1,7 +1,7 @@
 -- The dev dialog (tcDebug dev): testing tools with a screen, for things
 -- that are slow to do by typing. A page picker at the top:
 --
---   Jobs     every job the farm has, in a table. Change state offers the
+--   Jobs     every live job the farm has (terminal ones left out), in a table. Change state offers the
 --            states the highlighted job can go to (tcJob state), Delete
 --            takes it back as if it never was (tcDebug removeJob), and New
 --            job walks through making one: Auto, a real offer from the
@@ -170,7 +170,7 @@ function TCDevDialog:showPage(page)
     self.hitchesPage:setVisible(not isJobs)
 
     if isJobs then
-        self.hintText:setText("Every job this farm has. Change state offers only the states the job can go to; " ..
+        self.hintText:setText("Every live job this farm has (finished ones aren't listed). Change state offers only the states the job can go to; " ..
             "Delete takes it back as if it never was.")
         self:reloadJobs()
         FocusManager:setFocus(#self.jobs > 0 and self.jobList or self.pageOption)
@@ -306,7 +306,9 @@ function TCDevDialog:reloadJobs()
     local tc = g_currentMission.TheContractor
     if tc ~= nil and tc.Jobs ~= nil and self.farmId ~= nil then
         for _, job in ipairs(tc.Jobs:getAllJobs(self.farmId)) do
-            table.insert(self.jobs, job)
+            if not job:isTerminal() then
+                table.insert(self.jobs, job)
+            end
         end
     end
     table.sort(self.jobs, function(a, b)

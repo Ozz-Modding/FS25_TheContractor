@@ -1052,6 +1052,7 @@
 		<text name="tc_supplies_status_wrongFill" text="Tank holds %s - empty it"/>
 		<text name="tc_supplies_status_needsService" text="%s needs a service"/>
 		<text name="tc_supplies_onHold" text="%s on %s is on hold: %s."/>
+		<text name="tc_supplies_serviced" text="%s is serviced: %s on %s will carry on shortly."/>
 		<text name="tc_supplies_or" text=" or "/>
 		<text name="tc_supplies_noticeOne" text="Out of %s: a job is on hold until you restock."/>
 		<text name="tc_supplies_noticeMany" text="Out of %s: %d jobs are on hold until you restock."/>
@@ -2051,7 +2052,7 @@
 		<text name="tc_help_workshopTrades_3_title" text="Training"/>
 		<text name="tc_help_workshopTrades_3" text="Manage, Workshop training books a worker on a course to learn a trade or raise one a level. Your office administrator is the workshop's advisor."/>
 		<text name="tc_help_workshopTrades_4_title" text="Careless workers"/>
-		<text name="tc_help_workshopTrades_4" text="A careless or under-skilled worker can cause breakdowns on the machines they take out. A machine overdue for its service won't be taken out by a worker until it's seen to."/>
+		<text name="tc_help_workshopTrades_4" text="A careless or under-skilled worker can cause breakdowns on the machines they take out. A machine overdue for its service won't be taken out by a worker until it's seen to. Once it is, the worker gives you a minute to finish up and put your tools away before carrying on."/>
 		<text name="tc_help_repairContracts_title" text="Repair zones and quotes"/>
 		<text name="tc_help_repairContracts_1" text="Place repair zones from the construction menu (one, three or six tractor bays, or a harvester bay). Customers bring their machines there for a repair or a service, each with an offer in the Inbox."/>
 		<text name="tc_help_repairContracts_2_title" text="Inspect first"/>

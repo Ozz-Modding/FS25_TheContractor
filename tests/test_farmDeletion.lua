@@ -119,6 +119,7 @@ local function setup()
             ourJobIdByAIJob = { [world.aiJobs.a] = 12, [world.aiJobs.b] = 21 },
             ourJobIdByAISystemJobId = { [1] = 12, [2] = 21 },
             ranOutOfFillJobIds = { [11] = true, [21] = true },
+            serviceClearedAtByJobId = { [11] = 5, [21] = 5 },
         }),
         Watchdog = make("TheContractorWatchdog", { trackedByJobId = { [11] = {}, [21] = {} } }),
         -- 139: bids on lots, by lot then farm.
@@ -222,6 +223,8 @@ test("the deleted farm's state goes and the other farm's stays", function()
     assertEquals(tc.Dispatch.ourJobIdByAIJob[world.aiJobs.b], 21, "other AI job")
     assertEquals(tc.Dispatch.ourJobIdByAISystemJobId[1], nil, "AI system job")
     assertEquals(tc.Dispatch.ourJobIdByAISystemJobId[2], 21, "other AI system job")
+    assertEquals(tc.Dispatch.serviceClearedAtByJobId[11], nil, "service wait")
+    assertEquals(tc.Dispatch.serviceClearedAtByJobId[21], 5, "other service wait")
     assertEquals(tc.Dispatch.ranOutOfFillJobIds[11], nil, "ran out of fill")
     assertEquals(tc.Watchdog.trackedByJobId[11], nil, "watchdog")
     assertTrue(tc.Watchdog.trackedByJobId[21] ~= nil, "other watchdog")

@@ -34,6 +34,13 @@ TheContractorDispatch_mt = Class(TheContractorDispatch)
 TheContractorDispatch.HIDDEN_MS = 500
 TheContractorDispatch.SETTLE_MS = 1000
 
+-- 150: once a job held for a service (needsService) would be taken again,
+-- the worker waits this long (real time) before carrying on, so the player
+-- servicing it has time to finish (ADS's "fixed" is a threshold, not full)
+-- and put their tools away before the machine's taken back to work. Any
+-- refusal in the meantime starts the wait over.
+TheContractorDispatch.SERVICE_GRACE_MS = 60000
+
 -- Transport wait: how long the worker and equipment are "on the road"
 -- between leaving the yard and turning up on the field, in in-game minutes
 -- (counted down against the effective time scale, so it speeds up with
@@ -119,6 +126,9 @@ function TheContractorDispatch.new()
     -- (032) - TCJobSupplies' poll picks them up (takeRanOutOfFill) to refill
     -- and restart, or put them on hold. Live only, like the tables above.
     self.ranOutOfFillJobIds = {}
+    -- ourJobId -> g_time a job held for a service was first found serviced
+    -- (SERVICE_GRACE_MS). Live only: the hold itself isn't saved.
+    self.serviceClearedAtByJobId = {}
 
     return self
 end
@@ -205,7 +215,12 @@ function TheContractorDispatch:startJobForWorker(job, skipTransport)
     if supplyStatus == nil then
         local refusedVehicle = TCADSWorkerRefusal.getRefusedVehicle(job.assignedEquipmentIds)
         if refusedVehicle ~= nil then
+            self.serviceClearedAtByJobId[job.id] = nil
             supplyStatus, supplyFillTypeName = TCJobSupplies.STATUS.NEEDS_SERVICE, refusedVehicle:getName()
+        elseif job.supplyStatus == TCJobSupplies.STATUS.NEEDS_SERVICE and not self:isServiceGraceOver(job) then
+            -- Serviced, but the player gets a minute to finish up: still
+            -- held, so tried again next poll.
+            return
         end
     end
     if supplyStatus == nil and not skipTransport and job.transportRemainingMs == nil and
@@ -494,6 +509,7 @@ function TheContractorDispatch:onAIJobStopped(aiJob, aiMessage)
         end
         local jobs = g_currentMission.TheContractor.Jobs
         local job = jobs:getJobById(ourJobId)
+        self.serviceClearedAtByJobId[ourJobId] = nil
         if job ~= nil then
             local vehicle = TCADSWorkerRefusal.getRefusedVehicle(job.assignedEquipmentIds) or
                 TCAINotifications.getVehicle(aiJob)
@@ -616,6 +632,7 @@ function TheContractorDispatch:forgetFarm(farmId, jobIds)
         end
         self.aiJobByOurJobId[jobId] = nil
         self.ranOutOfFillJobIds[jobId] = nil
+        self.serviceClearedAtByJobId[jobId] = nil
         for aiSystemJobId, ourJobId in pairs(self.ourJobIdByAISystemJobId) do
             if ourJobId == jobId then
                 self.ourJobIdByAISystemJobId[aiSystemJobId] = nil
@@ -641,6 +658,25 @@ function TheContractorDispatch:pauseForSupplies(job)
         tostring(job.supplyStatus), tostring(job.supplyFillTypeName))
     self:stopJob(job.id, AIMessageErrorOutOfFill.new())
     self.ranOutOfFillJobIds[job.id] = nil
+end
+
+-- 150: whether a job held for a service, whose machines ADS would now take,
+-- has waited out SERVICE_GRACE_MS since it was first found serviced.
+function TheContractorDispatch:isServiceGraceOver(job)
+    local now = g_time or 0
+    local clearedAt = self.serviceClearedAtByJobId[job.id]
+    if clearedAt == nil then
+        self.serviceClearedAtByJobId[job.id] = now
+        TCLog.info("TheContractor: farm %d job %d serviced, back to work in %d s", job.farmId, job.id,
+            TheContractorDispatch.SERVICE_GRACE_MS / 1000)
+        TCJobServicedEvent.send(job)
+        return false
+    end
+    if now - clearedAt < TheContractorDispatch.SERVICE_GRACE_MS then
+        return false
+    end
+    self.serviceClearedAtByJobId[job.id] = nil
+    return true
 end
 
 -- Whether a job's AI stopped itself on an empty tank since last asked.

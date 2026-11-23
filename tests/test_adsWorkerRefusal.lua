@@ -188,6 +188,10 @@ local function setupDispatch()
     world:load("src/business/Job.lua")
     TCAINotifications = { getVehicle = function(aiJob) return aiJob.vehicleParameter:getVehicle() end }
     world:load("src/business/Dispatch.lua")
+    Event = { new = function(mt) return setmetatable({}, mt) end }
+    InitEventClass = function() end
+    world:load("src/events/TCJobServicedEvent.lua")
+    g_fieldManager = { getFieldById = function() return nil end }
     local ads = installADS(world)
     TCJobSupplies = { STATUS = { NEEDS_SERVICE = "needsService" },
         topUp = function() return 0, nil, nil, 0 end }
@@ -202,6 +206,7 @@ local function setupDispatch()
     world.statuses = {}
     g_currentMission.TheContractor.Jobs = {
         getJobById = function(_, jobId) return world.jobs[jobId] end,
+        getJob = function(_, _, jobId) return world.jobs[jobId] end,
         setJobSupplyStatus = function(_, job, status, name)
             job.supplyStatus = status
             job.supplyFillTypeName = name
@@ -271,8 +276,55 @@ test("once it's serviced the worker carries on", function()
     g_currentMission.TheContractor.Jobs.markWorkStarted = function() end
     TCJobConsequences = { recordStartCondition = function() end }
     TCJobSiteSetup.detachForeignImplements = function() return {} end
-    dispatch:startJobForWorker(job, true)
 
+    -- Serviced: the player gets a minute to finish up before it goes, and
+    -- is told so once.
+    g_client = {}
+    g_time = 1000
+    dispatch:startJobForWorker(job, true)
+    assertEquals(job.supplyStatus, "needsService", "waiting out the minute")
+    assertEquals(dispatch:isJobActive(job), false)
+    assertEquals(#world.notifications, 1)
+    assertEquals(world.notifications[1].type, FSBaseMission.INGAME_NOTIFICATION_OK)
+    g_time = 2000
+    dispatch:startJobForWorker(job, true)
+    assertEquals(#world.notifications, 1, "said once")
+
+    -- Due again part-way (the player put it back under its limit): the
+    -- wait starts over once it's serviced.
+    g_time = 30000
+    ads.reasons[tractor] = { { key = "motorOil", operation = "replace", severity = 0.6 } }
+    dispatch:startJobForWorker(job, true)
+    ads.reasons[tractor] = nil
+    g_time = 40000
+    dispatch:startJobForWorker(job, true)
+    g_time = 40000 + TheContractorDispatch.SERVICE_GRACE_MS - 1
+    dispatch:startJobForWorker(job, true)
+    assertEquals(dispatch:isJobActive(job), false, "a minute from the second service, not the first")
+    assertEquals(#world.notifications, 2, "told again for the second service")
+
+    g_time = 40000 + TheContractorDispatch.SERVICE_GRACE_MS
+    dispatch:startJobForWorker(job, true)
     assertEquals(job.supplyStatus, nil, "off hold")
     assertTrue(dispatch:isJobActive(job), "back out to work")
+    g_time = nil
+    g_client = nil
+end)
+
+test("a job that was never held for a service sets off straight away", function()
+    local world, dispatch = setupDispatch()
+    local job = addWorkerJob(world, TheContractorJob.STATE.ALLOCATED)
+    TCEquipmentVisibility = { setVisibleEverywhere = function() end }
+    TCVehicleLock = { refresh = function() end }
+    g_currentMission.TheContractor.Parking = { removeVehicles = function() end, parkMachines = function() end }
+    g_currentMission.TheContractor.Jobs.markWorkStarted = function() end
+    g_currentMission.TheContractor.Jobs.setJobTravelling = function() end
+    TCJobConsequences = { recordStartCondition = function() end }
+    TCJobSiteSetup.detachForeignImplements = function() return {} end
+    TheContractorDispatch.getTransportWaitMs = function() return 0 end
+    TheContractorProtest = { notifyDelay = function() end }
+
+    dispatch:startJobForWorker(job)
+
+    assertTrue(dispatch:isJobActive(job))
 end)
