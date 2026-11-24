@@ -91,12 +91,13 @@ function TheContractorWatchdog:checkActiveJobs()
 
     local activeJobIds = {}
 
-    -- A job on hold for supplies (032) isn't stuck, it's waiting on the
-    -- farm - left out, so it gets a fresh grace period once it's back at
-    -- work.
+    -- A job on hold for supplies (032), or with a full stone picker
+    -- waiting to be emptied, isn't stuck, it's waiting on the farm - left
+    -- out, so it gets a fresh grace period once it's back at work.
     for _, farm in ipairs(g_farmManager:getFarms()) do
         for _, job in ipairs(tc.Jobs:getJobsByState(farm.farmId, TheContractorJob.STATE.IN_PROGRESS)) do
-            if job.assignedWorkerId ~= nil and not job:isWaitingForSupplies() then
+            if job.assignedWorkerId ~= nil and not job:isWaitingForSupplies() and
+                not TheContractorWatchdog.isWaitingToBeEmptied(job) then
                 activeJobIds[job.id] = true
                 self:checkJob(job)
             end
@@ -108,6 +109,27 @@ function TheContractorWatchdog:checkActiveJobs()
             self.trackedByJobId[jobId] = nil
         end
     end
+end
+
+-- Whether one of the job's stone pickers has a full tank. Vanilla's AI
+-- (AIDriveStrategyStonePicker) doesn't stop for that: it stands still,
+-- with its own "tank is full" notification, until the picker's emptied
+-- into a trailer, so the field's progress stops and it would read as
+-- stuck. Only the picker's own fill unit, the way vanilla checks it: other
+-- machines' tanks are full whenever they've just been topped up.
+function TheContractorWatchdog.isWaitingToBeEmptied(job)
+    for _, vehicleId in ipairs(job.assignedEquipmentIds) do
+        local vehicle = NetworkUtil.getObject(vehicleId)
+        local spec = vehicle ~= nil and vehicle.spec_stonePicker or nil
+        if spec ~= nil and spec.fillUnitIndex ~= nil and vehicle.getFillUnitCapacity ~= nil then
+            local capacity = vehicle:getFillUnitCapacity(spec.fillUnitIndex)
+            local level = vehicle:getFillUnitFillLevel(spec.fillUnitIndex)
+            if capacity ~= nil and level ~= nil and capacity > 0 and level >= capacity then
+                return true
+            end
+        end
+    end
+    return false
 end
 
 -- Advances (or initializes) one job's stuck timer against its current
