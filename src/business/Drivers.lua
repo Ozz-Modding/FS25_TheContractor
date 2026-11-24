@@ -567,6 +567,20 @@ end
 -- (CP/AI jobs don't survive a save) the release tick frees them after
 -- LOAD_RELEASE_GRACE_MS.
 
+-- Every machine (TCVehicleReplace): a bound machine reloaded as a new
+-- object keeps its driver, if the release tick hasn't let them go while
+-- the copy loaded (a reset that deletes the old one first).
+function TheContractorDrivers:remapVehicle(oldId, newId)
+    local binding = self.bindingsByVehicleId[oldId]
+    if binding == nil then
+        return
+    end
+    TCVehicleIds.replaceKey(self.bindingsByVehicleId, oldId, newId)
+    binding.vehicleId = newId
+    local worker = g_currentMission.TheContractor.Staff:getWorker(binding.farmId, binding.workerId)
+    TCVehicleIds.replaceField(worker, "drivingVehicleId", oldId, newId)
+end
+
 -- A farm deleted in multiplayer (TCFarmDeletion), on every machine.
 function TheContractorDrivers:forgetFarm(farmId)
     for vehicleId, binding in pairs(self.bindingsByVehicleId) do

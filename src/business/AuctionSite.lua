@@ -1474,6 +1474,21 @@ function TheContractorAuctionSite:loadFromXMLFile(xmlFile)
     self:applySync(fieldId, {}, site.walkways, site.scene)
 end
 
+-- Every machine (TCVehicleReplace): a lot reloaded as a new object (a lot
+-- vanilla reset after it fell through the ground) is still the lot.
+function TheContractorAuctionSite:remapVehicle(oldId, newId)
+    local lotLists = { self.lots, self.site ~= nil and self.site.lots or nil }
+    for _, lots in pairs(lotLists) do
+        for _, lot in ipairs(lots) do
+            TCVehicleIds.replaceField(lot, "vehicleId", oldId, newId)
+            TCVehicleIds.replaceField(lot, "attachmentId", oldId, newId)
+        end
+    end
+    if self.vehicleIdSet[oldId] then
+        self:onLotsChanged()
+    end
+end
+
 -- Server, once vehicles exist: each lot's vehicle again, a lot whose
 -- vehicle has gone left out.
 function TheContractorAuctionSite:resolveSavedVehicles()

@@ -2120,6 +2120,24 @@ function TheContractorJobs:forgetFarm(farmId, jobIds)
     end
 end
 
+-- Every machine (TCVehicleReplace): a vehicle reloaded as a new object
+-- stays on its jobs, finished ones included (a workshop job's history).
+function TheContractorJobs:remapVehicle(oldId, newId)
+    for _, farmJobs in pairs(self.jobsByFarm) do
+        for _, job in pairs(farmJobs) do
+            TCVehicleIds.replaceInList(job.assignedEquipmentIds, oldId, newId)
+            TCVehicleIds.replaceInList(job.haulageEquipmentIds, oldId, newId)
+            TCVehicleIds.replaceInList(job.washVehicleIds, oldId, newId)
+            TCVehicleIds.replaceKey(job.startCondition, oldId, newId)
+            TCVehicleIds.replaceField(job.workshop, "vehicleId", oldId, newId)
+            TCVehicleIds.replaceField(job.workshop, "attachmentId", oldId, newId)
+        end
+    end
+    if TheContractorRepairContracts ~= nil then
+        TheContractorRepairContracts.clearCache()
+    end
+end
+
 function TheContractorJobs:loadFromXMLFile(xmlFile)
     if not g_currentMission:getIsServer() then return end
 

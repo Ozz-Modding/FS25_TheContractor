@@ -1050,6 +1050,16 @@ end
 
 -- After a load (server) ------------------------------------------------------------------
 
+-- Every machine (TCVehicleReplace): a kit machine reloaded as a new object.
+function TheContractorYardBales:remapVehicle(oldId, newId)
+    for _, farmJobs in pairs(g_currentMission.TheContractor.Jobs.jobsByFarm) do
+        for _, job in pairs(farmJobs) do
+            TCVehicleIds.replaceField(job.yardDelivery, "kitVehicleId", oldId, newId)
+            TCVehicleIds.replaceField(job.yardDelivery, "kitAttachmentId", oldId, newId)
+        end
+    end
+end
+
 -- TheContractor:resolveSavedVehicles, after Jobs' and RepairContracts': each
 -- job's kit gets its object ids back, and a job taken on without its kit
 -- (it never came out, or it's gone) sends for it again.

@@ -735,6 +735,18 @@ end
 -- message ids are kept so a reload doesn't post them twice.
 
 -- A farm deleted in multiplayer (TCFarmDeletion), on every machine.
+-- Every machine (TCVehicleReplace): a machine reloaded as a new object
+-- keeps its place in the queue and in a park all.
+function TheContractorParking:remapVehicle(oldId, newId)
+    for _, entry in ipairs(self.queue) do
+        TCVehicleIds.replaceField(entry, "vehicleId", oldId, newId)
+    end
+    TCVehicleIds.replaceKey(self.entryByVehicleId, oldId, newId)
+    for _, run in pairs(self.parkAllByFarm) do
+        TCVehicleIds.replaceInList(run.vehicleIds, oldId, newId)
+    end
+end
+
 function TheContractorParking:forgetFarm(farmId)
     local kept = {}
     for _, entry in ipairs(self.queue) do

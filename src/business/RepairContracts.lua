@@ -2329,6 +2329,15 @@ end
 -- Its customers' machines still to come and claims still to land go. Ones
 -- waiting to be collected stay: a machine that's still out there (not the
 -- farm's, so vanilla left it) is still taken home.
+-- Every machine (TCVehicleReplace): a customer's machine reloaded as a new
+-- object is still collected. Its job's ids are Jobs'.
+function TheContractorRepairContracts:remapVehicle(oldId, newId)
+    for _, entry in ipairs(self.removals) do
+        TCVehicleIds.replaceField(entry, "vehicleId", oldId, newId)
+    end
+    TheContractorRepairContracts.clearCache()
+end
+
 function TheContractorRepairContracts:forgetFarm(farmId)
     local function others(list)
         local kept = {}

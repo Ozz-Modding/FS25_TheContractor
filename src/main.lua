@@ -96,6 +96,7 @@ source(TheContractor.dir .. "src/util/TCProtestCrowd.lua")
 source(TheContractor.dir .. "src/util/TCJobHotspots.lua")
 source(TheContractor.dir .. "src/util/TCJobHud.lua")
 source(TheContractor.dir .. "src/util/TCFarmDeletion.lua")
+source(TheContractor.dir .. "src/util/TCVehicleReplace.lua")
 source(TheContractor.dir .. "src/util/TCJobList.lua")
 source(TheContractor.dir .. "src/gui/TCWorkerPortrait.lua")
 source(TheContractor.dir .. "src/gui/TCTooltip.lua")
@@ -277,6 +278,7 @@ source(TheContractor.dir .. "src/events/TCYardBalesKitEvent.lua")
 source(TheContractor.dir .. "src/events/TCYardHaulTrailerEvent.lua")
 source(TheContractor.dir .. "src/events/TCRefuelMachineEvent.lua")
 source(TheContractor.dir .. "src/events/TCFarmDeletedEvent.lua")
+source(TheContractor.dir .. "src/events/TCVehicleReplacedEvent.lua")
 source(TheContractor.dir .. "src/events/TCAuctionSiteEvent.lua")
 source(TheContractor.dir .. "src/events/TCAuctionSignsEvent.lua")
 source(TheContractor.dir .. "src/events/TCAuctionBidEvent.lua")
@@ -602,6 +604,8 @@ function TheContractor:loadMap()
 
     -- A farm deleted in multiplayer takes its company with it (server).
     TCFarmDeletion.install()
+    -- A vehicle reset or reconfigured keeps its jobs, logbook and the rest (server).
+    TCVehicleReplace.install()
 
     TCLog.info("TheContractor: loadMap")
 end
@@ -953,6 +957,7 @@ function TheContractor:deleteMap()
 
     TCConsole.uninstall()
     TCFarmDeletion.uninstall()
+    TCVehicleReplace.uninstall()
     TCCalendarChange.uninstall()
 
     if g_currentMission ~= nil and g_currentMission.TheContractor == self then

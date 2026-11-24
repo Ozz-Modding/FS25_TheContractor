@@ -1672,6 +1672,27 @@ local function loadVehicleEntry(xmlFile, key)
 end
 
 -- A farm deleted in multiplayer (TCFarmDeletion), on every machine.
+-- Every machine (TCVehicleReplace): a machine reloaded as a new object
+-- keeps its history, its place on a job's record and any open session.
+function TheContractorLogbook:remapVehicle(oldId, newId)
+    if TCVehicleIds.replaceKey(self.vehicles, oldId, newId) then
+        self.vehicles[newId].vehicleId = newId
+    end
+    for _, entries in pairs(self.jobEntriesByFarm) do
+        for _, entry in pairs(entries) do
+            for _, machine in ipairs(entry.equipment or {}) do
+                TCVehicleIds.replaceField(machine, "vehicleId", oldId, newId)
+            end
+        end
+    end
+    for _, pending in pairs(self.pendingByJobId) do
+        TCVehicleIds.replaceKey(pending.start, oldId, newId)
+    end
+    TCVehicleIds.replaceKey(self.driverSessions, oldId, newId)
+    TCVehicleIds.replaceKey(self.loadedDriverSessions, oldId, newId)
+    TCVehicleIds.replaceKey(self.playerSessions, oldId, newId)
+end
+
 function TheContractorLogbook:forgetFarm(farmId, jobIds)
     self.jobEntriesByFarm[farmId] = nil
     for _, jobId in ipairs(jobIds) do

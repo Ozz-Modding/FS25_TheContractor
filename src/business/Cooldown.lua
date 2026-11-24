@@ -372,6 +372,17 @@ end
 -- everything still in cooldown again.
 
 -- A farm deleted in multiplayer (TCFarmDeletion), on every machine.
+-- Every machine (TCVehicleReplace): a machine reloaded as a new object
+-- stays in its cooldown (TCEquipmentVisibility hides the new one).
+function TheContractorCooldown:remapVehicle(oldId, newId)
+    for _, entries in pairs(self.entriesByFarm) do
+        for _, entry in pairs(entries) do
+            TCVehicleIds.replaceInList(entry.vehicleIds, oldId, newId)
+        end
+    end
+    TCVehicleIds.replaceKey(self.vehicleIdsInCooldown, oldId, newId)
+end
+
 function TheContractorCooldown:forgetFarm(farmId)
     for _, entry in pairs(self.entriesByFarm[farmId] or {}) do
         for _, vehicleId in ipairs(entry.vehicleIds) do

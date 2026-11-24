@@ -244,6 +244,23 @@ function TCParking.resolveSavedVehicles()
     end
 end
 
+-- Every machine (TCVehicleReplace): a machine reloaded as a new object
+-- stays in the slot filters that name it.
+function TCParking.remapVehicle(oldId, newId)
+    local placeableSystem = g_currentMission.placeableSystem
+    if placeableSystem == nil then
+        return
+    end
+    for _, placeable in ipairs(placeableSystem.placeables) do
+        local data = PlaceableTCParkingSlot.isSlot(placeable) and placeable[PlaceableTCParkingSlot.KEY] or nil
+        if data ~= nil and data.filter ~= nil and data.filter.vehicleSet[oldId] then
+            local vehicleIds = table.clone(data.filter.vehicleIds)
+            TCVehicleIds.replaceInList(vehicleIds, oldId, newId)
+            data.filter = PlaceableTCParkingSlot.newFilter(data.filter.categories, vehicleIds)
+        end
+    end
+end
+
 -- Whether an implement hitches on at its back, as a front mower or a header
 -- does: every hitch it has is behind its origin. Parked facing the slot's
 -- way its hitch would face the start edge, away from every other
