@@ -18,10 +18,10 @@
 --     protected (isFieldInUse); either changing hands calls it off. The
 --     host is the showground field's farmer.
 --   Entries close ENTRY_CLOSE_MONTHS before the day (a week, scaled with
---     the month, entriesCloseDay). Nothing takes entries yet: 167's
---     livestock classes and 170's worker in the ploughing will, as
---     competitions (registerCompetition). Players can always plough
---     themselves on the day without entering (169).
+--     the month, entriesCloseDay), for the competitions that take them
+--     (registerCompetition): 167's livestock classes (ShowLivestock), and
+--     170's worker in the ploughing. Players can always plough themselves
+--     on the day without entering (169's PloughingMatch).
 --   Set out (midnight before): the site's dressed (164: the showground
 --     grass, the ploughing ground stubble, snapshots kept), and the
 --     showground laid out as an open site on its rectangle (163's
@@ -76,6 +76,7 @@ TheContractorShow.ENTRY_REMINDER_MONTHS = 0.5
 TheContractorShow.START_HOUR = 8
 TheContractorShow.END_HOUR = 18
 TheContractorShow.AFTER_DAYS = 0
+TheContractorShow.JUDGING_HOUR = 10
 TheContractorShow.RESULTS_HOUR = 16
 
 -- The day (game time). toHour: it runs until then.
@@ -125,24 +126,65 @@ function TheContractorShow.new()
     -- entryReminderDay (nil for none) and resultsGiven.
     -- Every machine: the last show's results, kept until the next one's: {
     --   showId, day, fieldId, hostFarmerId,
-    --   placings = { { titleKey, placing, farmId (0: a farmer's),
+    --   placings = { { titleKey, titleArg (167: the competition's own
+    --     title for it, "" for none), placing, farmId (0: a farmer's),
     --     farmerId (0: none), entrant (a name), prize (unscaled), paid } },
     -- } or nil.
     self.results = nil
-    -- Server, at load (167, 169, 170): the day's competitions, in order:
-    -- { key, titleKey, takesEntries, getPlacings(event) }.
+    -- Every machine, at load (167, 169, 170): the day's competitions, in
+    -- order (see registerCompetition). Only the server runs them.
     self.competitions = {}
     return self
 end
 
--- Server, at load: a competition held on the show day. def: { titleKey
--- (its name's l10n key), takesEntries (entries close a week before),
--- getPlacings(event) returning { { placing (1-3), farmId (a player's, or
--- nil), farmerId (a farmer's entry, or nil), entrant (a plain name),
--- prize (optional, unscaled pounds) } } }.
+-- Every machine, at load: a competition held on the show day. def: {
+--   titleKey      its name's l10n key
+--   takesEntries  entries close a week before
+--   getPlacings(event) returning { { placing (1-4; 4 is highly
+--     commended), farmId (a player's, or nil), farmerId (a farmer's entry,
+--     or nil), entrant (a plain name), prize (optional, unscaled pounds),
+--     titleArg (optional, 167: a class within it, named by getTitle),
+--     reputation, opinion (optional: jobs' worth and the host's opinion,
+--     instead of PLACING_REPUTATION and HOST_OPINION) } }
+--   getTitle(titleArg)  optional, every machine: a placing's title
+--   (server, each optional) onAnnounced(event), onNewDay(event),
+--     onHour(event, hour) on the day, onSetOut(event) at midnight before,
+--     onAttended(event, farmId) as a farm's attend job's done (171),
+--     onResults(event) once the results are given (169: the lent kit
+--     taken away), onFinished(event) at midnight after, before the site's
+--     put back, onCancelled(event), replacePerson(oldId, newId) returning a
+--     count
+-- }.
 function TheContractorShow:registerCompetition(key, def)
-    table.insert(self.competitions, { key = key, titleKey = def.titleKey, takesEntries = def.takesEntries == true,
-        getPlacings = def.getPlacings })
+    local competition = {}
+    for name, value in pairs(def) do
+        competition[name] = value
+    end
+    competition.key = key
+    competition.takesEntries = def.takesEntries == true
+    table.insert(self.competitions, competition)
+end
+
+-- Server: each competition's hook, if it has one.
+function TheContractorShow:callCompetitions(hook, ...)
+    for _, competition in ipairs(self.competitions) do
+        if competition[hook] ~= nil then
+            competition[hook](...)
+        end
+    end
+end
+
+-- A placing's title on this machine: its competition's own for its
+-- titleArg (167's classes), else its titleKey's text.
+function TheContractorShow:getPlacingTitle(placing)
+    if placing.titleArg ~= nil and placing.titleArg ~= "" then
+        for _, competition in ipairs(self.competitions) do
+            if competition.titleKey == placing.titleKey and competition.getTitle ~= nil then
+                return competition.getTitle(placing.titleArg)
+            end
+        end
+    end
+    return placing.titleKey ~= nil and placing.titleKey ~= "" and g_i18n:getText(placing.titleKey) or "-"
 end
 
 function TheContractorShow:takesEntries()
@@ -321,6 +363,7 @@ end
 
 function TheContractorShow:onAnnounced(event)
     TCAuctionAttendance.createDueJobs(event, self)
+    self:callCompetitions("onAnnounced", event)
 end
 
 function TheContractorShow:onNewDay(event)
@@ -330,11 +373,21 @@ function TheContractorShow:onNewDay(event)
         self:postMessages("entriesClosing", true)
     end
     TCAuctionAttendance.createDueJobs(event, self)
+    self:callCompetitions("onNewDay", event)
+end
+
+-- 171, server (TCAuctionAttendance.markAttended): a farm's attend job's
+-- just been done.
+function TheContractorShow:onAttended(farmId, event)
+    self:callCompetitions("onAttended", event, farmId)
 end
 
 function TheContractorShow:onNewHour(event)
     TCAuctionAttendance.checkAttendance(event, self)
     local env = g_currentMission.environment
+    if self.event == event and env.currentMonotonicDay == event.day then
+        self:callCompetitions("onHour", event, env.currentHour or 0)
+    end
     if self.event == event and env.currentMonotonicDay == event.day and (env.currentHour or 0) >= TheContractorShow.RESULTS_HOUR then
         self:giveResults(event)
     end
@@ -359,6 +412,7 @@ end
 
 function TheContractorShow:onFinish(event)
     self:giveResults(event)
+    self:callCompetitions("onFinished", event)
     self:clearSite()
 end
 
@@ -368,6 +422,7 @@ end
 
 function TheContractorShow:onCancelled(event)
     TCAuctionAttendance.removeJobs(event.id, self)
+    self:callCompetitions("onCancelled", event)
 end
 
 -- A big day: as many as a large sale.
@@ -431,6 +486,7 @@ function TheContractorShow:setOut(event)
         TCLog.warning("TheContractor: show %d has no site plan for field %d, laid out as an open site", event.id,
             event.fieldId)
         tc.AuctionSite:startOpen(event.fieldId, self.KIND, event.id)
+        self:callCompetitions("onSetOut", event)
         return
     end
     if not showSite.site.dressed then
@@ -441,10 +497,13 @@ function TheContractorShow:setOut(event)
         entrance = plan.entrance,
         keepGround = true,
         getWalkways = TCShowScene.getWalkways,
+        -- 169: the ploughing match's plots, marked out from the scene.
+        plots = plan.plots,
     })
     if tc.AuctionSite.site == nil or tc.AuctionSite.site.fieldId ~= event.fieldId then
         TCLog.warning("TheContractor: show %d's showground couldn't be set out on field %d", event.id, event.fieldId)
     end
+    self:callCompetitions("onSetOut", event)
 end
 
 -- The site put back as it was and dropped (midnight after, or called off).
@@ -481,11 +540,11 @@ function TheContractorShow:giveResults(event)
         placings = {} }
     for _, competition in ipairs(self.competitions) do
         local placings = competition.getPlacings ~= nil and competition.getPlacings(event) or {}
-        table.sort(placings, function(a, b) return (a.placing or 99) < (b.placing or 99) end)
-        for _, entry in ipairs(placings) do
+        for _, entry in ipairs(TheContractorShow.sortPlacings(placings)) do
             local placing = math.max(1, math.floor(entry.placing or 1))
             local record = {
                 titleKey = competition.titleKey,
+                titleArg = entry.titleArg or "",
                 placing = placing,
                 farmId = entry.farmId or 0,
                 farmerId = entry.farmerId or 0,
@@ -494,7 +553,7 @@ function TheContractorShow:giveResults(event)
                 paid = 0,
             }
             if record.farmId > 0 then
-                record.paid = self:rewardPlacing(record, event)
+                record.paid = self:rewardPlacing(record, event, entry.reputation, entry.opinion)
             end
             table.insert(results.placings, record)
         end
@@ -504,35 +563,74 @@ function TheContractorShow:giveResults(event)
     if #results.placings > 0 then
         self:postResults(results)
     end
+    self:callCompetitions("onResults", event)
     self:sync()
 end
 
+-- A competition's placings in the order they're kept (pure): grouped by
+-- titleArg in the order each first appears, then by placing, ties in the
+-- order given.
+function TheContractorShow.sortPlacings(placings)
+    local groupOrder, groups = {}, 0
+    local items = {}
+    for i, entry in ipairs(placings) do
+        local group = entry.titleArg or ""
+        if groupOrder[group] == nil then
+            groups = groups + 1
+            groupOrder[group] = groups
+        end
+        items[i] = { entry = entry, group = groupOrder[group], index = i }
+    end
+    table.sort(items, function(a, b)
+        if a.group ~= b.group then
+            return a.group < b.group
+        end
+        local placingA, placingB = a.entry.placing or 99, b.entry.placing or 99
+        if placingA ~= placingB then
+            return placingA < placingB
+        end
+        return a.index < b.index
+    end)
+    local sorted = {}
+    for i, item in ipairs(items) do
+        sorted[i] = item.entry
+    end
+    return sorted
+end
+
 -- Server: a farm's placing paid (prize money), its reputation and the
--- host's opinion raised. Returns what was paid.
-function TheContractorShow:rewardPlacing(record, event)
+-- host's opinion raised. reputation, opinion: the competition's own for
+-- it, or nil for the placing's. Returns what was paid.
+function TheContractorShow:rewardPlacing(record, event, reputation, opinion)
     local tc = g_currentMission.TheContractor
     local farmId = record.farmId
     local amount = TheContractorShow.scalePrize(record.prize)
     if amount > 0 then
         g_currentMission:addMoney(amount, farmId, MoneyType.TC_SHOW_PRIZES, true, true)
     end
-    local jobs = TheContractorShow.PLACING_REPUTATION[record.placing] or 0
+    local jobs = reputation or TheContractorShow.PLACING_REPUTATION[record.placing] or 0
     if jobs > 0 and tc.Reputation ~= nil then
         tc.Reputation:addReputation(farmId, TheContractorGoodNews.getReputationReward(farmId, jobs))
     end
-    local opinion = TheContractorShow.HOST_OPINION[record.placing] or 0
+    opinion = opinion or TheContractorShow.HOST_OPINION[record.placing] or 0
     if opinion > 0 and tc.Relationships ~= nil then
         tc.Relationships:adjust(farmId, event.hostFarmerId, opinion, TheContractorShow.RELATIONSHIP_REASON)
     end
-    TCLog.info("TheContractor: farm %d placed %d in %s (%s), paid %d", farmId, record.placing, record.titleKey,
-        record.entrant, amount)
+    TCLog.info("TheContractor: farm %d placed %d in %s %s (%s), paid %d", farmId, record.placing, record.titleKey,
+        record.titleArg or "", record.entrant, amount)
     return amount
 end
 
+-- The l10n key naming a placing in full: 1st, 2nd, 3rd, then highly
+-- commended.
+function TheContractorShow.getPlacingNameKey(placing)
+    return "tc_show_placingName" .. math.max(1, math.min(4, placing or 4))
+end
+
 -- Server: the results message to every company farm (each with its own
--- placings and prize money), and a notice to each farm that placed. Its
--- payload names the show as resultsShowId, not PAYLOAD_ID, so it outlasts
--- the show's other messages (gone when it's over).
+-- placings and prize money), and a rosette notice for each placing a farm
+-- won (167). Its payload names the show as resultsShowId, not PAYLOAD_ID,
+-- so it outlasts the show's other messages (gone when it's over).
 function TheContractorShow:postResults(results)
     local tc = g_currentMission.TheContractor
     local texts = TheContractorShow.TEXTS.results
@@ -543,8 +641,13 @@ function TheContractorShow:postResults(results)
             { TheContractorInbox.DISMISS_ACTION },
             { resultsShowId = results.showId, farmerId = results.hostFarmerId, fieldId = results.fieldId })
         if count > 0 and tc.Notices ~= nil then
-            tc.Notices:publish(farmId, string.format(g_i18n:getText("tc_show_resultsNotice"), count,
-                g_i18n:formatMoney(paid, 0, true, true)), TheContractorShow.NOTICE_MONTHS)
+            for _, placing in ipairs(results.placings) do
+                if placing.farmId == farmId then
+                    tc.Notices:publish(farmId, string.format(g_i18n:getText("tc_show_rosetteNotice"),
+                        g_i18n:getText(TheContractorShow.getPlacingNameKey(placing.placing)),
+                        self:getPlacingTitle(placing)), TheContractorShow.NOTICE_MONTHS)
+                end
+            end
         end
     end
 end
@@ -567,10 +670,7 @@ end
 -- Every machine (128, through tc.PublicEvents): a retired farmer's host
 -- and placings are their successor's. Returns how many.
 function TheContractorShow:replacePerson(oldId, newId)
-    local results = self.results
-    if results == nil then
-        return 0
-    end
+    local results = self.results or { placings = {} }
     local count = 0
     if results.hostFarmerId == oldId then
         results.hostFarmerId = newId
@@ -580,6 +680,12 @@ function TheContractorShow:replacePerson(oldId, newId)
         if placing.farmerId == oldId then
             placing.farmerId = newId
             count = count + 1
+        end
+    end
+    -- 167: a competition's own (its farmers' entries).
+    for _, competition in ipairs(self.competitions) do
+        if competition.replacePerson ~= nil then
+            count = count + (competition.replacePerson(oldId, newId) or 0)
         end
     end
     return count
@@ -630,6 +736,7 @@ function TheContractorShow.writeResults(streamId, results)
     streamWriteUInt16(streamId, #results.placings)
     for _, placing in ipairs(results.placings) do
         streamWriteString(streamId, placing.titleKey or "")
+        streamWriteString(streamId, placing.titleArg or "")
         streamWriteUInt8(streamId, placing.placing)
         streamWriteInt32(streamId, placing.farmId)
         streamWriteInt32(streamId, placing.farmerId)
@@ -654,6 +761,7 @@ function TheContractorShow.readResults(streamId)
     for _ = 1, count do
         table.insert(results.placings, {
             titleKey = streamReadString(streamId),
+            titleArg = streamReadString(streamId),
             placing = streamReadUInt8(streamId),
             farmId = streamReadInt32(streamId),
             farmerId = streamReadInt32(streamId),
@@ -708,6 +816,9 @@ function TheContractorShow:saveToXmlFile(xmlFile)
     for i, placing in ipairs(results.placings) do
         local placingKey = string.format("%s.placing(%d)", key, i - 1)
         setXMLString(xmlFile, placingKey .. "#titleKey", placing.titleKey or "")
+        if placing.titleArg ~= nil and placing.titleArg ~= "" then
+            setXMLString(xmlFile, placingKey .. "#titleArg", placing.titleArg)
+        end
         setXMLInt(xmlFile, placingKey .. "#placing", placing.placing)
         setXMLInt(xmlFile, placingKey .. "#farmId", placing.farmId)
         setXMLInt(xmlFile, placingKey .. "#farmerId", placing.farmerId)
@@ -739,6 +850,7 @@ function TheContractorShow:loadFromXMLFile(xmlFile)
         local placingKey = string.format("%s.placing(%d)", key, i)
         table.insert(results.placings, {
             titleKey = getXMLString(xmlFile, placingKey .. "#titleKey") or "",
+            titleArg = getXMLString(xmlFile, placingKey .. "#titleArg") or "",
             placing = getXMLInt(xmlFile, placingKey .. "#placing") or 1,
             farmId = getXMLInt(xmlFile, placingKey .. "#farmId") or 0,
             farmerId = getXMLInt(xmlFile, placingKey .. "#farmerId") or 0,

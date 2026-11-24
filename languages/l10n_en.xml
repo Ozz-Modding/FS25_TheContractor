@@ -604,7 +604,7 @@
 		<text name="tc_show_today_body" text="%s's county show on Field %s is today, %s. Gates open at 08:00, judging at 10:00, the ploughing match from 11:00 to 15:00, results at 16:00."/>
 		<text name="tc_show_results_title" text="County show results"/>
 		<text name="tc_show_results_body" text="The results are in from %s's county show on Field %s, %s. Your company placed %s time(s) and won %s in prize money. The full results are on the Show tab."/>
-		<text name="tc_show_resultsNotice" text="County show: placed %d time(s), %s in prize money."/>
+		<text name="tc_show_rosetteNotice" text="County show rosette: %s, %s."/>
 		<text name="tc_show_cancelled_title" text="County show cancelled"/>
 		<text name="tc_show_cancelled_body" text="%s's county show on Field %s, due on %s, has been called off."/>
 		<text name="tc_show_tabSummary" text="%s's county show, Field %s, %s."/>
@@ -627,7 +627,232 @@
 		<text name="tc_show_placing1" text="1st"/>
 		<text name="tc_show_placing2" text="2nd"/>
 		<text name="tc_show_placing3" text="3rd"/>
-		<text name="tc_show_placing4" text="%dth"/>
+		<text name="tc_show_placing4" text="HC"/>
+		<text name="tc_show_placingName1" text="1st"/>
+		<text name="tc_show_placingName2" text="2nd"/>
+		<text name="tc_show_placingName3" text="3rd"/>
+		<text name="tc_show_placingName4" text="Highly commended"/>
+		<text name="tc_show_tabEntriesClose" text="Entries close %s."/>
+		<text name="tc_show_sectionTimetable" text="The day"/>
+		<text name="tc_show_sectionEntries" text="Your entries"/>
+		<text name="tc_showLivestock_title" text="Livestock"/>
+		<text name="tc_showClass_title" text="%s, %s"/>
+		<text name="tc_showClass_herd" text="Best Kept Herd"/>
+		<text name="tc_showClass_ages" text="%d to %d months"/>
+		<text name="tc_showClass_agesFrom" text="%d months and over"/>
+		<text name="tc_showClass_champion" text="Supreme champion: %s"/>
+		<text name="tc_showEntry_title" text="Enter the county show"/>
+		<text name="tc_showEntry_button" text="Enter"/>
+		<text name="tc_showEntry_withdrawButton" text="Withdraw entry"/>
+		<text name="tc_showEntry_withdrawConfirm" text="Withdraw your entry in %s?"/>
+		<text name="tc_showEntry_pickHusbandry" text="Which of your husbandries are you showing from?"/>
+		<text name="tc_showEntry_husbandryOption" text="%s (%d animals)"/>
+		<text name="tc_showEntry_pickClass" text="Enter %s's Best Kept Herd, or pick a class its animals can show in."/>
+		<text name="tc_showEntry_classOption" text="%s (%d)"/>
+		<text name="tc_showEntry_pickAnimal" text="Which animal are you entering in %s?"/>
+		<text name="tc_showEntry_animalOption" text="%s, %d months, health %d%%"/>
+		<text name="tc_showEntry_fromHusbandry" text="from %s"/>
+		<text name="tc_showEntry_noHusbandries" text="You have no husbandries with animals to show."/>
+		<text name="tc_showEntry_none" text="No entries."/>
+		<text name="tc_showEntry_noneOpen" text="No entries yet. Enter animals to show your stock, or your husbandry for Best Kept Herd."/>
+		<text name="tc_showEntry_needCompany" text="Entering the show needs a company."/>
+		<text name="tc_showEntry_noneClosed" text="Entries have closed."/>
+		<text name="tc_showEntry_statusEntered" text="Entered"/>
+		<text name="tc_showEntry_statusUnplaced" text="Unplaced"/>
+		<text name="tc_showEntry_statusNoShow" text="No-show"/>
+		<text name="tc_showEntry_statusSick" text="Turned away"/>
+		<text name="tc_showEntry_statusChampion" text="Champion"/>
+		<text name="tc_showEntry_noShow" text="There's no show to enter."/>
+		<text name="tc_showEntry_closed" text="Entries for the show have closed."/>
+		<text name="tc_showEntry_noCompany" text="Entering the show needs a company."/>
+		<text name="tc_showEntry_noHusbandry" text="That husbandry isn't yours any more."/>
+		<text name="tc_showEntry_noClass" text="That class isn't running at this show."/>
+		<text name="tc_showEntry_limit" text="You've entered as many as you can in that class."/>
+		<text name="tc_showEntry_noAnimal" text="There are no more animals in that husbandry for that class."/>
+		<text name="tc_showEntry_wrongClass" text="That animal doesn't show in that class."/>
+		<text name="tc_showEntry_sick" text="That animal is sick: the show vet won't pass it."/>
+		<text name="tc_showEntry_alreadyEntered" text="That animal is already entered."/>
+		<text name="tc_showEntry_notYours" text="That entry isn't yours."/>
+		<text name="tc_showCard_button" text="Judge's card"/>
+		<text name="tc_showCard_header" text="%s: %s"/>
+		<text name="tc_showCard_noShow" text="It wasn't in a trailer stopped in the show's trailer lines at judging."/>
+		<text name="tc_showCard_herdGone" text="The husbandry had gone by judging."/>
+		<text name="tc_showCard_sick" text="The show vet turned it away as sick."/>
+		<text name="tc_showCard_champion" text="Supreme champion of the show."/>
+		<text name="tc_showCard_counted" text="What the judge looked at, most important first:"/>
+		<text name="tc_showCard_line" text="- %s: %s"/>
+		<text name="tc_ploughMatch_title" text="Ploughing match"/>
+		<text name="tc_ploughMatch_section" text="Ploughing match"/>
+		<text name="tc_ploughMatch_mapName" text="Ploughing plot %d"/>
+		<text name="tc_ploughMatch_take" text="Take plot %d"/>
+		<text name="tc_ploughMatch_finish" text="Finish my run on plot %d"/>
+		<text name="tc_ploughMatch_finishConfirm" text="Finish your run on plot %d? It's scored as it stands and the kit's locked."/>
+		<text name="tc_ploughMatch_lockNotStarted" text="The ploughing match starts at 11:00: the kit's locked until then."/>
+		<text name="tc_ploughMatch_lockFree" text="Take this plot at its start peg to plough with its kit."/>
+		<text name="tc_ploughMatch_lockNotYours" text="This kit is for another ploughman's plot."/>
+		<text name="tc_ploughMatch_lockFinished" text="This plot's run is over."/>
+		<text name="tc_ploughMatch_problemNoMatch" text="The ploughing plots aren't out."/>
+		<text name="tc_ploughMatch_problemNoCompany" text="Only a company can plough in the match."/>
+		<text name="tc_ploughMatch_problemClosed" text="The ploughing match is over."/>
+		<text name="tc_ploughMatch_problemTaken" text="That plot's taken."/>
+		<text name="tc_ploughMatch_problemHasPlot" text="Your company has a plot already."/>
+		<text name="tc_ploughMatch_problemNotYours" text="That plot isn't yours."/>
+		<text name="tc_ploughMatch_problemNotStarted" text="The ploughing match hasn't started."/>
+		<text name="tc_ploughMatch_problemFinished" text="Your run on that plot is over."/>
+		<text name="tc_ploughMatch_takenNotice" text="Ploughing match: plot %d is yours. Its kit unlocks at %d:00."/>
+		<text name="tc_ploughMatch_takenNoticeNow" text="Ploughing match: plot %d is yours, and the match is on: its kit's ready."/>
+		<text name="tc_ploughMatch_startedNoticePlot" text="The ploughing match has started: plot %d's kit is yours until %d:00. Coverage and straight furrows count, speed doesn't."/>
+		<text name="tc_ploughMatch_startedNotice" text="The ploughing match has started at the county show, until %d:00. Take a free plot at its start peg if there's one left."/>
+		<text name="tc_ploughMatch_cardTitle" text="Ploughing match scorecard"/>
+		<text name="tc_ploughMatch_cardBody" text="The ploughing match at %s's county show on Field %s: your run on plot %s came %s with %s out of 100, in %s game minutes. Coverage %s, straightness %s, opening split %s, furrow angle %s, neat ends %s, outside the plot %s, tidiness %s. Scorecards for every plot are on the Show tab."/>
+		<text name="tc_ploughMatch_unplaced" text="outside the placings"/>
+		<text name="tc_ploughMatch_unplacedName" text="Unplaced"/>
+		<text name="tc_ploughMatch_cardButton" text="Scorecard"/>
+		<text name="tc_ploughMatch_cardHeader" text="Plot %d, %s: %s"/>
+		<text name="tc_ploughMatch_cardTotal" text="%.1f out of 100, in %d game minutes."/>
+		<text name="tc_ploughMatch_cardLine" text="- %s: %.1f of %d"/>
+		<text name="tc_ploughMatch_part_coverage" text="Coverage"/>
+		<text name="tc_ploughMatch_part_straightness" text="Straightness"/>
+		<text name="tc_ploughMatch_part_split" text="Opening split"/>
+		<text name="tc_ploughMatch_part_furrowAngle" text="Furrow angle"/>
+		<text name="tc_ploughMatch_part_ends" text="Neat ends"/>
+		<text name="tc_ploughMatch_part_outside" text="Outside the plot"/>
+		<text name="tc_ploughMatch_part_tidiness" text="Tidiness"/>
+		<text name="tc_ploughMatch_noteTakePlot" text="No entry needed: on the day, take a free plot at its start peg. Its lent kit is yours from 11:00 to 15:00."/>
+		<text name="tc_ploughMatch_noteNeedCompany" text="Only a company can plough in the match, but anyone can watch."/>
+		<text name="tc_ploughMatch_best" text="Your best: %.1f, %d win(s) in %d match(es)."/>
+		<text name="tc_ploughMatch_stateOpen" text="Free"/>
+		<text name="tc_ploughMatch_stateTaken" text="Taken"/>
+		<text name="tc_ploughMatch_stateFinished" text="Finished"/>
+		<text name="tc_ploughMatch_stateFarmer" text="Farmer"/>
+		<text name="tc_ploughMatch_nobody" text="Nobody"/>
+		<text name="tc_ploughMatch_plotLine" text="Plot %d: %s"/>
+		<text name="tc_ploughMatch_plotLineScore" text="%s, %.1f"/>
+		<text name="tc_ploughMatch_lockWorker" text="A hired worker is ploughing this plot: nobody else can drive its kit."/>
+		<text name="tc_ploughMatch_problemWorker" text="A worker is ploughing that plot."/>
+		<text name="tc_ploughMatch_cardBodyWorker" text="The ploughing match at %s's county show on Field %s: your worker's run on plot %s came %s with %s out of 100, in %s game minutes. Coverage %s, straightness %s, opening split %s, furrow angle %s, neat ends %s, outside the plot %s, tidiness %s. %s ploughed it for you. Scorecards for every plot are on the Show tab."/>
+		<text name="tc_showEntry_pickWhat" text="What are you entering?"/>
+		<text name="tc_showEntry_optionAnimals" text="Animals"/>
+		<text name="tc_showEntry_optionWorker" text="A worker in the ploughing match"/>
+		<text name="tc_showWorker_pickWorker" text="Which worker will plough your plot? They need tillage skill and experience of mid-size tractors, and they're at the show all day."/>
+		<text name="tc_showWorker_workerOption" text="%s (tillage %d, mid-size tractors %s)"/>
+		<text name="tc_showWorker_noWorkers" text="You have no workers to enter."/>
+		<text name="tc_showWorker_entryLine" text="Ploughing for you: %s"/>
+		<text name="tc_showWorker_statusEntered" text="Entered"/>
+		<text name="tc_showWorker_statusAtShow" text="At the show"/>
+		<text name="tc_showWorker_noteEnter" text="Or enter one of your workers to plough your plot for you, until entries close."/>
+		<text name="tc_showWorker_withdrawConfirm" text="Withdraw %s from the ploughing match?"/>
+		<text name="tc_showWorker_plotWho" text="%s for %s"/>
+		<text name="tc_showWorker_problemNoShow" text="There's no show to enter."/>
+		<text name="tc_showWorker_problemClosed" text="Entries for the show have closed."/>
+		<text name="tc_showWorker_problemNoCompany" text="Entering the show needs a company."/>
+		<text name="tc_showWorker_problemNoWorker" text="That worker isn't on your staff."/>
+		<text name="tc_showWorker_problemEntered" text="You've entered a worker already: your company has one plot."/>
+		<text name="tc_showWorker_problemSick" text="That worker is off sick. Enter them once they're back."/>
+		<text name="tc_showWorker_problemAway" text="That worker is on holiday or training on the show's day."/>
+		<text name="tc_showWorker_problemLeaving" text="That worker has handed in their notice."/>
+		<text name="tc_showWorker_problemSkill" text="That worker isn't skilled enough at tillage to plough in a match."/>
+		<text name="tc_showWorker_problemTractor" text="That worker has no experience of mid-size tractors, and the match's kit is one."/>
+		<text name="tc_showWorker_problemNotEntered" text="You haven't entered a worker."/>
+		<text name="tc_showWorker_reasonSick" text="they're off sick"/>
+		<text name="tc_showWorker_reasonAway" text="they're away that day"/>
+		<text name="tc_showWorker_reasonGone" text="they've left the company"/>
+		<text name="tc_showWorker_reasonNoPlot" text="there was no plot left for them"/>
+		<text name="tc_showWorker_reasonLate" text="they didn't get to the show before the match ended"/>
+		<text name="tc_showWorker_withdrawnTitle" text="Ploughing match entry withdrawn"/>
+		<text name="tc_showWorker_withdrawnBody" text="%s's county show on Field %s, %s: %s can't plough for you in the ploughing match, as %s, so your entry's withdrawn."/>
+		<text name="tc_showWorker_withdrawnBodyPlot" text="%s's county show on Field %s, %s: %s can't plough for you in the ploughing match, as %s, so your entry's withdrawn. Their plot has gone to a farmer."/>
+		<text name="tc_showWorker_atShowNotification" text="%s is at the county show today, ploughing for you in the match."/>
+		<text name="tc_showWorker_backNotification" text="%s is back from the county show."/>
+		<text name="tc_showDayOff_askTitle" text="A day off for the county show?"/>
+		<text name="tc_showDayOff_askBody" text="The county show is on %s, and your staff would love the day off to go along. Give everyone the day? Anyone who'd be working that day goes, office staff too, on their normal pay, and it'll cheer them up; say no and they'll be a little disappointed. No answer by the day before counts as a no."/>
+		<text name="tc_showDayOff_yes" text="Give them the day"/>
+		<text name="tc_showDayOff_no" text="Not this year"/>
+		<text name="tc_showDayOff_section" text="Your staff"/>
+		<text name="tc_showDayOff_row" text="The day off for the show"/>
+		<text name="tc_showDayOff_chipAsked" text="Answer in Inbox"/>
+		<text name="tc_showDayOff_chipYes" text="Given"/>
+		<text name="tc_showDayOff_chipNo" text="Not given"/>
+		<text name="tc_showStands_title" text="Stands and farmers"/>
+		<text name="tc_showStands_name_association" text="Trade association"/>
+		<text name="tc_showStands_name_careers" text="Careers adviser"/>
+		<text name="tc_showStands_candidateChip" text="From the show"/>
+		<text name="tc_showStands_section" text="On the showground"/>
+		<text name="tc_showStands_rowAssociation" text="Trade association stand"/>
+		<text name="tc_showStands_rowCareers" text="Careers stand"/>
+		<text name="tc_showStands_rowAttended" text="You came to the show"/>
+		<text name="tc_showStands_rowFarmer" text="%s"/>
+		<text name="tc_showStands_chipJoined" text="Joined"/>
+		<text name="tc_showStands_chipMember" text="Member"/>
+		<text name="tc_showStands_chipVisited" text="Visited"/>
+		<text name="tc_showStands_chipTalked" text="Talked"/>
+		<text name="tc_showStands_chipAsked" text="Asked for work"/>
+		<text name="tc_showStands_chipHost" text="Host"/>
+		<text name="tc_offerSource_show" text="Asked for at the county show"/>
+		<text name="tc_showTalk_promptFarmer" text="Talk to %s"/>
+		<text name="tc_showTalk_prompt_association" text="Visit the trade association stand"/>
+		<text name="tc_showTalk_prompt_careers" text="Visit the careers stand"/>
+		<text name="tc_showTalk_optionAsk" text="Any work going?"/>
+		<text name="tc_showTalk_optionBye" text="Enjoy the show."/>
+		<text name="tc_showTalk_optionJoinAnnual" text="Join, paying %s for the year"/>
+		<text name="tc_showTalk_optionJoinMonthly" text="Join, paying %s a month"/>
+		<text name="tc_showTalk_optionNotToday" text="Not today, thanks."/>
+		<text name="tc_showTalk_optionYes" text="Yes, please."/>
+		<text name="tc_showTalk_optionNotNow" text="Not just now."/>
+		<text name="tc_showTalk_greet_1" text="Grand day for it. Have you had a look at the stock in the ring yet?"/>
+		<text name="tc_showTalk_greet_2" text="Good to see you here. Half the county's turned out, by the look of it."/>
+		<text name="tc_showTalk_greet_3" text="Morning. The ploughing's worth a watch later, if you've the time."/>
+		<text name="tc_showTalk_greet_4" text="Hello there. Never miss the show, me. Best day of the year."/>
+		<text name="tc_showTalk_greetHost_1" text="Glad you could come. It's taken some doing, getting the field ready."/>
+		<text name="tc_showTalk_greetHost_2" text="Welcome, welcome. Mind the ring, they're judging soon."/>
+		<text name="tc_showTalk_greetHost_3" text="Good of you to turn up. It means a lot, having the contractors here."/>
+		<text name="tc_showTalk_curt_1" text="Oh. It's you."/>
+		<text name="tc_showTalk_curt_2" text="I've nothing to say to you."/>
+		<text name="tc_showTalk_thinking_1" text="Let me think..."/>
+		<text name="tc_showTalk_thinking_2" text="Now there's a question..."/>
+		<text name="tc_showTalk_offer_1" text="Funny you should ask. I could do with a hand, as it happens. I'll send you the details."/>
+		<text name="tc_showTalk_offer_2" text="There is something, now you mention it. Look out for my message."/>
+		<text name="tc_showTalk_offer_3" text="You've caught me at the right time. I'll get the details over to you."/>
+		<text name="tc_showTalk_noWork_1" text="Not just now, but I'll keep you in mind."/>
+		<text name="tc_showTalk_noWork_2" text="Nothing at the moment, I'm afraid. Ask me again another time."/>
+		<text name="tc_showTalk_noWork_3" text="I'm on top of things for now. Thanks all the same."/>
+		<text name="tc_showTalk_asked_1" text="Like I said, nothing more today."/>
+		<text name="tc_showTalk_asked_2" text="You asked me that already. Enjoy the show."/>
+		<text name="tc_showTalk_associationOffer_1" text="Not a member yet? Join today and your first year's %d%% off: %s for the year, or %s a month."/>
+		<text name="tc_showTalk_associationMember_1" text="Good to see you. Cup of tea? It's on us."/>
+		<text name="tc_showTalk_associationMember_2" text="Ah, one of ours. Help yourself to a tea."/>
+		<text name="tc_showTalk_associationJoined_1" text="Welcome aboard. You'll find it's worth every penny."/>
+		<text name="tc_showTalk_associationJoined_2" text="That's you signed up. Have a cup of tea while you're here."/>
+		<text name="tc_showTalk_associationLater_1" text="No trouble. We'll be here next year."/>
+		<text name="tc_showTalk_associationLater_2" text="Fair enough. Take a leaflet, anyway."/>
+		<text name="tc_showTalk_associationCantAfford_1" text="I'm afraid that's not gone through. Maybe next time."/>
+		<text name="tc_showTalk_associationNoCompany_1" text="We're for contractors. Come back when you've a business of your own."/>
+		<text name="tc_showTalk_careersOffer_1" text="We've young people just finishing their courses, keen to get started. Shall we pass your details on?"/>
+		<text name="tc_showTalk_careersSent_1" text="Lovely. I'll send a few your way this week."/>
+		<text name="tc_showTalk_careersSent_2" text="Done. Expect to hear from some of them in the next few days."/>
+		<text name="tc_showTalk_careersVisited_1" text="We've passed your details on already. They'll be in touch."/>
+		<text name="tc_showTalk_careersLater_1" text="No problem. We're here all day if you change your mind."/>
+		<text name="tc_showTalk_careersNoCompany_1" text="We're placing people with contractors. Come back when you've a business of your own."/>
+		<text name="tc_showTalk_closed_1" text="Sorry, I'm packing up now."/>
+		<text name="tc_showStat_health" text="Health"/>
+		<text name="tc_showStat_age" text="Age"/>
+		<text name="tc_showStat_productivity" text="Productivity"/>
+		<text name="tc_showStat_quality" text="Genetic quality"/>
+		<text name="tc_showStat_geneticHealth" text="Genetic health"/>
+		<text name="tc_showStat_geneticProductivity" text="Genetic productivity"/>
+		<text name="tc_showStat_weight" text="Weight"/>
+		<text name="tc_showStat_breeding" text="Carrying young or in milk"/>
+		<text name="tc_showStat_foodLevel" text="Food"/>
+		<text name="tc_showStat_foodVariety" text="Food variety"/>
+		<text name="tc_showStat_straw" text="Straw"/>
+		<text name="tc_showStat_water" text="Water"/>
+		<text name="tc_showStat_cleanliness" text="Cleanliness"/>
+		<text name="tc_showStatValue_months" text="%d months"/>
+		<text name="tc_showStatValue_weightOf" text="%d kg (breed target %d kg)"/>
+		<text name="tc_showStatValue_weight" text="%d kg"/>
+		<text name="tc_showStatValue_genetics" text="%.2f (1.00 is average)"/>
+		<text name="tc_showStatValue_percent" text="%d%%"/>
+		<text name="tc_showStatValue_breeding" text="yes"/>
 		<text name="tc_auction_catalogueNone" text="The machinery auction is over."/>
 		<text name="tc_auction_catalogueSettingOut" text="The lots are being set out on the field. The catalogue fills in as they arrive."/>
 		<text name="tc_auction_catalogueSummary" text="%s's machinery auction, Field %s, %s. Viewing from 08:00; bidding on each lot closes at its own time from 17:00. Bids are made at the lot itself."/>
@@ -1124,6 +1349,7 @@
 		<text name="tc_staff_detailRetiringDue" text="As soon as they're back"/>
 		<text name="tc_staff_status_holiday" text="Holiday"/>
 		<text name="tc_staff_status_training" text="Training"/>
+		<text name="tc_staff_status_atShow" text="At the show"/>
 		<text name="tc_staff_status_atHome" text="At home"/>
 		<text name="tc_staff_status_comingIn" text="On the way in"/>
 		<text name="tc_staff_status_stayingLate" text="Staying late"/>
@@ -1503,6 +1729,7 @@
 		<text name="tc_office_status_available" text="In the office"/>
 		<text name="tc_office_status_training" text="Training"/>
 		<text name="tc_office_status_atHome" text="At home"/>
+		<text name="tc_office_status_atShow" text="At the show"/>
 		<text name="tc_office_detailRole" text="Role"/>
 		<text name="tc_office_detailLevel" text="Level"/>
 		<text name="tc_office_detailSince" text="Employed since"/>
@@ -2076,11 +2303,23 @@
 		<text name="tc_help_show_2_title" text="The day"/>
 		<text name="tc_help_show_2" text="The site is set out at midnight: the showground put down to grass with a ring, pens, stands and trailer lines, and the ploughing ground to stubble. Gates open at 08:00, judging starts at 10:00, the ploughing match runs from 11:00 to 15:00 and the results are given out at 16:00. Gates close at 18:00, and at midnight the farmer's land is put back exactly as it was."/>
 		<text name="tc_help_show_3_title" text="The Show tab"/>
-		<text name="tc_help_show_3" text="In the show's month the Show tab has the day's timetable and the results, this year's once they're in and last year's before."/>
+		<text name="tc_help_show_3" text="In the show's month the Show tab has the day's timetable, your livestock entries, the ploughing plots and the results, this year's once they're in and last year's before. Enter animals, or one of your workers for the ploughing match, while entries are open (they close a week before the day), and withdraw an entry if you change your mind. Once it's judged, the Judge's card on an entry shows what the judge looked at, most important first, and the Scorecard on a ploughing plot shows how its run was marked."/>
+		<text name="tc_help_show_6_title" text="Livestock classes"/>
+		<text name="tc_help_show_6" text="Each breed (as your barn names it) shows in classes by age, in months. Pick one of your husbandries, then a class its animals can show in: up to two entries a class. On the day, the animals you entered must be in one of your livestock trailers, stopped in the show's trailer lines, by 10:00; load them that morning. An entry that isn't there is a no-show, which costs nothing. Farmers enter too, and a class with nobody in it doesn't run. Each class gives 1st, 2nd, 3rd and highly commended, and the best class winner of each kind of animal, with two or more of its classes run, is supreme champion."/>
+		<text name="tc_help_show_7_title" text="How they're judged"/>
+		<text name="tc_help_show_7" text="With RealisticLivestock you enter the animal itself, and it's judged mostly on its genetics (quality and health, then productivity where its kind has it), its weight against its breed's target (heavier isn't better), its health and its age; a female carrying young, or a grown one in milk, does a little better. Without it, an entry is one of the breed and age from that husbandry, judged on its health, its age and how well the husbandry produces. A judge's eye means the best animal usually wins, but not always. Best Kept Herd is judged on a husbandry as it stood the day before: how well it produces, its food and the variety of it, straw, water, and how clean it's kept. No trailer is needed for it, one entry a company."/>
+		<text name="tc_help_show_8_title" text="The ploughing match"/>
+		<text name="tc_help_show_8" text="The ploughing ground is marked out in plots with pegs, each with the same lent tractor and reversible plough parked in it, and a numbered start peg on the crowd's side. No entry's needed: any time on the day, walk to a free plot's start peg and take it for your company, one plot a company; farmers plough the rest. The kit is locked until 11:00, then it's yours alone to drive, and it only ploughs its own plot. You have three game hours from your first run, and everyone stops at 15:00, so start by noon to have your full time. Say you've finished at the start peg, or carry on until 15:00. The judge looks at how much of the plot you ploughed and how straight: the opening split on its own, then every run, the furrows' direction, tidy ends, keeping inside the plot and not reversing or stopping with the plough down. Taking longer than three hours costs marks, but speed earns none. The top three win a small prize, a good boost to your reputation and the host's goodwill."/>
+		<text name="tc_help_show_9_title" text="Entering a worker"/>
+		<text name="tc_help_show_9" text="Instead of ploughing yourself, you can enter one of your workers for your company's plot while entries are open: Enter on the Show tab, then a worker. They need a fair tillage skill and experience of mid-size tractors, and must be free on the day, not off sick, on holiday or training. On the day they're at the show from midnight, so they can't be given any other work (one out on a job goes when they're back), and they plough your plot for you during the match, standing by its tractor. Their score comes from their tillage skill, their tractor experience, their morale and how they're going on the day. If they fall sick, are away that day, leave or don't get there before the match ends, the entry is withdrawn with a message and their plot goes to a farmer. A placing wins your company the prize and reputation as if you'd ploughed it, and lifts the worker's morale, a win most; a poor run costs them nothing."/>
+		<text name="tc_help_show_11_title" text="Your staff's day off"/>
+		<text name="tc_help_show_11" text="A few weeks before the show, the Inbox asks whether to give your staff the day off to go. Say yes and everyone who'd be working that day goes, office staff too, on their normal pay: their morale lifts a little, nothing can be allocated to them that day, there's no office work, and you'll find them in the crowd round the ring. Anyone sick, on holiday or training stays so, and a worker entered in the ploughing still ploughs. Say no, or don't answer by the day before, and they're a little disappointed."/>
 		<text name="tc_help_show_4_title" text="Prizes"/>
-		<text name="tc_help_show_4" text="Placings win a little prize money and, more usefully, reputation and the host farmer's goodwill. Results come by Inbox and a notice."/>
+		<text name="tc_help_show_4" text="Placings win a little prize money and, more usefully, reputation and the host farmer's goodwill, a supreme champion most of all; highly commended wins only the rosette. Results come by Inbox, with a rosette notice for each placing."/>
+		<text name="tc_help_show_10_title" text="Stands and farmers"/>
+		<text name="tc_help_show_10" text="Two of the stands along the ring have someone behind a table: walk up and press the activate key. At the trade association's, a company that isn't a member can join on the day with 25% off its first year (members get a cup of tea). The careers stand passes your details to a few young people looking for work, who join your candidates in the Staff tab for a week, once a show. Some farmers walk the showground too, the host among them; walk up to one to talk. The first chat with each lifts their opinion of you a little, and if you ask whether there's any work going, they might offer you a job on their land, once each a show."/>
 		<text name="tc_help_show_5_title" text="Going along"/>
-		<text name="tc_help_show_5" text="Every company is asked along, as an Attend Show job on the Jobs tab for the show day. Turning up anywhere on the site in the show's hours is all it takes, and missing it costs nothing. If the farmer's land changes hands, the show is cancelled."/>
+		<text name="tc_help_show_5" text="Every company is asked along, as an Attend Show job on the Jobs tab for the show day. Turning up anywhere on the site in the show's hours is all it takes, and wins you a little of the host's goodwill; missing it costs nothing. If the farmer's land changes hands, the show is cancelled."/>
 		<text name="tc_help_cat_auctions" text="Machinery auctions"/>
 		<text name="tc_help_auctionSale_title" text="The sale"/>
 		<text name="tc_help_auctionSale_1" text="About once a year, sometimes twice, a farmer holds a machinery auction on one of their fields, always in spring or autumn. It's announced two to four months ahead in the Inbox, with a reminder a week before and another on the day. Signs go up around the area and the field is marked on the map."/>

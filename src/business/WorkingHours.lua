@@ -259,10 +259,11 @@ function TheContractorWorkingHours.getDutyCost(worker, now, untilMinutes)
         TheContractorWorkingHours.getHourlyRate(worker)
 end
 
--- Sick, on holiday or training.
+-- Sick, on holiday or training (170: or at the show).
 function TheContractorWorkingHours.isAway(worker)
     local STATUS = TheContractorWorker.STATUS
-    return worker.status == STATUS.SICK or worker.status == STATUS.HOLIDAY or worker.status == STATUS.TRAINING
+    return worker.status == STATUS.SICK or worker.status == STATUS.HOLIDAY or worker.status == STATUS.TRAINING or
+        worker.status == STATUS.SHOW
 end
 local isAway = TheContractorWorkingHours.isAway
 

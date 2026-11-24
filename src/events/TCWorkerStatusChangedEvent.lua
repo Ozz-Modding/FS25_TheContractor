@@ -50,6 +50,14 @@ function TCWorkerStatusChangedEvent:run(connection)
         self.sickDays, self.isInjury)
 end
 
+-- 172: whether a worker's their farm's entrant in the ploughing (170).
+function TCWorkerStatusChangedEvent.isPloughingEntrant(worker)
+    local tc = g_currentMission.TheContractor
+    local showWorker = tc ~= nil and tc.ShowWorker or nil
+    local entry = showWorker ~= nil and showWorker:getEntry(worker.farmId) or nil
+    return entry ~= nil and entry.workerId == worker.id
+end
+
 -- 031: tells the worker's own farm when someone goes off sick or comes
 -- back (and 040, on holiday or back). Other status changes are already visible through the job they
 -- belong to, so they stay silent. Shared by run() (remote clients) and
@@ -73,6 +81,23 @@ function TCWorkerStatusChangedEvent.showNotification(worker, oldStatus, newStatu
     elseif oldStatus == holiday then
         g_currentMission:addIngameNotification(FSBaseMission.INGAME_NOTIFICATION_OK,
             string.format(g_i18n:getText("tc_holiday_ended"), worker.name))
+        return
+    end
+
+    -- 170: off to the show for the ploughing match, and back.
+    local show = TheContractorWorker.STATUS.SHOW
+    -- 172: the staff's day off is silent (the farm said yes, and the Staff
+    -- tab says where they are): only 170's entrant is told.
+    if (newStatus == show or oldStatus == show) and not TCWorkerStatusChangedEvent.isPloughingEntrant(worker) then
+        return
+    end
+    if newStatus == show then
+        g_currentMission:addIngameNotification(FSBaseMission.INGAME_NOTIFICATION_INFO,
+            string.format(g_i18n:getText("tc_showWorker_atShowNotification"), worker.name))
+        return
+    elseif oldStatus == show then
+        g_currentMission:addIngameNotification(FSBaseMission.INGAME_NOTIFICATION_INFO,
+            string.format(g_i18n:getText("tc_showWorker_backNotification"), worker.name))
         return
     end
 

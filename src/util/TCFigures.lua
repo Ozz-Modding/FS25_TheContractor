@@ -6,7 +6,8 @@
 --
 -- A figure is a plain table: { kind ("stand" or "walk"), template (a look,
 -- readTemplates'), x, y, z, yaw, rank (optional: there while rank < the
--- share passed to update), walker = { speed } for a walker }. Standers
+-- share passed to update), isAway (optional, 172: not there while true),
+-- walker = { speed } for a walker }. Standers
 -- play vanilla's NPC idle (isNPC); walkers are animated as vanilla animates
 -- a remote player (PlayerGraphicsState:updateRemote: absSpeed, isWalking,
 -- isGrounded), the idea from FS25_PlaceableNPCSystem by Arrow-kb (its
@@ -193,7 +194,7 @@ function TCFigures.update(figures, dt, cx, cy, cz, share, hooks)
     hooks = hooks or {}
     local loaded, shown, present, loadsStarted = 0, 0, 0, 0
     for _, figure in ipairs(figures) do
-        if figure.rank ~= nil and figure.rank >= share then
+        if figure.isAway or (figure.rank ~= nil and figure.rank >= share) then
             -- Not here at this hour: their model's freed until they come.
             if figure.graphics ~= nil then
                 TCFigures.freeModel(figure, hooks)

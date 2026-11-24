@@ -142,7 +142,8 @@ function TCADSWorkshop.buildAssignments(members, workers)
         if definition ~= nil and definition.adsRole ~= nil then
             -- 097: ADS has no "at home"; it's away all the same.
             local status = TheContractorOffice.getStatus(member)
-            if status == TheContractorOffice.STATUS.AT_HOME then
+            -- 172: nor the show's day off.
+            if status == TheContractorOffice.STATUS.AT_HOME or status == TheContractorOffice.STATUS.SHOW then
                 status = TheContractorWorkshop.ADS_STATUS.UNAVAILABLE
             end
             assignments[definition.adsRole] = {

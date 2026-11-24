@@ -106,6 +106,9 @@ local function setup()
         hasAdministrator = function()
             return world.hasAdmin
         end,
+        isAdministratorAtWork = function()
+            return world.hasAdmin
+        end,
     }
     tc.Finances = {
         recordClaims = function(_, farmId, amount)

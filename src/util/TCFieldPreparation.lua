@@ -262,6 +262,26 @@ function TCFieldPreparation.putDownStubble(field, fruitTypeName, area)
     return true
 end
 
+-- 169: part of a field (makeArea's) ploughed, as a farmer's plot in the
+-- ploughing match looks worked: no crop, the ground ploughed with its
+-- furrows at angle (radians, a direction's y rotation, as a plough's).
+-- Server. Returns whether it was done.
+function TCFieldPreparation.paintPloughed(field, area, angle)
+    if field == nil or area == nil then
+        return false
+    end
+    local task = FieldUpdateTask.new()
+    task:setField(field)
+    task:setArea(area)
+    task:clearHeight()
+    task:setFruit(FruitType.UNKNOWN, 0)
+    task:setGroundType(FieldGroundType.PLOWED)
+    task:setGroundAngle(angle)
+    task:setStubbleShredLevel(0)
+    g_fieldManager:addFieldUpdateTask(task, true)
+    return true
+end
+
 -- 143: a snapshot (snapshotField's) written back over the whole field. A
 -- crop that no longer exists (the mod list changed) leaves no crop.
 -- Server.

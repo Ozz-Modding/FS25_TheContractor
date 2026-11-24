@@ -386,12 +386,22 @@ function TheContractorStaff:getWorkersCapableOfTier(farmId, tier)
 end
 
 -- The pool any farm can currently hire from (017's Staff UI browse list).
-function TheContractorStaff:getCandidatePool()
+-- 171: farmId (optional) leaves out the candidates kept for another farm
+-- (the show's careers stand); without it, every candidate.
+function TheContractorStaff:getCandidatePool(farmId)
     local result = {}
     for _, candidate in pairs(self.candidatePool) do
-        table.insert(result, candidate)
+        if farmId == nil or TheContractorStaff.isCandidateFor(candidate, farmId) then
+            table.insert(result, candidate)
+        end
     end
     return result
+end
+
+-- 171: whether a farm can see and hire a candidate: one kept for a farm
+-- (keptForFarmId, the careers stand's) is that farm's alone.
+function TheContractorStaff.isCandidateFor(candidate, farmId)
+    return candidate.keptForFarmId == nil or candidate.keptForFarmId == farmId
 end
 
 function TheContractorStaff:getCandidate(candidateId)
@@ -610,23 +620,25 @@ end
 -- broadcasting to all clients (see file header — every client needs to see
 -- the same shared pool, not just the farm that happens to be looking at it).
 -- No-ops (returns nil) if the pool is already at POOL_MAX_SIZE.
-function TheContractorStaff:addCandidateToPool()
+--
+-- 171: options (optional): age (instead of rollAge), and keptForFarmId and
+-- keptUntilDay for a candidate kept for one farm until that day (the show's
+-- careers stand, addKeptCandidates). A kept candidate isn't counted against
+-- POOL_MAX_SIZE, nor stopped by it.
+function TheContractorStaff:addCandidateToPool(options)
     if not g_currentMission:getIsServer() then
         return nil
     end
+    options = options or {}
 
-    local poolCount = 0
-    for _ in pairs(self.candidatePool) do
-        poolCount = poolCount + 1
-    end
-    if poolCount >= TheContractorStaff.POOL_MAX_SIZE then
+    if options.keptForFarmId == nil and self:getOpenPoolCount() >= TheContractorStaff.POOL_MAX_SIZE then
         return nil
     end
 
     local id = self:takeWorkerId()
 
     -- 157: age first - the stats follow it.
-    local age = TheContractorStaff.rollAge()
+    local age = options.age or TheContractorStaff.rollAge()
     local experience = TheContractorStaff.getExperience(age)
     local workSpeed = TheContractorStaff.rollWorkSpeed(experience)
     local tierCapability = TheContractorStaff.rollTierCapability(experience)
@@ -650,6 +662,9 @@ function TheContractorStaff:addCandidateToPool()
     candidate.temperament = TheContractorMorale.rollTemperament()
     -- 054: some arrive already certified.
     TheContractorTraining.rollCandidateCertifications(candidate)
+    -- 171.
+    candidate.keptForFarmId = options.keptForFarmId
+    candidate.keptUntilDay = options.keptForFarmId ~= nil and options.keptUntilDay or nil
     self:applyCandidateAdded(candidate)
 
     if g_server ~= nil then
@@ -671,6 +686,33 @@ function TheContractorStaff:applyCandidateAdded(candidate)
     if candidate.id >= self.nextWorkerId then
         self.nextWorkerId = candidate.id + 1
     end
+end
+
+-- 171: how many candidates any farm can hire (not kept for one).
+function TheContractorStaff:getOpenPoolCount()
+    local count = 0
+    for _, candidate in pairs(self.candidatePool) do
+        if candidate.keptForFarmId == nil then
+            count = count + 1
+        end
+    end
+    return count
+end
+
+-- 171, server: count new candidates kept for farmId until untilDay (the
+-- show's careers stand), each aged by ageFn() (or rollAge). They're on top
+-- of the pool, and leave on that day if not hired. Returns how many came.
+function TheContractorStaff:addKeptCandidates(farmId, count, untilDay, ageFn)
+    local added = 0
+    for _ = 1, count do
+        local candidate = self:addCandidateToPool({ keptForFarmId = farmId, keptUntilDay = untilDay,
+            age = ageFn ~= nil and ageFn() or nil })
+        if candidate ~= nil then
+            added = added + 1
+        end
+    end
+    TCLog.info("TheContractor: %d candidate(s) kept for farm %d until day %d", added, farmId, untilDay)
+    return added
 end
 
 -- Removes a candidate from the pool without hiring them (poached elsewhere/
@@ -732,9 +774,14 @@ end
 function TheContractorStaff:updateCandidatePool(daysPerPeriod)
     local arrivals, leaveChance = TheContractorStaff.getDailyPoolOdds(daysPerPeriod)
 
+    -- 171: a candidate kept for a farm stays until their day, then goes.
     local departingIds = {}
-    for id in pairs(self.candidatePool) do
-        if math.random() < leaveChance then
+    for id, candidate in pairs(self.candidatePool) do
+        if candidate.keptForFarmId ~= nil then
+            if g_currentMission.environment.currentMonotonicDay >= (candidate.keptUntilDay or 0) then
+                table.insert(departingIds, id)
+            end
+        elseif math.random() < leaveChance then
             table.insert(departingIds, id)
         end
     end
@@ -780,7 +827,7 @@ end
 -- when they're next set idle. toRoll is gathered before anyone recovers, so
 -- someone who only just got better doesn't roll the same day, and anyone
 -- with sickness already pending doesn't roll again. Neither does anyone on
--- holiday (040).
+-- holiday (040), or at the show for the day (170).
 function TheContractorStaff:updateSickness()
     local sickStatus = TheContractorWorker.STATUS.SICK
 
@@ -792,7 +839,8 @@ function TheContractorStaff:updateSickness()
                 if worker.sickDaysRemaining <= 0 then
                     table.insert(toRecover, workerId)
                 end
-            elseif worker.pendingSickDays == 0 and worker.status ~= TheContractorWorker.STATUS.HOLIDAY then
+            elseif worker.pendingSickDays == 0 and worker.status ~= TheContractorWorker.STATUS.HOLIDAY and
+                    worker.status ~= TheContractorWorker.STATUS.SHOW then
                 table.insert(toRoll, worker)
             end
         end
@@ -1067,6 +1115,10 @@ function TheContractorStaff:retireWorker(farmId, workerId)
     g_currentMission.TheContractor.PayReviews:removeMessagesFor(farmId, workerId)
     -- 083: and any rival's offer.
     g_currentMission.TheContractor.Poaching:onWorkerGone(farmId, workerId)
+    -- 170: and any entry in the show's ploughing match.
+    if g_currentMission.TheContractor.ShowWorker ~= nil then
+        g_currentMission.TheContractor.ShowWorker:onWorkerGone(farmId, workerId)
+    end
 end
 
 -- Worker ids are unique across the pool and every roster (one shared
@@ -1104,10 +1156,8 @@ function TheContractorStaff:ensureInitialPool()
         return
     end
 
-    local poolCount = 0
-    for _ in pairs(self.candidatePool) do
-        poolCount = poolCount + 1
-    end
+    -- 171: candidates kept for a farm don't count.
+    local poolCount = self:getOpenPoolCount()
 
     while poolCount < TheContractorStaff.INITIAL_POOL_SIZE do
         if self:addCandidateToPool() == nil then
@@ -1144,7 +1194,7 @@ function TheContractorStaff:hireWorker(farmId, candidateId)
     end
 
     local candidate = self.candidatePool[candidateId]
-    if candidate == nil then
+    if candidate == nil or not TheContractorStaff.isCandidateFor(candidate, farmId) then
         return nil
     end
 
@@ -1157,6 +1207,9 @@ function TheContractorStaff:hireWorker(farmId, candidateId)
     g_currentMission.TheContractor.Finances:recordWages(farmId, firstPay)
 
     candidate.farmId = farmId
+    -- 171: hired, they're nobody's candidate.
+    candidate.keptForFarmId = nil
+    candidate.keptUntilDay = nil
     -- 040: before the broadcast, so the allowance goes out with them.
     TheContractorHolidays.grantInitialAllowance(candidate)
     -- 056: likewise their starting morale and hire date.
@@ -1332,6 +1385,10 @@ function TheContractorStaff:releaseWorker(farmId, workerId)
     g_currentMission.TheContractor.PayReviews:removeMessagesFor(farmId, workerId)
     -- 083: and any rival's offer.
     g_currentMission.TheContractor.Poaching:onWorkerGone(farmId, workerId)
+    -- 170: and any entry in the show's ploughing match.
+    if g_currentMission.TheContractor.ShowWorker ~= nil then
+        g_currentMission.TheContractor.ShowWorker:onWorkerGone(farmId, workerId)
+    end
 
     TCLog.info("TheContractor: farm %d released worker %d (%s) after %d year(s): %.1f weeks' notice pay (%.0f), %.1f weeks' redundancy pay (%.0f)",
         farmId, workerId, worker.name, cost.years, cost.noticeWeeks, cost.noticePay, cost.redundancyWeeks,
@@ -1396,12 +1453,31 @@ function TheContractorStaff:setWorkerStatus(farmId, workerId, status)
         status = TheContractorWorker.STATUS.SICK
     end
 
+    -- 170: someone back from a job on the day they're entered in the show's
+    -- ploughing match goes straight there. Sickness comes first.
+    local showWorker = g_currentMission.TheContractor.ShowWorker
+    if worker ~= nil and status == TheContractorWorker.STATUS.IDLE and showWorker ~= nil and
+            showWorker:isDueToday(worker) then
+        TCLog.info("TheContractor: farm %d worker %d (%s) back on the show's day, now at the show", farmId, workerId,
+            worker.name)
+        status = TheContractorWorker.STATUS.SHOW
+    end
+
     -- 054: someone back on a day they're due in for training goes straight
     -- there. Sickness comes first: they miss the day, and it slides.
     if worker ~= nil and status == TheContractorWorker.STATUS.IDLE and TheContractorTraining.isDueToday(worker) then
         TCLog.info("TheContractor: farm %d worker %d (%s) back on a training day, now training", farmId, workerId,
             worker.name)
         status = TheContractorWorker.STATUS.TRAINING
+    end
+
+    -- 172: someone back from a job on the day their farm's given the staff
+    -- off for the show goes there. Training comes first.
+    local dayOff = g_currentMission.TheContractor.ShowDayOff
+    if worker ~= nil and status == TheContractorWorker.STATUS.IDLE and dayOff ~= nil and dayOff:isDueToday(worker) then
+        TCLog.info("TheContractor: farm %d worker %d (%s) back on the show's day off, now at the show", farmId,
+            workerId, worker.name)
+        status = TheContractorWorker.STATUS.SHOW
     end
 
     local oldStatus = self:applyWorkerStatusChanged(farmId, workerId, status)
@@ -1852,6 +1928,9 @@ function TheContractorStaff.writeWorker(streamId, worker)
     TheContractorWorkshop.writeState(streamId, worker)
     -- 097.
     TheContractorWorkingHours.writeState(streamId, worker)
+    -- 171: a candidate kept for a farm (0: none).
+    streamWriteInt32(streamId, worker.keptForFarmId or 0)
+    streamWriteInt32(streamId, worker.keptUntilDay or 0)
 end
 
 function TheContractorStaff.readWorker(streamId)
@@ -1891,6 +1970,8 @@ function TheContractorStaff.readWorker(streamId)
     local adsSkills, workshopRole = TheContractorWorkshop.readState(streamId)
     local dutyFrom, dutyArrive, dutyUntil, overtimeMinutes, overtimeOwed, breakUntil =
         TheContractorWorkingHours.readState(streamId)
+    local keptForFarmId = streamReadInt32(streamId)
+    local keptUntilDay = streamReadInt32(streamId)
 
     local worker = TheContractorWorker.new(id, farmId, name, workSpeed, tierCapability, salary, age, nil, nil, nil,
         skills, cleanliness)
@@ -1913,6 +1994,10 @@ function TheContractorStaff.readWorker(streamId)
     TheContractorHolidays.applyHolidayChanged(worker, holidayAllowance,
         holidayStartDay > 0 and holidayStartDay or nil, holidayDays)
     TheContractorTraining.applyState(worker, trainingState)
+    if keptForFarmId > 0 then
+        worker.keptForFarmId = keptForFarmId
+        worker.keptUntilDay = keptUntilDay
+    end
 
     return worker
 end
@@ -1986,6 +2071,11 @@ function TheContractorStaff.writeWorkerXML(xmlFile, key, worker)
     TheContractorWorkshop.writeXML(xmlFile, key, worker)
     -- 097.
     TheContractorWorkingHours.writeXML(xmlFile, key, worker)
+    -- 171.
+    if worker.keptForFarmId ~= nil then
+        setXMLInt(xmlFile, key .. "#keptForFarmId", worker.keptForFarmId)
+        setXMLInt(xmlFile, key .. "#keptUntilDay", worker.keptUntilDay or 0)
+    end
 end
 
 -- farmId is passed in explicitly (nil for a pool candidate) rather than read
@@ -2093,13 +2183,26 @@ function TheContractorStaff.readWorkerXML(xmlFile, key, farmId)
     TheContractorPayReviews.readXML(xmlFile, key, worker)
     -- 097.
     TheContractorWorkingHours.readXML(xmlFile, key, worker)
+    -- 171: a candidate kept for a farm.
+    if farmId == nil then
+        worker.keptForFarmId = getXMLInt(xmlFile, key .. "#keptForFarmId")
+        if worker.keptForFarmId ~= nil then
+            worker.keptUntilDay = getXMLInt(xmlFile, key .. "#keptUntilDay") or 0
+        end
+    end
 
     return worker
 end
 
--- A farm deleted in multiplayer (TCFarmDeletion), on every machine.
+-- A farm deleted in multiplayer (TCFarmDeletion), on every machine. 171:
+-- with the candidates kept for it.
 function TheContractorStaff:forgetFarm(farmId)
     self.workersByFarm[farmId] = nil
+    for id, candidate in pairs(self.candidatePool) do
+        if candidate.keptForFarmId == farmId then
+            self.candidatePool[id] = nil
+        end
+    end
 end
 
 function TheContractorStaff:loadFromXMLFile(xmlFile)
@@ -2310,10 +2413,10 @@ function TheContractorStaff.registerConsoleCommands()
     })
 
     TCConsole.register("worker", "pool", {
-        description = "Candidates you can hire: id, speed, salary, tractors, skills",
+        description = "Candidates you can hire: id, speed, salary, tractors, skills (and how long one kept for you stays)",
         serverOnly = false,
         run = function(farmId, args)
-            local pool = g_currentMission.TheContractor.Staff:getCandidatePool()
+            local pool = g_currentMission.TheContractor.Staff:getCandidatePool(farmId)
             if #pool == 0 then
                 return "Staff pool is empty."
             end
@@ -2323,10 +2426,16 @@ function TheContractorStaff.registerConsoleCommands()
 
             local lines = {}
             for _, candidate in ipairs(pool) do
-                table.insert(lines, string.format("#%d %s - speed %d, salary %.0f, tractors: %s, skills: %s",
+                local line = string.format("#%d %s - speed %d, salary %.0f, tractors: %s, skills: %s",
                     candidate.id, candidate.name, candidate.workSpeed, candidate.salary,
                     TheContractorStaff.formatTierCapability(candidate.tierCapability),
-                    TheContractorStaff.formatSkills(candidate.skills)))
+                    TheContractorStaff.formatSkills(candidate.skills))
+                -- 171: kept for this farm by the show's careers stand.
+                if candidate.keptForFarmId ~= nil then
+                    line = line .. string.format(" (from the show's careers stand, until %s)",
+                        TCCalendar.formatDay(candidate.keptUntilDay or 0))
+                end
+                table.insert(lines, line)
             end
             return table.concat(lines, "\n")
         end,
@@ -2336,8 +2445,8 @@ function TheContractorStaff.registerConsoleCommands()
         args = "<candidate>",
         description = "Hire a candidate from the pool",
         run = function(farmId, args)
-            local candidate, problem = TCConsole.findPerson(g_currentMission.TheContractor.Staff:getCandidatePool(),
-                args[1], "candidate")
+            local candidate, problem = TCConsole.findPerson(
+                g_currentMission.TheContractor.Staff:getCandidatePool(farmId), args[1], "candidate")
             if candidate == nil then
                 return problem or false
             end

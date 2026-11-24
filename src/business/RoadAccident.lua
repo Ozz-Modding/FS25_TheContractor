@@ -404,7 +404,8 @@ function TheContractorRoadAccident:onAssessed(incident)
     data.noticeId = tc.Notices:publish(farmId, string.format(g_i18n:getText("tc_roadAccident_paymentNotice"),
         g_i18n:formatMoney(data.repairEstimate, 0, true, true), data.vehicleName))
 
-    if tc.Office:hasAdministrator(farmId) then
+    -- 172: not on the show's day off.
+    if tc.Office:isAdministratorAtWork(farmId) then
         return TheContractorRoadAccident.STAGE.PAID_FAST
     end
     return TheContractorRoadAccident.STAGE.PAID

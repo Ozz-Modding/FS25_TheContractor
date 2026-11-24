@@ -778,6 +778,30 @@ Credits:
                     <text text="$l10n_tc_help_show_3"/>
                 </paragraph>
                 <paragraph>
+                    <title text="$l10n_tc_help_show_6_title"/>
+                    <text text="$l10n_tc_help_show_6"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_show_7_title"/>
+                    <text text="$l10n_tc_help_show_7"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_show_8_title"/>
+                    <text text="$l10n_tc_help_show_8"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_show_9_title"/>
+                    <text text="$l10n_tc_help_show_9"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_show_11_title"/>
+                    <text text="$l10n_tc_help_show_11"/>
+                </paragraph>
+                <paragraph>
+                    <title text="$l10n_tc_help_show_10_title"/>
+                    <text text="$l10n_tc_help_show_10"/>
+                </paragraph>
+                <paragraph>
                     <title text="$l10n_tc_help_show_4_title"/>
                     <text text="$l10n_tc_help_show_4"/>
                 </paragraph>

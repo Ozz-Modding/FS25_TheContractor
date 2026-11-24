@@ -425,7 +425,7 @@ local function fakeCatalog()
     }
 end
 
-test("a sale's lots from the catalog: a model for each role, a combine with a header that fits", function()
+test("a sale's lots from the catalog: a model for each role, a combine without its header", function()
     local world = setup()
     world:load("src/business/FarmerFleet.lua")
     local catalog = fakeCatalog()
@@ -441,13 +441,32 @@ test("a sale's lots from the catalog: a model for each role, a combine with a he
     for i, lot in ipairs(lots) do
         assertEquals(lot.role, roles[i])
         if lot.role == "combine" then
-            -- Only combines with something that fits are picked, and it's fitted.
+            -- Only combines with something that fits are picked, and it's
+            -- sold on its own (headers are lots of their own).
             assertEquals(lot.xmlFilename, "combine.xml")
-            assertEquals(lot.attachmentXml, "grainHeader.xml")
-        else
-            assertEquals(lot.attachmentXml, nil)
         end
+        assertEquals(lot.attachmentXml, nil)
     end
+end)
+
+test("headers are lots of their own, every model that fits a combine once; a telehandler comes bare", function()
+    local world = setup()
+    world:load("src/business/FarmerFleet.lua")
+    local catalog = fakeCatalog()
+    catalog.byRole.combine = { { xmlFilename = "combine.xml" }, { xmlFilename = "combine2.xml" } }
+    catalog.attachments["combine2.xml"] = { { xmlFilename = "grainHeader.xml" }, { xmlFilename = "cornHeader.xml" } }
+    catalog.byRole.telehandler = { { xmlFilename = "telehandler.xml" } }
+    catalog.attachments["telehandler.xml"] = { { xmlFilename = "spike.xml" } }
+    local headers = TCAuctionLayout.getLotModels(catalog, "header")
+    assertEquals(#headers, 2)
+    assertEquals(headers[1].xmlFilename, "cornHeader.xml")
+    assertEquals(headers[2].xmlFilename, "grainHeader.xml")
+    assertTrue(TCAuctionLayout.getAvailableRoles(catalog, { { role = "header", weight = 1, min = 1, max = 2 } }).header)
+
+    local lots = TCAuctionLayout.pickLots(catalog, { "header", "telehandler" }, math.random)
+    assertEquals(lots[1].role, "header")
+    assertEquals(lots[1].attachmentXml, nil)
+    assertEquals(lots[2].attachmentXml, nil, "no spike")
 end)
 
 test("a role the catalog has nothing for gets no lot", function()

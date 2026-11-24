@@ -492,8 +492,9 @@ function TheContractorJobGeneration:rollForFarm(farmId, hour)
     end
 end
 
-function TheContractorJobGeneration:generateForFarm(farmId, offerSource)
-    local job = self:tryGenerateJob(farmId, nil, offerSource)
+-- 171: customerId (optional) limits it to that farmer's fields.
+function TheContractorJobGeneration:generateForFarm(farmId, offerSource, customerId)
+    local job = self:tryGenerateJob(farmId, nil, offerSource, customerId)
     if job ~= nil then
         self.lastOfferDayByFarm[farmId] = g_currentMission.environment.currentMonotonicDay
     end
@@ -581,8 +582,11 @@ end
 -- one type and always prefers a field the farm can fulfill, falling back
 -- to any of the type's fields - same rules otherwise, so a forced offer is
 -- still one the generator could have made on its own.
-function TheContractorJobGeneration:tryGenerateJob(farmId, onlyJobType, offerSource)
-    local options = self:getJobTypeOptions(farmId, onlyJobType)
+--
+-- customerId (171: "any work going?" at the show) restricts it to fields
+-- that customer's work is for (Farmers:getCustomerIdForField).
+function TheContractorJobGeneration:tryGenerateJob(farmId, onlyJobType, offerSource, customerId)
+    local options = self:getJobTypeOptions(farmId, onlyJobType, customerId)
     local preferFulfillable = onlyJobType ~= nil or
         math.random() < TheContractorJobGeneration.FULFILLABLE_TYPE_SHARE
     local field, deadlineDay, readyDay, option
@@ -855,8 +859,8 @@ end
 -- its year (and weeding not at all on a save with weeds off), drawing from
 -- every type would waste most rolls on types with nothing to offer and cut
 -- the offer rate to a fraction of 026's tuning. onlyJobType limits it to
--- that one type (see tryGenerateJob).
-function TheContractorJobGeneration:getJobTypeOptions(farmId, onlyJobType)
+-- that one type (see tryGenerateJob), customerId to that customer's fields.
+function TheContractorJobGeneration:getJobTypeOptions(farmId, onlyJobType, customerId)
     TheContractorJobGeneration.refreshFieldStates()
     local vehicles = TheContractorJobGeneration.getFarmVehicles(farmId)
     local options = {}
@@ -864,6 +868,9 @@ function TheContractorJobGeneration:getJobTypeOptions(farmId, onlyJobType)
         local jobDef = TheContractorJobGeneration.JOB_TYPES[jobType]
         local candidates = (onlyJobType == nil or onlyJobType == jobType) and
             self:getCandidateFields(farmId, jobDef) or {}
+        if customerId ~= nil then
+            candidates = self:filterByCustomer(candidates, customerId)
+        end
         if #candidates > 0 then
             table.insert(options, {
                 jobType = jobType,
@@ -874,6 +881,18 @@ function TheContractorJobGeneration:getJobTypeOptions(farmId, onlyJobType)
         end
     end
     return options
+end
+
+-- 171: the fields among fields whose work is for customerId.
+function TheContractorJobGeneration:filterByCustomer(fields, customerId)
+    local farmers = g_currentMission.TheContractor.Farmers
+    local result = {}
+    for _, field in ipairs(fields) do
+        if farmers:getCustomerIdForField(field:getId()) == customerId then
+            table.insert(result, field)
+        end
+    end
+    return result
 end
 
 -- Which of `fields` the farm's `vehicles` could do a job of this type on

@@ -13,7 +13,8 @@ local SUBSYSTEM_FILES = {
     "Company", "Reputation", "Advertising", "JobGeneration", "Job", "Jobs", "Staff", "Cooldown", "Drivers",
     "Notices", "Holidays", "Finances", "Inbox", "Overheads", "Claims", "Office", "Logbook",
     "MachineryInsurance", "GoodNews", "Parking", "RandomEvents", "Relationships", "RepairContracts",
-    "Dispatch", "Watchdog", "AuctionSale", "EventDay", "Show",
+    "Dispatch", "Watchdog", "AuctionSale", "EventDay", "Show", "ShowLivestock", "PloughingMatch",
+    "ShowWorker", "ShowStands", "ShowDayOff",
 }
 
 local function setup()
@@ -30,6 +31,12 @@ local function setup()
     Event = { new = function(mt) return setmetatable({}, mt) end }
     InitEventClass = function() end
 
+    -- 167's class keys, as ShowLivestock loads; 169's plot states.
+    world:load("src/util/TCShowClasses.lua")
+    world:load("src/util/TCPloughMatch.lua")
+    world:load("src/util/TCShowWorker.lua")
+    world:load("src/util/TCShowStands.lua")
+    world:load("src/util/TCShowDayOff.lua")
     for _, name in ipairs(SUBSYSTEM_FILES) do
         world:load("src/business/" .. name .. ".lua")
     end
@@ -61,7 +68,11 @@ local function setup()
             },
             graceJobs = { [12] = true, [21] = true },
         }),
-        Staff = make("TheContractorStaff", { workersByFarm = { [1] = { [1] = {} }, [2] = { [2] = {} } } }),
+        -- 171: a candidate kept for each farm by the show's careers stand,
+        -- and one any farm can hire.
+        Staff = make("TheContractorStaff", { workersByFarm = { [1] = { [1] = {} }, [2] = { [2] = {} } },
+            candidatePool = { [31] = { id = 31, keptForFarmId = 1, keptUntilDay = 9 },
+                [32] = { id = 32, keptForFarmId = 2, keptUntilDay = 9 }, [33] = { id = 33 } } }),
         Cooldown = make("TheContractorCooldown", {
             entriesByFarm = { [1] = { [1] = { vehicleIds = { 101, 102 } } }, [2] = { [2] = { vehicleIds = { 201 } } } },
             vehicleIdsInCooldown = { [101] = true, [102] = true, [201] = true },
@@ -129,6 +140,23 @@ local function setup()
         Show = make("TheContractorShow", { results = { showId = 1, day = 10, placings = {
             { placing = 1, farmId = 1, farmerId = 0 }, { placing = 2, farmId = 0, farmerId = 7 },
             { placing = 3, farmId = 2, farmerId = 0 } } } }),
+        -- 167: the show's livestock entries, by farm.
+        ShowLivestock = make("TheContractorShowLivestock", { entries = {
+            { id = 1, farmId = 1, classKey = "herd" }, { id = 2, farmId = 2, classKey = "herd" } } }),
+        -- 169: the ploughing plots and each farm's best.
+        PloughingMatch = make("TheContractorPloughingMatch", { over = false, runs = {}, plots = {
+            { number = 1, state = "taken", farmId = 1, farmerId = 0, workerId = 3 },
+            { number = 2, state = "taken", farmId = 2, farmerId = 0 } },
+            best = { [1] = { bestScore = 80, wins = 1, matches = 1 }, [2] = { bestScore = 70, wins = 0, matches = 1 } } }),
+        -- 170: the workers entered in the ploughing, by farm.
+        ShowWorker = make("TheContractorShowWorker", { showId = 1, entries = {
+            { farmId = 1, workerId = 3, name = "Amy" }, { farmId = 2, workerId = 4, name = "Ben" } } }),
+        -- 171: each farm's visit to the show's stands.
+        ShowStands = make("TheContractorShowStands", { showId = 1, visits = {
+            [1] = { attended = true, joined = false, careers = true, talked = { [7] = true }, asked = {} },
+            [2] = { attended = true, joined = true, careers = false, talked = {}, asked = { [8] = true } } } }),
+        -- 172: each farm's answer about the show's staff day off.
+        ShowDayOff = make("TheContractorShowDayOff", { showId = 1, answers = { [1] = 2, [2] = 3 } }),
     }
     g_currentMission.TheContractor = tc
     return world, tc
@@ -213,6 +241,22 @@ test("the deleted farm's state goes and the other farm's stays", function()
     assertEquals(#tc.Show.results.placings, 2, "show placings")
     assertEquals(tc.Show.results.placings[1].farmerId, 7, "a farmer's placing kept")
     assertEquals(tc.Show.results.placings[2].farmId, 2, "the other farm's placing kept")
+    assertEquals(#tc.ShowLivestock.entries, 1, "show entries")
+    assertEquals(tc.ShowLivestock.entries[1].farmId, 2, "the other farm's entry kept")
+    assertEquals(tc.PloughingMatch.plots[1].farmId, 0, "ploughing plot freed")
+    assertEquals(tc.PloughingMatch.plots[1].state, "open", "ploughing plot open again")
+    assertEquals(tc.PloughingMatch.plots[1].workerId, 0, "its worker gone")
+    assertEquals(#tc.ShowWorker.entries, 1, "the ploughing worker's entry")
+    assertEquals(tc.ShowWorker.entries[1].farmId, 2, "the other farm's entry kept")
+    assertEquals(tc.ShowStands.visits[1], nil, "the show visit")
+    assertTrue(tc.ShowStands.visits[2].joined, "the other farm's visit kept")
+    assertEquals(tc.ShowDayOff:getAnswer(1), nil, "the show day off's answer")
+    assertEquals(tc.ShowDayOff:getAnswer(2), TCShowDayOff.ANSWER.NO, "the other farm's answer kept")
+    assertEquals(tc.Staff.candidatePool[31], nil, "the candidate kept for the farm")
+    assertTrue(tc.Staff.candidatePool[32] ~= nil and tc.Staff.candidatePool[33] ~= nil, "the others kept")
+    assertEquals(tc.PloughingMatch.plots[2].farmId, 2, "the other farm's plot kept")
+    assertEquals(tc.PloughingMatch.best[1], nil, "ploughing best")
+    assertEquals(tc.PloughingMatch.best[2].bestScore, 70, "the other farm's best kept")
 
     assertEquals(count(tc.RandomEvents.incidents), 1, "incidents")
     assertEquals(tc.RandomEvents.lastPeriodByFarm[1], nil, "event cooldowns")

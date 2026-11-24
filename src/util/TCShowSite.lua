@@ -23,13 +23,13 @@
 --   Ranking (rankCandidates): those that can hold the show first, one field
 --     before a pair, then the most plots, the flattest plots, the biggest.
 --
--- The plot size and count are first guesses until 168 settles them (the
--- size a 3-4 furrow plough finishes in the time limit).
+-- The plot size is 168's: about 15 real minutes' ploughing for a 3-4
+-- furrow plough. The count (4 to 6) is still 164's guess.
 
 TCShowSite = {}
 
 TCShowSite.RULES = {
-    plotSize = 40,               -- a plot's side (m); 168 settles it
+    plotSize = 35,               -- a plot's side (m), 168's
     plotGap = 6,                 -- between neighbouring plots
     minPlots = 4,
     maxPlots = 6,

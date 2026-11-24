@@ -78,6 +78,10 @@ function TCAuctionSiteEvent.readLot(streamId)
     return lot
 end
 
+-- 169: a ploughing plot's numbers (164's plot: its middle, angle and half
+-- size).
+TCAuctionSiteEvent.PLOT_KEYS = { "cx", "cz", "angle", "half" }
+
 -- 140: the scene (TCAuctionLayout.getScene's), or nil.
 function TCAuctionSiteEvent.writeScene(streamId, scene)
     if not streamWriteBool(streamId, scene ~= nil) then
@@ -107,6 +111,14 @@ function TCAuctionSiteEvent.writeScene(streamId, scene)
         streamWriteUInt8(streamId, #slots)
         for _, u in ipairs(slots) do
             streamWriteFloat32(streamId, u)
+        end
+    end
+    -- 169: the show's ploughing plots (none for any other day).
+    local plots = scene.plots or {}
+    streamWriteUInt8(streamId, #plots)
+    for _, plot in ipairs(plots) do
+        for _, key in ipairs(TCAuctionSiteEvent.PLOT_KEYS) do
+            streamWriteFloat32(streamId, plot[key] or 0)
         end
     end
 end
@@ -142,6 +154,14 @@ function TCAuctionSiteEvent.readScene(streamId)
             table.insert(row.slots, streamReadFloat32(streamId))
         end
         table.insert(scene.rows, row)
+    end
+    scene.plots = {}
+    for _ = 1, streamReadUInt8(streamId) do
+        local plot = {}
+        for _, key in ipairs(TCAuctionSiteEvent.PLOT_KEYS) do
+            plot[key] = streamReadFloat32(streamId)
+        end
+        table.insert(scene.plots, plot)
     end
     return scene
 end

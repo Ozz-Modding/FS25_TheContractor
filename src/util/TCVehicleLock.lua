@@ -3,6 +3,9 @@
 -- post-job buffer (023), still hidden waiting for a parking space (062),
 -- stolen (069), or a lot at an auction (135), can't be tabbed to or driven. A player
 -- self-allocated job is never locked - the player is the one driving it.
+-- 169: the ploughing match's lent kit too, for everyone but the plot's farm
+-- while its run's on (PloughingMatch:getLockedKit, for this machine's
+-- player's farm).
 --
 -- Adapted from the user's FS25_UsedEquipmentYards mod
 -- (UsedEquipmentYards.applyClientRestrictions): the vehicle's own
@@ -143,6 +146,13 @@ local function collectLockedVehicleIds()
             shouldLock[vehicleId] = TCVehicleLock.REASON_AUCTION_LOT
         end
     end
+    -- 169: the ploughing match's kit, but for the plot's own farm's player
+    -- while their run's on.
+    if tc.PloughingMatch ~= nil then
+        for vehicleId, reason in pairs(tc.PloughingMatch:getLockedKit(g_currentMission:getFarmId())) do
+            shouldLock[vehicleId] = reason
+        end
+    end
     return shouldLock
 end
 
@@ -231,6 +241,11 @@ function TCVehicleLock.isBusyForSale(vehicle)
         end
         -- 100: a customer's machine isn't ours to sell.
         if TheContractorRepairContracts ~= nil and TheContractorRepairContracts.isContractVehicle(vehicle) then
+            return true
+        end
+        -- 169: nor the ploughing match's kit, whoever's driving it.
+        local match = g_currentMission.TheContractor.PloughingMatch
+        if match ~= nil and match:isKit(vehicle) then
             return true
         end
         vehicle = vehicle.getAttacherVehicle ~= nil and vehicle:getAttacherVehicle() or nil

@@ -220,6 +220,36 @@ test("135: an auction lot is out of Tab and can't be driven, for being a lot", f
     assertEquals(control(lot), true)
 end)
 
+test("169: the ploughing match's kit is locked with the match's reason, never sold, and free for its own plot's farm", function()
+    local world = setup()
+    local kit = addEnterable(world, "Kit", { farmId = 0 })
+    local control = nil
+    function kit:registerPlayerVehicleControlAllowedFunction(_, func) control = func end
+    local reason = "tc_ploughMatch_lockNotStarted"
+    local askedFor = nil
+    g_currentMission.TheContractor.PloughingMatch = {
+        getLockedKit = function(_, farmId)
+            askedFor = farmId
+            return reason ~= nil and { [kit.id] = reason } or {}
+        end,
+        isKit = function(_, vehicle) return vehicle == kit end,
+    }
+    TCVehicleLock.refresh()
+    assertEquals(askedFor, g_currentMission:getFarmId(), "for this machine's player's farm")
+    assertEquals(kit:getIsTabbable(), false)
+    local allowed, text = control(kit)
+    assertEquals(allowed, false)
+    assertEquals(text, g_i18n:getText(reason), "the match's own reason")
+    assertRefused(world, kit, "the kit")
+
+    -- Its plot's farm's, while its run's on: drivable, still not for sale.
+    reason = nil
+    TCVehicleLock.refresh()
+    assertEquals(control(kit), true)
+    world.replies = {}
+    assertRefused(world, kit, "the kit, driven")
+end)
+
 test("a player's own job's tractor stays tabbable", function()
     local world = setup()
     local tractor = addEnterable(world, "Tractor")

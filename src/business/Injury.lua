@@ -122,7 +122,7 @@ end
 function TheContractorInjury.canBeInjured(worker)
     local STATUS = TheContractorWorker.STATUS
     return worker.pendingSickDays == 0 and worker.status ~= STATUS.SICK and worker.status ~= STATUS.HOLIDAY and
-        worker.status ~= STATUS.TRAINING
+        worker.status ~= STATUS.TRAINING and worker.status ~= STATUS.SHOW
 end
 
 -- At work right now: in the yard during their hours, or out working.

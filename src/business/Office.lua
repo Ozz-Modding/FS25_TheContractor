@@ -82,6 +82,8 @@ TheContractorOffice.STATUS = {
     TRAINING = "training",
     -- 097: outside working hours.
     AT_HOME = "atHome",
+    -- 172: the farm's given the staff the show's day off.
+    SHOW = "atShow",
 }
 
 -- Why a hire or a course can't go ahead (getHireProblem/getTrainProblem).
@@ -120,6 +122,10 @@ end
 function TheContractorOffice.getStatus(member)
     if TheContractorOffice.isTraining(member) then
         return TheContractorOffice.STATUS.TRAINING
+    end
+    local tc = g_currentMission.TheContractor
+    if tc ~= nil and tc.ShowDayOff ~= nil and tc.ShowDayOff:isOffToday(member.farmId) then
+        return TheContractorOffice.STATUS.SHOW
     end
     return TheContractorWorkingHours.isOfficeOpen() and TheContractorOffice.STATUS.AVAILABLE or
         TheContractorOffice.STATUS.AT_HOME
@@ -190,19 +196,30 @@ function TheContractorOffice:getFarmIds()
     return farmIds
 end
 
+-- 172: an administrator employed and doing the office's work today: not
+-- on the show's day off.
+function TheContractorOffice:isAdministratorAtWork(farmId)
+    if not self:hasAdministrator(farmId) then
+        return false
+    end
+    local tc = g_currentMission.TheContractor
+    return tc == nil or tc.ShowDayOff == nil or not tc.ShowDayOff:isOffToday(farmId)
+end
+
 -- 049's invoice rolls for this farm.
 function TheContractorOffice:getDelayWeights(farmId)
-    return self:hasAdministrator(farmId) and TheContractorOffice.DELAY_WEIGHTS or TheContractorFinances.DELAY_WEIGHTS
+    return self:isAdministratorAtWork(farmId) and TheContractorOffice.DELAY_WEIGHTS or
+        TheContractorFinances.DELAY_WEIGHTS
 end
 
 function TheContractorOffice:getBadDebtChance(farmId)
-    return self:hasAdministrator(farmId) and TheContractorOffice.BAD_DEBT_CHANCE or
+    return self:isAdministratorAtWork(farmId) and TheContractorOffice.BAD_DEBT_CHANCE or
         TheContractorFinances.BAD_DEBT_CHANCE
 end
 
 function TheContractorOffice:getLatePayerChance(farmId)
     local chance = TheContractorFinances.LATE_PAYER_CHANCE
-    if self:hasAdministrator(farmId) then
+    if self:isAdministratorAtWork(farmId) then
         chance = chance * TheContractorOffice.LATE_PAYER_MULTIPLIER
     end
     return chance

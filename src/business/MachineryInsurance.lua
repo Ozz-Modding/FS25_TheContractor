@@ -289,7 +289,8 @@ function TheContractorMachineryInsurance:onClaim(incident)
     local data = incident.data
     local args = { data.name, "$l10n_" .. TheContractorMachineryInsurance.getLevelTextKey(data.coverLevel) }
 
-    if tc.Office:hasAdministrator(incident.farmId) then
+    -- 172: not on the show's day off.
+    if tc.Office:isAdministratorAtWork(incident.farmId) then
         data.claimSubmittedDay = getToday()
         self:publishClaimNotice(incident)
         tc.Inbox:postMessage(incident.farmId, TheContractorMachineryInsurance.MESSAGE_KIND,

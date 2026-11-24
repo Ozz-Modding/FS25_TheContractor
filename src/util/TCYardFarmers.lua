@@ -28,6 +28,10 @@
 -- 155: in wet weather (TCShelter) only indoor spots are in use, placed or
 -- generated, so a farmer with none goes in until it's dry.
 --
+-- 171: a farmer at the county show (tc.ShowStands) is on its showground
+-- while it's open, not in their yard (one waiting by a machine stays
+-- there, and TCShowStandsWorld leaves them off the showground).
+--
 -- Showing them is TCIdleStaff's: a HumanGraphicsComponent from their look,
 -- loaded within LOAD_DISTANCE and freed beyond UNLOAD_DISTANCE, so a map
 -- with many farmers only holds the ones near the player, and nobody
@@ -291,11 +295,18 @@ function TCYardFarmers.getWanted()
     end
     table.sort(farmers, function(a, b) return a.id < b.id end)
     local placedByYard, takenByYard = {}, {}
+    -- 171: a farmer at the show isn't in their yard while it's open.
+    local atShow = {}
+    if tc.ShowStands ~= nil and tc.ShowStands:isOpen() then
+        for _, id in ipairs(tc.ShowStands:getFarmersAtShow()) do
+            atShow[id] = true
+        end
+    end
     for _, person in ipairs(farmers) do
         local job, vehicle = TCYardFarmers.getMachineJob(person, tc.Jobs)
         if job ~= nil then
             wanted[person.id] = { person = person, spot = TCYardFarmers.getMachineSpot(person, job, vehicle, tc.Yards) }
-        elseif slot ~= nil and TCYardFarmers.getReason(person, tc.Yards) == nil then
+        elseif slot ~= nil and not atShow[person.id] and TCYardFarmers.getReason(person, tc.Yards) == nil then
             local farmlandId = person.yardFarmlandId
             placedByYard[farmlandId] = placedByYard[farmlandId] or TCYardFarmers.getPlacedSpots(farmlandId)
             local placed = placedByYard[farmlandId]

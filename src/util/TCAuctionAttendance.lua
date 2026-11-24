@@ -159,7 +159,8 @@ function TCAuctionAttendance.onCompanyCreated(farmId)
 end
 
 -- Server: the farm's been to the day (on its site, or for the auction a bid
--- or a win), so its attend job's done.
+-- or a win), so its attend job's done. 171: a kind with onAttended(farmId,
+-- event) is told, once, as the job's done (the show's host's goodwill).
 function TCAuctionAttendance.markAttended(farmId, kind)
     local tc = g_currentMission.TheContractor
     local event = nil
@@ -171,6 +172,9 @@ function TCAuctionAttendance.markAttended(farmId, kind)
     local job = event ~= nil and TCAuctionAttendance.getJob(farmId, event.id, kind) or nil
     if job ~= nil and job.state == TheContractorJob.STATE.ACCEPTED then
         tc.Jobs:completeJob(job, true)
+        if kind ~= nil and kind.onAttended ~= nil then
+            kind:onAttended(farmId, event)
+        end
     end
 end
 

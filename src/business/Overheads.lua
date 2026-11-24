@@ -323,12 +323,14 @@ function TheContractorOverheads:charge(farmId, definition, amount)
 end
 
 -- Starts a new term now, priced now, and takes its first payment. levelKey
--- only for an overhead with levels (nil picks its first).
-function TheContractorOverheads:startPolicy(farmId, definition, billing, levelKey)
+-- only for an overhead with levels (nil picks its first). discount
+-- (optional, 171: joining the association at the show) is the share off
+-- this first term only; the renewal's priced in full.
+function TheContractorOverheads:startPolicy(farmId, definition, billing, levelKey, discount)
     local periodIndex = TCCalendar.getPeriodIndex()
     local level = TheContractorOverheads.getLevel(definition, levelKey)
     levelKey = level ~= nil and level.key or nil
-    local termCost = self:getAnnualCost(farmId, definition, levelKey)
+    local termCost = self:getAnnualCost(farmId, definition, levelKey) * (1 - (discount or 0))
     local renewalPeriod = periodIndex + TheContractorOverheads.TERM_PERIODS
 
     local state = {

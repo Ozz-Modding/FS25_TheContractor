@@ -94,6 +94,10 @@ TCAuctionCrowd.CLUSTER_SIZES = { 3, 4, 2, 5, 3 }
 -- Live state (this machine only): { fieldId, loops (buildPath's paths),
 -- figures, elapsedMs, people, walkers, standers, lanes, stats }.
 TCAuctionCrowd.active = nil
+-- 172: standing spots someone else is on (spotKey -> true), whose crowd
+-- figure stands aside (TCShowStandsWorld's staff at the show). Kept across
+-- a crowd put up again.
+TCAuctionCrowd.reserved = {}
 
 -- Geometry (pure) ---------------------------------------------------------------------
 
@@ -671,6 +675,22 @@ function TCAuctionCrowd.pickTemplates(templates, count)
     return result
 end
 
+-- 172: a standing spot's key, the same for the same spot however it's
+-- worked out.
+function TCAuctionCrowd.spotKey(x, z)
+    return string.format("%.2f,%.2f", x, z)
+end
+
+-- 172: the spots someone else is standing on now (spotKey -> true; empty
+-- or nil for none): a crowd figure on one isn't there.
+function TCAuctionCrowd.setReservedSpots(reserved)
+    TCAuctionCrowd.reserved = reserved or {}
+    local active = TCAuctionCrowd.active
+    for _, figure in ipairs(active ~= nil and active.figures or {}) do
+        figure.isAway = figure.spotKey ~= nil and TCAuctionCrowd.reserved[figure.spotKey] == true
+    end
+end
+
 -- Engine side --------------------------------------------------------------------------
 
 function TCAuctionCrowd.getFieldPolygon(field)
@@ -793,8 +813,10 @@ function TCAuctionCrowd.putUp(fieldId, loops, spots, people, options)
     local categories = {}
     for i = 1, plan.standers do
         local spot = spots[i]
+        local spotKey = TCAuctionCrowd.spotKey(spot.x, spot.z)
         table.insert(figures, { kind = "stand", template = looks[i], x = spot.x,
-            y = TCFigures.groundY(spot.x, spot.z), z = spot.z, yaw = spot.yaw })
+            y = TCFigures.groundY(spot.x, spot.z), z = spot.z, yaw = spot.yaw, spotKey = spotKey,
+            isAway = TCAuctionCrowd.reserved[spotKey] == true })
         categories[#figures] = spot.category
     end
     for k, walker in ipairs(plan.walkers) do
@@ -912,6 +934,7 @@ end
 -- deleteMap: the crowd goes with the map.
 function TCAuctionCrowd.reset()
     TCAuctionCrowd.stop()
+    TCAuctionCrowd.reserved = {}
 end
 
 function TCAuctionCrowd.registerConsoleCommands()

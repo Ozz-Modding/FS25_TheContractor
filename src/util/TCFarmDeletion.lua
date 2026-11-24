@@ -22,7 +22,8 @@ TCFarmDeletion.SUBSYSTEMS = {
     "Company", "Reputation", "Advertising", "JobGeneration", "Jobs", "Staff", "Cooldown", "Drivers",
     "Notices", "Holidays", "Finances", "Inbox", "Overheads", "Claims", "Office", "Logbook",
     "MachineryInsurance", "GoodNews", "Parking", "RandomEvents", "Relationships", "RepairContracts",
-    "Dispatch", "Watchdog", "AuctionSale", "Show",
+    "Dispatch", "Watchdog", "AuctionSale", "Show", "ShowLivestock", "PloughingMatch",
+    "ShowWorker", "ShowStands", "ShowDayOff",
 }
 
 function TCFarmDeletion.install()

@@ -92,6 +92,17 @@ source(TheContractor.dir .. "src/util/TCShowSite.lua")
 source(TheContractor.dir .. "src/util/TCShowScene.lua")
 source(TheContractor.dir .. "src/util/TCRealisticLivestock.lua")
 source(TheContractor.dir .. "src/util/TCShowAnimals.lua")
+source(TheContractor.dir .. "src/util/TCShowClasses.lua")
+source(TheContractor.dir .. "src/util/TCShowJudging.lua")
+source(TheContractor.dir .. "src/util/TCPloughScore.lua")
+source(TheContractor.dir .. "src/util/TCPloughTrial.lua")
+source(TheContractor.dir .. "src/util/TCPloughMatch.lua")
+source(TheContractor.dir .. "src/util/TCShowWorker.lua")
+source(TheContractor.dir .. "src/util/TCPloughPlotActivatable.lua")
+source(TheContractor.dir .. "src/util/TCShowStands.lua")
+source(TheContractor.dir .. "src/util/TCShowDayOff.lua")
+source(TheContractor.dir .. "src/util/TCConversation.lua")
+source(TheContractor.dir .. "src/util/TCShowStandsWorld.lua")
 source(TheContractor.dir .. "src/util/TCAuctionAttendance.lua")
 source(TheContractor.dir .. "src/util/TCLotInspections.lua")
 source(TheContractor.dir .. "src/util/TCAuctionLotHud.lua")
@@ -184,6 +195,11 @@ source(TheContractor.dir .. "src/business/Auctions.lua")
 source(TheContractor.dir .. "src/business/OpenDay.lua")
 source(TheContractor.dir .. "src/business/ShowSite.lua")
 source(TheContractor.dir .. "src/business/Show.lua")
+source(TheContractor.dir .. "src/business/ShowLivestock.lua")
+source(TheContractor.dir .. "src/business/PloughingMatch.lua")
+source(TheContractor.dir .. "src/business/ShowWorker.lua")
+source(TheContractor.dir .. "src/business/ShowStands.lua")
+source(TheContractor.dir .. "src/business/ShowDayOff.lua")
 source(TheContractor.dir .. "src/business/AuctionSale.lua")
 source(TheContractor.dir .. "src/events/TCInitialClientStateEvent.lua")
 source(TheContractor.dir .. "src/events/TCSettingsEvent.lua")
@@ -293,6 +309,14 @@ source(TheContractor.dir .. "src/events/TCAuctionBidsEvent.lua")
 source(TheContractor.dir .. "src/events/TCAuctionEvent.lua")
 source(TheContractor.dir .. "src/events/TCEventDayEvent.lua")
 source(TheContractor.dir .. "src/events/TCShowEvent.lua")
+source(TheContractor.dir .. "src/events/TCShowEntryEvent.lua")
+source(TheContractor.dir .. "src/events/TCShowLivestockEvent.lua")
+source(TheContractor.dir .. "src/events/TCPloughMatchEvent.lua")
+source(TheContractor.dir .. "src/events/TCShowWorkerEvent.lua")
+source(TheContractor.dir .. "src/events/TCShowStandsEvent.lua")
+source(TheContractor.dir .. "src/events/TCShowDayOffEvent.lua")
+source(TheContractor.dir .. "src/events/TCShowTalkEvent.lua")
+source(TheContractor.dir .. "src/events/TCPloughPlotEvent.lua")
 
 -- The top-level Contractor page itself stays always-visible (see Company.lua
 -- and MenuContractor's Overview tab): "Create Company" has to live somewhere
@@ -448,6 +472,21 @@ function TheContractor:loadMap()
     self.Show = TheContractorShow.new()
     self.Show:register(self.Inbox)
     self.PublicEvents:registerKind(self.Show)
+    -- 167: its livestock classes, a competition on the day.
+    self.ShowLivestock = TheContractorShowLivestock.new()
+    self.ShowLivestock:register(self.Show)
+    -- 169: its ploughing match, after the livestock.
+    self.PloughingMatch = TheContractorPloughingMatch.new()
+    self.PloughingMatch:register(self.Show)
+    -- 170: a worker entered in the ploughing match.
+    self.ShowWorker = TheContractorShowWorker.new()
+    self.ShowWorker:register(self.Show)
+    -- 171: the stalls and farmers at the show.
+    self.ShowStands = TheContractorShowStands.new()
+    self.ShowStands:register(self.Show)
+    -- 172: the staff's day off for the show.
+    self.ShowDayOff = TheContractorShowDayOff.new()
+    self.ShowDayOff:register(self.Show, self.Inbox)
     -- 139: bids and the sale.
     self.AuctionSale = TheContractorAuctionSale.new()
     self.AuctionSale:register(self.Inbox)
@@ -534,6 +573,9 @@ function TheContractor:loadMap()
     TCTippedTrailerActivatable.install()
     -- 138: viewing an auction lot.
     TCAuctionLotActivatable.install()
+    -- 169: taking a ploughing plot at its start peg.
+    TCPloughPlotActivatable.install()
+    TCShowStandsWorld.install()
     -- 077: a worker's look is edited in the vanilla wardrobe.
     TCWardrobe.install()
 
@@ -621,7 +663,14 @@ function TheContractor:loadMap()
     TheContractorOpenDay.registerConsoleCommands()
     TheContractorShowSite.registerConsoleCommands()
     TheContractorShow.registerConsoleCommands()
+    TheContractorShowLivestock.registerConsoleCommands()
+    TheContractorPloughingMatch.registerConsoleCommands()
+    TheContractorShowWorker.registerConsoleCommands()
+    TheContractorShowStands.registerConsoleCommands()
+    TheContractorShowDayOff.registerConsoleCommands()
     TCShowAnimals.registerConsoleCommands()
+    -- 168: the ploughing match's scoring spike.
+    TCPloughTrial.registerConsoleCommands()
     TCLotInspections.registerConsoleCommands()
     TheContractorRepairContracts.registerConsoleCommands()
     TheContractorYards.registerConsoleCommands()
@@ -697,6 +746,11 @@ function TheContractor:loadFromXMLFile()
     self.OpenDay:loadFromXMLFile(xmlFile)
     self.ShowSite:loadFromXMLFile(xmlFile)
     self.Show:loadFromXMLFile(xmlFile)
+    self.ShowLivestock:loadFromXMLFile(xmlFile)
+    self.PloughingMatch:loadFromXMLFile(xmlFile)
+    self.ShowWorker:loadFromXMLFile(xmlFile)
+    self.ShowStands:loadFromXMLFile(xmlFile)
+    self.ShowDayOff:loadFromXMLFile(xmlFile)
     self.AuctionSale:loadFromXMLFile(xmlFile)
     TCCalendarChange.loadFromXMLFile(xmlFile)
 
@@ -733,6 +787,10 @@ function TheContractor:resolveSavedVehicles()
     self.EmergencyRefuel:resolveSavedVehicles()
     -- 135: an auction site's lots.
     self.AuctionSite:resolveSavedVehicles()
+    -- 167: the show entries' husbandries.
+    self.ShowLivestock:resolveSavedVehicles()
+    -- 169: the ploughing match's kit (after the site's scene, loaded with the save).
+    self.PloughingMatch:resolveSavedVehicles()
     TCVehicleLock.repairSavedTabbable()
     -- 110: not vehicles, but the same moment: the map's fields, farmland
     -- owners and buildings are in place. After Jobs, whose customers it links.
@@ -793,6 +851,11 @@ function TheContractor:saveToXmlFile()
     tc.OpenDay:saveToXmlFile(xmlFile)
     tc.ShowSite:saveToXmlFile(xmlFile)
     tc.Show:saveToXmlFile(xmlFile)
+    tc.ShowLivestock:saveToXmlFile(xmlFile)
+    tc.PloughingMatch:saveToXmlFile(xmlFile)
+    tc.ShowWorker:saveToXmlFile(xmlFile)
+    tc.ShowStands:saveToXmlFile(xmlFile)
+    tc.ShowDayOff:saveToXmlFile(xmlFile)
     tc.AuctionSale:saveToXmlFile(xmlFile)
     TCCalendarChange.saveToXmlFile(xmlFile)
 
@@ -872,7 +935,12 @@ function TheContractor:deleteMap()
     TCShelter.uninstall()
     TCTippedTrailerActivatable.uninstall()
     TCAuctionLotActivatable.uninstall()
+    TCPloughPlotActivatable.uninstall()
+    TCShowStandsWorld.uninstall()
     TCADSUsedLots.uninstall()
+    if self.PloughingMatch ~= nil then
+        self.PloughingMatch:delete()
+    end
 
     if self.JobGeneration ~= nil then
         self.JobGeneration:stopHourlyTick()
@@ -1025,6 +1093,8 @@ function TheContractor:update(dt)
     TCJobSupplies.update(dt)
     -- 147: bin bags squash on every machine that draws them.
     TCDebris.updateSquash(dt)
+    -- 168: a ploughing trial's path (server).
+    TCPloughTrial.update(dt)
 
     if self.Dispatch ~= nil then
         self.Dispatch:update(dt)
@@ -1105,6 +1175,11 @@ function TheContractor:update(dt)
     if self.Show ~= nil then
         self.Show:update(dt)
     end
+    -- 169: the ploughing match's path, kit and painting (server), its
+    -- markers and farmers (every machine).
+    if self.PloughingMatch ~= nil then
+        self.PloughingMatch:update(dt)
+    end
     if self.OpenDay ~= nil then
         self.OpenDay:update(dt)
     end
@@ -1132,6 +1207,10 @@ function TheContractor:update(dt)
     TCIdleStaff.update(dt)
     -- 114: farmers in their yards (clients only).
     TCYardFarmers.update(dt)
+    -- 171: the show's stallholders and farmers, and talking to them.
+    if g_currentMission:getIsClient() then
+        TCShowStandsWorld.update(dt)
+    end
     -- 134: an auction crowd, if one's up (clients only).
     TCAuctionCrowd.update(dt)
     -- 140: the auction site's props and crowd sound, following its scene
@@ -1161,6 +1240,8 @@ function TheContractor:draw()
     end
     -- 151: tcDebug protestShow's block outlines.
     TCProtestCrowd.draw()
+    -- 168: a ploughing trial's plot and path.
+    TCPloughTrial.draw()
 end
 
 -- After every event file: TC_DATA_UPDATED for each of ours.

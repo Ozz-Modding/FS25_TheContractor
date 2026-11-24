@@ -12,14 +12,24 @@
 --     stock in. Ringside spectators along its long sides.
 --   The pens: a row of hurdle pens along one long side (v < 0), as long as
 --     the ring, for the livestock classes (167).
---   The stands: gazebos along the other side (v > 0), for 171's trade
---     stands, a couple of people at each.
+--   The stands: gazebos along the other side (v > 0), a couple of people
+--     at each. 171: two of them are stalls (getStallStands: the trade
+--     association's and the careers stand), each with a table at its front
+--     and a stallholder behind it (layOut's stalls), the visitors stood
+--     wider so a player can reach the table.
+--   171's farmers' spots (layOut's mingles): the ringside places the
+--     spectators didn't take, where farmers at the show stand.
 --   The trailer lines: bays across the far end, past the ring, marked out
 --     with cones, where entrants park their livestock trailers (167).
 --   The crowd's walks (getWalkways): a lane down each side of the ring
 --     (between it and the pens, and it and the stands) and a cross aisle
 --     between the ring and the trailer lines; TCAuctionScene.getWalks adds
 --     the near and far cross aisles as it does for any site.
+--   The ploughing plots (169, getPlotFrames): 164's plots kept on the scene
+--     (scene.plots), each facing across its row, away from the showground,
+--     so its near edge is the one the crowd's side, with a peg at each
+--     corner and a start peg just outside its near edge, left of the
+--     middle (where a player takes the plot).
 --
 -- In the scene's frame: u along the showground (nearSign towards the
 -- entrance), v across. "Depth" d is measured in from the arena's near
@@ -48,7 +58,21 @@ TCShowScene.SIZES = {
     hurdlePost = { width = 0.15, length = 0.15 },
     stand = { width = 3.2, length = 3.2 },
     cone = { width = 0.4, length = 0.4 },
+    plotPeg = { width = 0.4, length = 0.4 },
+    plotStartPeg = { width = 0.4, length = 0.4 },
+    standTable = { width = 0.9, length = 2 },
 }
+
+-- 171: a stall, in from its gazebo's front edge (metres): the table and,
+-- behind it, the stallholder. Its visitors stand this much further apart
+-- than at another stand, so there's room at the table.
+TCShowScene.STALL = { tableIn = 0.5, holderIn = 1.3, visitorSpread = 2.3 }
+-- The stalls, in the order they're given stands.
+TCShowScene.STALL_ROLES = { "association", "careers" }
+
+-- 169: in a plot's own frame (u in from its near edge, v to its right),
+-- metres: its start peg (outside the near edge, left of the middle).
+TCShowScene.PLOT = { startPegU = -1.5, startPegV = -4 }
 
 -- Standing spot categories (as TCAuctionScene.SPOT).
 TCShowScene.SPOT = {
@@ -210,13 +234,110 @@ function TCShowScene.getWalkways(scene)
     return walkways
 end
 
--- Lays the arena out (pure). Returns { props, spots, sounds }, empty for a
--- scene that isn't the show's.
+-- The ploughing plots (169) ------------------------------------------------------------------
+
+-- A point in a plot's frame (u in from its near edge, v to its right) in
+-- the world (TCPloughScore.toWorld's frame).
+function TCShowScene.plotToWorld(frame, u, v)
+    return frame.x + u * frame.dirX + v * frame.dirZ, frame.z + u * frame.dirZ - v * frame.dirX
+end
+
+-- Each of the scene's plots as a frame (pure), numbered in the scene's
+-- order: { number, x, z (its near edge's middle), dirX, dirZ (facing in),
+-- size, cx, cz (its middle) }. Every plot faces the same way: across their
+-- row, away from the showground's middle (the scene's). Empty for a scene
+-- with none.
+function TCShowScene.getPlotFrames(scene)
+    local plots = scene ~= nil and scene.plots or nil
+    local frames = {}
+    if plots == nil or #plots == 0 then
+        return frames
+    end
+    local first, last = plots[1], plots[#plots]
+    local ax, az = last.cx - first.cx, last.cz - first.cz
+    local length = math.sqrt(ax * ax + az * az)
+    if length < 0.001 then
+        ax, az = math.cos(first.angle or 0), math.sin(first.angle or 0)
+    else
+        ax, az = ax / length, az / length
+    end
+    -- Across the row, away from the showground.
+    local fx, fz = -az, ax
+    local mx, mz = 0, 0
+    for _, plot in ipairs(plots) do
+        mx, mz = mx + plot.cx, mz + plot.cz
+    end
+    mx, mz = mx / #plots, mz / #plots
+    if (mx - (scene.cx or 0)) * fx + (mz - (scene.cz or 0)) * fz < 0 then
+        fx, fz = -fx, -fz
+    end
+    for i, plot in ipairs(plots) do
+        local half = plot.half or 0
+        table.insert(frames, {
+            number = i,
+            x = plot.cx - fx * half,
+            z = plot.cz - fz * half,
+            dirX = fx,
+            dirZ = fz,
+            size = 2 * half,
+            cx = plot.cx,
+            cz = plot.cz,
+        })
+    end
+    return frames
+end
+
+-- A plot's start peg in the world (pure).
+function TCShowScene.getStartPeg(frame)
+    return TCShowScene.plotToWorld(frame, TCShowScene.PLOT.startPegU, TCShowScene.PLOT.startPegV)
+end
+
+-- The plots' pegs (pure): one at each corner, and the start peg, facing
+-- in. Added to result.props.
+function TCShowScene.layOutPlots(scene, result)
+    for _, frame in ipairs(TCShowScene.getPlotFrames(scene)) do
+        local yaw = math.atan2(frame.dirX, frame.dirZ)
+        local half = frame.size * 0.5
+        for _, corner in ipairs({ { 0, -half }, { frame.size, -half }, { frame.size, half }, { 0, half } }) do
+            local x, z = TCShowScene.plotToWorld(frame, corner[1], corner[2])
+            local size = TCShowScene.SIZES.plotPeg
+            table.insert(result.props, { kind = "plotPeg", x = x, z = z, yaw = yaw, width = size.width,
+                length = size.length, plot = frame.number })
+        end
+        local x, z = TCShowScene.getStartPeg(frame)
+        local size = TCShowScene.SIZES.plotStartPeg
+        table.insert(result.props, { kind = "plotStartPeg", x = x, z = z, yaw = yaw, width = size.width,
+            length = size.length, plot = frame.number })
+    end
+end
+
+-- 171: which of count stands (by their index along the row) are stalls
+-- (pure): role -> index. The second and fourth of four or more, so they're
+-- spread down the row, else the first ones; a role with no stand left is
+-- missing.
+function TCShowScene.getStallStands(count)
+    local indices = count >= 4 and { 2, 4 } or { 1, 2 }
+    local stalls = {}
+    for i, role in ipairs(TCShowScene.STALL_ROLES) do
+        local index = indices[i]
+        if index ~= nil and index <= count then
+            stalls[role] = index
+        end
+    end
+    return stalls
+end
+
+-- Lays the arena out (pure). Returns { props, spots, sounds, stalls,
+-- mingles }, empty for a scene that isn't the show's. 171: stalls { role,
+-- x, z, yaw (the stallholder, facing the lane) }, mingles { x, z, yaw }
+-- (farmers' spots, kept off the crowd's).
 function TCShowScene.layOut(scene)
-    local result = { props = {}, spots = {}, sounds = {} }
+    local result = { props = {}, spots = {}, sounds = {}, stalls = {}, mingles = {} }
     if not TCShowScene.isShowDressing(scene) then
         return result
     end
+    -- 169: the plots are on the ploughing ground, whatever the arena's room.
+    TCShowScene.layOutPlots(scene, result)
     local areas = TCShowScene.getAreas(scene)
     if areas == nil then
         return result
@@ -285,13 +406,28 @@ function TCShowScene.layOut(scene)
         end
     end
 
-    -- The stands, facing the lane, a couple of people at each.
+    -- The stands, facing the lane, a couple of people at each. 171: a
+    -- stall has a table at its front and a stallholder behind it.
+    local stallIndices = {}
+    for role, index in pairs(TCShowScene.getStallStands(#areas.stands)) do
+        stallIndices[index] = role
+    end
+    local S = TCShowScene.STALL
     for i, stand in ipairs(areas.stands) do
-        add("stand", stand.d, stand.v, yawOf(scene, 0, -1))
+        local facing = yawOf(scene, 0, -1)
+        add("stand", stand.d, stand.v, facing)
+        local frontEdge = stand.v - TCShowScene.STANDS.depth * 0.5
+        local role = stallIndices[i]
+        if role ~= nil then
+            add("standTable", stand.d, frontEdge + S.tableIn, facing, { stall = role })
+            local x, z = toWorld(scene, frame.uAt(stand.d), frontEdge + S.holderIn)
+            table.insert(result.stalls, { role = role, x = x, z = z, yaw = facing })
+        end
         groupCount = groupCount + 1
-        local front = stand.v - TCShowScene.STANDS.depth * 0.5 - 1.2
+        local front = frontEdge - 1.2
+        local spread = role ~= nil and S.visitorSpread or 1.4
         for p = 1, 2 do
-            local offset = (p - 1.5) * 1.4 + (TCAuctionScene.hash(seed, 50, i, p) - 0.5) * 0.4
+            local offset = (p - 1.5) * spread + (TCAuctionScene.hash(seed, 50, i, p) - 0.5) * 0.4
             local x, z = toWorld(scene, frame.uAt(stand.d + offset), front)
             table.insert(result.spots, { x = x, z = z, yaw = yawOf(scene, 0, 1), category = TCShowScene.SPOT.STAND,
                 group = groupCount })
@@ -313,11 +449,14 @@ function TCShowScene.layOut(scene)
     for sideIndex, side in ipairs({ { v = ring.vFrom - R.standoff, face = 1 }, { v = ring.vTo + R.standoff, face = -1 } }) do
         local count = math.floor((ring.dTo - ring.dFrom) / R.spacing)
         for k = 1, count do
+            local x, z = toWorld(scene, frame.uAt(ring.dFrom + (k - 0.5) * R.spacing), side.v)
             if TCAuctionScene.hash(seed, 60 + sideIndex, k) < R.share then
                 groupCount = groupCount + 1
-                local x, z = toWorld(scene, frame.uAt(ring.dFrom + (k - 0.5) * R.spacing), side.v)
                 table.insert(result.spots, { x = x, z = z, yaw = yawOf(scene, 0, side.face),
                     category = TCShowScene.SPOT.RING, group = groupCount })
+            else
+                -- 171: a place the spectators left, for a farmer.
+                table.insert(result.mingles, { x = x, z = z, yaw = yawOf(scene, 0, side.face) })
             end
         end
     end

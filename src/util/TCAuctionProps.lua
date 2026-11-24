@@ -56,6 +56,15 @@ TCAuctionProps.MODELS = {
     cone = { filename = "$data/maps/mapUS/textures/props/trafficCone.i3d", childName = "visual_lod" },
     stand = { filename = "i3d/auctionGazebo.i3d", isMod = true, collision = true },
     showGateSign = { filename = "i3d/showGateSign.i3d", isMod = true, collision = true },
+    -- 169: the ploughing plots' pegs (TCShowScene.layOutPlots). Base game
+    -- stand-ins, the user's to swap: the traffic cone's look at the corners
+    -- (a wooden stake with a flag wanted), and the US signpost (with its
+    -- collision) for the start peg (a peg with a number board wanted).
+    plotPeg = { filename = "$data/maps/mapUS/textures/props/trafficCone.i3d", childName = "visual_lod" },
+    plotStartPeg = { filename = "$data/maps/mapUS/textures/props/signPost01.i3d", collision = true },
+    -- 171: a stall's table at its gazebo's front (TCShowScene's stalls).
+    -- The base game's wooden table (mapEU), the user's to swap.
+    standTable = { filename = "$data/maps/mapEU/textures/props/woodenTable.i3d", collision = true },
 }
 -- The bale's straw (vanilla's straw bale texture, as Bale's STRAW fill type).
 TCAuctionProps.BALE_STRAW = "$data/objects/bales/squarebales/squarebale120/fillTypes/straw_diffuse.dds"

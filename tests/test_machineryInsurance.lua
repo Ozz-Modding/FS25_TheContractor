@@ -104,7 +104,10 @@ local function setup(daysPerPeriod)
     tc.Drivers = { hasDriver = function() return false end }
     tc.Logbook = { recordTheftRecovered = function() end }
     world.adminEmployed = false
-    tc.Office = { hasAdministrator = function() return world.adminEmployed end }
+    tc.Office = {
+        hasAdministrator = function() return world.adminEmployed end,
+        isAdministratorAtWork = function() return world.adminEmployed end,
+    }
     tc.Finances = {}
     for _, name in ipairs({ "recordOverheads", "recordClaims", "recordInsurancePayout" }) do
         tc.Finances[name] = function(_, farmId, amount)

@@ -36,7 +36,7 @@ local function countingStaff()
         if count >= TheContractorStaff.POOL_MAX_SIZE then
             return nil
         end
-        self.candidatePool[self.nextId] = true
+        self.candidatePool[self.nextId] = {}
         self.nextId = self.nextId + 1
         self.arrivals = self.arrivals + 1
         return true

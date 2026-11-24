@@ -13,7 +13,9 @@
 --     footprint (its model's size, and its attachment's in front).
 --   The lots: roles drawn by LOT_ROLES' weights and count ranges, a model
 --     for each from 121's catalog (the fleet's roles, plus the implements
---     135 adds there), the cheaper models likelier (LOT_ROLES' cheapShare), a combine with a header that fits. Each gets Used
+--     135 adds there), the cheaper models likelier (LOT_ROLES' cheapShare). A
+--     combine or telehandler comes bare, and headers are lots of their own
+--     (the user's call, 2026-11-23). Each gets Used
 --     Equipment Yards' MEDIUM condition (CONDITION: hours, damage, wear; the
 --     age from the hours), light dirt and a low tank. With ADS, ADS builds
 --     its history from those (TCADSUsedLots). Its guide price is vanilla's
@@ -129,6 +131,8 @@ TheContractorAuctionSite.LOT_ROLES = {
     { role = ROLE.LARGE_TRACTOR, weight = 2, min = 0, max = 10, cheapShare = 0.4, medianPriceCap = 1.3 },
     { role = ROLE.TELEHANDLER, weight = 2, min = 1, max = 10, cheapShare = 0.6, medianPriceCap = 2 },
     { role = ROLE.COMBINE, weight = 1, min = 1, max = 6, cheapShare = 0.4, medianPriceCap = 1.6 },
+    -- Sold on their own, not on a combine (TCAuctionLayout.ATTACHED_ROLES).
+    { role = ROLE.HEADER, weight = 1, min = 1, max = 6, cheapShare = 0.5, medianPriceCap = 1.6 },
     { role = ROLE.MOWER, weight = 2, min = 1, max = 10, cheapShare = 0.6 },
     { role = ROLE.TEDDER, weight = 2, min = 1, max = 10, cheapShare = 0.7 },
     { role = ROLE.RAKE, weight = 2, min = 1, max = 10, cheapShare = 0.6 },
@@ -719,8 +723,9 @@ end
 -- this rectangle, not the field's largest: the show's showground),
 -- entrance (the road point to use), keepGround (leave the ground alone:
 -- the show dresses its own, 164), getWalkways(scene) (the crowd's walks
--- from the scene, in place of the open lanes). Returns the text to print;
--- self.site is set if it went up.
+-- from the scene, in place of the open lanes), plots (169: the ploughing
+-- plots, 164's, kept on the scene for every machine to mark out). Returns
+-- the text to print; self.site is set if it went up.
 function TheContractorAuctionSite:startOpen(fieldId, dressing, eventId, options)
     options = options or {}
     if self.site ~= nil then
@@ -748,6 +753,11 @@ function TheContractorAuctionSite:startOpen(fieldId, dressing, eventId, options)
     end
     local scene = TCAuctionLayout.getScene(layout, entrance, math.random(1, 1000000000))
     scene.dressing = dressing
+    -- 169: the show's ploughing plots, so every machine marks them out.
+    scene.plots = {}
+    for _, plot in ipairs(options.plots or {}) do
+        table.insert(scene.plots, { cx = plot.cx, cz = plot.cz, angle = plot.angle, half = plot.half })
+    end
     if options.getWalkways ~= nil then
         layout.walkways = options.getWalkways(scene)
     end
@@ -1378,6 +1388,8 @@ end
 -- 140: the scene's numbers, as written to the stream (TCAuctionSiteEvent).
 local SCENE_FLOATS = { "cx", "cz", "angle", "halfV", "nearEdge", "farEdge", "aisleWidth", "endAisle", "gateV" }
 local RESERVE_FLOATS = { "uFrom", "uTo", "vFrom", "vTo" }
+-- 169: a ploughing plot's (164's plot).
+local PLOT_FLOATS = { "cx", "cz", "angle", "half" }
 
 function TheContractorAuctionSite.saveScene(xmlFile, key, scene)
     setXMLInt(xmlFile, key .. "#seed", scene.seed or 0)
@@ -1406,6 +1418,13 @@ function TheContractorAuctionSite.saveScene(xmlFile, key, scene)
             table.insert(slots, string.format("%.3f", u))
         end
         setXMLString(xmlFile, rowKey .. "#slots", table.concat(slots, " "))
+    end
+    -- 169: the show's ploughing plots.
+    for i, plot in ipairs(scene.plots or {}) do
+        local plotKey = string.format("%s.plot(%d)", key, i - 1)
+        for _, name in ipairs(PLOT_FLOATS) do
+            setXMLFloat(xmlFile, plotKey .. "#" .. name, plot[name] or 0)
+        end
     end
 end
 
@@ -1452,6 +1471,17 @@ function TheContractorAuctionSite.loadScene(xmlFile, key)
         if row.vFrom ~= nil and row.vTo ~= nil and row.frontV ~= nil and row.lotFrom ~= nil and row.lotTo ~= nil then
             table.insert(scene.rows, row)
         end
+        i = i + 1
+    end
+    scene.plots = {}
+    i = 0
+    while hasXMLProperty(xmlFile, string.format("%s.plot(%d)", key, i)) do
+        local plotKey = string.format("%s.plot(%d)", key, i)
+        local plot = {}
+        for _, name in ipairs(PLOT_FLOATS) do
+            plot[name] = getXMLFloat(xmlFile, plotKey .. "#" .. name) or 0
+        end
+        table.insert(scene.plots, plot)
         i = i + 1
     end
     return scene

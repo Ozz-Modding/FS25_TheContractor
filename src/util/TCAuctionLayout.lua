@@ -701,14 +701,43 @@ function TCAuctionLayout.getAvailableRoles(catalog, roleDefs, maxDuplicates)
     return available
 end
 
--- The models a sale's lots of a role can be (pure): getRoleModels', less
+-- Every model of an attachment role (a header) that fits a machine in the
+-- catalog whose ATTACHMENT_ROLE it is (a combine), once each, by file
+-- (pure): the headers sold on their own.
+function TCAuctionLayout.getAttachmentModels(catalog, role)
+    local models, seen = {}, {}
+    for parentRole, attachmentRole in pairs(TheContractorFarmerFleet.ATTACHMENT_ROLE) do
+        if attachmentRole == role then
+            for _, parent in ipairs(catalog.byRole[parentRole] or {}) do
+                for _, model in ipairs((catalog.attachments or {})[parent.xmlFilename] or {}) do
+                    if not seen[model.xmlFilename] then
+                        seen[model.xmlFilename] = true
+                        table.insert(models, model)
+                    end
+                end
+            end
+        end
+    end
+    table.sort(models, function(a, b)
+        return a.xmlFilename < b.xmlFilename
+    end)
+    return models
+end
+
+-- The models a sale's lots of a role can be (pure): getRoleModels' (for a
+-- STANDALONE_ATTACHMENT_ROLES role, getAttachmentModels'), less
 -- any priced over medianPriceCap times the role's median price (def:
 -- LOT_ROLES' row, or nil: no cap), so a sale has no flagship machines. The
 -- median, not the cheapest, as a role's cheapest can be a toy (a small
 -- tipping trailer). A model with no price is kept. Never empty while the
 -- role has models: the median's under any cap of 1 or more.
 function TCAuctionLayout.getLotModels(catalog, role, def)
-    local models = TheContractorFarmerFleet.getRoleModels(catalog, role)
+    local models
+    if TCAuctionLayout.STANDALONE_ATTACHMENT_ROLES[role] then
+        models = TCAuctionLayout.getAttachmentModels(catalog, role)
+    else
+        models = TheContractorFarmerFleet.getRoleModels(catalog, role)
+    end
     local cap = def ~= nil and def.medianPriceCap or nil
     if cap == nil then
         return models
@@ -766,9 +795,19 @@ function TCAuctionLayout.getModelWeights(models, cheapShare, boost)
     return weights
 end
 
+-- The roles whose lots come with their attachment on (FarmerFleet's
+-- ATTACHMENT_ROLE). None (the user's call, 2026-11-23): a combine and a
+-- telehandler are sold bare, and headers are lots of their own, as at a
+-- real farm sale. Kept so a lot saved with one still loads with it.
+TCAuctionLayout.ATTACHED_ROLES = {}
+
+-- Roles of attachments sold on their own: their models are every one of
+-- that role that fits a machine in the catalog, each once.
+TCAuctionLayout.STANDALONE_ATTACHMENT_ROLES = { header = true }
+
 -- A model for each role (pure, from the catalog): { { role, xmlFilename,
--- attachmentXml } }, a machine that takes an attachment (a combine's
--- header, ATTACHMENT_ROLE) with one that fits it when there's one. No model
+-- attachmentXml } }, a machine in ATTACHED_ROLES with one that fits it on
+-- when there's one. No model
 -- more than maxDuplicates times (nil: no limit), so a sale isn't a row of
 -- the same tractor. A role with no model left is left out. roleDefs
 -- (optional, LOT_ROLES'): a role's medianPriceCap drops its dearest models
@@ -815,7 +854,7 @@ function TCAuctionLayout.pickLots(catalog, roles, random, maxDuplicates, roleDef
         if model ~= nil then
             used[model.xmlFilename] = (used[model.xmlFilename] or 0) + 1
             local lot = { role = role, xmlFilename = model.xmlFilename }
-            if F.ATTACHMENT_ROLE[role] ~= nil then
+            if F.ATTACHMENT_ROLE[role] ~= nil and TCAuctionLayout.ATTACHED_ROLES[role] then
                 local attachment = F.pickAttachmentModel(catalog, model.xmlFilename, random)
                 lot.attachmentXml = attachment ~= nil and attachment.xmlFilename or nil
             end

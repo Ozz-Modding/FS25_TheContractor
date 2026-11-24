@@ -1329,7 +1329,9 @@
             <!-- Whose show, where and when. Not gated on a company: anyone can go. -->
             <Text profile="tc_panelNote" id="showSummaryText" text="" position="40px -14px" size="576px 44px" textMaxNumLines="2"/>
 
-            <!-- The day's timetable, each entry done, on now or to come. -->
+            <!-- The day's timetable, each entry done, on now or to come; then (167) the
+                 farm's livestock entries, each with its status or placing. The bottom bar's
+                 Withdraw and Judge's card act on the highlighted entry. -->
             <GuiElement id="showTimetableContainer" position="40px -64px">
                 <GuiElement profile="tc_tableHeaderRow" position="0px 0px" size="600px 30px">
                     <Button profile="tc_tableHeader" position="14px 0px" text="$l10n_tc_show_columnTime" handleFocus="false"/>
@@ -1338,10 +1340,12 @@
                 </GuiElement>
                 <SmoothList id="showTimetableTable" profile="tc_table" position="0px -36px" size="600px 530px">
                     <ListItem profile="tc_tableListItem">
-                        <RoundCorner profile="tc_tableRowSurface"/>
+                        <RoundCorner profile="tc_tableRowSurface" name="surface"/>
                         <Bitmap profile="tc_tableRowAccent"/>
+                        <Text profile="tc_listRowSection" position="14px 0px" size="560px 32px" name="section"/>
                         <Text profile="tc_listRowCellLeft" position="14px 0px" size="120px 32px" name="time"/>
                         <Text profile="tc_listRowValue" position="140px 0px" size="330px 32px" name="text"/>
+                        <Text profile="tc_listRowValue" position="14px 0px" size="456px 32px" name="entry"/>
                         <RoundCorner profile="tc_rowChip" position="478px 0px" size="104px 20px" name="chip"/>
                         <Text profile="tc_rowChipText" position="478px 0px" size="104px 20px" name="chipText"/>
                     </ListItem>

@@ -13,7 +13,7 @@ You type these into the developer console. You don't need cheats on. Each group 
 | `tcFarmer` | The map's farmers: who they are, their machines, your relationships, a new land split |
 | `tcYard` | Farm yards: list them, check a farmland, mark them on the map, override detection |
 | `tcAuction` | The machinery auction: see it, announce one, call it off |
-| `tcShow` | The agricultural show: see it, announce one, call it off |
+| `tcShow` | The agricultural show: see it, announce one, call it off, its livestock entries and ploughing plots |
 | `tcLog` | Toggles the mod's detailed log ([below](#tclog)) |
 
 Testing tools that aren't part of the game (spikes, forced rolls, readouts of hidden state) are a separate group, `tcDebug`, for development only. It only appears with a marker file in place.
@@ -45,7 +45,7 @@ Farm 1 workers (today is day 104):
 
 ### `tcWorker pool`
 
-Lists the candidates currently available to hire, with their id, name, work speed, salary (the full-month rate, see `tcWorker pay`), the tractor sizes they can drive and their operation skills.
+Lists the candidates currently available to hire, with their id, name, work speed, salary (the full-month rate, see `tcWorker pay`), the tractor sizes they can drive and their operation skills. A candidate the county show's careers stand found for your company (171) says so, with the day they leave if you haven't hired them; other companies' are left out.
 
 ### `tcWorker hire <candidate>`
 
@@ -740,6 +740,58 @@ The fields, and pairs of fields side by side, that could hold the show, best fir
 
 ```
 tcShow fields
+```
+
+### `tcShow entries`
+
+The show's livestock entries (167), by class in show order: each class's name and key, every player farm's entries in it (entry number, farm, the animal's name or RealisticLivestock key, the husbandry for Best Kept Herd) with how each stands (`entered`, `placed N`, `unplaced`, `noShow` or `sick`, and `champion`), then the farmers who've entered it. Farmers enter when entries close. With no show announced, the last show's entries until the next is announced. No scores. Takes no arguments, and any player can run it.
+
+```
+tcShow entries
+```
+
+```
+Show 1's livestock entries (judged):
+  Holstein, 6 to 24 months (COW_HOLSTEIN:young):
+    entry 1: My Farm, Daisy - placed 1, champion
+    farmers: Tom Hargreaves, Ann Webb
+  Best Kept Herd (herd):
+    entry 2: My Farm, Cow barn - placed 3
+    farmers: Bob Oakes, Sue Lane, Tom Hargreaves
+```
+
+### `tcShow plots`
+
+The show's ploughing match (169), once its plots are set out at midnight before the day: whether the match is before 11:00, on, over or has its results, then each plot in number order with its state (`open`, `taken`, `finished` or `farmer`), who's on it (the farm or farmer, by id and name, a farm's entered worker (170) as `farm N's worker N`, or nobody), whether its lent kit is out, and its score: live (`so far`, read from the ground and the path now) while a player's run is on, the final score once it's finished, a farmer's or worker's rolled score (`worker not started` until an entered worker's at the show and the match is on), the game minutes ploughed and the placing once the results are in. With no plots out, says so; the last match's plots stay until the next show's announced. Takes no arguments, and any player can run it (it runs on the server, which has the scores).
+
+```
+tcShow plots
+```
+
+```
+Show 1's ploughing match (on), 5 plots:
+  plot 1: taken, farm 1 (My Farm), kit out, 62.4 so far, 74 game min
+  plot 2: open, nobody, kit out, -
+  plot 3: farmer, farmer 8 (Ann Webb), kit out, 81.2 (rolled)
+  plot 4: farmer, farmer 9 (Bob Oakes), kit out, 76.9 (rolled)
+  plot 5: farmer, farmer 7 (Tom Hargreaves), kit out, 88.0 (rolled)
+```
+
+### `tcShow people`
+
+The show's stalls and the farmers at it (171). On the show's day, from 08:00 to 18:00 with the showground out: each farmer there (the host first) by id and name, whether your company has talked to them or asked them for work, and where they're standing now with how far that is from you; then where the trade association's and the careers stand's stallholders are. Before the day, the farmers who'll be there. Last, what your company's done at this show: whether it's come (the host's goodwill), joined the association there (or is a member) and visited the careers stand. Takes no arguments, and any player can run it.
+
+```
+tcShow people
+```
+
+```
+Show 1 is open: the stalls and these farmers are on the showground.
+  7 Tom Hargreaves (the host, talked to, at 412, 88, 6 m from you)
+  9 Bob Oakes (asked for work, at 398, 61, 31 m from you)
+  The trade association's stall, at 430, 70, 20 m from you.
+  The careers stall, at 430, 84, 19 m from you.
+Farm 1: has come (the host's goodwill given); trade association: joined here; careers stand: not visited.
 ```
 
 ## Log — `tcLog`

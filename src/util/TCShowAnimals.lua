@@ -1,5 +1,7 @@
 -- The show's livestock (166, spike; 167 builds the classes on it): the
--- animals in a livestock trailer, as the judge reads them.
+-- animals in a livestock trailer, as the judge reads them, and (167) a
+-- farm's husbandries: their animals for the entry form, their
+-- productivity, and Best Kept Herd's readings.
 --
 -- Entrants bring their animals in a livestock trailer parked in the show's
 -- trailer lines (TCShowScene.findBay). The animals never leave vanilla's
@@ -132,6 +134,140 @@ function TCShowAnimals.getStanding(trailer, scene)
         standing.bay = TCShowScene.findBay(scene, x, z)
     end
     return standing
+end
+
+-- Husbandries (167) ---------------------------------------------------------------------------
+
+-- Whether a placeable is a husbandry with animals we can read.
+function TCShowAnimals.isHusbandry(placeable)
+    return type(placeable) == "table" and placeable.spec_husbandryAnimals ~= nil and
+        type(placeable.getClusters) == "function"
+end
+
+-- A farm's husbandries with animals (every machine: vanilla streams the
+-- clusters to clients), by name.
+function TCShowAnimals.getFarmHusbandries(farmId)
+    local husbandrySystem = g_currentMission.husbandrySystem
+    local husbandries = {}
+    if husbandrySystem == nil or husbandrySystem.getPlaceablesByFarm == nil then
+        return husbandries
+    end
+    for _, placeable in ipairs(husbandrySystem:getPlaceablesByFarm(farmId) or {}) do
+        if TCShowAnimals.isHusbandry(placeable) then
+            table.insert(husbandries, placeable)
+        end
+    end
+    table.sort(husbandries, function(a, b)
+        return TCShowAnimals.getHusbandryName(a) < TCShowAnimals.getHusbandryName(b)
+    end)
+    return husbandries
+end
+
+-- What the player calls it: its own name, else its store item's.
+function TCShowAnimals.getHusbandryName(placeable)
+    local name = type(placeable.getName) == "function" and placeable:getName() or nil
+    if (name == nil or name == "") and placeable.storeItem ~= nil then
+        name = placeable.storeItem.name
+    end
+    return name or "-"
+end
+
+-- The husbandry's animals, read as a trailer's are (readCluster).
+function TCShowAnimals.readHusbandry(placeable)
+    local entries = {}
+    if not TCShowAnimals.isHusbandry(placeable) then
+        return entries
+    end
+    local animalSystem = g_currentMission.animalSystem
+    for _, cluster in ipairs(placeable:getClusters() or {}) do
+        local entry = TCShowAnimals.readCluster(animalSystem, cluster)
+        if entry ~= nil then
+            table.insert(entries, entry)
+        end
+    end
+    return entries
+end
+
+-- How well it produces (0-1), as vanilla's info box shows it, or nil.
+function TCShowAnimals.getProductivity(placeable)
+    if type(placeable) ~= "table" or type(placeable.getGlobalProductionFactor) ~= "function" or
+            type(placeable.getProductionFactor) ~= "function" then
+        return nil
+    end
+    local global, factor = placeable:getGlobalProductionFactor(), placeable:getProductionFactor()
+    if type(global) ~= "number" or type(factor) ~= "number" then
+        return nil
+    end
+    return math.max(0, math.min(1, global * factor))
+end
+
+local function getRatio(placeable, fillTypeIndex)
+    if fillTypeIndex == nil or type(placeable.getHusbandryFillLevel) ~= "function" or
+            type(placeable.getHusbandryCapacity) ~= "function" then
+        return nil
+    end
+    local farmId = type(placeable.getOwnerFarmId) == "function" and placeable:getOwnerFarmId() or nil
+    local capacity = placeable:getHusbandryCapacity(fillTypeIndex, farmId)
+    if type(capacity) ~= "number" or capacity <= 0 then
+        return nil
+    end
+    local level = placeable:getHusbandryFillLevel(fillTypeIndex, farmId) or 0
+    return math.max(0, math.min(1, level / capacity))
+end
+
+-- Best Kept Herd (167): how the husbandry's run, each 0-1 or nil when it
+-- hasn't that side (no straw, say): { productivity, foodLevel, foodVariety
+-- (the share of its food groups stocked), straw, water (1 with an
+-- automatic supply), cleanliness (1 less the fuller of its manure and
+-- slurry stores) }.
+function TCShowAnimals.readHerd(placeable)
+    local readings = {}
+    if type(placeable) ~= "table" then
+        return readings
+    end
+    readings.productivity = TCShowAnimals.getProductivity(placeable)
+    local food = placeable.spec_husbandryFood
+    if food ~= nil and type(placeable.getTotalFood) == "function" and type(placeable.getFoodCapacity) == "function" then
+        local capacity = placeable:getFoodCapacity()
+        if type(capacity) == "number" and capacity > 0 then
+            readings.foodLevel = math.max(0, math.min(1, (placeable:getTotalFood() or 0) / capacity))
+        end
+    end
+    if food ~= nil and type(placeable.getFoodInfos) == "function" then
+        local groups, stocked = 0, 0
+        for _, info in ipairs(placeable:getFoodInfos() or {}) do
+            groups = groups + 1
+            if (info.value or 0) > 0 then
+                stocked = stocked + 1
+            end
+        end
+        if groups > 0 then
+            readings.foodVariety = stocked / groups
+        end
+    end
+    local straw = placeable.spec_husbandryStraw
+    if straw ~= nil then
+        readings.straw = getRatio(placeable, straw.inputFillType)
+    end
+    local water = placeable.spec_husbandryWater
+    if water ~= nil then
+        readings.water = water.automaticWaterSupply and 1 or getRatio(placeable, water.fillType)
+    end
+    local dirt = nil
+    if straw ~= nil then
+        dirt = getRatio(placeable, straw.outputFillType)
+    end
+    local slurry = placeable.spec_husbandryLiquidManure
+    if slurry ~= nil then
+        local ratio = getRatio(placeable, slurry.fillType)
+        if ratio ~= nil then
+            dirt = math.max(dirt or 0, ratio)
+        end
+    end
+    if dirt ~= nil then
+        readings.cleanliness = 1 - dirt
+    end
+    return readings
 end
 
 -- Console ------------------------------------------------------------------------------------

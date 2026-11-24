@@ -31,6 +31,9 @@ TheContractorWorker.STATUS = {
     HOLIDAY = "holiday",
     -- 054: on a training course or sitting its assessment (Training.lua).
     TRAINING = "training",
+    -- 170: at the county show for the day, ploughing in the match for the
+    -- farm (ShowWorker.lua) - can't be allocated until they're back.
+    SHOW = "atShow",
 }
 
 TheContractorWorker.TIERS = { "small", "medium", "large" }
