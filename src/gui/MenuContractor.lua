@@ -66,15 +66,6 @@ local function formatMonotonicDay(day)
     return formatTargetDate(TCCalendar.getPeriodFromDay(day), TCCalendar.getDayInPeriodFromDay(day))
 end
 
--- A date with its year, for a day whose year is known (a completed job's,
--- worked out from its absolute day). year is the game year
--- (environment.currentYear's count), and TCCalendar.formatYear shows
--- January and February as the next one.
-local function formatCalendarDate(period, dayInPeriod, year)
-    return string.format("%s %d, %s", g_i18n:getText("ui_month" .. TCCalendar.getMonth(period)), dayInPeriod,
-        TCCalendar.formatYear(year, period))
-end
-
 -- Compact per-tier tractor rating for a list cell (e.g. "S5 M- L8"), as
 -- opposed to Staff.lua's own formatTierCapability (console/log), which
 -- spells out each tier name in full. The Staff tab's own list dropped this
@@ -3717,27 +3708,13 @@ end
 
 -- Completed jobs (029 follow-up) -----------------------------------------
 
--- The absolute (monotonic) day a completed job finished on, as a calendar
--- period/day/year, counted back from today. Assumes daysPerPeriod hasn't
--- changed since, which is all we can do without storing the date itself.
-local function monotonicDayToCalendar(monotonicDay)
-    local environment = g_currentMission.environment
-    local daysPerPeriod = environment.daysPerPeriod
-    local yearLength = daysPerPeriod * Environment.PERIODS_IN_YEAR
-    local todayIndex = (environment.currentPeriod - 1) * daysPerPeriod + environment.currentDayInPeriod - 1
-    local index = todayIndex - (environment.currentMonotonicDay - monotonicDay)
-    local yearOffset = math.floor(index / yearLength)
-    local indexInYear = index - yearOffset * yearLength
-    return math.floor(indexInYear / daysPerPeriod) + 1, indexInYear % daysPerPeriod + 1,
-        environment.currentYear + yearOffset
-end
-
+-- The day a completed job finished on, as a date (TCCalendar dates a past
+-- day as it fell, across a change of days per month).
 local function formatCompletedAt(completedAt)
     if completedAt == nil then
         return "-"
     end
-    local period, dayInPeriod, year = monotonicDayToCalendar(math.floor(completedAt / (24 * 60)))
-    return formatCalendarDate(period, dayInPeriod, year)
+    return TCCalendar.formatDay(math.floor(completedAt / (24 * 60)))
 end
 
 -- Same reload-then-show-the-wrapping-container shape as
@@ -6026,7 +6003,7 @@ local function getInvoiceTimeliness(invoice)
     if daysLate <= 0 then
         return g_i18n:getText("tc_finances_paidOnTime"), "good"
     end
-    local monthsLate = math.ceil(daysLate / g_currentMission.environment.daysPerPeriod)
+    local monthsLate = math.max(1, math.ceil(TCCalendar.getMonthsBetween(invoice.dueDay, invoice.settledDay) - 1e-6))
     if monthsLate == 1 then
         return g_i18n:getText("tc_finances_paidMonthLate"), "warn"
     end

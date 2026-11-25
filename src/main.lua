@@ -62,6 +62,7 @@ source(TheContractor.dir .. "src/util/TCAttachImplementsManually.lua")
 source(TheContractor.dir .. "src/util/TCEconomyScale.lua")
 source(TheContractor.dir .. "src/util/TCCalendar.lua")
 source(TheContractor.dir .. "src/util/TCCalendarChange.lua")
+source(TheContractor.dir .. "src/util/TCCalendarHistory.lua")
 source(TheContractor.dir .. "src/util/TCSignImages.lua")
 source(TheContractor.dir .. "src/util/TCCompanyLogo.lua")
 -- Now, not in loadMap: the signs' store items list signs/ before the map
@@ -193,6 +194,7 @@ source(TheContractor.dir .. "src/events/TCJobMissedEvent.lua")
 source(TheContractor.dir .. "src/events/TCJobRemovedEvent.lua")
 source(TheContractor.dir .. "src/events/TCJobDatesChangedEvent.lua")
 source(TheContractor.dir .. "src/events/TCCalendarChangedEvent.lua")
+source(TheContractor.dir .. "src/events/TCCalendarHistoryEvent.lua")
 source(TheContractor.dir .. "src/events/TCConsoleEvent.lua")
 source(TheContractor.dir .. "src/events/TCRespondToJobOfferEvent.lua")
 source(TheContractor.dir .. "src/events/TCCounterOfferEvent.lua")
@@ -526,6 +528,8 @@ function TheContractor:loadMap()
     -- 160/161: booked days follow the calendar. Before the load, which
     -- reads the calendar they were booked under.
     TCCalendarChange.install()
+    -- Past days are dated as they fell, across a change of days per month.
+    TCCalendarHistory.install()
 
     self:loadFromXMLFile()
 
@@ -669,6 +673,7 @@ function TheContractor:loadFromXMLFile()
     self.Auctions:loadFromXMLFile(xmlFile)
     self.AuctionSale:loadFromXMLFile(xmlFile)
     TCCalendarChange.loadFromXMLFile(xmlFile)
+    TCCalendarHistory.loadFromXMLFile(xmlFile)
 
     delete(xmlFile)
 end
@@ -762,6 +767,7 @@ function TheContractor:saveToXmlFile()
     tc.Auctions:saveToXmlFile(xmlFile)
     tc.AuctionSale:saveToXmlFile(xmlFile)
     TCCalendarChange.saveToXmlFile(xmlFile)
+    TCCalendarHistory.saveToXmlFile(xmlFile)
 
     saveXMLFile(xmlFile)
     delete(xmlFile)
@@ -960,6 +966,7 @@ function TheContractor:deleteMap()
     TCFarmDeletion.uninstall()
     TCVehicleReplace.uninstall()
     TCCalendarChange.uninstall()
+    TCCalendarHistory.uninstall()
 
     if g_currentMission ~= nil and g_currentMission.TheContractor == self then
         g_currentMission.TheContractor = nil
@@ -1001,6 +1008,7 @@ function TheContractor:update(dt)
     -- 160/161: the first update after a load checks the calendar (server),
     -- after Jobs has filled in an old save's missing deadlines.
     TCCalendarChange.update()
+    TCCalendarHistory.update()
 
     if self.Cooldown ~= nil then
         self.Cooldown:update(dt)

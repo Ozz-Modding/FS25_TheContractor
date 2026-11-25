@@ -14,6 +14,8 @@ end
 function TCInitialClientStateEvent:writeStream(streamId, connection)
     local tc = g_currentMission.TheContractor
 
+    -- First, so anything read after it dates past days right.
+    TCCalendarHistory.writeInitialClientState(streamId, connection)
     tc.Settings:writeInitialClientState(streamId, connection)
     tc.Reputation:writeInitialClientState(streamId, connection)
     tc.Jobs:writeInitialClientState(streamId, connection)
@@ -56,6 +58,7 @@ end
 function TCInitialClientStateEvent:readStream(streamId, connection)
     local tc = g_currentMission.TheContractor
 
+    TCCalendarHistory.readInitialClientState(streamId, connection)
     tc.Settings:readInitialClientState(streamId, connection)
     tc.Reputation:readInitialClientState(streamId, connection)
     tc.Jobs:readInitialClientState(streamId, connection)

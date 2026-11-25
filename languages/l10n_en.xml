@@ -5,7 +5,7 @@
 		<text name="tc_settings_header" text="The Contractor"/>
 		<text name="tc_setting_jobPayRate" text="Job pay rate"/>
 		<text name="tc_setting_lateInvoices" text="Late/unpaid invoices"/>
-		<text name="tc_toolTip_lateInvoices" text="On: completed jobs are invoiced and paid up to three months later, some late and a few never. Off: jobs pay in full on completion. Invoices already sent still run their course."/>
+		<text name="tc_toolTip_lateInvoices" text="On: completed jobs are invoiced and paid up to about four months later, some late and a few never. Off: jobs pay in full on completion. Invoices already sent still run their course."/>
 		<text name="tc_setting_randomEvents" text="Random events"/>
 		<text name="tc_toolTip_randomEvents" text="How often rare events, such as a vehicle being stolen, happen to your business. Rare halves the odds, Off stops new ones. Anything already under way still runs its course."/>
 		<text name="tc_setting_randomEvents_off" text="Off"/>
