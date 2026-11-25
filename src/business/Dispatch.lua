@@ -542,9 +542,24 @@ function TheContractorDispatch:onAIJobStopped(aiJob, aiMessage)
         end
         local job = g_currentMission.TheContractor.Jobs:getJobById(ourJobId)
         if job ~= nil then
-            g_currentMission.TheContractor.Jobs:completeJob(job)
+            -- 184: driven the whole course, which is enough for a spreading
+            -- job some way short of 100%. Short of even that, the watchdog
+            -- sends the worker round once more, then holds the job.
+            local courseFinished = TheContractorDispatch.isCourseFinished(aiMessage)
+            g_currentMission.TheContractor.Jobs:completeJob(job, false, courseFinished)
+            if courseFinished and job.state == TheContractorJob.STATE.IN_PROGRESS and
+                TheContractorJobs.isSpreadingJob(job) and g_currentMission.TheContractor.Watchdog ~= nil then
+                g_currentMission.TheContractor.Watchdog:onCourseFinishedShort(job)
+            end
         end
     end
+end
+
+-- 184: vanilla's stop for an AI that has driven its whole course
+-- (AIFieldWorker), not the player switching it off or our own stop.
+function TheContractorDispatch.isCourseFinished(aiMessage)
+    return aiMessage ~= nil and aiMessage.isa ~= nil and AIMessageSuccessFinishedJob ~= nil and
+        aiMessage:isa(AIMessageSuccessFinishedJob)
 end
 
 -- AI_JOB_REMOVED only ever hands back AISystem's own numeric jobId (see

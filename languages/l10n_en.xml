@@ -363,6 +363,7 @@
 		<text name="tc_dispatch_failedNotification" text="Could not dispatch %s on Field %s: %s"/>
 		<text name="tc_watchdog_retriedNotification" text="Your worker got stuck on a %s job on Field %s - reset and dispatched again."/>
 		<text name="tc_watchdog_needsAttentionNotification" text="Your worker is stuck on a %s job on Field %s and needs your attention."/>
+		<text name="tc_watchdog_cantFinishNotification" text="Your worker can't finish a %s job on Field %s: they've been round the whole field twice and still left gaps. It needs your attention."/>
 		<text name="tc_moneyType_hiring" text="Staff hiring"/>
 		<text name="finance_tcHiring" text="Staff hiring"/>
 		<text name="tc_moneyType_wages" text="Staff wages"/>
@@ -1766,7 +1767,7 @@
 		<text name="tc_help_company_4_title" text="Around the yard"/>
 		<text name="tc_help_company_4" text="From the construction menu's Contractor tab, place parking slots for machines coming back from jobs, and standing spots or seats where idle staff wait. Without parking slots, machines back from a job have nowhere to go."/>
 		<text name="tc_help_company_5_title" text="Your stock"/>
-		<text name="tc_help_company_5" text="Jobs take seed, fertiliser, herbicide, lime and diesel from your own farm's stock, so keep some in. The Supplies tab shows what you have."/>
+		<text name="tc_help_company_5" text="Jobs take seed, fertiliser, herbicide, lime and diesel from your own farm's stock, so keep some in. The Supplies tab shows what you have. Helpers never buy their own fuel, seed or fertiliser while this mod is in: the game's settings for that are switched off."/>
 		<text name="tc_help_menu_title" text="The Contractor menu"/>
 		<text name="tc_help_menu_1" text="Everything is run from the Contractor page of the in-game menu. Its tabs are along the top, and each tab's actions are in the button bar at the bottom: they act on the highlighted row."/>
 		<text name="tc_help_menu_2_title" text="Overview"/>
@@ -1835,7 +1836,7 @@
 		<text name="tc_help_allocating_3_title" text="Off they go"/>
 		<text name="tc_help_allocating_3" text="A hired worker drives the base game's AI helper out to the field, does the work and comes back. While they're away, the machines are out of the yard and can't be used or sold."/>
 		<text name="tc_help_allocating_4_title" text="Stuck workers"/>
-		<text name="tc_help_allocating_4" text="A worker who gets stuck is reset and sent off again. If that doesn't work, you're told it needs your attention."/>
+		<text name="tc_help_allocating_4" text="A worker who gets stuck is reset and sent off again. If that doesn't work, you're told it needs your attention. A spreader can't cover a field perfectly, so a worker spreading fertiliser or lime is done at 85% once they've been round the whole field. Short of that they go round once more, and if it's still short, you're told it needs your attention."/>
 		<text name="tc_help_allocating_5_title" text="Unallocating"/>
 		<text name="tc_help_allocating_5" text="Unallocate in Job Details takes the crew off. The work done stays done and the job goes back to waiting for a crew. If they'd already left, they and their machines need time to come back first."/>
 		<text name="tc_help_doItYourself_title" text="Doing it yourself"/>

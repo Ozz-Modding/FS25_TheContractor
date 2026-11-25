@@ -39,6 +39,7 @@ source(TheContractor.dir .. "src/util/TCTippedTrailerActivatable.lua")
 source(TheContractor.dir .. "src/util/TCAuctionLotActivatable.lua")
 source(TheContractor.dir .. "src/util/TCHaulage.lua")
 source(TheContractor.dir .. "src/util/TCJobSupplies.lua")
+source(TheContractor.dir .. "src/util/TCNoHelperBuying.lua")
 source(TheContractor.dir .. "src/util/TCSupplyStock.lua")
 source(TheContractor.dir .. "src/util/TCADSStock.lua")
 source(TheContractor.dir .. "src/util/TCADSWorkshop.lua")
@@ -818,6 +819,8 @@ function TheContractor:onStartMission()
     TCFieldAccess.install()
     -- 155: the weather's ready by now.
     TCShelter.refresh()
+    -- 185: no helper ever buys, whatever the save had set.
+    TCNoHelperBuying.apply()
 
     local tc = g_currentMission.TheContractor
     if tc == nil then return end

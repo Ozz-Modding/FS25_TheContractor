@@ -37,6 +37,11 @@ TheContractorJobs.REPUTATION_ZERO_QUALITY = 50
 -- TCJobProgress.getSuccessFactor) reaches this.
 TheContractorJobs.COMPLETION_THRESHOLD_PERCENTAGE = 100
 
+-- 184: a spreading job (JOB_TYPES' spreads) is done at this once its hired
+-- worker's AI has driven the whole course: a spreader's cone leaves gaps
+-- at the ends of its runs that the AI never goes back for.
+TheContractorJobs.FINISHED_COURSE_THRESHOLD_PERCENTAGE = 85
+
 -- 076: that threshold leaves a strip unworked (vanilla's SUCCESS_FACTOR
 -- leniency), and players like to finish the field off. A player-driven
 -- job's field stays workable this long after it completes (TCFieldAccess),
@@ -1546,7 +1551,9 @@ end
 -- ever pays less than the full negotiated price.
 -- isForced (the tcJob state console command) skips the field-done and
 -- delivered checks: everything else happens as on a real finish.
-function TheContractorJobs:completeJob(job, isForced)
+-- courseFinished (184): the hired worker's AI has driven its whole course
+-- (Dispatch:onAIJobStopped), which lowers the bar for a spreading job.
+function TheContractorJobs:completeJob(job, isForced, courseFinished)
     if not g_currentMission:getIsServer() then
         return
     end
@@ -1557,7 +1564,7 @@ function TheContractorJobs:completeJob(job, isForced)
         return
     end
 
-    if not isForced and job.completionPercentage < TheContractorJobs.COMPLETION_THRESHOLD_PERCENTAGE then
+    if not isForced and job.completionPercentage < TheContractorJobs.getDoneThreshold(job, courseFinished) then
         return
     end
 
@@ -1672,6 +1679,22 @@ function TheContractorJobs:completeJob(job, isForced)
     -- 074: maybe a random event at the job's end (the kettle on, paid
     -- early, a worker stepping up). Last, so it follows everything above.
     g_currentMission.TheContractor.RandomEvents:onJobCompleted(job)
+end
+
+-- 184: a job whose machine spreads (JOB_TYPES' spreads).
+function TheContractorJobs.isSpreadingJob(job)
+    local jobDef = job ~= nil and TheContractorJobGeneration.JOB_TYPES[job.jobType] or nil
+    return jobDef ~= nil and jobDef.spreads == true
+end
+
+-- The progress (0-100, as the player sees it) a job's field work counts as
+-- done at: all of it, or (184) less for a spreading job whose worker has
+-- driven the whole course.
+function TheContractorJobs.getDoneThreshold(job, courseFinished)
+    if courseFinished and TheContractorJobs.isSpreadingJob(job) then
+        return TheContractorJobs.FINISHED_COURSE_THRESHOLD_PERCENTAGE
+    end
+    return TheContractorJobs.COMPLETION_THRESHOLD_PERCENTAGE
 end
 
 -- 141: a job with nothing riding on it (JOB_TYPES' noConsequences).

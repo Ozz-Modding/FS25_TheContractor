@@ -43,11 +43,19 @@ TheContractorWatchdog.CHECK_INTERVAL_MS = TCJobProgress.POLL_INTERVAL_MS
 -- partitioned density-map scan settling.
 TheContractorWatchdog.PROGRESS_EPSILON = 0.01
 
+-- 184: how many times a spreading job whose worker drove the whole course
+-- and still left too much is sent round again before it's held.
+TheContractorWatchdog.MAX_COURSE_RETRIES = 1
+
+-- What a notification says (TCWatchdogInterventionEvent).
+TheContractorWatchdog.NOTICE = { RETRIED = 1, NEEDS_ATTENTION = 2, CANT_FINISH = 3 }
+
 function TheContractorWatchdog.new()
     local self = {}
     setmetatable(self, TheContractorWatchdog_mt)
 
-    -- jobId -> { lastPercentage, elapsedStuckMs, retryCount, needsAttention }
+    -- jobId -> { lastPercentage, elapsedStuckMs, retryCount, needsAttention,
+    --           courseRetries, courseRetryDue }
     self.trackedByJobId = {}
     self.accumulatedMs = 0
 
@@ -132,16 +140,28 @@ function TheContractorWatchdog.isWaitingToBeEmptied(job)
     return false
 end
 
+-- A job's tracking, started on first sight.
+function TheContractorWatchdog:getEntry(job)
+    local entry = self.trackedByJobId[job.id]
+    if entry == nil then
+        entry = { lastPercentage = job.completionPercentage, elapsedStuckMs = 0, retryCount = 0,
+            needsAttention = false, courseRetries = 0, courseRetryDue = false }
+        self.trackedByJobId[job.id] = entry
+    end
+    return entry
+end
+
 -- Advances (or initializes) one job's stuck timer against its current
 -- completionPercentage (kept live by 019's TCJobProgress, already refreshed
 -- on the same machine before this runs — see TheContractor:update's call
 -- order). Fires handleStuckJob once the timeout is crossed with no real
 -- progress since the timer last reset.
 function TheContractorWatchdog:checkJob(job)
-    local entry = self.trackedByJobId[job.id]
-    if entry == nil then
-        entry = { lastPercentage = job.completionPercentage, elapsedStuckMs = 0, retryCount = 0, needsAttention = false }
-        self.trackedByJobId[job.id] = entry
+    local entry = self:getEntry(job)
+
+    if entry.courseRetryDue then
+        self:retryCourse(job, entry)
+        return
     end
 
     if job.completionPercentage > entry.lastPercentage + TheContractorWatchdog.PROGRESS_EPSILON then
@@ -196,7 +216,7 @@ function TheContractorWatchdog:handleStuckJob(job, entry)
         TCLog.warning(
             "TheContractor: farm %d job %d stuck watchdog exhausted %d retries - needs player attention",
             job.farmId, job.id, TheContractorWatchdog.MAX_RETRIES_PER_JOB)
-        self:notify(job, true)
+        self:notify(job, TheContractorWatchdog.NOTICE.NEEDS_ATTENTION)
         return
     end
 
@@ -216,17 +236,49 @@ function TheContractorWatchdog:handleStuckJob(job, entry)
 
     entry.elapsedStuckMs = 0
 
-    self:notify(job, false)
+    self:notify(job, TheContractorWatchdog.NOTICE.RETRIED)
+end
+
+-- 184, server: a spreading job's worker drove the whole course
+-- (Dispatch:onAIJobStopped) and still left too much undone for it to
+-- count (Jobs.getDoneThreshold). Another time round may catch what the
+-- first missed, so it's sent once more, at the next check rather than
+-- from inside vanilla's AI-stopped callback, and without counting as a
+-- stuck intervention (the gaps are the spreader's, not the worker's).
+-- After that it's held: the same course would leave the same gaps.
+function TheContractorWatchdog:onCourseFinishedShort(job)
+    local entry = self:getEntry(job)
+    if entry.courseRetries >= TheContractorWatchdog.MAX_COURSE_RETRIES then
+        entry.needsAttention = true
+        entry.courseRetryDue = false
+        TCLog.warning("TheContractor: farm %d job %d finished its course short again (%.0f%%) - held for the player",
+            job.farmId, job.id, job.completionPercentage)
+        self:notify(job, TheContractorWatchdog.NOTICE.CANT_FINISH)
+        return
+    end
+    entry.courseRetryDue = true
+    TCLog.info("TheContractor: farm %d job %d finished its course short (%.0f%%) - sending the worker round again",
+        job.farmId, job.id, job.completionPercentage)
+end
+
+function TheContractorWatchdog:retryCourse(job, entry)
+    entry.courseRetryDue = false
+    entry.courseRetries = entry.courseRetries + 1
+    entry.lastPercentage = job.completionPercentage
+    entry.elapsedStuckMs = 0
+    if g_currentMission.TheContractor.Staff:getWorker(job.farmId, job.assignedWorkerId) ~= nil then
+        g_currentMission.TheContractor.Dispatch:startJobForWorker(job, true)
+    end
 end
 
 -- Applies directly here for the server/host's own local notification, then
 -- broadcasts via TCWatchdogInterventionEvent for any other client on the
 -- farm - same "no SP loopback" shape TCJobMissedEvent/TCDispatchFailedEvent
 -- already use (see src/events/README.md).
-function TheContractorWatchdog:notify(job, isEscalation)
-    TCWatchdogInterventionEvent.showNotification(job.farmId, job:getTypeLabel(), job.fieldId, isEscalation)
+function TheContractorWatchdog:notify(job, notice)
+    TCWatchdogInterventionEvent.showNotification(job.farmId, job:getTypeLabel(), job.fieldId, notice)
 
     if g_server ~= nil then
-        g_server:broadcastEvent(TCWatchdogInterventionEvent.new(job.farmId, job:getTypeLabel(), job.fieldId, isEscalation))
+        g_server:broadcastEvent(TCWatchdogInterventionEvent.new(job.farmId, job:getTypeLabel(), job.fieldId, notice))
     end
 end
