@@ -175,6 +175,17 @@ end
 -- the player intervenes (re-allocates/reposition manually) or it eventually
 -- hits Jobs.lua's own missed-deadline sweep.
 function TheContractorWatchdog:handleStuckJob(job, entry)
+    -- 150: a machine ADS has stopped working (a breakdown, or due a
+    -- service) isn't stuck: a reset would only restart it on a machine that
+    -- can't work. Held for the player instead, without counting against
+    -- the job.
+    if g_currentMission.TheContractor.Dispatch:holdForADS(job) then
+        TCLog.info("TheContractor: farm %d job %d stalled on a machine ADS won't let the worker drive - on hold (%s)",
+            job.farmId, job.id, tostring(job.supplyStatus))
+        self.trackedByJobId[job.id] = nil
+        return
+    end
+
     entry.retryCount = entry.retryCount + 1
     -- Persisted on the job itself (unlike retryCount, which is live-only):
     -- feeds its quality score at completion (029).

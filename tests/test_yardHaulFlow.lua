@@ -168,7 +168,9 @@ local function setup()
 
     -- Tom's yard on farmland 50: its middle at (0, 0), one spot 30 m north;
     -- the ground's all open. His field (wheat) is farmland 4.
-    TheContractorYards = { isOpenGround = function() return true end }
+    TheContractorYards = { isOpenGround = function() return true end,
+        -- 183: no machine bays.
+        findBays = function() return {} end }
     g_farmlandManager = { getFarmlandOwner = function() return 0 end }
     local farmland = { getId = function() return 4 end }
     world.field = { id = 4 }
@@ -206,6 +208,7 @@ local function setup()
     world:load("src/util/TCHaulage.lua")
     world:load("src/business/RepairContracts.lua")
     world:load("src/business/FieldBreakdowns.lua")
+    world:load("src/util/TCYardBays.lua")
     world:load("src/business/Farmers.lua")
     world:load("src/business/FarmerFleet.lua")
     TCHaulage.emptyHarvestersAfterJob = function() end

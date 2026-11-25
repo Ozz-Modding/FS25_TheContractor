@@ -5087,7 +5087,7 @@ function MenuContractor:populateAllocationEquipmentCell(index, cell)
             self:getAllocationTierTone(row.sizeTier))
     end
     -- 150: ADS won't let the picked worker drive it until it's serviced
-    -- (the player can, so not while it's them alone). A machine still
+    -- or repaired (the player can, so not while it's them alone). A machine still
     -- waiting for a parking space (062) gets no chip: allocating sends it to
     -- the shop for the player, and a worker's dispatch takes it from the
     -- queue.
@@ -5151,10 +5151,16 @@ function MenuContractor:getAllocationProblem(job)
             g_fillTypeManager:getFillTypeTitleByIndex(heldFillType) or "?"), true
     end
 
-    -- 150: ADS won't let a hired worker drive it until it's serviced.
-    local refusedVehicle = operatorId ~= nil and TheContractorAllocation.getServiceRefusedVehicle(equipmentIds) or nil
+    -- 150: ADS won't let a hired worker drive it until it's serviced or
+    -- repaired.
+    local refusedVehicle, holdStatus
+    if operatorId ~= nil then
+        refusedVehicle, holdStatus = TheContractorAllocation.getServiceRefusedVehicle(equipmentIds)
+    end
     if refusedVehicle ~= nil then
-        return string.format(g_i18n:getText("tc_allocation_needsServiceWarning"), refusedVehicle:getName()), true
+        local key = holdStatus == TCJobSupplies.STATUS.NEEDS_REPAIR and "tc_allocation_needsRepairWarning" or
+            "tc_allocation_needsServiceWarning"
+        return string.format(g_i18n:getText(key), refusedVehicle:getName()), true
     end
 
     if capability == TheContractorAllocation.CAPABILITY.WARN then

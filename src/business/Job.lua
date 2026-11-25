@@ -421,9 +421,9 @@ function TheContractorJob:isWaitingForSupplies()
 end
 
 -- "Seeds", "Liquid fertilizer" - the product a supply status is about, or
--- for a machine needing a service (150) the machine's name.
+-- for a machine needing a service or repair (150) the machine's name.
 function TheContractorJob:getSupplyFillTypeTitle()
-    if TCJobSupplies ~= nil and self.supplyStatus == TCJobSupplies.STATUS.NEEDS_SERVICE then
+    if TCADSWorkerRefusal ~= nil and TCADSWorkerRefusal.isHoldStatus(self.supplyStatus) then
         return tostring(self.supplyFillTypeName)
     end
     local fillTypeIndex = self.supplyFillTypeName ~= nil and

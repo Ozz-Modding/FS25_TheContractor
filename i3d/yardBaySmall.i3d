@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="iso-8859-1"?>
+
+<i3D name="yardBaySmall" version="1.6" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://i3d.giants.ch/schema/i3d-1.6.xsd">
+  <Asset>
+    <Export program="i3dConverter" version="1.0"/>
+  </Asset>
+
+  <Files>
+    <File fileId="5" filename="$data/shaders/placeableShader.xml"/>
+    <File fileId="2" filename="$data/shared/warningStripes_diffuse.dds"/>
+    <File fileId="3" filename="$data/shared/warningStripes_normal.dds"/>
+    <File fileId="4" filename="$data/shared/warningStripes_specular.dds"/>
+  </Files>
+
+
+  <Materials>
+    <Material name="lambert1" materialId="1" diffuseColor="0.494118 0.494118 0.494118 1">
+    </Material>
+    <Material name="warningStripes_mat" materialId="2" customShaderId="5">
+      <Texture fileId="2"/>
+      <Normalmap fileId="3"/>
+      <Glossmap fileId="4"/>
+      <CustomParameter name="snowScale" value="0"/>
+    </Material>
+  </Materials>
+
+
+  <Shapes externalShapesFile="yardBaySmall.i3d.shapes">
+  </Shapes>
+
+  <Scene>
+    <TransformGroup name="parkingSlot" clipDistance="300" nodeId="8">
+      <TransformGroup name="areaStart" translation="-2.5 0 -5.5" nodeId="9"/>
+      <TransformGroup name="areaWidth" translation="2.5 0 -5.5" nodeId="10"/>
+      <TransformGroup name="areaHeight" translation="-2.5 0 5.5" nodeId="11"/>
+      <TransformGroup name="testAreas" nodeId="12">
+        <TransformGroup name="testAreaStart" translation="-2.45 0 -5.45" nodeId="13">
+          <TransformGroup name="testAreaEnd" translation="4.9 1 10.9" nodeId="14"/>
+        </TransformGroup>
+      </TransformGroup>
+      <Shape name="pickCollision" shapeId="1" static="true" collisionFilterGroup="0x2000" collisionFilterMask="0x0" density="0.0001" nodeId="15" castsShadows="false" receiveShadows="false" nonRenderable="true" materialIds="1"/>
+      <TransformGroup name="visuals" nodeId="16">
+        <Shape name="borderLeft" translation="-2.4 0.02 0" shapeId="2" clipDistance="300" nodeId="17" castsShadows="false" receiveShadows="true" nonRenderable="true" terrainDecal="true" decalLayer="1" materialIds="2"/>
+        <Shape name="borderRight" translation="2.4 0.02 0" shapeId="2" clipDistance="300" nodeId="18" castsShadows="false" receiveShadows="true" nonRenderable="true" terrainDecal="true" decalLayer="1" materialIds="2"/>
+        <Shape name="borderBack" translation="0 0.02 -5.4" shapeId="3" clipDistance="300" nodeId="19" castsShadows="false" receiveShadows="true" nonRenderable="true" terrainDecal="true" decalLayer="1" materialIds="2"/>
+        <Shape name="borderFront" translation="0 0.02 5.4" shapeId="3" clipDistance="300" nodeId="20" castsShadows="false" receiveShadows="true" nonRenderable="true" terrainDecal="true" decalLayer="1" materialIds="2"/>
+        <Shape name="arrow" translation="0 0.02 1.5" shapeId="4" clipDistance="300" nodeId="21" castsShadows="false" receiveShadows="true" nonRenderable="true" terrainDecal="true" decalLayer="1" materialIds="2"/>
+      </TransformGroup>
+    </TransformGroup>
+  </Scene>
+
+</i3D>

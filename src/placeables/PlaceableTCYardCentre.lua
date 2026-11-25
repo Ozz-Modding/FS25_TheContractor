@@ -165,16 +165,18 @@ function PlaceableTCYardCentre.getPlacementError(canChange, ownerFarmId, isYard,
 end
 
 -- The live map's verdict for the farmland at x, z (see getPlacementError).
-function PlaceableTCYardCentre.getPlacementErrorAt(placeable, x, z)
+-- allowMany (183's yard bays): any number can go on a yard, so it's never
+-- TAKEN.
+function PlaceableTCYardCentre.getPlacementErrorAt(placeable, x, z, allowMany)
     local tc = g_currentMission.TheContractor
     local farmlandId = g_farmlandManager:getFarmlandIdAtWorldPosition(x, z)
     if tc == nil or tc.Yards == nil or not g_farmlandManager:getIsValidFarmlandId(farmlandId) then
         return PlaceableTCYardCentre.PLACEMENT_ERROR.NOT_A_YARD
     end
     local placeables = g_currentMission.placeableSystem ~= nil and g_currentMission.placeableSystem.placeables or {}
+    local hasMarker = not allowMany and TheContractorYards.findCentreMarker(placeables, farmlandId, placeable) ~= nil
     return PlaceableTCYardCentre.getPlacementError(TheContractorSettings.getCanLocalPlayerChange(),
-        g_farmlandManager:getFarmlandOwner(farmlandId), tc.Yards:getYard(farmlandId) ~= nil,
-        TheContractorYards.findCentreMarker(placeables, farmlandId, placeable) ~= nil)
+        g_farmlandManager:getFarmlandOwner(farmlandId), tc.Yards:getYard(farmlandId) ~= nil, hasMarker)
 end
 
 function PlaceableTCYardCentre:getCanBePlacedAt(superFunc, x, y, z, farmId)

@@ -406,6 +406,9 @@ function TCParking.updateVisuals()
         elseif PlaceableTCYardCentre.isMarker(placeable) then
             -- 146: yard centre markers too.
             PlaceableTCYardCentre.setVisualsVisible(placeable, showSlots)
+        elseif PlaceableTCYardBay.isBay(placeable) then
+            -- 183: and yard machine bays.
+            PlaceableTCYardBay.setVisualsVisible(placeable, showSlots)
         elseif TCParking.isRepairZone(placeable) then
             -- 100: repair zones show with the slots.
             PlaceableTCRepairZone.setVisualsVisible(placeable, showSlots)
@@ -477,6 +480,8 @@ function TCParking.getSlotAt(x, z)
                 area = PlaceableTCStandingSpot.getArea(placeable)
             elseif PlaceableTCYardCentre.isMarker(placeable) then
                 area = PlaceableTCYardCentre.getArea(placeable)
+            elseif PlaceableTCYardBay.isBay(placeable) then
+                area = PlaceableTCYardBay.getArea(placeable)
             elseif TCParking.isRepairZone(placeable) then
                 area = PlaceableTCRepairZone.getArea(placeable)
             end

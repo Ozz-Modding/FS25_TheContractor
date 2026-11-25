@@ -976,6 +976,14 @@
 		<text name="tc_yardCentre_owned" text="A player owns this land: it's no farmer's yard"/>
 		<text name="tc_yardCentre_notYard" text="This farmland isn't a farmer's yard. Set it as one from the map first"/>
 		<text name="tc_yardCentre_taken" text="This yard already has a centre marker"/>
+		<text name="tc_yardBay_name" text="Yard Machine Bay"/>
+		<text name="tc_yardBay_function" text="Where a farmer's machines and trailers come out in their yard, ahead of anywhere else, facing the way the arrow points. Big enough for a machine with its implement. Place as many as you like, whole on a yard that no player owns (host or admin only). Only visible in the construction menu, unless you turn on Show parking slots (Right Ctrl+P)."/>
+		<text name="tc_yardBaySmall_name" text="Yard Machine Bay (Small)"/>
+		<text name="tc_yardBaySmall_function" text="A smaller yard machine bay for tight yards: room for a trailer or a tractor on its own. A farmer's machines and trailers come out in a free bay ahead of anywhere else, facing the way the arrow points. Place as many as you like, whole on a yard that no player owns (host or admin only). Only visible in the construction menu, unless you turn on Show parking slots (Right Ctrl+P)."/>
+		<text name="tc_yardBay_noPermission" text="Only the host or an admin can place a yard machine bay"/>
+		<text name="tc_yardBay_owned" text="A player owns this land: it's no farmer's yard"/>
+		<text name="tc_yardBay_notYard" text="This farmland isn't a farmer's yard. Set it as one from the map first"/>
+		<text name="tc_yardBay_offYard" text="The whole bay has to be on the farmer's yard"/>
 		<text name="tc_disposalSkip_name" text="Disposal Skip"/>
 		<text name="tc_disposalSkip_function" text="Where fly-tipped junk from a clearing job goes, and old parts taken off a machine with Advanced Damage System. Drop each piece in or right next to it and it's taken away. Every piece from a job, and every old part, costs a small tipping fee."/>
 		<text name="tc_logoSign_name" text="Company Sign"/>
@@ -1053,8 +1061,10 @@
 		<text name="tc_supplies_status_noStock" text="Waiting for %s"/>
 		<text name="tc_supplies_status_wrongFill" text="Tank holds %s - empty it"/>
 		<text name="tc_supplies_status_needsService" text="%s needs a service"/>
+		<text name="tc_supplies_status_needsRepair" text="%s needs a repair"/>
 		<text name="tc_supplies_onHold" text="%s on %s is on hold: %s."/>
 		<text name="tc_supplies_serviced" text="%s is serviced: %s on %s will carry on shortly."/>
+		<text name="tc_supplies_repaired" text="%s is repaired: %s on %s will carry on shortly."/>
 		<text name="tc_supplies_or" text=" or "/>
 		<text name="tc_supplies_noticeOne" text="Out of %s: a job is on hold until you restock."/>
 		<text name="tc_supplies_noticeMany" text="Out of %s: %d jobs are on hold until you restock."/>
@@ -1062,6 +1072,7 @@
 		<text name="tc_allocation_notCertifiedWarning" text="%s doesn't hold a %s certificate. Book them on a course from the Staff tab."/>
 		<text name="tc_allocation_filledHarvesterWarning" text="%s still has %s in its tank. Empty it before it goes out on a job."/>
 		<text name="tc_allocation_needsServiceWarning" text="%s needs a service before a worker will take it out."/>
+		<text name="tc_allocation_needsRepairWarning" text="%s has broken down and needs a repair before a worker will take it out."/>
 		<text name="tc_allocation_crewRolesTitle" text="Who does what"/>
 		<text name="tc_allocation_crewRolesPrompt" text="Choose who harvests and who hauls. The recommended way round suits their skills best, but you can swap them round to give the other one the practice."/>
 		<text name="tc_allocation_crewRolesOption" text="%s harvests, %s hauls"/>
@@ -1818,7 +1829,7 @@
 		<text name="tc_help_allocating_title" text="Allocating a crew"/>
 		<text name="tc_help_allocating_1" text="To get a job done, highlight it on the Jobs tab and choose Allocate. Pick a worker (or Do It Myself) and the machines to take: a tractor and implement, a harvester and header, and for harvest and haul a haulage tractor and trailer."/>
 		<text name="tc_help_allocating_2_title" text="Warnings"/>
-		<text name="tc_help_allocating_2" text="The dialog warns you about anything wrong: a worker short of the skill the job needs (expect lower quality and extra wear), no certificate, missing supplies, a machine that needs emptying or a service first. Machines that are busy, in use or still on their way back can't be picked."/>
+		<text name="tc_help_allocating_2" text="The dialog warns you about anything wrong: a worker short of the skill the job needs (expect lower quality and extra wear), no certificate, missing supplies, a machine that needs emptying, a service or a repair first. Machines that are busy, in use or still on their way back can't be picked."/>
 		<text name="tc_help_allocating_3_title" text="Off they go"/>
 		<text name="tc_help_allocating_3" text="A hired worker drives the base game's AI helper out to the field, does the work and comes back. While they're away, the machines are out of the yard and can't be used or sold."/>
 		<text name="tc_help_allocating_4_title" text="Stuck workers"/>
@@ -2008,7 +2019,7 @@
 		<text name="tc_help_farmerYards_title" text="Farmers' yards"/>
 		<text name="tc_help_farmerYards_1" text="Farms on the map that no player owns are farmers' yards, worked out from their buildings. In daylight, a farmer stands about in their yard."/>
 		<text name="tc_help_farmerYards_2_title" text="Setting a yard"/>
-		<text name="tc_help_farmerYards_2" text="The host or an admin can mark a farmland as a farmer's yard, or rule one out, from its box on the in-game map. A Yard Centre Marker (construction menu) sets where the yard's middle really is."/>
+		<text name="tc_help_farmerYards_2" text="The host or an admin can mark a farmland as a farmer's yard, or rule one out, from its box on the in-game map. A Yard Centre Marker (construction menu) sets where the yard's middle really is. Yard Machine Bays (two sizes) mark where the farmer's machines and trailers should come out: a machine goes in a free bay it fits before anywhere else, so put them where you can get a tractor to."/>
 		<text name="tc_help_farmerYards_3_title" text="Dressing it"/>
 		<text name="tc_help_farmerYards_3" text="Standing spots and seats placed in a farmer's yard are for that farmer (host or admin only)."/>
 		<text name="tc_help_farmerMachines_title" text="Farmers' machines"/>
@@ -2054,7 +2065,7 @@
 		<text name="tc_help_workshopTrades_3_title" text="Training"/>
 		<text name="tc_help_workshopTrades_3" text="Manage, Workshop training books a worker on a course to learn a trade or raise one a level. Your office administrator is the workshop's advisor."/>
 		<text name="tc_help_workshopTrades_4_title" text="Careless workers"/>
-		<text name="tc_help_workshopTrades_4" text="A careless or under-skilled worker can cause breakdowns on the machines they take out. A machine overdue for its service won't be taken out by a worker until it's seen to. Once it is, the worker gives you a minute to finish up and put your tools away before carrying on."/>
+		<text name="tc_help_workshopTrades_4" text="A careless or under-skilled worker can cause breakdowns on the machines they take out. A machine overdue for its service won't be taken out by a worker until it's seen to, and a breakdown that stops a worker's machine puts their job on hold until it's repaired. Once it is, the worker gives you a minute to finish up and put your tools away before carrying on."/>
 		<text name="tc_help_repairContracts_title" text="Repair zones and quotes"/>
 		<text name="tc_help_repairContracts_1" text="Place repair zones from the construction menu (one, three or six tractor bays, or a harvester bay). Customers bring their machines there for a repair or a service, each with an offer in the Inbox."/>
 		<text name="tc_help_repairContracts_2_title" text="Inspect first"/>

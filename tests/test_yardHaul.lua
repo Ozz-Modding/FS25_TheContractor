@@ -62,7 +62,9 @@ local function setup()
         return xml == "trailer.xml" and { xmlFilename = xml, name = "Trailer", categoryName = "TRAILERS" } or nil
     end }
     StoreItemUtil = { getSizeValues = function() return { width = 2.5, length = 8, height = 3 } end }
-    TheContractorYards = { isOpenGround = function() return world.open ~= false end }
+    TheContractorYards = { isOpenGround = function() return world.open ~= false end,
+        -- 183: no machine bays.
+        findBays = function() return {} end }
     g_farmlandManager = { getFarmlandOwner = function(_, farmlandId) return world.yardOwners[farmlandId] or 0 end }
     world.yardOwners = {}
 
@@ -70,6 +72,7 @@ local function setup()
     world:load("src/util/TCVehicleIds.lua")
     world:load("src/business/FarmerFleet.lua")
     world:load("src/business/FieldBreakdowns.lua")
+    world:load("src/util/TCYardBays.lua")
     world:load("src/business/YardBales.lua")
     world:load("src/business/YardHaul.lua")
     TheContractorYardHaul.getTrailerSpec = function(xml)

@@ -36,7 +36,8 @@
 -- the worker drive until it's serviced ("needsService", the machine's name
 -- where a product's would be - TCADSWorkerRefusal). The worker waits on the
 -- field and carries on once it's been seen to (Dispatch:startJobForWorker
--- checks again each poll).
+-- checks again each poll). A breakdown ADS stops the AI for is the same
+-- hold as "needsRepair".
 --
 -- Diesel (063): a hired worker's machines run on the farm's own diesel,
 -- out of the same stock (a fuel tank is a storage). Their diesel tanks are
@@ -73,6 +74,7 @@ TCJobSupplies.STATUS = {
     NO_STOCK = "noStock",
     WRONG_FILL = "wrongFill",
     NEEDS_SERVICE = "needsService",
+    NEEDS_REPAIR = "needsRepair",
 }
 
 local accumulatedMs = 0

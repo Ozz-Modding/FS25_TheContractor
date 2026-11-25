@@ -210,14 +210,15 @@ function TheContractorDispatch:startJobForWorker(job, skipTransport)
     -- it. Should that empty a tank (the farm's out of diesel), the second
     -- topUp is what puts the job on hold.
     local loaded, supplyStatus, supplyFillTypeName, fuelLoaded = TCJobSupplies.topUp(job)
-    -- 150: nor with a machine ADS won't let them drive until it's serviced.
-    -- Before the trip's diesel, which a held job would burn again each try.
+    -- 150: nor with a machine ADS won't let them drive until it's serviced
+    -- or repaired. Before the trip's diesel, which a held job would burn
+    -- again each try.
     if supplyStatus == nil then
-        local refusedVehicle = TCADSWorkerRefusal.getRefusedVehicle(job.assignedEquipmentIds)
+        local refusedVehicle, holdStatus = TCADSWorkerRefusal.getRefusedVehicle(job.assignedEquipmentIds)
         if refusedVehicle ~= nil then
             self.serviceClearedAtByJobId[job.id] = nil
-            supplyStatus, supplyFillTypeName = TCJobSupplies.STATUS.NEEDS_SERVICE, refusedVehicle:getName()
-        elseif job.supplyStatus == TCJobSupplies.STATUS.NEEDS_SERVICE and not self:isServiceGraceOver(job) then
+            supplyStatus, supplyFillTypeName = holdStatus, refusedVehicle:getName()
+        elseif TCADSWorkerRefusal.isHoldStatus(job.supplyStatus) and not self:isServiceGraceOver(job) then
             -- Serviced, but the player gets a minute to finish up: still
             -- held, so tried again next poll.
             return
@@ -499,22 +500,20 @@ function TheContractorDispatch:onAIJobStopped(aiJob, aiMessage)
         aiMessage ~= nil and aiMessage:getMessage(aiJob) or "no message")
 
     -- 150: ADS stopped it, at the start or mid-shift, for a machine that
-    -- needs a service. On hold like a supplies problem: the worker waits
-    -- where they are, and TCJobSupplies' poll restarts the job once ADS
-    -- would take the machine again.
-    if not isClean and TCADSWorkerRefusal.isRefusalMessage(aiMessage) then
+    -- needs a service, or one with a breakdown that stops the AI. On hold
+    -- like a supplies problem: the worker waits where they are, and
+    -- TCJobSupplies' poll restarts the job once ADS would take the machine
+    -- again. Left to the watchdog, it'd be reset and restarted on a machine
+    -- that can't work, and given up on.
+    local job = g_currentMission.TheContractor.Jobs:getJobById(ourJobId)
+    if not isClean and TCADSWorkerRefusal.isRefusalMessage(aiMessage, job ~= nil and job.assignedEquipmentIds or nil) then
         self.ourJobIdByAIJob[aiJob] = nil
         if self.aiJobByOurJobId[ourJobId] == aiJob then
             self.aiJobByOurJobId[ourJobId] = nil
         end
-        local jobs = g_currentMission.TheContractor.Jobs
-        local job = jobs:getJobById(ourJobId)
-        self.serviceClearedAtByJobId[ourJobId] = nil
         if job ~= nil then
-            local vehicle = TCADSWorkerRefusal.getRefusedVehicle(job.assignedEquipmentIds) or
-                TCAINotifications.getVehicle(aiJob)
-            jobs:setJobSupplyStatus(job, TCJobSupplies.STATUS.NEEDS_SERVICE,
-                vehicle ~= nil and vehicle:getName() or "?")
+            local vehicle = TCAINotifications.getVehicle(aiJob)
+            self:holdForADS(job, vehicle ~= nil and vehicle:getName() or "?")
         end
         return
     end
@@ -676,6 +675,24 @@ function TheContractorDispatch:isServiceGraceOver(job)
         return false
     end
     self.serviceClearedAtByJobId[job.id] = nil
+    return true
+end
+
+-- 150: puts a hired worker's job on hold for a machine ADS won't let them
+-- drive (TCADSWorkerRefusal), stopping its AI if it's still running.
+-- fallbackName names the machine when ADS has already stopped the job but
+-- its state no longer says which (a service refusal judged a moment ago):
+-- held for a service. Without one, only held if ADS names a machine.
+-- Returns whether it was held.
+function TheContractorDispatch:holdForADS(job, fallbackName)
+    local vehicle, status = TCADSWorkerRefusal.getRefusedVehicle(job.assignedEquipmentIds)
+    if vehicle == nil and fallbackName == nil then
+        return false
+    end
+    self:stopJob(job.id)
+    self.serviceClearedAtByJobId[job.id] = nil
+    g_currentMission.TheContractor.Jobs:setJobSupplyStatus(job, status or TCJobSupplies.STATUS.NEEDS_SERVICE,
+        vehicle ~= nil and vehicle:getName() or fallbackName)
     return true
 end
 

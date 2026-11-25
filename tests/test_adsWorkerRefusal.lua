@@ -2,10 +2,11 @@
 -- let a hired worker drive can't be allocated to one, and a job ADS stops
 -- for it, as it sets off or mid-shift, goes on hold until it's serviced.
 
--- A fake ADS: refusal and self-service on, and each vehicle's refusal
--- reasons as ADS_AIWorker.getRefusalReasons gives them.
+-- A fake ADS: refusal and self-service on, each vehicle's refusal reasons
+-- as ADS_AIWorker.getRefusalReasons gives them, and its resolved effects as
+-- ADS_VehiclePerformance.resolveEffect does (effectId -> effect).
 local function installADS(world)
-    local ads = { refusal = true, selfService = true, reasons = {} }
+    local ads = { refusal = true, selfService = true, reasons = {}, effects = {} }
     local messageClass = {}
     ads.env = {
         ADS_AIWorker = {
@@ -14,14 +15,33 @@ local function installADS(world)
             getRefusalReasons = function(vehicle) return ads.reasons[vehicle] or {} end,
         },
         ADS_AIMessageErrorPoorMaintenance = messageClass,
+        ADS_VehiclePerformance = {
+            EffectRegistry = { HYDRAULIC_HOSE_BURST = {}, ENGINE_POWER_MODIFIER = {} },
+            resolveEffect = function(vehicle, effectId)
+                return ads.effects[vehicle] ~= nil and ads.effects[vehicle][effectId] or nil
+            end,
+        },
     }
-    function ads.refusalMessage()
+    local function message(class)
         return {
-            isa = function(_, class) return class == messageClass end,
+            isa = function(_, other) return other == class end,
             getType = function() return AIMessageType.ERROR end,
-            getMessage = function() return "refused" end,
+            getMessage = function() return "stopped" end,
         }
     end
+    function ads.refusalMessage()
+        return message(messageClass)
+    end
+    -- Vanilla's, which ADS stops the AI with for a breakdown.
+    AIMessageErrorVehicleBroken = {}
+    function ads.brokenMessage()
+        return message(AIMessageErrorVehicleBroken)
+    end
+    -- A burst hose: an effect that stops the AI.
+    function ads.breakDown(vehicle)
+        ads.effects[vehicle] = { HYDRAULIC_HOSE_BURST = { metadata = { disableAi = true } } }
+    end
+    TCJobSupplies = { STATUS = { NEEDS_SERVICE = "needsService", NEEDS_REPAIR = "needsRepair" } }
     world:load("src/util/TCADSWorkerRefusal.lua")
     TCADSWorkerRefusal.getEnv = function() return ads.env end
     return ads
@@ -90,6 +110,58 @@ test("ADS's stop message is told from any other", function()
     assertEquals(TCADSWorkerRefusal.isRefusalMessage(nil), false)
 end)
 
+-- Breakdowns -------------------------------------------------------------------
+
+test("a breakdown that stops the AI needs a repair, whatever the refusal setting", function()
+    local world = stubs.install()
+    local ads = installADS(world)
+    local tractor = addADSVehicle(world, "MT635")
+    assertEquals(TCADSWorkerRefusal.getHoldStatus(tractor), nil, "in good order")
+
+    ads.effects[tractor] = { ENGINE_POWER_MODIFIER = { metadata = {} } }
+    assertEquals(TCADSWorkerRefusal.getHoldStatus(tractor), nil, "a fault that doesn't stop the AI")
+
+    ads.breakDown(tractor)
+    ads.refusal = false
+    assertEquals(TCADSWorkerRefusal.getHoldStatus(tractor), "needsRepair")
+    assertTrue(TCADSWorkerRefusal.isRefused(tractor))
+
+    ads.refusal = true
+    ads.reasons[tractor] = { { key = "motorOil", operation = "replace", severity = 0.4 } }
+    local vehicle, status = TCADSWorkerRefusal.getRefusedVehicle({ tractor.id })
+    assertTrue(vehicle == tractor)
+    assertEquals(status, "needsRepair", "the repair comes first")
+
+    ads.effects[tractor] = nil
+    assertEquals(TCADSWorkerRefusal.getHoldStatus(tractor), "needsService")
+end)
+
+test("no breakdown is read with the machine outside ADS or an ADS without its effects", function()
+    local world = stubs.install()
+    local ads = installADS(world)
+    local tractor = addADSVehicle(world, "MT635")
+    ads.breakDown(tractor)
+
+    function tractor:getIsADSExcluded() return true end
+    assertEquals(TCADSWorkerRefusal.isBrokenDown(tractor), false, "excluded from ADS")
+    tractor.getIsADSExcluded = nil
+
+    ads.env.ADS_VehiclePerformance.resolveEffect = nil
+    assertEquals(TCADSWorkerRefusal.isBrokenDown(tractor), false, "no resolveEffect")
+    ads.env.ADS_VehiclePerformance = nil
+    assertEquals(TCADSWorkerRefusal.isBrokenDown(tractor), false, "no ADS_VehiclePerformance")
+end)
+
+test("vanilla's broken-vehicle stop is ADS's only with a breakdown on the job's machines", function()
+    local world = stubs.install()
+    local ads = installADS(world)
+    local tractor = addADSVehicle(world, "MT635")
+    assertEquals(TCADSWorkerRefusal.isRefusalMessage(ads.brokenMessage(), { tractor.id }), false)
+    ads.breakDown(tractor)
+    assertTrue(TCADSWorkerRefusal.isRefusalMessage(ads.brokenMessage(), { tractor.id }))
+    assertEquals(TCADSWorkerRefusal.isRefusalMessage(ads.brokenMessage(), {}), false, "another machine's")
+end)
+
 -- Allocating -----------------------------------------------------------------------
 
 local function setupAllocation()
@@ -119,7 +191,7 @@ local function setupAllocation()
     TCFieldPreparation = { prepareFieldForJob = function() end }
     TCJobProgress = { clearJob = function() end }
     TCFieldAccess = { refresh = function() end }
-    TCJobSupplies = { topUp = function() end }
+    TCJobSupplies.topUp = function() end
     TCHaulage = { startDelivery = function() end, resumeDelivery = function() end }
     TCJobAllocatedEvent = { new = function(job) return { job = job } end }
     TheContractorWorker = { STATUS = { ASSIGNED = "assigned" } }
@@ -193,8 +265,7 @@ local function setupDispatch()
     world:load("src/events/TCJobServicedEvent.lua")
     g_fieldManager = { getFieldById = function() return nil end }
     local ads = installADS(world)
-    TCJobSupplies = { STATUS = { NEEDS_SERVICE = "needsService" },
-        topUp = function() return 0, nil, nil, 0 end }
+    TCJobSupplies.topUp = function() return 0, nil, nil, 0 end
     TCJobSiteSetup = { selectJobSeed = function() end }
     world.fuelBurnt = 0
     TCJobFuel = { burnTravelFuel = function() world.fuelBurnt = world.fuelBurnt + 1 return false end }
@@ -327,4 +398,71 @@ test("a job that was never held for a service sets off straight away", function(
     dispatch:startJobForWorker(job)
 
     assertTrue(dispatch:isJobActive(job))
+end)
+
+test("a breakdown ADS stops the AI for puts the job on hold for a repair, not the watchdog", function()
+    local world, dispatch, ads = setupDispatch()
+    local job, tractor = addWorkerJob(world, TheContractorJob.STATE.IN_PROGRESS)
+    local aiJob = { vehicleParameter = { getVehicle = function() return tractor end } }
+    dispatch.aiJobByOurJobId[job.id] = aiJob
+    dispatch.ourJobIdByAIJob[aiJob] = job.id
+    ads.breakDown(tractor)
+
+    dispatch:onAIJobStopped(aiJob, ads.brokenMessage())
+
+    assertEquals(job.supplyStatus, "needsRepair")
+    assertEquals(job.supplyFillTypeName, "MT635")
+    assertEquals(dispatch:isJobActive(job), false, "free for the poll to restart")
+end)
+
+test("a broken-vehicle stop with no ADS breakdown is left as it was", function()
+    local world, dispatch, ads = setupDispatch()
+    local job, tractor = addWorkerJob(world, TheContractorJob.STATE.IN_PROGRESS)
+    local aiJob = { vehicleParameter = { getVehicle = function() return tractor end } }
+    dispatch.aiJobByOurJobId[job.id] = aiJob
+    dispatch.ourJobIdByAIJob[aiJob] = job.id
+
+    dispatch:onAIJobStopped(aiJob, ads.brokenMessage())
+
+    assertEquals(job.supplyStatus, nil)
+end)
+
+test("once it's repaired the worker carries on after the same minute", function()
+    local world, dispatch, ads = setupDispatch()
+    local job, tractor = addWorkerJob(world, TheContractorJob.STATE.IN_PROGRESS)
+    ads.breakDown(tractor)
+    dispatch:startJobForWorker(job, true)
+    assertEquals(job.supplyStatus, "needsRepair")
+
+    ads.effects[tractor] = nil
+    g_client = {}
+    g_time = 1000
+    dispatch:startJobForWorker(job, true)
+    assertEquals(job.supplyStatus, "needsRepair", "waiting out the minute")
+    assertEquals(#world.notifications, 1, "told it's repaired")
+    g_time = nil
+    g_client = nil
+end)
+
+test("the watchdog holds a stalled job on a broken-down machine instead of resetting it", function()
+    local world, dispatch, ads = setupDispatch()
+    TCJobProgress = { POLL_INTERVAL_MS = 3000 }
+    world:load("src/business/Watchdog.lua")
+    g_currentMission.TheContractor.Dispatch = dispatch
+    local job, tractor = addWorkerJob(world, TheContractorJob.STATE.IN_PROGRESS)
+    local stuckBefore = job.stuckInterventions
+    local watchdog = TheContractorWatchdog.new()
+    local entry = { lastPercentage = 0, elapsedStuckMs = 0, retryCount = 0, needsAttention = false }
+    watchdog.trackedByJobId[job.id] = entry
+    ads.breakDown(tractor)
+
+    watchdog:handleStuckJob(job, entry)
+
+    assertEquals(job.supplyStatus, "needsRepair")
+    assertEquals(entry.retryCount, 0, "no reset")
+    assertEquals(job.stuckInterventions, stuckBefore, "not held against the job")
+    assertEquals(watchdog.trackedByJobId[job.id], nil, "a fresh grace period once it's back at work")
+
+    local soundJob = addWorkerJob(world, TheContractorJob.STATE.IN_PROGRESS)
+    assertEquals(dispatch:holdForADS(soundJob), false, "nothing to hold a sound machine for")
 end)
