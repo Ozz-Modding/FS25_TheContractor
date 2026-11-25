@@ -506,6 +506,7 @@
 		<text name="tc_staff_detailSalary" text="%s per month"/>
 		<text name="tc_staff_detailJobNone" text="None"/>
 		<text name="tc_staff_detailOnBreak" text="On break until %s"/>
+		<text name="tc_staff_detailCooldown" text="Expected back: %s"/>
 		<text name="tc_staff_detailComingIn" text="In at %s, on until %s"/>
 		<text name="tc_staff_detailOnUntil" text="On until %s"/>
 		<text name="tc_growth_improved" text="%s improved: %s %d to %d"/>
@@ -1094,6 +1095,7 @@
 		<text name="tc_staff_status_comingIn" text="On the way in"/>
 		<text name="tc_staff_status_stayingLate" text="Staying late"/>
 		<text name="tc_staff_status_onBreak" text="On break"/>
+		<text name="tc_staff_status_inWorkshop" text="In workshop"/>
 		<text name="tc_hours_driversAllHome" text="Everyone free has gone home for the day. Ask someone to stay late, or call them back in, from Manage on the Staff tab."/>
 		<text name="tc_hours_driversAllOnBreak" text="Everyone free is on a break. %s is back first, at %s."/>
 		<text name="tc_hours_detailOvertime" text="%s (+%s overtime this month)"/>
@@ -2061,7 +2063,7 @@
 		<text name="tc_help_workshopTrades_title" text="Workshop staff"/>
 		<text name="tc_help_workshopTrades_1" text="With Advanced Damage System, your own staff run its workshop. Field workers may have workshop trades, mechanic, electrician, bodyworker or storekeeper, at level 1 to 3, shown on the People tab."/>
 		<text name="tc_help_workshopTrades_2_title" text="Working in the workshop"/>
-		<text name="tc_help_workshopTrades_2" text="From Manage, set a worker to work in the workshop in one of their trades. They do it whenever they aren't out on a job; while they're away, that trade's work waits. Only one worker per trade."/>
+		<text name="tc_help_workshopTrades_2" text="From Manage, set a worker to work in the workshop in one of their trades. They do it whenever they aren't out on a job, and show as In workshop while they're busy on one of its jobs (they can still be given a contract). While they're away, that trade's work waits. Only one worker per trade."/>
 		<text name="tc_help_workshopTrades_3_title" text="Training"/>
 		<text name="tc_help_workshopTrades_3" text="Manage, Workshop training books a worker on a course to learn a trade or raise one a level. Your office administrator is the workshop's advisor."/>
 		<text name="tc_help_workshopTrades_4_title" text="Careless workers"/>

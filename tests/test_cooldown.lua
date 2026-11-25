@@ -104,3 +104,25 @@ test("a protest out adds to the trip back, and the farm's told", function()
     assertEquals(world.protestDelays[1].jobId, job.id)
     assertTrue(world.protestDelays[1].isReturn, "the trip back")
 end)
+
+-- The Staff tab's "Expected back": now plus what's left of the cooldown,
+-- counted down on every machine.
+test("a worker in a cooldown is expected back when it runs out", function()
+    local world, cooldown = setup()
+    local tractor = world:addVehicle({})
+    world:addJob({ workerId = 3, vehicles = { tractor } })
+    cooldown:startCooldown(world.jobs[1])
+    local minutes = TheContractorCooldown.getBufferDurationMs(world.jobs[1]) / 60000
+
+    assertEquals(cooldown:getWorkerReturnTime(1, 3, 600), 600 + minutes, "at the start")
+    assertEquals(cooldown:getWorkerReturnTime(1, 4, 600), nil, "someone else")
+
+    g_currentMission.getEffectiveTimeScale = function() return 1 end
+    g_currentMission.getIsServer = function() return false end
+    cooldown:update(4 * 60000)
+    assertEquals(cooldown:getWorkerReturnTime(1, 3, 604), 600 + minutes, "a client counts down too")
+
+    cooldown:update(minutes * 60000)
+    assertTrue(cooldown:isVehicleInCooldown(tractor.id), "only the server ends it")
+    assertEquals(cooldown:getWorkerReturnTime(1, 3, 700), 700, "overdue on a client: any minute")
+end)

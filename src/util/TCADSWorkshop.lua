@@ -16,7 +16,9 @@
 -- The entry points are looked up once per loadMap (detect), the
 -- TCADSStock way: anything missing or a different API version leaves us
 -- disconnected, with one warning. Checked against FS25_AdvancedDamageSystem
--- 0.10.0.6 (commit 2901e04).
+-- 0.10.0.6 (commit 2901e04). getStaffActivity (whether a trade is busy on a
+-- job now) came later, so it's optional: without it nobody shows as in the
+-- workshop.
 
 TCADSWorkshop = {}
 
@@ -78,6 +80,17 @@ end
 -- ADS syncs it).
 function TCADSWorkshop.isActive()
     return api ~= nil and api.isContractorStaffEnabled() == true
+end
+
+-- Whether a worker ticked into a trade is busy on an ADS workshop job right
+-- now (in the building or out with the mobile workshop). ADS syncs it, so
+-- it's the same on every machine.
+function TCADSWorkshop.isWorking(worker)
+    if worker.workshopRole == nil or worker.farmId == nil or not TCADSWorkshop.isActive() or
+            type(api.getStaffActivity) ~= "function" then
+        return false
+    end
+    return api.getStaffActivity(worker.farmId, worker.workshopRole) ~= nil
 end
 
 -- Every machine, after our save has loaded.

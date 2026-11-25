@@ -214,6 +214,11 @@ function TheContractorWorkingHours.getDisplayStatus(worker, now)
     end
     local STATE = TheContractorWorkingHours.STATE
     local state = TheContractorWorkingHours.getState(worker, now or TheContractorWorkingHours.getNow())
+    -- Still idle to us (allocation takes them as ever), but busy in ADS's
+    -- workshop.
+    if (state == STATE.AT_WORK or state == STATE.STAYING) and TCADSWorkshop.isWorking(worker) then
+        return "inWorkshop"
+    end
     if state == STATE.AT_HOME then
         return "atHome"
     elseif state == STATE.COMING_IN then

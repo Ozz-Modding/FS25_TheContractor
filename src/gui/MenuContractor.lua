@@ -161,6 +161,8 @@ local STATUS_CHIP_TONES = {
     stayingLate = "info",
     -- 131.
     onBreak = "info",
+    -- Idle, but busy on an ADS workshop job (TCADSWorkshop.isWorking).
+    inWorkshop = "good",
 }
 
 local function getWorkerStatusTone(status)
@@ -1842,6 +1844,14 @@ function MenuContractor:updateStaffDetails()
         if jobLine == nil and status == "onBreak" then
             jobLine = string.format(g_i18n:getText("tc_staff_detailOnBreak"),
                 TheContractorWorkingHours.formatTime(worker.breakUntil))
+        end
+        -- On the way back from a job: when they're due in.
+        if jobLine == nil and worker.status == TheContractorWorker.STATUS.COOLDOWN then
+            local backAt = g_currentMission.TheContractor.Cooldown:getWorkerReturnTime(farmId, worker.id)
+            if backAt ~= nil then
+                jobLine = string.format(g_i18n:getText("tc_staff_detailCooldown"),
+                    TheContractorWorkingHours.formatTime(backAt))
+            end
         end
         -- 178: when someone called back will be in, and until when they're on.
         jobLine = jobLine or self:getDutyNoteText(worker)
