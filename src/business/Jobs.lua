@@ -2885,6 +2885,7 @@ function TheContractorJobs.registerConsoleCommands()
     -- and machines come home as they would from the Unallocate button.
     TCConsole.register("debug", "removeJob", {
         args = "<jobId>",
+        devPanel = true,
         description = "Delete a job as if it never was (unallocated first if it has a crew)",
         run = function(farmId, args)
             local jobId = tonumber(args[1])

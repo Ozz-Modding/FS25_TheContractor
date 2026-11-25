@@ -178,6 +178,26 @@ test("the server refuses a tcDebug request unless it has the marker too", functi
     assertEquals(runs, 1, "run")
 end)
 
+test("a devPanel tcDebug subcommand runs without the marker, but tcDebug stays uninstalled", function()
+    local world = setup()
+    TheContractorSettings = { getCanConnectionChange = function() return true end }
+    TCConsole.reset()
+    local runs = 0
+    TCConsole.register("debug", "panelPoke", {
+        devPanel = true,
+        run = function()
+            runs = runs + 1
+            return "done"
+        end,
+    })
+    TCConsole.runRequest("debug", { "panelPoke" }, { farmId = 1 }, {})
+    assertEquals(runs, 1, "run without the marker")
+
+    TCConsole.install()
+    assertEquals(world.commands.tcDebug, nil, "still not typeable")
+    TCConsole.uninstall()
+end)
+
 test("every registration is in a known group, once", function()
     setup()
     local registrations = scanRegistrations()

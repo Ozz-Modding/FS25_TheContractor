@@ -23,8 +23,10 @@
 -- up when any of our events lands (TC_DATA_UPDATED). The hitch test only
 -- reads, so it runs where it's asked.
 --
--- A testing tool, so its texts are plain English like tcDebug's, not l10n,
--- and it's only reachable with tcDebug's marker file. Gamepad-first like
+-- A testing tool, so its texts are plain English like tcDebug's, not l10n.
+-- It opens without tcDebug's marker file (its key works anywhere), and the
+-- tcDebug subcommands it runs are marked devPanel so they work without it
+-- too (TCConsole.isGroupEnabled). Gamepad-first like
 -- the other dialogs: the button bar acts on the highlighted row, and
 -- up from the list reaches the page picker.
 
@@ -77,16 +79,10 @@ function TCDevDialog.show(farmId)
 end
 
 -- TC_OPEN_DEV_PANEL (modDesc <actions>, unbound by default: a player binds
--- it in Controls). It opens the dialog only where tcDebug is installed, as
--- tcDebug dev does; elsewhere it says what's missing. Registered with the
--- player's global action events, as TCParking's toggle is.
+-- it in Controls). It opens the dialog whether or not tcDebug is installed.
+-- Registered with the player's global action events, as TCParking's toggle is.
 function TCDevDialog.onOpenAction()
     if g_gui == nil or g_gui:getIsGuiVisible() then
-        return
-    end
-    if not TCConsole.debugEnabled then
-        g_currentMission:addIngameNotification(FSBaseMission.INGAME_NOTIFICATION_INFO,
-            g_i18n:getText("tc_devPanel_needsDebug"))
         return
     end
     TCDevDialog.show(g_currentMission:getFarmId())
@@ -261,7 +257,8 @@ end
 -- through TCConsole.resultListener).
 function TCDevDialog:runCommand(groupKey, args)
     local group = TCConsole.groups[groupKey]
-    if group == nil or not TCConsole.isGroupEnabled(group) then
+    local def = group ~= nil and args[1] ~= nil and group.subcommands[string.lower(args[1])] or nil
+    if group == nil or not TCConsole.isGroupEnabled(group, def) then
         self:setStatus("That console group isn't installed on this machine.")
         return
     end

@@ -931,7 +931,6 @@
 		<text name="tc_parking_slotsHidden" text="Parking slots and standing spots hidden"/>
 		<text name="input_TC_TOGGLE_PARKING_SLOTS" text="Show/hide parking slots and standing spots"/>
 		<text name="input_TC_OPEN_DEV_PANEL" text="Open The Contractor's dev panel"/>
-		<text name="tc_devPanel_needsDebug" text="The dev panel needs a file called tcDebug.txt in the mod's settings folder (modSettings/FS25_TheContractor), read when a save loads."/>
 		<text name="tc_parkingSlot_activate" text="Set parking slot filter"/>
 		<text name="tc_parkingSlot_dialogTitle" text="Parking Slot Filter"/>
 		<text name="tc_parkingSlot_dialogHeading" text="Takes: %s"/>
