@@ -239,7 +239,7 @@ function TheContractorJobNews:onStepsUp(incident)
         return TheContractorRandomEvents.DONE
     end
 
-    local value = tc.Staff:boostWorker(incident.farmId, worker.id, incident.data.stat)
+    local value = tc.Staff:boostWorker(incident.farmId, worker.id, incident.data.stat, job.id)
     if value == nil then
         return TheContractorRandomEvents.DONE
     end

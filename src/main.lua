@@ -96,6 +96,7 @@ source(TheContractor.dir .. "src/util/TCLotInspections.lua")
 source(TheContractor.dir .. "src/util/TCAuctionLotHud.lua")
 source(TheContractor.dir .. "src/util/TCProtestLayout.lua")
 source(TheContractor.dir .. "src/util/TCProtestCrowd.lua")
+source(TheContractor.dir .. "src/util/TCFallenTreeBlocks.lua")
 source(TheContractor.dir .. "src/util/TCJobHotspots.lua")
 source(TheContractor.dir .. "src/util/TCJobHud.lua")
 source(TheContractor.dir .. "src/util/TCFarmDeletion.lua")
@@ -964,6 +965,8 @@ function TheContractor:deleteMap()
     TCAuctionProps.reset()
     -- 151: a protest's people, placards, blocks and markers.
     TCProtestCrowd.reset()
+    -- 107: the traffic blocks on fallen trees' roads.
+    TCFallenTreeBlocks.reset()
 
     TCConsole.uninstall()
     TCFarmDeletion.uninstall()
@@ -1030,6 +1033,8 @@ function TheContractor:update(dt)
     if self.FallenTree ~= nil then
         self.FallenTree:update(dt)
     end
+    -- 107: traffic blocks on fallen trees' roads (every machine).
+    TCFallenTreeBlocks.update(dt)
 
     -- 151: protests going out and ending (server).
     if self.Protest ~= nil then

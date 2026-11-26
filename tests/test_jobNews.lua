@@ -99,6 +99,14 @@ local function setup()
         end,
     }
 
+    -- Issue #16: growth from a job goes on its logbook entry.
+    world.logbookGrowth = {}
+    tc.Logbook = {
+        applyGrowth = function(_, farmId, jobId, workerId, stat, oldValue, newValue)
+            table.insert(world.logbookGrowth, { jobId = jobId, workerId = workerId, stat = stat, to = newValue })
+        end,
+    }
+
     world.morale = {}
     tc.Morale = {
         adjust = function(_, farmId, workers, delta)
@@ -276,6 +284,8 @@ test("a worker steps up: a free point on their weakest rating, and morale", func
     assertEquals(worker:getSkill("tillage"), 4, "tillage was the weaker")
     assertEquals(worker.growthPotential, 0, "outside their potential")
     assertEquals(world.grown[1].stat, "tillage")
+    assertEquals(world.logbookGrowth[1].jobId, job.id, "on the job's logbook entry")
+    assertEquals(world.logbookGrowth[1].stat, "tillage")
     assertEquals(world.morale[1].delta, TheContractorJobNews.STEPS_UP_MORALE)
     assertEquals(world.messages[1].titleKey, "tc_jobNews_stepsUp_title")
     assertEquals(table.concat(world.messages[1].args, "|"), "Amy Hill|4|$l10n_tc_growth_stat_tillage|4",

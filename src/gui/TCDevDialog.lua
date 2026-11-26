@@ -15,6 +15,10 @@
 --   Reports  the job types, harvest first. Write report writes the
 --            highlighted type's job report (tcDebug jobReport, TCJobReport)
 --            to a file for a player to send in with a bug report.
+--   Parking  the farm's parking slots and repair zones, with where each is
+--            in the minimap's coordinates and a chip on the one nearest the
+--            player. Delete sells the highlighted one (tcDebug removeZone),
+--            for one the construction menu can't pick to sell.
 --
 -- Everything that changes the game goes through the same console commands
 -- a player would type (TCConsole.dispatch), so it runs on the server and
@@ -36,7 +40,8 @@ local TCDevDialog_mt = Class(TCDevDialog, MessageDialog)
 TCDevDialog.PAGE_JOBS = 1
 TCDevDialog.PAGE_HITCHES = 2
 TCDevDialog.PAGE_REPORTS = 3
-TCDevDialog.PAGE_TITLES = { "Jobs", "Hitches", "Reports" }
+TCDevDialog.PAGE_PARKING = 4
+TCDevDialog.PAGE_TITLES = { "Jobs", "Hitches", "Reports", "Parking" }
 
 -- The Reports page's first rows; every other job type follows.
 TCDevDialog.REPORT_FIRST_TYPES = { "harvest" }
@@ -57,7 +62,7 @@ end
 
 function TCDevDialog.registerConsoleCommands()
     TCConsole.register("debug", "dev", {
-        description = "Open the dev dialog: the farm's jobs (change state, delete, add one), the hitch test and job reports",
+        description = "Open the dev dialog: the farm's jobs (change state, delete, add one), the hitch test, job reports and parking zones",
         serverOnly = false,
         run = function(farmId)
             if not TCDevDialog.show(farmId) then
@@ -127,6 +132,10 @@ function TCDevDialog.new(target, customMt)
     -- Reports: the job types, in the page's order.
     self.reportTypes = {}
     self.selectedReportIndex = 1
+    -- Parking: TCParking.getZoneRows' rows, and the nearest one's index.
+    self.zoneRows = {}
+    self.nearestZoneIndex = nil
+    self.selectedZoneIndex = 1
     -- The New job journey's answers so far.
     self.draft = nil
 
@@ -149,6 +158,9 @@ function TCDevDialog:onGuiSetupFinished()
     self.reportsPage = self:getDescendantById("reportsPage")
     self.reportList = self:getDescendantById("reportList")
     self.reportResultText = self:getDescendantById("reportResultText")
+    self.parkingPage = self:getDescendantById("parkingPage")
+    self.zoneList = self:getDescendantById("zoneList")
+    self.zonesEmptyText = self:getDescendantById("zonesEmptyText")
     self.okButton = self:getDescendantById("okButton")
     self.activateButton = self:getDescendantById("activateButton")
     self.extraButton = self:getDescendantById("extraButton")
@@ -159,6 +171,8 @@ function TCDevDialog:onGuiSetupFinished()
     self.vehicleList:setDelegate(self)
     self.reportList:setDataSource(self)
     self.reportList:setDelegate(self)
+    self.zoneList:setDataSource(self)
+    self.zoneList:setDelegate(self)
 end
 
 function TCDevDialog:onOpen()
@@ -189,6 +203,7 @@ function TCDevDialog:onClose()
     TCConsole.resultListener = nil
     self.jobs = {}
     self.vehicleRows = {}
+    self.zoneRows = {}
     self.draft = nil
 end
 
@@ -205,6 +220,8 @@ function TCDevDialog:update(dt)
         self.isDirty = false
         if self.page == TCDevDialog.PAGE_JOBS then
             self:reloadJobs()
+        elseif self.page == TCDevDialog.PAGE_PARKING then
+            self:reloadZones()
         end
     end
 end
@@ -221,8 +238,14 @@ function TCDevDialog:showPage(page)
     self.jobsPage:setVisible(isJobs)
     self.hitchesPage:setVisible(page == TCDevDialog.PAGE_HITCHES)
     self.reportsPage:setVisible(page == TCDevDialog.PAGE_REPORTS)
+    self.parkingPage:setVisible(page == TCDevDialog.PAGE_PARKING)
 
-    if page == TCDevDialog.PAGE_REPORTS then
+    if page == TCDevDialog.PAGE_PARKING then
+        self.hintText:setText("This farm's parking slots and repair zones, at the minimap's coordinates. Delete sells " ..
+            "the highlighted one, for one the construction menu can't pick (something else's collision over it).")
+        self:reloadZones()
+        FocusManager:setFocus(#self.zoneRows > 0 and self.zoneList or self.pageOption)
+    elseif page == TCDevDialog.PAGE_REPORTS then
         self.hintText:setText("Write report saves why this farm is or isn't offered the highlighted job type " ..
             "to jobReport.txt in the mod's settings folder (the host's, in multiplayer), to send in with a bug report.")
         self:reloadReports()
@@ -277,9 +300,13 @@ end
 
 function TCDevDialog:updateButtons()
     local isReports = self.page == TCDevDialog.PAGE_REPORTS
-    self.activateButton:setVisible(not isReports)
-    self.extraButton:setVisible(not isReports)
-    if isReports then
+    local isParking = self.page == TCDevDialog.PAGE_PARKING
+    self.activateButton:setVisible(not isReports and not isParking)
+    self.extraButton:setVisible(not isReports and not isParking)
+    if isParking then
+        self.okButton:setText("Delete")
+        self.okButton:setDisabled(self.zoneRows[self.selectedZoneIndex] == nil)
+    elseif isReports then
         self.okButton:setText("Write report")
         self.okButton:setDisabled(self.reportTypes[self.selectedReportIndex] == nil)
     elseif self.page == TCDevDialog.PAGE_JOBS then
@@ -302,7 +329,9 @@ function TCDevDialog:updateButtons()
 end
 
 function TCDevDialog:onClickOk()
-    if self.page == TCDevDialog.PAGE_REPORTS then
+    if self.page == TCDevDialog.PAGE_PARKING then
+        self:deleteZone()
+    elseif self.page == TCDevDialog.PAGE_REPORTS then
         self:writeReport()
     elseif self.page == TCDevDialog.PAGE_JOBS then
         self:changeJobState()
@@ -313,7 +342,7 @@ function TCDevDialog:onClickOk()
 end
 
 function TCDevDialog:onClickActivate()
-    if self.page == TCDevDialog.PAGE_REPORTS then
+    if self.page == TCDevDialog.PAGE_REPORTS or self.page == TCDevDialog.PAGE_PARKING then
         return
     elseif self.page == TCDevDialog.PAGE_JOBS then
         self:startNewJob()
@@ -323,7 +352,7 @@ function TCDevDialog:onClickActivate()
 end
 
 function TCDevDialog:onClickExtra1()
-    if self.page == TCDevDialog.PAGE_REPORTS then
+    if self.page == TCDevDialog.PAGE_REPORTS or self.page == TCDevDialog.PAGE_PARKING then
         return
     elseif self.page == TCDevDialog.PAGE_JOBS then
         self:deleteJob()
@@ -348,6 +377,8 @@ function TCDevDialog:getNumberOfItemsInSection(list, section)
         return #self.jobs
     elseif list == self.reportList then
         return #self.reportTypes
+    elseif list == self.zoneList then
+        return #self.zoneRows
     end
     return #self.vehicleRows
 end
@@ -360,6 +391,8 @@ function TCDevDialog:populateCellForItemInSection(list, section, index, cell)
         if jobType ~= nil then
             cell:getAttribute("name"):setText(string.format("Why am I (not) getting '%s' jobs?", jobType))
         end
+    elseif list == self.zoneList then
+        self:populateZoneCell(index, cell)
     else
         self:populateVehicleCell(self.vehicleRows[index], cell)
     end
@@ -371,6 +404,8 @@ function TCDevDialog:onListSelectionChanged(list, section, index)
         self.selectedJobIndex = index
     elseif list == self.reportList then
         self.selectedReportIndex = index
+    elseif list == self.zoneList then
+        self.selectedZoneIndex = index
     else
         self.selectedVehicleIndex = index
     end
@@ -648,6 +683,76 @@ function TCDevDialog:writeReport()
     end
     self.reportResultText:setText("Writing the report...")
     self:runCommand("debug", { "jobReport", jobType })
+end
+
+-- Parking ---------------------------------------------------------------------------
+
+-- The farm's zones, the one nearest the player marked: the dialog's own
+-- machine, so the local player is the one who opened it.
+function TCDevDialog:reloadZones()
+    local selected = self.zoneRows[self.selectedZoneIndex]
+    local selectedId = selected ~= nil and selected.id or nil
+
+    local context = TCConsole.getLocalContext()
+    local px, pz
+    if TCConsole.hasPosition(context) then
+        px, pz = context.x, context.z
+    end
+    self.zoneRows, self.nearestZoneIndex = {}, nil
+    if self.farmId ~= nil then
+        self.zoneRows, self.nearestZoneIndex = TCParking.getZoneRows(self.farmId, px, pz)
+    end
+
+    local index = self.nearestZoneIndex or 1
+    for i, row in ipairs(self.zoneRows) do
+        if row.id == selectedId then
+            index = i
+        end
+    end
+    self.selectedZoneIndex = index
+    self.zonesEmptyText:setVisible(#self.zoneRows == 0)
+    self.zoneList:reloadData()
+    if #self.zoneRows > 0 then
+        self.zoneList:setSelectedIndex(index)
+    end
+    self:updateButtons()
+end
+
+function TCDevDialog:populateZoneCell(index, cell)
+    local row = self.zoneRows[index]
+    if row == nil then
+        return
+    end
+    cell:getAttribute("id"):setText(tostring(row.id))
+    cell:getAttribute("kind"):setText(row.kind)
+    cell:getAttribute("name"):setText(tostring(row.name))
+    cell:getAttribute("x"):setText(string.format("%d", math.floor(row.mapX + 0.5)))
+    cell:getAttribute("z"):setText(string.format("%d", math.floor(row.mapZ + 0.5)))
+    cell:getAttribute("distance"):setText(row.distance ~= nil and
+        string.format("%d m", math.floor(row.distance + 0.5)) or "-")
+
+    local isNearest = index == self.nearestZoneIndex
+    cell:getAttribute("nearestChip"):setVisible(isNearest)
+    cell:getAttribute("nearestChipText"):setVisible(isNearest)
+    if isNearest then
+        cell:getAttribute("nearestChip").color = MenuContractor.CHIP_COLORS.info
+        cell:getAttribute("nearestChipText"):setText("Nearest")
+    end
+end
+
+function TCDevDialog:deleteZone()
+    local row = self.zoneRows[self.selectedZoneIndex]
+    if row == nil then
+        return
+    end
+    local zoneId = row.id
+    YesNoDialog.show(function(_, yes)
+        if yes then
+            self:runCommand("debug", { "removeZone", tostring(zoneId) })
+        end
+    end, self, string.format("Sell %s %d (%s) at x %d, z %d? It goes as if sold from the construction menu, " ..
+        "at its sell price.", string.lower(row.kind), zoneId, tostring(row.name), math.floor(row.mapX + 0.5),
+        math.floor(row.mapZ + 0.5)))
 end
 
 -- Hitches ---------------------------------------------------------------------------

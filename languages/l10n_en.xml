@@ -107,6 +107,7 @@
 		<text name="tc_equipment_need_tractor" text="Tractor"/>
 		<text name="tc_equipment_need_seedTank" text="Seed tank (the seeder has no hopper of its own)"/>
 		<text name="tc_equipment_need_seedTankHitch" text="Seed tank that fits the tractor"/>
+		<text name="tc_equipment_need_tool" text="The tool the tank spreads through (a dribble bar or injector)"/>
 		<text name="tc_equipment_need_haulTractor" text="Tractor for hauling"/>
 		<text name="tc_equipment_need_trailer" text="Trailer that takes %s"/>
 		<text name="tc_equipment_need_trailerHitch" text="Trailer that hitches to the haulage tractor"/>
@@ -357,6 +358,10 @@
 		<text name="tc_unallocate_problemState" text="Only an allocated or in-progress job can be unallocated."/>
 		<text name="tc_unallocate_problemSpill" text="A spill is yours to clear up: it can't be unallocated."/>
 		<text name="tc_logbook_earlierCrew" text="Earlier crew"/>
+		<text name="tc_logbook_grew" text="Improved"/>
+		<text name="tc_logbook_grewValue" text="%d to %d in %s"/>
+		<text name="tc_logbook_certifiedValue" text="Now certified on %s"/>
+		<text name="tc_logbook_grewChip" text="Skill up"/>
 		<text name="tc_job_missedNotification" text="Job failed: %s on Field %s wasn't done by its deadline."/>
 		<text name="tc_job_landSoldNotice" text="Job called off: %s on Field %s. %s has bought the land, so the work's no longer wanted. Nothing's lost on either side."/>
 		<text name="tc_dispatch_noVehicleReady" text="None of the allocated equipment can be driven by the worker (is it free, and can it do this job?)."/>
@@ -856,6 +861,10 @@
 		<text name="tc_repair_tamperedTitle" text="Customer complaint: %s"/>
 		<text name="tc_repair_tamperedBody" text="The owner of the %s has taken it back worse than they left it: parts missing or swapped for worn ones. They won't pay, and they're telling everyone (-%s reputation)."/>
 		<text name="tc_repair_tamperedBodyClaim" text="The owner of the %s has taken it back worse than they left it: parts missing or swapped for worn ones. They won't pay, they're telling everyone (-%s reputation), and they're going to their solicitor about the damage."/>
+		<text name="tc_repair_tamperedPaidBody" text="The owner of the %s paid for the work, then got it home to find it worse than they left it: parts missing or swapped for worn ones. They're telling everyone (-%s reputation)."/>
+		<text name="tc_repair_tamperedPaidBodyClaim" text="The owner of the %s paid for the work, then got it home to find it worse than they left it: parts missing or swapped for worn ones. They're telling everyone (-%s reputation), and they're going to their solicitor about the damage."/>
+		<text name="tc_repair_substandardTitle" text="Unhappy customer: %s"/>
+		<text name="tc_repair_substandardBody" text="The owner of the %s has had a closer look at the work and found what went into it: %s, not the new parts they paid for. They're telling everyone (-%s reputation)."/>
 		<text name="tc_repair_claimTitle" text="Compensation claim: %s"/>
 		<text name="tc_repair_claimBody" text="The owner of the %s has claimed for the parts that went missing while it was with you. Public liability doesn't cover deliberate damage, so the whole %s has been charged."/>
 		<text name="tc_repair_claimBodyLegal" text="The owner of the %s has claimed for the parts that went missing while it was with you. Your legal cover got it reduced, but public liability doesn't cover deliberate damage, so %s has been charged."/>
@@ -1059,6 +1068,7 @@
 		<text name="tc_equipment_missing_implement_lime" text="a lime spreader"/>
 		<text name="tc_equipment_missing_seedTank" text="a seed tank (front hopper) - the seeder has no hopper of its own"/>
 		<text name="tc_equipment_missing_seedTankHitch" text="a seed tank that fits the tractor (a front hopper needs front linkage)"/>
+		<text name="tc_equipment_missing_tool" text="the tool the tank spreads through (pick its dribble bar or injector too)"/>
 		<text name="tc_supplies_status_noStock" text="Waiting for %s"/>
 		<text name="tc_supplies_status_wrongFill" text="Tank holds %s - empty it"/>
 		<text name="tc_supplies_status_needsService" text="%s needs a service"/>
@@ -1829,7 +1839,7 @@
 		<text name="tc_help_planning_5_title" text="Due dates"/>
 		<text name="tc_help_planning_5" text="A job not finished by the end of its due day fails. See Quality, pay and failed jobs. Changing the days per month keeps every job's date: a job due in October is still due in October."/>
 		<text name="tc_help_allocating_title" text="Allocating a crew"/>
-		<text name="tc_help_allocating_1" text="To get a job done, highlight it on the Jobs tab and choose Allocate. Pick a worker (or Do It Myself) and the machines to take: a tractor and implement, a harvester and header, and for harvest and haul a haulage tractor and trailer."/>
+		<text name="tc_help_allocating_1" text="To get a job done, highlight it on the Jobs tab and choose Allocate. Pick a worker (or Do It Myself) and the machines to take: a tractor and implement, a harvester and header, and for harvest and haul a haulage tractor and trailer. A slurry tank goes with the dribble bar or injector it spreads through: pick the tank and the one hitched to it comes too."/>
 		<text name="tc_help_allocating_2_title" text="Warnings"/>
 		<text name="tc_help_allocating_2" text="The dialog warns you about anything wrong: a worker short of the skill the job needs (expect lower quality and extra wear), no certificate, missing supplies, a machine that needs emptying, a service or a repair first. Machines that are busy, in use or still on their way back can't be picked."/>
 		<text name="tc_help_allocating_3_title" text="Off they go"/>
@@ -1869,7 +1879,7 @@
 		<text name="tc_help_logbook_title" text="The Logbook"/>
 		<text name="tc_help_logbook_1" text="The Logbook keeps the business's records. Jobs lists every completed and failed job; Vehicles lists every machine and what it's been doing."/>
 		<text name="tc_help_logbook_2_title" text="A job's log"/>
-		<text name="tc_help_logbook_2" text="Who did it, which machines they took and the state each came back in, how the time went (travel, fieldwork, return and wash), the fuel and supplies used, and the money: the price, an estimate of what the supplies, labour and wear cost, any claim, and the margin left."/>
+		<text name="tc_help_logbook_2" text="Who did it and anything they got better at from it, which machines they took and the state each came back in, how the time went (travel, fieldwork, return and wash), the fuel and supplies used, and the money: the price, an estimate of what the supplies, labour and wear cost, any claim, and the margin left."/>
 		<text name="tc_help_logbook_3_title" text="A vehicle's log"/>
 		<text name="tc_help_logbook_3" text="Who had it, when, for how long, and its condition before and after, for jobs, staff drivers and your own driving. Sort by most hours or most faults to spot the machines that cost you."/>
 		<text name="tc_help_logbook_4_title" text="Filters"/>
@@ -2075,7 +2085,7 @@
 		<text name="tc_help_repairContracts_3_title" text="Quoting"/>
 		<text name="tc_help_repairContracts_3" text="Choose Negotiate on the offer and pick your margin. The customer says yes or takes the machine away. A fair price earns more reputation; a steep one costs some, and a name for overcharging means fewer customers for a while."/>
 		<text name="tc_help_repairContracts_4_title" text="Doing the work"/>
-		<text name="tc_help_repairContracts_4" text="The Workshop tab's checklist shows what's left. The job's done, and paid, once every fault it came in with is fixed (or everything on a service list done) before its due day, and the owner comes for it an hour later. A machine left worse than it came isn't paid for, and the owner may claim."/>
+		<text name="tc_help_repairContracts_4" text="The Workshop tab's checklist shows what's left. The job's done, and paid, once every fault it came in with is fixed (or everything on a service list done) before its due day, and the owner comes for it an hour later. A machine left worse than it came isn't paid for, and the owner may claim. They check it again as they take it away: one stripped after it's done costs the same reputation, and maybe a claim, though the pay stands. Fitting used or aftermarket parts, or cheaper oils, filters and batteries than it came in with, may be found out a few days later, and costs some reputation."/>
 		<text name="tc_help_repairContracts_5_title" text="Old parts"/>
 		<text name="tc_help_repairContracts_5" text="Parts you take off go in a disposal skip, for a small fee."/>
 		<text name="tc_help_breakdowns_title" text="Breakdowns and favours"/>
@@ -2112,7 +2122,7 @@
 		<text name="tc_help_clearing_2_title" text="Fly-tipping"/>
 		<text name="tc_help_clearing_2" text="Junk dumped at a field gate or on a roadside verge. Carry each piece to a disposal skip and drop it there; each piece costs a small tipping fee. Roadside pieces are marked on your map."/>
 		<text name="tc_help_clearing_3_title" text="Fallen trees"/>
-		<text name="tc_help_clearing_3" text="After a spell of bad weather, trees may come down across the roads. Clear them with a chainsaw today; the wood is yours to keep or sell. Each tree is marked on your map."/>
+		<text name="tc_help_clearing_3" text="After a spell of bad weather, trees may come down across the roads. Clear them with a chainsaw today; the wood is yours to keep or sell. Each tree is marked on your map, and traffic waits short of it until its road is clear."/>
 		<text name="tc_help_clearing_4_title" text="Joyriders"/>
 		<text name="tc_help_clearing_4" text="Joyriders tear up a grass field. On a farmer's field you're offered the plowing, and may then be asked to sow it back to grass. On your own field, it's just bad luck."/>
 		<text name="tc_help_clearing_5_title" text="Turning it down"/>

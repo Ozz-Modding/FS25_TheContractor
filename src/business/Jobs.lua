@@ -23,6 +23,12 @@ FinanceStats.statNameToIndex["tcJobPayout"] = #FinanceStats.statNames
 TheContractorJobs.MISSED_JOB_PENALTY_MULTIPLIER = 1.5
 TheContractorJobs.MIN_MISSED_JOB_REPUTATION_PENALTY = 10
 
+-- A miss's reputation penalty before its progress is taken off.
+function TheContractorJobs.getFullMissPenalty(job)
+    return math.max(TheContractorJobs.MIN_MISSED_JOB_REPUTATION_PENALTY,
+        TheContractorJobs.getBaseReputationReward(job) * TheContractorJobs.MISSED_JOB_PENALTY_MULTIPLIER)
+end
+
 -- Completion reputation reward (022) is the field's area times the job
 -- type's reputationPerHa (JobGeneration's JOB_TYPES), scaled by the job's
 -- quality score (080, see getQualityReputationFactor): the full reward only
@@ -890,9 +896,7 @@ function TheContractorJobs:missJob(job, noPenalty, quiet)
     -- Reputation.lua's score is otherwise always an integer (tier thresholds,
     -- %d display formatting) — floor this rather than let a partial-progress
     -- job leave a fractional score behind.
-    local fullPenalty = math.max(TheContractorJobs.MIN_MISSED_JOB_REPUTATION_PENALTY,
-        TheContractorJobs.getBaseReputationReward(job) * TheContractorJobs.MISSED_JOB_PENALTY_MULTIPLIER)
-    local penalty = math.floor(fullPenalty * (1 - job.completionPercentage / 100))
+    local penalty = math.floor(TheContractorJobs.getFullMissPenalty(job) * (1 - job.completionPercentage / 100))
     if noPenalty then
         penalty = 0
     elseif job.spill ~= nil then
@@ -1785,6 +1789,8 @@ function TheContractorJobs:completeWorkshopJob(job)
     g_currentMission.TheContractor.Logbook:recordJobCompleted(job, reputationReward)
     -- 102: far over the benchmark, word gets round.
     g_currentMission.TheContractor.RepairContracts:onJobCompleted(job)
+    -- 186: cheap parts the customer may find out about.
+    g_currentMission.TheContractor.RepairContracts:judgeParts(job)
     g_currentMission.TheContractor.Inbox:removeMessagesForJob(job.farmId, job.id)
 
     TCLog.info("TheContractor: farm %d job %d completed (%s, %s) - billed %.0f, %+d reputation", job.farmId,
@@ -2480,9 +2486,11 @@ end
 
 -- Server: the ids of jobs something else still names, so they stay in the
 -- save however old: an invoice not yet dropped from the save, a pending
--- claim (052's, or a workshop job's tampering claim), a cooldown (it washes
--- the job's kit when it ends), a random event's incident (074's job events)
--- or an inbox message.
+-- claim (052's, or a workshop job's tampering claim), a customer's machine
+-- still to be collected (judged as it goes), substandard parts its customer
+-- has still to find (186), a cooldown (it washes the job's
+-- kit when it ends), a random event's incident (074's job events) or an
+-- inbox message.
 function TheContractorJobs.getHeldJobIds()
     local tc = g_currentMission.TheContractor
     local held = {}
@@ -2499,6 +2507,12 @@ function TheContractorJobs.getHeldJobIds()
     end
     for _, claim in ipairs(tc.RepairContracts.pendingClaims or {}) do
         hold(claim.jobId)
+    end
+    for _, entry in ipairs(tc.RepairContracts.removals or {}) do
+        hold(entry.jobId)
+    end
+    for _, discovery in ipairs(tc.RepairContracts.pendingDiscoveries or {}) do
+        hold(discovery.jobId)
     end
     for _, farmEntries in pairs(tc.Cooldown.entriesByFarm or {}) do
         for _, entry in pairs(farmEntries) do

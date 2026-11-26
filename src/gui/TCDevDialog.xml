@@ -6,7 +6,7 @@
      shown one at a time. Lists span -440px..440px of their page; the Jobs
      page's column headings sit over its cells' columns (#id 14px, job 70px,
      field 380px, state 460px, price 600px, due 740px in from the list's
-     left edge). The texts are set from the Lua: it's a testing tool, so
+     left edge), and the Parking page's likewise. The texts are set from the Lua: it's a testing tool, so
      they're plain English like tcDebug's, not l10n. -->
 <GUI onOpen="onOpen" onClose="onClose" onCreate="onCreate">
     <GuiElement profile="newLayer"/>
@@ -82,6 +82,36 @@
                     <Slider profile="fs25_listSlider" dataElementId="reportList"/>
                 </ThreePartBitmap>
                 <Text profile="tc_devResultText" id="reportResultText" position="0px -185px" text=""/>
+            </GuiElement>
+
+            <!-- Parking: columns #id 14px, kind 80px, name 270px, x 530px,
+                 z 610px, distance 690px, chip 780px. -->
+            <GuiElement profile="tc_devPage" id="parkingPage" position="0px -165px">
+                <Text profile="tc_driverPickerColumn" size="60px 28px" position="-396px 0px" text="#"/>
+                <Text profile="tc_driverPickerColumn" size="180px 28px" position="-270px 0px" text="Kind"/>
+                <Text profile="tc_driverPickerColumn" size="250px 28px" position="-45px 0px" text="Name"/>
+                <Text profile="tc_driverPickerColumn" size="70px 28px" position="125px 0px" text="X"/>
+                <Text profile="tc_driverPickerColumn" size="70px 28px" position="205px 0px" text="Z"/>
+                <Text profile="tc_driverPickerColumn" size="80px 28px" position="290px 0px" text="Distance"/>
+
+                <SmoothList id="zoneList" profile="tc_driverPickerList" position="0px -32px" size="880px 315px">
+                    <ListItem profile="tc_tableListItem">
+                        <RoundCorner profile="tc_tableRowSurface"/>
+                        <Bitmap profile="tc_tableRowAccent"/>
+                        <Text profile="tc_listRowCellLeft" position="14px 0px" size="60px 32px" name="id"/>
+                        <Text profile="tc_listRowCellLeft" position="80px 0px" size="180px 32px" name="kind"/>
+                        <Text profile="tc_listRowCellLeft" position="270px 0px" size="250px 32px" name="name"/>
+                        <Text profile="tc_listRowCellLeft" position="530px 0px" size="70px 32px" name="x"/>
+                        <Text profile="tc_listRowCellLeft" position="610px 0px" size="70px 32px" name="z"/>
+                        <Text profile="tc_listRowCellLeft" position="690px 0px" size="80px 32px" name="distance"/>
+                        <RoundCorner profile="tc_rowChip" position="780px 0px" size="90px 20px" name="nearestChip"/>
+                        <Text profile="tc_rowChipText" position="780px 0px" size="90px 20px" name="nearestChipText"/>
+                    </ListItem>
+                </SmoothList>
+                <ThreePartBitmap profile="tc_dialogSlider_box" position="452px -32px" size="6px 315px">
+                    <Slider profile="fs25_listSlider" dataElementId="zoneList"/>
+                </ThreePartBitmap>
+                <Text profile="tc_adDialogInfoText" id="zonesEmptyText" position="0px -60px" text="This farm has no parking slots or repair zones."/>
             </GuiElement>
 
             <Text profile="tc_devStatusText" id="statusText" position="0px -525px" text=""/>

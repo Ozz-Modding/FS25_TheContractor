@@ -56,6 +56,11 @@
 -- shows the share cleared till then). Wood stacked on the verge counts as
 -- cleared.
 --
+-- Traffic would drive through a trunk and shove it along the road
+-- (issue 19), so TCFallenTreeBlocks puts a block it stops at on each
+-- tree's road, every machine, till that road's clear or the incident's
+-- closed.
+--
 -- Turned down or left to lapse: a small reputation loss
 -- (DECLINE_REPUTATION_PENALTY), and the council's own crew clears it (every
 -- loose piece on every tree's site deleted). Missed once taken on: the usual missed

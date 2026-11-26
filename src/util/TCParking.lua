@@ -368,6 +368,120 @@ function TCParking.placeVehicle(vehicle, x, y, z, rotY)
     TCEquipmentVisibility.setVisibleEverywhere({ NetworkUtil.getObjectId(vehicle) }, true)
 end
 
+-- Zones (the dev panel's Parking page) ----------------------------------------
+-- Every parking slot and repair zone a farm has placed, and where each is in
+-- the minimap's coordinates (0, 0 the map's corner, as gsTeleport takes
+-- them). A zone that can't be picked in the construction menu to sell (a
+-- building or another placeable's collision over it) is sold from there
+-- instead (tcDebug removeZone).
+
+-- A parking slot or a repair zone.
+function TCParking.isZone(object)
+    return PlaceableTCParkingSlot.isSlot(object) or TCParking.isRepairZone(object)
+end
+
+-- The farm's slots and zones, in placement order.
+function TCParking.getZones(farmId)
+    local zones = {}
+    local placeableSystem = g_currentMission.placeableSystem
+    if placeableSystem == nil then
+        return zones
+    end
+    for _, placeable in ipairs(placeableSystem.placeables) do
+        if TCParking.isZone(placeable) and not placeable.isDeleted and not placeable.markedForDeletion and
+            placeable:getOwnerFarmId() == farmId then
+            table.insert(zones, placeable)
+        end
+    end
+    return zones
+end
+
+-- What it is, plain English (a testing tool's text, not l10n).
+function TCParking.getZoneKind(placeable)
+    if TCParking.isRepairZone(placeable) then
+        if PlaceableTCRepairZone.getZoneType(placeable) == PlaceableTCRepairZone.ZONE_TYPE.HARVESTER then
+            return "Harvester repair zone"
+        end
+        return "Repair zone"
+    end
+    local slotType = PlaceableTCParkingSlot.getSlotType(placeable)
+    return string.upper(string.sub(slotType, 1, 1)) .. string.sub(slotType, 2) .. " slot"
+end
+
+-- The middle of its rectangle, or its root node without one: world x, z.
+function TCParking.getZoneCentre(placeable)
+    local area
+    if TCParking.isRepairZone(placeable) then
+        area = PlaceableTCRepairZone.getArea(placeable)
+    else
+        area = PlaceableTCParkingSlot.getArea(placeable)
+    end
+    if area ~= nil then
+        return area.x + (area.uX * area.width + area.vX * area.length) * 0.5,
+            area.z + (area.uZ * area.width + area.vZ * area.length) * 0.5
+    end
+    if placeable.rootNode ~= nil then
+        local x, _, z = getWorldTranslation(placeable.rootNode)
+        return x, z
+    end
+    return nil
+end
+
+-- World x, z in the minimap's coordinates.
+function TCParking.toMapCoordinates(x, z)
+    local half = (g_currentMission.terrainSize or 0) * 0.5
+    return x + half, z + half
+end
+
+-- The farm's zones as rows, by id: { placeable, id, kind, name, x, z (world),
+-- mapX, mapZ, distance }, and the index of the one nearest px, pz (distance
+-- and the index are nil without a position).
+function TCParking.getZoneRows(farmId, px, pz)
+    local rows = {}
+    for _, placeable in ipairs(TCParking.getZones(farmId)) do
+        local x, z = TCParking.getZoneCentre(placeable)
+        if x ~= nil then
+            local mapX, mapZ = TCParking.toMapCoordinates(x, z)
+            table.insert(rows, {
+                placeable = placeable,
+                id = NetworkUtil.getObjectId(placeable),
+                kind = TCParking.getZoneKind(placeable),
+                name = placeable:getName(),
+                x = x,
+                z = z,
+                mapX = mapX,
+                mapZ = mapZ,
+                distance = px ~= nil and pz ~= nil and MathUtil.vector2Length(x - px, z - pz) or nil,
+            })
+        end
+    end
+    table.sort(rows, function(a, b)
+        return (a.id or 0) < (b.id or 0)
+    end)
+    local nearestIndex
+    for index, row in ipairs(rows) do
+        if row.distance ~= nil and (nearestIndex == nil or row.distance < rows[nearestIndex].distance) then
+            nearestIndex = index
+        end
+    end
+    return rows, nearestIndex
+end
+
+-- Server: sells a zone as the construction menu would (SellPlaceableEvent),
+-- at its sell price, to its owner. Returns the price.
+function TCParking.removeZone(placeable)
+    local farmId = placeable:getOwnerFarmId()
+    local sellPrice = placeable.getSellPrice ~= nil and placeable:getSellPrice() or 0
+    if placeable.onSell ~= nil then
+        placeable:onSell()
+    end
+    if sellPrice > 0 then
+        g_currentMission:addMoney(sellPrice, farmId, MoneyType.SHOP_PROPERTY_SELL, true, true)
+    end
+    placeable:delete()
+    return sellPrice
+end
+
 -- Construction menu ---------------------------------------------------------
 -- Slots show while the construction menu is open, and outside it too while
 -- the player's showParkingSlots setting (086) is on, toggled from the

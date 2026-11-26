@@ -111,6 +111,7 @@ local function setup()
             arrivals = { { farmId = 1 }, { farmId = 2 } },
             removals = { { farmId = 1 }, { farmId = 2 } },
             pendingClaims = { { farmId = 1 }, { farmId = 2 } },
+            pendingDiscoveries = { { farmId = 1 }, { farmId = 2 } },
             overcharged = { [1] = {}, [2] = {} },
         }),
         Dispatch = make("TheContractorDispatch", {
@@ -215,6 +216,7 @@ test("the deleted farm's state goes and the other farm's stays", function()
     assertEquals(#tc.RepairContracts.arrivals, 1, "arrivals")
     assertEquals(#tc.RepairContracts.removals, 2, "collections still go ahead")
     assertEquals(#tc.RepairContracts.pendingClaims, 1, "repair claims")
+    assertEquals(#tc.RepairContracts.pendingDiscoveries, 1, "substandard parts to be found")
     assertEquals(tc.RepairContracts.overcharged[1], nil, "overcharging")
 
     assertEquals(tc.Dispatch.pendingByJobId[11], nil, "staging")

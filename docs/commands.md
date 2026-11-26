@@ -298,7 +298,7 @@ Job 7 is accepted. It can go to: allocated, missed
 
 ### `tcJob log [jobId]`
 
-Shows a job's entry in the Logbook. That's the crew, each machine's condition going out and coming back (for an FS25_AdvancedDamageSystem machine, what its last inspection showed and any fault found during the job), the time split, supplies, costs, margin, reputation and any claim. With no job id it lists the farm's last 10 logged jobs, newest first, with their ids and margins. Read-only, so it also works on a joined client.
+Shows a job's entry in the Logbook. That's the crew (with any skill each of them gained from the job), each machine's condition going out and coming back (for an FS25_AdvancedDamageSystem machine, what its last inspection showed and any fault found during the job), the time split, supplies, costs, margin, reputation and any claim. With no job id it lists the farm's last 10 logged jobs, newest first, with their ids and margins. Read-only, so it also works on a joined client.
 
 | Argument | Meaning |
 |---|---|

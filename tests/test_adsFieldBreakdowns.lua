@@ -595,9 +595,9 @@ test("a lapsed offer: the customer has it recovered from where it stands", funct
     tc.Jobs:onDayChanged()
     assertEquals(job.state, TheContractorJob.STATE.DECLINED)
     assertEquals(#world.calls.reputation, 0, "an offer let go costs nothing")
-    assertEquals(world.calls.released[1], vehicle.id)
     tc.RepairContracts:update(TheContractorRepairContracts.PLACE_CHECK_MS)
     assertTrue(vehicle.isDeleted)
+    assertEquals(world.calls.released[1], vehicle.id)
 end)
 
 test("done in ADS completes it; left undone it's missed at midnight", function()

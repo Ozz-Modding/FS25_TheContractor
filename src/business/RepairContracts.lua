@@ -39,14 +39,23 @@
 -- status reached before the save). An accepted job that can't be worked
 -- after a load (machine gone, no ADS, no contract) ends then with no
 -- penalty (endUnworkableJobs). When it ends the customer takes the
--- machine back: the contract is released and the machine is deleted on the
--- next look at the queue (unless someone's driving it).
+-- machine back: it's deleted on the next look at the queue (a finished
+-- job's an hour later; never while someone's driving it), and its contract
+-- is released only then.
 --
--- Tampering is judged once, at the deadline (Jobs:missJob): a machine
+-- Tampering is judged at the deadline (Jobs:missJob): a machine
 -- that's still worse than it arrived means no pay, TAMPER_REPUTATION_MULTIPLIER
 -- times a miss's reputation loss, and over TAMPER_CLAIM_THRESHOLD of damage a
 -- compensation claim a few days later, never insured (public liability
--- doesn't cover deliberate acts), cut by legal cover (053).
+-- doesn't cover deliberate acts), cut by legal cover (053). A machine
+-- stripped after its job's over (finished and paid, or an honest miss) is
+-- judged the same way as the customer collects it (judgeCollected); the
+-- pay stands, but a customer who'd paid remembers.
+--
+-- 186: a finished job's machine is also judged by what was fitted to it
+-- (judgeParts): used or aftermarket components, or cheaper consumables than
+-- it came in with, may be found out by its customer a few days later
+-- (pendingDiscoveries): reputation, a farmer's opinion and a message.
 --
 -- Field breakdowns (101, TheContractorFieldBreakdowns) use the same queue
 -- with a spot on a field instead of a bay (entry.fieldId), ADS's breakdown
@@ -209,6 +218,25 @@ TheContractorRepairContracts.CLAIM_CAUSE = "tampering"
 TheContractorRepairContracts.MESSAGE_KIND = "repairContract"
 TheContractorRepairContracts.NOTICE_MONTHS = 1
 
+-- 186: substandard parts. A finished job's machine is judged by what ADS
+-- says was fitted to it (getFittedParts), each substandard part rolled for
+-- whether its customer finds out, SUBSTANDARD_DELAY days later. A grade's
+-- share is of a miss's reputation penalty (Jobs.getFullMissPenalty) and of
+-- 113's MISSED_LOSS, summed over the parts found, capped at
+-- SUBSTANDARD_MAX_SHARE. Aftermarket is the middle grade: found out less,
+-- and costs less (the user's call). No money and no change to the quality
+-- score: the job was done, and only found out later.
+TheContractorRepairContracts.SUBSTANDARD_GRADE = { USED = "used", AFTERMARKET = "aftermarket" }
+TheContractorRepairContracts.SUBSTANDARD = {
+    used = { chance = 0.75, share = 0.5 },
+    aftermarket = { chance = 0.45, share = 0.25 },
+}
+TheContractorRepairContracts.SUBSTANDARD_MAX_SHARE = 1
+TheContractorRepairContracts.SUBSTANDARD_DELAY = { 3, 10 }
+TheContractorRepairContracts.SUBSTANDARD_KIND = "substandardParts"
+-- ADS's part tier keys, as getFittedParts gives them.
+TheContractorRepairContracts.ADS_PART_TYPE_AFTERMARKET = "AFTERMARKET"
+
 -- Store categories a tractor zone takes models from.
 TheContractorRepairContracts.TRACTOR_CATEGORIES = { TRACTORSS = true, TRACTORSM = true, TRACTORSL = true }
 
@@ -224,6 +252,10 @@ function TheContractorRepairContracts.new()
     self.removals = {}
     -- Server, saved: { farmId, jobId, vehicleName, amount, notifyDay }.
     self.pendingClaims = {}
+    -- 186, server, saved: substandard parts a customer will find out about:
+    -- { farmId, jobId, vehicleName, partKeys (ADS name keys, comma
+    -- separated), penalty, share, notifyDay }.
+    self.pendingDiscoveries = {}
     -- 102, server, saved: farmId -> { untilDay, noticeId } while the farm's
     -- known for overcharging.
     self.overcharged = {}
@@ -243,6 +275,12 @@ function TheContractorRepairContracts:register(inbox)
     inbox:registerMessageKind(TheContractorRepairContracts.MESSAGE_KIND, {
         category = "workshop",
         chipTone = "warn",
+    })
+    -- 186: the parts are named in ADS's words, on each client.
+    inbox:registerMessageKind(TheContractorRepairContracts.SUBSTANDARD_KIND, {
+        category = "workshop",
+        chipTone = "warn",
+        getArgs = TheContractorRepairContracts.getSubstandardArgs,
     })
 end
 
@@ -1103,6 +1141,21 @@ function TheContractorRepairContracts:onDayChanged()
         end
     end
     self.pendingClaims = remaining
+
+    self:deliverDiscoveries(today)
+end
+
+-- 186: every substandard part found out by today.
+function TheContractorRepairContracts:deliverDiscoveries(today)
+    local remaining = {}
+    for _, discovery in ipairs(self.pendingDiscoveries) do
+        if discovery.notifyDay <= today then
+            self:deliverDiscovery(discovery)
+        else
+            table.insert(remaining, discovery)
+        end
+    end
+    self.pendingDiscoveries = remaining
 end
 
 -- Customers come in through the day, never at midnight.
@@ -2015,17 +2068,22 @@ function TheContractorRepairContracts:expireOvercharging(today)
 end
 
 -- Server: the customer comes for their machine (an offer turned down or
--- lapsed, or a job finished or missed). The contract comes off now; the
--- machine goes on the next look at the queue, or (delayHours) once that
--- many game hours have passed.
+-- lapsed, or a job finished or missed). The machine goes on the next look
+-- at the queue, or (delayHours) once that many game hours have passed. Its
+-- ADS contract stays on until then (tryCollect takes it off), so a machine
+-- stripped after its job's over is still found out as it's collected
+-- (judgeTamper: a finished job, or a miss that wasn't judged tampered at
+-- the deadline; an offer never let anyone near the parts).
 function TheContractorRepairContracts:queueCollection(job, delayHours)
     local workshop = job.workshop
     if workshop == nil then
         return
     end
-    local vehicle = TheContractorRepairContracts.getVehicle(job)
-    if vehicle ~= nil then
-        TCADSRepairContracts.release(vehicle)
+    local judgeTamper = job.state == TheContractorJob.STATE.COMPLETED
+    if job.state == TheContractorJob.STATE.MISSED then
+        local vehicle = TheContractorRepairContracts.getVehicle(job)
+        local status = vehicle ~= nil and TCADSRepairContracts.getStatus(vehicle) or nil
+        judgeTamper = status == nil or status.state ~= TCADSRepairContracts.STATE.TAMPERED
     end
     for _, entry in ipairs(self.removals) do
         if entry.vehicleId == workshop.vehicleId then
@@ -2046,6 +2104,10 @@ function TheContractorRepairContracts:queueCollection(job, delayHours)
         farmerId = workshop.farmerId,
         machineId = workshop.machineId,
         collectAfter = collectAfter,
+        -- Its job (Jobs:getHeldJobIds keeps it), whose contract comes off as
+        -- it's collected.
+        jobId = job.id,
+        judgeTamper = judgeTamper or nil,
     })
     -- 121: and its attachment, wherever it's been left.
     if workshop.attachmentId ~= nil and workshop.attachmentId ~= 0 then
@@ -2132,6 +2194,12 @@ function TheContractorRepairContracts:tryCollect(entry)
         return
     end
     removeFrom(self.removals, entry)
+    if entry.judgeTamper then
+        self:judgeCollected(entry, vehicle)
+    end
+    if entry.jobId ~= nil then
+        TCADSRepairContracts.release(vehicle)
+    end
     TCLog.info("TheContractor: farm %d: the customer collected %s", entry.farmId, vehicle:getFullName())
     vehicle:delete()
 end
@@ -2268,12 +2336,14 @@ end
 
 -- From Jobs:missJob, before the penalty's taken: a machine still worse
 -- than it arrived means a bigger penalty and maybe a claim. Returns the
--- penalty to take.
-function TheContractorRepairContracts:judgeTampering(job, penalty)
+-- penalty to take, and whether it was tampered with. paid: the job was
+-- finished and paid for before it was found (judgeCollected), so the
+-- message doesn't say they won't pay.
+function TheContractorRepairContracts:judgeTampering(job, penalty, paid)
     local vehicle = TheContractorRepairContracts.getVehicle(job)
     local status = vehicle ~= nil and TCADSRepairContracts.getStatus(vehicle) or nil
     if status == nil or status.state ~= TCADSRepairContracts.STATE.TAMPERED then
-        return penalty
+        return penalty, false
     end
 
     local _, findings = TCADSRepairContracts.checkTampering(vehicle)
@@ -2298,13 +2368,149 @@ function TheContractorRepairContracts:judgeTampering(job, penalty)
     end
 
     local tamperPenalty = math.floor(penalty * TheContractorRepairContracts.TAMPER_REPUTATION_MULTIPLIER)
+    local bodyKey
+    if paid then
+        bodyKey = claimAmount > 0 and "tc_repair_tamperedPaidBodyClaim" or "tc_repair_tamperedPaidBody"
+    else
+        bodyKey = claimAmount > 0 and "tc_repair_tamperedBodyClaim" or "tc_repair_tamperedBody"
+    end
     tc.Inbox:postMessage(job.farmId, TheContractorRepairContracts.MESSAGE_KIND, "tc_repair_tamperedTitle",
-        claimAmount > 0 and "tc_repair_tamperedBodyClaim" or "tc_repair_tamperedBody",
-        { job.workshop.vehicleName, tamperPenalty }, nil, { jobId = job.id })
+        bodyKey, { job.workshop.vehicleName, tamperPenalty }, nil, { jobId = job.id })
     TCLog.info("TheContractor: farm %d job %d: %s went back tampered with (%d finding(s), %.0f lost), -%d reputation%s",
         job.farmId, job.id, job.workshop.vehicleName, #(findings or {}), value, tamperPenalty,
         claimAmount > 0 and string.format(", claim of %.0f to come", claimAmount) or "")
-    return tamperPenalty
+    return tamperPenalty, true
+end
+
+-- tryCollect: a machine its customer finds stripped as they collect it,
+-- after a finished job (paid, and the pay stands) or a miss that wasn't
+-- tampered at the deadline. The same double loss and claim as a tampered
+-- miss (judgeTampering), and the customer who'd paid remembers (113).
+function TheContractorRepairContracts:judgeCollected(entry, vehicle)
+    local tc = g_currentMission.TheContractor
+    local job = tc.Jobs:getJob(entry.farmId, entry.jobId)
+    if job == nil or job.workshop == nil or TheContractorRepairContracts.getVehicle(job) ~= vehicle then
+        return
+    end
+    local paid = job.state == TheContractorJob.STATE.COMPLETED
+    local penalty, tampered = self:judgeTampering(job, TheContractorJobs.getFullMissPenalty(job), paid)
+    if not tampered then
+        return
+    end
+    tc.Reputation:addReputation(job.farmId, -penalty)
+    if paid then
+        tc.Relationships:adjust(job.farmId, job.customerId, -TheContractorRelationships.MISSED_LOSS, "tampered")
+    end
+end
+
+-- Substandard parts (186, server) -----------------------------------------------------
+
+-- How substandard a part ADS says was fitted is (a getFittedParts entry):
+-- SUBSTANDARD_GRADE.USED for a used component or a consumable two tiers
+-- cheaper than it came in with, AFTERMARKET for an aftermarket component or
+-- one tier cheaper, nil for new OEM or better.
+function TheContractorRepairContracts.getSubstandardGrade(part)
+    local GRADE = TheContractorRepairContracts.SUBSTANDARD_GRADE
+    if type(part) ~= "table" then
+        return nil
+    end
+    if part.kind == "component" then
+        if part.used == true then
+            return GRADE.USED
+        end
+        if part.partType == TheContractorRepairContracts.ADS_PART_TYPE_AFTERMARKET then
+            return GRADE.AFTERMARKET
+        end
+        return nil
+    end
+    if part.kind == "consumable" then
+        local fitted = TCADSRepairContracts.getTierRank(part.tier)
+        local accepted = TCADSRepairContracts.getTierRank(part.acceptedTier)
+        if fitted == nil or accepted == nil then
+            return nil
+        end
+        local drop = accepted - fitted
+        if drop >= 2 then
+            return GRADE.USED
+        elseif drop == 1 then
+            return GRADE.AFTERMARKET
+        end
+    end
+    return nil
+end
+
+-- From Jobs:completeWorkshopJob, while the contract's still on (it comes
+-- off as the machine's collected): each substandard part fitted is rolled
+-- for whether its customer finds out, and any that are go on
+-- pendingDiscoveries. Nothing without ADS's getFittedParts. A tampered
+-- machine never completes, so it's never judged both ways. random: a
+-- function returning [0, 1), math.random by default.
+function TheContractorRepairContracts:judgeParts(job, random)
+    random = random or math.random
+    local vehicle = TheContractorRepairContracts.getVehicle(job)
+    local parts = vehicle ~= nil and TCADSRepairContracts.getFittedParts(vehicle) or nil
+    if parts == nil then
+        return
+    end
+    local keys, share = {}, 0
+    for _, part in ipairs(parts) do
+        local grade = TheContractorRepairContracts.getSubstandardGrade(part)
+        local def = grade ~= nil and TheContractorRepairContracts.SUBSTANDARD[grade] or nil
+        if def ~= nil and random() < def.chance then
+            table.insert(keys, tostring(part.nameKey or part.id))
+            share = share + def.share
+        end
+    end
+    if #keys == 0 then
+        return
+    end
+    share = math.min(share, TheContractorRepairContracts.SUBSTANDARD_MAX_SHARE)
+    local delay = TheContractorRepairContracts.SUBSTANDARD_DELAY
+    local discovery = {
+        farmId = job.farmId,
+        jobId = job.id,
+        vehicleName = job.workshop.vehicleName,
+        partKeys = table.concat(keys, ","),
+        penalty = math.max(1, math.floor(TheContractorJobs.getFullMissPenalty(job) * share)),
+        share = share,
+        notifyDay = g_currentMission.environment.currentMonotonicDay + math.random(delay[1], delay[2]),
+    }
+    table.insert(self.pendingDiscoveries, discovery)
+    TCLog.info("TheContractor: farm %d job %d: %s went back with %s, found out on day %d (-%d reputation)",
+        job.farmId, job.id, tostring(job.workshop.vehicleName), discovery.partKeys, discovery.notifyDay,
+        discovery.penalty)
+end
+
+-- The day a customer finds out: reputation, their opinion if they're a
+-- farmer (the job's customer, read now, so 128's retirements are Jobs'),
+-- and a message naming the parts.
+function TheContractorRepairContracts:deliverDiscovery(discovery)
+    local tc = g_currentMission.TheContractor
+    if g_farmManager:getFarmById(discovery.farmId) == nil then
+        return
+    end
+    tc.Reputation:addReputation(discovery.farmId, -discovery.penalty)
+    local job = tc.Jobs:getJob(discovery.farmId, discovery.jobId)
+    if job ~= nil then
+        tc.Relationships:adjust(discovery.farmId, job.customerId,
+            -TheContractorRelationships.MISSED_LOSS * discovery.share, "substandard")
+    end
+    tc.Inbox:postMessage(discovery.farmId, TheContractorRepairContracts.SUBSTANDARD_KIND,
+        "tc_repair_substandardTitle", "tc_repair_substandardBody",
+        { discovery.vehicleName, discovery.partKeys, discovery.penalty }, nil, { jobId = discovery.jobId })
+    TCLog.info("TheContractor: farm %d job %d: the customer found %s on the %s, -%d reputation", discovery.farmId,
+        discovery.jobId, discovery.partKeys, tostring(discovery.vehicleName), discovery.penalty)
+end
+
+-- Every machine (the inbox kind's getArgs): the message's ADS name keys as
+-- the parts' names in ADS's words.
+function TheContractorRepairContracts.getSubstandardArgs(message)
+    local args = message.args or {}
+    local names = {}
+    for key in string.gmatch(tostring(args[2] or ""), "[^,]+") do
+        table.insert(names, TCADSRepairContracts.getText(key))
+    end
+    return { args[1], table.concat(names, ", "), args[3] }
 end
 
 function TheContractorRepairContracts:deliverClaim(claim)
@@ -2326,9 +2532,11 @@ end
 -- Persistence (server) -------------------------------------------------------------------
 
 -- A farm deleted in multiplayer (TCFarmDeletion), on every machine.
--- Its customers' machines still to come and claims still to land go. Ones
+-- Its customers' machines still to come, and claims and substandard parts
+-- (186) still to land, go. Ones
 -- waiting to be collected stay: a machine that's still out there (not the
--- farm's, so vanilla left it) is still taken home.
+-- farm's, so vanilla left it) is still taken home, but judged against
+-- nobody (the next farm gets the id).
 -- Every machine (TCVehicleReplace): a customer's machine reloaded as a new
 -- object is still collected. Its job's ids are Jobs'.
 function TheContractorRepairContracts:remapVehicle(oldId, newId)
@@ -2350,7 +2558,13 @@ function TheContractorRepairContracts:forgetFarm(farmId)
     end
     self.arrivals = others(self.arrivals)
     self.pendingClaims = others(self.pendingClaims)
+    self.pendingDiscoveries = others(self.pendingDiscoveries)
     self.overcharged[farmId] = nil
+    for _, entry in ipairs(self.removals) do
+        if entry.farmId == farmId then
+            entry.judgeTamper = nil
+        end
+    end
 end
 
 function TheContractorRepairContracts:loadFromXMLFile(xmlFile)
@@ -2358,6 +2572,7 @@ function TheContractorRepairContracts:loadFromXMLFile(xmlFile)
         return
     end
     self.arrivals, self.removals, self.pendingClaims, self.overcharged = {}, {}, {}, {}
+    self.pendingDiscoveries = {}
     local rootKey = TheContractor.SaveKey .. ".repairContracts"
 
     local index = 0
@@ -2414,6 +2629,8 @@ function TheContractorRepairContracts:loadFromXMLFile(xmlFile)
             -- 126.
             whenUnseen = getXMLBool(xmlFile, key .. "#whenUnseen") == true or nil,
             collectAfter = getXMLFloat(xmlFile, key .. "#collectAfter"),
+            jobId = getXMLInt(xmlFile, key .. "#jobId"),
+            judgeTamper = getXMLBool(xmlFile, key .. "#judgeTamper") == true or nil,
         })
         index = index + 1
     end
@@ -2431,6 +2648,30 @@ function TheContractorRepairContracts:loadFromXMLFile(xmlFile)
             amount = Utils.getNoNil(getXMLFloat(xmlFile, key .. "#amount"), 0),
             notifyDay = Utils.getNoNil(getXMLInt(xmlFile, key .. "#notifyDay"), 0),
         })
+        index = index + 1
+    end
+
+    -- 186.
+    index = 0
+    while true do
+        local key = string.format("%s.discovery(%d)", rootKey, index)
+        if not hasXMLProperty(xmlFile, key) then
+            break
+        end
+        local farmId = getXMLInt(xmlFile, key .. "#farmId")
+        local jobId = getXMLInt(xmlFile, key .. "#jobId")
+        local partKeys = getXMLString(xmlFile, key .. "#partKeys")
+        if farmId ~= nil and jobId ~= nil and partKeys ~= nil then
+            table.insert(self.pendingDiscoveries, {
+                farmId = farmId,
+                jobId = jobId,
+                vehicleName = Utils.getNoNil(getXMLString(xmlFile, key .. "#vehicleName"), ""),
+                partKeys = partKeys,
+                penalty = Utils.getNoNil(getXMLInt(xmlFile, key .. "#penalty"), 0),
+                share = Utils.getNoNil(getXMLFloat(xmlFile, key .. "#share"), 0),
+                notifyDay = Utils.getNoNil(getXMLInt(xmlFile, key .. "#notifyDay"), 0),
+            })
+        end
         index = index + 1
     end
 
@@ -2550,6 +2791,12 @@ function TheContractorRepairContracts:saveToXmlFile(xmlFile)
             if entry.collectAfter ~= nil then
                 setXMLFloat(xmlFile, key .. "#collectAfter", entry.collectAfter)
             end
+            if entry.jobId ~= nil then
+                setXMLInt(xmlFile, key .. "#jobId", entry.jobId)
+            end
+            if entry.judgeTamper then
+                setXMLBool(xmlFile, key .. "#judgeTamper", true)
+            end
             index = index + 1
         end
     end
@@ -2561,6 +2808,18 @@ function TheContractorRepairContracts:saveToXmlFile(xmlFile)
         setXMLString(xmlFile, key .. "#vehicleName", claim.vehicleName)
         setXMLFloat(xmlFile, key .. "#amount", claim.amount)
         setXMLInt(xmlFile, key .. "#notifyDay", claim.notifyDay)
+    end
+
+    -- 186.
+    for i, discovery in ipairs(self.pendingDiscoveries) do
+        local key = string.format("%s.discovery(%d)", rootKey, i - 1)
+        setXMLInt(xmlFile, key .. "#farmId", discovery.farmId)
+        setXMLInt(xmlFile, key .. "#jobId", discovery.jobId)
+        setXMLString(xmlFile, key .. "#vehicleName", discovery.vehicleName or "")
+        setXMLString(xmlFile, key .. "#partKeys", discovery.partKeys)
+        setXMLInt(xmlFile, key .. "#penalty", discovery.penalty)
+        setXMLFloat(xmlFile, key .. "#share", discovery.share)
+        setXMLInt(xmlFile, key .. "#notifyDay", discovery.notifyDay)
     end
 
     -- 102: in farm order, so the save doesn't shuffle.
@@ -2714,8 +2973,9 @@ function TheContractorRepairContracts.registerConsoleCommands()
                         repairContracts:isBayTaken(zoneUniqueId, bayIndex) and "taken" or "free"))
                 end
             end
-            table.insert(lines, string.format("%d on the way, %d waiting to be collected, %d claim(s) to come",
-                #repairContracts.arrivals, #repairContracts.removals, #repairContracts.pendingClaims))
+            table.insert(lines, string.format("%d on the way, %d waiting to be collected, %d claim(s) and %d " ..
+                "substandard part finding(s) to come", #repairContracts.arrivals, #repairContracts.removals,
+                #repairContracts.pendingClaims, #repairContracts.pendingDiscoveries))
             -- 102: each open job's ADS stage and whether it's been inspected.
             for _, job in ipairs(g_currentMission.TheContractor.Jobs:getAllJobs(farmId)) do
                 if job.workshop ~= nil and not job:isTerminal() then
@@ -2756,6 +3016,60 @@ function TheContractorRepairContracts.registerConsoleCommands()
                 end
             end
             return false
+        end,
+    })
+
+    -- 186.
+    TCConsole.register("debug", "partsCheck", {
+        args = "<jobId>",
+        description = "What's been fitted to a workshop job's machine, how substandard each part is, and any " ..
+            "finding to come",
+        run = function(farmId, args)
+            local tc = g_currentMission.TheContractor
+            local job = tonumber(args[1]) ~= nil and tc.Jobs:getJob(farmId, tonumber(args[1])) or nil
+            if job == nil or job.workshop == nil then
+                return false
+            end
+            local lines = { string.format("Job %d (%s, %s):", job.id, tostring(job.workshop.vehicleName), job.state) }
+            local vehicle = TheContractorRepairContracts.getVehicle(job)
+            local parts = vehicle ~= nil and TCADSRepairContracts.getFittedParts(vehicle) or nil
+            if parts == nil then
+                table.insert(lines, "  ADS can't say (no machine, no contract, or an ADS without getFittedParts)")
+            elseif #parts == 0 then
+                table.insert(lines, "  nothing fitted")
+            end
+            for _, part in ipairs(parts or {}) do
+                local detail = part.kind == "component" and string.format("%s%s", tostring(part.partType),
+                    part.used and ", used" or "") or string.format("%s, came with %s", tostring(part.tier),
+                    tostring(part.acceptedTier))
+                table.insert(lines, string.format("  %s %s (%s): %s", part.kind, tostring(part.id), detail,
+                    TheContractorRepairContracts.getSubstandardGrade(part) or "fine"))
+            end
+            for _, discovery in ipairs(tc.RepairContracts.pendingDiscoveries) do
+                if discovery.farmId == farmId and discovery.jobId == job.id then
+                    table.insert(lines, string.format("  To be found on day %d: %s (-%d reputation)",
+                        discovery.notifyDay, discovery.partKeys, discovery.penalty))
+                end
+            end
+            return table.concat(lines, "\n")
+        end,
+    })
+
+    TCConsole.register("debug", "partsDiscover", {
+        args = "",
+        description = "Your customers find every substandard part still to be found, now",
+        run = function(farmId, args)
+            local repairContracts = g_currentMission.TheContractor.RepairContracts
+            local today = g_currentMission.environment.currentMonotonicDay
+            local count = 0
+            for _, discovery in ipairs(repairContracts.pendingDiscoveries) do
+                if discovery.farmId == farmId then
+                    discovery.notifyDay = today
+                    count = count + 1
+                end
+            end
+            repairContracts:deliverDiscoveries(today)
+            return string.format("%d substandard part finding(s) delivered.", count)
         end,
     })
 end

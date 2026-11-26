@@ -933,4 +933,50 @@ function TheContractorParking.registerConsoleCommands()
             return string.format("No free parking slot: %s is hidden and waiting in the parking queue.", name)
         end,
     })
+
+    -- The dev panel's Parking page lists these itself; this is its typed twin.
+    TCConsole.register("debug", "zones", {
+        description = "List your farm's parking slots and repair zones, with their map coordinates",
+        serverOnly = false,
+        run = function(farmId, args, context)
+            local px, pz
+            if TCConsole.hasPosition(context) then
+                px, pz = context.x, context.z
+            end
+            local rows, nearestIndex = TCParking.getZoneRows(farmId, px, pz)
+            if #rows == 0 then
+                return "Your farm has no parking slots or repair zones."
+            end
+            local lines = {}
+            for index, row in ipairs(rows) do
+                table.insert(lines, string.format("%d: %s (%s) at x %d, z %d%s", row.id, row.kind, row.name,
+                    math.floor(row.mapX + 0.5), math.floor(row.mapZ + 0.5),
+                    index == nearestIndex and string.format(", nearest you (%d m)", math.floor(row.distance + 0.5)) or ""))
+            end
+            return table.concat(lines, "\n")
+        end,
+    })
+
+    TCConsole.register("debug", "removeZone", {
+        args = "<zoneId>",
+        hints = { zoneId = "a parking slot's or repair zone's id (tcDebug zones)" },
+        devPanel = true,
+        description = "Sell one of your parking slots or repair zones, for one the construction menu can't pick",
+        run = function(farmId, args)
+            local zoneId = tonumber(args[1])
+            if zoneId == nil then
+                return false
+            end
+            local placeable = NetworkUtil.getObject(zoneId)
+            if not TCParking.isZone(placeable) or placeable.isDeleted or placeable.markedForDeletion then
+                return string.format("Error: no parking slot or repair zone %d (tcDebug zones lists them).", zoneId)
+            end
+            if placeable:getOwnerFarmId() ~= farmId then
+                return string.format("Error: zone %d isn't your farm's.", zoneId)
+            end
+            local kind = TCParking.getZoneKind(placeable)
+            local price = TCParking.removeZone(placeable)
+            return string.format("Sold %s %d for %s.", string.lower(kind), zoneId, g_i18n:formatMoney(price, 0, true, true))
+        end,
+    })
 end

@@ -5014,11 +5014,30 @@ function MenuContractor:onClickToggleAllocationEquipment()
             end
         end
         self.allocationSelectedEquipmentKeys[row.key] = true
+        self:selectAllocationTools(row)
     end
 
     self.allocationEquipmentTable:reloadData()
     self:updateAllocationEquipmentToggleButton()
     self:updateAllocationWarning()
+end
+
+-- A tank that spreads only through a tool on its hitch (a slurry tanker's
+-- dribble bar, TCEquipmentClass.needsTool) brings the tool hitched to it
+-- now, if that's listed for the job too: it's one machine to the player.
+function MenuContractor:selectAllocationTools(row)
+    local vehicle = NetworkUtil.getObject(row.vehicleId)
+    if vehicle == nil or vehicle.getAttachedImplements == nil or not TCEquipmentClass.needsTool(vehicle) then
+        return
+    end
+    for _, implement in ipairs(vehicle:getAttachedImplements()) do
+        local toolId = NetworkUtil.getObjectId(implement.object)
+        for _, other in ipairs(self.allocationEquipmentRows) do
+            if other.vehicleId == toolId and other.role == "implement" then
+                self.allocationSelectedEquipmentKeys[other.key] = true
+            end
+        end
+    end
 end
 
 function MenuContractor:updateAllocationEquipmentToggleButton()
@@ -7295,6 +7314,13 @@ function MenuContractor:getLogbookJobRows(entry)
             end
             row(text("tc_logbook_role_" .. (member.role or TheContractorLogbook.ROLE.OPERATOR)), getCrewName(member),
                 chip, tone)
+            -- Issue #16: what they got better at from the job.
+            for _, grew in ipairs(member.growth or {}) do
+                local statName = text("tc_growth_stat_" .. grew.stat)
+                local value = grew.from ~= nil and string.format(text("tc_logbook_grewValue"), grew.from, grew.to,
+                    statName) or string.format(text("tc_logbook_certifiedValue"), statName)
+                row(text("tc_logbook_grew"), value, text("tc_logbook_grewChip"), "good")
+            end
         end
         -- 094: whoever had it before it was unallocated.
         if entry.earlierCrew ~= nil then

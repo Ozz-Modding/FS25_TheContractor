@@ -360,6 +360,34 @@ function TCEquipmentClass.isSeedTank(vehicle)
     return false
 end
 
+-- Tools on a tank: some implements do no work of their own and work
+-- through whatever's hitched to them - a slurry tanker (Kotte's Profi)
+-- with a dribble bar or injector on its rear hitch. The AI finds the tool
+-- through the tank's hitch (AttacherJoints:addVehicleToAIImplementList);
+-- the tank itself has no AI markers, so with no tool on the AI won't
+-- start. Whether `vehicle` is one of those: something can hitch to it, it
+-- has no AI markers of its own, and it either takes its tool's AI
+-- attributes (ai.useAttributesOfAttachedImplement) or has no work areas
+-- of its own - so a sprayer with a hitch for a trailer isn't one.
+function TCEquipmentClass.needsTool(vehicle)
+    local spec = vehicle.spec_aiImplement
+    if spec == nil or vehicle.spec_attacherJoints == nil then
+        return false
+    end
+    local setup = vehicle.getCustomAIImplementBaseSetup ~= nil and vehicle:getCustomAIImplementBaseSetup() or nil
+    if setup == nil or setup.rightMarker == nil then
+        setup = spec
+    end
+    if setup.leftMarker ~= nil and setup.rightMarker ~= nil and setup.backMarker ~= nil then
+        return false
+    end
+    if spec.useAttributesOfAttachedImplement then
+        return true
+    end
+    local workAreas = vehicle.spec_workArea ~= nil and vehicle.spec_workArea.workAreas or nil
+    return workAreas == nil or #workAreas == 0
+end
+
 -- What part a vehicle can play in a job, or nil if none:
 -- "harvester" | "header" | "implement" | "seedTank" | "tractor". jobDef is
 -- a TheContractorJobGeneration.JOB_TYPES entry.
@@ -398,6 +426,8 @@ end
 --               and there's no seed tank to feed them
 --   "seedTankHitch" sow: seed tanks there, but none hitches to any of the
 --               tractors (a front hopper needs front linkage)
+--   "tool"      every implement there works only through a tool hitched
+--               to it (needsTool: a slurry tanker with no dribble bar)
 -- See getMissingEquipmentText for the player-facing wording. A job type
 -- that needs nothing (067's noEquipment) is never missing anything.
 function TCEquipmentClass.getMissingEquipment(vehicles, jobDef, fruitTypeIndex, standingCrop)
@@ -408,6 +438,7 @@ function TCEquipmentClass.getMissingEquipment(vehicles, jobDef, fruitTypeIndex, 
     local hasCutter, hasHarvester, hasSelfPropelledHarvester, hasImplement, hasTractor = false, false, false, false,
         false
     local hasSelfPropelledImplement = false
+    local hasWorkingImplement = false
     local hasSeederWithHopper, hasSeederNeedingTank = false, false
     local seedTanks, tractors = {}, {}
     local hasPairing = false
@@ -434,6 +465,9 @@ function TCEquipmentClass.getMissingEquipment(vehicles, jobDef, fruitTypeIndex, 
             end
         elseif TCEquipmentClass.isJobImplement(vehicle, jobDef, fruitTypeIndex, standingCrop) then
             hasImplement = true
+            if not TCEquipmentClass.needsTool(vehicle) then
+                hasWorkingImplement = true
+            end
             if TCEquipmentClass.isSelfPropelled(vehicle) then
                 hasSelfPropelledImplement = true
             end
@@ -483,6 +517,8 @@ function TCEquipmentClass.getMissingEquipment(vehicles, jobDef, fruitTypeIndex, 
     else
         if not hasImplement then
             table.insert(missing, "implement")
+        elseif not hasWorkingImplement then
+            table.insert(missing, "tool")
         end
         if not hasSelfPropelledImplement and not hasTractor then
             table.insert(missing, "tractor")
