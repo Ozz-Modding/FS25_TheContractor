@@ -78,6 +78,10 @@ TheContractorJobGeneration_mt = Class(TheContractorJobGeneration)
 --                    so no vanillaMission: only on a save that needs lime
 --                    (getLimeRequired), and the field by our own rule
 --                    (needsLime).
+--   spreads          184: a spreader throws its product in a cone, so the AI
+--                    leaves gaps it never fills: a hired worker's job is done
+--                    at a lower share once its AI has driven the whole course
+--                    (TheContractorJobs.getDoneThreshold).
 --   serverMeasured   progress is measured against something only the server
 --                    knows (spawned windrow, the field's weeds at the start,
 --                    spawned bales) - see TCJobProgress.
@@ -206,7 +210,7 @@ TheContractorJobGeneration.JOB_TYPES = {
     fertilize = { implementSpec = "spec_sprayer", vanillaMission = FertilizeMission, startState = "sprayLevel",
         supplyFillTypeNames = { "FERTILIZER", "LIQUIDFERTILIZER", "MANURE", "LIQUIDMANURE" },
         modSupplyFillTypeNames = TheContractorJobGeneration.SOIL_FERTILIZER_PRODUCTS.fertilize, seasonRule = "noWinter",
-        rewardPerHa = 1500, reputationPerHa = 5.1, skill = "cropCare",
+        spreads = true, rewardPerHa = 1500, reputationPerHa = 5.1, skill = "cropCare",
         workAreaTypes = { "SPRAYER" } },
     herbicide = { implementSpec = "spec_sprayer", vanillaMission = HerbicideMission, startState = "weedState",
         supplyFillTypeNames = { "HERBICIDE" }, seasonRule = "noWinter", requiresWeeds = true, needsGrowingCrop = true,
@@ -229,7 +233,7 @@ TheContractorJobGeneration.JOB_TYPES = {
     -- work's fertilize's, so the reputation is too.
     lime = { implementSpec = "spec_sprayer", supplyFillTypeNames = { "LIME" },
         modSupplyFillTypeNames = TheContractorJobGeneration.SOIL_FERTILIZER_PRODUCTS.lime, requiresLime = true,
-        seasonRule = "noWinter", rewardPerHa = 3000, reputationPerHa = 5.1, skill = "cropCare",
+        spreads = true, seasonRule = "noWinter", rewardPerHa = 3000, reputationPerHa = 5.1, skill = "cropCare",
         workAreaTypes = { "SPRAYER" } },
     -- 075: clearing a fly-tipped pile by hand. A piece pays what a bale
     -- wrap's bale does, and earns about the reputation that pay would on

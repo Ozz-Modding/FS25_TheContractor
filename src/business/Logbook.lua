@@ -7,7 +7,9 @@
 -- state each came back in, where the time went (travel out, fieldwork,
 -- return and wash), fuel, the supplies it used (158) and what they'd cost,
 -- an estimated labour and wear cost, income, reputation and any claim, and
--- the margin left.
+-- the margin left. A crew member's entry also keeps what they got better at
+-- from the job (issue #16): its growth roll (030) or stepping up (074), each
+-- { stat, from, to }, from nil for a new tractor size.
 --
 -- Vehicle entries, kept VEHICLE_RETENTION_YEARS, grouped per vehicle: each
 -- time a job used it, a staff driver (037) drove it, or a player drove one
@@ -980,6 +982,22 @@ function TheContractorLogbook:applyClaim(farmId, jobId, claim)
     return true
 end
 
+-- Every machine (Staff:announceGrowth, TCWorkerGrewEvent): a worker grew
+-- `stat` from `oldValue` (nil: newly certified on a tractor size) to
+-- `newValue` from a job, so it goes on their row in its entry. False if the
+-- job or the worker isn't in the logbook.
+function TheContractorLogbook:applyGrowth(farmId, jobId, workerId, stat, oldValue, newValue)
+    local entry = self:getJobEntry(farmId, jobId)
+    for _, member in ipairs(entry ~= nil and entry.crew or {}) do
+        if member.workerId == workerId then
+            member.growth = member.growth or {}
+            table.insert(member.growth, { stat = stat, from = oldValue, to = newValue })
+            return true
+        end
+    end
+    return false
+end
+
 -- Queries -----------------------------------------------------------------------------
 
 function TheContractorLogbook:getJobEntry(farmId, jobId)
@@ -1135,6 +1153,30 @@ function TheContractorLogbook.readClaim(streamId)
     }
 end
 
+-- Issue #16: a crew member's growth list (nil for none).
+function TheContractorLogbook.writeGrowth(streamId, growth)
+    growth = growth or {}
+    streamWriteUInt8(streamId, #growth)
+    for _, grew in ipairs(growth) do
+        writeString(streamId, grew.stat)
+        writeOptionalInt(streamId, grew.from)
+        streamWriteInt32(streamId, grew.to)
+    end
+end
+
+function TheContractorLogbook.readGrowth(streamId)
+    local count = streamReadUInt8(streamId)
+    if count == 0 then
+        return nil
+    end
+    local growth = {}
+    for _ = 1, count do
+        table.insert(growth, { stat = readString(streamId), from = readOptionalInt(streamId),
+            to = streamReadInt32(streamId) })
+    end
+    return growth
+end
+
 function TheContractorLogbook.writeJobEntry(streamId, entry)
     streamWriteInt32(streamId, entry.jobId)
     streamWriteInt32(streamId, entry.farmId)
@@ -1167,6 +1209,7 @@ function TheContractorLogbook.writeJobEntry(streamId, entry)
         writeString(streamId, member.name)
         writeString(streamId, member.role)
         writeOptionalInt(streamId, member.rating)
+        TheContractorLogbook.writeGrowth(streamId, member.growth)
     end
 
     streamWriteUInt8(streamId, #entry.equipment)
@@ -1251,6 +1294,7 @@ function TheContractorLogbook.readJobEntry(streamId)
             name = readString(streamId),
             role = readString(streamId),
             rating = readOptionalInt(streamId),
+            growth = TheContractorLogbook.readGrowth(streamId),
         })
     end
 
@@ -1466,6 +1510,14 @@ local function saveJobEntry(xmlFile, key, entry)
         if member.rating ~= nil then
             setXMLInt(xmlFile, crewKey .. "#rating", member.rating)
         end
+        for j, grew in ipairs(member.growth or {}) do
+            local growthKey = string.format("%s.growth(%d)", crewKey, j - 1)
+            setXMLString(xmlFile, growthKey .. "#stat", grew.stat)
+            if grew.from ~= nil then
+                setXMLInt(xmlFile, growthKey .. "#from", grew.from)
+            end
+            setXMLInt(xmlFile, growthKey .. "#to", grew.to)
+        end
     end
 
     for i, machine in ipairs(entry.equipment) do
@@ -1573,12 +1625,25 @@ local function loadJobEntry(xmlFile, key)
         if not hasXMLProperty(xmlFile, crewKey) then
             break
         end
-        table.insert(entry.crew, {
+        local member = {
             workerId = getXMLInt(xmlFile, crewKey .. "#workerId"),
             name = getXMLString(xmlFile, crewKey .. "#name"),
             role = Utils.getNoNil(getXMLString(xmlFile, crewKey .. "#role"), TheContractorLogbook.ROLE.OPERATOR),
             rating = getXMLInt(xmlFile, crewKey .. "#rating"),
-        })
+        }
+        local growthIndex = 0
+        while true do
+            local growthKey = string.format("%s.growth(%d)", crewKey, growthIndex)
+            local stat = getXMLString(xmlFile, growthKey .. "#stat")
+            local to = getXMLInt(xmlFile, growthKey .. "#to")
+            if stat == nil or to == nil then
+                break
+            end
+            member.growth = member.growth or {}
+            table.insert(member.growth, { stat = stat, from = getXMLInt(xmlFile, growthKey .. "#from"), to = to })
+            growthIndex = growthIndex + 1
+        end
+        table.insert(entry.crew, member)
         index = index + 1
     end
 
@@ -1672,6 +1737,27 @@ local function loadVehicleEntry(xmlFile, key)
 end
 
 -- A farm deleted in multiplayer (TCFarmDeletion), on every machine.
+-- Every machine (TCVehicleReplace): a machine reloaded as a new object
+-- keeps its history, its place on a job's record and any open session.
+function TheContractorLogbook:remapVehicle(oldId, newId)
+    if TCVehicleIds.replaceKey(self.vehicles, oldId, newId) then
+        self.vehicles[newId].vehicleId = newId
+    end
+    for _, entries in pairs(self.jobEntriesByFarm) do
+        for _, entry in pairs(entries) do
+            for _, machine in ipairs(entry.equipment or {}) do
+                TCVehicleIds.replaceField(machine, "vehicleId", oldId, newId)
+            end
+        end
+    end
+    for _, pending in pairs(self.pendingByJobId) do
+        TCVehicleIds.replaceKey(pending.start, oldId, newId)
+    end
+    TCVehicleIds.replaceKey(self.driverSessions, oldId, newId)
+    TCVehicleIds.replaceKey(self.loadedDriverSessions, oldId, newId)
+    TCVehicleIds.replaceKey(self.playerSessions, oldId, newId)
+end
+
 function TheContractorLogbook:forgetFarm(farmId, jobIds)
     self.jobEntriesByFarm[farmId] = nil
     for _, jobId in ipairs(jobIds) do
@@ -1937,8 +2023,14 @@ function TheContractorLogbook.formatJobEntryText(entry)
 
     local crew = {}
     for _, member in ipairs(entry.crew) do
-        table.insert(crew, string.format("%s (%s%s)", member.name or "?", member.role or "?",
-            member.rating ~= nil and string.format(", rating %d", member.rating) or ""))
+        local grew = {}
+        for _, growth in ipairs(member.growth or {}) do
+            table.insert(grew, growth.from ~= nil and string.format("%s %d->%d", growth.stat, growth.from, growth.to)
+                or string.format("%s certified", growth.stat))
+        end
+        table.insert(crew, string.format("%s (%s%s%s)", member.name or "?", member.role or "?",
+            member.rating ~= nil and string.format(", rating %d", member.rating) or "",
+            #grew > 0 and ", grew " .. table.concat(grew, ", ") or ""))
     end
     table.insert(lines, "  Crew: " .. (#crew > 0 and table.concat(crew, ", ") or "-"))
     if entry.earlierCrew ~= nil then

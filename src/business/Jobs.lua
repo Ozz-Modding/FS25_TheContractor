@@ -23,6 +23,12 @@ FinanceStats.statNameToIndex["tcJobPayout"] = #FinanceStats.statNames
 TheContractorJobs.MISSED_JOB_PENALTY_MULTIPLIER = 1.5
 TheContractorJobs.MIN_MISSED_JOB_REPUTATION_PENALTY = 10
 
+-- A miss's reputation penalty before its progress is taken off.
+function TheContractorJobs.getFullMissPenalty(job)
+    return math.max(TheContractorJobs.MIN_MISSED_JOB_REPUTATION_PENALTY,
+        TheContractorJobs.getBaseReputationReward(job) * TheContractorJobs.MISSED_JOB_PENALTY_MULTIPLIER)
+end
+
 -- Completion reputation reward (022) is the field's area times the job
 -- type's reputationPerHa (JobGeneration's JOB_TYPES), scaled by the job's
 -- quality score (080, see getQualityReputationFactor): the full reward only
@@ -36,6 +42,11 @@ TheContractorJobs.REPUTATION_ZERO_QUALITY = 50
 -- (0-100 scale, already normalized against the fieldWorkDone setting by
 -- TCJobProgress.getSuccessFactor) reaches this.
 TheContractorJobs.COMPLETION_THRESHOLD_PERCENTAGE = 100
+
+-- 184: a spreading job (JOB_TYPES' spreads) is done at this once its hired
+-- worker's AI has driven the whole course: a spreader's cone leaves gaps
+-- at the ends of its runs that the AI never goes back for.
+TheContractorJobs.FINISHED_COURSE_THRESHOLD_PERCENTAGE = 85
 
 -- 076: that threshold leaves a strip unworked (vanilla's SUCCESS_FACTOR
 -- leniency), and players like to finish the field off. A player-driven
@@ -885,9 +896,7 @@ function TheContractorJobs:missJob(job, noPenalty, quiet)
     -- Reputation.lua's score is otherwise always an integer (tier thresholds,
     -- %d display formatting) — floor this rather than let a partial-progress
     -- job leave a fractional score behind.
-    local fullPenalty = math.max(TheContractorJobs.MIN_MISSED_JOB_REPUTATION_PENALTY,
-        TheContractorJobs.getBaseReputationReward(job) * TheContractorJobs.MISSED_JOB_PENALTY_MULTIPLIER)
-    local penalty = math.floor(fullPenalty * (1 - job.completionPercentage / 100))
+    local penalty = math.floor(TheContractorJobs.getFullMissPenalty(job) * (1 - job.completionPercentage / 100))
     if noPenalty then
         penalty = 0
     elseif job.spill ~= nil then
@@ -1547,7 +1556,9 @@ end
 -- ever pays less than the full negotiated price.
 -- isForced (the tcJob state console command) skips the field-done and
 -- delivered checks: everything else happens as on a real finish.
-function TheContractorJobs:completeJob(job, isForced)
+-- courseFinished (184): the hired worker's AI has driven its whole course
+-- (Dispatch:onAIJobStopped), which lowers the bar for a spreading job.
+function TheContractorJobs:completeJob(job, isForced, courseFinished)
     if not g_currentMission:getIsServer() then
         return
     end
@@ -1558,7 +1569,7 @@ function TheContractorJobs:completeJob(job, isForced)
         return
     end
 
-    if not isForced and job.completionPercentage < TheContractorJobs.COMPLETION_THRESHOLD_PERCENTAGE then
+    if not isForced and job.completionPercentage < TheContractorJobs.getDoneThreshold(job, courseFinished) then
         return
     end
 
@@ -1675,6 +1686,22 @@ function TheContractorJobs:completeJob(job, isForced)
     g_currentMission.TheContractor.RandomEvents:onJobCompleted(job)
 end
 
+-- 184: a job whose machine spreads (JOB_TYPES' spreads).
+function TheContractorJobs.isSpreadingJob(job)
+    local jobDef = job ~= nil and TheContractorJobGeneration.JOB_TYPES[job.jobType] or nil
+    return jobDef ~= nil and jobDef.spreads == true
+end
+
+-- The progress (0-100, as the player sees it) a job's field work counts as
+-- done at: all of it, or (184) less for a spreading job whose worker has
+-- driven the whole course.
+function TheContractorJobs.getDoneThreshold(job, courseFinished)
+    if courseFinished and TheContractorJobs.isSpreadingJob(job) then
+        return TheContractorJobs.FINISHED_COURSE_THRESHOLD_PERCENTAGE
+    end
+    return TheContractorJobs.COMPLETION_THRESHOLD_PERCENTAGE
+end
+
 -- 141: a job with nothing riding on it (JOB_TYPES' noConsequences).
 function TheContractorJobs.hasNoConsequences(job)
     local jobDef = job ~= nil and TheContractorJobGeneration.JOB_TYPES[job.jobType] or nil
@@ -1763,6 +1790,8 @@ function TheContractorJobs:completeWorkshopJob(job)
     g_currentMission.TheContractor.Logbook:recordJobCompleted(job, reputationReward)
     -- 102: far over the benchmark, word gets round.
     g_currentMission.TheContractor.RepairContracts:onJobCompleted(job)
+    -- 186: cheap parts the customer may find out about.
+    g_currentMission.TheContractor.RepairContracts:judgeParts(job)
     g_currentMission.TheContractor.Inbox:removeMessagesForJob(job.farmId, job.id)
 
     TCLog.info("TheContractor: farm %d job %d completed (%s, %s) - billed %.0f, %+d reputation", job.farmId,
@@ -2121,6 +2150,24 @@ function TheContractorJobs:forgetFarm(farmId, jobIds)
     end
 end
 
+-- Every machine (TCVehicleReplace): a vehicle reloaded as a new object
+-- stays on its jobs, finished ones included (a workshop job's history).
+function TheContractorJobs:remapVehicle(oldId, newId)
+    for _, farmJobs in pairs(self.jobsByFarm) do
+        for _, job in pairs(farmJobs) do
+            TCVehicleIds.replaceInList(job.assignedEquipmentIds, oldId, newId)
+            TCVehicleIds.replaceInList(job.haulageEquipmentIds, oldId, newId)
+            TCVehicleIds.replaceInList(job.washVehicleIds, oldId, newId)
+            TCVehicleIds.replaceKey(job.startCondition, oldId, newId)
+            TCVehicleIds.replaceField(job.workshop, "vehicleId", oldId, newId)
+            TCVehicleIds.replaceField(job.workshop, "attachmentId", oldId, newId)
+        end
+    end
+    if TheContractorRepairContracts ~= nil then
+        TheContractorRepairContracts.clearCache()
+    end
+end
+
 function TheContractorJobs:loadFromXMLFile(xmlFile)
     if not g_currentMission:getIsServer() then return end
 
@@ -2440,9 +2487,11 @@ end
 
 -- Server: the ids of jobs something else still names, so they stay in the
 -- save however old: an invoice not yet dropped from the save, a pending
--- claim (052's, or a workshop job's tampering claim), a cooldown (it washes
--- the job's kit when it ends), a random event's incident (074's job events)
--- or an inbox message.
+-- claim (052's, or a workshop job's tampering claim), a customer's machine
+-- still to be collected (judged as it goes), substandard parts its customer
+-- has still to find (186), a cooldown (it washes the job's
+-- kit when it ends), a random event's incident (074's job events) or an
+-- inbox message.
 function TheContractorJobs.getHeldJobIds()
     local tc = g_currentMission.TheContractor
     local held = {}
@@ -2459,6 +2508,12 @@ function TheContractorJobs.getHeldJobIds()
     end
     for _, claim in ipairs(tc.RepairContracts.pendingClaims or {}) do
         hold(claim.jobId)
+    end
+    for _, entry in ipairs(tc.RepairContracts.removals or {}) do
+        hold(entry.jobId)
+    end
+    for _, discovery in ipairs(tc.RepairContracts.pendingDiscoveries or {}) do
+        hold(discovery.jobId)
     end
     for _, farmEntries in pairs(tc.Cooldown.entriesByFarm or {}) do
         for _, entry in pairs(farmEntries) do
@@ -2845,6 +2900,7 @@ function TheContractorJobs.registerConsoleCommands()
     -- and machines come home as they would from the Unallocate button.
     TCConsole.register("debug", "removeJob", {
         args = "<jobId>",
+        devPanel = true,
         description = "Delete a job as if it never was (unallocated first if it has a crew)",
         run = function(farmId, args)
             local jobId = tonumber(args[1])

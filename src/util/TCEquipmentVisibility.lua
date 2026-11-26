@@ -204,6 +204,17 @@ function TCEquipmentVisibility.setVisibleEverywhere(vehicleIds, isVisible)
     end
 end
 
+-- Every machine (TCVehicleReplace): a vehicle reloaded as a new object. A
+-- client's waiting request follows it. The server hides the new one if the
+-- old one was hidden: it comes back visible, where the old one stood.
+function TCEquipmentVisibility.remapVehicle(oldId, newId)
+    TCVehicleIds.replaceKey(pendingByVehicleId, oldId, newId)
+    if hiddenVehicleIds[oldId] then
+        hiddenVehicleIds[oldId] = nil
+        TCEquipmentVisibility.setVisibleEverywhere({ newId }, false)
+    end
+end
+
 -- 061: a joining client gets every vehicle the server has hidden, as object
 -- ids. Anything that's been sold or deleted since drops out here.
 function TCEquipmentVisibility.writeInitialClientState(streamId, connection)

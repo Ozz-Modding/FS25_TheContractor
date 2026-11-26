@@ -5,7 +5,7 @@
 		<text name="tc_settings_header" text="The Contractor"/>
 		<text name="tc_setting_jobPayRate" text="Job pay rate"/>
 		<text name="tc_setting_lateInvoices" text="Late/unpaid invoices"/>
-		<text name="tc_toolTip_lateInvoices" text="On: completed jobs are invoiced and paid up to three months later, some late and a few never. Off: jobs pay in full on completion. Invoices already sent still run their course."/>
+		<text name="tc_toolTip_lateInvoices" text="On: completed jobs are invoiced and paid up to about four months later, some late and a few never. Off: jobs pay in full on completion. Invoices already sent still run their course."/>
 		<text name="tc_setting_randomEvents" text="Random events"/>
 		<text name="tc_toolTip_randomEvents" text="How often rare events, such as a vehicle being stolen, happen to your business. Rare halves the odds, Off stops new ones. Anything already under way still runs its course."/>
 		<text name="tc_setting_randomEvents_off" text="Off"/>
@@ -108,6 +108,7 @@
 		<text name="tc_equipment_need_tractor" text="Tractor"/>
 		<text name="tc_equipment_need_seedTank" text="Seed tank (the seeder has no hopper of its own)"/>
 		<text name="tc_equipment_need_seedTankHitch" text="Seed tank that fits the tractor"/>
+		<text name="tc_equipment_need_tool" text="The tool the tank spreads through (a dribble bar or injector)"/>
 		<text name="tc_equipment_need_haulTractor" text="Tractor for hauling"/>
 		<text name="tc_equipment_need_trailer" text="Trailer that takes %s"/>
 		<text name="tc_equipment_need_trailerHitch" text="Trailer that hitches to the haulage tractor"/>
@@ -359,12 +360,17 @@
 		<text name="tc_unallocate_problemState" text="Only an allocated or in-progress job can be unallocated."/>
 		<text name="tc_unallocate_problemSpill" text="A spill is yours to clear up: it can't be unallocated."/>
 		<text name="tc_logbook_earlierCrew" text="Earlier crew"/>
+		<text name="tc_logbook_grew" text="Improved"/>
+		<text name="tc_logbook_grewValue" text="%d to %d in %s"/>
+		<text name="tc_logbook_certifiedValue" text="Now certified on %s"/>
+		<text name="tc_logbook_grewChip" text="Skill up"/>
 		<text name="tc_job_missedNotification" text="Job failed: %s on Field %s wasn't done by its deadline."/>
 		<text name="tc_job_landSoldNotice" text="Job called off: %s on Field %s. %s has bought the land, so the work's no longer wanted. Nothing's lost on either side."/>
 		<text name="tc_dispatch_noVehicleReady" text="None of the allocated equipment can be driven by the worker (is it free, and can it do this job?)."/>
 		<text name="tc_dispatch_failedNotification" text="Could not dispatch %s on Field %s: %s"/>
 		<text name="tc_watchdog_retriedNotification" text="Your worker got stuck on a %s job on Field %s - reset and dispatched again."/>
 		<text name="tc_watchdog_needsAttentionNotification" text="Your worker is stuck on a %s job on Field %s and needs your attention."/>
+		<text name="tc_watchdog_cantFinishNotification" text="Your worker can't finish a %s job on Field %s: they've been round the whole field twice and still left gaps. It needs your attention."/>
 		<text name="tc_moneyType_hiring" text="Staff hiring"/>
 		<text name="finance_tcHiring" text="Staff hiring"/>
 		<text name="tc_moneyType_wages" text="Staff wages"/>
@@ -510,6 +516,7 @@
 		<text name="tc_staff_detailSalary" text="%s per month"/>
 		<text name="tc_staff_detailJobNone" text="None"/>
 		<text name="tc_staff_detailOnBreak" text="On break until %s"/>
+		<text name="tc_staff_detailCooldown" text="Expected back: %s"/>
 		<text name="tc_staff_detailComingIn" text="In at %s, on until %s"/>
 		<text name="tc_staff_detailOnUntil" text="On until %s"/>
 		<text name="tc_growth_improved" text="%s improved: %s %d to %d"/>
@@ -1124,6 +1131,10 @@
 		<text name="tc_repair_tamperedTitle" text="Customer complaint: %s"/>
 		<text name="tc_repair_tamperedBody" text="The owner of the %s has taken it back worse than they left it: parts missing or swapped for worn ones. They won't pay, and they're telling everyone (-%s reputation)."/>
 		<text name="tc_repair_tamperedBodyClaim" text="The owner of the %s has taken it back worse than they left it: parts missing or swapped for worn ones. They won't pay, they're telling everyone (-%s reputation), and they're going to their solicitor about the damage."/>
+		<text name="tc_repair_tamperedPaidBody" text="The owner of the %s paid for the work, then got it home to find it worse than they left it: parts missing or swapped for worn ones. They're telling everyone (-%s reputation)."/>
+		<text name="tc_repair_tamperedPaidBodyClaim" text="The owner of the %s paid for the work, then got it home to find it worse than they left it: parts missing or swapped for worn ones. They're telling everyone (-%s reputation), and they're going to their solicitor about the damage."/>
+		<text name="tc_repair_substandardTitle" text="Unhappy customer: %s"/>
+		<text name="tc_repair_substandardBody" text="The owner of the %s has had a closer look at the work and found what went into it: %s, not the new parts they paid for. They're telling everyone (-%s reputation)."/>
 		<text name="tc_repair_claimTitle" text="Compensation claim: %s"/>
 		<text name="tc_repair_claimBody" text="The owner of the %s has claimed for the parts that went missing while it was with you. Public liability doesn't cover deliberate damage, so the whole %s has been charged."/>
 		<text name="tc_repair_claimBodyLegal" text="The owner of the %s has claimed for the parts that went missing while it was with you. Your legal cover got it reduced, but public liability doesn't cover deliberate damage, so %s has been charged."/>
@@ -1199,7 +1210,6 @@
 		<text name="tc_parking_slotsHidden" text="Parking slots and standing spots hidden"/>
 		<text name="input_TC_TOGGLE_PARKING_SLOTS" text="Show/hide parking slots and standing spots"/>
 		<text name="input_TC_OPEN_DEV_PANEL" text="Open The Contractor's dev panel"/>
-		<text name="tc_devPanel_needsDebug" text="The dev panel needs a file called tcDebug.txt in the mod's settings folder (modSettings/FS25_TheContractor), read when a save loads."/>
 		<text name="tc_parkingSlot_activate" text="Set parking slot filter"/>
 		<text name="tc_parkingSlot_dialogTitle" text="Parking Slot Filter"/>
 		<text name="tc_parkingSlot_dialogHeading" text="Takes: %s"/>
@@ -1246,6 +1256,14 @@
 		<text name="tc_yardCentre_owned" text="A player owns this land: it's no farmer's yard"/>
 		<text name="tc_yardCentre_notYard" text="This farmland isn't a farmer's yard. Set it as one from the map first"/>
 		<text name="tc_yardCentre_taken" text="This yard already has a centre marker"/>
+		<text name="tc_yardBay_name" text="Yard Machine Bay"/>
+		<text name="tc_yardBay_function" text="Where a farmer's machines and trailers come out in their yard, ahead of anywhere else, facing the way the arrow points. Big enough for a machine with its implement. Place as many as you like, whole on a yard that no player owns (host or admin only). Only visible in the construction menu, unless you turn on Show parking slots (Right Ctrl+P)."/>
+		<text name="tc_yardBaySmall_name" text="Yard Machine Bay (Small)"/>
+		<text name="tc_yardBaySmall_function" text="A smaller yard machine bay for tight yards: room for a trailer or a tractor on its own. A farmer's machines and trailers come out in a free bay ahead of anywhere else, facing the way the arrow points. Place as many as you like, whole on a yard that no player owns (host or admin only). Only visible in the construction menu, unless you turn on Show parking slots (Right Ctrl+P)."/>
+		<text name="tc_yardBay_noPermission" text="Only the host or an admin can place a yard machine bay"/>
+		<text name="tc_yardBay_owned" text="A player owns this land: it's no farmer's yard"/>
+		<text name="tc_yardBay_notYard" text="This farmland isn't a farmer's yard. Set it as one from the map first"/>
+		<text name="tc_yardBay_offYard" text="The whole bay has to be on the farmer's yard"/>
 		<text name="tc_disposalSkip_name" text="Disposal Skip"/>
 		<text name="tc_disposalSkip_function" text="Where fly-tipped junk from a clearing job goes, and old parts taken off a machine with Advanced Damage System. Drop each piece in or right next to it and it's taken away. Every piece from a job, and every old part, costs a small tipping fee."/>
 		<text name="tc_logoSign_name" text="Company Sign"/>
@@ -1320,11 +1338,14 @@
 		<text name="tc_equipment_missing_implement_lime" text="a lime spreader"/>
 		<text name="tc_equipment_missing_seedTank" text="a seed tank (front hopper) - the seeder has no hopper of its own"/>
 		<text name="tc_equipment_missing_seedTankHitch" text="a seed tank that fits the tractor (a front hopper needs front linkage)"/>
+		<text name="tc_equipment_missing_tool" text="the tool the tank spreads through (pick its dribble bar or injector too)"/>
 		<text name="tc_supplies_status_noStock" text="Waiting for %s"/>
 		<text name="tc_supplies_status_wrongFill" text="Tank holds %s - empty it"/>
 		<text name="tc_supplies_status_needsService" text="%s needs a service"/>
+		<text name="tc_supplies_status_needsRepair" text="%s needs a repair"/>
 		<text name="tc_supplies_onHold" text="%s on %s is on hold: %s."/>
 		<text name="tc_supplies_serviced" text="%s is serviced: %s on %s will carry on shortly."/>
+		<text name="tc_supplies_repaired" text="%s is repaired: %s on %s will carry on shortly."/>
 		<text name="tc_supplies_or" text=" or "/>
 		<text name="tc_supplies_noticeOne" text="Out of %s: a job is on hold until you restock."/>
 		<text name="tc_supplies_noticeMany" text="Out of %s: %d jobs are on hold until you restock."/>
@@ -1332,6 +1353,7 @@
 		<text name="tc_allocation_notCertifiedWarning" text="%s doesn't hold a %s certificate. Book them on a course from the Staff tab."/>
 		<text name="tc_allocation_filledHarvesterWarning" text="%s still has %s in its tank. Empty it before it goes out on a job."/>
 		<text name="tc_allocation_needsServiceWarning" text="%s needs a service before a worker will take it out."/>
+		<text name="tc_allocation_needsRepairWarning" text="%s has broken down and needs a repair before a worker will take it out."/>
 		<text name="tc_allocation_crewRolesTitle" text="Who does what"/>
 		<text name="tc_allocation_crewRolesPrompt" text="Choose who harvests and who hauls. The recommended way round suits their skills best, but you can swap them round to give the other one the practice."/>
 		<text name="tc_allocation_crewRolesOption" text="%s harvests, %s hauls"/>
@@ -1354,6 +1376,7 @@
 		<text name="tc_staff_status_comingIn" text="On the way in"/>
 		<text name="tc_staff_status_stayingLate" text="Staying late"/>
 		<text name="tc_staff_status_onBreak" text="On break"/>
+		<text name="tc_staff_status_inWorkshop" text="In workshop"/>
 		<text name="tc_hours_driversAllHome" text="Everyone free has gone home for the day. Ask someone to stay late, or call them back in, from Manage on the Staff tab."/>
 		<text name="tc_hours_driversAllOnBreak" text="Everyone free is on a break. %s is back first, at %s."/>
 		<text name="tc_hours_detailOvertime" text="%s (+%s overtime this month)"/>
@@ -2025,7 +2048,7 @@
 		<text name="tc_help_company_4_title" text="Around the yard"/>
 		<text name="tc_help_company_4" text="From the construction menu's Contractor tab, place parking slots for machines coming back from jobs, and standing spots or seats where idle staff wait. Without parking slots, machines back from a job have nowhere to go."/>
 		<text name="tc_help_company_5_title" text="Your stock"/>
-		<text name="tc_help_company_5" text="Jobs take seed, fertiliser, herbicide, lime and diesel from your own farm's stock, so keep some in. The Supplies tab shows what you have."/>
+		<text name="tc_help_company_5" text="Jobs take seed, fertiliser, herbicide, lime and diesel from your own farm's stock, so keep some in. The Supplies tab shows what you have. Helpers never buy their own fuel, seed or fertiliser while this mod is in: the game's settings for that are switched off."/>
 		<text name="tc_help_menu_title" text="The Contractor menu"/>
 		<text name="tc_help_menu_1" text="Everything is run from the Contractor page of the in-game menu. Its tabs are along the top, and each tab's actions are in the button bar at the bottom: they act on the highlighted row."/>
 		<text name="tc_help_menu_2_title" text="Overview"/>
@@ -2088,13 +2111,13 @@
 		<text name="tc_help_planning_5_title" text="Due dates"/>
 		<text name="tc_help_planning_5" text="A job not finished by the end of its due day fails. See Quality, pay and failed jobs. Changing the days per month keeps every job's date: a job due in October is still due in October."/>
 		<text name="tc_help_allocating_title" text="Allocating a crew"/>
-		<text name="tc_help_allocating_1" text="To get a job done, highlight it on the Jobs tab and choose Allocate. Pick a worker (or Do It Myself) and the machines to take: a tractor and implement, a harvester and header, and for harvest and haul a haulage tractor and trailer."/>
+		<text name="tc_help_allocating_1" text="To get a job done, highlight it on the Jobs tab and choose Allocate. Pick a worker (or Do It Myself) and the machines to take: a tractor and implement, a harvester and header, and for harvest and haul a haulage tractor and trailer. A slurry tank goes with the dribble bar or injector it spreads through: pick the tank and the one hitched to it comes too."/>
 		<text name="tc_help_allocating_2_title" text="Warnings"/>
-		<text name="tc_help_allocating_2" text="The dialog warns you about anything wrong: a worker short of the skill the job needs (expect lower quality and extra wear), no certificate, missing supplies, a machine that needs emptying or a service first. Machines that are busy, in use or still on their way back can't be picked."/>
+		<text name="tc_help_allocating_2" text="The dialog warns you about anything wrong: a worker short of the skill the job needs (expect lower quality and extra wear), no certificate, missing supplies, a machine that needs emptying, a service or a repair first. Machines that are busy, in use or still on their way back can't be picked."/>
 		<text name="tc_help_allocating_3_title" text="Off they go"/>
 		<text name="tc_help_allocating_3" text="A hired worker drives the base game's AI helper out to the field, does the work and comes back. While they're away, the machines are out of the yard and can't be used or sold."/>
 		<text name="tc_help_allocating_4_title" text="Stuck workers"/>
-		<text name="tc_help_allocating_4" text="A worker who gets stuck is reset and sent off again. If that doesn't work, you're told it needs your attention."/>
+		<text name="tc_help_allocating_4" text="A worker who gets stuck is reset and sent off again. If that doesn't work, you're told it needs your attention. A spreader can't cover a field perfectly, so a worker spreading fertiliser or lime is done at 85% once they've been round the whole field. Short of that they go round once more, and if it's still short, you're told it needs your attention."/>
 		<text name="tc_help_allocating_5_title" text="Unallocating"/>
 		<text name="tc_help_allocating_5" text="Unallocate in Job Details takes the crew off. The work done stays done and the job goes back to waiting for a crew. If they'd already left, they and their machines need time to come back first."/>
 		<text name="tc_help_doItYourself_title" text="Doing it yourself"/>
@@ -2128,7 +2151,7 @@
 		<text name="tc_help_logbook_title" text="The Logbook"/>
 		<text name="tc_help_logbook_1" text="The Logbook keeps the business's records. Jobs lists every completed and failed job; Vehicles lists every machine and what it's been doing."/>
 		<text name="tc_help_logbook_2_title" text="A job's log"/>
-		<text name="tc_help_logbook_2" text="Who did it, which machines they took and the state each came back in, how the time went (travel, fieldwork, return and wash), the fuel and supplies used, and the money: the price, an estimate of what the supplies, labour and wear cost, any claim, and the margin left."/>
+		<text name="tc_help_logbook_2" text="Who did it and anything they got better at from it, which machines they took and the state each came back in, how the time went (travel, fieldwork, return and wash), the fuel and supplies used, and the money: the price, an estimate of what the supplies, labour and wear cost, any claim, and the margin left."/>
 		<text name="tc_help_logbook_3_title" text="A vehicle's log"/>
 		<text name="tc_help_logbook_3" text="Who had it, when, for how long, and its condition before and after, for jobs, staff drivers and your own driving. Sort by most hours or most faults to spot the machines that cost you."/>
 		<text name="tc_help_logbook_4_title" text="Filters"/>
@@ -2280,7 +2303,7 @@
 		<text name="tc_help_farmerYards_title" text="Farmers' yards"/>
 		<text name="tc_help_farmerYards_1" text="Farms on the map that no player owns are farmers' yards, worked out from their buildings. In daylight, a farmer stands about in their yard."/>
 		<text name="tc_help_farmerYards_2_title" text="Setting a yard"/>
-		<text name="tc_help_farmerYards_2" text="The host or an admin can mark a farmland as a farmer's yard, or rule one out, from its box on the in-game map. A Yard Centre Marker (construction menu) sets where the yard's middle really is."/>
+		<text name="tc_help_farmerYards_2" text="The host or an admin can mark a farmland as a farmer's yard, or rule one out, from its box on the in-game map. A Yard Centre Marker (construction menu) sets where the yard's middle really is. Yard Machine Bays (two sizes) mark where the farmer's machines and trailers should come out: a machine goes in a free bay it fits before anywhere else, so put them where you can get a tractor to."/>
 		<text name="tc_help_farmerYards_3_title" text="Dressing it"/>
 		<text name="tc_help_farmerYards_3" text="Standing spots and seats placed in a farmer's yard are for that farmer (host or admin only)."/>
 		<text name="tc_help_farmerMachines_title" text="Farmers' machines"/>
@@ -2345,11 +2368,11 @@
 		<text name="tc_help_workshopTrades_title" text="Workshop staff"/>
 		<text name="tc_help_workshopTrades_1" text="With Advanced Damage System, your own staff run its workshop. Field workers may have workshop trades, mechanic, electrician, bodyworker or storekeeper, at level 1 to 3, shown on the People tab."/>
 		<text name="tc_help_workshopTrades_2_title" text="Working in the workshop"/>
-		<text name="tc_help_workshopTrades_2" text="From Manage, set a worker to work in the workshop in one of their trades. They do it whenever they aren't out on a job; while they're away, that trade's work waits. Only one worker per trade."/>
+		<text name="tc_help_workshopTrades_2" text="From Manage, set a worker to work in the workshop in one of their trades. They do it whenever they aren't out on a job, and show as In workshop while they're busy on one of its jobs (they can still be given a contract). While they're away, that trade's work waits. Only one worker per trade."/>
 		<text name="tc_help_workshopTrades_3_title" text="Training"/>
 		<text name="tc_help_workshopTrades_3" text="Manage, Workshop training books a worker on a course to learn a trade or raise one a level. Your office administrator is the workshop's advisor."/>
 		<text name="tc_help_workshopTrades_4_title" text="Careless workers"/>
-		<text name="tc_help_workshopTrades_4" text="A careless or under-skilled worker can cause breakdowns on the machines they take out. A machine overdue for its service won't be taken out by a worker until it's seen to. Once it is, the worker gives you a minute to finish up and put your tools away before carrying on."/>
+		<text name="tc_help_workshopTrades_4" text="A careless or under-skilled worker can cause breakdowns on the machines they take out. A machine overdue for its service won't be taken out by a worker until it's seen to, and a breakdown that stops a worker's machine puts their job on hold until it's repaired. Once it is, the worker gives you a minute to finish up and put your tools away before carrying on."/>
 		<text name="tc_help_repairContracts_title" text="Repair zones and quotes"/>
 		<text name="tc_help_repairContracts_1" text="Place repair zones from the construction menu (one, three or six tractor bays, or a harvester bay). Customers bring their machines there for a repair or a service, each with an offer in the Inbox."/>
 		<text name="tc_help_repairContracts_2_title" text="Inspect first"/>
@@ -2357,7 +2380,7 @@
 		<text name="tc_help_repairContracts_3_title" text="Quoting"/>
 		<text name="tc_help_repairContracts_3" text="Choose Negotiate on the offer and pick your margin. The customer says yes or takes the machine away. A fair price earns more reputation; a steep one costs some, and a name for overcharging means fewer customers for a while."/>
 		<text name="tc_help_repairContracts_4_title" text="Doing the work"/>
-		<text name="tc_help_repairContracts_4" text="The Workshop tab's checklist shows what's left. The job's done, and paid, once every fault it came in with is fixed (or everything on a service list done) before its due day, and the owner comes for it an hour later. A machine left worse than it came isn't paid for, and the owner may claim."/>
+		<text name="tc_help_repairContracts_4" text="The Workshop tab's checklist shows what's left. The job's done, and paid, once every fault it came in with is fixed (or everything on a service list done) before its due day, and the owner comes for it an hour later. A machine left worse than it came isn't paid for, and the owner may claim. They check it again as they take it away: one stripped after it's done costs the same reputation, and maybe a claim, though the pay stands. Fitting used or aftermarket parts, or cheaper oils, filters and batteries than it came in with, may be found out a few days later, and costs some reputation."/>
 		<text name="tc_help_repairContracts_5_title" text="Old parts"/>
 		<text name="tc_help_repairContracts_5" text="Parts you take off go in a disposal skip, for a small fee."/>
 		<text name="tc_help_breakdowns_title" text="Breakdowns and favours"/>
@@ -2394,7 +2417,7 @@
 		<text name="tc_help_clearing_2_title" text="Fly-tipping"/>
 		<text name="tc_help_clearing_2" text="Junk dumped at a field gate or on a roadside verge. Carry each piece to a disposal skip and drop it there; each piece costs a small tipping fee. Roadside pieces are marked on your map."/>
 		<text name="tc_help_clearing_3_title" text="Fallen trees"/>
-		<text name="tc_help_clearing_3" text="After a spell of bad weather, trees may come down across the roads. Clear them with a chainsaw today; the wood is yours to keep or sell. Each tree is marked on your map."/>
+		<text name="tc_help_clearing_3" text="After a spell of bad weather, trees may come down across the roads. Clear them with a chainsaw today; the wood is yours to keep or sell. Each tree is marked on your map, and traffic waits short of it until its road is clear."/>
 		<text name="tc_help_clearing_4_title" text="Joyriders"/>
 		<text name="tc_help_clearing_4" text="Joyriders tear up a grass field. On a farmer's field you're offered the plowing, and may then be asked to sow it back to grass. On your own field, it's just bad luck."/>
 		<text name="tc_help_clearing_5_title" text="Turning it down"/>

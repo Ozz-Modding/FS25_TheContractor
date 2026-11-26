@@ -14,7 +14,9 @@
 -- building), with no more than MAX_FARMHOUSES farmhouses (more is a
 -- village). The yard sits in the middle of its
 -- yard buildings, or on its yard centre marker (146,
--- PlaceableTCYardCentre) when one's been placed there.
+-- PlaceableTCYardCentre) when one's been placed there. 183: its machine
+-- bays (PlaceableTCYardBay) are where its farmer's machines come out
+-- (TCYardBays), and its standing spots keep out of them.
 --
 -- Detection runs on the live map every time it's asked for, on every
 -- machine (preplaced placeables are the same everywhere), and nothing
@@ -222,10 +224,11 @@ local function getNameAndCategory(placeable)
     return name or "?", string.upper(category or "UNKNOWN")
 end
 
--- 146: whether the placeable is a yard centre marker, which is never one of
--- the yard's buildings.
+-- 146: whether the placeable is a yard centre marker (or, 183, a machine
+-- bay), which is never one of the yard's buildings.
 local function isCentreMarker(placeable)
-    return PlaceableTCYardCentre ~= nil and PlaceableTCYardCentre.isMarker(placeable)
+    return (PlaceableTCYardCentre ~= nil and PlaceableTCYardCentre.isMarker(placeable)) or
+        (PlaceableTCYardBay ~= nil and PlaceableTCYardBay.isBay(placeable))
 end
 
 -- 146: the yard centre marker that counts on the farmland (any farm's, but
@@ -241,6 +244,24 @@ function TheContractorYards.findCentreMarker(placeables, farmlandId, except)
         end
     end
     return nil
+end
+
+-- 183: the areas (PlaceableTCParkingSlot.getArea's shape) of the machine
+-- bays that count on the farmland, any farm's.
+function TheContractorYards.findBays(placeables, farmlandId)
+    local areas = {}
+    if PlaceableTCYardBay == nil then
+        return areas
+    end
+    for _, placeable in ipairs(placeables) do
+        if PlaceableTCYardBay.isActiveBay(placeable) and placeable:getFarmlandId() == farmlandId then
+            local area = PlaceableTCYardBay.getArea(placeable)
+            if area ~= nil then
+                table.insert(areas, area)
+            end
+        end
+    end
+    return areas
 end
 
 -- What detection needs to know about a placeable, or nil if it isn't a
@@ -459,6 +480,7 @@ function TheContractorYards.detect(placeables, overrides)
                 entry.x, entry.z = TheContractorYards.getMiddle(group)
                 entry.middleFrom = TheContractorYards.MIDDLE_FROM.BUILDINGS
             end
+            entry.bays = TheContractorYards.findBays(placeables, farmlandId)
             if entry.x == nil then
                 local farmland = g_farmlandManager:getFarmlandById(farmlandId)
                 if farmland ~= nil then
@@ -637,6 +659,7 @@ end
 TheContractorYards.SPOT_REJECTION = {
     SEPARATION = "separation",
     FOOTPRINT = "footprint",
+    BAY = "bay",
     FARMLAND = "farmland",
     INDOOR = "indoor",
     SLOPE = "slope",
@@ -657,6 +680,7 @@ function TheContractorYards.pickSpots(yard, candidates, isOpen, tally)
     local spots = {}
     local separationSq = Y.SPOT_SEPARATION * Y.SPOT_SEPARATION
     local buildings = yard.group ~= nil and yard.group.buildings or {}
+    local bays = yard.bays or {}
     if tally ~= nil then
         tally.candidates, tally.rejected, tally.blockers = #candidates, {}, {}
     end
@@ -685,6 +709,15 @@ function TheContractorYards.pickSpots(yard, candidates, isOpen, tally)
                     end
                 end
                 if rejection ~= nil then
+                    break
+                end
+            end
+        end
+        if rejection == nil then
+            -- 183: a machine bay is kept for the farmer's machines.
+            for _, bay in ipairs(bays) do
+                if PlaceableTCParkingSlot.isInArea(bay, point.x, point.z) then
+                    rejection = Y.SPOT_REJECTION.BAY
                     break
                 end
             end
@@ -1244,11 +1277,12 @@ local EXCLUSION_TEXTS = {
     [TheContractorYards.EXCLUSION.NO_FARMLAND] = "not on a valid farmland",
 }
 
-local SPOT_REJECTION_ORDER = { "SEPARATION", "FOOTPRINT", "FARMLAND", "INDOOR", "SLOPE", "FIELD", "NAVIGATION",
+local SPOT_REJECTION_ORDER = { "SEPARATION", "FOOTPRINT", "BAY", "FARMLAND", "INDOOR", "SLOPE", "FIELD", "NAVIGATION",
     "BLOCKED" }
 local SPOT_REJECTION_TEXTS = {
     separation = "too close to a kept spot",
     footprint = "inside a building's footprint",
+    bay = "inside a machine bay",
     farmland = "off the farmland",
     indoor = "indoors (indoor mask)",
     slope = "too steep",
@@ -1335,6 +1369,14 @@ function TheContractorYards.getFarmlandText(farmlandId, yards, nearMisses, exclu
     if entry ~= nil and entry.x ~= nil and entry.middleFrom ~= nil then
         table.insert(lines, string.format("  Middle at %.0f, %.0f, %s", entry.x, entry.z,
             MIDDLE_FROM_TEXTS[entry.middleFrom] or entry.middleFrom))
+    end
+    if entry ~= nil and entry.bays ~= nil then
+        table.insert(lines, string.format("  Machine bays (%d)%s", #entry.bays,
+            #entry.bays == 0 and ": none, so its farmer's machines go on its standing spots" or ":"))
+        for _, bay in ipairs(entry.bays) do
+            local x, z = TCYardBays.getPose(bay)
+            table.insert(lines, string.format("    %.1f x %.1f m at %.0f, %.0f", bay.width, bay.length, x, z))
+        end
     end
 
     table.insert(lines, string.format("Counted (%d):", group ~= nil and #group.buildings or 0))

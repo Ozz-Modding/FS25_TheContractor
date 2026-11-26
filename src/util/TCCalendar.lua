@@ -148,12 +148,18 @@ function TCCalendar.getDaysPerPeriodOfPeriodIndex(periodIndex, model)
     return model.plannedDaysPerPeriod
 end
 
--- For a monotonic day from today on: its period index, its day in that
--- period, and the days per period in force on it. Days before today are
--- worked out at today's days per period, which is wrong for anything before
--- the last change - don't rely on them.
+-- For a monotonic day: its period index, its day in that period, and the
+-- days per period in force on it. With the live calendar (no model), a day
+-- before today is dated by TCCalendarHistory, so a change of days per month
+-- since doesn't move it. With a model given, a day before the model's today
+-- is worked back at its days per period.
 function TCCalendar.getDayInfo(monotonicDay, model)
-    model = model or TCCalendar.getModel()
+    if model == nil then
+        model = TCCalendar.getModel()
+        if monotonicDay < model.day and TCCalendarHistory ~= nil then
+            model = TCCalendarHistory.getModelOn(monotonicDay) or model
+        end
+    end
     local offset = monotonicDay - model.day
     local untilNextSeason = TCCalendar.getDaysUntilNextSeason(model)
 
@@ -213,13 +219,14 @@ function TCCalendar.getNextOccurrenceDay(period, dayInPeriod, model)
     return day
 end
 
--- 161: the day `months` months after a day from today on, by the calendar
--- (so a planned change is allowed for): whole months land on the same share
--- of the month (the 2nd of 4 becomes the 1st of 2), and a fraction of a
--- month is that share of the month landed in, rounded. Never before `day`.
+-- 161: the day `months` months after a day, by the calendar (so a planned
+-- change is allowed for, and a day gone is dated as it was): whole months
+-- land on the same share of the month (the 2nd of 4 becomes the 1st of 2),
+-- and a fraction of a month is that share of the month landed in, rounded.
+-- Never before `day`.
 function TCCalendar.addMonths(day, months, model)
-    model = model or TCCalendar.getModel()
     local periodIndex, dayInPeriod, daysPerPeriod = TCCalendar.getDayInfo(day, model)
+    model = model or TCCalendar.getModel()
     local whole = math.floor(months)
     local targetIndex = periodIndex + whole
     local targetDaysPerPeriod = TCCalendar.getDaysPerPeriodOfPeriodIndex(targetIndex, model)
@@ -252,6 +259,15 @@ function TCCalendar.remapDay(day, fromModel, toModel, isEnd)
         end
     end
     return math.max(toModel.day, TCCalendar.getMonotonicDay(periodIndex, newDayInPeriod, toModel))
+end
+
+-- How many months from one day to another, by their dates: whole months
+-- plus the share of a month between their days (June 10 to August 24 at 28
+-- days a month is 2.5).
+function TCCalendar.getMonthsBetween(fromDay, toDay)
+    local fromIndex, fromDayInPeriod, fromDaysPerPeriod = TCCalendar.getDayInfo(fromDay)
+    local toIndex, toDayInPeriod, toDaysPerPeriod = TCCalendar.getDayInfo(toDay)
+    return (toIndex + (toDayInPeriod - 1) / toDaysPerPeriod) - (fromIndex + (fromDayInPeriod - 1) / fromDaysPerPeriod)
 end
 
 function TCCalendar.getDaysPerPeriodOn(monotonicDay)

@@ -71,15 +71,6 @@ local function formatMonotonicDay(day)
     return formatTargetDate(TCCalendar.getPeriodFromDay(day), TCCalendar.getDayInPeriodFromDay(day))
 end
 
--- A date with its year, for a day whose year is known (a completed job's,
--- worked out from its absolute day). year is the game year
--- (environment.currentYear's count), and TCCalendar.formatYear shows
--- January and February as the next one.
-local function formatCalendarDate(period, dayInPeriod, year)
-    return string.format("%s %d, %s", g_i18n:getText("ui_month" .. TCCalendar.getMonth(period)), dayInPeriod,
-        TCCalendar.formatYear(year, period))
-end
-
 -- Compact per-tier tractor rating for a list cell (e.g. "S5 M- L8"), as
 -- opposed to Staff.lua's own formatTierCapability (console/log), which
 -- spells out each tier name in full. The Staff tab's own list dropped this
@@ -168,6 +159,8 @@ local STATUS_CHIP_TONES = {
     stayingLate = "info",
     -- 131.
     onBreak = "info",
+    -- Idle, but busy on an ADS workshop job (TCADSWorkshop.isWorking).
+    inWorkshop = "good",
 }
 
 local function getWorkerStatusTone(status)
@@ -1913,6 +1906,14 @@ function MenuContractor:updateStaffDetails()
         if jobLine == nil and status == "onBreak" then
             jobLine = string.format(g_i18n:getText("tc_staff_detailOnBreak"),
                 TheContractorWorkingHours.formatTime(worker.breakUntil))
+        end
+        -- On the way back from a job: when they're due in.
+        if jobLine == nil and worker.status == TheContractorWorker.STATUS.COOLDOWN then
+            local backAt = g_currentMission.TheContractor.Cooldown:getWorkerReturnTime(farmId, worker.id)
+            if backAt ~= nil then
+                jobLine = string.format(g_i18n:getText("tc_staff_detailCooldown"),
+                    TheContractorWorkingHours.formatTime(backAt))
+            end
         end
         -- 178: when someone called back will be in, and until when they're on.
         jobLine = jobLine or self:getDutyNoteText(worker)
@@ -3799,27 +3800,13 @@ end
 
 -- Completed jobs (029 follow-up) -----------------------------------------
 
--- The absolute (monotonic) day a completed job finished on, as a calendar
--- period/day/year, counted back from today. Assumes daysPerPeriod hasn't
--- changed since, which is all we can do without storing the date itself.
-local function monotonicDayToCalendar(monotonicDay)
-    local environment = g_currentMission.environment
-    local daysPerPeriod = environment.daysPerPeriod
-    local yearLength = daysPerPeriod * Environment.PERIODS_IN_YEAR
-    local todayIndex = (environment.currentPeriod - 1) * daysPerPeriod + environment.currentDayInPeriod - 1
-    local index = todayIndex - (environment.currentMonotonicDay - monotonicDay)
-    local yearOffset = math.floor(index / yearLength)
-    local indexInYear = index - yearOffset * yearLength
-    return math.floor(indexInYear / daysPerPeriod) + 1, indexInYear % daysPerPeriod + 1,
-        environment.currentYear + yearOffset
-end
-
+-- The day a completed job finished on, as a date (TCCalendar dates a past
+-- day as it fell, across a change of days per month).
 local function formatCompletedAt(completedAt)
     if completedAt == nil then
         return "-"
     end
-    local period, dayInPeriod, year = monotonicDayToCalendar(math.floor(completedAt / (24 * 60)))
-    return formatCalendarDate(period, dayInPeriod, year)
+    return TCCalendar.formatDay(math.floor(completedAt / (24 * 60)))
 end
 
 -- Same reload-then-show-the-wrapping-container shape as
@@ -5121,11 +5108,30 @@ function MenuContractor:onClickToggleAllocationEquipment()
             end
         end
         self.allocationSelectedEquipmentKeys[row.key] = true
+        self:selectAllocationTools(row)
     end
 
     self.allocationEquipmentTable:reloadData()
     self:updateAllocationEquipmentToggleButton()
     self:updateAllocationWarning()
+end
+
+-- A tank that spreads only through a tool on its hitch (a slurry tanker's
+-- dribble bar, TCEquipmentClass.needsTool) brings the tool hitched to it
+-- now, if that's listed for the job too: it's one machine to the player.
+function MenuContractor:selectAllocationTools(row)
+    local vehicle = NetworkUtil.getObject(row.vehicleId)
+    if vehicle == nil or vehicle.getAttachedImplements == nil or not TCEquipmentClass.needsTool(vehicle) then
+        return
+    end
+    for _, implement in ipairs(vehicle:getAttachedImplements()) do
+        local toolId = NetworkUtil.getObjectId(implement.object)
+        for _, other in ipairs(self.allocationEquipmentRows) do
+            if other.vehicleId == toolId and other.role == "implement" then
+                self.allocationSelectedEquipmentKeys[other.key] = true
+            end
+        end
+    end
 end
 
 function MenuContractor:updateAllocationEquipmentToggleButton()
@@ -5181,7 +5187,7 @@ function MenuContractor:populateAllocationEquipmentCell(index, cell)
             self:getAllocationTierTone(row.sizeTier))
     end
     -- 150: ADS won't let the picked worker drive it until it's serviced
-    -- (the player can, so not while it's them alone). A machine still
+    -- or repaired (the player can, so not while it's them alone). A machine still
     -- waiting for a parking space (062) gets no chip: allocating sends it to
     -- the shop for the player, and a worker's dispatch takes it from the
     -- queue.
@@ -5245,10 +5251,16 @@ function MenuContractor:getAllocationProblem(job)
             g_fillTypeManager:getFillTypeTitleByIndex(heldFillType) or "?"), true
     end
 
-    -- 150: ADS won't let a hired worker drive it until it's serviced.
-    local refusedVehicle = operatorId ~= nil and TheContractorAllocation.getServiceRefusedVehicle(equipmentIds) or nil
+    -- 150: ADS won't let a hired worker drive it until it's serviced or
+    -- repaired.
+    local refusedVehicle, holdStatus
+    if operatorId ~= nil then
+        refusedVehicle, holdStatus = TheContractorAllocation.getServiceRefusedVehicle(equipmentIds)
+    end
     if refusedVehicle ~= nil then
-        return string.format(g_i18n:getText("tc_allocation_needsServiceWarning"), refusedVehicle:getName()), true
+        local key = holdStatus == TCJobSupplies.STATUS.NEEDS_REPAIR and "tc_allocation_needsRepairWarning" or
+            "tc_allocation_needsServiceWarning"
+        return string.format(g_i18n:getText(key), refusedVehicle:getName()), true
     end
 
     if capability == TheContractorAllocation.CAPABILITY.WARN then
@@ -6131,7 +6143,7 @@ local function getInvoiceTimeliness(invoice)
     if daysLate <= 0 then
         return g_i18n:getText("tc_finances_paidOnTime"), "good"
     end
-    local monthsLate = math.ceil(daysLate / g_currentMission.environment.daysPerPeriod)
+    local monthsLate = math.max(1, math.ceil(TCCalendar.getMonthsBetween(invoice.dueDay, invoice.settledDay) - 1e-6))
     if monthsLate == 1 then
         return g_i18n:getText("tc_finances_paidMonthLate"), "warn"
     end
@@ -7424,6 +7436,13 @@ function MenuContractor:getLogbookJobRows(entry)
             end
             row(text("tc_logbook_role_" .. (member.role or TheContractorLogbook.ROLE.OPERATOR)), getCrewName(member),
                 chip, tone)
+            -- Issue #16: what they got better at from the job.
+            for _, grew in ipairs(member.growth or {}) do
+                local statName = text("tc_growth_stat_" .. grew.stat)
+                local value = grew.from ~= nil and string.format(text("tc_logbook_grewValue"), grew.from, grew.to,
+                    statName) or string.format(text("tc_logbook_certifiedValue"), statName)
+                row(text("tc_logbook_grew"), value, text("tc_logbook_grewChip"), "good")
+            end
         end
         -- 094: whoever had it before it was unallocated.
         if entry.earlierCrew ~= nil then

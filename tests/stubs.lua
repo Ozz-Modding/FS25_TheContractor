@@ -246,6 +246,12 @@ function stubs.install()
         getIsSprayerExternallyFilled = function()
             return true
         end,
+        -- Records the buy settings the spray step ran with.
+        onStartWorkAreaProcessing = function(vehicle)
+            local missionInfo = g_currentMission.missionInfo
+            vehicle.sprayedWith = { helperBuyFertilizer = missionInfo.helperBuyFertilizer,
+                helperSlurrySource = missionInfo.helperSlurrySource, helperManureSource = missionInfo.helperManureSource }
+        end,
     }
 
     g_farmManager = setmetatable({

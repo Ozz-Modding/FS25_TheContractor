@@ -523,7 +523,8 @@ function TheContractorAllocation.getFilledHarvester(equipmentIds)
 end
 
 -- 150: a machine among equipmentIds that ADS wouldn't let a hired worker
--- drive (TCADSWorkerRefusal), or nil. Only a hired worker's allocation is
+-- drive (TCADSWorkerRefusal) and the hold it means (TCJobSupplies.STATUS:
+-- a service or a repair), or nil. Only a hired worker's allocation is
 -- refused for it: the player drives their own job.
 function TheContractorAllocation.getServiceRefusedVehicle(equipmentIds)
     return TCADSWorkerRefusal.getRefusedVehicle(equipmentIds)

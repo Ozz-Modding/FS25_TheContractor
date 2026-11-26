@@ -281,6 +281,7 @@ local function setup(def)
     world:load("src/business/RepairContracts.lua")
     world:load("src/business/FarmerFleet.lua")
     world:load("src/business/FieldBreakdowns.lua")
+    world:load("src/util/TCYardBays.lua")
 
     TCADSRepairContracts.getEnv = function() return world.adsEnv end
     TCADSRepairContracts.detect()
@@ -594,9 +595,9 @@ test("a lapsed offer: the customer has it recovered from where it stands", funct
     tc.Jobs:onDayChanged()
     assertEquals(job.state, TheContractorJob.STATE.DECLINED)
     assertEquals(#world.calls.reputation, 0, "an offer let go costs nothing")
-    assertEquals(world.calls.released[1], vehicle.id)
     tc.RepairContracts:update(TheContractorRepairContracts.PLACE_CHECK_MS)
     assertTrue(vehicle.isDeleted)
+    assertEquals(world.calls.released[1], vehicle.id)
 end)
 
 test("done in ADS completes it; left undone it's missed at midnight", function()
@@ -860,7 +861,9 @@ local function addYard(world, tc, farmer)
             return farmlandId == 5 and { x = 0, z = 500, spots = { { x = 0, z = 520 } } } or nil
         end,
     }
-    TheContractorYards = { isOpenGround = function(_, x, z) return world.isOpen(x, z) end }
+    TheContractorYards = { isOpenGround = function(_, x, z) return world.isOpen(x, z) end,
+        -- 183: no machine bays.
+        findBays = function() return {} end }
     g_farmlandManager = { getFarmlandOwner = function() return world.yardOwner end }
 end
 

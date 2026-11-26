@@ -1007,6 +1007,15 @@ end
 
 -- After a load (server) ------------------------------------------------------------------
 
+-- Every machine (TCVehicleReplace): the trailer reloaded as a new object.
+function TheContractorYardHaul:remapVehicle(oldId, newId)
+    for _, farmJobs in pairs(g_currentMission.TheContractor.Jobs.jobsByFarm) do
+        for _, job in pairs(farmJobs) do
+            TCVehicleIds.replaceField(job.yardHaul, "trailerVehicleId", oldId, newId)
+        end
+    end
+end
+
 -- TheContractor:resolveSavedVehicles, after Jobs' and RepairContracts': the
 -- trailer gets its object id back, and a job taken on without it (it never
 -- came out, or it's gone) sends for it again: filled with what's still to

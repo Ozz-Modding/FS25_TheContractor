@@ -61,6 +61,39 @@ function TCVehicleIds.loadList(xmlFile, key)
     return uniqueIds
 end
 
+-- A vehicle swapped for a new object (TCVehicleReplace): oldId becomes
+-- newId wherever it's in the list, in place. Whether it was there.
+function TCVehicleIds.replaceInList(vehicleIds, oldId, newId)
+    local found = false
+    for i, vehicleId in ipairs(vehicleIds or {}) do
+        if vehicleId == oldId then
+            vehicleIds[i] = newId
+            found = true
+        end
+    end
+    return found
+end
+
+-- Likewise for a table keyed by vehicle id: the value moves to newId.
+-- Whether there was one.
+function TCVehicleIds.replaceKey(map, oldId, newId)
+    if map == nil or map[oldId] == nil then
+        return false
+    end
+    map[newId] = map[oldId]
+    map[oldId] = nil
+    return true
+end
+
+-- Likewise for one field of a table (t may be nil). Whether it held oldId.
+function TCVehicleIds.replaceField(t, field, oldId, newId)
+    if t == nil or t[field] ~= oldId then
+        return false
+    end
+    t[field] = newId
+    return true
+end
+
 -- Server: object ids for a list of uniqueIds, leaving out any vehicle
 -- that's gone.
 function TCVehicleIds.resolveList(uniqueIds)

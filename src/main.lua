@@ -32,12 +32,14 @@ source(TheContractor.dir .. "src/util/TCHitchExplain.lua")
 source(TheContractor.dir .. "src/util/TCJobReport.lua")
 source(TheContractor.dir .. "src/util/TCFolding.lua")
 source(TheContractor.dir .. "src/util/TCParking.lua")
+source(TheContractor.dir .. "src/util/TCYardBays.lua")
 source(TheContractor.dir .. "src/util/TCParkingSlotFilter.lua")
 source(TheContractor.dir .. "src/util/TCParkingSlotActivatable.lua")
 source(TheContractor.dir .. "src/util/TCTippedTrailerActivatable.lua")
 source(TheContractor.dir .. "src/util/TCAuctionLotActivatable.lua")
 source(TheContractor.dir .. "src/util/TCHaulage.lua")
 source(TheContractor.dir .. "src/util/TCJobSupplies.lua")
+source(TheContractor.dir .. "src/util/TCNoHelperBuying.lua")
 source(TheContractor.dir .. "src/util/TCSupplyStock.lua")
 source(TheContractor.dir .. "src/util/TCADSStock.lua")
 source(TheContractor.dir .. "src/util/TCADSWorkshop.lua")
@@ -61,6 +63,7 @@ source(TheContractor.dir .. "src/util/TCAttachImplementsManually.lua")
 source(TheContractor.dir .. "src/util/TCEconomyScale.lua")
 source(TheContractor.dir .. "src/util/TCCalendar.lua")
 source(TheContractor.dir .. "src/util/TCCalendarChange.lua")
+source(TheContractor.dir .. "src/util/TCCalendarHistory.lua")
 source(TheContractor.dir .. "src/util/TCSignImages.lua")
 source(TheContractor.dir .. "src/util/TCCompanyLogo.lua")
 -- Now, not in loadMap: the signs' store items list signs/ before the map
@@ -108,9 +111,11 @@ source(TheContractor.dir .. "src/util/TCLotInspections.lua")
 source(TheContractor.dir .. "src/util/TCAuctionLotHud.lua")
 source(TheContractor.dir .. "src/util/TCProtestLayout.lua")
 source(TheContractor.dir .. "src/util/TCProtestCrowd.lua")
+source(TheContractor.dir .. "src/util/TCFallenTreeBlocks.lua")
 source(TheContractor.dir .. "src/util/TCJobHotspots.lua")
 source(TheContractor.dir .. "src/util/TCJobHud.lua")
 source(TheContractor.dir .. "src/util/TCFarmDeletion.lua")
+source(TheContractor.dir .. "src/util/TCVehicleReplace.lua")
 source(TheContractor.dir .. "src/util/TCJobList.lua")
 source(TheContractor.dir .. "src/gui/TCWorkerPortrait.lua")
 source(TheContractor.dir .. "src/gui/TCTooltip.lua")
@@ -216,6 +221,7 @@ source(TheContractor.dir .. "src/events/TCJobMissedEvent.lua")
 source(TheContractor.dir .. "src/events/TCJobRemovedEvent.lua")
 source(TheContractor.dir .. "src/events/TCJobDatesChangedEvent.lua")
 source(TheContractor.dir .. "src/events/TCCalendarChangedEvent.lua")
+source(TheContractor.dir .. "src/events/TCCalendarHistoryEvent.lua")
 source(TheContractor.dir .. "src/events/TCConsoleEvent.lua")
 source(TheContractor.dir .. "src/events/TCRespondToJobOfferEvent.lua")
 source(TheContractor.dir .. "src/events/TCCounterOfferEvent.lua")
@@ -302,6 +308,7 @@ source(TheContractor.dir .. "src/events/TCYardBalesKitEvent.lua")
 source(TheContractor.dir .. "src/events/TCYardHaulTrailerEvent.lua")
 source(TheContractor.dir .. "src/events/TCRefuelMachineEvent.lua")
 source(TheContractor.dir .. "src/events/TCFarmDeletedEvent.lua")
+source(TheContractor.dir .. "src/events/TCVehicleReplacedEvent.lua")
 source(TheContractor.dir .. "src/events/TCAuctionSiteEvent.lua")
 source(TheContractor.dir .. "src/events/TCAuctionSignsEvent.lua")
 source(TheContractor.dir .. "src/events/TCAuctionBidEvent.lua")
@@ -591,6 +598,8 @@ function TheContractor:loadMap()
     -- 160/161: booked days follow the calendar. Before the load, which
     -- reads the calendar they were booked under.
     TCCalendarChange.install()
+    -- Past days are dated as they fell, across a change of days per month.
+    TCCalendarHistory.install()
 
     self:loadFromXMLFile()
 
@@ -683,6 +692,8 @@ function TheContractor:loadMap()
 
     -- A farm deleted in multiplayer takes its company with it (server).
     TCFarmDeletion.install()
+    -- A vehicle reset or reconfigured keeps its jobs, logbook and the rest (server).
+    TCVehicleReplace.install()
 
     TCLog.info("TheContractor: loadMap")
 end
@@ -753,6 +764,7 @@ function TheContractor:loadFromXMLFile()
     self.ShowDayOff:loadFromXMLFile(xmlFile)
     self.AuctionSale:loadFromXMLFile(xmlFile)
     TCCalendarChange.loadFromXMLFile(xmlFile)
+    TCCalendarHistory.loadFromXMLFile(xmlFile)
 
     delete(xmlFile)
 end
@@ -858,6 +870,7 @@ function TheContractor:saveToXmlFile()
     tc.ShowDayOff:saveToXmlFile(xmlFile)
     tc.AuctionSale:saveToXmlFile(xmlFile)
     TCCalendarChange.saveToXmlFile(xmlFile)
+    TCCalendarHistory.saveToXmlFile(xmlFile)
 
     saveXMLFile(xmlFile)
     delete(xmlFile)
@@ -908,6 +921,8 @@ function TheContractor:onStartMission()
     TCFieldAccess.install()
     -- 155: the weather's ready by now.
     TCShelter.refresh()
+    -- 185: no helper ever buys, whatever the save had set.
+    TCNoHelperBuying.apply()
 
     local tc = g_currentMission.TheContractor
     if tc == nil then return end
@@ -1064,10 +1079,14 @@ function TheContractor:deleteMap()
     TCAuctionProps.reset()
     -- 151: a protest's people, placards, blocks and markers.
     TCProtestCrowd.reset()
+    -- 107: the traffic blocks on fallen trees' roads.
+    TCFallenTreeBlocks.reset()
 
     TCConsole.uninstall()
     TCFarmDeletion.uninstall()
+    TCVehicleReplace.uninstall()
     TCCalendarChange.uninstall()
+    TCCalendarHistory.uninstall()
 
     if g_currentMission ~= nil and g_currentMission.TheContractor == self then
         g_currentMission.TheContractor = nil
@@ -1111,6 +1130,7 @@ function TheContractor:update(dt)
     -- 160/161: the first update after a load checks the calendar (server),
     -- after Jobs has filled in an old save's missing deadlines.
     TCCalendarChange.update()
+    TCCalendarHistory.update()
 
     if self.Cooldown ~= nil then
         self.Cooldown:update(dt)
@@ -1129,6 +1149,8 @@ function TheContractor:update(dt)
     if self.FallenTree ~= nil then
         self.FallenTree:update(dt)
     end
+    -- 107: traffic blocks on fallen trees' roads (every machine).
+    TCFallenTreeBlocks.update(dt)
 
     -- 151: protests going out and ending (server).
     if self.Protest ~= nil then

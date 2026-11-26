@@ -153,6 +153,43 @@ test("only an idle worker is there; cooldown counts as working", function()
     end
 end)
 
+test("a ticked worker busy on an ADS job shows in the workshop, and stays available", function()
+    local world, tc = setup()
+    local busy = {}
+    local worker = addWorker(tc, 1, { mechanic = 1 })
+    local display = TheContractorWorkingHours.getDisplayStatus
+
+    -- An ADS without getStaffActivity: just idle.
+    assertTrue(not TCADSWorkshop.isWorking(worker), "no API, not working")
+
+    world.adsEnv.ADS_OwnWorkshop.getStaffActivity = function(farmId, role)
+        return busy[farmId .. role]
+    end
+    TCADSWorkshop.detect()
+    busy["1mechanic"] = "building"
+    assertEquals(display(worker), "idle", "not ticked in")
+
+    worker.workshopRole = "mechanic"
+    assertEquals(display(worker), "inWorkshop", "in the building")
+    busy["1mechanic"] = "vehicle7"
+    assertEquals(display(worker), "inWorkshop", "out with the mobile workshop")
+    assertEquals(worker.status, TheContractorWorker.STATUS.IDLE, "still idle")
+    assertTrue(TheContractorWorkingHours.isAvailable(worker), "still takes a job")
+
+    -- Gone home: ADS can't have them, whatever it holds.
+    g_currentMission.environment.dayTime = 22 * 3600000
+    assertEquals(display(worker), "atHome", "at home")
+    g_currentMission.environment.dayTime = 12 * 3600000
+
+    busy["1mechanic"] = nil
+    assertEquals(display(worker), "idle", "nothing to do")
+
+    -- ADS running its own roster: our tick means nothing there.
+    busy["1mechanic"] = "building"
+    world.adsOn = false
+    assertEquals(display(worker), "idle", "ADS's own staff")
+end)
+
 test("ticking needs ADS and the skill, and moves the old holder out", function()
     local world, tc = setup()
     local sam = addWorker(tc, 1, { mechanic = 2 })

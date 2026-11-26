@@ -123,6 +123,7 @@ local function setup(def)
     -- world.inspectionDates[vehicle.id] (a service's last inspection).
     world.status, world.farmTools, world.tampering, world.prepareResults = {}, {}, {}, {}
     world.stages, world.inspectionDates, world.calls.authorized = {}, {}, {}
+    world.fitted = {}
     world.adsEnv = {
         ADS_RepairContracts = {
             getInfo = function() return { version = 1 } end,
@@ -169,6 +170,11 @@ local function setup(def)
             registerListener = function(id, fn) world.listener = fn return true end,
             unregisterListener = function() world.listener = nil end,
             release = function(vehicle) table.insert(world.calls.released, vehicle.id) return true end,
+            -- 186: world.fitted[vehicle.id].
+            getFittedParts = function(vehicle) return world.fitted[vehicle.id] or {} end,
+        },
+        ADS_Consumables = {
+            getTierIndex = function(tier) return ({ LIZARD = 1, ORIGINAL = 2, PREMIUM = 3 })[tier] end,
         },
         ADS_Maintenance = {
             getPartPrice = function(vehicle, componentId) return world.partPrice end,
@@ -744,11 +750,13 @@ test("an offer lapses after its days and the customer takes the machine", functi
     g_currentMission.environment.currentMonotonicDay = job.workshop.offerExpiresDay + 1
     tc.Jobs:onDayChanged()
     assertEquals(job.state, TheContractorJob.STATE.DECLINED)
-    assertEquals(world.calls.released[1], vehicle.id)
+    assertEquals(#world.calls.released, 0, "the contract stays on until it's collected")
     assertEquals(#tc.RepairContracts.removals, 1)
+    assertTrue(not tc.RepairContracts.removals[1].judgeTamper, "an offer never let anyone near the parts")
 
     tc.RepairContracts:update(TheContractorRepairContracts.PLACE_CHECK_MS)
     assertTrue(vehicle.isDeleted, "collected on the next look")
+    assertEquals(world.calls.released[1], vehicle.id)
     assertEquals(#tc.RepairContracts.removals, 0)
 end)
 
@@ -1005,6 +1013,263 @@ test("legal cover halves the claim; a small loss brings none", function()
     assertEquals(world.calls.messages[1].bodyKey, "tc_repair_tamperedBody")
 end)
 
+-- Finished and paid, then waiting for its customer.
+local function finishAccepted(world, tc)
+    local job, vehicle = makeOffer(world, tc)
+    tc.Jobs:transitionJobState(1, job.id, TheContractorJob.STATE.ACCEPTED)
+    tc.RepairContracts:resolveSavedVehicles()
+    world.status[vehicle.id] = "done"
+    world.listener(vehicle, { state = "done" })
+    return job, vehicle
+end
+
+local function collectAfterTheHour(tc)
+    local environment = g_currentMission.environment
+    environment.dayTime = environment.dayTime + TheContractorRepairContracts.COLLECT_DELAY_HOURS * 60 * 60 * 1000
+    tc.RepairContracts:update(TheContractorRepairContracts.PLACE_CHECK_MS)
+end
+
+test("stripped after it's finished: found as it's collected, double the loss and a claim, the pay stands", function()
+    local world, tc = setup()
+    world.partPrice = 4000
+    local job, vehicle = finishAccepted(world, tc)
+    assertEquals(job.state, TheContractorJob.STATE.COMPLETED)
+    assertEquals(#world.calls.released, 0, "still under contract while it waits")
+    job.customerId = 7
+    local messages = #world.calls.messages
+
+    world.status[vehicle.id] = "tampered"
+    world.tampering[vehicle.id] = { { kind = "component", id = "engine", accepted = 0.8, current = 0.3 } }
+    collectAfterTheHour(tc)
+    assertTrue(vehicle.isDeleted, "collected")
+    assertEquals(world.calls.released[1], vehicle.id, "released as it goes")
+    assertEquals(#world.calls.invoices, 1, "the pay stands")
+    local penalty = math.floor(TheContractorJobs.getFullMissPenalty(job) *
+        TheContractorRepairContracts.TAMPER_REPUTATION_MULTIPLIER)
+    assertEquals(world.calls.reputation[#world.calls.reputation], -penalty)
+    assertEquals(#world.calls.messages, messages + 1)
+    assertEquals(world.calls.messages[#world.calls.messages].bodyKey, "tc_repair_tamperedPaidBodyClaim")
+    assertEquals(tc.RepairContracts.pendingClaims[1].amount, 2000)
+    assertEquals(tc.Relationships:getScore(1, 7), -TheContractorRelationships.MISSED_LOSS, "the customer had paid")
+end)
+
+test("a finished job's machine collected as it was left costs nothing", function()
+    local world, tc = setup()
+    local job, vehicle = finishAccepted(world, tc)
+    local reputation, messages = #world.calls.reputation, #world.calls.messages
+    collectAfterTheHour(tc)
+    assertTrue(vehicle.isDeleted)
+    assertEquals(world.calls.released[1], vehicle.id)
+    assertEquals(#world.calls.reputation, reputation)
+    assertEquals(#world.calls.messages, messages)
+    assertEquals(#tc.RepairContracts.pendingClaims, 0)
+end)
+
+test("tampered at the deadline is judged once, not again as it's collected", function()
+    local world, tc = setup()
+    world.partPrice = 4000
+    local _, vehicle = missAccepted(world, tc, { { kind = "component", id = "engine", accepted = 0.8, current = 0.3 } })
+    assertTrue(not tc.RepairContracts.removals[1].judgeTamper)
+    tc.RepairContracts:update(TheContractorRepairContracts.PLACE_CHECK_MS)
+    assertTrue(vehicle.isDeleted)
+    assertEquals(#world.calls.reputation, 1)
+    assertEquals(#world.calls.messages, 1)
+    assertEquals(#tc.RepairContracts.pendingClaims, 1)
+end)
+
+test("an honest miss stripped before it's collected is found then, unpaid", function()
+    local world, tc = setup()
+    local _, vehicle = missAccepted(world, tc, nil)
+    function vehicle:getIsControlled() return true end
+    tc.RepairContracts:update(TheContractorRepairContracts.PLACE_CHECK_MS)
+    world.status[vehicle.id] = "tampered"
+    world.tampering[vehicle.id] = { { kind = "battery", id = "battery", accepted = 0.9, current = 0.7 } }
+    function vehicle:getIsControlled() return false end
+    tc.RepairContracts:update(TheContractorRepairContracts.PLACE_CHECK_MS)
+    assertTrue(vehicle.isDeleted)
+    assertEquals(#world.calls.reputation, 2, "the miss, then the tampering")
+    assertEquals(world.calls.messages[1].bodyKey, "tc_repair_tamperedBody")
+end)
+
+test("a deleted farm's machine is still collected but judged against nobody", function()
+    local world, tc = setup()
+    local job, vehicle = finishAccepted(world, tc)
+    local reputation = #world.calls.reputation
+    tc.RepairContracts:forgetFarm(1)
+    world.status[vehicle.id] = "tampered"
+    world.tampering[vehicle.id] = { { kind = "battery", id = "battery", accepted = 0.9, current = 0.7 } }
+    collectAfterTheHour(tc)
+    assertTrue(vehicle.isDeleted)
+    assertEquals(world.calls.released[1], vehicle.id)
+    assertEquals(#world.calls.reputation, reputation)
+end)
+
+-- Substandard parts (186) ------------------------------------------------------------
+
+local function component(id, partType, used)
+    return { kind = "component", id = id, nameKey = "ads_" .. id, partType = partType, used = used == true }
+end
+
+local function consumable(id, tier, acceptedTier)
+    return { kind = "consumable", id = id, nameKey = "ads_" .. id, tier = tier, acceptedTier = acceptedTier }
+end
+
+-- Completes a job with math.random's [0, 1) roll fixed at `roll`.
+local function finishWithRoll(world, tc, parts, roll)
+    local job, vehicle = makeOffer(world, tc)
+    world.fitted[vehicle.id] = parts
+    local random = math.random
+    math.random = function(low, high)
+        if low ~= nil then
+            return low
+        end
+        return roll
+    end
+    tc.Jobs:transitionJobState(1, job.id, TheContractorJob.STATE.ACCEPTED)
+    tc.RepairContracts:resolveSavedVehicles()
+    world.status[vehicle.id] = "done"
+    world.listener(vehicle, { state = "done" })
+    math.random = random
+    return job, vehicle
+end
+
+test("substandard: a used part is the worst grade, aftermarket or one tier down the middle, new or better none", function()
+    setup()
+    local GRADE = TheContractorRepairContracts.SUBSTANDARD_GRADE
+    local grade = TheContractorRepairContracts.getSubstandardGrade
+    assertEquals(grade(component("engine", "USED", true)), GRADE.USED)
+    assertEquals(grade(component("engine", "OEM", true)), GRADE.USED, "taken out of another machine")
+    assertEquals(grade(component("engine", "AFTERMARKET", false)), GRADE.AFTERMARKET)
+    assertEquals(grade(component("engine", "OEM", false)), nil)
+    assertEquals(grade(component("engine", "PREMIUM", false)), nil)
+    assertEquals(grade(consumable("battery", "LIZARD", "PREMIUM")), GRADE.USED, "two tiers down")
+    assertEquals(grade(consumable("battery", "LIZARD", "ORIGINAL")), GRADE.AFTERMARKET, "one tier down")
+    assertEquals(grade(consumable("battery", "PREMIUM", "ORIGINAL")), nil, "better is never held against you")
+    assertEquals(grade(consumable("battery", "MYSTERY", "ORIGINAL")), nil, "a tier ADS can't rank")
+end)
+
+test("substandard: each part's own chance, the found ones' shares summed into the knock", function()
+    local world, tc = setup()
+    local parts = { component("engine", "USED", true), component("gearbox", "AFTERMARKET", false),
+        component("brakes", "OEM", false) }
+    -- 0.5: the used part's found (0.75), the aftermarket one isn't (0.45).
+    local job = finishWithRoll(world, tc, parts, 0.5)
+    assertEquals(job.state, TheContractorJob.STATE.COMPLETED)
+    local discovery = tc.RepairContracts.pendingDiscoveries[1]
+    assertEquals(discovery.jobId, job.id)
+    assertEquals(discovery.partKeys, "ads_engine")
+    assertEquals(discovery.share, TheContractorRepairContracts.SUBSTANDARD.used.share)
+    assertEquals(discovery.penalty, math.floor(TheContractorJobs.getFullMissPenalty(job) *
+        TheContractorRepairContracts.SUBSTANDARD.used.share))
+    assertEquals(discovery.notifyDay, world.today + TheContractorRepairContracts.SUBSTANDARD_DELAY[1])
+    assertEquals(job.qualityScore, 100, "the quality score isn't touched")
+
+    world, tc = setup()
+    job = finishWithRoll(world, tc, parts, 0)
+    discovery = tc.RepairContracts.pendingDiscoveries[1]
+    assertEquals(discovery.partKeys, "ads_engine,ads_gearbox", "both found")
+    assertEquals(discovery.share, TheContractorRepairContracts.SUBSTANDARD.used.share +
+        TheContractorRepairContracts.SUBSTANDARD.aftermarket.share)
+
+    world, tc = setup()
+    finishWithRoll(world, tc, parts, 0.8)
+    assertEquals(#tc.RepairContracts.pendingDiscoveries, 0, "nobody notices")
+end)
+
+test("substandard: the knock is capped however many parts are found", function()
+    local world, tc = setup()
+    local parts = {}
+    for i = 1, 5 do
+        table.insert(parts, component("part" .. i, "USED", true))
+    end
+    local job = finishWithRoll(world, tc, parts, 0)
+    local discovery = tc.RepairContracts.pendingDiscoveries[1]
+    assertEquals(discovery.share, TheContractorRepairContracts.SUBSTANDARD_MAX_SHARE)
+    assertEquals(discovery.penalty, math.floor(TheContractorJobs.getFullMissPenalty(job) *
+        TheContractorRepairContracts.SUBSTANDARD_MAX_SHARE))
+end)
+
+test("substandard: new parts bring nothing", function()
+    local world, tc = setup()
+    finishWithRoll(world, tc, { component("engine", "OEM", false), consumable("battery", "PREMIUM", "ORIGINAL") }, 0)
+    assertEquals(#tc.RepairContracts.pendingDiscoveries, 0)
+end)
+
+test("substandard: found out on its day, reputation, a farmer's opinion and a message, no money", function()
+    local world, tc = setup()
+    local job = finishWithRoll(world, tc, { component("engine", "USED", true) }, 0)
+    job.customerId = 7
+    local discovery = tc.RepairContracts.pendingDiscoveries[1]
+    local reputation, invoices = #world.calls.reputation, #world.calls.invoices
+
+    g_currentMission.environment.currentMonotonicDay = discovery.notifyDay - 1
+    tc.RepairContracts:onDayChanged()
+    assertEquals(#world.calls.reputation, reputation, "not yet")
+
+    g_currentMission.environment.currentMonotonicDay = discovery.notifyDay
+    tc.RepairContracts:onDayChanged()
+    assertEquals(world.calls.reputation[#world.calls.reputation], -discovery.penalty)
+    assertEquals(tc.Relationships:getScore(1, 7),
+        -math.floor(TheContractorRelationships.MISSED_LOSS * discovery.share + 0.5))
+    local message = world.calls.messages[#world.calls.messages]
+    assertEquals(message.kind, TheContractorRepairContracts.SUBSTANDARD_KIND)
+    assertEquals(message.bodyKey, "tc_repair_substandardBody")
+    assertEquals(message.args[2], "ads_engine")
+    assertEquals(message.args[3], discovery.penalty)
+    assertEquals(#world.calls.invoices, invoices)
+    assertEquals(#world.calls.charged, 0, "no money")
+    assertEquals(#tc.RepairContracts.pendingDiscoveries, 0)
+end)
+
+test("substandard: an ADS without getFittedParts judges nothing and the job finishes as before", function()
+    local world, tc = setup()
+    world.adsEnv.ADS_RepairContracts.getFittedParts = nil
+    TCADSRepairContracts.detect()
+    assertTrue(TCADSRepairContracts.isActive(), "it's optional")
+    local job = finishWithRoll(world, tc, { component("engine", "USED", true) }, 0)
+    assertEquals(job.state, TheContractorJob.STATE.COMPLETED)
+    assertEquals(#tc.RepairContracts.pendingDiscoveries, 0)
+end)
+
+test("substandard: a finding to come survives a save, keeps its job, and goes with a deleted farm", function()
+    local world, tc = setup()
+    local job = finishWithRoll(world, tc, { component("engine", "USED", true) }, 0)
+    local discovery = tc.RepairContracts.pendingDiscoveries[1]
+    tc.Finances.invoicesById, tc.Claims.pendingClaims = {}, {}
+    tc.Cooldown = { entriesByFarm = {} }
+    tc.RandomEvents = { incidents = {} }
+    tc.Inbox.messagesById = {}
+    tc.RepairContracts.removals = {}
+    assertTrue(TheContractorJobs.getHeldJobIds()[job.id], "its job is kept")
+
+    local xmlFile = {}
+    tc.RepairContracts:saveToXmlFile(xmlFile)
+    local loaded = TheContractorRepairContracts.new()
+    loaded:loadFromXMLFile(xmlFile)
+    local copy = loaded.pendingDiscoveries[1]
+    assertEquals(copy.farmId, discovery.farmId)
+    assertEquals(copy.jobId, discovery.jobId)
+    assertEquals(copy.partKeys, discovery.partKeys)
+    assertEquals(copy.penalty, discovery.penalty)
+    assertNear(copy.share, discovery.share, 0.0001)
+    assertEquals(copy.notifyDay, discovery.notifyDay)
+
+    tc.RepairContracts:forgetFarm(1)
+    assertEquals(#tc.RepairContracts.pendingDiscoveries, 0)
+end)
+
+test("a machine still to be collected keeps its job in the save", function()
+    local world, tc = setup()
+    tc.Finances.invoicesById, tc.Claims.pendingClaims = {}, {}
+    tc.Cooldown = { entriesByFarm = {} }
+    tc.RandomEvents = { incidents = {} }
+    tc.Inbox.messagesById = {}
+    local job = finishAccepted(world, tc)
+    assertTrue(TheContractorJobs.getHeldJobIds()[job.id], "held while it waits")
+    collectAfterTheHour(tc)
+    assertTrue(not TheContractorJobs.getHeldJobIds()[job.id], "let go once it's gone")
+end)
+
 -- The rest ------------------------------------------------------------------------------
 
 test("a job from before the parts were kept has none, streamed or saved", function()
@@ -1138,7 +1403,7 @@ test("the queue, collections and claims survive a save", function()
     local repairContracts = tc.RepairContracts
     repairContracts:queueArrival(1, zone, 2, ADS_KIND.MAINTENANCE, 3)
     table.insert(repairContracts.removals, { farmId = 1, vehicleId = 7, uniqueId = "v7", zoneUniqueId = "zone1",
-        bayIndex = 3, waitMs = 0, collectAfter = 1234.5 })
+        bayIndex = 3, waitMs = 0, collectAfter = 1234.5, jobId = 4, judgeTamper = true })
     table.insert(repairContracts.pendingClaims, { farmId = 1, jobId = 4, vehicleName = "Fendt", amount = 900,
         notifyDay = 12 })
 
@@ -1152,6 +1417,8 @@ test("the queue, collections and claims survive a save", function()
     assertEquals(loaded.arrivals[1].bayIndex, 2)
     assertEquals(loaded.removals[1].uniqueId, "v7")
     assertEquals(loaded.removals[1].collectAfter, 1234.5)
+    assertEquals(loaded.removals[1].jobId, 4)
+    assertEquals(loaded.removals[1].judgeTamper, true)
     assertEquals(loaded.pendingClaims[1].amount, 900)
 end)
 
@@ -1532,9 +1799,10 @@ test("a quote over the ceiling: the customer takes the machine elsewhere", funct
     job.workshop.refusalMargin = 1.0
     assertEquals(tc.RepairContracts:proposeQuote(1, job.id, 1.05), "refused")
     assertEquals(job.state, TheContractorJob.STATE.DECLINED)
-    assertEquals(world.calls.released[1], vehicle.id)
     assertEquals(#tc.RepairContracts.removals, 1)
     assertEquals(world.stages[vehicle.id], "inspection", "never authorized")
+    tc.RepairContracts:update(TheContractorRepairContracts.PLACE_CHECK_MS)
+    assertEquals(world.calls.released[1], vehicle.id, "released as it's collected")
 end)
 
 test("a quote at the least price, out of range, or for another farm", function()

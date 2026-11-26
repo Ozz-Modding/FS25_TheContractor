@@ -298,14 +298,12 @@ function TheContractorCooldown:applyVehiclesReleased(vehicleIds)
     end
 end
 
--- Background tick (server-only, same shape as TCJobProgress/Watchdog's own
--- update(dt) polling): counts every active cooldown down in game time (so
--- it speeds up with the time scale) and ends whichever ones have expired.
+-- Background tick: counts every active cooldown down in game time (so it
+-- speeds up with the time scale). Every machine counts, so a client's
+-- Staff tab can say when the crew's expected back; only the server ends
+-- the ones that have expired (clients from its event).
 function TheContractorCooldown:update(dt)
-    if not g_currentMission:getIsServer() then
-        return
-    end
-
+    local isServer = g_currentMission:getIsServer()
     local gameDt = dt * g_currentMission:getEffectiveTimeScale()
     for farmId, farmEntries in pairs(self.entriesByFarm) do
         local expiredIds = {}
@@ -316,10 +314,27 @@ function TheContractorCooldown:update(dt)
             end
         end
 
-        for _, cooldownId in ipairs(expiredIds) do
-            self:endCooldown(farmId, cooldownId)
+        if isServer then
+            for _, cooldownId in ipairs(expiredIds) do
+                self:endCooldown(farmId, cooldownId)
+            end
         end
     end
+end
+
+-- When a worker in a cooldown is expected back, in absolute game minutes
+-- (TheContractorWorkingHours.getNow's), or nil if they aren't in one. Every
+-- machine.
+function TheContractorCooldown:getWorkerReturnTime(farmId, workerId, now)
+    for _, entry in pairs(self.entriesByFarm[farmId] or {}) do
+        for _, entryWorkerId in ipairs(entry.workerIds) do
+            if entryWorkerId == workerId then
+                now = now or TheContractorWorkingHours.getNow()
+                return now + math.ceil(math.max(0, entry.remainingMs) / 60000)
+            end
+        end
+    end
+    return nil
 end
 
 -- Wire serialization, shared by the cooldown-started event and initial
@@ -372,6 +387,17 @@ end
 -- everything still in cooldown again.
 
 -- A farm deleted in multiplayer (TCFarmDeletion), on every machine.
+-- Every machine (TCVehicleReplace): a machine reloaded as a new object
+-- stays in its cooldown (TCEquipmentVisibility hides the new one).
+function TheContractorCooldown:remapVehicle(oldId, newId)
+    for _, entries in pairs(self.entriesByFarm) do
+        for _, entry in pairs(entries) do
+            TCVehicleIds.replaceInList(entry.vehicleIds, oldId, newId)
+        end
+    end
+    TCVehicleIds.replaceKey(self.vehicleIdsInCooldown, oldId, newId)
+end
+
 function TheContractorCooldown:forgetFarm(farmId)
     for _, entry in pairs(self.entriesByFarm[farmId] or {}) do
         for _, vehicleId in ipairs(entry.vehicleIds) do

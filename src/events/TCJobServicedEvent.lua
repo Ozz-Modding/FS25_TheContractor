@@ -1,5 +1,5 @@
 -- Broadcast-only: a hired worker's job held for a service (150's
--- needsService) has had its machine seen to, and the worker carries on
+-- needsService, or needsRepair) has had its machine seen to, and the worker carries on
 -- once Dispatch.SERVICE_GRACE_MS is up. Shown to the job's farm only, from
 -- the job each machine already holds (the machine's name is its synced
 -- supplyFillTypeName). See src/events/README.md for the general event
@@ -53,7 +53,10 @@ function TCJobServicedEvent.showNotification(farmId, jobId)
     if job == nil then
         return
     end
+    -- Still held while the worker waits, so the hold says which it was.
+    local key = job.supplyStatus == TCJobSupplies.STATUS.NEEDS_REPAIR and "tc_supplies_repaired" or
+        "tc_supplies_serviced"
     g_currentMission:addIngameNotification(FSBaseMission.INGAME_NOTIFICATION_OK,
-        string.format(g_i18n:getText("tc_supplies_serviced"), job.supplyFillTypeName or "?", job:getTypeText(),
+        string.format(g_i18n:getText(key), job.supplyFillTypeName or "?", job:getTypeText(),
             job:getLocationText()))
 end

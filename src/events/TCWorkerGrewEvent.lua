@@ -2,8 +2,9 @@
 -- TheContractorStaff:rollWorkerGrowth, 030) and the server sends just that
 -- stat's new value to every client - same "changed field only" shape as
 -- TCWorkerStatusChangedEvent. growthPotential isn't sent: it's hidden and
--- only the server needs it. See src/events/README.md for the general event
--- conventions.
+-- only the server needs it. jobId (issue #16): the job it came from, if
+-- any, so the job's logbook entry shows it. See src/events/README.md for the
+-- general event conventions.
 
 TCWorkerGrewEvent = {}
 local TCWorkerGrewEvent_mt = Class(TCWorkerGrewEvent, Event)
@@ -15,12 +16,14 @@ function TCWorkerGrewEvent.emptyNew()
 end
 
 -- stat is "workSpeed" or a tier key (see TheContractorWorker:getStat).
-function TCWorkerGrewEvent.new(farmId, workerId, stat, value)
+-- jobId is optional.
+function TCWorkerGrewEvent.new(farmId, workerId, stat, value, jobId)
     local self = TCWorkerGrewEvent.emptyNew()
     self.farmId = farmId
     self.workerId = workerId
     self.stat = stat
     self.value = value
+    self.jobId = jobId
     return self
 end
 
@@ -29,6 +32,9 @@ function TCWorkerGrewEvent:writeStream(streamId, connection)
     streamWriteInt32(streamId, self.workerId)
     streamWriteString(streamId, self.stat)
     streamWriteInt32(streamId, self.value)
+    if streamWriteBool(streamId, self.jobId ~= nil) then
+        streamWriteInt32(streamId, self.jobId)
+    end
 end
 
 function TCWorkerGrewEvent:readStream(streamId, connection)
@@ -36,6 +42,9 @@ function TCWorkerGrewEvent:readStream(streamId, connection)
     self.workerId = streamReadInt32(streamId)
     self.stat = streamReadString(streamId)
     self.value = streamReadInt32(streamId)
+    if streamReadBool(streamId) then
+        self.jobId = streamReadInt32(streamId)
+    end
     self:run(connection)
 end
 
@@ -48,6 +57,10 @@ function TCWorkerGrewEvent:run(connection)
 
     local oldValue = worker:getStat(self.stat)
     staff:applyWorkerGrowth(self.farmId, self.workerId, self.stat, self.value)
+    if self.jobId ~= nil then
+        g_currentMission.TheContractor.Logbook:applyGrowth(self.farmId, self.jobId, self.workerId, self.stat,
+            oldValue, self.value)
+    end
     TCWorkerGrewEvent.showNotification(worker, self.stat, oldValue, self.value)
 end
 

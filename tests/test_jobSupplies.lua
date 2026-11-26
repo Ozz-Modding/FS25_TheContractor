@@ -341,3 +341,64 @@ test("with FS25_SoilFertilizer: an empty sprayer takes whichever product the far
     assertEquals(sprayer.fillUnits[1].fillType, uan, "UAN32")
     assertEquals(sprayer.fillUnits[1].level, 1000, "full")
 end)
+
+-- 185: job machines never buy their product as they work ----------------------
+
+local function sprayStep(vehicle)
+    Sprayer.onStartWorkAreaProcessing(vehicle, 16)
+    return vehicle.sprayedWith
+end
+
+local function addSpreader(world)
+    local spreader = world:addVehicle({ name = "Spreader", fillUnits = { { capacity = 1000, level = 500,
+        fillType = FillType.FERTILIZER } } })
+    spreader.spec_sprayer = { fillUnitIndex = 1 }
+    return spreader
+end
+
+test("a job machine's spray step runs with nothing to buy from, and the settings go back", function()
+    local world = setup()
+    local missionInfo = g_currentMission.missionInfo
+    missionInfo.helperSlurrySource = 2
+    missionInfo.helperManureSource = 2
+    local spreader = addSpreader(world)
+    world:addJob({ jobType = "fertilize", workerId = 3, vehicles = { spreader }, working = true })
+    poll()
+
+    local seen = sprayStep(spreader)
+
+    assertEquals(seen.helperBuyFertilizer, false)
+    assertEquals(seen.helperSlurrySource, 1)
+    assertEquals(seen.helperManureSource, 1)
+    assertEquals(missionInfo.helperBuyFertilizer, true, "put back")
+    assertEquals(missionInfo.helperSlurrySource, 2, "put back")
+    assertEquals(missionInfo.helperManureSource, 2, "put back")
+    assertEquals(Sprayer.getIsSprayerExternallyFilled(spreader), false)
+end)
+
+test("a machine off any job still follows the buy settings", function()
+    local world = setup()
+    local spreader = addSpreader(world)
+    poll()
+
+    assertEquals(sprayStep(spreader).helperBuyFertilizer, true)
+    assertEquals(TCJobSupplies.isContractVehicle(spreader), false)
+end)
+
+test("a machine running one of our AI jobs counts before the poll has seen it", function()
+    local world = setup()
+    local tractor = world:addVehicle({ name = "Tractor" })
+    local spreader = addSpreader(world)
+    spreader.rootVehicle = tractor
+    local aiJob = {}
+    function tractor:getJob() return aiJob end
+    g_currentMission.TheContractor.Dispatch.isOurAIJob = function(_, job) return job == aiJob end
+
+    assertEquals(TCJobSupplies.isContractVehicle(spreader), true, "the spreader, through its tractor")
+    assertEquals(sprayStep(spreader).helperBuyFertilizer, false)
+
+    aiJob = { "someone else's" }
+    function tractor:getJob() return aiJob end
+    g_currentMission.TheContractor.Dispatch.isOurAIJob = function() return false end
+    assertEquals(TCJobSupplies.isContractVehicle(spreader), false, "a vanilla helper of the player's")
+end)

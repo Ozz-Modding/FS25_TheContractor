@@ -11,7 +11,7 @@
 -- against FS25_AdvancedDamageSystem 0.10.0.8 (commit a0285ed), and 102's
 -- stage gate and per-option costs at fffc957 (still API version 1, so they're
 -- detected by their functions). 116's targets are optional (hasTargets,
--- getStockParts).
+-- getStockParts), and so is 186's getFittedParts.
 
 TCADSRepairContracts = {}
 
@@ -554,6 +554,35 @@ function TCADSRepairContracts.getPartPrice(vehicle, componentId)
     end
     local price = maintenance.getPartPrice(vehicle, componentId, ads.PART_TYPES.OEM)
     return tonumber(price)
+end
+
+-- 186: what's been fitted to the machine since its contract was prepared,
+-- as ADS reports it (getFittedParts): { { kind = "component", id, nameKey,
+-- partType, used } or { kind = "consumable", id, nameKey, tier,
+-- acceptedTier } }. Optional: an older ADS has no getFittedParts (one
+-- warning), and then nil, so nothing fitted is judged. Server or client.
+function TCADSRepairContracts.getFittedParts(vehicle)
+    if api == nil or vehicle == nil then
+        return nil
+    end
+    if type(api.getFittedParts) ~= "function" then
+        warnOnce("fittedParts", "%s's repair contracts API has no getFittedParts - parts fitted to customers' " ..
+            "machines aren't judged", TCADSRepairContracts.MOD_NAME)
+        return nil
+    end
+    local parts = api.getFittedParts(vehicle)
+    return type(parts) == "table" and parts or nil
+end
+
+-- 186: a consumable quality tier's rank, higher is better (ADS's
+-- getTierIndex: LIZARD, ORIGINAL, PREMIUM), or nil if ADS can't say.
+function TCADSRepairContracts.getTierRank(tier)
+    local env = TCADSRepairContracts.getEnv()
+    local consumables = env ~= nil and env.ADS_Consumables or nil
+    if tier == nil or consumables == nil or type(consumables.getTierIndex) ~= "function" then
+        return nil
+    end
+    return tonumber(consumables.getTierIndex(tier))
 end
 
 -- "Lift, Machining" from ADS tool ids, in ADS's own words.

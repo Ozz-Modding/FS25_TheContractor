@@ -34,7 +34,10 @@
 -- tcDebug is the testing group: spikes, forced rolls and readouts of what
 -- players never see. It's only installed on a machine with DEBUG_FILENAME
 -- in its modSettings folder (and a joined admin's request runs only if the
--- server has it too), so a release never shows it.
+-- server has it too), so a release never shows it. The exception is a
+-- subcommand marked devPanel = true: the dev panel (TCDevDialog), which
+-- opens without the file, runs it through dispatch on any machine. It's
+-- still not typeable there (tcDebug isn't installed) and still server-only.
 --
 -- Commands aren't cheat-gated: they're there for players to shape their
 -- game. Anything that changes state is server-only, since the subsystems
@@ -120,8 +123,9 @@ function TCConsole.readDebugEnabled()
 end
 
 -- Whether this machine has a group: tcDebug only with its marker file.
-function TCConsole.isGroupEnabled(group)
-    return not group.debugOnly or TCConsole.debugEnabled
+-- With def, whether that subcommand can run here: a devPanel one always can.
+function TCConsole.isGroupEnabled(group, def)
+    return not group.debugOnly or TCConsole.debugEnabled or (def ~= nil and def.devPanel == true)
 end
 
 function TCConsole.register(groupKey, name, def)
@@ -342,7 +346,7 @@ function TCConsole.runRequest(groupKey, args, context, connection)
     local group = TCConsole.groups[groupKey]
     local name = args[1]
     local def = group ~= nil and name ~= nil and group.subcommands[string.lower(name)] or nil
-    if def == nil or not TCConsole.isGroupEnabled(group) then
+    if def == nil or not TCConsole.isGroupEnabled(group, def) then
         return "Error: the server doesn't know that command"
     end
     if not TheContractorSettings.getCanConnectionChange(connection) then

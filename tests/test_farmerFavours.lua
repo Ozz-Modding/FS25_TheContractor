@@ -175,7 +175,9 @@ local function setup(def)
     world.yardSpots = {}
     world.isOpen = function() return true end
     tc.Yards = { getSpots = function(_, farmlandId) return world.yardSpots[farmlandId] end }
-    TheContractorYards = { isOpenGround = function(farmlandId, x, z) return world.isOpen(x, z) end }
+    TheContractorYards = { isOpenGround = function(farmlandId, x, z) return world.isOpen(x, z) end,
+        -- 183: no machine bays.
+        findBays = function() return {} end }
 
     world.models = def.models or {
         { xml = "small.xml", category = "TRACTORSS", specs = { AdvancedDamageSystem = true, drivable = true },
@@ -268,6 +270,7 @@ local function setup(def)
     world:load("src/business/CropSpill.lua")
     world:load("src/business/RepairContracts.lua")
     world:load("src/business/FieldBreakdowns.lua")
+    world:load("src/util/TCYardBays.lua")
     world:load("src/business/Farmers.lua")
     world:load("src/business/FarmerFleet.lua")
     world:load("src/business/FarmerFavours.lua")

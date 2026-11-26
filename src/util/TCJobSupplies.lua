@@ -36,7 +36,8 @@
 -- the worker drive until it's serviced ("needsService", the machine's name
 -- where a product's would be - TCADSWorkerRefusal). The worker waits on the
 -- field and carries on once it's been seen to (Dispatch:startJobForWorker
--- checks again each poll).
+-- checks again each poll). A breakdown ADS stops the AI for is the same
+-- hold as "needsRepair".
 --
 -- Diesel (063): a hired worker's machines run on the farm's own diesel,
 -- out of the same stock (a fuel tank is a storage). Their diesel tanks are
@@ -73,6 +74,7 @@ TCJobSupplies.STATUS = {
     NO_STOCK = "noStock",
     WRONG_FILL = "wrongFill",
     NEEDS_SERVICE = "needsService",
+    NEEDS_REPAIR = "needsRepair",
 }
 
 local accumulatedMs = 0
@@ -651,18 +653,30 @@ end
 -- getIsSprayerExternallyFilled). That would sidestep the farm's stock
 -- entirely, so equipment out on a hired worker's contract job always works
 -- from its tank, whatever the settings - the player's own vanilla helpers
--- still follow them. Patched at source time, before vehicle types are
--- finalized (they copy specialization functions then); the event listener
--- is looked up when it fires, so that one takes either way.
+-- still follow them (a player's job included: 063 keeps its helper's 1.5x
+-- diesel). Patched at source time, before vehicle types are finalized
+-- (they copy specialization functions then); the event listeners are
+-- looked up when they fire, so those take either way.
 
+-- Whether the vehicle's AI job is one of Dispatch's (a hired worker's).
+local function isOnOurAIJob(vehicle)
+    local rootVehicle = vehicle.rootVehicle or vehicle
+    local aiJob = rootVehicle.getJob ~= nil and rootVehicle:getJob() or nil
+    local dispatch = g_currentMission.TheContractor ~= nil and g_currentMission.TheContractor.Dispatch or nil
+    return aiJob ~= nil and dispatch ~= nil and dispatch.isOurAIJob ~= nil and dispatch:isOurAIJob(aiJob)
+end
+
+-- A machine on a live hired-worker job (the poll's list), or (185) running
+-- one of our AI jobs, which holds from the moment the AI starts, poll or
+-- not.
 function TCJobSupplies.isContractVehicle(vehicle)
-    return contractVehicles[vehicle] == true
+    return vehicle ~= nil and (contractVehicles[vehicle] == true or isOnOurAIJob(vehicle))
 end
 
 -- Runs func with helperBuySeeds off for a contract vehicle, then puts the
 -- setting back.
 local function withOwnSeeds(vehicle, func, ...)
-    if not contractVehicles[vehicle] then
+    if not TCJobSupplies.isContractVehicle(vehicle) then
         return func(...)
     end
     local missionInfo = g_currentMission.missionInfo
@@ -685,11 +699,40 @@ end
 
 Sprayer.getIsSprayerExternallyFilled = Utils.overwrittenFunction(Sprayer.getIsSprayerExternallyFilled,
     function(self, superFunc)
-        if contractVehicles[self] then
+        if TCJobSupplies.isContractVehicle(self) then
             return false
         end
         return superFunc(self)
     end)
+
+-- 185: and the spray step itself (an event listener, so never copied) runs
+-- with nothing to buy from - "helper buys fertilizer" off, slurry and
+-- manure from nowhere (1) - which is all vanilla's getExternalFill reads,
+-- whatever getIsSprayerExternallyFilled says.
+local function withOwnFertilizer(vehicle, func, ...)
+    if not TCJobSupplies.isContractVehicle(vehicle) then
+        return func(...)
+    end
+    local missionInfo = g_currentMission.missionInfo
+    local helperBuyFertilizer = missionInfo.helperBuyFertilizer
+    local helperSlurrySource = missionInfo.helperSlurrySource
+    local helperManureSource = missionInfo.helperManureSource
+    missionInfo.helperBuyFertilizer = false
+    missionInfo.helperSlurrySource = 1
+    missionInfo.helperManureSource = 1
+    local a, b, c = func(...)
+    missionInfo.helperBuyFertilizer = helperBuyFertilizer
+    missionInfo.helperSlurrySource = helperSlurrySource
+    missionInfo.helperManureSource = helperManureSource
+    return a, b, c
+end
+
+local originalSprayerStartWorkAreaProcessing = Sprayer.onStartWorkAreaProcessing
+if originalSprayerStartWorkAreaProcessing ~= nil then
+    Sprayer.onStartWorkAreaProcessing = function(self, dt)
+        return withOwnFertilizer(self, originalSprayerStartWorkAreaProcessing, self, dt)
+    end
+end
 
 local function refreshContractVehicles()
     local result = {}

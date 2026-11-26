@@ -532,9 +532,7 @@ end
 -- pursuits (053) and writes off the ones that have been overdue too long
 -- (never one being pursued).
 function TheContractorFinances:onDayChanged()
-    local environment = g_currentMission.environment
-    local today = environment.currentMonotonicDay
-    local writeOffDays = TheContractorFinances.WRITE_OFF_AFTER_PERIODS * environment.daysPerPeriod
+    local today = g_currentMission.environment.currentMonotonicDay
 
     local invoices = {}
     for _, invoice in pairs(self.invoicesById) do
@@ -551,12 +549,14 @@ function TheContractorFinances:onDayChanged()
 
         if isUnpaid and invoice.paymentDay ~= nil and invoice.paymentDay <= today then
             self:payInvoice(invoice)
-        elseif invoice.status == TheContractorFinances.STATUS.OUTSTANDING and invoice.dueDay <= today then
+        elseif invoice.status == TheContractorFinances.STATUS.OUTSTANDING and invoice.dueDay < today then
+            -- The day after it's due: the due day is still theirs to pay on.
             self:setInvoiceStatus(invoice, TheContractorFinances.STATUS.OVERDUE)
         elseif invoice.status == TheContractorFinances.STATUS.PURSUING and
             (invoice.pursuitResolveDay == nil or invoice.pursuitResolveDay <= today) then
             self:resolvePursuit(invoice)
-        elseif invoice.status == TheContractorFinances.STATUS.OVERDUE and today - invoice.dueDay >= writeOffDays then
+        elseif invoice.status == TheContractorFinances.STATUS.OVERDUE and
+            today >= TCCalendar.addMonths(invoice.dueDay, TheContractorFinances.WRITE_OFF_AFTER_PERIODS) then
             self:writeOffInvoice(invoice, true)
         end
     end

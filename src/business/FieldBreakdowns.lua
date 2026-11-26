@@ -291,23 +291,33 @@ function TheContractorFieldBreakdowns.pickSpot(fieldId, model, random)
     return site.x, site.z, site.heading
 end
 
--- 116, 123: a spot in a farmer's yard for a machine this size: one of the
--- yard's synced standing spots (114's, the server's) facing the yard's
--- middle, with every corner of the machine on open ground too. x, z, rotY
--- or nil.
+-- 116, 123: a spot in a farmer's yard for a machine this size. 183: a free
+-- machine bay it fits in first (TCYardBays), facing the bay's way. Else one
+-- of the yard's synced standing spots (114's, the server's) facing the
+-- yard's middle, with every corner of the machine on open ground too and
+-- none of it in a bay, which is kept for what's coming. x, z, rotY or nil.
 function TheContractorFieldBreakdowns.pickYardSpot(farmlandId, model, random)
+    local bayX, bayZ, bayRotY = TCYardBays.pickOnYard(farmlandId, model, random)
+    if bayX ~= nil then
+        return bayX, bayZ, bayRotY
+    end
     local entry = g_currentMission.TheContractor.Yards:getSpots(farmlandId)
     if entry == nil or #entry.spots == 0 then
         return nil
     end
+    local bays = TCYardBays.getYardBays(farmlandId)
     local halfWidth, halfLength = model.width * 0.5, model.length * 0.5
     for _ = 1, TheContractorFieldBreakdowns.YARD_SPOT_TRIES do
         local spot = entry.spots[math.floor(random() * #entry.spots) + 1] or entry.spots[1]
         local rotY = MathUtil.getYRotationFromDirection(entry.x - spot.x, entry.z - spot.z)
         local vX, vZ = math.sin(rotY), math.cos(rotY)
         local uX, uZ = vZ, -vX
-        local open = true
+        local open = not TCYardBays.overlapsAny(bays, TCYardBays.makeArea(spot.x, spot.z, rotY, model.width,
+            model.length))
         for _, corner in ipairs({ { 1, 1 }, { 1, -1 }, { -1, 1 }, { -1, -1 } }) do
+            if not open then
+                break
+            end
             local x = spot.x + uX * halfWidth * corner[1] + vX * halfLength * corner[2]
             local z = spot.z + uZ * halfWidth * corner[1] + vZ * halfLength * corner[2]
             if not TheContractorYards.isOpenGround(farmlandId, x, z) then

@@ -153,6 +153,11 @@ local function findJoint(attacher, implement, claimedJoints, isJobVehicle, farmI
         else
             local occupantEntry = attacher:getImplementByJointDescIndex(jointIndex)
             local occupant = occupantEntry ~= nil and occupantEntry.object or nil
+            -- Its own joint now (a dribble bar on its tank): free, as it's
+            -- unhitched from wherever it is before it's hitched again.
+            if occupant == implement then
+                occupant = nil
+            end
             jointTrace.occupant = occupant
             if occupant ~= nil and isJobVehicle[occupant] then
                 jointTrace.status = "jobOccupied"
@@ -266,6 +271,31 @@ local function getJobVehicles(job)
     return vehicles, isJobVehicle
 end
 
+-- The order `implement` tries the attachers in: whatever job machine it's
+-- on now first (a dribble bar left on its tank goes back on it), then any
+-- tank that needs a tool (TCEquipmentClass.needsTool), then the rest as
+-- they came (the operating vehicle first).
+local function getAttacherOrder(implement, attachers, isJobVehicle)
+    local current = implement.getAttacherVehicle ~= nil and implement:getAttacherVehicle() or nil
+    local first, toolTanks, rest = {}, {}, {}
+    for _, attacher in ipairs(attachers) do
+        if attacher == current and isJobVehicle[current] then
+            table.insert(first, attacher)
+        elseif TCEquipmentClass.needsTool(attacher) then
+            table.insert(toolTanks, attacher)
+        else
+            table.insert(rest, attacher)
+        end
+    end
+    for _, attacher in ipairs(toolTanks) do
+        table.insert(first, attacher)
+    end
+    for _, attacher in ipairs(rest) do
+        table.insert(first, attacher)
+    end
+    return first
+end
+
 -- Plans every hitch of the job's equipment, moving nothing. Returns the
 -- plans (each with its implement, and the occupant it would unhitch) and
 -- the operating vehicle; or nil plus the reason's l10n key and its args
@@ -292,14 +322,26 @@ function TCJobSiteSetup.planHitches(job, trace)
     -- hitched earlier in the same plan.
     -- Seed tanks (a seeder's front hopper, 032) are planned last, so the
     -- seeder gets first pick of the (preferred) rear linkage and the tank
-    -- takes what's left - the front.
+    -- takes what's left - the front. A tank that works through a tool on
+    -- its hitch (TCEquipmentClass.needsTool: a slurry tanker) is planned
+    -- first, so it's there for its dribble bar to go on.
     local toHitch = {}
+    local toolTanks = {}
     local seedTanks = {}
     for _, vehicle in ipairs(vehicles) do
         if vehicle ~= operatingVehicle and vehicle.getInputAttacherJoints ~= nil and
             not vehicle:getIsAttachedTo(operatingVehicle) then
-            table.insert(TCEquipmentClass.isSeedTank(vehicle) and seedTanks or toHitch, vehicle)
+            if TCEquipmentClass.isSeedTank(vehicle) then
+                table.insert(seedTanks, vehicle)
+            elseif TCEquipmentClass.needsTool(vehicle) then
+                table.insert(toolTanks, vehicle)
+            else
+                table.insert(toHitch, vehicle)
+            end
         end
+    end
+    for i, vehicle in ipairs(toolTanks) do
+        table.insert(toHitch, i, vehicle)
     end
     for _, vehicle in ipairs(seedTanks) do
         table.insert(toHitch, vehicle)
@@ -330,7 +372,7 @@ function TCJobSiteSetup.planHitches(job, trace)
             local plan = nil
             local step = { implement = implement, pass = pass, attempts = {} }
             table.insert(trace.steps, step)
-            for _, attacher in ipairs(attachers) do
+            for _, attacher in ipairs(getAttacherOrder(implement, attachers, isJobVehicle)) do
                 local attempt = {}
                 table.insert(step.attempts, attempt)
                 plan = findJoint(attacher, implement, claimedJoints, isJobVehicle, job.farmId, attempt)

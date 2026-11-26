@@ -823,6 +823,20 @@ end
 -- Persistence -------------------------------------------------------------------------
 
 -- A farm deleted in multiplayer (TCFarmDeletion), on every machine.
+-- Incident data fields that hold a vehicle's object id (TCVehicleReplace):
+-- a new one goes here.
+TheContractorRandomEvents.VEHICLE_DATA_KEYS = { "vehicleId", "tractorId", "courtesyVehicleId" }
+
+-- Every machine (TCVehicleReplace): an incident's machine (a stolen one, a
+-- crashed or tipped one, a courtesy vehicle) reloaded as a new object.
+function TheContractorRandomEvents:remapVehicle(oldId, newId)
+    for _, incident in pairs(self.incidents) do
+        for _, key in ipairs(TheContractorRandomEvents.VEHICLE_DATA_KEYS) do
+            TCVehicleIds.replaceField(incident.data, key, oldId, newId)
+        end
+    end
+end
+
 function TheContractorRandomEvents:forgetFarm(farmId)
     for id, incident in pairs(self.incidents) do
         if incident.farmId == farmId then
