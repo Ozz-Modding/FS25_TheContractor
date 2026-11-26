@@ -5,7 +5,7 @@
 -- self-allocated job is never locked - the player is the one driving it.
 -- 169: the ploughing match's lent kit too, for everyone but the plot's farm
 -- while its run's on (PloughingMatch:getLockedKit, for this machine's
--- player's farm).
+-- player's farm). 173: the show's breeder's trailers, for everyone.
 --
 -- Adapted from the user's FS25_UsedEquipmentYards mod
 -- (UsedEquipmentYards.applyClientRestrictions): the vehicle's own
@@ -40,6 +40,7 @@ local lockedVehicleIds = {}
 
 TCVehicleLock.REASON_BUSY = "tc_vehicleLock_busy"
 TCVehicleLock.REASON_AUCTION_LOT = "tc_vehicleLock_auctionLot"
+TCVehicleLock.REASON_BREEDER = "tc_vehicleLock_breeder"
 local controlFunctionRegistered = setmetatable({}, { __mode = "k" })
 local tabbableWrapped = setmetatable({}, { __mode = "k" })
 local accumulatedMs = 0
@@ -153,6 +154,12 @@ local function collectLockedVehicleIds()
             shouldLock[vehicleId] = reason
         end
     end
+    -- 173: the breeder's trailers.
+    if tc.BreedersPen ~= nil then
+        for _, vehicleId in ipairs(tc.BreedersPen:getTrailerIds()) do
+            shouldLock[vehicleId] = TCVehicleLock.REASON_BREEDER
+        end
+    end
     return shouldLock
 end
 
@@ -246,6 +253,11 @@ function TCVehicleLock.isBusyForSale(vehicle)
         -- 169: nor the ploughing match's kit, whoever's driving it.
         local match = g_currentMission.TheContractor.PloughingMatch
         if match ~= nil and match:isKit(vehicle) then
+            return true
+        end
+        -- 173: nor the breeder's trailers.
+        local pen = g_currentMission.TheContractor.BreedersPen
+        if pen ~= nil and pen:isTrailer(vehicle) then
             return true
         end
         vehicle = vehicle.getAttacherVehicle ~= nil and vehicle:getAttacherVehicle() or nil

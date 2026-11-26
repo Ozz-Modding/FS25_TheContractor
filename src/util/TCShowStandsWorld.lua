@@ -12,6 +12,10 @@
 --     own look on their spot for this part of the day (TCShowStands.
 --     getPlaces). One waiting by a machine of theirs (TCYardFarmers) is
 --     there instead.
+--   173: the breeder, while the breeders' pen's open (BreedersPen:isOpen),
+--     at their stand (TCShowScene.getBreederStand) in their own look (or a
+--     stallholder's, with no farmer to spare); talking to them is
+--     TCBreedersPenWorld's.
 --   172: the staff given the show's day off (ShowDayOff:getCrowdPlacesNow),
 --     each in their own look ringside, the crowd's figure on a spectator
 --     spot they're on standing aside (TCAuctionCrowd.setReservedSpots).
@@ -88,6 +92,17 @@ function TCShowStandsWorld.getWanted()
         table.insert(wanted, { target = { kind = "stall", role = stall.role,
             name = getText("tc_showStands_name_" .. stall.role) }, x = stall.x, z = stall.z, yaw = stall.yaw })
         table.insert(parts, stall.role)
+    end
+    -- 173: the breeder at their stand.
+    local pen = tc.BreedersPen
+    local breederStand = pen ~= nil and pen:isOpen() and TCShowScene.getBreederStand(stands:getScene()) or nil
+    if breederStand ~= nil then
+        local breeder = pen:getBreeder()
+        local style = breeder ~= nil and TCWorkerAppearance.getPlayerStyle(breeder) or nil
+        table.insert(wanted, { target = { kind = "stall", role = "breeder", personId = breeder ~= nil and breeder.id or nil,
+            name = breeder ~= nil and breeder.name or getText("tc_showStands_name_breeder") }, x = breederStand.x,
+            z = breederStand.z, yaw = breederStand.yaw, style = style })
+        table.insert(parts, string.format("breeder%d:%s", pen.breederId, tostring(style)))
     end
     for _, id in ipairs(stands:getFarmersAtShow()) do
         local spot = places[id]
@@ -367,6 +382,8 @@ function TCShowStandsWorld.talkTo(figure)
     end
     if target.kind == "farmer" then
         TCShowStandsWorld.talkToFarmer(target.personId)
+    elseif target.role == "breeder" then
+        TCBreedersPenWorld.visit()
     elseif target.role == "association" then
         TCShowStandsWorld.visitAssociation()
     else
@@ -445,4 +462,5 @@ function TCShowStandsWorld.uninstall()
     TCShowStandsWorld.freeAll()
     TCShowStandsWorld.templates = nil
     TCShowStandsWorld.pending = {}
+    TCBreedersPenWorld.reset()
 end

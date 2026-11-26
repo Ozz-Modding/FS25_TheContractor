@@ -397,6 +397,8 @@
 		<text name="finance_tcAuctionPurchase" text="Machinery auctions"/>
 		<text name="tc_moneyType_showPrizes" text="Show prizes"/>
 		<text name="finance_tcShowPrizes" text="Show prizes"/>
+		<text name="tc_moneyType_breederStock" text="Breeding stock"/>
+		<text name="finance_tcBreederStock" text="Breeding stock"/>
 		<text name="tc_staff_viewRoster" text="Your Staff"/>
 		<text name="tc_staff_viewCandidates" text="Candidates"/>
 		<text name="tc_staff_viewOthers" text="Others"/>
@@ -590,6 +592,7 @@
 		<text name="tc_allocation_cancelButton" text="Cancel"/>
 		<text name="tc_vehicleLock_busy" text="This vehicle is out on a contract job."/>
 		<text name="tc_vehicleLock_auctionLot" text="This machine is a lot in an auction."/>
+		<text name="tc_vehicleLock_breeder" text="This is the breeder's trailer."/>
 		<text name="tc_auction_mapName" text="Machinery auction"/>
 		<text name="tc_auction_showOnMap" text="Show on map"/>
 		<text name="tc_auction_announced_title" text="Machinery auction announced"/>
@@ -783,6 +786,7 @@
 		<text name="tc_showStands_title" text="Stands and farmers"/>
 		<text name="tc_showStands_name_association" text="Trade association"/>
 		<text name="tc_showStands_name_careers" text="Careers adviser"/>
+		<text name="tc_showStands_name_breeder" text="Breeder"/>
 		<text name="tc_showStands_candidateChip" text="From the show"/>
 		<text name="tc_showStands_section" text="On the showground"/>
 		<text name="tc_showStands_rowAssociation" text="Trade association stand"/>
@@ -798,6 +802,7 @@
 		<text name="tc_offerSource_show" text="Asked for at the county show"/>
 		<text name="tc_showTalk_promptFarmer" text="Talk to %s"/>
 		<text name="tc_showTalk_prompt_association" text="Visit the trade association stand"/>
+		<text name="tc_showTalk_prompt_breeder" text="Look at the breeder's stock"/>
 		<text name="tc_showTalk_prompt_careers" text="Visit the careers stand"/>
 		<text name="tc_showTalk_optionAsk" text="Any work going?"/>
 		<text name="tc_showTalk_optionBye" text="Enjoy the show."/>
@@ -841,6 +846,41 @@
 		<text name="tc_showTalk_careersLater_1" text="No problem. We're here all day if you change your mind."/>
 		<text name="tc_showTalk_careersNoCompany_1" text="We're placing people with contractors. Come back when you've a business of your own."/>
 		<text name="tc_showTalk_closed_1" text="Sorry, I'm packing up now."/>
+		<text name="tc_breedersPen_title" text="Breeders' pen"/>
+		<text name="tc_breeder_greet_1" text="Morning. Pedigree stock, every one of them, from the best lines I've got. Have a look."/>
+		<text name="tc_breeder_greet_2" text="You won't find better at any dealer. They're in the trailers there. What catches your eye?"/>
+		<text name="tc_breeder_others" text="Here's the rest of them."/>
+		<text name="tc_breeder_optionAnimal" text="%s, %d months: %s"/>
+		<text name="tc_breeder_optionJustLooking" text="Just looking, thanks"/>
+		<text name="tc_breeder_animal" text="%s. Name: %s. %d months old, %d kg, health %d%%.%s Genetics: %s. I'm asking %s."/>
+		<text name="tc_breeder_noName" text="none yet"/>
+		<text name="tc_breeder_pregnant" text="Carrying."/>
+		<text name="tc_breeder_lactating" text="In milk."/>
+		<text name="tc_breeder_gene_quality" text="quality %.2f"/>
+		<text name="tc_breeder_gene_health" text="health %.2f"/>
+		<text name="tc_breeder_gene_fertility" text="fertility %.2f"/>
+		<text name="tc_breeder_gene_metabolism" text="metabolism %.2f"/>
+		<text name="tc_breeder_gene_productivity" text="productivity %.2f"/>
+		<text name="tc_breeder_optionTake" text="I'll take it"/>
+		<text name="tc_breeder_optionOthers" text="Show me the others"/>
+		<text name="tc_breeder_optionNotToday" text="Not today"/>
+		<text name="tc_breeder_where" text="That's %s. Where's it going?"/>
+		<text name="tc_breeder_optionTrailer" text="Into my trailer: %s"/>
+		<text name="tc_breeder_optionHusbandry" text="Deliver to %s (%s delivery)"/>
+		<text name="tc_breeder_optionNeverMind" text="Never mind"/>
+		<text name="tc_breeder_soldOut_1" text="Sold out, I'm afraid. Try me next year."/>
+		<text name="tc_breeder_noRoom_1" text="Where would you put it? Bring a livestock trailer to the show, or make room in one of your barns, and come back."/>
+		<text name="tc_breeder_thinking_1" text="Right, let's get it moved."/>
+		<text name="tc_breeder_bought_1" text="It's yours. Look after it and it'll look after you."/>
+		<text name="tc_breeder_bought_2" text="Done. You've got a good one there."/>
+		<text name="tc_breeder_sold_1" text="Sorry, that one's just gone."/>
+		<text name="tc_breeder_cantAfford_1" text="That's more than you've got in the bank, I'm afraid."/>
+		<text name="tc_breeder_closed_1" text="Sorry, I'm packing up now."/>
+		<text name="tc_breeder_noPermission_1" text="I'd need to deal with whoever does the buying for your farm."/>
+		<text name="tc_breeder_sick_1" text="Hang on, that one's not right today. I can't sell it you like that."/>
+		<text name="tc_breeder_failed_1" text="Something's gone wrong getting it moved. Give me a minute and try again."/>
+		<text name="tc_breeder_later_1" text="No bother. I'm here all day."/>
+		<text name="tc_breeder_later_2" text="Fair enough. You know where I am."/>
 		<text name="tc_showStat_health" text="Health"/>
 		<text name="tc_showStat_age" text="Age"/>
 		<text name="tc_showStat_productivity" text="Productivity"/>
@@ -2337,6 +2377,8 @@
 		<text name="tc_help_show_9" text="Instead of ploughing yourself, you can enter one of your workers for your company's plot while entries are open: Enter on the Show tab, then a worker. They need a fair tillage skill and experience of mid-size tractors, and must be free on the day, not off sick, on holiday or training. On the day they're at the show from midnight, so they can't be given any other work (one out on a job goes when they're back), and they plough your plot for you during the match, standing by its tractor. Their score comes from their tillage skill, their tractor experience, their morale and how they're going on the day. If they fall sick, are away that day, leave or don't get there before the match ends, the entry is withdrawn with a message and their plot goes to a farmer. A placing wins your company the prize and reputation as if you'd ploughed it, and lifts the worker's morale, a win most; a poor run costs them nothing."/>
 		<text name="tc_help_show_11_title" text="Your staff's day off"/>
 		<text name="tc_help_show_11" text="A few weeks before the show, the Inbox asks whether to give your staff the day off to go. Say yes and everyone who'd be working that day goes, office staff too, on their normal pay: their morale lifts a little, nothing can be allocated to them that day, there's no office work, and you'll find them in the crowd round the ring. Anyone sick, on holiday or training stays so, and a worker entered in the ploughing still ploughs. Say no, or don't answer by the day before, and they're a little disappointed."/>
+		<text name="tc_help_show_12_title" text="The breeders' pen"/>
+		<text name="tc_help_show_12" text="With RealisticLivestock, a farmer brings pedigree stock to sell: animals with better genetics than the dealer usually has, kept in the breeder's livestock trailers at the stands' end of the trailer lines. On the day, walk up to the breeder at their stand by the ring and press the activate key to see each animal's age, weight, health, genetics and price. Buy one straight into one of your livestock trailers at the show (in the trailer lines or near the stand), or have it delivered to one of your barns with room for a small fee. The price is well above what the animal would sell for, and anything unsold goes home at the end of the day. Without RealisticLivestock there's no breeders' pen."/>
 		<text name="tc_help_show_4_title" text="Prizes"/>
 		<text name="tc_help_show_4" text="Placings win a little prize money and, more usefully, reputation and the host farmer's goodwill, a supreme champion most of all; highly commended wins only the rosette. Results come by Inbox, with a rosette notice for each placing."/>
 		<text name="tc_help_show_10_title" text="Stands and farmers"/>

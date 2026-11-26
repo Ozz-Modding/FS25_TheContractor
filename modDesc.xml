@@ -809,6 +809,10 @@ Credits:
                     <text text="$l10n_tc_help_show_10"/>
                 </paragraph>
                 <paragraph>
+                    <title text="$l10n_tc_help_show_12_title"/>
+                    <text text="$l10n_tc_help_show_12"/>
+                </paragraph>
+                <paragraph>
                     <title text="$l10n_tc_help_show_4_title"/>
                     <text text="$l10n_tc_help_show_4"/>
                 </paragraph>

@@ -49,6 +49,8 @@ TCI18NExtension.theContractorTexts = {
     ["finance_tcAuctionPurchase"] = true,
     ["tc_moneyType_showPrizes"] = true,
     ["finance_tcShowPrizes"] = true,
+    ["tc_moneyType_breederStock"] = true,
+    ["finance_tcBreederStock"] = true,
 }
 
 function TCI18NExtension:getText(superFunc, text, modEnv)

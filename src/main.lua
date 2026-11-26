@@ -106,6 +106,8 @@ source(TheContractor.dir .. "src/util/TCShowStands.lua")
 source(TheContractor.dir .. "src/util/TCShowDayOff.lua")
 source(TheContractor.dir .. "src/util/TCConversation.lua")
 source(TheContractor.dir .. "src/util/TCShowStandsWorld.lua")
+source(TheContractor.dir .. "src/util/TCBreedersPen.lua")
+source(TheContractor.dir .. "src/util/TCBreedersPenWorld.lua")
 source(TheContractor.dir .. "src/util/TCAuctionAttendance.lua")
 source(TheContractor.dir .. "src/util/TCLotInspections.lua")
 source(TheContractor.dir .. "src/util/TCAuctionLotHud.lua")
@@ -205,6 +207,7 @@ source(TheContractor.dir .. "src/business/PloughingMatch.lua")
 source(TheContractor.dir .. "src/business/ShowWorker.lua")
 source(TheContractor.dir .. "src/business/ShowStands.lua")
 source(TheContractor.dir .. "src/business/ShowDayOff.lua")
+source(TheContractor.dir .. "src/business/BreedersPen.lua")
 source(TheContractor.dir .. "src/business/AuctionSale.lua")
 source(TheContractor.dir .. "src/events/TCInitialClientStateEvent.lua")
 source(TheContractor.dir .. "src/events/TCSettingsEvent.lua")
@@ -323,6 +326,8 @@ source(TheContractor.dir .. "src/events/TCShowWorkerEvent.lua")
 source(TheContractor.dir .. "src/events/TCShowStandsEvent.lua")
 source(TheContractor.dir .. "src/events/TCShowDayOffEvent.lua")
 source(TheContractor.dir .. "src/events/TCShowTalkEvent.lua")
+source(TheContractor.dir .. "src/events/TCBreedersPenEvent.lua")
+source(TheContractor.dir .. "src/events/TCBreederBuyEvent.lua")
 source(TheContractor.dir .. "src/events/TCPloughPlotEvent.lua")
 
 -- The top-level Contractor page itself stays always-visible (see Company.lua
@@ -494,6 +499,10 @@ function TheContractor:loadMap()
     -- 172: the staff's day off for the show.
     self.ShowDayOff = TheContractorShowDayOff.new()
     self.ShowDayOff:register(self.Show, self.Inbox)
+    -- 173: the breeders' pen (RealisticLivestock only), after the stands
+    -- and the plots, whose farmers it keeps its breeder from.
+    self.BreedersPen = TheContractorBreedersPen.new()
+    self.BreedersPen:register(self.Show)
     -- 139: bids and the sale.
     self.AuctionSale = TheContractorAuctionSale.new()
     self.AuctionSale:register(self.Inbox)
@@ -677,6 +686,7 @@ function TheContractor:loadMap()
     TheContractorShowWorker.registerConsoleCommands()
     TheContractorShowStands.registerConsoleCommands()
     TheContractorShowDayOff.registerConsoleCommands()
+    TheContractorBreedersPen.registerConsoleCommands()
     TCShowAnimals.registerConsoleCommands()
     -- 168: the ploughing match's scoring spike.
     TCPloughTrial.registerConsoleCommands()
@@ -762,6 +772,7 @@ function TheContractor:loadFromXMLFile()
     self.ShowWorker:loadFromXMLFile(xmlFile)
     self.ShowStands:loadFromXMLFile(xmlFile)
     self.ShowDayOff:loadFromXMLFile(xmlFile)
+    self.BreedersPen:loadFromXMLFile(xmlFile)
     self.AuctionSale:loadFromXMLFile(xmlFile)
     TCCalendarChange.loadFromXMLFile(xmlFile)
     TCCalendarHistory.loadFromXMLFile(xmlFile)
@@ -803,6 +814,8 @@ function TheContractor:resolveSavedVehicles()
     self.ShowLivestock:resolveSavedVehicles()
     -- 169: the ploughing match's kit (after the site's scene, loaded with the save).
     self.PloughingMatch:resolveSavedVehicles()
+    -- 173: the breeder's trailers (after the show, which says whether it's still on).
+    self.BreedersPen:resolveSavedVehicles()
     TCVehicleLock.repairSavedTabbable()
     -- 110: not vehicles, but the same moment: the map's fields, farmland
     -- owners and buildings are in place. After Jobs, whose customers it links.
@@ -868,6 +881,7 @@ function TheContractor:saveToXmlFile()
     tc.ShowWorker:saveToXmlFile(xmlFile)
     tc.ShowStands:saveToXmlFile(xmlFile)
     tc.ShowDayOff:saveToXmlFile(xmlFile)
+    tc.BreedersPen:saveToXmlFile(xmlFile)
     tc.AuctionSale:saveToXmlFile(xmlFile)
     TCCalendarChange.saveToXmlFile(xmlFile)
     TCCalendarHistory.saveToXmlFile(xmlFile)
@@ -955,6 +969,9 @@ function TheContractor:deleteMap()
     TCADSUsedLots.uninstall()
     if self.PloughingMatch ~= nil then
         self.PloughingMatch:delete()
+    end
+    if self.BreedersPen ~= nil then
+        self.BreedersPen:delete()
     end
 
     if self.JobGeneration ~= nil then

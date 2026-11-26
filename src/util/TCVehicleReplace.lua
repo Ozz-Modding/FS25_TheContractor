@@ -31,7 +31,7 @@ TCVehicleReplace = {}
 -- Keys of g_currentMission.TheContractor with a remapVehicle(oldId, newId).
 TCVehicleReplace.SUBSYSTEMS = {
     "Jobs", "Cooldown", "Parking", "Logbook", "Drivers", "RepairContracts", "YardBales", "YardHaul",
-    "EmergencyRefuel", "AuctionSite", "RandomEvents",
+    "EmergencyRefuel", "AuctionSite", "RandomEvents", "BreedersPen",
 }
 
 -- Server: uniqueId -> object id of a vehicle removed with no copy in its

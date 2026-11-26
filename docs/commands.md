@@ -797,6 +797,20 @@ Show 1 is open: the stalls and these farmers are on the showground.
 Farm 1: has come (the host's goodwill given); trade association: joined here; careers stand: not visited.
 ```
 
+### `tcShow breeder`
+
+The show's breeders' pen (173), RealisticLivestock only. Once it's set out at midnight before the show's day: the show, whether it's open now (08:00 to 18:00), the spare farm id the breeder's trailers belong to, the breeder, and each animal in the trailers by its RealisticLivestock key: its breed, age in months, whether it's pregnant, weight, health, genetics, what RealisticLivestock values it at and the breeder's price. A sick one is marked as not for sale. Without RealisticLivestock's API, or with no pen out, says so. Takes no arguments, and any player can run it.
+
+```
+tcShow breeder
+```
+
+```
+Show 1's breeders' pen (open now), farm id 8, breeder Ann Webb, 2 trailer(s):
+  COW DE 214598 710041: Holstein, 26 months, pregnant, 612 kg, health 97, quality 1.42, health 1.31, fertility 1.38, metabolism 1.22, productivity 1.51; value 2675, price 3478
+  SHEEP DE 118342 420017: Texel, 14 months, 71 kg, health 99, quality 1.55, health 1.19, fertility 1.47, metabolism 1.33; value 310, price 403
+```
+
 ## Log — `tcLog`
 
 ### `tcLog`

@@ -20,7 +20,10 @@
 --   171's farmers' spots (layOut's mingles): the ringside places the
 --     spectators didn't take, where farmers at the show stand.
 --   The trailer lines: bays across the far end, past the ring, marked out
---     with cones, where entrants park their livestock trailers (167).
+--     with cones, where entrants park their livestock trailers (167). 173:
+--     the breeder's trailers take the bays at the stands' end
+--     (getBreederBays), the breeder the last stand that isn't a stall
+--     (getBreederStand).
 --   The crowd's walks (getWalkways): a lane down each side of the ring
 --     (between it and the pens, and it and the stands) and a cross aisle
 --     between the ring and the trailer lines; TCAuctionScene.getWalks adds
@@ -325,6 +328,54 @@ function TCShowScene.getStallStands(count)
         end
     end
     return stalls
+end
+
+-- 173: the breeder's stand (pure): the last stand along the row that isn't
+-- a stall, where the breeder stands at its front as a stallholder does
+-- (with no table): { x, z, yaw, d, index }, or nil with no stand left.
+function TCShowScene.getBreederStand(scene)
+    if not TCShowScene.isShowDressing(scene) then
+        return nil
+    end
+    local areas = TCShowScene.getAreas(scene)
+    if areas == nil or #areas.stands == 0 then
+        return nil
+    end
+    local taken = {}
+    for _, index in pairs(TCShowScene.getStallStands(#areas.stands)) do
+        taken[index] = true
+    end
+    for index = #areas.stands, 1, -1 do
+        if not taken[index] then
+            local stand = areas.stands[index]
+            local frame = frameOf(scene)
+            local frontEdge = stand.v - TCShowScene.STANDS.depth * 0.5
+            local x, z = toWorld(scene, frame.uAt(stand.d), frontEdge + TCShowScene.STALL.holderIn)
+            return { x = x, z = z, yaw = yawOf(scene, 0, -1), d = stand.d, index = index }
+        end
+    end
+    return nil
+end
+
+-- 173: where the breeder's trailers park (pure): the trailer line bays from
+-- the stands' end of the lines, one a trailer, always leaving one for the
+-- entrants. { { x, z, yaw (facing the far end, its ramp to the ring), bay } },
+-- as many as there's room for up to count.
+function TCShowScene.getBreederBays(scene, count)
+    local bays = {}
+    local areas = TCShowScene.isShowDressing(scene) and TCShowScene.getAreas(scene) or nil
+    local lines = areas ~= nil and areas.lines or nil
+    if lines == nil then
+        return bays
+    end
+    local frame = frameOf(scene)
+    local d = (lines.dFrom + lines.dTo) * 0.5
+    for k = 1, math.min(count or 0, lines.count - 1) do
+        local bay = lines.count - k + 1
+        local x, z = toWorld(scene, frame.uAt(d), lines.vFrom + (bay - 0.5) * lines.bayWidth)
+        table.insert(bays, { x = x, z = z, yaw = yawOf(scene, frame.inSign, 0), bay = bay })
+    end
+    return bays
 end
 
 -- Lays the arena out (pure). Returns { props, spots, sounds, stalls,

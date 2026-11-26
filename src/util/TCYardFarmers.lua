@@ -28,7 +28,7 @@
 -- 155: in wet weather (TCShelter) only indoor spots are in use, placed or
 -- generated, so a farmer with none goes in until it's dry.
 --
--- 171: a farmer at the county show (tc.ShowStands) is on its showground
+-- 171: a farmer at the county show (tc.ShowStands, and 173's breeder) is on its showground
 -- while it's open, not in their yard (one waiting by a machine stays
 -- there, and TCShowStandsWorld leaves them off the showground).
 --
@@ -301,6 +301,11 @@ function TCYardFarmers.getWanted()
         for _, id in ipairs(tc.ShowStands:getFarmersAtShow()) do
             atShow[id] = true
         end
+    end
+    -- 173: nor is the breeder at their stand.
+    local breederId = tc.BreedersPen ~= nil and tc.BreedersPen:getBreederAtShow() or nil
+    if breederId ~= nil then
+        atShow[breederId] = true
     end
     for _, person in ipairs(farmers) do
         local job, vehicle = TCYardFarmers.getMachineJob(person, tc.Jobs)

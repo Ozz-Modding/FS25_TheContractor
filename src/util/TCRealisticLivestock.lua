@@ -14,6 +14,13 @@
 -- function hides only what needs it, with one warning per session:
 --   diseases   Animal.getHasAnyDisease (a sick animal can't be shown)
 -- Checked against refs/FS25_RealisticLivestockRM.
+--
+-- 173: RL's API for other mods (RealisticLivestockAPI, scripts/api/ in RL,
+-- API_VERSION 1): the one supported way to make, read, price and move RL's
+-- animals, used by the show's breeders' pen. getAPI looks it up at each use,
+-- never kept, because RL rebuilds it every map load; it's nil without RL,
+-- with an RL too old to have it, before RL's ready, or with a function we
+-- need missing (warned once). Nothing outside this file names it.
 
 TCRealisticLivestock = {}
 
@@ -23,6 +30,11 @@ TCRealisticLivestock.MOD_NAMES = { "FS25_RealisticLivestockRM", "FS25_RealisticL
 -- The genetics RL keeps (1.0 is average; productivity only for milk, wool
 -- and egg animals).
 TCRealisticLivestock.GENETICS = { "quality", "health", "productivity", "metabolism", "fertility" }
+
+-- 173: the API's lowest version we use, and its functions we call.
+TCRealisticLivestock.API_MIN_VERSION = 1
+TCRealisticLivestock.API_FUNCTIONS = { "isReady", "createAnimal", "getAnimalsIn", "describeAnimal", "getAnimalValue",
+    "addAnimalsTo", "moveAnimals" }
 
 local capabilities = {}
 local entryPoints = {}
@@ -127,6 +139,51 @@ function TCRealisticLivestock.readAnimal(animal)
         read.isSick = entryPoints.getHasAnyDisease(animal) == true
     end
     return read
+end
+
+-- 173: RL's API ------------------------------------------------------------------------------
+
+-- RL's published table, or nil. A function so the tests can swap it.
+function TCRealisticLivestock.findAPI()
+    return RealisticLivestockAPI
+end
+
+-- RL's API, ready to use now, or nil (see the header).
+function TCRealisticLivestock.getAPI()
+    local api = TCRealisticLivestock.findAPI()
+    if type(api) ~= "table" or type(api.API_VERSION) ~= "number" or
+            api.API_VERSION < TCRealisticLivestock.API_MIN_VERSION then
+        return nil
+    end
+    for _, name in ipairs(TCRealisticLivestock.API_FUNCTIONS) do
+        if type(api[name]) ~= "function" then
+            local key = "RealisticLivestockAPI." .. name
+            if not warned[key] then
+                warned[key] = true
+                TCLog.warning("TheContractor: RealisticLivestock's %s is missing - the show's breeders' pen is off", key)
+            end
+            return nil
+        end
+    end
+    if not api.isReady() then
+        return nil
+    end
+    return api
+end
+
+function TCRealisticLivestock.hasAPI()
+    return TCRealisticLivestock.getAPI() ~= nil
+end
+
+-- An animal's key from describeAnimal's id: "TYPE country herd number",
+-- the animal across loads and moves.
+function TCRealisticLivestock.getAPIKey(info)
+    local id = type(info) == "table" and info.id or nil
+    if type(id) ~= "table" then
+        return nil
+    end
+    return string.format("%s %s %s %s", tostring(id.type), tostring(id.country), tostring(id.herd),
+        tostring(id.number))
 end
 
 -- Tests.

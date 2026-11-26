@@ -12,7 +12,7 @@ end
 
 local SUBSYSTEM_FILES = {
     "Job", "Jobs", "Cooldown", "Drivers", "Logbook", "Parking", "RandomEvents", "RepairContracts", "YardBales",
-    "YardHaul", "EmergencyRefuel", "AuctionSite",
+    "YardHaul", "EmergencyRefuel", "AuctionSite", "BreedersPen",
 }
 
 local world, sent, subscriptions
@@ -76,6 +76,8 @@ local function setup()
     world:load("src/business/FarmerFleet.lua")
     world:load("src/util/TCAuctionCrowd.lua")
     world:load("src/util/TCAuctionLayout.lua")
+    -- What the breeders' pen reaches for as it's loaded.
+    world:load("src/util/TCBreedersPen.lua")
     for _, name in ipairs(SUBSYSTEM_FILES) do
         world:load("src/business/" .. name .. ".lua")
     end
@@ -159,6 +161,7 @@ local function setupHolders(combineId, headerId)
     tc.AuctionSite = make("TheContractorAuctionSite", {
         lots = { lot }, site = { lots = { lot } }, vehicleIdSet = { [combineId] = true, [headerId] = true },
     })
+    tc.BreedersPen = make("TheContractorBreedersPen", { trailerIds = { headerId, combineId } })
 
     local slot = { farmId = 1 }
     slot[PlaceableTCParkingSlot.KEY] = { filter = PlaceableTCParkingSlot.newFilter({ "TRACTORSL" }, { combineId }) }
@@ -310,6 +313,8 @@ test("the reset combine stays on its harvest job, and everything else holding it
     assertEquals(tc.RepairContracts.removals[1].vehicleId, 50, "collection queue")
     assertEquals(tc.AuctionSite.lots[1].vehicleId, 50, "auction lot")
     assertTrue(tc.AuctionSite.vehicleIdSet[50] and tc.AuctionSite.vehicleIdSet[1] == nil, "lot lock set")
+    assertEquals(tc.BreedersPen.trailerIds[2], 50, "the breeder's trailer")
+    assertEquals(tc.BreedersPen.trailerIds[1], 2, "the other trailer untouched")
 end)
 
 test("a hidden machine's copy is hidden again everywhere", function()
