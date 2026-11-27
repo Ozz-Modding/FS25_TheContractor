@@ -42,17 +42,15 @@ TCAuctionProps.MODELS = {
     board = { filename = "i3d/auctionBoard.i3d", isMod = true, collision = true },
     -- 165: the show's arena (TCShowScene). childName: only that node of the
     -- file is used (found by name anywhere below its root), the rest
-    -- thrown away: a fence placeable's one panel or post, a cone's look
-    -- without its loose body. Base game candidates, the user's to swap:
-    --   hurdle, hurdlePost: the US red steel rail fence's panel (3 m, its
-    --     origin at its start, running along its own z) and post;
+    -- thrown away: a cone's look without its loose body. The user's to
+    -- swap:
+    --   hurdle: ours (182, genShowPropsI3d.py), a galvanised hurdle 3 m
+    --     along its own z (TCShowScene.PANEL), its origin at its middle,
+    --     standing on its own feet: neighbours meet upright to upright;
     --   cone: the US traffic cone's look (no collision: it'd be knocked
     --     about as a loose body);
     --   stand: our own sale office gazebo, as a trade stand.
-    hurdle = { filename = "$data/placeables/brandless/fences/US/fence10/fence10.i3d", childName = "panel01",
-        originZ = 1.5, collision = true },
-    hurdlePost = { filename = "$data/placeables/brandless/fences/US/fence10/fence10.i3d", childName = "pole01",
-        collision = true },
+    hurdle = { filename = "i3d/showHurdle.i3d", isMod = true, collision = true },
     cone = { filename = "$data/maps/mapUS/textures/props/trafficCone.i3d", childName = "visual_lod" },
     stand = { filename = "i3d/auctionGazebo.i3d", isMod = true, collision = true },
     showGateSign = { filename = "i3d/showGateSign.i3d", isMod = true, collision = true },

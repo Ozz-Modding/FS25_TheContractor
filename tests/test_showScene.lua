@@ -77,7 +77,7 @@ test("the arena: a ring with a gateway, a row of pens, stands and trailer lines,
     assertTrue(#dressed.sounds == 1, "the ring's murmur")
 end)
 
-test("the crowd's lanes keep clear of every hurdle, post and stand", function()
+test("the crowd's lanes keep clear of every hurdle and stand", function()
     setup()
     local scene = makeScene()
     local walkways = TCShowScene.getWalkways(scene)

@@ -57,8 +57,7 @@ TCShowScene.RINGSIDE = { spacing = 2.5, standoff = 1.0, share = 0.6 }
 
 -- The sizes the show's props take on the ground (as TCAuctionScene.SIZES).
 TCShowScene.SIZES = {
-    hurdle = { width = 0.15, length = 3 },
-    hurdlePost = { width = 0.15, length = 0.15 },
+    hurdle = { width = 0.5, length = 3 },  -- its feet across
     stand = { width = 3.2, length = 3.2 },
     cone = { width = 0.4, length = 0.4 },
     plotPeg = { width = 0.4, length = 0.4 },
@@ -410,8 +409,9 @@ function TCShowScene.layOut(scene)
     end
 
     -- A run of hurdles from (d1, v1) to (d2, v2), a whole number of panels
-    -- (the run's length over PANEL, rounded down), with a post at each
-    -- joint and both ends. skip(i): leave panel i out (a gateway).
+    -- (the run's length over PANEL, rounded down). Each hurdle stands on
+    -- its own feet, so there's no post at the joints. skip(i): leave panel
+    -- i out (a gateway).
     local function run(d1, v1, d2, v2, skip)
         local dd, dv = d2 - d1, v2 - v1
         local length = math.sqrt(dd * dd + dv * dv)
@@ -426,9 +426,7 @@ function TCShowScene.layOut(scene)
             if skip == nil or not skip(i, count) then
                 add("hurdle", startD + stepD * 0.5, startV + stepV * 0.5, yaw)
             end
-            add("hurdlePost", startD, startV, yaw)
         end
-        add("hurdlePost", d1 + stepD * count, v1 + stepV * count, yaw)
     end
 
     -- The ring, its near side with a gateway in the middle.
