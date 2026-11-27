@@ -99,6 +99,7 @@ local function setup(withRL)
     world:load("src/util/TCShowAnimals.lua")
     world:load("src/util/TCShowClasses.lua")
     world:load("src/util/TCShowJudging.lua")
+    world:load("src/util/TCShowPens.lua")
     world:load("src/business/PublicEvents.lua")
     world:load("src/business/EventDay.lua")
     world:load("src/business/Show.lua")
@@ -166,6 +167,7 @@ local function setup(withRL)
         planOn = function() return { plan = world.plan, problems = {} } end,
         setPlan = function(self, plan) self.site = { plan = plan, dressed = false } end,
         dress = function(self) self.site.dressed = true return "dressed" end,
+        paintPenGround = function() return 0 end,
         clear = function(self) self.site = nil return "cleared" end,
     }
     TheContractorAuctionSite = { PREFERRED_LOTS = 120, CLOSE_HOURS = { 17, 18 },
@@ -174,7 +176,11 @@ local function setup(withRL)
         site = nil, fieldId = 0, walkways = {},
         getWalkways = function(self) return self.walkways end,
         getScene = function(self) return self.site ~= nil and world.scene or nil end,
-        startOpen = function(self, fieldId) self.site = { fieldId = fieldId } self.fieldId = fieldId end,
+        startOpen = function(self, fieldId, kind, eventId, options)
+            self.site = { fieldId = fieldId }
+            self.fieldId = fieldId
+            world.scene.pens = options ~= nil and options.pens or nil
+        end,
         clear = function(self) self.site, self.fieldId = nil, 0 end,
     }
     tc.AuctionSigns = {
@@ -320,6 +326,7 @@ local function addTrailer(world, clusters, def)
         getLastSpeed = function() return def.speed or 0 end,
         getAttacherVehicle = function() return nil end,
     }
+    world:register(trailer)
     table.insert(world.trailers, trailer)
     return trailer
 end
@@ -902,4 +909,241 @@ test("a new show starts the entries again, and a cancelled one drops them", func
     world.tc.Show:cancel(false)
     assertEquals(#livestock.entries, 0)
     assertEquals(livestock.showId, nil)
+end)
+
+-- 182: the pens ----------------------------------------------------------------------------------
+
+-- The pens given to farmers (no entry).
+local function farmerPens(livestock)
+    local list = {}
+    for number, pen in ipairs(livestock.pens) do
+        if pen.entryId == nil and pen.subTypeName ~= nil then
+            table.insert(list, number)
+        end
+    end
+    return list
+end
+
+test("pens: given out at set-out, players' animals first, farmers' filling the row, the count in the scene", function()
+    local world = setup(false)
+    local livestock = world.tc.ShowLivestock
+    local _, _, first, second, other = twoFarmShow(world)
+    runToDay(world, SHOW_DAY - 1)
+    assertTrue(not livestock.pensAssigned, "not before the set-out")
+    runToDay(world, SHOW_DAY)
+    assertTrue(livestock.pensAssigned)
+    assertEquals(livestock.pens[1].entryId, first.id)
+    assertEquals(livestock.pens[2].entryId, second.id)
+    assertEquals(livestock.pens[3].entryId, other.id)
+    assertEquals(livestock.pens[3].farmId, 2)
+    local farmers = farmerPens(livestock)
+    assertEquals(#livestock.pens, math.min(TheContractorShowLivestock.getPensPerRow(), 3 + #farmers))
+    assertTrue(#farmers > 0, "the farmers fill the rest")
+    for _, number in ipairs(farmers) do
+        assertTrue(number > 3)
+    end
+    assertEquals(world.scene.pens, #livestock.pens, "the scene lays out that many")
+    -- Each farmer's pen is a farmer's entry's.
+    local held = 0
+    for _, farmerEntry in ipairs(livestock.farmerEntries) do
+        if farmerEntry.pen ~= nil then
+            held = held + 1
+            assertEquals(livestock.pens[farmerEntry.pen].subTypeName,
+                TCShowClasses.getClass(g_currentMission.animalSystem, farmerEntry.classKey).subTypeName)
+        end
+    end
+    assertEquals(held, #farmers)
+end)
+
+test("pens: a player's animal is in its pen while its trailer stands in the lines, the farmers' while the gates are open", function()
+    local world = setup(false)
+    local livestock = world.tc.ShowLivestock
+    local _, _, first = twoFarmShow(world)
+    runToDay(world, SHOW_DAY)
+    local movement = { farmId = 1, bay = 1, speed = 8 }
+    local trailer = addTrailer(world, { cluster("COW_HOLSTEIN", 1, 22, 40), cluster("COW_HOLSTEIN", 1, 20, 100) },
+        movement)
+    local farmerPen = livestock.pens[farmerPens(livestock)[1]]
+    livestock:updatePens()
+    assertEquals(farmerPen.present, nil, "not before the gates open")
+    assertEquals(livestock.pens[1].present, nil)
+
+    setHour(world, 8)
+    local sent = #world.events
+    livestock:updatePens()
+    assertTrue(farmerPen.present, "the farmers' are there")
+    assertEquals(livestock.pens[1].present, nil, "a trailer still moving isn't unloaded")
+    assertTrue(#world.events > sent, "every machine told")
+
+    movement.speed = 0
+    livestock:updatePens()
+    local pen = livestock.pens[1]
+    assertTrue(pen.present)
+    assertEquals(pen.trailerId, trailer.id)
+    -- The best heifer there, as the judge will take it, and the second
+    -- entry the other.
+    assertEquals(pen.subTypeName, "COW_HOLSTEIN")
+    assertEquals(pen.age, 20)
+    assertEquals(pen.variation, 1, "vanilla's coat, as its trailer shows it")
+    assertTrue(livestock.pens[2].present)
+    assertEquals(livestock.pens[2].age, 22)
+    assertEquals(livestock.pens[3].present, nil, "farm 2 hasn't come")
+
+    -- Pulling out: still penned until the trailer leaves the lines.
+    movement.speed = 8
+    sent = #world.events
+    livestock:updatePens()
+    assertTrue(pen.present)
+    assertEquals(#world.events, sent, "nothing changed, nothing sent")
+    trailer.rootNode.x, trailer.rootNode.z = 900, 900
+    livestock:updatePens()
+    assertEquals(pen.present, nil)
+    assertEquals(pen.trailerId, nil)
+
+    -- Back, and judged as before; then the gates close and everyone's gone.
+    trailer.rootNode.x, trailer.rootNode.z = bayMiddle(world.scene, 1)
+    movement.speed = 0
+    setHour(world, 10)
+    assertEquals(first.status, TheContractorShowLivestock.STATUS.PLACED, "judging read the trailer as before")
+    setHour(world, 18)
+    livestock:updatePens()
+    assertEquals(pen.present, nil)
+    assertEquals(farmerPen.present, nil)
+end)
+
+test("pens: an RL animal by its key with its own coat; a sick one isn't penned", function()
+    local world = setup(true)
+    local livestock = world.tc.ShowLivestock
+    local daisy = rlAnimal({ uniqueId = "100001", name = "Daisy", age = 20 })
+    daisy.variation = 3
+    local bess = rlAnimal({ uniqueId = "100002", name = "Bess", age = 20 })
+    local barn = addHusbandry(world, { clusters = { daisy, bess } })
+    announce(world)
+    enter(world, 1, "COW_HOLSTEIN:young", barn, rlKey("100001"))
+    enter(world, 1, "COW_HOLSTEIN:young", barn, rlKey("100002"))
+    runToDay(world, SHOW_DAY)
+    bess.sick = true
+    addTrailer(world, { rlAnimal({ uniqueId = "100009", age = 20 }), bess, daisy }, { farmId = 1, bay = 4 })
+    setHour(world, 8)
+    livestock:updatePens()
+    assertTrue(livestock.pens[1].present)
+    assertEquals(livestock.pens[1].animalKey, rlKey("100001"))
+    assertEquals(livestock.pens[1].variation, 3)
+    assertEquals(livestock.pens[2].present, nil, "turned away by the vet")
+end)
+
+test("pens: once judged, each pen has its animal's placing, and every machine has the pens", function()
+    local world = setup(false)
+    local livestock = world.tc.ShowLivestock
+    TheContractorShowLivestock.FARMER_ONLY_CLASSES = 0
+    TheContractorShowLivestock.FARMERS_PER_CLASS = { 2, 2 }
+    twoFarmShow(world)
+    runToDay(world, SHOW_DAY)
+    addTrailer(world, { cluster("COW_HOLSTEIN", 1, 22, 40), cluster("COW_HOLSTEIN", 1, 20, 100) }, { farmId = 1, bay = 1 })
+    setHour(world, 8)
+    livestock:updatePens()
+    setHour(world, 10)
+    assertEquals(livestock.pens[1].placing, 1)
+    assertEquals(livestock.pens[2].placing, 4)
+    assertEquals(livestock.pens[3].placing, nil, "a no-show")
+    -- Two farmers at 77, 2nd and 3rd.
+    local placed = {}
+    for _, number in ipairs(farmerPens(livestock)) do
+        local pen = livestock.pens[number]
+        if pen.placing ~= nil then
+            table.insert(placed, pen.placing)
+        end
+    end
+    table.sort(placed)
+    assertEquals(table.concat(placed, ","), "2,3")
+
+    local stream = world:newStream()
+    world.events[#world.events]:writeStream(stream)
+    local client = TheContractorShowLivestock.new()
+    world.tc.ShowLivestock = client
+    local received = TCShowLivestockEvent.emptyNew()
+    received:readStream(stream, { getIsServer = function() return true end })
+    assertEquals(#client.pens, #livestock.pens)
+    assertTrue(client.penVersion > 0)
+    for number, pen in ipairs(livestock.pens) do
+        local copy = client.pens[number]
+        for _, field in ipairs({ "entryId", "subTypeName", "age", "variation", "present", "trailerId", "placing",
+            "champion" }) do
+            assertEquals(copy[field], pen[field], field .. " of pen " .. number)
+        end
+    end
+end)
+
+test("pens: a supreme champion's pen says so", function()
+    local world = setup(false)
+    local livestock = world.tc.ShowLivestock
+    TheContractorShowLivestock.FARMER_ONLY_CLASSES = 0
+    TheContractorShowLivestock.FARMERS_PER_CLASS = { 2, 2 }
+    local barn = addHusbandry(world, { farmId = 1, clusters = {
+        cluster("COW_HOLSTEIN", 1, 20, 100), cluster("BULL_HOLSTEIN", 1, 20, 100) } })
+    announce(world)
+    enter(world, 1, "COW_HOLSTEIN:young", barn)
+    enter(world, 1, "BULL_HOLSTEIN:young", barn)
+    runToDay(world, SHOW_DAY)
+    addTrailer(world, { cluster("COW_HOLSTEIN", 1, 20, 100), cluster("BULL_HOLSTEIN", 1, 20, 100) }, { farmId = 1, bay = 1 })
+    setHour(world, 10)
+    local champions = 0
+    for _, pen in ipairs(livestock.pens) do
+        if pen.champion then
+            champions = champions + 1
+            assertEquals(pen.placing, 1)
+        end
+    end
+    assertEquals(champions, 1)
+end)
+
+test("pens: given out survive a save and load (who's there read again); a deleted farm's stand empty", function()
+    local world = setup(false)
+    local livestock = world.tc.ShowLivestock
+    twoFarmShow(world)
+    runToDay(world, SHOW_DAY)
+    addTrailer(world, { cluster("COW_HOLSTEIN", 2, 20, 100) }, { farmId = 1, bay = 1 })
+    setHour(world, 10)
+    livestock:updatePens()
+    assertTrue(livestock.pens[1].present)
+
+    local xmlFile = {}
+    livestock:saveToXmlFile(xmlFile)
+    local loaded = TheContractorShowLivestock.new()
+    loaded:loadFromXMLFile(xmlFile)
+    assertTrue(loaded.pensAssigned)
+    assertEquals(#loaded.pens, #livestock.pens)
+    assertEquals(loaded.pens[1].entryId, livestock.pens[1].entryId)
+    assertEquals(loaded.pens[1].present, nil, "read again, not saved")
+    assertEquals(loaded.pens[1].placing, livestock.pens[1].placing, "placings rebuilt")
+    for number, pen in ipairs(livestock.pens) do
+        if pen.entryId == nil then
+            assertEquals(loaded.pens[number].subTypeName, pen.subTypeName)
+            assertEquals(loaded.pens[number].age, pen.age)
+            assertEquals(loaded.pens[number].variation, pen.variation)
+            assertEquals(loaded.pens[number].placing, pen.placing)
+        end
+    end
+    world.tc.ShowLivestock = loaded
+    loaded:resolveSavedVehicles()
+    loaded:updatePens()
+    assertTrue(loaded.pens[1].present, "back in its pen")
+
+    local count = #loaded.pens
+    loaded:forgetFarm(2)
+    assertEquals(#loaded.pens, count, "the others keep their numbers")
+    assertEquals(loaded.pens[3].entryId, nil)
+    assertEquals(loaded.pens[3].subTypeName, nil)
+end)
+
+test("pens: a load from before 182 on the day gives them out at the first look", function()
+    local world = setup(false)
+    local livestock = world.tc.ShowLivestock
+    twoFarmShow(world)
+    runToDay(world, SHOW_DAY)
+    livestock.pens, livestock.pensAssigned = {}, false
+    setHour(world, 9)
+    livestock:updatePens()
+    assertTrue(livestock.pensAssigned)
+    assertEquals(livestock.pens[1].entryId, livestock.entries[1].id)
 end)

@@ -758,6 +758,8 @@ function TheContractorAuctionSite:startOpen(fieldId, dressing, eventId, options)
     for _, plot in ipairs(options.plots or {}) do
         table.insert(scene.plots, { cx = plot.cx, cz = plot.cz, angle = plot.angle, half = plot.half })
     end
+    -- 182: the show's pens, one an animal (nil: TCShowScene's default).
+    scene.pens = options.pens
     if options.getWalkways ~= nil then
         layout.walkways = options.getWalkways(scene)
     end
@@ -1397,6 +1399,9 @@ function TheContractorAuctionSite.saveScene(xmlFile, key, scene)
     if scene.dressing ~= nil then
         setXMLString(xmlFile, key .. "#dressing", scene.dressing)
     end
+    if scene.pens ~= nil then
+        setXMLInt(xmlFile, key .. "#pens", scene.pens)
+    end
     setXMLInt(xmlFile, key .. "#nearSign", scene.nearSign)
     for _, name in ipairs(SCENE_FLOATS) do
         setXMLFloat(xmlFile, key .. "#" .. name, scene[name] or 0)
@@ -1436,7 +1441,7 @@ function TheContractorAuctionSite.loadScene(xmlFile, key)
         return nil
     end
     local scene = { seed = seed, nearSign = nearSign >= 0 and 1 or -1, reserve = {}, rows = {},
-        dressing = getXMLString(xmlFile, key .. "#dressing") }
+        dressing = getXMLString(xmlFile, key .. "#dressing"), pens = getXMLInt(xmlFile, key .. "#pens") }
     for _, name in ipairs(SCENE_FLOATS) do
         scene[name] = getXMLFloat(xmlFile, key .. "#" .. name)
         if scene[name] == nil then

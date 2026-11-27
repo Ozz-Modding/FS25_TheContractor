@@ -15,12 +15,11 @@
 --     slope measured too. Ranked by TCShowSite.rankCandidates: one field
 --     before a pair.
 --   Dressing (dress, server): every field in the site is snapshotted as
---     143 does for an auction (snapshotField), then painted: one field,
---     its showground side of the dividing line put down to short grass and
---     the rest to even stubble of its own crop (wheat's if it has none
---     with a cut state); a pair, the showground field all grass and the
---     other all stubble. The plots are in the stubble, nothing ploughed or
---     cultivated in them.
+--     143 does for an auction (snapshotField), then painted: every field
+--     in the site put down to short grass, then each plot's square to even
+--     stubble of the ploughing field's own crop (wheat's if it has none
+--     with a cut state), so the plots stand out from the grass round them
+--     (182). Nothing ploughed or cultivated in them.
 --   Putting it back (restore, server): each field to its snapshot, the
 --     plots and all, whatever its crop and stage.
 --   Saving: the plan (fields, rectangles, line, plots, entrance), whether
@@ -275,8 +274,8 @@ function TheContractorShowSite.getFieldIds(plan)
     return { plan.showFieldId, plan.ploughFieldId }
 end
 
--- Snapshots every field in the site, then dresses it: the showground grass,
--- the ploughing ground stubble. Returns the text to print.
+-- Snapshots every field in the site, then dresses it: all of it grass, the
+-- plots stubble. Returns the text to print.
 function TheContractorShowSite:dress()
     local site = self.site
     if site == nil then
@@ -296,22 +295,21 @@ function TheContractorShowSite:dress()
         end
         site.snapshots[fieldId] = snapshot
     end
-    local showField = g_fieldManager:getFieldById(plan.showFieldId)
     local ploughField = g_fieldManager:getFieldById(plan.ploughFieldId)
     local ploughCrop = site.snapshots[plan.ploughFieldId].fruitType
-    if plan.mode == TCShowSite.MODE.SINGLE then
-        local showPart, ploughPart = TCShowSite.splitPolygon(TCAuctionCrowd.getFieldPolygon(showField), plan.line)
-        TCFieldPreparation.putDownGrass(showField, TCFieldPreparation.makeArea(showPart))
-        TCFieldPreparation.putDownStubble(ploughField, ploughCrop, TCFieldPreparation.makeArea(ploughPart))
-    else
-        TCFieldPreparation.putDownGrass(showField)
-        TCFieldPreparation.putDownStubble(ploughField, ploughCrop)
+    -- All grass first (immediate tasks, so in this order), then the plots.
+    for _, fieldId in ipairs(TheContractorShowSite.getFieldIds(plan)) do
+        TCFieldPreparation.putDownGrass(g_fieldManager:getFieldById(fieldId))
+    end
+    for _, plot in ipairs(plan.plots or {}) do
+        local corners = TCShowSite.getCorners(TCShowSite.plotRect(plot))
+        TCFieldPreparation.putDownStubble(ploughField, ploughCrop, TCFieldPreparation.makeArea(corners))
     end
     site.dressed = true
     TCLog.info("TheContractor: show site dressed (%s, showground field %d, plots on field %d)", plan.mode,
         plan.showFieldId, plan.ploughFieldId)
     local stubble = TCFieldPreparation.getStubbleCrop(ploughCrop)
-    return string.format("Show site dressed: the showground to grass, the ploughing ground to %s stubble (field %d was %s). 'tcDebug showSite restore' puts it back.",
+    return string.format("Show site dressed: the site to grass, the plots to %s stubble (field %d was %s). 'tcDebug showSite restore' puts it back.",
         stubble ~= nil and stubble.name or "?", plan.ploughFieldId, ploughCrop)
 end
 
@@ -347,6 +345,25 @@ function TheContractorShowSite:clear()
     self.site = nil
     self.debugVisible = false
     return text
+end
+
+-- 182, server: the ground under the laid-out showground's pens bare and
+-- trodden (TCShowScene.getPenGround), so no grass comes up through their
+-- straw. Only on a dressed site, whose snapshot puts it back with the rest.
+-- Returns how many rows were painted.
+function TheContractorShowSite:paintPenGround(scene)
+    local site = self.site
+    if site == nil or not site.dressed then
+        return 0
+    end
+    local field = g_fieldManager:getFieldById(site.plan.showFieldId)
+    local painted = 0
+    for _, corners in ipairs(TCShowScene.getPenGround(scene)) do
+        if TCFieldPreparation.paintTrodden(field, TCFieldPreparation.makeArea(corners)) then
+            painted = painted + 1
+        end
+    end
+    return painted
 end
 
 -- Debug lines -----------------------------------------------------------------------------------

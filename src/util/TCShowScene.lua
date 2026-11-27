@@ -11,7 +11,10 @@
 --     from the near cross aisle, with a gap in its near side to lead
 --     stock in. Ringside spectators along its long sides.
 --   The pens: a row of hurdle pens along one long side (v < 0), as long as
---     the ring, for the livestock classes (167).
+--     the ring, for the livestock classes (167), and a second row behind it
+--     when the show has more animals than one row holds (182, getPens). 182:
+--     an animal a pen (TCShowPens), shown there with its rosettes
+--     (layOutPens).
 --   The stands: gazebos along the other side (v > 0), a couple of people
 --     at each. 171: two of them are stalls (getStallStands: the trade
 --     association's and the careers stand), each with a table at its front
@@ -33,6 +36,12 @@
 --     so its near edge is the one the crowd's side, with a peg at each
 --     corner and a start peg just outside its near edge, left of the
 --     middle (where a player takes the plot).
+--   182's straw (layOutStraw): a bed under each row of pens, over the
+--     bare ground round them (getPenGround), in tiles.
+--   182's animals and rosettes in the pens (layOutPens): not in layOut,
+--     since they come and go through the day (an animal in its pen while
+--     its trailer's in the lines, a rosette once it's judged): TCAuctionProps
+--     lays them out from ShowLivestock's synced pens as late props.
 --
 -- In the scene's frame: u along the showground (nearSign towards the
 -- entrance), v across. "Depth" d is measured in from the arena's near
@@ -49,7 +58,23 @@ TCShowScene.DRESSING = "show"
 TCShowScene.EDGE = 1.5               -- kept clear of the showground's sides
 TCShowScene.PANEL = 3                -- one hurdle (the model's panel length)
 TCShowScene.RING = { start = 13, length = 36, width = 24, gatePanels = 1 }
-TCShowScene.PENS = { size = 3, maxCount = 8 }
+-- The pens (182): as many as the scene asks for (scene.pens, the show's:
+-- one an animal, ShowLivestock's), else `default`; a row holds perRow (or
+-- as many as the ring's length takes), and past that a second row stands
+-- back to back behind it, its fronts facing out, if there's room.
+-- A pen is one penHurdle a side (4 m: room for a cow, the user's call).
+TCShowScene.PENS = { size = 4, default = 8, perRow = 12 }
+-- 182: the bare ground under the pens (getPenGround) reaches this far past
+-- their hurdles (metres), trodden round them.
+TCShowScene.PEN_GROUND_MARGIN = 0.75
+-- 182: the straw bed under each row of pens (layOutStraw): margin past the
+-- hurdles (a little past the bare ground, so its ragged edge runs onto the
+-- grass), and the tile's size (genShowPropsI3d.py's STRAW: each tile is
+-- scaled a little to fit the bed exactly). Metres.
+TCShowScene.STRAW = { margin = 1.0, tile = 2.75 }
+-- A straw tile's faded sides (TCAuctionProps' setUp shows the model's
+-- child numbered by their sum): its own -x, +x, -z, +z.
+TCShowScene.STRAW_FADE = { minusX = 1, plusX = 2, minusZ = 4, plusZ = 8 }
 TCShowScene.STANDS = { spacing = 7, depth = 3.2, maxCount = 5 }
 TCShowScene.TRAILER_LINES = { gap = 8, bayWidth = 5, bayLength = 16, maxBays = 8 }
 TCShowScene.LANE_CLEARANCE = 1       -- a lane's edge from the hurdles and stands
@@ -58,11 +83,14 @@ TCShowScene.RINGSIDE = { spacing = 2.5, standoff = 1.0, share = 0.6 }
 -- The sizes the show's props take on the ground (as TCAuctionScene.SIZES).
 TCShowScene.SIZES = {
     hurdle = { width = 0.5, length = 3 },  -- its feet across
+    penHurdle = { width = 0.5, length = 4 },  -- 182: a pen's
     stand = { width = 3.2, length = 3.2 },
     cone = { width = 0.4, length = 0.4 },
     plotPeg = { width = 0.4, length = 0.4 },
     plotStartPeg = { width = 0.4, length = 0.4 },
     standTable = { width = 0.9, length = 2 },
+    -- 182: an animal in its pen (its footprint for the ground under it).
+    penAnimal = { width = 1, length = 2.2 },
 }
 
 -- 171: a stall, in from its gazebo's front edge (metres): the table and,
@@ -71,6 +99,13 @@ TCShowScene.SIZES = {
 TCShowScene.STALL = { tableIn = 0.5, holderIn = 1.3, visitorSpread = 2.3 }
 -- The stalls, in the order they're given stands.
 TCShowScene.STALL_ROLES = { "association", "careers" }
+
+-- 182: the rosettes on the pens' front hurdles, once judged (layOutPens). Metres: apart along the hurdle. A placing's
+-- colour (TCAuctionProps.ROSETTE_FACES: the model's child shown); a
+-- supreme champion's is CHAMPION.
+TCShowScene.ROSETTE = { spacing = 0.6 }
+TCShowScene.ROSETTE_COLOURS = { "first", "second", "third", "commended" }
+TCShowScene.ROSETTE_CHAMPION = "champion"
 
 -- 169: in a plot's own frame (u in from its near edge, v to its right),
 -- metres: its start peg (outside the near edge, left of the middle).
@@ -114,7 +149,8 @@ end
 
 -- Where everything goes (pure), in depth d and across v: {
 --   ring = { dFrom, dTo, vFrom, vTo },
---   pens = { dFrom, vFrom, vTo, count, size } or nil,
+--   pens = { dFrom, vFrom, vTo, count, size, back = { vFrom, vTo, count } or
+--     nil (182's second row, behind the first) } or nil,
 --   stands = { { d, v } },
 --   lines = { dFrom, dTo, vFrom, bayWidth, count } or nil,
 --   lanes = { { v, halfWidth } } (along d, the ring's sides),
@@ -140,25 +176,50 @@ function TCShowScene.getAreas(scene)
     local aisleHalf = (scene.aisleWidth or 10) * 0.5
     local clearance = TCShowScene.LANE_CLEARANCE
 
-    -- The pens: along the -v side, out to the edge.
+    -- The pens and the stands sit just past the lane each side of the ring
+    -- (182: on a wide showground, against its edges, they were a long walk
+    -- from it), the spare width outside them. A narrow one holds them in
+    -- from its edges, the lane taking what's left.
+    local laneRoom = 2 * aisleHalf + 2 * clearance
+
+    -- The pens: along the -v side.
     local P = TCShowScene.PENS
-    local penCount = math.min(P.maxCount, math.floor(R.length / P.size))
-    local penInner = -halfV + edge + P.size
-    local penRoom = ring.vFrom - penInner
+    local wanted = scene.pens or P.default
+    local perRow = math.min(P.perRow, math.floor(R.length / P.size))
+    local penCount = math.min(perRow, wanted)
+    local backCount = math.min(penCount, wanted - penCount)
+    local minRoom = 2 * clearance + 2
+    local function rowAt(outer)
+        return outer, outer + P.size, ring.vFrom - (outer + P.size)
+    end
+    local penOuter, penInner, penRoom = rowAt(math.max(-halfV + edge, ring.vFrom - laneRoom - P.size))
+    local hasBack = false
+    if backCount >= 1 then
+        -- 182: a second row behind the first, both out towards the edge if
+        -- that's what it takes (the lane narrower), if they fit.
+        local outer, inner, room = rowAt(math.max(-halfV + edge + P.size, ring.vFrom - laneRoom - P.size))
+        if room >= minRoom then
+            penOuter, penInner, penRoom = outer, inner, room
+            hasBack = true
+        end
+    end
     local leftInner = -halfV + edge
-    if penCount >= 1 and penRoom >= 2 * clearance + 2 then
-        areas.pens = { dFrom = ring.dFrom, vFrom = -halfV + edge, vTo = penInner, count = penCount, size = P.size }
+    if penCount >= 1 and penRoom >= minRoom then
+        areas.pens = { dFrom = ring.dFrom, vFrom = penOuter, vTo = penInner, count = penCount, size = P.size }
         leftInner = penInner
+        if hasBack then
+            areas.pens.back = { vFrom = penOuter - P.size, vTo = penOuter, count = backCount }
+        end
     end
 
     -- The stands: along the +v side.
     local S = TCShowScene.STANDS
-    local standInner = halfV - edge - S.depth
+    local standInner = math.min(halfV - edge - S.depth, ring.vTo + laneRoom)
     local rightInner = halfV - edge
     if standInner - ring.vTo >= 2 * clearance + 2 then
         local count = math.min(S.maxCount, math.floor(R.length / S.spacing))
         for i = 1, count do
-            table.insert(areas.stands, { d = ring.dFrom + (i - 0.5) * S.spacing, v = halfV - edge - S.depth * 0.5 })
+            table.insert(areas.stands, { d = ring.dFrom + (i - 0.5) * S.spacing, v = standInner + S.depth * 0.5 })
         end
         rightInner = standInner
     end
@@ -377,6 +438,176 @@ function TCShowScene.getBreederBays(scene, count)
     return bays
 end
 
+-- 182: each pen (pure), numbered as ShowLivestock's pens are: the first
+-- row from the entrance end, then the second. { number, x, z (its middle),
+-- yaw (facing out of its front), frontX, frontZ (its front hurdle's
+-- middle), outU (1 when its front faces +v, -1 for the second row's) }.
+-- Empty with no pens.
+function TCShowScene.getPens(scene)
+    local list = {}
+    local areas = TCShowScene.isShowDressing(scene) and TCShowScene.getAreas(scene) or nil
+    local pens = areas ~= nil and areas.pens or nil
+    if pens == nil then
+        return list
+    end
+    local frame = frameOf(scene)
+    local rows = { { vFrom = pens.vFrom, vTo = pens.vTo, count = pens.count, front = pens.vTo, out = 1 } }
+    if pens.back ~= nil then
+        table.insert(rows, { vFrom = pens.back.vFrom, vTo = pens.back.vTo, count = pens.back.count,
+            front = pens.back.vFrom, out = -1 })
+    end
+    for _, row in ipairs(rows) do
+        for i = 1, row.count do
+            local d = pens.dFrom + (i - 0.5) * pens.size
+            local u = frame.uAt(d)
+            local x, z = toWorld(scene, u, (row.vFrom + row.vTo) * 0.5)
+            local frontX, frontZ = toWorld(scene, u, row.front)
+            table.insert(list, { number = #list + 1, x = x, z = z, yaw = yawOf(scene, 0, row.out),
+                frontX = frontX, frontZ = frontZ, outU = row.out })
+        end
+    end
+    return list
+end
+
+-- 182: the ground under the pens (pure), bare and trodden so no grass
+-- grows up through the straw: a rectangle a row, PEN_GROUND_MARGIN past its
+-- hurdles all round. Each { { x, z } x 4 } (its corners in turn). Empty with
+-- no pens.
+function TCShowScene.getPenGround(scene)
+    local list = {}
+    local areas = TCShowScene.isShowDressing(scene) and TCShowScene.getAreas(scene) or nil
+    local pens = areas ~= nil and areas.pens or nil
+    if pens == nil then
+        return list
+    end
+    local frame = frameOf(scene)
+    local margin = TCShowScene.PEN_GROUND_MARGIN
+    local rows = { { vFrom = pens.vFrom, vTo = pens.vTo, count = pens.count } }
+    if pens.back ~= nil then
+        table.insert(rows, pens.back)
+    end
+    for _, row in ipairs(rows) do
+        local dFrom, dTo = pens.dFrom - margin, pens.dFrom + row.count * pens.size + margin
+        local vFrom, vTo = row.vFrom - margin, row.vTo + margin
+        local corners = {}
+        for _, corner in ipairs({ { dFrom, vFrom }, { dTo, vFrom }, { dTo, vTo }, { dFrom, vTo } }) do
+            local x, z = toWorld(scene, frame.uAt(corner[1]), corner[2])
+            table.insert(corners, { x = x, z = z })
+        end
+        table.insert(list, corners)
+    end
+    return list
+end
+
+-- 182: the pens' animals and rosettes (pure), from ShowLivestock's synced
+-- pens (pens[number] = { present, subTypeName, age, variation, placing,
+-- champion }). In each pen with its animal there: the animal, posed, in its
+-- middle facing out of the front (an `animal` prop: subTypeName, age,
+-- variation), and once judged its rosettes along its front hurdle on the
+-- outside, the champion's first, from the entrance end. A rosette has the
+-- hurdle's footprint (so it sits at the hurdle's height on a slope), turned
+-- to face out, offsetX along it. Every prop has a `key` naming what it
+-- shows, so the props can be swapped one by one as the pens change. A pen
+-- past the scene's (no room) is left out.
+function TCShowScene.layOutPens(scene, pens)
+    local props = {}
+    if pens == nil then
+        return props
+    end
+    local places = TCShowScene.getPens(scene)
+    local frame = frameOf(scene)
+    local animalSize = TCShowScene.SIZES.penAnimal
+    local footprint = TCShowScene.SIZES.penHurdle
+    local spacing = TCShowScene.ROSETTE.spacing
+    for number, pen in ipairs(pens) do
+        local place = places[number]
+        if place ~= nil and pen.present and pen.subTypeName ~= nil then
+            table.insert(props, { kind = "animal", x = place.x, z = place.z, yaw = place.yaw,
+                width = animalSize.width, length = animalSize.length, pen = number,
+                subTypeName = pen.subTypeName, age = pen.age or 0, variation = pen.variation or 1,
+                key = string.format("animal:%d:%s:%d:%d", number, pen.subTypeName, pen.age or 0, pen.variation or 1) })
+            local colours = {}
+            if pen.champion then
+                table.insert(colours, TCShowScene.ROSETTE_CHAMPION)
+            end
+            local colour = pen.placing ~= nil and TCShowScene.ROSETTE_COLOURS[pen.placing] or nil
+            if colour ~= nil then
+                table.insert(colours, colour)
+            end
+            for slot, rosette in ipairs(colours) do
+                -- Along d from the entrance end; the model's x is along u
+                -- facing +v, against it facing -v.
+                local dOffset = (slot - (#colours + 1) * 0.5) * spacing
+                table.insert(props, { kind = "rosette", x = place.frontX, z = place.frontZ, yaw = place.yaw,
+                    width = footprint.length, length = footprint.width,
+                    offsetX = frame.inSign * dOffset * place.outU, rosette = rosette, pen = number,
+                    key = string.format("rosette:%d:%d:%s", number, slot, rosette) })
+            end
+        end
+    end
+    return props
+end
+
+-- 182: the straw beds (pure), one under each row of pens, STRAW.margin
+-- past its hurdles, laid in tiles (penStraw props, each scaled by scaleX,
+-- scaleZ to fit). A tile fades (its ragged edge) only on the bed's outer
+-- sides; inside, tiles meet with none, so the bed's one piece. Two rows
+-- meet at their shared wall, unfaded. A tile's model +z is towards the
+-- entrance (-d), so its +x is +v or -v as the scene runs (place's right
+-- of its forward). Added to result.props.
+function TCShowScene.layOutStraw(scene, result)
+    local areas = TCShowScene.getAreas(scene)
+    local pens = areas ~= nil and areas.pens or nil
+    if pens == nil then
+        return
+    end
+    local frame = frameOf(scene)
+    local S = TCShowScene.STRAW
+    local F = TCShowScene.STRAW_FADE
+    local margin = S.margin
+    local back = pens.back
+    local beds = { { count = pens.count, vFrom = back ~= nil and pens.vFrom or pens.vFrom - margin,
+        vTo = pens.vTo + margin, fadeVFrom = back == nil, fadeVTo = true } }
+    if back ~= nil then
+        table.insert(beds, { count = back.count, vFrom = back.vFrom - margin, vTo = back.vTo,
+            fadeVFrom = true, fadeVTo = false })
+    end
+    -- Model +z towards the entrance: -d, which is u's -inSign. Its +x
+    -- (place's right: forward (fx, fz) turned to (fz, -fx)) is then +v
+    -- when inSign is 1, -v when it's -1.
+    local yaw = yawOf(scene, -frame.inSign, 0)
+    local vFromBit, vToBit = F.minusX, F.plusX
+    if frame.inSign < 0 then
+        vFromBit, vToBit = F.plusX, F.minusX
+    end
+    for _, bed in ipairs(beds) do
+        local dFrom, dTo = pens.dFrom - margin, pens.dFrom + bed.count * pens.size + margin
+        local nD = math.max(1, math.floor((dTo - dFrom) / S.tile + 0.5))
+        local nV = math.max(1, math.floor((bed.vTo - bed.vFrom) / S.tile + 0.5))
+        local stepD, stepV = (dTo - dFrom) / nD, (bed.vTo - bed.vFrom) / nV
+        for i = 1, nD do
+            for j = 1, nV do
+                local fade = 0
+                if i == 1 then
+                    fade = fade + F.plusZ      -- the entrance end, -d
+                end
+                if i == nD then
+                    fade = fade + F.minusZ
+                end
+                if j == 1 and bed.fadeVFrom then
+                    fade = fade + vFromBit
+                end
+                if j == nV and bed.fadeVTo then
+                    fade = fade + vToBit
+                end
+                local x, z = toWorld(scene, frame.uAt(dFrom + (i - 0.5) * stepD), bed.vFrom + (j - 0.5) * stepV)
+                table.insert(result.props, { kind = "penStraw", x = x, z = z, yaw = yaw, width = stepV,
+                    length = stepD, scaleX = stepV / S.tile, scaleZ = stepD / S.tile, fade = fade })
+            end
+        end
+    end
+end
+
 -- Lays the arena out (pure). Returns { props, spots, sounds, stalls,
 -- mingles }, empty for a scene that isn't the show's. 171: stalls { role,
 -- x, z, yaw (the stallholder, facing the lane) }, mingles { x, z, yaw }
@@ -394,7 +625,6 @@ function TCShowScene.layOut(scene)
     end
     local frame = frameOf(scene)
     local seed = scene.seed or 0
-    local panel = TCShowScene.PANEL
     local groupCount = 1000
 
     local function add(kind, d, v, yaw, extra)
@@ -411,8 +641,11 @@ function TCShowScene.layOut(scene)
     -- A run of hurdles from (d1, v1) to (d2, v2), a whole number of panels
     -- (the run's length over PANEL, rounded down). Each hurdle stands on
     -- its own feet, so there's no post at the joints. skip(i): leave panel
-    -- i out (a gateway).
-    local function run(d1, v1, d2, v2, skip)
+    -- i out (a gateway). kind: the hurdle's (182: the pens' are longer),
+    -- `hurdle` by default.
+    local function run(d1, v1, d2, v2, skip, kind)
+        kind = kind or "hurdle"
+        local panel = TCShowScene.SIZES[kind].length
         local dd, dv = d2 - d1, v2 - v1
         local length = math.sqrt(dd * dd + dv * dv)
         local count = math.floor(length / panel + 0.001)
@@ -424,7 +657,7 @@ function TCShowScene.layOut(scene)
         for i = 1, count do
             local startD, startV = d1 + stepD * (i - 1), v1 + stepV * (i - 1)
             if skip == nil or not skip(i, count) then
-                add("hurdle", startD + stepD * 0.5, startV + stepV * 0.5, yaw)
+                add(kind, startD + stepD * 0.5, startV + stepV * 0.5, yaw)
             end
         end
     end
@@ -447,13 +680,26 @@ function TCShowScene.layOut(scene)
     if pens ~= nil then
         local size = pens.size
         local dTo = pens.dFrom + pens.count * size
-        run(pens.dFrom, pens.vFrom, dTo, pens.vFrom)
-        run(pens.dFrom, pens.vTo, dTo, pens.vTo)
+        run(pens.dFrom, pens.vFrom, dTo, pens.vFrom, nil, "penHurdle")
+        run(pens.dFrom, pens.vTo, dTo, pens.vTo, nil, "penHurdle")
         for i = 0, pens.count do
             local d = pens.dFrom + i * size
-            run(d, pens.vFrom, d, pens.vTo)
+            run(d, pens.vFrom, d, pens.vTo, nil, "penHurdle")
+        end
+        -- 182: the second row's outer wall (its fronts) and dividers; its
+        -- inner wall is the first row's back.
+        local back = pens.back
+        if back ~= nil then
+            run(pens.dFrom, back.vFrom, pens.dFrom + back.count * size, back.vFrom, nil, "penHurdle")
+            for i = 0, back.count do
+                local d = pens.dFrom + i * size
+                run(d, back.vFrom, d, back.vTo, nil, "penHurdle")
+            end
         end
     end
+
+    -- 182: the straw under the pens.
+    TCShowScene.layOutStraw(scene, result)
 
     -- The stands, facing the lane, a couple of people at each. 171: a
     -- stall has a table at its front and a stallholder behind it.

@@ -96,6 +96,9 @@ source(TheContractor.dir .. "src/util/TCShowScene.lua")
 source(TheContractor.dir .. "src/util/TCRealisticLivestock.lua")
 source(TheContractor.dir .. "src/util/TCShowAnimals.lua")
 source(TheContractor.dir .. "src/util/TCShowClasses.lua")
+source(TheContractor.dir .. "src/util/TCShowPens.lua")
+source(TheContractor.dir .. "src/util/TCShowPenTrailers.lua")
+source(TheContractor.dir .. "src/util/TCShowAnimalAnimation.lua")
 source(TheContractor.dir .. "src/util/TCShowJudging.lua")
 source(TheContractor.dir .. "src/util/TCPloughScore.lua")
 source(TheContractor.dir .. "src/util/TCPloughTrial.lua")
@@ -1094,6 +1097,8 @@ function TheContractor:deleteMap()
     TCAuctionCrowd.reset()
     -- 140: and the auction site's dressing.
     TCAuctionProps.reset()
+    TCShowPenTrailers.reset()
+    TCShowAnimalAnimation.reset()
     -- 151: a protest's people, placards, blocks and markers.
     TCProtestCrowd.reset()
     -- 107: the traffic blocks on fallen trees' roads.
@@ -1214,6 +1219,10 @@ function TheContractor:update(dt)
     if self.Show ~= nil then
         self.Show:update(dt)
     end
+    -- 182: the show's animals into their pens (server).
+    if self.ShowLivestock ~= nil and g_currentMission:getIsServer() then
+        self.ShowLivestock:update(dt)
+    end
     -- 169: the ploughing match's path, kit and painting (server), its
     -- markers and farmers (every machine).
     if self.PloughingMatch ~= nil then
@@ -1249,6 +1258,8 @@ function TheContractor:update(dt)
     -- 171: the show's stallholders and farmers, and talking to them.
     if g_currentMission:getIsClient() then
         TCShowStandsWorld.update(dt)
+        -- 182: a penned animal hidden in its trailer.
+        TCShowPenTrailers.update(dt)
     end
     -- 134: an auction crowd, if one's up (clients only).
     TCAuctionCrowd.update(dt)

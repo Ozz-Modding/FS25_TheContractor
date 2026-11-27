@@ -19,6 +19,12 @@
 -- A line is said again into the same box while it's open (vanilla's
 -- ConversationDialog.show updates it), so a conversation is one box from
 -- start to finish. update(dt) every frame keeps the camera on the speaker.
+--
+-- A line said from inside an answer's callback is held to the next frame
+-- (update): vanilla's box clears its callback after calling it
+-- (ConversationDialog:onClickOption), so a line shown there would lose its
+-- own and the box could never be closed. Vanilla's NPC always answers
+-- through an event, so never meets this; our server answers at once.
 
 TCConversation = {}
 
@@ -26,6 +32,8 @@ TCConversation = {}
 -- camera's on) }, or nil.
 TCConversation.active = nil
 TCConversation.session = 0
+-- Whether an answer's callback is running (see the header).
+TCConversation.answering = false
 
 -- Whether this machine can hold a conversation (vanilla's box exists).
 function TCConversation.isAvailable()
@@ -74,24 +82,40 @@ function TCConversation.start(speaker)
     return true
 end
 
+local function show(active, text, options, onAnswer)
+    local session = active.session
+    local dialog = ConversationDialog.INSTANCE
+    if dialog ~= nil and dialog.isOpen and dialog.time ~= nil then
+        -- The box stays open between lines: the same input delay as a
+        -- fresh one, so the press that answered can't skip the next line.
+        dialog.inputDelay = dialog.time + 250
+    end
+    ConversationDialog.show(active.speaker.name or "", text or "", options, nil, function(canceled, optionIndex)
+        if TCConversation.getSession() ~= session then
+            return
+        end
+        TCConversation.answering = true
+        if onAnswer ~= nil then
+            onAnswer(not canceled and optionIndex or nil)
+        else
+            TCConversation.finish()
+        end
+        TCConversation.answering = false
+    end)
+end
+
 -- Says a line (see the header). Nothing without a conversation on.
 function TCConversation.say(text, options, onAnswer)
     local active = TCConversation.active
     if active == nil then
         return
     end
-    local session = active.session
     options = options or {}
-    ConversationDialog.show(active.speaker.name or "", text or "", options, nil, function(canceled, optionIndex)
-        if TCConversation.getSession() ~= session then
-            return
-        end
-        if onAnswer ~= nil then
-            onAnswer(not canceled and optionIndex or nil)
-        else
-            TCConversation.finish()
-        end
-    end)
+    if TCConversation.answering then
+        active.queued = { text = text, options = options, onAnswer = onAnswer }
+        return
+    end
+    show(active, text, options, onAnswer)
 end
 
 -- Ends the conversation: the box closed, the camera back.
@@ -121,6 +145,12 @@ end
 -- speaker whose model's gone (freed out of range) ends the camera's part.
 function TCConversation.update(dt)
     local active = TCConversation.active
+    -- A line held from an answer's callback (see the header).
+    if active ~= nil and active.queued ~= nil then
+        local queued = active.queued
+        active.queued = nil
+        show(active, queued.text, queued.options, queued.onAnswer)
+    end
     if active == nil or not active.camera then
         return
     end
@@ -150,4 +180,5 @@ end
 -- deleteMap: anything still open goes.
 function TCConversation.reset()
     TCConversation.finish()
+    TCConversation.answering = false
 end

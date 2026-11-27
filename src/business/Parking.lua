@@ -960,7 +960,6 @@ function TheContractorParking.registerConsoleCommands()
     TCConsole.register("debug", "removeZone", {
         args = "<zoneId>",
         hints = { zoneId = "a parking slot's or repair zone's id (tcDebug zones)" },
-        devPanel = true,
         description = "Sell one of your parking slots or repair zones, for one the construction menu can't pick",
         run = function(farmId, args)
             local zoneId = tonumber(args[1])

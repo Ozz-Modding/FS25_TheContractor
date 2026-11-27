@@ -16,7 +16,7 @@ You type these into the developer console. You don't need cheats on. Each group 
 | `tcShow` | The agricultural show: see it, announce one, call it off, its livestock entries and ploughing plots |
 | `tcLog` | Toggles the mod's detailed log ([below](#tclog)) |
 
-Testing tools that aren't part of the game (spikes, forced rolls, readouts of hidden state) are a separate group, `tcDebug`, for development only. It only appears with a marker file in place.
+Testing tools that aren't part of the game (spikes, forced rolls, readouts of hidden state) are a separate group, `tcDebug`, for development and testing.
 
 Type a group on its own (or with `help`) to list its subcommands and their arguments. Subcommand names aren't case-sensitive. If you get the arguments wrong, or leave out one it needs, the command prints that subcommand's usage.
 

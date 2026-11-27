@@ -81,3 +81,53 @@ test("every prop the layout makes has a model, and ours are in the mod", functio
         assertTrue(face == TCAuctionScene.FACES.GATE or faces[face], "the sign has no " .. face .. " face")
     end
 end)
+
+local function setupShow()
+    local world = setup()
+    world:load("src/util/TCShowClasses.lua")
+    world:load("src/util/TCShowPens.lua")
+    world:load("src/util/TCShowScene.lua")
+    return world
+end
+
+test("182: the rosette has a model in the mod and a face for every colour", function()
+    setupShow()
+    local model = TCAuctionProps.MODELS.rosette
+    assertTrue(model ~= nil and model.isMod and exists(model.filename))
+    local faces = {}
+    for _, face in ipairs(TCAuctionProps.ROSETTE_FACES) do
+        faces[face] = true
+    end
+    for _, colour in ipairs(TCShowScene.ROSETTE_COLOURS) do
+        assertTrue(faces[colour], "no face for " .. colour)
+    end
+    assertTrue(faces[TCShowScene.ROSETTE_CHAMPION])
+end)
+
+test("182: the pens' props come from the show's livestock, only on the show's site", function()
+    setupShow()
+    local livestock = { pens = {}, penVersion = 3 }
+    g_currentMission.TheContractor = { ShowLivestock = livestock }
+    assertTrue(TCAuctionProps.getLateSource({ dressing = "show" }) == livestock)
+    assertEquals(TCAuctionProps.getLateSource({ dressing = "auction" }), nil, "not the show's site")
+    assertEquals(TCAuctionProps.getLateSource(nil), nil)
+end)
+
+test("182: an animal's posed model is its subtype's visual for its age; none without one", function()
+    setupShow()
+    local young = { filenamePosed = "young_posed.i3d", variations = {} }
+    local adult = { filenamePosed = "adult_posed.i3d", variations = {} }
+    g_currentMission.animalSystem = {
+        getSubTypeIndexByName = function(_, name) return name == "COW_HOLSTEIN" and 3 or nil end,
+        getVisualByAge = function(_, index, age)
+            assertEquals(index, 3)
+            return { visualAnimal = age >= 18 and adult or young }
+        end,
+    }
+    assertTrue(TCAuctionProps.getVisualAnimal({ subTypeName = "COW_HOLSTEIN", age = 6 }) == young)
+    assertTrue(TCAuctionProps.getVisualAnimal({ subTypeName = "COW_HOLSTEIN", age = 30 }) == adult)
+    assertEquals(TCAuctionProps.getVisualAnimal({ subTypeName = "PIG", age = 30 }), nil)
+    adult.filenamePosed = nil
+    assertEquals(TCAuctionProps.getVisualAnimal({ subTypeName = "COW_HOLSTEIN", age = 30 }), nil)
+    assertTrue(TCAuctionProps.MODELS.animal ~= nil and TCAuctionProps.MODELS.animal.wholeFile)
+end)

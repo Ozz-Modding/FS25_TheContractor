@@ -108,6 +108,7 @@ end
 --   genetics = { quality, health, productivity, metabolism, fertility }
 --   isPregnant, isLactating, isCastrated
 --   isSick     (nil when RL's disease check is missing)
+--   variation  (182) its coat, an index into its visual's variations
 -- }, every field nil when RL doesn't have it. Plain data, safe to keep.
 function TCRealisticLivestock.readAnimal(animal)
     if not TCRealisticLivestock.isAnimal(animal) then
@@ -128,6 +129,7 @@ function TCRealisticLivestock.readAnimal(animal)
         isPregnant = animal.isPregnant == true,
         isLactating = animal.isLactating == true,
         isCastrated = animal.isCastrated == true,
+        variation = readNumber(animal.variation),
         genetics = {},
     }
     if type(animal.genetics) == "table" then

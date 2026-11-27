@@ -142,25 +142,8 @@ test("args words are found inside enums and optional parts, once each", function
     assertEquals(table.concat(words, ","), "farmlandId,here,show,value")
 end)
 
-test("tcDebug is only installed with its marker file", function()
+test("tcDebug is installed with the other groups, no marker file needed", function()
     local world = setup()
-    TCConsole.reset()
-    TCConsole.install()
-    assertTrue(world.commands.tcWorker ~= nil, "the player's groups")
-    assertEquals(world.commands.tcDebug, nil, "no marker, no tcDebug")
-    TCConsole.uninstall()
-    assertEquals(world.commands.tcWorker, nil, "uninstalled")
-
-    world.files["modSettings/FS25_TheContractor/" .. TCConsole.DEBUG_FILENAME] = true
-    TCConsole.reset()
-    TCConsole.install()
-    assertTrue(world.commands.tcDebug ~= nil, "with the marker")
-    TCConsole.uninstall()
-    assertEquals(world.commands.tcDebug, nil, "uninstalled too")
-end)
-
-test("the server refuses a tcDebug request unless it has the marker too", function()
-    setup()
     TheContractorSettings = { getCanConnectionChange = function() return true end }
     TCConsole.reset()
     local runs = 0
@@ -170,32 +153,13 @@ test("the server refuses a tcDebug request unless it has the marker too", functi
             return "done"
         end,
     })
-    TCConsole.runRequest("debug", { "poke" }, { farmId = 1 }, {})
-    assertEquals(runs, 0, "refused")
-
-    TCConsole.debugEnabled = true
-    TCConsole.runRequest("debug", { "poke" }, { farmId = 1 }, {})
-    assertEquals(runs, 1, "run")
-end)
-
-test("a devPanel tcDebug subcommand runs without the marker, but tcDebug stays uninstalled", function()
-    local world = setup()
-    TheContractorSettings = { getCanConnectionChange = function() return true end }
-    TCConsole.reset()
-    local runs = 0
-    TCConsole.register("debug", "panelPoke", {
-        devPanel = true,
-        run = function()
-            runs = runs + 1
-            return "done"
-        end,
-    })
-    TCConsole.runRequest("debug", { "panelPoke" }, { farmId = 1 }, {})
-    assertEquals(runs, 1, "run without the marker")
-
     TCConsole.install()
-    assertEquals(world.commands.tcDebug, nil, "still not typeable")
+    assertTrue(world.commands.tcWorker ~= nil, "the player's groups")
+    assertTrue(world.commands.tcDebug ~= nil, "tcDebug too")
+    TCConsole.runRequest("debug", { "poke" }, { farmId = 1 }, {})
+    assertEquals(runs, 1, "a joined admin's tcDebug request runs on the server")
     TCConsole.uninstall()
+    assertEquals(world.commands.tcDebug, nil, "uninstalled")
 end)
 
 test("every registration is in a known group, once", function()

@@ -187,6 +187,7 @@ local function setup()
         planOn = function() return { plan = world.plan, problems = {} } end,
         setPlan = function(self, plan) self.site = { plan = plan, dressed = false } end,
         dress = function(self) self.site.dressed = true return "dressed" end,
+        paintPenGround = function() return 0 end,
         clear = function(self) self.site = nil return "cleared" end,
     }
     TheContractorAuctionSite = { PREFERRED_LOTS = 120, CLOSE_HOURS = { 17, 18 },

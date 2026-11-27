@@ -354,7 +354,7 @@ test("steep plots are passed over for flat ones, and a field steep all over can'
     assertEquals(candidate.problems[1], TCShowSite.PROBLEM.TOO_STEEP)
 end)
 
-test("dressing one field: snapshotted, its showground side grass, the rest stubble of its crop; put back after", function()
+test("dressing one field: snapshotted, all of it grass, then each plot a square of stubble of its crop; put back after", function()
     local world = setupGame()
     world:addField(1, rectPolygon(0, 0, 380, 110), "WHEAT")
     world.showSite:consolePlan(1)
@@ -364,41 +364,51 @@ test("dressing one field: snapshotted, its showground side grass, the rest stubb
     world.showSite:dress()
     assertTrue(world.showSite.site.dressed)
     assertEquals(world.showSite.site.snapshots[1].fruitType, "WHEAT")
-    assertEquals(#world.painted, 2)
-    local grass, stubble = world.painted[1], world.painted[2]
-    assertEquals(grass.what, "grass")
-    assertEquals(stubble.what, "stubble")
-    assertEquals(stubble.crop, "WHEAT")
-    -- Each side of the line, between them the whole field.
-    local line = plan.line
-    for _, p in ipairs(grass.area.points) do
-        assertTrue((p.x - line.x) * line.nx + (p.z - line.z) * line.nz >= -0.001, "grass past the line")
+    assertEquals(#world.painted, 1 + #plan.plots)
+    assertEquals(world.painted[1].what, "grass")
+    assertEquals(world.painted[1].area, nil, "the whole field, first")
+    for i, plot in ipairs(plan.plots) do
+        local stubble = world.painted[1 + i]
+        assertEquals(stubble.what, "stubble")
+        assertEquals(stubble.fieldId, 1)
+        assertEquals(stubble.crop, "WHEAT")
+        assertNear(TCShowSite.getArea(stubble.area.points), (2 * plot.half) ^ 2, 0.01, "the plot's square")
+        local cx, cz = 0, 0
+        for _, point in ipairs(stubble.area.points) do
+            cx, cz = cx + point.x / 4, cz + point.z / 4
+        end
+        assertNear(cx, plot.cx, 0.01)
+        assertNear(cz, plot.cz, 0.01)
     end
-    assertNear(TCShowSite.getArea(grass.area.points) + TCShowSite.getArea(stubble.area.points), 380 * 110, 0.1)
-    -- The road's at the +x end: the showground's there.
-    assertTrue(line.nx > 0)
-    assertTrue(world.showSite:dress() ~= nil and #world.painted == 2, "not dressed twice")
+    local painted = #world.painted
+    assertTrue(world.showSite:dress() ~= nil and #world.painted == painted, "not dressed twice")
 
     world.showSite:restore()
-    assertEquals(world.painted[3].what, "restore")
-    assertEquals(world.painted[3].crop, "WHEAT")
+    assertEquals(world.painted[painted + 1].what, "restore")
+    assertEquals(world.painted[painted + 1].crop, "WHEAT")
     assertTrue(not world.showSite.site.dressed)
 end)
 
-test("dressing a pair: the showground field all grass, the other all stubble; each put back to its own", function()
+test("dressing a pair: both fields grass, the plots stubble of the ploughing field's crop; each put back to its own", function()
     local world = setupGame()
     world:addField(2, rectPolygon(0, 300, 200, 410), "WHEAT")
     world:addField(3, rectPolygon(208, 300, 408, 410), "BARLEY")
     world.roads = { { x = -10, z = 350 } }
     world.showSite:consolePlan(2, 3)
-    assertEquals(world.showSite.site.plan.mode, TCShowSite.MODE.PAIR)
+    local plan = world.showSite.site.plan
+    assertEquals(plan.mode, TCShowSite.MODE.PAIR)
     world.showSite:dress()
     assertEquals(world.painted[1].what, "grass")
     assertEquals(world.painted[1].fieldId, 2)
     assertEquals(world.painted[1].area, nil, "the whole field")
-    assertEquals(world.painted[2].what, "stubble")
+    assertEquals(world.painted[2].what, "grass")
     assertEquals(world.painted[2].fieldId, 3)
-    assertEquals(world.painted[2].crop, "BARLEY")
+    assertEquals(#world.painted, 2 + #plan.plots)
+    for i = 1, #plan.plots do
+        assertEquals(world.painted[2 + i].what, "stubble")
+        assertEquals(world.painted[2 + i].fieldId, 3)
+        assertEquals(world.painted[2 + i].crop, "BARLEY")
+    end
     world.showSite:clear()
     local restored = {}
     for _, painted in ipairs(world.painted) do
@@ -414,6 +424,33 @@ test("dressing a pair: the showground field all grass, the other all stubble; ea
     world:addField(4, rectPolygon(600, 300, 800, 410))
     local candidate = world.showSite:planOn(2, 4)
     assertEquals(candidate, nil)
+end)
+
+test("the pens' ground bared on the showground's field, only once the site's dressed", function()
+    local world = setupGame()
+    world:addField(1, rectPolygon(0, 0, 380, 110), "WHEAT")
+    TCFieldPreparation.paintTrodden = function(field, area)
+        table.insert(world.painted, { what = "trodden", fieldId = field:getId(), area = area })
+        return true
+    end
+    local rows = { { { x = 1, z = 1 }, { x = 2, z = 1 }, { x = 2, z = 2 }, { x = 1, z = 2 } },
+        { { x = 3, z = 1 }, { x = 4, z = 1 }, { x = 4, z = 2 }, { x = 3, z = 2 } } }
+    local asked = nil
+    TCShowScene = { getPenGround = function(scene)
+        asked = scene
+        return rows
+    end }
+    local scene = { dressing = "show" }
+    assertEquals(world.showSite:paintPenGround(scene), 0, "no site")
+    world.showSite:consolePlan(1)
+    assertEquals(world.showSite:paintPenGround(scene), 0, "not dressed: nothing would put it back")
+    world.showSite:dress()
+    local before = #world.painted
+    assertEquals(world.showSite:paintPenGround(scene), 2)
+    assertEquals(asked, scene)
+    assertEquals(world.painted[before + 1].what, "trodden")
+    assertEquals(world.painted[before + 1].fieldId, world.showSite.site.plan.showFieldId)
+    assertEquals(world.painted[before + 2].area.points, rows[2])
 end)
 
 test("a dressed site survives a save and is still put back after a load; an undressed plan too", function()

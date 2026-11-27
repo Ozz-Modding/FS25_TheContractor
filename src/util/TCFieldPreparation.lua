@@ -262,6 +262,28 @@ function TCFieldPreparation.putDownStubble(field, fruitTypeName, area)
     return true
 end
 
+-- 182: part of a field (makeArea's) bare and trodden, as the ground in a
+-- show's pens: no crop, weeds or stones, rolled seedbed (fine, flat earth,
+-- the nearest field ground has to a trodden pen). Server. Returns whether
+-- it was done.
+function TCFieldPreparation.paintTrodden(field, area)
+    if field == nil or area == nil then
+        return false
+    end
+    local task = FieldUpdateTask.new()
+    task:setField(field)
+    task:setArea(area)
+    task:clearHeight()
+    task:setWeedState(0)
+    task:setStoneLevel(0)
+    task:setFruit(FruitType.UNKNOWN, 0)
+    task:setGroundType(FieldGroundType.ROLLED_SEEDBED)
+    task:setGroundAngle(field:getAngle())
+    task:setStubbleShredLevel(0)
+    g_fieldManager:addFieldUpdateTask(task, true)
+    return true
+end
+
 -- 169: part of a field (makeArea's) ploughed, as a farmer's plot in the
 -- ploughing match looks worked: no crop, the ground ploughed with its
 -- furrows at angle (radians, a direction's y rotation, as a plough's).

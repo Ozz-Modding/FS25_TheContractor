@@ -25,6 +25,16 @@
 --   from the trailer, scored (TCShowJudging) with the judge's eye, and the
 --   classes ranked. An entry with no animal there is a no-show (no penalty);
 --   a sick RL animal is turned away by the vet.
+-- The pens (182, TCShowPens): at set-out each animal entry gets a pen,
+--   players' first and the farmers' filling the rest, their number in the
+--   scene (the show's getPens hook). From the gates opening to their
+--   closing a farmer's animal is in its pen, and a player's while its
+--   trailer stands in the lines (updatePens, every PEN_CHECK_MS): its look
+--   read from the trailer, the trailer named so a client hides it there.
+--   Judged, a pen has its animal's placing (and a champion's), for the
+--   rosettes. Every machine has the pens (looks, placings, never a score),
+--   TCShowScene.layOutPens shows them. Saved without who's there (read
+--   again after a load).
 -- Results: TheContractorShow collects the placings at 16:00 (getPlacings)
 --   and pays them (prizes, reputation, the host's opinion), each class with
 --   its own amounts here. A player sees their entries' placings and the stats
@@ -55,6 +65,10 @@ TheContractorShowLivestock.FARMER_ONLY_CLASSES = 4
 TheContractorShowLivestock.VANILLA_AGE_TOLERANCE = 1
 -- km/h: a trailer slower than this is stopped.
 TheContractorShowLivestock.STOPPED_SPEED = 1
+-- 182: how often the server looks for animals to put in their pens (ms).
+TheContractorShowLivestock.PEN_CHECK_MS = 1000
+-- Rows of pens at most.
+TheContractorShowLivestock.PEN_ROWS = 2
 
 -- Prize money (unscaled pounds, real UK show rates), reputation (jobs'
 -- worth) and the host's opinion, by placing; highly commended gets a
@@ -106,6 +120,16 @@ function TheContractorShowLivestock.new()
     self.farmerEntries = {}
     self.drawn = false
     self.stockman = {}
+    -- 182, every machine: the pens (TCShowPens: pens[number] = { entryId,
+    -- farmId } or a farmer's look; and present, subTypeName, age,
+    -- variation, trailerId, animalKey, placing, champion), whether they've
+    -- been given out, and a count that goes up whenever they change (the
+    -- props follow it, TCAuctionProps).
+    self.pens = {}
+    self.pensAssigned = false
+    self.penVersion = 0
+    -- Server: ms to the next look for animals to pen.
+    self.penTimer = 0
     -- Server: the rolls (the tests swap it).
     self.random = math.random
     return self
@@ -132,6 +156,10 @@ function TheContractorShowLivestock:register(show)
         end,
         onSetOut = function(event)
             self:readHerds(event)
+        end,
+        -- 182: the pens the showground needs, given out before it's laid out.
+        getPens = function(event)
+            return self:assignPens(event)
         end,
         onHour = function(event, hour)
             if hour >= TheContractorShow.JUDGING_HOUR then
@@ -300,6 +328,9 @@ function TheContractorShowLivestock:reset(showId)
     self.judged = false
     self.farmerEntries = {}
     self.drawn = false
+    self.pens = {}
+    self.pensAssigned = false
+    self.penVersion = self.penVersion + 1
     self:sync()
 end
 
@@ -463,8 +494,10 @@ function TheContractorShowLivestock:readHerds(event)
 end
 
 -- Server: the animals stopped in the show's trailer lines, by farm: {
--- [farmId] = { read cluster, ... } } (one per cluster, its count as read).
-function TheContractorShowLivestock.readTrailersInLines()
+-- [farmId] = { { read (a cluster), left (its count, as taken), trailer,
+-- stopped } } }. includeMoving (182's pens): a moving trailer in the lines
+-- too, stopped false.
+function TheContractorShowLivestock.readTrailersInLines(includeMoving)
     local husbandrySystem = g_currentMission.husbandrySystem
     local site = g_currentMission.TheContractor.AuctionSite
     local scene = site ~= nil and site:getScene() or nil
@@ -475,12 +508,13 @@ function TheContractorShowLivestock.readTrailersInLines()
     for _, trailer in ipairs(husbandrySystem ~= nil and husbandrySystem.livestockTrailers or {}) do
         if TCShowAnimals.isTrailer(trailer) then
             local standing = TCShowAnimals.getStanding(trailer, scene)
-            if standing.bay ~= nil and standing.farmId ~= nil and
-                    (standing.speed or 0) < TheContractorShowLivestock.STOPPED_SPEED then
+            local stopped = (standing.speed or 0) < TheContractorShowLivestock.STOPPED_SPEED
+            if standing.bay ~= nil and standing.farmId ~= nil and (stopped or includeMoving) then
                 local read = TCShowAnimals.readTrailer(trailer)
                 byFarm[standing.farmId] = byFarm[standing.farmId] or {}
                 for _, cluster in ipairs(read ~= nil and read.entries or {}) do
-                    table.insert(byFarm[standing.farmId], { read = cluster, left = cluster.count })
+                    table.insert(byFarm[standing.farmId], { read = cluster, left = cluster.count, trailer = trailer,
+                        stopped = stopped })
                 end
             end
         end
@@ -612,6 +646,8 @@ function TheContractorShowLivestock:buildPlacings()
         end
     end
     for _, farmerEntry in ipairs(self.farmerEntries) do
+        farmerEntry.placing = nil
+        farmerEntry.champion = nil
         add(farmerEntry.classKey, { score = farmerEntry.score, farmerEntry = farmerEntry })
     end
     local order = getClassOrder()
@@ -656,6 +692,9 @@ function TheContractorShowLivestock:buildPlacings()
         if best.entry ~= nil then
             best.entry.champion = true
         end
+        if best.farmerEntry ~= nil then
+            best.farmerEntry.champion = true
+        end
         addPlacing(best, 1, TCShowClasses.getChampionKey(typeName), TheContractorShowLivestock.CHAMPION_PRIZE,
             TheContractorShowLivestock.CHAMPION_REPUTATION, TheContractorShowLivestock.CHAMPION_OPINION)
     end
@@ -675,6 +714,9 @@ function TheContractorShowLivestock:buildPlacings()
                 competitor.entry.placing = placing
                 competitor.entry.status = placing ~= nil and STATUS.PLACED or STATUS.UNPLACED
             end
+            if competitor.farmerEntry ~= nil then
+                competitor.farmerEntry.placing = placing
+            end
             if placing ~= nil then
                 if isHerd then
                     -- The show's own amounts (highly commended: none).
@@ -693,6 +735,7 @@ function TheContractorShowLivestock:buildPlacings()
         end
     end
     addChampion(lastType)
+    self:applyPenPlacings()
     return placings
 end
 
@@ -705,6 +748,154 @@ function TheContractorShowLivestock:getPlacings(event)
     return self:buildPlacings()
 end
 
+-- The pens (182) ------------------------------------------------------------------------------------
+
+-- Pens a row: as many as the ring's length takes (TCShowScene's).
+function TheContractorShowLivestock.getPensPerRow()
+    local P = TCShowScene.PENS
+    return math.min(P.perRow, math.floor(TCShowScene.RING.length / P.size))
+end
+
+-- Server, at set-out (the show's getPens), or the first look after a load
+-- that missed it: every animal entry given a pen. Returns how many pens,
+-- or nil with none (the scene's default).
+function TheContractorShowLivestock:assignPens(event)
+    if event == nil then
+        return nil
+    end
+    if self.showId ~= event.id then
+        self:reset(event.id)
+    end
+    self:drawFarmerEntries(event)
+    if not self.pensAssigned then
+        local animalSystem = g_currentMission.animalSystem
+        self.pens = TCShowPens.assign(self.entries, self.farmerEntries, TheContractorShowLivestock.getPensPerRow(),
+            TheContractorShowLivestock.PEN_ROWS, function(classKey)
+                return TCShowClasses.getClass(animalSystem, classKey)
+            end, self.random)
+        self.pensAssigned = true
+        if self.judged then
+            self:applyPenPlacings()
+        end
+        self.penVersion = self.penVersion + 1
+        TCLog.info("TheContractor: show %d: %d pen(s) given out", event.id, #self.pens)
+        self:sync()
+    end
+    return #self.pens > 0 and #self.pens or nil
+end
+
+-- Every pen's placing and champion from its animal's (server, once judged).
+function TheContractorShowLivestock:applyPenPlacings()
+    local byPen = {}
+    for _, farmerEntry in ipairs(self.farmerEntries) do
+        if farmerEntry.pen ~= nil then
+            byPen[farmerEntry.pen] = farmerEntry
+        end
+    end
+    for number, pen in ipairs(self.pens) do
+        local source = pen.entryId ~= nil and self:getEntry(pen.entryId) or byPen[number]
+        pen.placing = source ~= nil and source.placing or nil
+        pen.champion = source ~= nil and source.champion == true or nil
+    end
+    self.penVersion = self.penVersion + 1
+end
+
+-- Server, every frame: who's in their pens, looked at every PEN_CHECK_MS.
+function TheContractorShowLivestock:update(dt)
+    self.penTimer = self.penTimer - dt
+    if self.penTimer > 0 then
+        return
+    end
+    self.penTimer = TheContractorShowLivestock.PEN_CHECK_MS
+    self:updatePens()
+end
+
+-- Server: the pens' animals as they are now. A farmer's is there while the
+-- gates are open; a player's while its trailer stands in the lines (it
+-- must have stopped to be penned; it stays penned until the trailer
+-- leaves). A no-show or a sick one isn't penned. Every machine told of a
+-- change.
+function TheContractorShowLivestock:updatePens()
+    local tc = g_currentMission.TheContractor
+    local event = tc.Show ~= nil and tc.Show:getEvent() or nil
+    local env = g_currentMission.environment
+    local scene = tc.AuctionSite ~= nil and tc.AuctionSite:getScene() or nil
+    local open = event ~= nil and self.showId == event.id and TCShowScene.isShowDressing(scene) and
+        TCShowPens.isOpen(event.day, env.currentMonotonicDay, env.currentHour or 0, TheContractorShow.START_HOUR,
+            TheContractorShow.END_HOUR)
+    if open and not self.pensAssigned then
+        self:assignPens(event)
+    end
+    local lines = open and TheContractorShowLivestock.readTrailersInLines(true) or {}
+    local changed = false
+    local function set(pen, field, value)
+        if pen[field] ~= value then
+            pen[field] = value
+            changed = true
+        end
+    end
+    for _, pen in ipairs(self.pens) do
+        if pen.entryId == nil then
+            if pen.subTypeName ~= nil then
+                set(pen, "present", open or nil)
+            end
+        else
+            local read, trailer = nil, nil
+            local entry = self:getEntry(pen.entryId)
+            if open and entry ~= nil and entry.status ~= STATUS.NO_SHOW and entry.status ~= STATUS.SICK then
+                read, trailer = self:findPenAnimal(entry, pen, lines[entry.farmId])
+            end
+            if read ~= nil then
+                set(pen, "present", true)
+                set(pen, "trailerId", NetworkUtil.getObjectId(trailer))
+                set(pen, "subTypeName", read.subTypeName)
+                set(pen, "age", read.age)
+                set(pen, "variation", read.animal ~= nil and read.animal.variation or 1)
+                set(pen, "animalKey", read.animal ~= nil and read.animal.key or nil)
+            else
+                set(pen, "present", nil)
+                set(pen, "trailerId", nil)
+            end
+        end
+    end
+    if changed then
+        self.penVersion = self.penVersion + 1
+        self:sync()
+    end
+end
+
+-- Server: a player's pen's animal in the lines, and its trailer, or nil. A
+-- moving trailer counts only for the animal already penned from it. pool:
+-- the farm's from readTrailersInLines(true), shared by its pens so no
+-- animal's in two.
+function TheContractorShowLivestock:findPenAnimal(entry, pen, pool)
+    if pool == nil then
+        return nil
+    end
+    local usable = {}
+    for _, item in ipairs(pool) do
+        if item.stopped or (pen.present and pen.trailerId == NetworkUtil.getObjectId(item.trailer)) then
+            table.insert(usable, item)
+        end
+    end
+    local class = TCShowClasses.getClass(g_currentMission.animalSystem, entry.classKey)
+    if class == nil then
+        return nil
+    end
+    local husbandry = entry.husbandryId ~= nil and NetworkUtil.getObject(entry.husbandryId) or nil
+    local productivity = TCShowAnimals.isHusbandry(husbandry) and TCShowAnimals.getProductivity(husbandry) or nil
+    local read = TheContractorShowLivestock.findEntryAnimal(entry, class, usable, productivity)
+    if read == nil or (read.animal ~= nil and read.animal.isSick) then
+        return nil
+    end
+    for _, item in ipairs(usable) do
+        if item.read == read then
+            return read, item.trailer
+        end
+    end
+    return nil
+end
+
 -- Farms and farmers --------------------------------------------------------------------------------
 
 -- Every machine (TCFarmDeletion): a deleted farm's entries go.
@@ -712,6 +903,13 @@ function TheContractorShowLivestock:forgetFarm(farmId)
     for i = #self.entries, 1, -1 do
         if self.entries[i].farmId == farmId then
             table.remove(self.entries, i)
+        end
+    end
+    -- 182: its pens stand empty (the others keep their numbers).
+    for number, pen in ipairs(self.pens or {}) do
+        if pen.farmId == farmId then
+            self.pens[number] = {}
+            self.penVersion = (self.penVersion or 0) + 1
         end
     end
 end
@@ -764,6 +962,21 @@ function TheContractorShowLivestock.writeState(streamId, state)
             streamWriteFloat32(streamId, stat.target or -1)
         end
     end
+    -- 182: the pens, a farmer's look and placing too (never a score).
+    local pens = state.pens or {}
+    streamWriteUInt8(streamId, #pens)
+    for _, pen in ipairs(pens) do
+        streamWriteInt32(streamId, pen.entryId or -1)
+        streamWriteInt32(streamId, pen.farmId or 0)
+        streamWriteString(streamId, pen.subTypeName or "")
+        streamWriteInt16(streamId, pen.age or -1)
+        streamWriteUInt8(streamId, pen.variation or 0)
+        streamWriteBool(streamId, pen.present == true)
+        streamWriteInt32(streamId, pen.trailerId or -1)
+        streamWriteString(streamId, pen.animalKey or "")
+        streamWriteUInt8(streamId, pen.placing or 0)
+        streamWriteBool(streamId, pen.champion == true)
+    end
 end
 
 local function readOptionalString(streamId)
@@ -806,6 +1019,30 @@ function TheContractorShowLivestock.readState(streamId)
         end
         table.insert(state.entries, entry)
     end
+    state.pens = {}
+    local penCount = streamReadUInt8(streamId)
+    for _ = 1, penCount do
+        local pen = {
+            entryId = readOptionalNumber(streamReadInt32(streamId)),
+            farmId = streamReadInt32(streamId),
+            subTypeName = readOptionalString(streamId),
+            age = readOptionalNumber(streamReadInt16(streamId)),
+            variation = streamReadUInt8(streamId),
+            present = streamReadBool(streamId) or nil,
+            trailerId = readOptionalNumber(streamReadInt32(streamId)),
+            animalKey = readOptionalString(streamId),
+        }
+        if pen.variation == 0 then
+            pen.variation = nil
+        end
+        local placing = streamReadUInt8(streamId)
+        pen.placing = placing > 0 and placing or nil
+        pen.champion = streamReadBool(streamId) or nil
+        if pen.farmId == 0 then
+            pen.farmId = nil
+        end
+        table.insert(state.pens, pen)
+    end
     return state
 end
 
@@ -814,6 +1051,8 @@ function TheContractorShowLivestock:applyState(state)
     self.showId = state.showId
     self.judged = state.judged
     self.entries = state.entries
+    self.pens = state.pens or {}
+    self.penVersion = self.penVersion + 1
 end
 
 function TheContractorShowLivestock:writeInitialClientState(streamId, connection)
@@ -885,6 +1124,24 @@ function TheContractorShowLivestock:saveToXmlFile(xmlFile)
         setXMLInt(xmlFile, farmerKey .. "#farmerId", farmerEntry.farmerId)
         setXMLString(xmlFile, farmerKey .. "#model", farmerEntry.model or "")
         setXMLFloat(xmlFile, farmerKey .. "#score", farmerEntry.score)
+        if farmerEntry.pen ~= nil then
+            setXMLInt(xmlFile, farmerKey .. "#pen", farmerEntry.pen)
+        end
+    end
+    -- 182: the pens as given out (who's in them now is read again).
+    setXMLBool(xmlFile, key .. "#pensAssigned", self.pensAssigned)
+    for i, pen in ipairs(self.pens) do
+        local penKey = string.format("%s.pen(%d)", key, i - 1)
+        if pen.entryId ~= nil then
+            setXMLInt(xmlFile, penKey .. "#entryId", pen.entryId)
+            setXMLInt(xmlFile, penKey .. "#farmId", pen.farmId or 0)
+        elseif pen.subTypeName ~= nil then
+            setXMLString(xmlFile, penKey .. "#subTypeName", pen.subTypeName)
+            setXMLInt(xmlFile, penKey .. "#age", pen.age or 0)
+            setXMLInt(xmlFile, penKey .. "#variation", pen.variation or 1)
+        else
+            setXMLBool(xmlFile, penKey .. "#empty", true)
+        end
     end
     local farmerIds = {}
     for farmerId in pairs(self.stockman) do
@@ -955,7 +1212,29 @@ function TheContractorShowLivestock:loadFromXMLFile(xmlFile)
             farmerId = getXMLInt(xmlFile, farmerKey .. "#farmerId") or 0,
             model = model ~= "" and model or nil,
             score = getXMLFloat(xmlFile, farmerKey .. "#score") or 0,
+            pen = getXMLInt(xmlFile, farmerKey .. "#pen"),
         })
+        i = i + 1
+    end
+    self.pensAssigned = getXMLBool(xmlFile, key .. "#pensAssigned") == true
+    self.pens = {}
+    i = 0
+    while hasXMLProperty(xmlFile, string.format("%s.pen(%d)", key, i)) do
+        local penKey = string.format("%s.pen(%d)", key, i)
+        local pen = {}
+        local entryId = getXMLInt(xmlFile, penKey .. "#entryId")
+        if entryId ~= nil then
+            pen.entryId = entryId
+            pen.farmId = getXMLInt(xmlFile, penKey .. "#farmId")
+        else
+            pen.subTypeName = getXMLString(xmlFile, penKey .. "#subTypeName")
+            if pen.subTypeName ~= nil then
+                pen.farmer = true
+                pen.age = getXMLInt(xmlFile, penKey .. "#age") or 0
+                pen.variation = getXMLInt(xmlFile, penKey .. "#variation") or 1
+            end
+        end
+        table.insert(self.pens, pen)
         i = i + 1
     end
     self.stockman = {}
@@ -1133,4 +1412,45 @@ function TheContractorShowLivestock.registerConsoleCommands()
             return tc.ShowLivestock:describeEntries()
         end,
     })
+
+    -- 182: the pens as the server has them, read again first.
+    TCConsole.register("debug", "showPens", {
+        description = "The show's pens: whose animal each holds, whether it's there now (and from which trailer), its look and placing",
+        run = function()
+            local livestock = g_currentMission.TheContractor.ShowLivestock
+            livestock:updatePens()
+            return livestock:describePens()
+        end,
+    })
+end
+
+-- 182: the pens, for tcDebug showPens.
+function TheContractorShowLivestock:describePens()
+    if #self.pens == 0 then
+        return self.pensAssigned and "The show's pens were given out, but no animal has one." or
+            "No pens given out yet: that's at the show's set-out (midnight before)."
+    end
+    local lines = { string.format("Show pens (%d):", #self.pens) }
+    for number, pen in ipairs(self.pens) do
+        local who
+        if pen.entryId ~= nil then
+            local entry = self:getEntry(pen.entryId)
+            who = string.format("%s's entry %d (%s)", getFarmName(pen.farmId or 0), pen.entryId,
+                entry ~= nil and entry.classKey or "gone")
+        elseif pen.subTypeName ~= nil then
+            who = "a farmer's"
+        else
+            who = "empty"
+        end
+        local state = pen.present and "there" or "not there"
+        if pen.present and pen.trailerId ~= nil then
+            state = string.format("there, from trailer %d", pen.trailerId)
+        end
+        local look = pen.subTypeName ~= nil and string.format("%s, %d months, coat %d", pen.subTypeName, pen.age or 0,
+            pen.variation or 1) or "-"
+        local placed = pen.placing ~= nil and string.format(", placed %d%s", pen.placing,
+            pen.champion and ", champion" or "") or ""
+        table.insert(lines, string.format("  %d: %s, %s; %s%s", number, who, state, look, placed))
+    end
+    return table.concat(lines, "\n")
 end

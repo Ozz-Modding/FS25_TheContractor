@@ -28,9 +28,7 @@
 -- reads, so it runs where it's asked.
 --
 -- A testing tool, so its texts are plain English like tcDebug's, not l10n.
--- It opens without tcDebug's marker file (its key works anywhere), and the
--- tcDebug subcommands it runs are marked devPanel so they work without it
--- too (TCConsole.isGroupEnabled). Gamepad-first like
+-- Gamepad-first like
 -- the other dialogs: the button bar acts on the highlighted row, and
 -- up from the list reaches the page picker.
 
@@ -280,8 +278,7 @@ end
 -- through TCConsole.resultListener).
 function TCDevDialog:runCommand(groupKey, args)
     local group = TCConsole.groups[groupKey]
-    local def = group ~= nil and args[1] ~= nil and group.subcommands[string.lower(args[1])] or nil
-    if group == nil or not TCConsole.isGroupEnabled(group, def) then
+    if group == nil then
         self:setStatus("That console group isn't installed on this machine.")
         return
     end

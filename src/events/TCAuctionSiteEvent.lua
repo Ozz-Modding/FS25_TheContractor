@@ -121,6 +121,8 @@ function TCAuctionSiteEvent.writeScene(streamId, scene)
             streamWriteFloat32(streamId, plot[key] or 0)
         end
     end
+    -- 182: the show's pens (0: the scene's default).
+    streamWriteUInt8(streamId, scene.pens or 0)
 end
 
 function TCAuctionSiteEvent.readScene(streamId)
@@ -163,6 +165,8 @@ function TCAuctionSiteEvent.readScene(streamId)
         end
         table.insert(scene.plots, plot)
     end
+    local pens = streamReadUInt8(streamId)
+    scene.pens = pens > 0 and pens or nil
     return scene
 end
 

@@ -108,6 +108,12 @@ local function setup()
             self.site.dressed = true
             return "dressed"
         end,
+        -- 182: the pens' ground, after the showground's laid out.
+        paintPenGround = function(self, scene)
+            table.insert(world.showSiteLog, "pens")
+            world.penGroundScene = scene
+            return 1
+        end,
         clear = function(self)
             table.insert(world.showSiteLog, self.site.dressed and "restore" or "clear")
             self.site = nil
@@ -334,7 +340,7 @@ test("the day: signs a month before, dressed and laid out at midnight, results a
     setDay(50)
     nextDay(world)
     assertEquals(event.state, TheContractorEventDay.STATE.SET_OUT)
-    assertEquals(table.concat(world.showSiteLog, ","), "plan,dress")
+    assertEquals(table.concat(world.showSiteLog, ","), "plan,dress,pens")
     assertEquals(#world.openStarts, 1)
     local start = world.openStarts[1]
     assertEquals(start.fieldId, SHOW_FIELD)
@@ -381,7 +387,7 @@ test("the day: signs a month before, dressed and laid out at midnight, results a
 
     nextDay(world)
     assertEquals(tc.Show:getEvent(), nil)
-    assertEquals(table.concat(world.showSiteLog, ","), "plan,dress,restore")
+    assertEquals(table.concat(world.showSiteLog, ","), "plan,dress,pens,restore")
     assertEquals(world.siteClears, 1)
     assertEquals(tc.AuctionSigns.month, 0)
     assertTrue(not tc.PublicEvents:isFieldInUse(PLOUGH_FIELD))
@@ -426,7 +432,7 @@ test("the ploughing field bought by a farm calls it off and puts the site back",
     world.fields[PLOUGH_FIELD].owner = 3
     setHour(world, 1)
     assertEquals(tc.Show:getEvent(), nil)
-    assertEquals(table.concat(world.showSiteLog, ","), "plan,dress,restore")
+    assertEquals(table.concat(world.showSiteLog, ","), "plan,dress,pens,restore")
     assertEquals(world.siteClears, 1)
     local found = false
     for _, message in ipairs(tc.Inbox:getMessages(1)) do

@@ -2,7 +2,9 @@
 -- one's made or withdrawn, the entries are judged, or they start again for
 -- a new show. Every farm's entries, with their placings and the stats that
 -- counted once judged; never a score, the judge's eye or a farmer's entry
--- (ShowLivestock.writeState). Also the livestock's part of the initial
+-- (ShowLivestock.writeState). 182: also the pens, a farmer's animal's look
+-- and placing among them (never who, or a score), each time they change.
+-- Also the livestock's part of the initial
 -- client state.
 
 TCShowLivestockEvent = {}

@@ -51,19 +51,42 @@ TCAuctionProps.MODELS = {
     --     about as a loose body);
     --   stand: our own sale office gazebo, as a trade stand.
     hurdle = { filename = "i3d/showHurdle.i3d", isMod = true, collision = true },
+    -- 182: the pens' hurdle, the same 4 m long (room for a cow).
+    penHurdle = { filename = "i3d/showPenHurdle.i3d", isMod = true, collision = true },
     cone = { filename = "$data/maps/mapUS/textures/props/trafficCone.i3d", childName = "visual_lod" },
     stand = { filename = "i3d/auctionGazebo.i3d", isMod = true, collision = true },
     showGateSign = { filename = "i3d/showGateSign.i3d", isMod = true, collision = true },
-    -- 169: the ploughing plots' pegs (TCShowScene.layOutPlots). Base game
-    -- stand-ins, the user's to swap: the traffic cone's look at the corners
-    -- (a wooden stake with a flag wanted), and the US signpost (with its
-    -- collision) for the start peg (a peg with a number board wanted).
-    plotPeg = { filename = "$data/maps/mapUS/textures/props/trafficCone.i3d", childName = "visual_lod" },
-    plotStartPeg = { filename = "$data/maps/mapUS/textures/props/signPost01.i3d", collision = true },
+    -- 169: the ploughing plots' pegs (TCShowScene.layOutPlots). Ours (182,
+    -- genShowPropsI3d.py), the user's to swap: an oak stake with a white
+    -- flag at each corner (no collision: a tractor on the headland mustn't
+    -- catch it), and the start peg, an oak post with a white number board
+    -- (its plot's number shown, setUp).
+    plotPeg = { filename = "i3d/showPlotPeg.i3d", isMod = true },
+    plotStartPeg = { filename = "i3d/showPlotStartPeg.i3d", isMod = true, collision = true },
     -- 171: a stall's table at its gazebo's front (TCShowScene's stalls).
     -- The base game's wooden table (mapEU), the user's to swap.
     standTable = { filename = "$data/maps/mapEU/textures/props/woodenTable.i3d", collision = true },
+    -- 182: a rosette on a pen's front hurdle (TCShowScene.layOutPens),
+    -- ours (genShowPropsI3d.py), the user's to swap: one model, its colour
+    -- a child shown (ROSETTE_FACES). No collision.
+    rosette = { filename = "i3d/showRosette.i3d", isMod = true },
+    -- 182: an animal in its pen (TCShowScene.layOutPens): no file of its
+    -- own. The animal system's animated model for its subtype and age,
+    -- playing an idle clip (TCShowAnimalAnimation), or its posed model as
+    -- vanilla's LivestockTrailer shows one when that can't be found
+    -- (resolve), the whole file kept, its coat set in setUp. No collision.
+    animal = { wholeFile = true },
+    -- 182: a tile of the pens' straw bed (TCShowScene.layOutStraw), ours
+    -- (genShowPropsI3d.py), a straw plane as vanilla's barns have, the
+    -- user's to swap: a child a set of faded sides, one shown (setUp, by
+    -- prop.fade), scaled to fit (prop.scaleX, scaleZ). Flat, so it follows
+    -- the ground's slope (followGround) rather than sitting at its lowest
+    -- corner. No collision.
+    penStraw = { filename = "i3d/showPenStraw.i3d", isMod = true, followGround = true },
 }
+-- The rosette's colours (genShowPropsI3d.py): colours (0) > one per entry,
+-- in this order.
+TCAuctionProps.ROSETTE_FACES = { "first", "second", "third", "commended", "champion" }
 -- The bale's straw (vanilla's straw bale texture, as Bale's STRAW fill type).
 TCAuctionProps.BALE_STRAW = "$data/objects/bales/squarebales/squarebale120/fillTypes/straw_diffuse.dds"
 
@@ -229,6 +252,44 @@ local function setUp(node, prop, data)
         end
     elseif kind == "sign" then
         TCAuctionProps.setSignFace(node, prop)
+    elseif kind == "plotStartPeg" then
+        -- visuals (0) > numbers (2) > one per plot number: its plot's shown.
+        local visuals = getChildAt(node, 0)
+        local numbers = getNumOfChildren(visuals) > 2 and getChildAt(visuals, 2) or nil
+        if numbers ~= nil then
+            for i = 0, getNumOfChildren(numbers) - 1 do
+                setVisibility(getChildAt(numbers, i), i == (prop.plot or 1) - 1)
+            end
+        end
+    elseif kind == "animal" then
+        -- data: { visualAnimal, asset } (resolve). Its coat, as
+        -- LivestockTrailer:onAnimalLoaded sets it, from the pen's variation.
+        local variations = data ~= nil and data.visualAnimal.variations or nil
+        local variation = variations ~= nil and variations[TCShowPens.getVariationIndex(prop.variation, #variations)] or nil
+        if variation ~= nil and I3DUtil ~= nil and I3DUtil.setShaderParameterRec ~= nil then
+            I3DUtil.setShaderParameterRec(node, "atlasInvSizeAndOffsetUV", 1 / variation.numTilesU,
+                1 / variation.numTilesV, variation.tileUIndex / variation.numTilesU,
+                variation.tileVIndex / variation.numTilesV)
+            -- Posed, as the trailer does; the animated mesh's dirt keeps
+            -- its tiling (TCShowAnimalAnimation.start).
+            if data.asset == nil then
+                I3DUtil.setShaderParameterRec(node, "dirt", 0, nil, nil, nil)
+            end
+        end
+    elseif kind == "penStraw" then
+        -- One child a set of faded sides (TCShowScene.STRAW_FADE's sum).
+        for i = 0, getNumOfChildren(node) - 1 do
+            setVisibility(getChildAt(node, i), i == (prop.fade or 0))
+        end
+    elseif kind == "rosette" then
+        local colours = getNumOfChildren(node) > 0 and getChildAt(node, 0) or nil
+        if colours ~= nil then
+            for i, colour in ipairs(TCAuctionProps.ROSETTE_FACES) do
+                if i <= getNumOfChildren(colours) then
+                    setVisibility(getChildAt(colours, i - 1), colour == prop.rosette)
+                end
+            end
+        end
     end
 end
 
@@ -317,7 +378,9 @@ local function place(node, prop, model)
     local yaw = prop.yaw + (model.yawOffset or 0)
     local fx, fz = math.sin(yaw), math.cos(yaw)
     local rx, rz = fz, -fx
-    local ox, oz = model.originX or 0, model.originZ or 0
+    -- A prop's own offsetX moves the model along its x, its footprint
+    -- staying put (182's rosettes, on their hurdle's footprint).
+    local ox, oz = (model.originX or 0) - (prop.offsetX or 0), model.originZ or 0
     local x = prop.x - rx * ox - fx * oz
     local z = prop.z - rz * ox - fz * oz
     if prop.kind == "car" then
@@ -333,6 +396,25 @@ local function place(node, prop, model)
         setTranslation(node, x, y, z)
         local dy = (frontY - backY) / (half * 2)
         setDirection(node, fx, dy, fz, 0, 1, 0)
+        return
+    end
+    -- 182: a flat prop (the pens' straw) tilted to the plane through the
+    -- ground at its footprint's sides' middles, its middle on the ground.
+    if model.followGround then
+        local halfL, halfW = (prop.length or 0) * 0.5, (prop.width or 0) * 0.5
+        local function groundAt(along, across)
+            return getTerrainHeightAtWorldPos(g_terrainNode, x + fx * along + rx * across, 0,
+                z + fz * along + rz * across)
+        end
+        local slopeF = halfL > 0 and (groundAt(halfL, 0) - groundAt(-halfL, 0)) / (2 * halfL) or 0
+        local slopeR = halfW > 0 and (groundAt(0, halfW) - groundAt(0, -halfW)) / (2 * halfW) or 0
+        -- up = forward x right, forward (fx, slopeF, fz), right (rx, slopeR, rz).
+        local ux = slopeF * rz - fz * slopeR
+        local uy = fz * rx - fx * rz
+        local uz = fx * slopeR - slopeF * rx
+        setTranslation(node, x, getTerrainHeightAtWorldPos(g_terrainNode, x, 0, z) + (model.heightOffset or 0), z)
+        setDirection(node, fx, slopeF, fz, ux, uy, uz)
+        setScale(node, prop.scaleX or 1, 1, prop.scaleZ or 1)
         return
     end
     -- A stacked prop (the bales) sits its level's height up.
@@ -356,8 +438,31 @@ local function isWanted(prop)
     return model ~= nil and model.collision == true
 end
 
+-- 182: the visual animal for an animal prop's subtype and age (the animal
+-- system's: { filenamePosed, variations }), or nil.
+function TCAuctionProps.getVisualAnimal(prop)
+    local animalSystem = g_currentMission.animalSystem
+    local subTypeIndex = animalSystem ~= nil and prop.subTypeName ~= nil and
+        animalSystem:getSubTypeIndexByName(prop.subTypeName) or nil
+    local visual = subTypeIndex ~= nil and animalSystem:getVisualByAge(subTypeIndex, prop.age or 0) or nil
+    local visualAnimal = visual ~= nil and visual.visualAnimal or nil
+    if visualAnimal == nil or visualAnimal.filenamePosed == nil then
+        return nil
+    end
+    return visualAnimal
+end
+
 -- The prop's file and model entry, or nil.
 local function resolve(prop)
+    if prop.kind == "animal" then
+        local visualAnimal = TCAuctionProps.getVisualAnimal(prop)
+        if visualAnimal == nil then
+            return nil
+        end
+        local asset = TCShowAnimalAnimation.getAsset(prop.subTypeName, visualAnimal)
+        local filename = asset ~= nil and asset.filename or visualAnimal.filenamePosed
+        return filename, TCAuctionProps.MODELS.animal, { visualAnimal = visualAnimal, asset = asset }
+    end
     if prop.kind == "car" then
         local car = TCAuctionScene.CAR_MODELS[prop.model]
         local data = car ~= nil and TCAuctionProps.getCarData(car) or nil
@@ -375,11 +480,29 @@ end
 
 function TCAuctionProps.onModelLoaded(_, root, failedReason, args)
     local active, entry = TCAuctionProps.active, args.entry
-    local stale = active == nil or active.generation ~= args.generation
+    -- 182: a late prop dropped while it loaded (dropLateProps) is stale too.
+    local stale = active == nil or active.generation ~= args.generation or entry.dropped
     if root == nil or root == 0 then
         if not stale then
-            TCLog.warning("TheContractor: auction prop '%s' could not be loaded", tostring(args.filename))
             active.loading = nil
+            local data = args.data
+            if entry.prop.kind == "animal" and data ~= nil and data.asset ~= nil then
+                -- 182: an animated animal that won't load stands posed
+                -- instead: this one queued again, the rest from now on.
+                TCShowAnimalAnimation.markFailed(data.visualAnimal, data.asset)
+                table.insert(active.entries, { prop = entry.prop, late = entry.late })
+                for i = #active.entries, 1, -1 do
+                    if active.entries[i] == entry then
+                        table.remove(active.entries, i)
+                        if i < active.next then
+                            active.next = active.next - 1
+                        end
+                        break
+                    end
+                end
+                return
+            end
+            TCLog.warning("TheContractor: auction prop '%s' could not be loaded", tostring(args.filename))
         end
         return
     end
@@ -401,11 +524,15 @@ function TCAuctionProps.onModelLoaded(_, root, failedReason, args)
             delete(root)
             return
         end
+    elseif model.wholeFile then
+        node = root
     else
         node = getChildAt(root, 0)
     end
     link(getRootNode(), node)
-    delete(root)
+    if node ~= root then
+        delete(root)
+    end
     if prop.kind == "bale" then
         node = TCAuctionProps.takeBaleVisual(node)
     end
@@ -416,6 +543,10 @@ function TCAuctionProps.onModelLoaded(_, root, failedReason, args)
             addToPhysics(node)
         end
         entry.node = node
+        -- 182: an animated animal brought to life.
+        if prop.kind == "animal" and args.data ~= nil and args.data.asset ~= nil then
+            TCShowAnimalAnimation.start(node, args.data.asset, entry)
+        end
     end
 end
 
@@ -514,6 +645,7 @@ function TCAuctionProps.clear()
         return
     end
     for _, entry in ipairs(active.entries) do
+        TCShowAnimalAnimation.release(entry)
         if entry.node ~= nil then
             if entityExists(entry.node) then
                 delete(entry.node)
@@ -594,6 +726,80 @@ local function updateSounds(active)
     end
 end
 
+-- Late props (182) ------------------------------------------------------------------------
+
+-- What the late props come from, cheap to read every frame: the show's
+-- livestock, with its pens, while the site's dressed as the show (the
+-- animals in their pens and their rosettes, TCShowScene.layOutPens), or
+-- nil. Its penVersion goes up whenever the pens change.
+function TCAuctionProps.getLateSource(scene)
+    if not TCShowScene.isShowDressing(scene) then
+        return nil
+    end
+    return g_currentMission.TheContractor.ShowLivestock
+end
+
+-- Takes one late prop away (its node deleted, a load on its way deleting
+-- itself when it lands).
+local function dropLateEntry(active, entry)
+    entry.dropped = true
+    if active.loading == entry then
+        active.loading = nil
+    end
+    TCShowAnimalAnimation.release(entry)
+    if entry.node ~= nil then
+        if entityExists(entry.node) then
+            delete(entry.node)
+        end
+        entry.node = nil
+        if entry.requestId ~= nil then
+            g_i3DManager:releaseSharedI3DFile(entry.requestId)
+        end
+    end
+end
+
+-- The late props follow their source: each one put up after the scene's
+-- (on the end of the queue, so nothing else reloads), and when the source
+-- changes, only those whose key's gone are taken away and only new ones
+-- added (an animal coming to its pen doesn't reload the others).
+local function updateLateProps(active, scene)
+    local source = TCAuctionProps.getLateSource(scene)
+    local version = source ~= nil and source.penVersion or nil
+    if source == active.lateSource and version == active.lateVersion then
+        return
+    end
+    active.lateSource, active.lateVersion = source, version
+    local wanted = {}
+    for _, prop in ipairs(source ~= nil and TCShowScene.layOutPens(scene, source.pens) or {}) do
+        if isWanted(prop) then
+            wanted[prop.key] = prop
+        end
+    end
+    local have = {}
+    for i = #active.entries, 1, -1 do
+        local entry = active.entries[i]
+        if entry.late then
+            if wanted[entry.prop.key] ~= nil then
+                have[entry.prop.key] = true
+            else
+                dropLateEntry(active, entry)
+                table.remove(active.entries, i)
+            end
+        end
+    end
+    active.next = math.min(active.next, #active.entries + 1)
+    local added = 0
+    for key, prop in pairs(wanted) do
+        if not have[key] then
+            table.insert(active.entries, { prop = prop, late = true })
+            added = added + 1
+        end
+    end
+    if added > 0 then
+        TCLog.info("TheContractor: show pens: %d prop(s) to load", added)
+    end
+end
+
 -- Every machine, every frame: the props follow the site's scene (rebuilt
 -- when its seed changes or it goes), loaded one at a time.
 function TCAuctionProps.update(dt)
@@ -611,6 +817,7 @@ function TCAuctionProps.update(dt)
         active = TCAuctionProps.active
     end
     if active ~= nil then
+        updateLateProps(active, scene)
         loadNext(active)
         updateSounds(active)
     end

@@ -451,7 +451,6 @@ end
 function TCJobReport.registerConsoleCommands()
     TCConsole.register("debug", "jobReport", {
         args = "[jobType]",
-        devPanel = true,
         description = "Write a report of why this farm is or isn't offered a job type (default harvest) to a file to send in",
         run = function(farmId, args)
             local jobType = TheContractorJobGeneration.findJobType(args[1] or "harvest")

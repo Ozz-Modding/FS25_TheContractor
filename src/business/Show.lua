@@ -23,7 +23,7 @@
 --     170's worker in the ploughing. Players can always plough themselves
 --     on the day without entering (169's PloughingMatch).
 --   Set out (midnight before): the site's dressed (164: the showground
---     grass, the ploughing ground stubble, snapshots kept), and the
+--     grass, the plots stubble (182), snapshots kept), and the
 --     showground laid out as an open site on its rectangle (163's
 --     AuctionSite:startOpen, the ground left to 164) with the show's
 --     dressing (TCShowScene: ring, pens, stands, trailer lines; the shared
@@ -149,6 +149,7 @@ end
 --   getTitle(titleArg)  optional, every machine: a placing's title
 --   (server, each optional) onAnnounced(event), onNewDay(event),
 --     onHour(event, hour) on the day, onSetOut(event) at midnight before,
+--     getPens(event) just before (182: the pens it needs, or nil),
 --     onAttended(event, farmId) as a farm's attend job's done (171),
 --     onResults(event) once the results are given (169: the lent kit
 --     taken away), onFinished(event) at midnight after, before the site's
@@ -485,7 +486,7 @@ function TheContractorShow:setOut(event)
     if plan == nil then
         TCLog.warning("TheContractor: show %d has no site plan for field %d, laid out as an open site", event.id,
             event.fieldId)
-        tc.AuctionSite:startOpen(event.fieldId, self.KIND, event.id)
+        tc.AuctionSite:startOpen(event.fieldId, self.KIND, event.id, { pens = self:getPens(event) })
         self:callCompetitions("onSetOut", event)
         return
     end
@@ -499,11 +500,29 @@ function TheContractorShow:setOut(event)
         getWalkways = TCShowScene.getWalkways,
         -- 169: the ploughing match's plots, marked out from the scene.
         plots = plan.plots,
+        -- 182: the livestock's pens, one an animal.
+        pens = self:getPens(event),
     })
     if tc.AuctionSite.site == nil or tc.AuctionSite.site.fieldId ~= event.fieldId then
         TCLog.warning("TheContractor: show %d's showground couldn't be set out on field %d", event.id, event.fieldId)
+    else
+        -- 182: bare ground under the pens, for their straw.
+        local rows = showSite:paintPenGround(tc.AuctionSite:getScene())
+        TCLog.info("TheContractor: show %d's pens' ground bared (%d rows)", event.id, rows)
     end
     self:callCompetitions("onSetOut", event)
+end
+
+-- 182: the pens the competitions need (the most any asks for), or nil.
+function TheContractorShow:getPens(event)
+    local pens = nil
+    for _, competition in ipairs(self.competitions) do
+        local count = competition.getPens ~= nil and competition.getPens(event) or nil
+        if count ~= nil and (pens == nil or count > pens) then
+            pens = count
+        end
+    end
+    return pens
 end
 
 -- The site put back as it was and dropped (midnight after, or called off).

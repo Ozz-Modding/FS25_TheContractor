@@ -32,12 +32,8 @@
 -- tests/test_console.lua checks every id-like argument has one.
 --
 -- tcDebug is the testing group: spikes, forced rolls and readouts of what
--- players never see. It's only installed on a machine with DEBUG_FILENAME
--- in its modSettings folder (and a joined admin's request runs only if the
--- server has it too), so a release never shows it. The exception is a
--- subcommand marked devPanel = true: the dev panel (TCDevDialog), which
--- opens without the file, runs it through dispatch on any machine. It's
--- still not typeable there (tcDebug isn't installed) and still server-only.
+-- players never see. It's installed like the others (no marker file), and
+-- the dev panel (TCDevDialog) runs its subcommands through dispatch.
 --
 -- Commands aren't cheat-gated: they're there for players to shape their
 -- game. Anything that changes state is server-only, since the subsystems
@@ -62,10 +58,6 @@ TCConsole.HELP_COMMAND = "tcHelp"
 TCConsole.LOG_COMMAND = "tcLog"
 TCConsole.LOG_DESCRIPTION = "Toggle the mod's detailed log on this machine (on by default)"
 
--- The marker file that unlocks tcDebug, in this machine's modSettings folder.
-TCConsole.DEBUG_FILENAME = "tcDebug.txt"
-TCConsole.settingsDir = g_currentModSettingsDirectory
-
 -- In tcHelp's order.
 TCConsole.GROUPS = {
     { key = "worker", command = "tcWorker", description = "Hire, list and manage your staff" },
@@ -77,15 +69,14 @@ TCConsole.GROUPS = {
     { key = "yard", command = "tcYard", description = "Farm yards: list them, check a farmland, mark them on the map, override detection" },
     { key = "auction", command = "tcAuction", description = "The machinery auction: see it, announce one, call it off" },
     { key = "show", command = "tcShow", description = "The agricultural show: see it, announce one, call it off" },
-    { key = "debug", command = "tcDebug", description = "Testing tools: spikes, forced rolls and hidden state", debugOnly = true },
+    { key = "debug", command = "tcDebug", description = "Testing tools: spikes, forced rolls and hidden state" },
 }
 
--- groups[key] = { key, command, description, debugOnly, order = { names }, subcommands = { [lowerName] = def } }
+-- groups[key] = { key, command, description, order = { names }, subcommands = { [lowerName] = def } }
 TCConsole.groups = {}
 -- hints[word] = text, or a function returning it (for a live list).
 TCConsole.hints = {}
 TCConsole.installed = false
-TCConsole.debugEnabled = false
 -- function(text), or nil: told each answer the server sends back to a
 -- command this client sent (onRemoteResult), as well as printing it. The
 -- dev dialog sets it while it's open (TCDevDialog).
@@ -109,23 +100,10 @@ function TCConsole.reset()
             key = group.key,
             command = group.command,
             description = group.description,
-            debugOnly = group.debugOnly == true,
             order = {},
             subcommands = {},
         }
     end
-    TCConsole.debugEnabled = TCConsole.readDebugEnabled()
-end
-
-function TCConsole.readDebugEnabled()
-    local dir = TCConsole.settingsDir
-    return dir ~= nil and fileExists ~= nil and fileExists(dir .. TCConsole.DEBUG_FILENAME) == true
-end
-
--- Whether this machine has a group: tcDebug only with its marker file.
--- With def, whether that subcommand can run here: a devPanel one always can.
-function TCConsole.isGroupEnabled(group, def)
-    return not group.debugOnly or TCConsole.debugEnabled or (def ~= nil and def.devPanel == true)
 end
 
 function TCConsole.register(groupKey, name, def)
@@ -169,14 +147,12 @@ function TCConsole.install()
 
     for _, groupInfo in ipairs(TCConsole.GROUPS) do
         local group = TCConsole.groups[groupInfo.key]
-        if TCConsole.isGroupEnabled(group) then
-            addConsoleCommand(group.command, group.description .. ". Type it on its own to list subcommands.", "run", {
-                run = function(_, ...)
-                    return TCConsole.dispatch(group, { ... })
-                end,
-            })
-            group.installed = true
-        end
+        addConsoleCommand(group.command, group.description .. ". Type it on its own to list subcommands.", "run", {
+            run = function(_, ...)
+                return TCConsole.dispatch(group, { ... })
+            end,
+        })
+        group.installed = true
     end
 
     TCConsole.installed = true
@@ -204,10 +180,7 @@ end
 function TCConsole.getHelpText()
     local lines = { "The Contractor console commands:" }
     for _, groupInfo in ipairs(TCConsole.GROUPS) do
-        local group = TCConsole.groups[groupInfo.key]
-        if group == nil or TCConsole.isGroupEnabled(group) then
-            table.insert(lines, string.format("  %-11s %s", groupInfo.command, groupInfo.description))
-        end
+        table.insert(lines, string.format("  %-11s %s", groupInfo.command, groupInfo.description))
     end
     table.insert(lines, string.format("  %-11s %s", TCConsole.LOG_COMMAND, TCConsole.LOG_DESCRIPTION))
     table.insert(lines, "Type a command on its own to see what it can do, e.g. tcWorker")
@@ -346,7 +319,7 @@ function TCConsole.runRequest(groupKey, args, context, connection)
     local group = TCConsole.groups[groupKey]
     local name = args[1]
     local def = group ~= nil and name ~= nil and group.subcommands[string.lower(name)] or nil
-    if def == nil or not TCConsole.isGroupEnabled(group, def) then
+    if def == nil then
         return "Error: the server doesn't know that command"
     end
     if not TheContractorSettings.getCanConnectionChange(connection) then
