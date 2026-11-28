@@ -161,7 +161,8 @@ local function setupHolders(combineId, headerId)
     tc.AuctionSite = make("TheContractorAuctionSite", {
         lots = { lot }, site = { lots = { lot } }, vehicleIdSet = { [combineId] = true, [headerId] = true },
     })
-    tc.BreedersPen = make("TheContractorBreedersPen", { trailerIds = { headerId, combineId } })
+    tc.BreedersPen = make("TheContractorBreedersPen", { breeders = { { trailerIds = { headerId } },
+        { trailerIds = { combineId } } } })
 
     local slot = { farmId = 1 }
     slot[PlaceableTCParkingSlot.KEY] = { filter = PlaceableTCParkingSlot.newFilter({ "TRACTORSL" }, { combineId }) }
@@ -313,8 +314,8 @@ test("the reset combine stays on its harvest job, and everything else holding it
     assertEquals(tc.RepairContracts.removals[1].vehicleId, 50, "collection queue")
     assertEquals(tc.AuctionSite.lots[1].vehicleId, 50, "auction lot")
     assertTrue(tc.AuctionSite.vehicleIdSet[50] and tc.AuctionSite.vehicleIdSet[1] == nil, "lot lock set")
-    assertEquals(tc.BreedersPen.trailerIds[2], 50, "the breeder's trailer")
-    assertEquals(tc.BreedersPen.trailerIds[1], 2, "the other trailer untouched")
+    assertEquals(tc.BreedersPen.breeders[2].trailerIds[1], 50, "a breeder's trailer")
+    assertEquals(tc.BreedersPen.breeders[1].trailerIds[1], 2, "another's untouched")
 end)
 
 test("a hidden machine's copy is hidden again everywhere", function()

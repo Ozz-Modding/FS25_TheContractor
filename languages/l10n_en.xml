@@ -605,13 +605,13 @@
 		<text name="tc_auction_cancelled_body" text="%s's machinery auction on Field %s, due on %s, has been called off."/>
 		<text name="tc_show_mapName" text="County show"/>
 		<text name="tc_show_announced_title" text="County show announced"/>
-		<text name="tc_show_announced_body" text="%s is hosting this year's county show on Field %s on %s: livestock classes on the showground and a ploughing match next door, with stands and food. Gates open at 08:00, judging starts at 10:00, the ploughing runs from 11:00 to 15:00 and the results are at 16:00. Anyone may come. In the show's month, the Show tab has the timetable. Look out for the signs round the area."/>
-		<text name="tc_show_entriesClosing_title" text="County show entries closing soon"/>
-		<text name="tc_show_entriesClosing_body" text="Entries for %s's county show on Field %s, on %s, close a week before the day. Enter on the Show tab."/>
+		<text name="tc_show_announced_body" text="%s is hosting this year's county show on Field %s on %s: livestock classes on the showground and a ploughing match next door, with stands and food. Gates open at 08:00, judging starts at 10:00, the ploughing runs from 11:00 to 15:00 and the results are at 16:00. Anyone may come. The Show tab has the timetable and the entries. Look out for the signs round the area."/>
+		<text name="tc_show_entriesClosing_title" text="County show entries"/>
+		<text name="tc_show_entriesClosing_body" text="Entries for %s's county show on Field %s, on %s, close at 09:30 on the day. Enter on the Show tab."/>
 		<text name="tc_show_reminder_title" text="County show coming up"/>
-		<text name="tc_show_reminder_body" text="A reminder: %s's county show on Field %s is on %s. Entries are now closed. Gates open at 08:00, judging at 10:00, the ploughing match from 11:00 to 15:00, results at 16:00."/>
+		<text name="tc_show_reminder_body" text="A reminder: %s's county show on Field %s is on %s. Entries close at 09:30 on the day. Gates open at 08:00, judging in the ring from 10:00, the ploughing match from 11:00 to 15:00, results at 16:00."/>
 		<text name="tc_show_today_title" text="County show today"/>
-		<text name="tc_show_today_body" text="%s's county show on Field %s is today, %s. Gates open at 08:00, judging at 10:00, the ploughing match from 11:00 to 15:00, results at 16:00."/>
+		<text name="tc_show_today_body" text="%s's county show on Field %s is today, %s. Gates open at 08:00, judging in the ring from 10:00, the ploughing match from 11:00 to 15:00, results at 16:00."/>
 		<text name="tc_show_results_title" text="County show results"/>
 		<text name="tc_show_results_body" text="The results are in from %s's county show on Field %s, %s. Your company placed %s time(s) and won %s in prize money. The full results are on the Show tab."/>
 		<text name="tc_show_rosetteNotice" text="County show rosette: %s, %s."/>
@@ -623,10 +623,15 @@
 		<text name="tc_show_columnTime" text="Time"/>
 		<text name="tc_show_columnWhat" text="What's on"/>
 		<text name="tc_show_timetable_gatesOpen" text="Gates open"/>
-		<text name="tc_show_timetable_judging" text="Livestock judging"/>
+		<text name="tc_show_timetable_judging" text="Livestock judging in the ring, a class at a time"/>
 		<text name="tc_show_timetable_ploughing" text="Ploughing match"/>
 		<text name="tc_show_timetable_results" text="Results and prizes"/>
 		<text name="tc_show_timetable_gatesClose" text="Gates close"/>
+		<text name="tc_showRing_section" text="In the ring"/>
+		<text name="tc_showRing_noticeInRing" text="%s is in the ring now."/>
+		<text name="tc_showRing_noticeNoShow" text="%s is in the ring, but your entry wasn't in the drop-off zone: a no-show."/>
+		<text name="tc_showEntry_noticeDropOff" text="County show: entered animals not in the drop-off zone yet: %d. Bring them there in a livestock trailer before their class."/>
+		<text name="tc_showEntry_atTime" text="%s, judged at %s"/>
 		<text name="tc_show_stateDone" text="Done"/>
 		<text name="tc_show_stateNow" text="On now"/>
 		<text name="tc_show_resultsTitle" text="Results, %s"/>
@@ -642,7 +647,7 @@
 		<text name="tc_show_placingName2" text="2nd"/>
 		<text name="tc_show_placingName3" text="3rd"/>
 		<text name="tc_show_placingName4" text="Highly commended"/>
-		<text name="tc_show_tabEntriesClose" text="Entries close %s."/>
+		<text name="tc_show_tabEntriesClose" text="Entries close at %s on the day."/>
 		<text name="tc_show_sectionTimetable" text="The day"/>
 		<text name="tc_show_sectionEntries" text="Your entries"/>
 		<text name="tc_showLivestock_title" text="Livestock"/>
@@ -657,14 +662,17 @@
 		<text name="tc_showEntry_withdrawConfirm" text="Withdraw your entry in %s?"/>
 		<text name="tc_showEntry_pickHusbandry" text="Which of your husbandries are you showing from?"/>
 		<text name="tc_showEntry_husbandryOption" text="%s (%d animals)"/>
-		<text name="tc_showEntry_pickClass" text="Enter %s's Best Kept Herd, or pick a class its animals can show in."/>
+		<text name="tc_showEntry_trailerOption" text="%s, trailer (%d animals)"/>
+		<text name="tc_showEntry_pickClass" text="Pick a class for the animals in %s."/>
 		<text name="tc_showEntry_classOption" text="%s (%d)"/>
 		<text name="tc_showEntry_pickAnimal" text="Which animal are you entering in %s?"/>
 		<text name="tc_showEntry_animalOption" text="%s, %d months, health %d%%"/>
 		<text name="tc_showEntry_fromHusbandry" text="from %s"/>
-		<text name="tc_showEntry_noHusbandries" text="You have no husbandries with animals to show."/>
+		<text name="tc_showEntry_noHusbandries" text="You have no animals to show, in a barn or a livestock trailer."/>
 		<text name="tc_showEntry_none" text="No entries."/>
-		<text name="tc_showEntry_noneOpen" text="No entries yet. Enter animals to show your stock, or your husbandry for Best Kept Herd."/>
+		<text name="tc_showEntry_noneOpen" text="No entries yet."/>
+		<text name="tc_showEntry_tipTitle" text="Entering"/>
+		<text name="tc_showEntry_tip" text="Enter animals to show your stock, or a husbandry for Best Kept Herd: Enter in the bottom bar, from a barn or from a livestock trailer with them loaded. Entries close at %s on the show day. On the show day, bring your entered animals in a livestock trailer to the drop-off zone (the coned bays past the ring) and stop there before their class."/>
 		<text name="tc_showEntry_needCompany" text="Entering the show needs a company."/>
 		<text name="tc_showEntry_noneClosed" text="Entries have closed."/>
 		<text name="tc_showEntry_statusEntered" text="Entered"/>
@@ -685,7 +693,7 @@
 		<text name="tc_showEntry_notYours" text="That entry isn't yours."/>
 		<text name="tc_showCard_button" text="Judge's card"/>
 		<text name="tc_showCard_header" text="%s: %s"/>
-		<text name="tc_showCard_noShow" text="It wasn't in a trailer stopped in the show's trailer lines at judging."/>
+		<text name="tc_showCard_noShow" text="It wasn't in a trailer stopped in the show's drop-off zone at judging."/>
 		<text name="tc_showCard_herdGone" text="The husbandry had gone by judging."/>
 		<text name="tc_showCard_sick" text="The show vet turned it away as sick."/>
 		<text name="tc_showCard_champion" text="Supreme champion of the show."/>
@@ -728,7 +736,8 @@
 		<text name="tc_ploughMatch_part_ends" text="Neat ends"/>
 		<text name="tc_ploughMatch_part_outside" text="Outside the plot"/>
 		<text name="tc_ploughMatch_part_tidiness" text="Tidiness"/>
-		<text name="tc_ploughMatch_noteTakePlot" text="No entry needed: on the day, take a free plot at its start peg. Its lent kit is yours from 11:00 to 15:00."/>
+		<text name="tc_ploughMatch_noteTakePlot" text="No entry needed: take a free plot on the day."/>
+		<text name="tc_ploughMatch_tipTakePlot" text="No entry needed: on the day, take a free plot at its start peg. Its lent kit is yours from 11:00 to 15:00."/>
 		<text name="tc_ploughMatch_noteNeedCompany" text="Only a company can plough in the match, but anyone can watch."/>
 		<text name="tc_ploughMatch_best" text="Your best: %.1f, %d win(s) in %d match(es)."/>
 		<text name="tc_ploughMatch_stateOpen" text="Free"/>
@@ -750,7 +759,9 @@
 		<text name="tc_showWorker_entryLine" text="Ploughing for you: %s"/>
 		<text name="tc_showWorker_statusEntered" text="Entered"/>
 		<text name="tc_showWorker_statusAtShow" text="At the show"/>
-		<text name="tc_showWorker_noteEnter" text="Or enter one of your workers to plough your plot for you, until entries close."/>
+		<text name="tc_showWorker_noteEnter" text="Or enter a worker, by %s."/>
+		<text name="tc_showWorker_tipTitle" text="Entering a worker"/>
+		<text name="tc_showWorker_tip" text="One of your workers can plough your company's plot for you. Enter them by %s with Enter in the bottom bar: they're at the show all day, so they can't be given other work."/>
 		<text name="tc_showWorker_withdrawConfirm" text="Withdraw %s from the ploughing match?"/>
 		<text name="tc_showWorker_plotWho" text="%s for %s"/>
 		<text name="tc_showWorker_problemNoShow" text="There's no show to enter."/>
@@ -802,7 +813,6 @@
 		<text name="tc_offerSource_show" text="Asked for at the county show"/>
 		<text name="tc_showTalk_promptFarmer" text="Talk to %s"/>
 		<text name="tc_showTalk_prompt_association" text="Visit the trade association stand"/>
-		<text name="tc_showTalk_prompt_breeder" text="Look at the breeder's stock"/>
 		<text name="tc_showTalk_prompt_careers" text="Visit the careers stand"/>
 		<text name="tc_showTalk_optionAsk" text="Any work going?"/>
 		<text name="tc_showTalk_optionBye" text="Enjoy the show."/>
@@ -846,14 +856,14 @@
 		<text name="tc_showTalk_careersLater_1" text="No problem. We're here all day if you change your mind."/>
 		<text name="tc_showTalk_careersNoCompany_1" text="We're placing people with contractors. Come back when you've a business of your own."/>
 		<text name="tc_showTalk_closed_1" text="Sorry, I'm packing up now."/>
-		<text name="tc_breedersPen_title" text="Breeders' pen"/>
+		<text name="tc_breedersPen_title" text="Breeders"/>
 		<text name="tc_breeder_greet_1" text="Morning. Pedigree stock, every one of them, from the best lines I've got. Have a look."/>
-		<text name="tc_breeder_greet_2" text="You won't find better at any dealer. They're in the trailers there. What catches your eye?"/>
+		<text name="tc_breeder_greet_2" text="You won't find better at any dealer. They're all in the pen here. What catches your eye?"/>
 		<text name="tc_breeder_others" text="Here's the rest of them."/>
 		<text name="tc_breeder_optionAnimal" text="%s, %d months: %s"/>
 		<text name="tc_breeder_optionJustLooking" text="Just looking, thanks"/>
-		<text name="tc_breeder_animal" text="%s. Name: %s. %d months old, %d kg, health %d%%.%s Genetics: %s. I'm asking %s."/>
-		<text name="tc_breeder_noName" text="none yet"/>
+		<text name="tc_breeder_animal" text="%s.%s %d months old, %d kg, health %d%%.%s Genetics: %s. I'm asking %s."/>
+		<text name="tc_breeder_name" text="Name: %s."/>
 		<text name="tc_breeder_pregnant" text="Carrying."/>
 		<text name="tc_breeder_lactating" text="In milk."/>
 		<text name="tc_breeder_gene_quality" text="quality %.2f"/>
@@ -881,6 +891,11 @@
 		<text name="tc_breeder_failed_1" text="Something's gone wrong getting it moved. Give me a minute and try again."/>
 		<text name="tc_breeder_later_1" text="No bother. I'm here all day."/>
 		<text name="tc_breeder_later_2" text="Fair enough. You know where I am."/>
+		<text name="tc_breeder_greetNoSale_1" text="Morning. Not selling today, I'm afraid: they're here to be shown. Have a look, though."/>
+		<text name="tc_breeder_greetNoSale_2" text="Good to see you. None of these are for sale, but I'm proud of every one of them."/>
+		<text name="tc_breeder_optionEntered" text="%s, %d months: entered, for sale after %s"/>
+		<text name="tc_breeder_entered_1" text="That %s is entered in %s, so it's not for sale till that's over. Come back after %s and we'll talk."/>
+		<text name="tc_breeder_enteredHeld_1" text="Not that one, not yet: it's still to go in the ring. Come back once it's been judged."/>
 		<text name="tc_showStat_health" text="Health"/>
 		<text name="tc_showStat_age" text="Age"/>
 		<text name="tc_showStat_productivity" text="Productivity"/>
@@ -2364,23 +2379,23 @@
 		<text name="tc_help_show_title" text="The county show"/>
 		<text name="tc_help_show_1" text="Every year, in late summer after the harvest, a farmer hosts the county show on their land: livestock classes on a grass showground and a ploughing match on stubble next door, all on one day. It's announced two or three months ahead in the Inbox, with a reminder a week before and another on the day. Signs go up around the area a month before and the site is marked on the map. There's never an auction and a show at the same time."/>
 		<text name="tc_help_show_2_title" text="The day"/>
-		<text name="tc_help_show_2" text="The site is set out at midnight: the showground put down to grass with a ring, pens bedded with straw on bare earth, stands and trailer lines, and the ploughing plots marked out as squares of stubble in the grass. Gates open at 08:00, judging starts at 10:00, the ploughing match runs from 11:00 to 15:00 and the results are given out at 16:00. Gates close at 18:00, and at midnight the farmer's land is put back exactly as it was."/>
+		<text name="tc_help_show_2" text="The site is set out at midnight: the showground put down to grass with a ring, pens bedded with straw on bare earth, stands and the livestock drop-off zone (coned bays for trailers), the breeders' pens round them (as many as the showground has room for), and the ploughing plots marked out as squares of stubble in the grass. Gates open at 08:00, the livestock are judged in the ring a class at a time from 10:00, the ploughing match runs from 11:00 to 15:00 and the results are given out at 16:00. Gates close at 18:00, and at midnight the farmer's land is put back exactly as it was."/>
 		<text name="tc_help_show_3_title" text="The Show tab"/>
-		<text name="tc_help_show_3" text="In the show's month the Show tab has the day's timetable, your livestock entries, the ploughing plots and the results, this year's once they're in and last year's before. Enter animals, or one of your workers for the ploughing match, while entries are open (they close a week before the day), and withdraw an entry if you change your mind. Once it's judged, the Judge's card on an entry shows what the judge looked at, most important first, and the Scorecard on a ploughing plot shows how its run was marked."/>
+		<text name="tc_help_show_3" text="From the announcement to the day, and in the show's month, the Show tab has the day's timetable, the ring's (each class's time, and which is in the ring now), your livestock entries with the time each is judged, the ploughing plots and the results, this year's once they're in and last year's before. Enter animals until 09:30 on the show day, from a barn or from a livestock trailer with them loaded. Enter one of your workers for the ploughing match up to a week before. Withdraw an entry if you change your mind, while you could still enter it. Once it's judged, the Judge's card on an entry shows what the judge looked at, most important first, and the Scorecard on a ploughing plot shows how its run was marked."/>
 		<text name="tc_help_show_6_title" text="Livestock classes"/>
-		<text name="tc_help_show_6" text="Each breed (as your barn names it) shows in classes by age, in months. Pick one of your husbandries, then a class its animals can show in: up to two entries a class. On the day, the animals you entered must be in one of your livestock trailers, stopped in the show's trailer lines, by 10:00; load them that morning. An entry that isn't there is a no-show, which costs nothing. Farmers enter too, and a class with nobody in it doesn't run. Each class gives 1st, 2nd, 3rd and highly commended, and the best class winner of each kind of animal, with two or more of its classes run, is supreme champion. Each animal entered has a pen by the ring: while your trailer stands in the trailer lines, between the gates opening and closing, your animals are in their pens (they go home in the trailer), and once judged their rosettes hang on the pens."/>
+		<text name="tc_help_show_6" text="Each breed (as your barn names it) shows in classes by age, in months. Pick one of your husbandries (or a livestock trailer with the animals loaded), then a class its animals can show in: up to two entries a class. The breeders enter their own premium stock, so a win is hard to come by, other farmers an animal or two, and farmers enter Best Kept Herd. A class with nobody in it doesn't run. The ring's timetable has the classes one after another from 10:00, about an hour each, each kind of animal's supreme champion after its classes, Best Kept Herd last. When a class is called its animals are brought into the ring and stand in a line while the judge walks it, then stand again in placing order: 1st, 2nd, 3rd and highly commended, a rosette notice for each of yours, before they go back. The best class winner of each kind of animal, with two or more of its classes run, is supreme champion. Entering doesn't bring your animals: on the day, bring them in one of your livestock trailers to the show's drop-off zone (the coned bays past the ring) and stop there, by their class at the latest. At 09:00 you're sent a notice if any aren't there yet. An entry that isn't there then is a no-show, which costs nothing. Your animals stay in your trailer all day, out of it only in the ring for their class. The row of small pens by the ring holds other farmers' animals, with their rosettes once placed."/>
 		<text name="tc_help_show_7_title" text="How they're judged"/>
-		<text name="tc_help_show_7" text="With RealisticLivestock you enter the animal itself, and it's judged mostly on its genetics (quality and health, then productivity where its kind has it), its weight against its breed's target (heavier isn't better), its health and its age; a female carrying young, or a grown one in milk, does a little better. Without it, an entry is one of the breed and age from that husbandry, judged on its health, its age and how well the husbandry produces. A judge's eye means the best animal usually wins, but not always. Best Kept Herd is judged on a husbandry as it stood the day before: how well it produces, its food and the variety of it, straw, water, and how clean it's kept. No trailer is needed for it, one entry a company."/>
+		<text name="tc_help_show_7" text="With RealisticLivestock you enter the animal itself, and it's judged mostly on its genetics (quality and health, then productivity where its kind has it), its weight against its breed's target (heavier isn't better), its health and its age; a female carrying young, or a grown one in milk, does a little better. Without it, an entry is one of the breed and age from that husbandry, judged on its health, its age and how well the husbandry produces. A judge's eye means the best animal usually wins, but not always. Best Kept Herd is judged on a husbandry as it stood the day before (entered on the day, as it stood then): how well it produces, its food and the variety of it, straw, water, and how clean it's kept. No trailer is needed for it, one entry a company."/>
 		<text name="tc_help_show_8_title" text="The ploughing match"/>
 		<text name="tc_help_show_8" text="The ploughing ground is marked out in plots with pegs, each with the same lent tractor and reversible plough parked in it, and a numbered start peg on the crowd's side. No entry's needed: any time on the day, walk to a free plot's start peg and take it for your company, one plot a company; farmers plough the rest. The kit is locked until 11:00, then it's yours alone to drive, and it only ploughs its own plot. You have three game hours from your first run, and everyone stops at 15:00, so start by noon to have your full time. Say you've finished at the start peg, or carry on until 15:00. The judge looks at how much of the plot you ploughed and how straight: the opening split on its own, then every run, the furrows' direction, tidy ends, keeping inside the plot and not reversing or stopping with the plough down. Taking longer than three hours costs marks, but speed earns none. The top three win a small prize, a good boost to your reputation and the host's goodwill."/>
 		<text name="tc_help_show_9_title" text="Entering a worker"/>
-		<text name="tc_help_show_9" text="Instead of ploughing yourself, you can enter one of your workers for your company's plot while entries are open: Enter on the Show tab, then a worker. They need a fair tillage skill and experience of mid-size tractors, and must be free on the day, not off sick, on holiday or training. On the day they're at the show from midnight, so they can't be given any other work (one out on a job goes when they're back), and they plough your plot for you during the match, standing by its tractor. Their score comes from their tillage skill, their tractor experience, their morale and how they're going on the day. If they fall sick, are away that day, leave or don't get there before the match ends, the entry is withdrawn with a message and their plot goes to a farmer. A placing wins your company the prize and reputation as if you'd ploughed it, and lifts the worker's morale, a win most; a poor run costs them nothing."/>
+		<text name="tc_help_show_9" text="Instead of ploughing yourself, you can enter one of your workers for your company's plot up to a week before the show: Enter on the Show tab, then a worker. They need a fair tillage skill and experience of mid-size tractors, and must be free on the day, not off sick, on holiday or training. On the day they're at the show from midnight, so they can't be given any other work (one out on a job goes when they're back), and they plough your plot for you during the match, standing by its tractor. Their score comes from their tillage skill, their tractor experience, their morale and how they're going on the day. If they fall sick, are away that day, leave or don't get there before the match ends, the entry is withdrawn with a message and their plot goes to a farmer. A placing wins your company the prize and reputation as if you'd ploughed it, and lifts the worker's morale, a win most; a poor run costs them nothing."/>
 		<text name="tc_help_show_11_title" text="Your staff's day off"/>
 		<text name="tc_help_show_11" text="A few weeks before the show, the Inbox asks whether to give your staff the day off to go. Say yes and everyone who'd be working that day goes, office staff too, on their normal pay: their morale lifts a little, nothing can be allocated to them that day, there's no office work, and you'll find them in the crowd round the ring. Anyone sick, on holiday or training stays so, and a worker entered in the ploughing still ploughs. Say no, or don't answer by the day before, and they're a little disappointed."/>
-		<text name="tc_help_show_12_title" text="The breeders' pen"/>
-		<text name="tc_help_show_12" text="With RealisticLivestock, a farmer brings pedigree stock to sell: animals with better genetics than the dealer usually has, kept in the breeder's livestock trailers at the stands' end of the trailer lines. On the day, walk up to the breeder at their stand by the ring and press the activate key to see each animal's age, weight, health, genetics and price. Buy one straight into one of your livestock trailers at the show (in the trailer lines or near the stand), or have it delivered to one of your barns with room for a small fee. The price is well above what the animal would sell for, and anything unsold goes home at the end of the day. Without RealisticLivestock there's no breeders' pen."/>
+		<text name="tc_help_show_12_title" text="The breeders"/>
+		<text name="tc_help_show_12" text="Farmers bring their premium stock to the show, each breeder with a pen of their own on the showground, their animals in it all day, and enter some of them in the classes; a breeder's rosettes hang on their pen as they win them. The bigger the showground, the more breeders come. With RealisticLivestock their animals are for sale: pedigree stock with better genetics than the dealer usually has, brought in the breeder's trailer behind their pen. Walk up to a breeder at their pen and press the activate key to see each animal's age, weight, health, genetics and price. An animal entered in a class isn't for sale until its class is over: the breeder tells you when to come back. Buy one straight into one of your livestock trailers at the show (in the drop-off zone or near the breeder's pen), or have it delivered to one of your barns with room for a small fee. The price is well above what the animal would sell for, and anything unsold goes home at the end of the day. Without RealisticLivestock the breeders still come, but don't sell."/>
 		<text name="tc_help_show_4_title" text="Prizes"/>
-		<text name="tc_help_show_4" text="Placings win a little prize money and, more usefully, reputation and the host farmer's goodwill, a supreme champion most of all; highly commended wins only the rosette. Results come by Inbox, with a rosette notice for each placing."/>
+		<text name="tc_help_show_4" text="Placings win a little prize money and, more usefully, reputation and the host farmer's goodwill, a supreme champion most of all; highly commended wins only the rosette. Results come by Inbox, with a rosette notice for each placing (for the livestock, as each class is placed in the ring)."/>
 		<text name="tc_help_show_10_title" text="Stands and farmers"/>
 		<text name="tc_help_show_10" text="Two of the stands along the ring have someone behind a table: walk up and press the activate key. At the trade association's, a company that isn't a member can join on the day with 25% off its first year (members get a cup of tea). The careers stand passes your details to a few young people looking for work, who join your candidates in the Staff tab for a week, once a show. Some farmers walk the showground too, the host among them; walk up to one to talk. The first chat with each lifts their opinion of you a little, and if you ask whether there's any work going, they might offer you a job on their land, once each a show."/>
 		<text name="tc_help_show_5_title" text="Going along"/>

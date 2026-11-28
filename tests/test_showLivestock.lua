@@ -53,6 +53,7 @@ local function installAnimalSystem(world)
     g_currentMission.animalSystem = {
         getSubTypeByIndex = function(_, index) return subTypes[index] end,
         getSubTypeByName = function(_, name) return byName[name] end,
+        getSubTypeIndexByName = function(_, name) return byName[name] ~= nil and byName[name].subTypeIndex or nil end,
         getTypeByIndex = function(_, index) return types[index] end,
         getTypeByName = function(_, name)
             for _, animalType in ipairs(types) do
@@ -100,6 +101,7 @@ local function setup(withRL)
     world:load("src/util/TCShowClasses.lua")
     world:load("src/util/TCShowJudging.lua")
     world:load("src/util/TCShowPens.lua")
+    world:load("src/util/TCShowRing.lua")
     world:load("src/business/PublicEvents.lua")
     world:load("src/business/EventDay.lua")
     world:load("src/business/Show.lua")
@@ -347,9 +349,44 @@ local function runToDay(world, day)
     end
 end
 
+-- 188: the hour, the clock (dayTime) with it, and the ring's run on to
+-- it (ShowLivestock:update, as the server does every second).
 local function setHour(world, hour)
     g_currentMission.environment.currentHour = hour
+    g_currentMission.environment.dayTime = hour * 3600000
+    world.tc.ShowLivestock:update(TheContractorShowLivestock.PEN_CHECK_MS)
     world.tc.Show:onHourChanged()
+end
+
+-- 188: the clock to a minute of the show's day, the ring run on to it.
+local function setMinute(world, minute)
+    local environment = g_currentMission.environment
+    environment.currentHour = math.floor(minute / 60)
+    environment.dayTime = minute * 60000
+    world.tc.ShowLivestock:update(TheContractorShowLivestock.PEN_CHECK_MS)
+end
+
+-- 188: every class through the ring (to 15:30, before the results).
+local function runRing(world)
+    setMinute(world, TCShowRing.END_MINUTE)
+end
+
+-- 188: a class placed: the clock to its slot's placing.
+local function placeClass(world, classKey)
+    local slot = TCShowRing.findSlot(world.tc.ShowLivestock.timetable, classKey)
+    assertTrue(slot ~= nil, classKey .. " in the ring's timetable")
+    setMinute(world, slot.judgeAt)
+end
+
+-- How many notices a farm's had.
+local function noticesFor(world, farmId)
+    local count = 0
+    for _, id in ipairs(world.notices) do
+        if id == farmId then
+            count = count + 1
+        end
+    end
+    return count
 end
 
 local function announce(world)
@@ -548,8 +585,31 @@ test("entering: open, a company's, a class its animals show in, two a class and 
     assertEquals(livestock:withdraw(1, entry.id), nil)
     assertEquals(#livestock:getFarmEntries(1), 3)
 
+    -- 188: any class until 09:30 on the day; a late entry in a class not
+    -- on the ring's timetable adds it, with a few farmers in it.
     runToDay(world, CLOSE_DAY)
-    assertEquals(problem(1, "COW_HOLSTEIN:young", barn), P.closed)
+    local event = world.tc.Show:getEvent()
+    assertEquals(problem(1, "COW_HOLSTEIN:young", barn), nil, "late, its class is in the ring")
+    assertEquals(livestock:getWindowProblem(event, TCShowClasses.HERD_KEY), nil)
+    local heifers = addHusbandry(world, { clusters = { cluster("BULL_HOLSTEIN", 1, 30, 90) } })
+    assertEquals(TCShowRing.findSlot(livestock.timetable, "BULL_HOLSTEIN:adult"), nil, "not running yet")
+    assertTrue(enter(world, 1, "BULL_HOLSTEIN:adult", heifers) ~= nil, "a late entry in a new class")
+    assertTrue(TCShowRing.findSlot(livestock.timetable, "BULL_HOLSTEIN:adult") ~= nil, "added to the ring")
+    local farmers = 0
+    for _, farmerEntry in ipairs(livestock.farmerEntries) do
+        if farmerEntry.classKey == "BULL_HOLSTEIN:adult" then
+            farmers = farmers + 1
+        end
+    end
+    assertTrue(farmers > 0, "farmers in it too")
+    assertTrue(enter(world, 1, "COW_HOLSTEIN:young", barn) ~= nil, "a late entry")
+    runToDay(world, SHOW_DAY)
+    setMinute(world, TheContractorShow.ENTRY_CLOSE_MINUTE - 1)
+    assertEquals(livestock:getWindowProblem(event, "COW_HOLSTEIN:young"), nil, "on the morning")
+    assertEquals(livestock:getWindowProblem(event, TCShowClasses.HERD_KEY), nil)
+    assertEquals(livestock:withdraw(1, livestock:getFarmEntries(1)[1].id), nil, "withdrawn late")
+    setMinute(world, TheContractorShow.ENTRY_CLOSE_MINUTE)
+    assertEquals(problem(1, "COW_HOLSTEIN:young", barn), P.closed, "entries closed at 09:30")
     assertEquals(livestock:withdraw(1, livestock:getFarmEntries(1)[1].id), P.closed)
 end)
 
@@ -576,6 +636,38 @@ test("entering with RL: the animal by its key, in its own class, not sick, not t
     -- The sick one isn't offered.
     local classes = TheContractorShowLivestock.getHusbandryClasses(barn)
     assertEquals(classes[1].count, 1)
+end)
+
+test("188: entering from a livestock trailer, the animals loaded already; a herd entered on the day is read then", function()
+    local world = setup(false)
+    local livestock = world.tc.ShowLivestock
+    local P = TheContractorShowLivestock.PROBLEMS
+    local barn = addHusbandry(world, { productivity = 1 })
+    announce(world)
+    runToDay(world, CLOSE_DAY - 1)
+    enter(world, 2, "COW_HOLSTEIN:young", addHusbandry(world, { farmId = 2,
+        clusters = { cluster("COW_HOLSTEIN", 1, 20, 90) } }))
+    runToDay(world, SHOW_DAY)
+    setMinute(world, 8 * 60)
+    local trailer = addTrailer(world, { cluster("COW_HOLSTEIN", 1, 20, 100) }, { farmId = 1, bay = 1 })
+    local sources = TCShowAnimals.getFarmSources(1)
+    assertEquals(sources[#sources], trailer, "the farm's trailer after its barns")
+    assertEquals(#TCShowAnimals.getFarmSources(3), 0, "only a farm's own")
+    local classes = TheContractorShowLivestock.getHusbandryClasses(trailer)
+    assertEquals(classes[1].classKey, "COW_HOLSTEIN:young")
+    assertEquals((livestock:getEntryProblem(1, { classKey = TCShowClasses.HERD_KEY, husbandry = trailer })),
+        P.noHusbandry, "Best Kept Herd from a barn only")
+    local entry = world.tc.ShowLivestock:enter(1, "COW_HOLSTEIN:young", trailer.id)
+    assertTrue(entry ~= nil, "entered from the trailer")
+    assertEquals(entry.husbandryId, nil, "no barn kept")
+    assertEquals(select(2, world.tc.ShowLivestock:enter(1, "COW_HOLSTEIN:young", trailer.id)), P.noAnimal,
+        "only one heifer in it")
+    -- A herd entered on the morning is read as it stands then.
+    local herd = enter(world, 1, TCShowClasses.HERD_KEY, barn)
+    assertTrue(herd ~= nil and herd.herdReadings ~= nil)
+    runRing(world)
+    assertEquals(entry.status, TheContractorShowLivestock.STATUS.PLACED, "judged from the trailer in the lines")
+    assertTrue(herd.score ~= nil)
 end)
 
 -- Farmers ---------------------------------------------------------------------------------------------------
@@ -636,7 +728,7 @@ local function twoFarmShow(world)
     return barn1, barn2, first, second, other
 end
 
-test("judged at 10:00 from the trailers stopped in the lines: two farms in one class, a no-show, the placings paid at 16:00", function()
+test("judged in the ring at its class's time from the trailers stopped in the lines: two farms in one class, a no-show, the placings paid at 16:00", function()
     local world = setup(false)
     local livestock = world.tc.ShowLivestock
     -- Two farmers a class, so farm 1's second heifer comes 4th, and no classes
@@ -653,17 +745,55 @@ test("judged at 10:00 from the trailers stopped in the lines: two farms in one c
     addTrailer(world, { cluster("COW_HOLSTEIN", 5, 20, 100) }, { farmId = 3, bay = 3 })
     setHour(world, 9)
     assertTrue(not livestock.judged, "not before 10:00")
+    assertEquals(livestock.ring, nil)
+    -- 188: the heifers first in the ring, at 10:00; Best Kept Herd after.
+    local slot = livestock.timetable[1]
+    assertEquals(slot.key, "COW_HOLSTEIN:young")
+    assertEquals(slot.from, TCShowRing.START_MINUTE)
+    assertEquals(livestock.timetable[#livestock.timetable].key, TCShowClasses.HERD_KEY)
     setHour(world, 10)
-    assertTrue(livestock.judged)
     local S = TheContractorShowLivestock.STATUS
     assertEquals(other.status, S.NO_SHOW, "a moving trailer isn't in the lines")
-    -- The first entry gets the best animal there.
+    -- The first entry gets the best animal there: judged, not yet placed.
     assertNear(first.score, 100, 0.001)
+    assertEquals(first.placing, nil)
+    assertEquals(first.status, S.ENTERED)
+    assertEquals(livestock.slotStates[1], TCShowRing.STATE.IN_RING)
+    -- Farm 1's two heifers in the line, as they're seen in its trailer
+    -- (188: never penned), and the two farmers' from their pens; farm 2
+    -- told it's a no-show, farm 1 that its class is in.
+    assertEquals(livestock.ring.slot, 1)
+    assertEquals(#livestock.ring.lineup, 4)
+    local looks, fromPens = 0, 0
+    for _, item in ipairs(livestock.ring.lineup) do
+        if item.look ~= nil then
+            looks = looks + 1
+            assertEquals(item.look.subTypeName, "COW_HOLSTEIN")
+            assertEquals(item.look.trailerId, world.trailers[1].id, "hidden in its trailer meanwhile")
+        elseif item.pen ~= nil then
+            fromPens = fromPens + 1
+        end
+    end
+    assertEquals(looks, 2)
+    assertEquals(fromPens, 2)
+    assertEquals(#livestock.pens, 2, "a pen each for the farmers' heifers, none for a player's")
+    assertEquals(noticesFor(world, 1), 1)
+    assertEquals(noticesFor(world, 2), 1)
+    assertTrue(not livestock.judged)
+
+    placeClass(world, "COW_HOLSTEIN:young")
     assertEquals(first.placing, 1)
     assertEquals(first.stats[1].key, "health")
     assertEquals(second.placing, 4, "behind two farmers at 77")
     assertEquals(second.status, S.PLACED)
     assertEquals(#livestock.farmerEntries > 0, true)
+    -- The line in placing order, the rosettes' notices as they're placed.
+    assertTrue(livestock.ring.placed)
+    assertEquals(livestock.ring.lineup[1].entry, first)
+    assertEquals(noticesFor(world, 1), 3, "a rosette notice for each placing")
+    setMinute(world, slot.to)
+    assertEquals(livestock.ring, nil, "back in their pens")
+    assertEquals(livestock.slotStates[1], TCShowRing.STATE.OVER)
 
     setHour(world, 16)
     local heifers = placingsFor(world, "COW_HOLSTEIN:young")
@@ -685,8 +815,37 @@ test("judged at 10:00 from the trailers stopped in the lines: two farms in one c
     assertEquals(#world.reputation, 1, "nothing for highly commended")
     assertEquals(world.opinions[1].customerId, HOST_ID)
     assertEquals(world.opinions[1].delta, TheContractorShowLivestock.CLASS_OPINION[1])
-    -- A rosette notice for each placing a farm won.
-    assertEquals(table.concat(world.notices, ","), "1,1")
+    -- 188: none more at the results: the rosettes' went as they were placed.
+    assertEquals(noticesFor(world, 1), 3)
+    assertTrue(livestock.judged)
+end)
+
+test("188: at 09:00 a farm is told how many entered animals aren't in the drop-off zone, once", function()
+    local world = setup(false)
+    local livestock = world.tc.ShowLivestock
+    twoFarmShow(world)
+    runToDay(world, SHOW_DAY)
+    -- Farm 1 brings one of its two heifers; farm 2 none.
+    addTrailer(world, { cluster("COW_HOLSTEIN", 1, 20, 100) }, { farmId = 1, bay = 1 })
+    setMinute(world, TheContractorShowLivestock.DROP_OFF_CHECK_MINUTE - 1)
+    assertEquals(#world.notices, 0, "not before 09:00")
+    local told = {}
+    world.tc.Notices.publish = function(_, farmId, text)
+        told[farmId] = text
+        table.insert(world.notices, farmId)
+    end
+    world.texts["tc_showEntry_noticeDropOff"] = "missing %d"
+    setMinute(world, TheContractorShowLivestock.DROP_OFF_CHECK_MINUTE)
+    assertEquals(told[1], "missing 1")
+    assertEquals(told[2], "missing 1")
+    assertEquals(#world.notices, 2)
+    setMinute(world, TheContractorShowLivestock.DROP_OFF_CHECK_MINUTE + 10)
+    assertEquals(#world.notices, 2, "once a show")
+    local xml = {}
+    livestock:saveToXmlFile(xml)
+    local loaded = TheContractorShowLivestock.new()
+    loaded:loadFromXMLFile(xml)
+    assertTrue(loaded.dropOffChecked, "not told again after a load")
 end)
 
 test("a no-show costs nothing, an empty class doesn't run, and the farmers' classes give their placings", function()
@@ -729,6 +888,7 @@ test("RL: the entered animal found by its key in the trailer, a sick one turned 
     addTrailer(world, { rlAnimal({ uniqueId = "100009", age = 20 }), bess, daisy }, { farmId = 1, bay = 4 })
     setHour(world, 10)
     assertEquals(bessEntry.status, TheContractorShowLivestock.STATUS.SICK)
+    placeClass(world, "COW_HOLSTEIN:young")
     assertEquals(daisyEntry.placing, 1)
     assertEquals(daisyEntry.stats[1].key, "quality")
     assertEquals(daisyEntry.stats[1].value, 1.5)
@@ -784,6 +944,8 @@ test("Best Kept Herd is judged on the husbandry as it was the day before", funct
     -- Set out at midnight: read then. The barn runs out of straw that morning.
     barn.levels.straw = 0
     setHour(world, 10)
+    assertEquals(entry.score, nil, "the herd's slot is the day's last")
+    placeClass(world, TCShowClasses.HERD_KEY)
     assertNear(entry.score, 100, 0.001)
     assertEquals(entry.placing, 1)
     setHour(world, 16)
@@ -801,6 +963,21 @@ test("every machine gets the entries, placings and stats, never a score, the eye
     runToDay(world, SHOW_DAY)
     addTrailer(world, { cluster("COW_HOLSTEIN", 2, 20, 100) }, { farmId = 1, bay = 1 })
     setHour(world, 10)
+    -- 188: judged but not placed yet: no stats go.
+    local early = world:newStream()
+    local lastLivestock = nil
+    for _, event in ipairs(world.events) do
+        if getmetatable(event) == getmetatable(TCShowLivestockEvent.emptyNew()) then
+            lastLivestock = event
+        end
+    end
+    lastLivestock:writeStream(early)
+    local earlyCopy = TCShowLivestockEvent.emptyNew()
+    earlyCopy:readStream(early, { getIsServer = function() return false end })
+    assertEquals(#earlyCopy.state.entries[1].stats, 0, "no stats before its placing")
+    assertEquals(earlyCopy.state.ring.slot, 1, "the ring goes")
+    assertEquals(#earlyCopy.state.timetable, #livestock.timetable, "and the timetable")
+    runRing(world)
     local sent = world.events[#world.events]
     assertEquals(getmetatable(sent), getmetatable(TCShowLivestockEvent.emptyNew()))
     local stream = world:newStream()
@@ -843,6 +1020,7 @@ test("entries, farmers' entries, traits and scores survive a save and load, plac
     runToDay(world, SHOW_DAY)
     addTrailer(world, { cluster("COW_HOLSTEIN", 2, 20, 100) }, { farmId = 1, bay = 1 })
     setHour(world, 10)
+    runRing(world)
     local before = livestock:buildPlacings()
 
     local xmlFile = {}
@@ -851,6 +1029,8 @@ test("entries, farmers' entries, traits and scores survive a save and load, plac
     loaded:loadFromXMLFile(xmlFile)
     assertEquals(loaded.showId, livestock.showId)
     assertTrue(loaded.judged and loaded.drawn)
+    assertEquals(#loaded.timetable, #livestock.timetable, "188: the timetable")
+    assertEquals(loaded.slotStates[1], TCShowRing.STATE.OVER)
     assertEquals(#loaded.entries, 3)
     assertEquals(#loaded.farmerEntries, #livestock.farmerEntries)
     assertEquals(loaded.stockman[8], livestock.stockman[8])
@@ -913,37 +1093,42 @@ end)
 
 -- 182: the pens ----------------------------------------------------------------------------------
 
--- The pens given to farmers (no entry).
+-- The pens given to farmers.
 local function farmerPens(livestock)
     local list = {}
     for number, pen in ipairs(livestock.pens) do
-        if pen.entryId == nil and pen.subTypeName ~= nil then
+        if pen.subTypeName ~= nil then
             table.insert(list, number)
         end
     end
     return list
 end
 
-test("pens: given out at set-out, players' animals first, farmers' filling the row, the count in the scene", function()
+-- 188: the players' animals in the ring's line (their looks).
+local function lineLooks(livestock)
+    local list = {}
+    for _, item in ipairs(livestock.ring ~= nil and livestock.ring.lineup or {}) do
+        if item.look ~= nil then
+            table.insert(list, item)
+        end
+    end
+    return list
+end
+
+test("pens: given out at set-out to the farmers' animals only (188: never a player's), a row at most, the count in the scene", function()
     local world = setup(false)
     local livestock = world.tc.ShowLivestock
-    local _, _, first, second, other = twoFarmShow(world)
+    twoFarmShow(world)
     runToDay(world, SHOW_DAY - 1)
     assertTrue(not livestock.pensAssigned, "not before the set-out")
     runToDay(world, SHOW_DAY)
     assertTrue(livestock.pensAssigned)
-    assertEquals(livestock.pens[1].entryId, first.id)
-    assertEquals(livestock.pens[2].entryId, second.id)
-    assertEquals(livestock.pens[3].entryId, other.id)
-    assertEquals(livestock.pens[3].farmId, 2)
     local farmers = farmerPens(livestock)
-    assertEquals(#livestock.pens, math.min(TheContractorShowLivestock.getPensPerRow(), 3 + #farmers))
-    assertTrue(#farmers > 0, "the farmers fill the rest")
-    for _, number in ipairs(farmers) do
-        assertTrue(number > 3)
-    end
+    assertTrue(#farmers > 0)
+    assertEquals(#farmers, #livestock.pens, "every pen a farmer's")
+    assertTrue(#livestock.pens <= TheContractorShowLivestock.getPensPerRow())
     assertEquals(world.scene.pens, #livestock.pens, "the scene lays out that many")
-    -- Each farmer's pen is a farmer's entry's.
+    -- Each pen is a farmer's entry's.
     local held = 0
     for _, farmerEntry in ipairs(livestock.farmerEntries) do
         if farmerEntry.pen ~= nil then
@@ -955,63 +1140,44 @@ test("pens: given out at set-out, players' animals first, farmers' filling the r
     assertEquals(held, #farmers)
 end)
 
-test("pens: a player's animal is in its pen while its trailer stands in the lines, the farmers' while the gates are open", function()
+test("pens: the farmers' animals are there while the gates are open; a player's stays in its trailer, seen only in the ring", function()
     local world = setup(false)
     local livestock = world.tc.ShowLivestock
     local _, _, first = twoFarmShow(world)
     runToDay(world, SHOW_DAY)
-    local movement = { farmId = 1, bay = 1, speed = 8 }
     local trailer = addTrailer(world, { cluster("COW_HOLSTEIN", 1, 22, 40), cluster("COW_HOLSTEIN", 1, 20, 100) },
-        movement)
+        { farmId = 1, bay = 1 })
     local farmerPen = livestock.pens[farmerPens(livestock)[1]]
     livestock:updatePens()
     assertEquals(farmerPen.present, nil, "not before the gates open")
-    assertEquals(livestock.pens[1].present, nil)
-
-    setHour(world, 8)
     local sent = #world.events
-    livestock:updatePens()
+    setHour(world, 8)
     assertTrue(farmerPen.present, "the farmers' are there")
-    assertEquals(livestock.pens[1].present, nil, "a trailer still moving isn't unloaded")
     assertTrue(#world.events > sent, "every machine told")
+    assertEquals(#lineLooks(livestock), 0, "nobody in the ring yet")
 
-    movement.speed = 0
-    livestock:updatePens()
-    local pen = livestock.pens[1]
-    assertTrue(pen.present)
-    assertEquals(pen.trailerId, trailer.id)
-    -- The best heifer there, as the judge will take it, and the second
-    -- entry the other.
-    assertEquals(pen.subTypeName, "COW_HOLSTEIN")
-    assertEquals(pen.age, 20)
-    assertEquals(pen.variation, 1, "vanilla's coat, as its trailer shows it")
-    assertTrue(livestock.pens[2].present)
-    assertEquals(livestock.pens[2].age, 22)
-    assertEquals(livestock.pens[3].present, nil, "farm 2 hasn't come")
-
-    -- Pulling out: still penned until the trailer leaves the lines.
-    movement.speed = 8
-    sent = #world.events
-    livestock:updatePens()
-    assertTrue(pen.present)
-    assertEquals(#world.events, sent, "nothing changed, nothing sent")
-    trailer.rootNode.x, trailer.rootNode.z = 900, 900
-    livestock:updatePens()
-    assertEquals(pen.present, nil)
-    assertEquals(pen.trailerId, nil)
-
-    -- Back, and judged as before; then the gates close and everyone's gone.
-    trailer.rootNode.x, trailer.rootNode.z = bayMiddle(world.scene, 1)
-    movement.speed = 0
+    -- At its class: the player's heifers in the line as their trailer has
+    -- them, the best first as the judge takes it; the ring shows them.
     setHour(world, 10)
-    assertEquals(first.status, TheContractorShowLivestock.STATUS.PLACED, "judging read the trailer as before")
+    local looks = lineLooks(livestock)
+    assertEquals(#looks, 2)
+    local ages = {}
+    for _, item in ipairs(looks) do
+        assertEquals(item.look.trailerId, trailer.id)
+        assertEquals(item.look.variation, 1, "vanilla's coat, as its trailer shows it")
+        assertEquals(item.farmId, 1)
+        ages[item.entry.id] = item.look.age
+    end
+    assertEquals(ages[first.id], 20)
+    local display = livestock:getDisplay()
+    assertEquals(#display.ring, #livestock.ring.lineup, "the players' and the farmers' in the ring")
+    runRing(world)
+    assertEquals(first.status, TheContractorShowLivestock.STATUS.PLACED)
     setHour(world, 18)
-    livestock:updatePens()
-    assertEquals(pen.present, nil)
-    assertEquals(farmerPen.present, nil)
+    assertEquals(farmerPen.present, nil, "the gates closed")
 end)
 
-test("pens: an RL animal by its key with its own coat; a sick one isn't penned", function()
+test("the ring: an RL animal by its key with its own coat; a sick one turned away isn't in the line", function()
     local world = setup(true)
     local livestock = world.tc.ShowLivestock
     local daisy = rlAnimal({ uniqueId = "100001", name = "Daisy", age = 20 })
@@ -1024,15 +1190,14 @@ test("pens: an RL animal by its key with its own coat; a sick one isn't penned",
     runToDay(world, SHOW_DAY)
     bess.sick = true
     addTrailer(world, { rlAnimal({ uniqueId = "100009", age = 20 }), bess, daisy }, { farmId = 1, bay = 4 })
-    setHour(world, 8)
-    livestock:updatePens()
-    assertTrue(livestock.pens[1].present)
-    assertEquals(livestock.pens[1].animalKey, rlKey("100001"))
-    assertEquals(livestock.pens[1].variation, 3)
-    assertEquals(livestock.pens[2].present, nil, "turned away by the vet")
+    setHour(world, 10)
+    local looks = lineLooks(livestock)
+    assertEquals(#looks, 1)
+    assertEquals(looks[1].look.animalKey, rlKey("100001"))
+    assertEquals(looks[1].look.variation, 3)
 end)
 
-test("pens: once judged, each pen has its animal's placing, and every machine has the pens", function()
+test("pens: once placed, the farmers' pens have their placings; every machine has the pens and the ring's looks", function()
     local world = setup(false)
     local livestock = world.tc.ShowLivestock
     TheContractorShowLivestock.FARMER_ONLY_CLASSES = 0
@@ -1040,13 +1205,12 @@ test("pens: once judged, each pen has its animal's placing, and every machine ha
     twoFarmShow(world)
     runToDay(world, SHOW_DAY)
     addTrailer(world, { cluster("COW_HOLSTEIN", 1, 22, 40), cluster("COW_HOLSTEIN", 1, 20, 100) }, { farmId = 1, bay = 1 })
-    setHour(world, 8)
-    livestock:updatePens()
     setHour(world, 10)
-    assertEquals(livestock.pens[1].placing, 1)
-    assertEquals(livestock.pens[2].placing, 4)
-    assertEquals(livestock.pens[3].placing, nil, "a no-show")
-    -- Two farmers at 77, 2nd and 3rd.
+    for _, pen in ipairs(livestock.pens) do
+        assertEquals(pen.placing, nil, "not till it's placed")
+    end
+    placeClass(world, "COW_HOLSTEIN:young")
+    -- Farm 1's best 1st; two farmers at 77, 2nd and 3rd.
     local placed = {}
     for _, number in ipairs(farmerPens(livestock)) do
         local pen = livestock.pens[number]
@@ -1067,14 +1231,25 @@ test("pens: once judged, each pen has its animal's placing, and every machine ha
     assertTrue(client.penVersion > 0)
     for number, pen in ipairs(livestock.pens) do
         local copy = client.pens[number]
-        for _, field in ipairs({ "entryId", "subTypeName", "age", "variation", "present", "trailerId", "placing",
-            "champion" }) do
+        for _, field in ipairs({ "subTypeName", "age", "variation", "present", "placing", "champion" }) do
             assertEquals(copy[field], pen[field], field .. " of pen " .. number)
         end
     end
+    assertEquals(#client.ring.lineup, #livestock.ring.lineup)
+    for i, item in ipairs(livestock.ring.lineup) do
+        local copy = client.ring.lineup[i]
+        assertEquals(copy.pen, item.pen)
+        assertEquals(copy.farmId, item.farmId)
+        if item.look ~= nil then
+            for _, field in ipairs({ "subTypeName", "age", "variation", "trailerId", "animalKey" }) do
+                assertEquals(copy.look[field], item.look[field], field)
+            end
+        end
+    end
+    assertEquals(client.ring.lineup[1].entry, nil, "never the entry itself")
 end)
 
-test("pens: a supreme champion's pen says so", function()
+test("the ring: a supreme champion's line is its type's class winners, a player's as its trailer has it", function()
     local world = setup(false)
     local livestock = world.tc.ShowLivestock
     TheContractorShowLivestock.FARMER_ONLY_CLASSES = 0
@@ -1087,25 +1262,31 @@ test("pens: a supreme champion's pen says so", function()
     runToDay(world, SHOW_DAY)
     addTrailer(world, { cluster("COW_HOLSTEIN", 1, 20, 100), cluster("BULL_HOLSTEIN", 1, 20, 100) }, { farmId = 1, bay = 1 })
     setHour(world, 10)
+    local championKey = TCShowClasses.getChampionKey("COW")
+    local championSlot, championIndex = TCShowRing.findSlot(livestock.timetable, championKey)
+    assertTrue(championSlot ~= nil)
+    setMinute(world, championSlot.from)
+    assertEquals(livestock.ring.slot, championIndex)
+    assertEquals(#lineLooks(livestock), 2, "both of farm 1's winners")
+    setMinute(world, championSlot.judgeAt)
     local champions = 0
-    for _, pen in ipairs(livestock.pens) do
-        if pen.champion then
+    for _, item in ipairs(livestock.ring.lineup) do
+        if item.champion then
             champions = champions + 1
-            assertEquals(pen.placing, 1)
         end
     end
     assertEquals(champions, 1)
 end)
 
-test("pens: given out survive a save and load (who's there read again); a deleted farm's stand empty", function()
+test("pens and the ring survive a save and load mid-class; a deleted farm's animals leave the ring", function()
     local world = setup(false)
     local livestock = world.tc.ShowLivestock
-    twoFarmShow(world)
+    local first = twoFarmShow(world)
     runToDay(world, SHOW_DAY)
     addTrailer(world, { cluster("COW_HOLSTEIN", 2, 20, 100) }, { farmId = 1, bay = 1 })
     setHour(world, 10)
-    livestock:updatePens()
-    assertTrue(livestock.pens[1].present)
+    placeClass(world, "COW_HOLSTEIN:young")
+    assertTrue(#lineLooks(livestock) > 0)
 
     local xmlFile = {}
     livestock:saveToXmlFile(xmlFile)
@@ -1113,37 +1294,385 @@ test("pens: given out survive a save and load (who's there read again); a delete
     loaded:loadFromXMLFile(xmlFile)
     assertTrue(loaded.pensAssigned)
     assertEquals(#loaded.pens, #livestock.pens)
-    assertEquals(loaded.pens[1].entryId, livestock.pens[1].entryId)
-    assertEquals(loaded.pens[1].present, nil, "read again, not saved")
-    assertEquals(loaded.pens[1].placing, livestock.pens[1].placing, "placings rebuilt")
     for number, pen in ipairs(livestock.pens) do
-        if pen.entryId == nil then
-            assertEquals(loaded.pens[number].subTypeName, pen.subTypeName)
-            assertEquals(loaded.pens[number].age, pen.age)
-            assertEquals(loaded.pens[number].variation, pen.variation)
-            assertEquals(loaded.pens[number].placing, pen.placing)
+        assertEquals(loaded.pens[number].subTypeName, pen.subTypeName)
+        assertEquals(loaded.pens[number].age, pen.age)
+        assertEquals(loaded.pens[number].variation, pen.variation)
+        assertEquals(loaded.pens[number].placing, pen.placing, "placings rebuilt")
+    end
+    assertEquals(#loaded.ring.lineup, #livestock.ring.lineup)
+    local entries = {}
+    for _, item in ipairs(loaded.ring.lineup) do
+        if item.look ~= nil then
+            entries[item.entry ~= nil and item.entry.id or -1] = true
+            assertEquals(item.farmId, 1)
+        elseif item.pen ~= nil then
+            assertTrue(item.farmerEntry ~= nil and item.farmerEntry.pen == item.pen, "a farmer's, from its pen")
         end
     end
-    world.tc.ShowLivestock = loaded
-    loaded:resolveSavedVehicles()
-    loaded:updatePens()
-    assertTrue(loaded.pens[1].present, "back in its pen")
+    assertTrue(entries[first.id], "the player's entry back in its place in the line")
 
-    local count = #loaded.pens
-    loaded:forgetFarm(2)
-    assertEquals(#loaded.pens, count, "the others keep their numbers")
-    assertEquals(loaded.pens[3].entryId, nil)
-    assertEquals(loaded.pens[3].subTypeName, nil)
+    loaded:forgetFarm(1)
+    assertEquals(#lineLooks(loaded), 0)
 end)
 
-test("pens: a load from before 182 on the day gives them out at the first look", function()
+test("pens: a load from before 182 on the day gives them out at the first look; a player's pen from before 188 stands empty", function()
     local world = setup(false)
     local livestock = world.tc.ShowLivestock
     twoFarmShow(world)
     runToDay(world, SHOW_DAY)
     livestock.pens, livestock.pensAssigned = {}, false
     setHour(world, 9)
-    livestock:updatePens()
     assertTrue(livestock.pensAssigned)
-    assertEquals(livestock.pens[1].entryId, livestock.entries[1].id)
+    assertTrue(#livestock.pens > 0)
+    assertEquals(livestock.pens[1].entryId, nil)
+
+    local xmlFile = {}
+    livestock:saveToXmlFile(xmlFile)
+    local key = TheContractor.SaveKey .. "." .. TheContractorShowLivestock.SAVE_KEY .. ".pen(0)"
+    xmlFile[key .. "#subTypeName"] = nil
+    xmlFile[key .. "#entryId"] = livestock.entries[1].id
+    xmlFile[key .. "#farmId"] = 1
+    local loaded = TheContractorShowLivestock.new()
+    loaded:loadFromXMLFile(xmlFile)
+    assertEquals(loaded.pens[1].subTypeName, nil)
+    assertEquals(loaded.pens[1].entryId, nil)
+end)
+
+-- 188: the breeders ------------------------------------------------------------------------------
+
+-- RL's API for the breeders' stock (tests/test_breedersPen.lua's, cut
+-- down): every animal it makes is healthy and premium.
+local function installBreederAPI(world)
+    local api = { API_VERSION = 1, REASON = { ANIMAL_NOT_IN_SOURCE = "animalNotInSource" } }
+    world.holdings = {}
+    world.nextNumber = 1
+    function api.isReady() return true end
+    function api.createAnimal(options)
+        local animal = { subType = options.subType, age = options.age, quality = options.quality,
+            number = world.nextNumber }
+        world.nextNumber = world.nextNumber + 1
+        return animal
+    end
+    function api.describeAnimal(animal)
+        return { id = { type = "T", country = "DE", herd = "1", number = tostring(animal.number) },
+            subType = animal.subType, age = animal.age, weight = 400, targetWeight = 400, health = 100,
+            gender = "female", diseased = animal.diseased == true,
+            genetics = { quality = 1.4, health = 1.4, productivity = 1.4, metabolism = 1, fertility = 1 } }
+    end
+    function api.getAnimalValue() return 1000 end
+    function api.getAnimalsIn(target) return world.holdings[target] or {} end
+    function api.addAnimalsTo(target, animals)
+        world.holdings[target] = world.holdings[target] or {}
+        for _, animal in ipairs(animals) do
+            table.insert(world.holdings[target], animal)
+        end
+        return true
+    end
+    function api.moveAnimals() return true end
+    RealisticLivestockAPI = api
+    return api
+end
+
+-- The show with its breeders: a roomy showground (160 x 100 m), the real
+-- breeders on it (their stand's open in the show's hours) and, withRL,
+-- their RL stock in trailers.
+local function setupBreeders(withRL)
+    local world = setup(withRL)
+    RealisticLivestockAPI = nil
+    world:load("src/util/TCVehicleIds.lua")
+    world:load("src/util/TCBreedersPen.lua")
+    world:load("src/business/BreedersPen.lua")
+    world:load("src/events/TCBreedersPenEvent.lua")
+    local rect = { cx = 100, cz = 50, angle = 0, halfU = 80, halfV = 50 }
+    local entrance = { x = rect.cx + rect.halfU + 10, z = rect.cz }
+    world.scene = TCAuctionLayout.getScene(TCAuctionLayout.layOutOpenRect(rect, entrance), entrance, 99)
+    world.scene.dressing = "show"
+    world.plan.showRect = rect
+    world.plan.entrance = { x = entrance.x, z = entrance.z, distance = 10 }
+    local site = world.tc.AuctionSite
+    site.startOpen = function(self, fieldId, kind, eventId, options)
+        self.site = { fieldId = fieldId }
+        self.fieldId = fieldId
+        world.scene.pens = options ~= nil and options.pens or nil
+        world.scene.breeders = options ~= nil and options.breeders or nil
+    end
+    local tc = world.tc
+    tc.ShowStands = {
+        getScene = function() return site:getScene() end,
+        isOpen = function()
+            local hour = g_currentMission.environment.currentHour or 0
+            return site:getScene() ~= nil and hour >= 8 and hour < 18
+        end,
+    }
+    if withRL then
+        installBreederAPI(world)
+        FarmManager.MAX_NUM_FARMS = 8
+        g_farmManager.getFarmById = function(_, farmId) return farmId <= 2 and { farmId = farmId } or nil end
+    end
+    local pen = TheContractorBreedersPen.new()
+    pen:register(tc.Show)
+    pen.random = function(a, b)
+        if b ~= nil then
+            return a
+        end
+        return 1
+    end
+    pen.engine = {
+        pickTrailerModel = function() return { xmlFilename = "trailer.xml" }, 8 end,
+        spawnTrailer = function(spawner, index, spot, generation)
+            local trailer = world:addVehicle({ name = "breeder trailer", farmId = spawner.farmId })
+            spawner:onTrailerSpawned(trailer, index, generation)
+        end,
+        deleteVehicle = function() end,
+    }
+    tc.BreedersPen = pen
+    world.pen = pen
+    return world
+end
+
+-- A breeder's entries in a class: { farmerEntry, ... }.
+local function breederEntriesIn(livestock, classKey)
+    local list = {}
+    for _, farmerEntry in ipairs(livestock.farmerEntries) do
+        if farmerEntry.breeder ~= nil and farmerEntry.classKey == classKey then
+            table.insert(list, farmerEntry)
+        end
+    end
+    return list
+end
+
+test("188: the breeders enter their own animals in place of the farmers' rolls, and the ring's timetable has their classes", function()
+    local world = setupBreeders(false)
+    local livestock = world.tc.ShowLivestock
+    local barn = addHusbandry(world, { clusters = { cluster("COW_HOLSTEIN", 1, 20, 100) } })
+    announce(world)
+    enter(world, 1, "COW_HOLSTEIN:young", barn)
+    runToDay(world, CLOSE_DAY)
+    local breeders = world.pen.breeders
+    assertTrue(#breeders > 0, "breeders come")
+    for _, breeder in ipairs(breeders) do
+        assertTrue(breeder.farmerId ~= HOST_ID)
+    end
+    -- A breeder's entry is their own animal, in its own class; other
+    -- farmers enter Best Kept Herd and (188) single animals for the row of
+    -- pens, in the classes running, never a breeder.
+    local classes, isBreeder = {}, {}
+    for _, breeder in ipairs(breeders) do
+        isBreeder[breeder.farmerId] = true
+    end
+    local rowEntries = {}
+    for _, farmerEntry in ipairs(livestock.farmerEntries) do
+        if farmerEntry.breeder ~= nil then
+            local animal = breeders[farmerEntry.breeder].animals[farmerEntry.animal]
+            assertEquals(farmerEntry.classKey, animal.classKey)
+            assertEquals(farmerEntry.farmerId, breeders[farmerEntry.breeder].farmerId)
+            assertTrue(farmerEntry.score ~= nil, "without RL a premium roll")
+            classes[farmerEntry.classKey] = true
+        elseif farmerEntry.classKey ~= TCShowClasses.HERD_KEY then
+            assertTrue(not isBreeder[farmerEntry.farmerId], "not a breeder")
+            assertTrue(farmerEntry.score ~= nil, "a farmer's roll")
+            table.insert(rowEntries, farmerEntry)
+        end
+    end
+    local others = 0
+    for _, farmer in ipairs(world.tc.Farmers:getFarmers()) do
+        if not isBreeder[farmer.id] then
+            others = others + 1
+        end
+    end
+    if others > 0 then
+        assertTrue(#rowEntries > 0, "the row of pens filled")
+    end
+    assertTrue(#rowEntries <= TheContractorShowLivestock.getPensPerRow())
+    for _, farmerEntry in ipairs(rowEntries) do
+        assertTrue(classes[farmerEntry.classKey] or farmerEntry.classKey == "COW_HOLSTEIN:young",
+            "in a class running")
+    end
+    -- The timetable: the players' class, the breeders' classes, the
+    -- champions after their types', the herd last, from 10:00.
+    local timetable = livestock.timetable
+    assertTrue(TCShowRing.findSlot(timetable, "COW_HOLSTEIN:young") ~= nil)
+    for classKey in pairs(classes) do
+        assertTrue(TCShowRing.findSlot(timetable, classKey) ~= nil, classKey .. " runs")
+    end
+    assertEquals(timetable[1].from, TCShowRing.START_MINUTE)
+    assertEquals(timetable[#timetable].key, TCShowClasses.HERD_KEY)
+    assertTrue(#timetable <= TCShowRing.MAX_SLOTS)
+    local _, champion = TCShowRing.findSlot(timetable, TCShowClasses.getChampionKey("COW"))
+    local _, adult = TCShowRing.findSlot(timetable, "COW_HOLSTEIN:adult")
+    assertTrue(champion ~= nil and adult ~= nil and champion > adult, "the champion after its type's classes")
+    -- Every machine has which animal's in which class, never a score.
+    local stream = world:newStream()
+    TheContractorShowLivestock.writeState(stream, livestock)
+    local state = TheContractorShowLivestock.readState(stream)
+    local count = 0
+    for _, farmerEntry in ipairs(livestock.farmerEntries) do
+        if farmerEntry.breeder ~= nil then
+            count = count + 1
+        end
+    end
+    assertEquals(#state.breederEntries, count)
+    assertEquals(state.breederEntries[1].score, nil)
+    assertEquals(#state.timetable, #timetable)
+end)
+
+test("188: no room for breeders: the farmers enter as 167 had it", function()
+    local world = setup(false)
+    world:load("src/util/TCVehicleIds.lua")
+    world:load("src/util/TCBreedersPen.lua")
+    world:load("src/business/BreedersPen.lua")
+    world:load("src/events/TCBreedersPenEvent.lua")
+    RealisticLivestockAPI = nil
+    local pen = TheContractorBreedersPen.new()
+    pen:register(world.tc.Show)
+    world.tc.BreedersPen = pen
+    local barn = addHusbandry(world, { clusters = { cluster("COW_HOLSTEIN", 1, 20, 100) } })
+    announce(world)
+    enter(world, 1, "COW_HOLSTEIN:young", barn)
+    runToDay(world, CLOSE_DAY)
+    assertEquals(#pen.breeders, 0, "a 120 x 60 m showground has no room")
+    local rolled = 0
+    for _, farmerEntry in ipairs(world.tc.ShowLivestock.farmerEntries) do
+        assertEquals(farmerEntry.breeder, nil)
+        if farmerEntry.classKey == "COW_HOLSTEIN:young" then
+            rolled = rolled + 1
+        end
+    end
+    assertTrue(rolled > 0, "farmers in the player's class")
+end)
+
+test("188: the ring: a class's breeders' animals in the line with the player's, placed in order, their rosettes on the breeder's pen, held till it's over", function()
+    local world = setupBreeders(false)
+    local livestock = world.tc.ShowLivestock
+    local barn = addHusbandry(world, { clusters = { cluster("COW_HOLSTEIN", 1, 20, 100) } })
+    announce(world)
+    local heifer = enter(world, 1, "COW_HOLSTEIN:young", barn)
+    runToDay(world, SHOW_DAY)
+    addTrailer(world, { cluster("COW_HOLSTEIN", 1, 20, 100) }, { farmId = 1, bay = 1 })
+    assertTrue(world.scene.breeders ~= nil and #world.scene.breeders == #world.pen.breeders, "their pens laid out")
+    setHour(world, 8)
+    assertTrue(world.pen.present, "the breeders' animals in their pens with the gates open")
+    local display = livestock:getDisplay()
+    local shown = 0
+    for index, breeder in ipairs(world.pen.breeders) do
+        shown = shown + #display.breeders[index].animals
+        assertEquals(#display.breeders[index].animals, #breeder.animals)
+    end
+    assertTrue(shown > 0)
+
+    local breederEntries = breederEntriesIn(livestock, "COW_HOLSTEIN:young")
+    assertTrue(#breederEntries > 0)
+    local mine = breederEntries[1]
+    local slot = TCShowRing.findSlot(livestock.timetable, "COW_HOLSTEIN:young")
+    assertEquals(livestock:getHeldUntil(mine.breeder, mine.animal), slot.to, "held till its class is over")
+
+    setHour(world, 10)
+    assertEquals(livestock.timetable[livestock.ring.slot].key, "COW_HOLSTEIN:young")
+    local fromRow = 0
+    for _, farmerEntry in ipairs(livestock.farmerEntries) do
+        if farmerEntry.breeder == nil and farmerEntry.pen ~= nil and farmerEntry.classKey == "COW_HOLSTEIN:young" then
+            fromRow = fromRow + 1
+        end
+    end
+    assertEquals(#livestock.ring.lineup, 1 + #breederEntries + fromRow, "the player's, the breeders' and the row's")
+    display = livestock:getDisplay()
+    assertEquals(#display.ring, #livestock.ring.lineup)
+    for _, animal in ipairs(display.breeders[mine.breeder].animals) do
+        assertTrue(animal.id ~= mine.animal, "a breeder's in the ring isn't in their pen")
+    end
+
+    placeClass(world, "COW_HOLSTEIN:young")
+    -- The player's healthy heifer in its prime beats the premium rolls.
+    assertEquals(heifer.placing, 1)
+    assertEquals(mine.placing, 2)
+    local first = livestock.ring.lineup[1]
+    assertEquals(first.entry, heifer, "the line stood in placing order")
+    display = livestock:getDisplay()
+    assertEquals(display.breeders[mine.breeder].rosettes[1], TCShowScene.ROSETTE_COLOURS[2])
+
+    setMinute(world, slot.to)
+    assertEquals(livestock:getHeldUntil(mine.breeder, mine.animal), nil, "for sale once its class is over")
+    display = livestock:getDisplay()
+    local back = false
+    for _, animal in ipairs(display.breeders[mine.breeder].animals) do
+        back = back or animal.id == mine.animal
+    end
+    assertTrue(back, "back in its pen")
+
+    -- A client has the breeders' placings and the ring, never a score.
+    setMinute(world, TCShowRing.findSlot(livestock.timetable, "COW_HOLSTEIN:adult").from)
+    local stream = world:newStream()
+    TheContractorShowLivestock.writeState(stream, livestock)
+    local client = TheContractorShowLivestock.new()
+    client:applyState(TheContractorShowLivestock.readState(stream))
+    assertTrue(client.ring ~= nil)
+    assertEquals(#client.ring.lineup, #livestock.ring.lineup)
+    local copy = nil
+    for _, entry in ipairs(client.breederEntries) do
+        if entry.breeder == mine.breeder and entry.animal == mine.animal then
+            copy = entry
+        end
+    end
+    assertEquals(copy.placing, 2)
+    assertEquals(copy.score, nil)
+
+    -- Saved mid-class: the ring and the timetable come back.
+    local xml = {}
+    livestock:saveToXmlFile(xml)
+    local loaded = TheContractorShowLivestock.new()
+    loaded:loadFromXMLFile(xml)
+    assertEquals(#loaded.timetable, #livestock.timetable)
+    assertEquals(loaded.ring.slot, livestock.ring.slot)
+    assertEquals(#loaded.ring.lineup, #livestock.ring.lineup)
+    for i, item in ipairs(loaded.ring.lineup) do
+        if item.breeder ~= nil then
+            assertTrue(item.farmerEntry ~= nil, "back to its entry, for its placing")
+            assertEquals(item.animal, livestock.ring.lineup[i].animal)
+        end
+    end
+    local savedEntry = nil
+    for _, farmerEntry in ipairs(loaded.farmerEntries) do
+        if farmerEntry.breeder == mine.breeder and farmerEntry.animal == mine.animal then
+            savedEntry = farmerEntry
+        end
+    end
+    assertEquals(savedEntry.placing, 2, "placings rebuilt from the saved scores")
+
+    -- At 16:00 the breeders' placings are in the results under their breeds.
+    setHour(world, 16)
+    local heifers = placingsFor(world, "COW_HOLSTEIN:young")
+    assertEquals(heifers[1].farmId, 1)
+    assertEquals(heifers[2].farmerId, mine.farmerId)
+    assertTrue(heifers[2].entrant ~= "", "named by its breed")
+end)
+
+test("188: with RL, a breeder's entry is judged on the real animal in their trailer; one sold or sick before its class is out", function()
+    local world = setupBreeders(true)
+    local livestock = world.tc.ShowLivestock
+    announce(world)
+    runToDay(world, CLOSE_DAY)
+    for _, farmerEntry in ipairs(livestock.farmerEntries) do
+        if farmerEntry.breeder ~= nil then
+            assertTrue(farmerEntry.real, "to be judged on the animal")
+            assertEquals(farmerEntry.score, nil)
+        end
+    end
+    runToDay(world, SHOW_DAY)
+    assertTrue(world.pen:hasSales(), "their stock out in trailers")
+    for _, breeder in ipairs(world.pen.breeders) do
+        assertEquals(#breeder.trailerIds, 1)
+    end
+    local first = livestock.timetable[1].key
+    local entries = breederEntriesIn(livestock, first)
+    assertTrue(#entries >= 1)
+    -- One of them sold out of the trailer beforehand (marked sold).
+    local soldEntry = entries[1]
+    world.pen.breeders[soldEntry.breeder].animals[soldEntry.animal].sold = true
+    setHour(world, 10)
+    assertTrue(soldEntry.out and soldEntry.score == nil, "sold: out")
+    for i = 2, #entries do
+        assertTrue(entries[i].score ~= nil, "judged on the animal")
+        assertTrue(entries[i].eye ~= nil)
+    end
 end)

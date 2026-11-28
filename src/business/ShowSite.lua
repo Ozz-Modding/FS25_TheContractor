@@ -141,6 +141,8 @@ function TheContractorShowSite.planSingle(shape)
     candidate.plotCount = #plots
     candidate.plotSlope = #plots > 0 and worst or nil
     candidate.showgroundSlope = TheContractorShowSite.measureRectSlope(split.showRect)
+    -- 188: room for breeders' pens.
+    candidate.roomy = TCShowSite.isRoomy(split.showRect)
     candidate.plan = {
         mode = TCShowSite.MODE.SINGLE,
         showFieldId = shape.id,
@@ -171,6 +173,7 @@ function TheContractorShowSite.planPair(showShape, ploughShape)
     candidate.plotCount = #plots
     candidate.plotSlope = #plots > 0 and worst or nil
     candidate.showgroundSlope = TheContractorShowSite.measureRectSlope(showShape.rect)
+    candidate.roomy = TCShowSite.isRoomy(showShape.rect)
     candidate.plan = {
         mode = TCShowSite.MODE.PAIR,
         showFieldId = showShape.id,

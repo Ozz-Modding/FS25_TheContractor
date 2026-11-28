@@ -1,6 +1,5 @@
--- 182: the show's pens, the pure half (TCShowPens): who gets a pen (players
--- first, the farmers' a class at a time, one row unless the players need
--- more), a farmer's animal's look, the pens' hours, and which of a
+-- 182: the show's pens, the pure half (TCShowPens): who gets a pen (188:
+-- the farmers' a class at a time, one row), a farmer's animal's look, the pens' hours, and which of a
 -- trailer's slots hold the penned animals.
 
 local function setup()
@@ -20,10 +19,6 @@ local function getClass(classKey)
     return { key = classKey, subTypeName = subTypeName, band = BAND }
 end
 
-local function playerEntry(id, farmId, classKey)
-    return { id = id, farmId = farmId, classKey = classKey }
-end
-
 local function farmerEntry(classKey)
     return { classKey = classKey, farmerId = 8 }
 end
@@ -32,56 +27,33 @@ local function middle()
     return 0.5
 end
 
-test("players' animals first, Best Kept Herd left out, then the farmers' a class at a time", function()
+test("188: the farmers' animals a class at a time, Best Kept Herd left out, one row at most", function()
     setup()
-    local entries = { playerEntry(1, 1, "COW:young"), playerEntry(2, 1, "herd"), playerEntry(3, 2, "SHEEP:young") }
     local farmers = { farmerEntry("COW:young"), farmerEntry("COW:young"), farmerEntry("COW:young"),
         farmerEntry("PIG:young"), farmerEntry("herd"), farmerEntry("PIG:young") }
-    local pens = TCShowPens.assign(entries, farmers, 12, 2, getClass, middle)
-    assertEquals(#pens, 2 + 5, "every animal, the herds none")
-    assertEquals(pens[1].entryId, 1)
-    assertEquals(pens[1].farmId, 1)
-    assertEquals(pens[2].entryId, 3)
+    local pens = TCShowPens.assign(farmers, 12, getClass, middle)
+    assertEquals(#pens, 5, "every animal, the herds none")
     -- Round one: a cow and a pig; round two: the same; round three: a cow.
     local order = {}
-    for i = 3, #pens do
-        table.insert(order, pens[i].subTypeName)
-        assertEquals(pens[i].entryId, nil)
+    for i, pen in ipairs(pens) do
+        order[i] = pen.subTypeName
+        assertEquals(pen.entryId, nil, "no player's: theirs stay in their trailers")
     end
     assertEquals(table.concat(order, ","), "COW,PIG,COW,PIG,COW")
     -- Each farmer's entry knows its pen; the herd's has none.
-    assertEquals(farmers[1].pen, 3)
-    assertEquals(farmers[4].pen, 4)
-    assertEquals(farmers[2].pen, 5)
+    assertEquals(farmers[1].pen, 1)
+    assertEquals(farmers[4].pen, 2)
+    assertEquals(farmers[2].pen, 3)
     assertEquals(farmers[5].pen, nil)
-end)
 
-test("one row unless the players need more: farmers fill only the first row, players get two at most", function()
-    setup()
-    local farmers = {}
+    local many = {}
     for _ = 1, 20 do
-        table.insert(farmers, farmerEntry("COW:young"))
+        table.insert(many, farmerEntry("COW:young"))
     end
-    local entries = { playerEntry(1, 1, "COW:young") }
-    local pens = TCShowPens.assign(entries, farmers, 12, 2, getClass, middle)
-    assertEquals(#pens, 12)
-    assertEquals(farmers[11].pen, 12)
-    assertEquals(farmers[12].pen, nil, "past the row: no pen")
-
-    entries = {}
-    for i = 1, 15 do
-        table.insert(entries, playerEntry(i, 1, "COW:young"))
-    end
-    pens = TCShowPens.assign(entries, farmers, 12, 2, getClass, middle)
-    assertEquals(#pens, 15, "the players' 15, no farmers")
-    assertEquals(farmers[1].pen, nil, "a pen from an earlier go is dropped")
-
-    entries = {}
-    for i = 1, 30 do
-        table.insert(entries, playerEntry(i, 1, "COW:young"))
-    end
-    assertEquals(#TCShowPens.assign(entries, {}, 12, 2, getClass, middle), 24, "two rows at most")
-    assertEquals(#TCShowPens.assign({}, {}, 12, 2, getClass, middle), 0)
+    assertEquals(#TCShowPens.assign(many, 12, getClass, middle), 12)
+    assertEquals(many[12].pen, 12)
+    assertEquals(many[13].pen, nil, "past the row: no pen")
+    assertEquals(#TCShowPens.assign({}, 12, getClass, middle), 0)
 end)
 
 test("a farmer's animal is in its band's prime, its coat rolled", function()

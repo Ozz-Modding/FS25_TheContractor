@@ -1,12 +1,16 @@
--- The breeders' pen at the show (173), on each machine with a client: the
--- talk at the breeder's stand. TCShowStandsWorld puts the breeder there (a
+-- The breeders at the show (173, 188), on each machine with a client: the
+-- talk at a breeder's pen. TCShowStandsWorld puts each breeder there (a
 -- stall of role "breeder", in the farmer's own look) and hands a player who
 -- walks up to them here. All of it's one conversation (TCConversation,
 -- vanilla's NPC chat):
 --
---   The stock: the animals in the breeder's trailers as RL has them on this
+--   188: without RL (or with nothing for sale at this show), the breeder
+--     greets you and says there's nothing to sell.
+--   The stock: the animals in the breeder's trailer as RL has them on this
 --     machine (BreedersPen:getCatalogue), each by its breed's own title,
---     its age in months and its price; a sick one isn't offered.
+--     its age in months and its price; a sick one isn't offered. 188: one
+--     entered in a class not yet over is named with the time to come back
+--     (ShowLivestock:getHeldUntil), and isn't sold till then.
 --   One of them: its name, age, weight, health, whether it's carrying or in
 --     milk, its genetics and price; "I'll take it", the others, or not today.
 --   Where to: the farm's livestock trailers at the show (free) and its
@@ -98,8 +102,12 @@ function TCBreedersPenWorld.describeAnimal(entry)
     if info.lactating then
         table.insert(notes, getText("tc_breeder_lactating"))
     end
-    return string.format(getText("tc_breeder_animal"), entry.title or "-",
-        info.name ~= nil and info.name ~= "" and info.name or getText("tc_breeder_noName"), info.age or 0,
+    -- An animal with no name yet gets no name part at all.
+    local name = ""
+    if info.name ~= nil and info.name ~= "" then
+        name = " " .. string.format(getText("tc_breeder_name"), info.name)
+    end
+    return string.format(getText("tc_breeder_animal"), entry.title or "-", name, info.age or 0,
         math.floor((info.weight or 0) + 0.5), math.floor((info.health or 0) + 0.5),
         #notes > 0 and (" " .. table.concat(notes, " ")) or "", TCBreedersPenWorld.formatGenetics(info.genetics),
         money(entry.price))
@@ -107,8 +115,20 @@ end
 
 -- The conversation ----------------------------------------------------------------------------------------
 
+-- The breeder being talked to (an index of BreedersPen's).
+TCBreedersPenWorld.breeder = nil
+
 local function getCatalogue()
-    return getTC().BreedersPen:getCatalogue(false)
+    return getTC().BreedersPen:getCatalogue(false, TCBreedersPenWorld.breeder)
+end
+
+-- 188: until when an animal's held for its class (a minute), or nil.
+local function getHeldUntil(entry)
+    local livestock = getTC().ShowLivestock
+    if livestock == nil or entry.record == nil then
+        return nil
+    end
+    return livestock:getHeldUntil(entry.breeder, entry.record.id)
 end
 
 -- Asks and, until the answer, the breeder's thinking it over (none on the
@@ -135,7 +155,7 @@ local showList
 
 local function chooseTarget(entry)
     local tc = getTC()
-    local targets = tc.BreedersPen:getTargets(g_currentMission:getFarmId(), entry.subTypeIndex)
+    local targets = tc.BreedersPen:getTargets(g_currentMission:getFarmId(), entry.subTypeIndex, entry.breeder)
     if #targets == 0 then
         sayAndFinish(line("noRoom"))
         return
@@ -163,6 +183,26 @@ local function chooseTarget(entry)
 end
 
 local function showAnimal(entry)
+    -- 188: entered in a class still to come: back after it.
+    local held = getHeldUntil(entry)
+    if held ~= nil then
+        local livestock = getTC().ShowLivestock
+        local classKey = livestock:getBreederEntryClass(entry.breeder, entry.record.id)
+        TCConversation.say(string.format(line("entered"), entry.title or "-", TCShowClasses.getTitle(classKey),
+            TCShowRing.formatMinute(held)), {
+            getText("tc_breeder_optionOthers"),
+            getText("tc_breeder_optionNotToday"),
+        }, function(index)
+            if index == 1 then
+                showList(getText("tc_breeder_others"))
+            elseif index == 2 then
+                sayAndFinish(line("later"))
+            else
+                TCConversation.finish()
+            end
+        end)
+        return
+    end
     TCConversation.say(TCBreedersPenWorld.describeAnimal(entry), {
         getText("tc_breeder_optionTake"),
         getText("tc_breeder_optionOthers"),
@@ -188,8 +228,15 @@ showList = function(text)
     end
     local options = {}
     for _, entry in ipairs(entries) do
-        table.insert(options, string.format(getText("tc_breeder_optionAnimal"), entry.title or "-", entry.info.age or 0,
-            money(entry.price)))
+        local held = getHeldUntil(entry)
+        if held ~= nil then
+            -- 188: entered, for sale after its class.
+            table.insert(options, string.format(getText("tc_breeder_optionEntered"), entry.title or "-",
+                entry.info.age or 0, TCShowRing.formatMinute(held)))
+        else
+            table.insert(options, string.format(getText("tc_breeder_optionAnimal"), entry.title or "-",
+                entry.info.age or 0, money(entry.price)))
+        end
     end
     table.insert(options, getText("tc_breeder_optionJustLooking"))
     TCConversation.say(text, options, function(index)
@@ -203,12 +250,19 @@ showList = function(text)
     end)
 end
 
--- TCShowStandsWorld.talkTo, the conversation started: the breeder's stock.
-function TCBreedersPenWorld.visit()
+-- TCShowStandsWorld.talkTo, the conversation started: the breeder's
+-- (index) stock, or (188) with nothing for sale, a greeting.
+function TCBreedersPenWorld.visit(index)
+    TCBreedersPenWorld.breeder = index
+    if not getTC().BreedersPen:hasSales() then
+        sayAndFinish(line("greetNoSale"))
+        return
+    end
     showList(line("greet"))
 end
 
 -- deleteMap.
 function TCBreedersPenWorld.reset()
     TCBreedersPenWorld.pending = {}
+    TCBreedersPenWorld.breeder = nil
 end

@@ -69,6 +69,13 @@ TCShowJudging.FARMER_ROLLS = {
     herd = { min = 45, spread = 40 },
 }
 TCShowJudging.STOCKMAN_POINTS = 8
+-- 188: a breeder's entry with no real animal to judge (no RL stock): a
+-- roll like a farmer's but higher, their stock premium (the user's call:
+-- it should be hard to win).
+TCShowJudging.BREEDER_ROLLS = {
+    vanilla = { min = 82, spread = 14 },
+    rl = { min = 66, spread = 22 },
+}
 
 -- Placings given in a class: 1st, 2nd, 3rd and highly commended.
 TCShowJudging.PLACINGS = 4
@@ -194,6 +201,13 @@ end
 -- A farmer's entry's score in a class judged on a model (server).
 function TCShowJudging.rollFarmerScore(model, stockman, random)
     local roll = TCShowJudging.FARMER_ROLLS[model] or TCShowJudging.FARMER_ROLLS.vanilla
+    local score = roll.min + random() * roll.spread + (stockman or 0) * TCShowJudging.STOCKMAN_POINTS
+    return math.max(0, math.min(100, score))
+end
+
+-- 188: a breeder's premium roll (BREEDER_ROLLS), moved by their trait.
+function TCShowJudging.rollBreederScore(model, stockman, random)
+    local roll = TCShowJudging.BREEDER_ROLLS[model] or TCShowJudging.BREEDER_ROLLS.vanilla
     local score = roll.min + random() * roll.spread + (stockman or 0) * TCShowJudging.STOCKMAN_POINTS
     return math.max(0, math.min(100, score))
 end

@@ -1376,6 +1376,14 @@
                     <Slider profile="fs25_listSlider" dataElementId="showResultsTable"/>
                 </ThreePartBitmap>
             </GuiElement>
+
+            <!-- 188: mouse-over tooltip (TCTooltip) for the timetable's rows, last so it draws on top. -->
+            <RoundCorner profile="tc_tooltipBox" id="showTooltipBox" visible="false">
+                <RoundCorner profile="tc_tooltipSurface" id="showTooltipSurface"/>
+                <Text profile="tc_tooltipTitle" id="showTooltipTitle" text=""/>
+                <Bitmap profile="tc_tooltipDivider" id="showTooltipDivider"/>
+                <Text profile="tc_tooltipText" id="showTooltipText" text=""/>
+            </RoundCorner>
         </GuiElement>
     </GuiElement>
 </GUI>

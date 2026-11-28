@@ -172,6 +172,47 @@ function TCShowAnimals.getHusbandryName(placeable)
     return name or "-"
 end
 
+-- 188: where a farm can enter animals from: a husbandry, or (late entries
+-- on the show's morning, the animals loaded already) a livestock trailer.
+function TCShowAnimals.isSource(object)
+    return TCShowAnimals.isHusbandry(object) or TCShowAnimals.isTrailer(object)
+end
+
+-- 188: a source's animals (readHusbandry's, or a trailer's).
+function TCShowAnimals.readSource(object)
+    if TCShowAnimals.isTrailer(object) then
+        local read = TCShowAnimals.readTrailer(object)
+        return read ~= nil and read.entries or {}
+    end
+    return TCShowAnimals.readHusbandry(object)
+end
+
+-- 188: a source's name: a husbandry's, or a trailer's.
+function TCShowAnimals.getSourceName(object)
+    if TCShowAnimals.isTrailer(object) then
+        local name = type(object.getFullName) == "function" and object:getFullName() or nil
+        if (name == nil or name == "") and type(object.getName) == "function" then
+            name = object:getName()
+        end
+        return name or "-"
+    end
+    return TCShowAnimals.getHusbandryName(object)
+end
+
+-- 188: a farm's sources (every machine): its husbandries by name, then its
+-- livestock trailers with animals in them.
+function TCShowAnimals.getFarmSources(farmId)
+    local sources = TCShowAnimals.getFarmHusbandries(farmId)
+    local husbandrySystem = g_currentMission.husbandrySystem
+    for _, trailer in ipairs(husbandrySystem ~= nil and husbandrySystem.livestockTrailers or {}) do
+        if TCShowAnimals.isTrailer(trailer) and type(trailer.getOwnerFarmId) == "function" and
+                trailer:getOwnerFarmId() == farmId and #TCShowAnimals.readSource(trailer) > 0 then
+            table.insert(sources, trailer)
+        end
+    end
+    return sources
+end
+
 -- The husbandry's animals, read as a trailer's are (readCluster).
 function TCShowAnimals.readHusbandry(placeable)
     local entries = {}

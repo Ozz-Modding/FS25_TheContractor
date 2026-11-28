@@ -119,7 +119,7 @@ function TheContractorShowStands:isOpen()
 end
 
 -- The farmers at the show (ids, the host first): never one ploughing a plot
--- (169), nor 173's breeder. Empty with no show.
+-- (169), nor 188's breeders. Empty with no show.
 function TheContractorShowStands:getFarmersAtShow()
     local tc = getTC()
     local event = getShowEvent()
@@ -133,11 +133,10 @@ function TheContractorShowStands:getFarmersAtShow()
             excluded[plot.farmerId] = true
         end
     end
-    -- 173: nor the breeder, who's at their stand (picked from those not
-    -- here, so leaving them out changes nothing until a plot changes hands).
+    -- 188: nor the breeders, who're at their pens.
     local pen = tc.BreedersPen
-    if pen ~= nil and pen.breederId > 0 then
-        excluded[pen.breederId] = true
+    for _, id in ipairs(pen ~= nil and pen:getBreederIds() or {}) do
+        excluded[id] = true
     end
     return TCShowStands.pickFarmers(event.id, tc.Farmers:getFarmers(), event.hostFarmerId, excluded)
 end

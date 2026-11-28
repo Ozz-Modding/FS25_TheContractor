@@ -293,7 +293,14 @@ function TheContractorPloughingMatch:setUpPlots(event)
             farmerCount = farmerCount + 1
         end
     end
-    local farmers = tc.Farmers ~= nil and tc.Farmers:getFarmers() or {}
+    -- 188: never a breeder, who's at their pen all day.
+    local farmers = {}
+    local breeders = tc.BreedersPen
+    for _, farmer in ipairs(tc.Farmers ~= nil and tc.Farmers:getFarmers() or {}) do
+        if breeders == nil or not breeders:isBreeder(farmer.id) then
+            table.insert(farmers, farmer)
+        end
+    end
     local picked = TCPloughMatch.pickSome(farmers, farmerCount, self.random)
     self.plots, self.runs = {}, {}
     local nextFarmer = 1
@@ -396,8 +403,9 @@ function TheContractorPloughingMatch:giveToFarmer(plot)
         end
     end
     local free = {}
+    local breeders = tc.BreedersPen
     for _, farmer in ipairs(tc.Farmers ~= nil and tc.Farmers:getFarmers() or {}) do
-        if not used[farmer.id] then
+        if not used[farmer.id] and (breeders == nil or not breeders:isBreeder(farmer.id)) then
             table.insert(free, farmer)
         end
     end

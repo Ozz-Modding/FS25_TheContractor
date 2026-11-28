@@ -33,25 +33,56 @@ function TCTooltip:addTarget(element, getContent)
     table.insert(self.targets, { element = element, getContent = getContent })
 end
 
+-- A list's rows (188): getContent(index) returns the title and body for
+-- the row the mouse is over (its index in the list's one section), or nil
+-- for a row with none.
+function TCTooltip:addListTarget(list, getContent)
+    table.insert(self.targets, { list = list, getRowContent = getContent })
+end
+
 function TCTooltip:hide()
     self.hovered = nil
     self.elapsed = 0
     self.elements.box:setVisible(false)
 end
 
+-- The target under the mouse and a key for it (the same while the mouse
+-- stays on the same thing), or nil.
 function TCTooltip:getHoveredTarget()
     local x, y = g_lastMousePosX, g_lastMousePosY
     if x == nil or y == nil then
         return nil
     end
     for _, target in ipairs(self.targets) do
-        local element = target.element
-        if element:getIsVisible() and GuiUtils.checkOverlayOverlap(x, y, element.absPosition[1],
-                element.absPosition[2], element.absSize[1], element.absSize[2]) then
-            return target
+        local list = target.list
+        if list ~= nil then
+            if list:getIsVisible() and GuiUtils.checkOverlayOverlap(x, y, list.absPosition[1], list.absPosition[2],
+                    list.absSize[1], list.absSize[2]) then
+                local cell = list:getElementAtScreenPosition(x, y)
+                local index = cell ~= nil and cell.indexInSection or nil
+                local title, body = nil, nil
+                if index ~= nil then
+                    title, body = target.getRowContent(index)
+                end
+                if title ~= nil then
+                    return { element = cell, key = tostring(list) .. ":" .. index, getContent = function()
+                        return title, body
+                    end }
+                end
+            end
+        else
+            local element = target.element
+            if element:getIsVisible() and GuiUtils.checkOverlayOverlap(x, y, element.absPosition[1],
+                    element.absPosition[2], element.absSize[1], element.absSize[2]) then
+                return target
+            end
         end
     end
     return nil
+end
+
+local function getKey(target)
+    return target ~= nil and (target.key or target) or nil
 end
 
 function TCTooltip:update(dt)
@@ -65,7 +96,7 @@ function TCTooltip:update(dt)
         end
         return
     end
-    if target ~= self.hovered then
+    if getKey(target) ~= getKey(self.hovered) then
         self:hide()
         self.hovered = target
     end

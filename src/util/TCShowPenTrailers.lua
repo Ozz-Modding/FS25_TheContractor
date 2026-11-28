@@ -1,12 +1,15 @@
--- The show's pens (182), on a machine with a client: an animal standing in
--- its pen isn't also seen in its trailer. The animal never leaves the
--- trailer (166: vanilla's or RL's systems keep it), so its look there,
--- vanilla's LivestockTrailer slot mesh (updateAnimals: a posed model a
--- slot, the clusters' animals in turn), is hidden while ShowLivestock's
--- synced pen says it's penned from that trailer, and shown again when it
--- isn't. Looked at every CHECK_MS, since the trailer rebuilds its meshes
+-- The show's animals (182, 188), on a machine with a client: an animal
+-- standing in the ring isn't also seen in its trailer. The animal never
+-- leaves the trailer (166: vanilla's or RL's systems keep it), so its look
+-- there, vanilla's LivestockTrailer slot mesh (updateAnimals: a posed
+-- model a slot, the clusters' animals in turn), is hidden while
+-- ShowLivestock's synced ring has a player's animal from that trailer in
+-- its line (188: a player's animal is never penned), and shown again when
+-- it isn't. Looked at every CHECK_MS, since the trailer rebuilds its meshes
 -- whenever its animals change. Which slot is which: TCShowPens.matchSlots,
--- an RL animal by its key, a vanilla one by its subtype and age.
+-- an RL animal by its key, a vanilla one by its subtype and age. 188: a
+-- breeder's trailer shows none of its animals while they're at their pen
+-- (BreedersPen.present).
 --
 -- Nothing's kept but the meshes hidden: never saved or synced (every client
 -- works it out from the pens).
@@ -47,7 +50,8 @@ local function readClusters(trailer)
     return clusters
 end
 
--- Every frame: the penned animals' meshes hidden, the others shown.
+-- Every frame: the meshes of the animals in the ring hidden, the others
+-- shown.
 function TCShowPenTrailers.update(dt)
     TCShowPenTrailers.timer = TCShowPenTrailers.timer - dt
     if TCShowPenTrailers.timer > 0 then
@@ -56,22 +60,42 @@ function TCShowPenTrailers.update(dt)
     TCShowPenTrailers.timer = TCShowPenTrailers.CHECK_MS
     local tc = g_currentMission.TheContractor
     local livestock = tc ~= nil and tc.ShowLivestock or nil
-    -- The present pens by trailer.
+    -- The players' animals in the ring, by trailer.
     local byTrailer = {}
-    for _, pen in ipairs(livestock ~= nil and livestock.pens or {}) do
-        if pen.present and pen.trailerId ~= nil then
-            local trailer = NetworkUtil.getObject(pen.trailerId)
+    local ring = livestock ~= nil and livestock.ring or nil
+    for _, item in ipairs(ring ~= nil and ring.lineup or {}) do
+        local look = item.look
+        if look ~= nil and look.trailerId ~= nil then
+            local trailer = NetworkUtil.getObject(look.trailerId)
             if TCShowAnimals.isTrailer(trailer) then
                 byTrailer[trailer] = byTrailer[trailer] or {}
-                table.insert(byTrailer[trailer], pen)
+                table.insert(byTrailer[trailer], look)
             end
         end
     end
     local hidden = {}
-    for trailer, pens in pairs(byTrailer) do
+    -- 188: a breeder's whole stock is in their pen (or the ring) while
+    -- they're there, so none of it's seen in their trailer.
+    local breeders = tc ~= nil and tc.BreedersPen or nil
+    if breeders ~= nil and breeders.present then
+        for _, trailerId in ipairs(breeders:getTrailerIds()) do
+            local trailer = NetworkUtil.getObject(trailerId)
+            local slots = TCShowAnimals.isTrailer(trailer) and getSlots(trailer) or nil
+            for _, slot in ipairs(slots or {}) do
+                local mesh = slot.loadedMesh
+                if mesh ~= nil and entityExists(mesh) then
+                    if getVisibility(mesh) then
+                        setVisibility(mesh, false)
+                    end
+                    hidden[mesh] = true
+                end
+            end
+        end
+    end
+    for trailer, looks in pairs(byTrailer) do
         local slots = getSlots(trailer)
         if slots ~= nil then
-            for _, index in ipairs(TCShowPens.matchSlots(readClusters(trailer), pens)) do
+            for _, index in ipairs(TCShowPens.matchSlots(readClusters(trailer), looks)) do
                 local slot = slots[index]
                 local mesh = slot ~= nil and slot.loadedMesh or nil
                 if mesh ~= nil and entityExists(mesh) then

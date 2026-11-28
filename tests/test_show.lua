@@ -413,8 +413,11 @@ test("the show tab's months, and the timetable's states on the day", function()
     assertTrue(TheContractorShow.isShowMonth(6, 6, nil))
     assertTrue(TheContractorShow.isShowMonth(6, nil, 6))
     assertTrue(not TheContractorShow.isShowMonth(5, 6, 4))
+    -- 188: the judging runs on through the ploughing, a class at a time.
     local states = TheContractorShow.getTimetableStates(TheContractorShow.TIMETABLE, 51, 51, 12)
-    assertEquals(table.concat(states, ","), "done,done,now,next,next")
+    assertEquals(table.concat(states, ","), "done,now,now,next,next")
+    states = TheContractorShow.getTimetableStates(TheContractorShow.TIMETABLE, 51, 51, 16)
+    assertEquals(table.concat(states, ","), "done,done,done,now,next")
     assertEquals(table.concat(TheContractorShow.getTimetableStates(TheContractorShow.TIMETABLE, 50, 51, 12), ","),
         "next,next,next,next,next")
     assertEquals(table.concat(TheContractorShow.getTimetableStates(TheContractorShow.TIMETABLE, 52, 51, 0), ","),
@@ -422,6 +425,26 @@ test("the show tab's months, and the timetable's states on the day", function()
 end)
 
 -- Called off -----------------------------------------------------------------------------------
+
+test("188: the show tab's up from the announcement to the day; late entries until 09:30 on the day", function()
+    local world = setup()
+    local tc = world.tc
+    local event = tc.Show:announce(nil, 51, always)
+    g_currentMission.environment.currentMonotonicDay = 5
+    assertTrue(TCCalendar.getDayInfo(5) ~= TCCalendar.getDayInfo(51), "another month")
+    assertTrue(tc.Show:isTabShown(), "months before")
+    g_currentMission.environment.currentMonotonicDay = 61
+    assertTrue(TCCalendar.getDayInfo(61) ~= TCCalendar.getDayInfo(51))
+    assertTrue(not tc.Show:isTabShown(), "after the day, another month, no results")
+    -- Entries close on day 48: late ones from then to 09:30 on the day.
+    local closeMinute = TheContractorShow.ENTRY_CLOSE_MINUTE
+    assertTrue(closeMinute < TheContractorShow.JUDGING_HOUR * 60, "before judging starts")
+    assertTrue(not TheContractorShow.isLateEntryOpen(event, 47, 720), "entries still open")
+    assertTrue(TheContractorShow.isLateEntryOpen(event, 48, 0))
+    assertTrue(TheContractorShow.isLateEntryOpen(event, 51, closeMinute - 1))
+    assertTrue(not TheContractorShow.isLateEntryOpen(event, 51, closeMinute))
+    assertTrue(not TheContractorShow.isLateEntryOpen(event, 52, 0))
+end)
 
 test("the ploughing field bought by a farm calls it off and puts the site back", function()
     local world = setup()

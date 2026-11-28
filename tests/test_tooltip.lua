@@ -57,3 +57,46 @@ test("a joining client's tooltip has no save folder", function()
     g_currentMission.missionInfo.savegameIndex = 0
     assertEquals(TCCompanyLogo.getSavegameDir(), nil)
 end)
+
+-- 188: a list's rows: the row under the mouse gives the tooltip, the same
+-- key while the mouse stays on that row.
+test("a list target: the hovered row's content, keyed by its row, none for a row without one", function()
+    setup()
+    GuiUtils = GuiUtils or {}
+    GuiUtils.checkOverlayOverlap = function(x, y, px, py, sx, sy)
+        return x >= px and x <= px + sx and y >= py and y <= py + sy
+    end
+    local cells = { { indexInSection = 1, absPosition = { 0, 0.5 }, absSize = { 1, 0.5 } },
+        { indexInSection = 2, absPosition = { 0, 0 }, absSize = { 1, 0.5 } } }
+    local list = { absPosition = { 0, 0 }, absSize = { 1, 1 } }
+    function list:getIsVisible() return true end
+    function list:getElementAtScreenPosition(x, y)
+        for _, cell in ipairs(cells) do
+            if y >= cell.absPosition[2] and y <= cell.absPosition[2] + cell.absSize[2] then
+                return cell
+            end
+        end
+        return nil
+    end
+    local tooltip = TCTooltip.new({})
+    local tips = { [1] = { "Title", "Body" } }
+    tooltip:addListTarget(list, function(index)
+        local tip = tips[index]
+        if tip == nil then
+            return nil
+        end
+        return tip[1], tip[2]
+    end)
+    g_lastMousePosX, g_lastMousePosY = 0.5, 0.75
+    local target = tooltip:getHoveredTarget()
+    assertTrue(target ~= nil)
+    assertEquals(target.element, cells[1])
+    local title, body = target.getContent()
+    assertEquals(title, "Title")
+    assertEquals(body, "Body")
+    assertEquals(tooltip:getHoveredTarget().key, target.key, "the same row, the same key")
+    g_lastMousePosY = 0.25
+    assertEquals(tooltip:getHoveredTarget(), nil, "a row with no tooltip")
+    g_lastMousePosX = 2
+    assertEquals(tooltip:getHoveredTarget(), nil, "off the list")
+end)

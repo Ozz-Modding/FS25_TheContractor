@@ -724,8 +724,10 @@ end
 -- entrance (the road point to use), keepGround (leave the ground alone:
 -- the show dresses its own, 164), getWalkways(scene) (the crowd's walks
 -- from the scene, in place of the open lanes), plots (169: the ploughing
--- plots, 164's, kept on the scene for every machine to mark out). Returns
--- the text to print; self.site is set if it went up.
+-- plots, 164's, kept on the scene for every machine to mark out), pens
+-- (182: the small pens, 0 for none), breeders (188: the breeders' pens,
+-- TCShowScene's scene.breeders). Returns the text to print; self.site is
+-- set if it went up.
 function TheContractorAuctionSite:startOpen(fieldId, dressing, eventId, options)
     options = options or {}
     if self.site ~= nil then
@@ -760,6 +762,14 @@ function TheContractorAuctionSite:startOpen(fieldId, dressing, eventId, options)
     end
     -- 182: the show's pens, one an animal (nil: TCShowScene's default).
     scene.pens = options.pens
+    -- 188: the show's breeders' pens ({ length, depth, trailer, typeName }).
+    if options.breeders ~= nil then
+        scene.breeders = {}
+        for _, breeder in ipairs(options.breeders) do
+            table.insert(scene.breeders, { length = breeder.length, depth = breeder.depth,
+                trailer = breeder.trailer == true, typeName = breeder.typeName })
+        end
+    end
     if options.getWalkways ~= nil then
         layout.walkways = options.getWalkways(scene)
     end
@@ -1431,6 +1441,16 @@ function TheContractorAuctionSite.saveScene(xmlFile, key, scene)
             setXMLFloat(xmlFile, plotKey .. "#" .. name, plot[name] or 0)
         end
     end
+    -- 188: the show's breeders' pens.
+    for i, breeder in ipairs(scene.breeders or {}) do
+        local breederKey = string.format("%s.breeder(%d)", key, i - 1)
+        setXMLInt(xmlFile, breederKey .. "#length", breeder.length or 2)
+        setXMLInt(xmlFile, breederKey .. "#depth", breeder.depth or 2)
+        setXMLBool(xmlFile, breederKey .. "#trailer", breeder.trailer == true)
+        if breeder.typeName ~= nil then
+            setXMLString(xmlFile, breederKey .. "#type", breeder.typeName)
+        end
+    end
 end
 
 -- The scene saved at key, or nil (none, or a save from before 140).
@@ -1487,6 +1507,17 @@ function TheContractorAuctionSite.loadScene(xmlFile, key)
             plot[name] = getXMLFloat(xmlFile, plotKey .. "#" .. name) or 0
         end
         table.insert(scene.plots, plot)
+        i = i + 1
+    end
+    -- 188: the show's breeders' pens.
+    i = 0
+    while hasXMLProperty(xmlFile, string.format("%s.breeder(%d)", key, i)) do
+        local breederKey = string.format("%s.breeder(%d)", key, i)
+        scene.breeders = scene.breeders or {}
+        table.insert(scene.breeders, { length = getXMLInt(xmlFile, breederKey .. "#length") or 2,
+            depth = getXMLInt(xmlFile, breederKey .. "#depth") or 2,
+            trailer = getXMLBool(xmlFile, breederKey .. "#trailer") == true,
+            typeName = getXMLString(xmlFile, breederKey .. "#type") })
         i = i + 1
     end
     return scene

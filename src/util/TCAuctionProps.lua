@@ -730,13 +730,21 @@ end
 
 -- What the late props come from, cheap to read every frame: the show's
 -- livestock, with its pens, while the site's dressed as the show (the
--- animals in their pens and their rosettes, TCShowScene.layOutPens), or
--- nil. Its penVersion goes up whenever the pens change.
+-- animals in their pens and their rosettes, TCShowScene.layOutPens; 188:
+-- the breeders' and the ring's, ShowLivestock:getDisplay), or nil; and its
+-- version, which changes whenever any of it does (the livestock's
+-- penVersion, the breeders' version).
 function TCAuctionProps.getLateSource(scene)
     if not TCShowScene.isShowDressing(scene) then
-        return nil
+        return nil, nil
     end
-    return g_currentMission.TheContractor.ShowLivestock
+    local tc = g_currentMission.TheContractor
+    local livestock = tc.ShowLivestock
+    if livestock == nil then
+        return nil, nil
+    end
+    local breeders = tc.BreedersPen
+    return livestock, string.format("%d:%d", livestock.penVersion or 0, breeders ~= nil and breeders.version or 0)
 end
 
 -- Takes one late prop away (its node deleted, a load on its way deleting
@@ -763,14 +771,15 @@ end
 -- changes, only those whose key's gone are taken away and only new ones
 -- added (an animal coming to its pen doesn't reload the others).
 local function updateLateProps(active, scene)
-    local source = TCAuctionProps.getLateSource(scene)
-    local version = source ~= nil and source.penVersion or nil
+    local source, version = TCAuctionProps.getLateSource(scene)
     if source == active.lateSource and version == active.lateVersion then
         return
     end
     active.lateSource, active.lateVersion = source, version
     local wanted = {}
-    for _, prop in ipairs(source ~= nil and TCShowScene.layOutPens(scene, source.pens) or {}) do
+    local props = source ~= nil and TCShowScene.layOutPens(scene, source.pens,
+        source.getDisplay ~= nil and source:getDisplay() or nil) or {}
+    for _, prop in ipairs(props) do
         if isWanted(prop) then
             wanted[prop.key] = prop
         end

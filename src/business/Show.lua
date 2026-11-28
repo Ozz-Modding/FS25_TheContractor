@@ -20,7 +20,9 @@
 --   Entries close ENTRY_CLOSE_MONTHS before the day (a week, scaled with
 --     the month, entriesCloseDay), for the competitions that take them
 --     (registerCompetition): 167's livestock classes (ShowLivestock), and
---     170's worker in the ploughing. Players can always plough themselves
+--     170's worker in the ploughing. 188: animals can still be entered
+--     after that, into a class on the ring's timetable, until
+--     ENTRY_CLOSE_MINUTE on the day (isLateEntryOpen). Players can always plough themselves
 --     on the day without entering (169's PloughingMatch).
 --   Set out (midnight before): the site's dressed (164: the showground
 --     grass, the plots stubble (182), snapshots kept), and the
@@ -29,8 +31,9 @@
 --     dressing (TCShowScene: ring, pens, stands, trailer lines; the shared
 --     car park, food and toilets; the show's gate sign) and the crowd's
 --     lanes round them.
---   The day (TIMETABLE): gates at 08:00, judging 10:00, the ploughing
---     11:00-15:00, results at 16:00 (giveResults: each competition's
+--   The day (TIMETABLE): gates at 08:00, the livestock judged in the ring
+--     class by class from 10:00 (188, ShowLivestock's own timetable), the
+--     ploughing 11:00-15:00, results at 16:00 (giveResults: each competition's
 --     placings, prize money, reputation and the host's opinion, by inbox
 --     and a notice), gates shut 18:00. Over at midnight: the site put back
 --     to its snapshots, the dressing and signs down, the field released.
@@ -76,13 +79,17 @@ TheContractorShow.ENTRY_REMINDER_MONTHS = 0.5
 TheContractorShow.START_HOUR = 8
 TheContractorShow.END_HOUR = 18
 TheContractorShow.AFTER_DAYS = 0
+-- 188: the livestock judging starts then, a class at a time (TCShowRing).
 TheContractorShow.JUDGING_HOUR = 10
+-- 188: animals can be entered until this minute of the show's day (09:30,
+-- before judging starts), whatever else has closed.
+TheContractorShow.ENTRY_CLOSE_MINUTE = 9 * 60 + 30
 TheContractorShow.RESULTS_HOUR = 16
 
 -- The day (game time). toHour: it runs until then.
 TheContractorShow.TIMETABLE = {
     { key = "gatesOpen", hour = 8 },
-    { key = "judging", hour = 10 },
+    { key = "judging", hour = 10, toHour = 16 },
     { key = "ploughing", hour = 11, toHour = 15 },
     { key = "results", hour = 16 },
     { key = "gatesClose", hour = 18 },
@@ -147,9 +154,13 @@ end
 --     reputation, opinion (optional: jobs' worth and the host's opinion,
 --     instead of PLACING_REPUTATION and HOST_OPINION) } }
 --   getTitle(titleArg)  optional, every machine: a placing's title
+--   noticesGiven  (188) its rosette notices are its own, as it places
+--     them, so giveResults sends none for it
 --   (server, each optional) onAnnounced(event), onNewDay(event),
 --     onHour(event, hour) on the day, onSetOut(event) at midnight before,
 --     getPens(event) just before (182: the pens it needs, or nil),
+--     getBreeders(event) then too (188: the breeders' pens for the scene,
+--     TCShowScene's scene.breeders, or nil),
 --     onAttended(event, farmId) as a farm's attend job's done (171),
 --     onResults(event) once the results are given (169: the lent kit
 --     taken away), onFinished(event) at midnight after, before the site's
@@ -227,6 +238,16 @@ function TheContractorShow.isEntryOpen(event, today)
     return event ~= nil and event.entriesCloseDay ~= nil and today < event.entriesCloseDay
 end
 
+-- 188 (pure): after entries close, the livestock's late entries, until
+-- ENTRY_CLOSE_MINUTE on the day (into a class already on the ring's
+-- timetable: ShowLivestock's to say). minute: of the day.
+function TheContractorShow.isLateEntryOpen(event, today, minute)
+    if event == nil or event.entriesCloseDay == nil or TheContractorShow.isEntryOpen(event, today) then
+        return false
+    end
+    return today < event.day or (today == event.day and (minute or 0) < TheContractorShow.ENTRY_CLOSE_MINUTE)
+end
+
 -- The entry days for a show day (pure): entries close closeMonths before
 -- (at least a day), the "closing soon" reminder reminderMonths before
 -- (none if that's not after the announcement or not before the close).
@@ -246,9 +267,15 @@ function TheContractorShow.isShowMonth(periodIndex, eventPeriodIndex, resultsPer
     return periodIndex == eventPeriodIndex or periodIndex == resultsPeriodIndex
 end
 
--- Every machine: whether the Show tab's up now.
+-- Every machine: whether the Show tab's up now: in the show's month (or its
+-- results'), and 188: from the announcement to the day, or a show early in
+-- its month (or in short months) would give no time to enter.
 function TheContractorShow:isTabShown()
-    local periodIndex = TCCalendar.getDayInfo(g_currentMission.environment.currentMonotonicDay)
+    local today = g_currentMission.environment.currentMonotonicDay
+    if self.event ~= nil and today <= self.event.day then
+        return true
+    end
+    local periodIndex = TCCalendar.getDayInfo(today)
     local eventPeriod = self.event ~= nil and (TCCalendar.getDayInfo(self.event.day)) or nil
     local resultsPeriod = self.results ~= nil and (TCCalendar.getDayInfo(self.results.day)) or nil
     return TheContractorShow.isShowMonth(periodIndex, eventPeriod, resultsPeriod)
@@ -486,13 +513,19 @@ function TheContractorShow:setOut(event)
     if plan == nil then
         TCLog.warning("TheContractor: show %d has no site plan for field %d, laid out as an open site", event.id,
             event.fieldId)
-        tc.AuctionSite:startOpen(event.fieldId, self.KIND, event.id, { pens = self:getPens(event) })
+        local pens = self:getPens(event)
+        local breeders = self:getSceneBreeders(event)
+        tc.AuctionSite:startOpen(event.fieldId, self.KIND, event.id, { pens = pens, breeders = breeders })
         self:callCompetitions("onSetOut", event)
         return
     end
     if not showSite.site.dressed then
         TCLog.info("TheContractor: %s", showSite:dress())
     end
+    -- 182: the livestock's pens, one an animal; 188: then the breeders'
+    -- (planned with the pens if they weren't before).
+    local pens = self:getPens(event)
+    local breeders = self:getSceneBreeders(event)
     tc.AuctionSite:startOpen(event.fieldId, self.KIND, event.id, {
         rect = plan.showRect,
         entrance = plan.entrance,
@@ -500,8 +533,8 @@ function TheContractorShow:setOut(event)
         getWalkways = TCShowScene.getWalkways,
         -- 169: the ploughing match's plots, marked out from the scene.
         plots = plan.plots,
-        -- 182: the livestock's pens, one an animal.
-        pens = self:getPens(event),
+        pens = pens,
+        breeders = breeders,
     })
     if tc.AuctionSite.site == nil or tc.AuctionSite.site.fieldId ~= event.fieldId then
         TCLog.warning("TheContractor: show %d's showground couldn't be set out on field %d", event.id, event.fieldId)
@@ -523,6 +556,18 @@ function TheContractorShow:getPens(event)
         end
     end
     return pens
+end
+
+-- 188: the breeders' pens a competition asks for (the first that does),
+-- or nil.
+function TheContractorShow:getSceneBreeders(event)
+    for _, competition in ipairs(self.competitions) do
+        local breeders = competition.getBreeders ~= nil and competition.getBreeders(event) or nil
+        if breeders ~= nil then
+            return breeders
+        end
+    end
+    return nil
 end
 
 -- The site put back as it was and dropped (midnight after, or called off).
@@ -661,7 +706,8 @@ function TheContractorShow:postResults(results)
             { resultsShowId = results.showId, farmerId = results.hostFarmerId, fieldId = results.fieldId })
         if count > 0 and tc.Notices ~= nil then
             for _, placing in ipairs(results.placings) do
-                if placing.farmId == farmId then
+                -- 188: a competition giving its own as it places them.
+                if placing.farmId == farmId and not self:givesOwnNotices(placing.titleKey) then
                     tc.Notices:publish(farmId, string.format(g_i18n:getText("tc_show_rosetteNotice"),
                         g_i18n:getText(TheContractorShow.getPlacingNameKey(placing.placing)),
                         self:getPlacingTitle(placing)), TheContractorShow.NOTICE_MONTHS)
@@ -669,6 +715,17 @@ function TheContractorShow:postResults(results)
             end
         end
     end
+end
+
+-- 188: whether the competition with a titleKey sends its own rosette
+-- notices (noticesGiven).
+function TheContractorShow:givesOwnNotices(titleKey)
+    for _, competition in ipairs(self.competitions) do
+        if competition.titleKey == titleKey and competition.noticesGiven then
+            return true
+        end
+    end
+    return false
 end
 
 -- Farms and farmers -------------------------------------------------------------------------

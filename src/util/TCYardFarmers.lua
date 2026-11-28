@@ -302,9 +302,8 @@ function TCYardFarmers.getWanted()
             atShow[id] = true
         end
     end
-    -- 173: nor is the breeder at their stand.
-    local breederId = tc.BreedersPen ~= nil and tc.BreedersPen:getBreederAtShow() or nil
-    if breederId ~= nil then
+    -- 173: nor are the breeders at their pens (188).
+    for _, breederId in ipairs(tc.BreedersPen ~= nil and tc.BreedersPen:getBreedersAtShow() or {}) do
         atShow[breederId] = true
     end
     for _, person in ipairs(farmers) do

@@ -12,10 +12,11 @@
 --     own look on their spot for this part of the day (TCShowStands.
 --     getPlaces). One waiting by a machine of theirs (TCYardFarmers) is
 --     there instead.
---   173: the breeder, while the breeders' pen's open (BreedersPen:isOpen),
---     at their stand (TCShowScene.getBreederStand) in their own look (or a
---     stallholder's, with no farmer to spare); talking to them is
---     TCBreedersPenWorld's.
+--   188: the breeders, while they're at their pens (BreedersPen:isOpen),
+--     each at their pen's front (TCShowScene.getBreederPens' holder) in
+--     their own look; talking to them is TCBreedersPenWorld's.
+--   188: the judge, in the ring while a class is in it, walking its line
+--     (TCShowScene.getJudgeSpot, placed each frame); not talked to.
 --   172: the staff given the show's day off (ShowDayOff:getCrowdPlacesNow),
 --     each in their own look ringside, the crowd's figure on a spectator
 --     spot they're on standing aside (TCAuctionCrowd.setReservedSpots).
@@ -93,16 +94,30 @@ function TCShowStandsWorld.getWanted()
             name = getText("tc_showStands_name_" .. stall.role) }, x = stall.x, z = stall.z, yaw = stall.yaw })
         table.insert(parts, stall.role)
     end
-    -- 173: the breeder at their stand.
+    -- 188: each breeder at their pen's front, in their own look.
     local pen = tc.BreedersPen
-    local breederStand = pen ~= nil and pen:isOpen() and TCShowScene.getBreederStand(stands:getScene()) or nil
-    if breederStand ~= nil then
-        local breeder = pen:getBreeder()
-        local style = breeder ~= nil and TCWorkerAppearance.getPlayerStyle(breeder) or nil
-        table.insert(wanted, { target = { kind = "stall", role = "breeder", personId = breeder ~= nil and breeder.id or nil,
-            name = breeder ~= nil and breeder.name or getText("tc_showStands_name_breeder") }, x = breederStand.x,
-            z = breederStand.z, yaw = breederStand.yaw, style = style })
-        table.insert(parts, string.format("breeder%d:%s", pen.breederId, tostring(style)))
+    if pen ~= nil and pen:isOpen() then
+        local pens = TCShowScene.getBreederPens(stands:getScene())
+        for _, item in ipairs(pen:getBreeders()) do
+            local place = pens[item.index]
+            if place ~= nil and place.placed then
+                local person = pen:getPerson(item.index)
+                local style = person ~= nil and TCWorkerAppearance.getPlayerStyle(person) or nil
+                table.insert(wanted, { target = { kind = "stall", role = "breeder", breeder = item.index,
+                    personId = person ~= nil and person.id or nil,
+                    name = person ~= nil and person.name or getText("tc_showStands_name_breeder") },
+                    x = place.holder.x, z = place.holder.z, yaw = place.holder.yaw, style = style })
+                table.insert(parts, string.format("breeder%d:%d:%s", item.index, item.breeder.farmerId, tostring(style)))
+            end
+        end
+    end
+    -- 188: the judge, on a show day with classes in the ring (placed by
+    -- the frame, walking the line, away while the ring's empty, so the
+    -- others don't reload as classes come and go; not talked to).
+    local livestock = tc.ShowLivestock
+    if livestock ~= nil and livestock.showId == event.id and #livestock.timetable > 0 then
+        table.insert(wanted, { target = { kind = "judge", name = "" }, x = 0, z = 0, yaw = 0, isJudge = true })
+        table.insert(parts, "judge")
     end
     for _, id in ipairs(stands:getFarmersAtShow()) do
         local spot = places[id]
@@ -156,8 +171,12 @@ function TCShowStandsWorld.rebuild(wanted, key, reserved)
             local pick = TCAuctionScene.hash(event ~= nil and event.id or 0, 1711, i)
             template = templates[math.floor(pick * #templates) % #templates + 1]
         end
-        table.insert(figures, { kind = "stand", template = template, x = entry.x, y = TCFigures.groundY(entry.x, entry.z),
-            z = entry.z, yaw = entry.yaw, baseYaw = entry.yaw, target = entry.target })
+        local figure = { kind = "stand", template = template, x = entry.x, y = TCFigures.groundY(entry.x, entry.z),
+            z = entry.z, yaw = entry.yaw, baseYaw = entry.yaw, target = entry.target }
+        if entry.isJudge then
+            TCShowStandsWorld.placeJudge(figure)
+        end
+        table.insert(figures, figure)
     end
     TCShowStandsWorld.figures = figures
 end
@@ -186,8 +205,21 @@ function TCShowStandsWorld.update(dt)
         return
     end
     local px, _, pz = getLocalPlayerPosition()
+    -- 188: the judge's there only with a class in the ring.
+    local livestock = getTC().ShowLivestock
+    local ring = livestock ~= nil and livestock.ring or nil
+    for _, figure in ipairs(figures) do
+        if figure.target.kind == "judge" then
+            figure.isAway = ring == nil or #ring.lineup == 0
+        end
+    end
     TCFigures.update(figures, dt, cx, cy, cz, 1, {
         place = function(figure)
+            -- 188: the judge walks the line.
+            if figure.target.kind == "judge" then
+                TCShowStandsWorld.placeJudge(figure)
+                return
+            end
             figure.yaw = figure.baseYaw
             if px ~= nil then
                 local dx, dz = px - figure.x, pz - figure.z
@@ -199,13 +231,33 @@ function TCShowStandsWorld.update(dt)
     })
 end
 
+-- 188: the judge where they are now: along the line while the class is
+-- being judged (from its start to its placing), stood back once it's
+-- placed (TCShowScene.getJudgeSpot).
+function TCShowStandsWorld.placeJudge(figure)
+    local tc = getTC()
+    local livestock = tc.ShowLivestock
+    local ring = livestock ~= nil and livestock.ring or nil
+    local slot = ring ~= nil and livestock.timetable[ring.slot] or nil
+    if slot == nil then
+        return
+    end
+    local minute = (g_currentMission.environment.dayTime or 0) / 60000
+    local progress = (minute - slot.from) / math.max(1, slot.judgeAt - slot.from)
+    local spot = TCShowScene.getJudgeSpot(tc.ShowStands:getScene(), #ring.lineup, progress, ring.placed)
+    if spot ~= nil then
+        figure.x, figure.z, figure.yaw = spot.x, spot.z, spot.yaw
+        figure.y = TCFigures.groundY(spot.x, spot.z)
+    end
+end
+
 -- The nearest person a player at (x, z) can talk to, and how far: a
 -- figure, or nil.
 function TCShowStandsWorld.findNearest(x, z)
     local best, bestDistance = nil, math.huge
     for _, figure in ipairs(TCShowStandsWorld.figures or {}) do
-        -- 172: the staff aren't talked to (130's).
-        if figure.target.kind ~= "staff" then
+        -- 172: the staff aren't talked to (130's), nor (188) the judge.
+        if figure.target.kind ~= "staff" and figure.target.kind ~= "judge" then
             local reach = figure.target.kind == "stall" and TCShowStands.STALL_DISTANCE or TCShowStands.TALK_DISTANCE
             local distance = math.sqrt((x - figure.x) ^ 2 + (z - figure.z) ^ 2)
             if distance <= reach and distance < bestDistance then
@@ -383,7 +435,7 @@ function TCShowStandsWorld.talkTo(figure)
     if target.kind == "farmer" then
         TCShowStandsWorld.talkToFarmer(target.personId)
     elseif target.role == "breeder" then
-        TCBreedersPenWorld.visit()
+        TCBreedersPenWorld.visit(target.breeder)
     elseif target.role == "association" then
         TCShowStandsWorld.visitAssociation()
     else
@@ -419,7 +471,8 @@ function TCShowStandsActivatable:getIsActivatable()
     if figure ~= self.shownFigure then
         self.shownFigure = figure
         local target = figure.target
-        if target.kind == "farmer" then
+        if target.kind == "farmer" or target.role == "breeder" then
+            -- 188: a breeder by name, as a farmer.
             self.activateText = string.format(getText("tc_showTalk_promptFarmer"), target.name)
         else
             self.activateText = getText("tc_showTalk_prompt_" .. target.role)

@@ -710,14 +710,14 @@ tcShow status
 
 ```
 Show 1 on field 12, held by Tom Hargreaves: signsUp.
-  Announced May 2, Year 2; signs up July 10, Year 2; reminder August 3, Year 2; the day August 10, Year 2 (gatesOpen 08:00, judging 10:00, ploughing 11:00-15:00, results 16:00, gatesClose 18:00); entries close August 3, Year 2.
+  Announced May 2, Year 2; signs up July 10, Year 2; reminder August 3, Year 2; the day August 10, Year 2 (gatesOpen 08:00, judging 10:00-16:00, ploughing 11:00-15:00, results 16:00, gatesClose 18:00); entries close August 3, Year 2.
   Entrance at 512, -88.
 ```
 
 ### `tcShow start [fieldId|auto] [days]`
 
 Announces one now, ignoring the season and the monthly roll. Its site is the best one `tcShow fields` lists (one farmer's field split into a showground and ploughing ground, or two fields side by side), its day 2 to 3 months ahead. The signs go up a month before the day, or at once if it's nearer. Every company farm gets the message, and every player the map marker. If the day's in this month, every company farm gets its Attend Show job at once; otherwise on the first day of the show's month.
-- `<fieldId>`: on that one field instead, split into the showground at its road end and the ploughing ground past it. No farm may own it, a farmer must hold it, it can't have a live job, and it must be big enough for the showground (120 x 60 m) and at least 4 plots; it doesn't need a road near or flat ground.
+- `<fieldId>`: on that one field instead, split into the showground at its road end and the ploughing ground past it. No farm may own it, a farmer must hold it, it can't have a live job, and it must be big enough for the showground (120 x 60 m at least; longer, up to 160 m, when the ploughing ground keeps its plots, so the breeders' pens have room) and at least 4 plots; it doesn't need a road near or flat ground.
 - `auto`: the site picked as above, so `[days]` can be given without a field.
 - `[days]`: the day that many days from today (at least 1).
 
@@ -747,20 +747,23 @@ tcShow fields
 
 ### `tcShow entries`
 
-The show's livestock entries (167), by class in show order: each class's name and key, every player farm's entries in it (entry number, farm, the animal's name or RealisticLivestock key, the husbandry for Best Kept Herd) with how each stands (`entered`, `placed N`, `unplaced`, `noShow` or `sick`, and `champion`), then the farmers who've entered it. Farmers enter when entries close. With no show announced, the last show's entries until the next is announced. No scores. Takes no arguments, and any player can run it.
+The show's livestock entries (167), by class: each class's name and key, every player farm's entries in it (entry number, farm, the animal's name or RealisticLivestock key, the husbandry for Best Kept Herd) with how each stands (`entered`, `placed N`, `unplaced`, `noShow` or `sick`, and `champion`), then the farmers who've entered it. 188: once entries close the breeders enter their own animals (each as `breeder N's animal N`, with its placing once given, and `sold` if it's been bought since), and the classes are in the ring's order, each with its time and how it stands (`to come`, `in the ring`, `placed` or `over`); a supreme champion's slot lists the player's champion. Farmers enter Best Kept Herd. With no show announced, the last show's entries until the next is announced. No scores. Takes no arguments, and any player can run it.
 
 ```
 tcShow entries
 ```
 
 ```
-Show 1's livestock entries (judged):
-  Holstein, 6 to 24 months (COW_HOLSTEIN:young):
-    entry 1: My Farm, Daisy - placed 1, champion
-    farmers: Tom Hargreaves, Ann Webb
-  Best Kept Herd (herd):
-    entry 2: My Farm, Cow barn - placed 3
-    farmers: Bob Oakes, Sue Lane, Tom Hargreaves
+Show 1's livestock entries (entries closed):
+  Holstein Cow, 6 to 24 months (COW_HOLSTEIN:young) 10:00-11:00, placed:
+    entry 1: My Farm, Daisy - placed 2
+    farmers: Ann Webb (breeder 1's animal 2, placed 1), Bob Oakes (breeder 2's animal 1, placed 3)
+  Holstein Cow, from 24 months (COW_HOLSTEIN:adult) 11:00-12:00, in the ring:
+    farmers: Ann Webb (breeder 1's animal 4), Bob Oakes (breeder 2's animal 3)
+  Supreme champion, Cattle (champion:COW) 12:00-13:00, to come:
+  Best Kept Herd (herd) 13:00-14:00, to come:
+    entry 2: My Farm, Cow barn - entered
+    farmers: Sue Lane, Tom Hargreaves
 ```
 
 ### `tcShow plots`
@@ -797,18 +800,21 @@ Show 1 is open: the stalls and these farmers are on the showground.
 Farm 1: has come (the host's goodwill given); trade association: joined here; careers stand: not visited.
 ```
 
-### `tcShow breeder`
+### `tcShow breeder [breeder]`
 
-The show's breeders' pen (173), RealisticLivestock only. Once it's set out at midnight before the show's day: the show, whether it's open now (08:00 to 18:00), the spare farm id the breeder's trailers belong to, the breeder, and each animal in the trailers by its RealisticLivestock key: its breed, age in months, whether it's pregnant, weight, health, genetics, what RealisticLivestock values it at and the breeder's price. A sick one is marked as not for sale. Without RealisticLivestock's API, or with no pen out, says so. Takes no arguments, and any player can run it.
+The show's breeders (173, 188), once they're planned when its entries close: whether they're at their pens now (08:00 to 18:00 on the day), whether anything's for sale (RealisticLivestock's API, and the spare farm id their trailers belong to), then each breeder by number: their name, animal type and trailers, and each of their animals by number: its subtype, age in months, whether it's `here`, `sold` or `missing` (RealisticLivestock couldn't make it), the class it's entered in and the time it's held till (not for sale before then). With RealisticLivestock, a breeder's animals for sale also show their RealisticLivestock key, weight, health, genetics, what RealisticLivestock values it at and the breeder's price; a sick one is marked as not for sale. With none planned yet, says so. Any player can run it.
+- `[breeder]`: just that breeder, by number (all by default).
 
 ```
 tcShow breeder
+tcShow breeder 2
 ```
 
 ```
-Show 1's breeders' pen (open now), farm id 8, breeder Ann Webb, 2 trailer(s):
-  COW DE 214598 710041: Holstein, 26 months, pregnant, 612 kg, health 97, quality 1.42, health 1.31, fertility 1.38, metabolism 1.22, productivity 1.51; value 2675, price 3478
-  SHEEP DE 118342 420017: Texel, 14 months, 71 kg, health 99, quality 1.55, health 1.19, fertility 1.47, metabolism 1.33; value 310, price 403
+Show 1's breeders (at their pens now), their stock RL's on farm id 8:
+  1: Ann Webb, COW, 1 trailer(s):
+    animal 1: COW_HOLSTEIN, 26 months, here, entered in COW_HOLSTEIN:adult (held till 12:00); COW DE 214598 710041, 612 kg, health 97, quality 1.42, health 1.31, fertility 1.38, metabolism 1.22, productivity 1.51; value 2675, price 3478
+    animal 2: COW_HOLSTEIN, 14 months, sold, entered in COW_HOLSTEIN:young
 ```
 
 ## Log — `tcLog`

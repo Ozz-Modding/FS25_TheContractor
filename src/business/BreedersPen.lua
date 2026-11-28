@@ -1,41 +1,51 @@
--- The breeders' pen at the show (173): a breeder (a farmer) at a stand
--- selling premium stock from their livestock trailers, with
--- RealisticLivestock only. The rules and numbers are TCBreedersPen's
--- (src/util/TCBreedersPen.lua); the stand and the talking are
--- TCBreedersPenWorld's (and TCShowStandsWorld's, which puts the breeder at
--- the stand). Everything RL goes through RL's own API for other mods
+-- The breeders at the show (173, 188): farmers who bring their premium
+-- stock, each in their own pen on the showground, enter some of it in the
+-- livestock classes (ShowLivestock judges them) and, with
+-- RealisticLivestock, sell it. The rules and numbers are TCBreedersPen's
+-- (src/util/TCBreedersPen.lua); the pens are TCShowScene's; the talking is
+-- TCBreedersPenWorld's (and TCShowStandsWorld's, which puts each breeder
+-- at their pen). Everything RL goes through RL's own API for other mods
 -- (TCRealisticLivestock.getAPI): nothing of RL's is patched or read past it.
 --
---   Set out (the show's onSetOut, midnight before): with RL's API, a spare
---     farm id (TCBreedersPen.pickFarmId) and a stand and bays on the
---     showground (TCShowScene.getBreederStand/getBreederBays), a trailer of
---     the breeder's for each of up to TYPES animal types, MISSION state and
---     owned by the spare farm id (no costs, never sold, and no farm can get
---     at it: vanilla's AccessHandler refuses every farm a vehicle of a farm
---     that doesn't exist), each stocked with RL's premium animals
---     (createAnimal, then addAnimalsTo the trailer as the spare farm id).
---     RL keeps nothing ticking in a trailer, saves its animals with it, and
---     streams them to every machine, so the catalogue is the trailers'
---     contents (getAnimalsIn): nothing of ours holds or sends an animal.
---   The day: while the show's stands are open (ShowStands:isOpen), a player
---     at the stand picks an animal and where it goes (handleBuy): one of
---     their livestock trailers at the show, or a husbandry of theirs for a
---     delivery fee. The server checks it all again, moves it with RL's
---     moveAnimals, and only then charges the farm (MoneyType
---     TC_BREEDER_STOCK).
+--   Planned (plan, server) when the show's entries close, or at set-out if
+--     that was missed (ShowLivestock asks, then makes their entries): the
+--     breeders (TCBreedersPen.planBreeders: farmers who aren't the host),
+--     their types, pens and animals, as many as the showground has room
+--     for (TCShowScene's pens on a plan of 164's showground; the rest
+--     don't come). With RL's API and a spare farm id (pickFarmId), each
+--     brings their stock in a livestock trailer (its model picked then, so
+--     the stock fits it).
+--   Set out (the show's onSetOut, midnight before): a breeder the real
+--     showground has no room for stays away (ShowLivestock drops their
+--     entries). With RL, each breeder's trailer out behind their pen,
+--     MISSION state and owned by the spare farm id (no costs, never sold,
+--     and no farm can get at it: vanilla's AccessHandler refuses every farm
+--     a vehicle of a farm that doesn't exist), stocked with RL's premium
+--     animals as planned (createAnimal, then addAnimalsTo the trailer as the
+--     spare farm id). RL keeps nothing ticking in a trailer, saves its
+--     animals with it, and streams them to every machine, so what's for
+--     sale is the trailers' contents (getAnimalsIn).
+--   The day: the breeders' animals are shown in their pens while the gates
+--     are open (present, the server's say). A player at a breeder's pen can
+--     buy from them while the stands are open (handleBuy, RL only): an
+--     animal not entered, or entered in a class that's over
+--     (ShowLivestock:getHeldUntil). The server checks it all again, moves it
+--     with RL's moveAnimals, only then charges the farm (MoneyType
+--     TC_BREEDER_STOCK), and the animal's gone from the pen.
 --   Over (onFinished, midnight after; or called off): the trailers and any
---     unsold animals deleted. A farm created on the spare id while they're
---     out (MessageType.FARM_CREATED) closes the pen at once, so the new
---     farm never owns them.
+--     unsold animals deleted, the breeders gone. A farm created on the
+--     spare id while they're out (MessageType.FARM_CREATED) has the trailers
+--     taken away at once, so the new farm never owns them.
 --
 -- A competition of the show's that places nobody (registerCompetition), for
--- its hooks. Every machine holds the show it's for, the spare farm id, the
--- breeder and the trailers (object ids); saved in TheContractor.xml
--- (.breedersPen, the trailers by uniqueId), in the initial client state and
--- sent whole (TCBreedersPenEvent). The breeder's a farmer (replacePerson,
--- through the show). Nothing's kept by farm, and nothing's a date. The
--- trailers are locked (TCVehicleLock) and remapped if replaced
--- (TCVehicleReplace). Tested in tests/test_breedersPen.lua.
+-- its hooks. Every machine holds the show it's for, the spare farm id and
+-- the breeders (who, their type, animals' looks and RL keys, what's sold,
+-- their trailers' object ids); saved in TheContractor.xml (.breedersPen,
+-- the trailers by uniqueId), in the initial client state and sent whole
+-- (TCBreedersPenEvent). The breeders are farmers (replacePerson, through
+-- the show). Nothing's kept by farm, and nothing's a date. The trailers are
+-- locked (TCVehicleLock) and remapped if replaced (TCVehicleReplace).
+-- Tested in tests/test_breedersPen.lua.
 
 TheContractorBreedersPen = {}
 TheContractorBreedersPen_mt = Class(TheContractorBreedersPen)
@@ -57,15 +67,18 @@ function TheContractorBreedersPen.new()
     local self = setmetatable({}, TheContractorBreedersPen_mt)
     MoneyType.TC_BREEDER_STOCK = MoneyType.register("tcBreederStock", "tc_moneyType_breederStock")
     MoneyType.LAST_ID = MoneyType.LAST_ID + 1
+    -- Every machine: the show the breeders are for (nil: none), the spare
+    -- farm id their trailers belong to (0: none, nothing for sale), the
+    -- breeders (see newBreeder), whether their animals are in their pens
+    -- now, and a count that goes up whenever any of it changes (the props
+    -- follow it, TCAuctionProps).
     self.showId = nil
-    -- The spare farm id the trailers belong to (0: none out).
     self.farmId = 0
-    -- The breeder (a farmer's person id, 0 for none).
-    self.breederId = 0
-    -- The trailers' object ids.
-    self.trailerIds = {}
-    -- Server: the trailers' uniqueIds from the save, until resolveSavedVehicles.
-    self.savedUniqueIds = nil
+    self.breeders = {}
+    self.present = false
+    self.version = 0
+    -- Server: whether the breeders have been planned for showId.
+    self.planned = false
     -- Server: trailers loading, so a close drops them as they arrive.
     self.generation = 0
     self.engine = ENGINE
@@ -77,14 +90,21 @@ end
 function TheContractorBreedersPen:register(show)
     show:registerCompetition(TheContractorBreedersPen.KEY, {
         titleKey = TheContractorBreedersPen.TITLE_KEY,
+        onAnnounced = function(event)
+            self:reset(event.id)
+        end,
+        -- 188: the breeders' pens the showground's laid out with.
+        getBreeders = function(event)
+            return self:getSceneBreeders(event)
+        end,
         onSetOut = function(event)
             self:open(event)
         end,
         onFinished = function()
-            self:close()
+            self:reset(nil)
         end,
         onCancelled = function()
-            self:close()
+            self:reset(nil)
         end,
         replacePerson = function(oldId, newId)
             return self:replacePerson(oldId, newId)
@@ -121,29 +141,106 @@ end
 
 -- Queries (every machine) ------------------------------------------------------------------
 
--- Whether the pen's trailers are out for the show announced now.
-function TheContractorBreedersPen:isOut()
+-- The breeders who've come for the show announced now (not one left away
+-- for want of room), each with its index: { { index, breeder } }.
+function TheContractorBreedersPen:getBreeders()
+    local list = {}
     local event = getShowEvent()
-    return #self.trailerIds > 0 and self.farmId > 0 and event ~= nil and self.showId == event.id
+    if event == nil or self.showId ~= event.id then
+        return list
+    end
+    for index, breeder in ipairs(self.breeders) do
+        if not breeder.absent then
+            table.insert(list, { index = index, breeder = breeder })
+        end
+    end
+    return list
 end
 
--- Whether it's selling now: out, and the show's stands open.
+-- A breeder by index (this show's), or nil.
+function TheContractorBreedersPen:getBreeder(index)
+    local event = getShowEvent()
+    local breeder = self.breeders[index or 0]
+    if breeder == nil or breeder.absent or event == nil or self.showId ~= event.id then
+        return nil
+    end
+    return breeder
+end
+
+-- The breeders' person ids (farmers), this show's: ShowStands, 169's plots
+-- and TCYardFarmers leave them out.
+function TheContractorBreedersPen:getBreederIds()
+    local ids = {}
+    for _, item in ipairs(self:getBreeders()) do
+        table.insert(ids, item.breeder.farmerId)
+    end
+    return ids
+end
+
+function TheContractorBreedersPen:isBreeder(personId)
+    for _, id in ipairs(self:getBreederIds()) do
+        if id == personId then
+            return true
+        end
+    end
+    return false
+end
+
+-- A breeder's person (a farmer), or nil.
+function TheContractorBreedersPen:getPerson(index)
+    local tc = getTC()
+    local breeder = self:getBreeder(index)
+    if breeder == nil or tc == nil or tc.Farmers == nil then
+        return nil
+    end
+    return tc.Farmers:getPerson(breeder.farmerId)
+end
+
+-- The breeders' ids while they're at their pens (TCYardFarmers keeps them
+-- out of their yards).
+function TheContractorBreedersPen:getBreedersAtShow()
+    if not self:isOpen() then
+        return {}
+    end
+    return self:getBreederIds()
+end
+
+-- Whether the breeders are out for the show announced now.
+function TheContractorBreedersPen:isOut()
+    return #self:getBreeders() > 0
+end
+
+-- Whether they're at their pens now: out, their animals there, and the
+-- show's stands open.
 function TheContractorBreedersPen:isOpen()
     local tc = getTC()
-    return self:isOut() and tc.ShowStands ~= nil and tc.ShowStands:isOpen()
+    return self:isOut() and self.present and tc.ShowStands ~= nil and tc.ShowStands:isOpen()
 end
 
+-- Whether anything's for sale at this show: RL's API, and the breeders'
+-- trailers out on a spare farm id.
+function TheContractorBreedersPen:hasSales()
+    return self.farmId > 0 and TCRealisticLivestock.getAPI() ~= nil and #self:getTrailerIds() > 0
+end
+
+-- Every breeder's trailers' object ids.
 function TheContractorBreedersPen:getTrailerIds()
-    return self.trailerIds
+    local ids = {}
+    for _, breeder in ipairs(self.breeders) do
+        for _, id in ipairs(breeder.trailerIds or {}) do
+            table.insert(ids, id)
+        end
+    end
+    return ids
 end
 
--- Whether a vehicle's one of the breeder's trailers.
+-- Whether a vehicle's one of the breeders' trailers.
 function TheContractorBreedersPen:isTrailer(vehicle)
     local vehicleId = vehicle ~= nil and NetworkUtil.getObjectId(vehicle) or nil
     if vehicleId == nil then
         return false
     end
-    for _, id in ipairs(self.trailerIds) do
+    for _, id in ipairs(self:getTrailerIds()) do
         if id == vehicleId then
             return true
         end
@@ -151,53 +248,54 @@ function TheContractorBreedersPen:isTrailer(vehicle)
     return false
 end
 
--- The breeder, a farmer's person, or nil.
-function TheContractorBreedersPen:getBreeder()
-    local tc = getTC()
-    if self.breederId <= 0 or tc == nil or tc.Farmers == nil then
-        return nil
-    end
-    return tc.Farmers:getPerson(self.breederId)
-end
-
--- The breeder's id while the pen's open (TCYardFarmers keeps them out of
--- their yard), or nil.
-function TheContractorBreedersPen:getBreederAtShow()
-    if self.breederId > 0 and self:isOpen() then
-        return self.breederId
+-- A breeder's animal by its RL key, or nil.
+function TheContractorBreedersPen:findAnimalByKey(index, key)
+    local breeder = self.breeders[index or 0]
+    for _, animal in ipairs(breeder ~= nil and breeder.animals or {}) do
+        if key ~= nil and animal.key == key then
+            return animal
+        end
     end
     return nil
 end
 
--- What's for sale now, read from the trailers through RL's API (on any
--- machine): { { key, trailerId, info (describeAnimal's), value, price,
--- subTypeIndex, title } }, a sick one left out unless withSick.
-function TheContractorBreedersPen:getCatalogue(withSick)
+-- What a breeder has for sale now, read from their trailers through RL's
+-- API (on any machine): { { key, animal, trailerId, info (describeAnimal's),
+-- value, price, subTypeIndex, title, record (our animal: its id, entry) } },
+-- a sick one left out unless withSick. index: one breeder's, nil for all.
+function TheContractorBreedersPen:getCatalogue(withSick, index)
     local entries = {}
     local api = TCRealisticLivestock.getAPI()
-    if api == nil then
+    if api == nil or self.farmId <= 0 then
         return entries
     end
     local animalSystem = g_currentMission.animalSystem
-    for _, trailerId in ipairs(self.trailerIds) do
-        local trailer = NetworkUtil.getObject(trailerId)
-        local animals = trailer ~= nil and api.getAnimalsIn(trailer) or nil
-        for _, animal in ipairs(animals or {}) do
-            local info = api.describeAnimal(animal)
-            local value = info ~= nil and api.getAnimalValue(animal) or nil
-            if info ~= nil and value ~= nil and (withSick or not info.diseased) then
-                local subTypeIndex = animalSystem ~= nil and info.subType ~= nil and
-                    animalSystem:getSubTypeIndexByName(info.subType) or nil
-                table.insert(entries, {
-                    key = TCRealisticLivestock.getAPIKey(info),
-                    animal = animal,
-                    trailerId = trailerId,
-                    info = info,
-                    value = value,
-                    price = TCBreedersPen.getPrice(value),
-                    subTypeIndex = subTypeIndex,
-                    title = TCShowClasses.getSubTypeTitle(animalSystem, info.subType),
-                })
+    for breederIndex, breeder in ipairs(self.breeders) do
+        if (index == nil or index == breederIndex) and not breeder.absent then
+            for _, trailerId in ipairs(breeder.trailerIds or {}) do
+                local trailer = NetworkUtil.getObject(trailerId)
+                local animals = trailer ~= nil and api.getAnimalsIn(trailer) or nil
+                for _, animal in ipairs(animals or {}) do
+                    local info = api.describeAnimal(animal)
+                    local value = info ~= nil and api.getAnimalValue(animal) or nil
+                    if info ~= nil and value ~= nil and (withSick or not info.diseased) then
+                        local key = TCRealisticLivestock.getAPIKey(info)
+                        local subTypeIndex = animalSystem ~= nil and info.subType ~= nil and
+                            animalSystem:getSubTypeIndexByName(info.subType) or nil
+                        table.insert(entries, {
+                            key = key,
+                            animal = animal,
+                            trailerId = trailerId,
+                            breeder = breederIndex,
+                            record = self:findAnimalByKey(breederIndex, key),
+                            info = info,
+                            value = value,
+                            price = TCBreedersPen.getPrice(value),
+                            subTypeIndex = subTypeIndex,
+                            title = TCShowClasses.getSubTypeTitle(animalSystem, info.subType),
+                        })
+                    end
+                end
             end
         end
     end
@@ -215,8 +313,8 @@ function TheContractorBreedersPen.getDeliveryFee()
 end
 
 -- Whether a buyer's trailer is at the show: in the trailer lines, or within
--- REACH of the breeder's stand.
-function TheContractorBreedersPen.isTrailerAtShow(trailer, scene)
+-- REACH of a breeder's pen (the breeder's at `index`, or any).
+function TheContractorBreedersPen.isTrailerAtShow(trailer, scene, index)
     if trailer == nil or trailer.rootNode == nil or scene == nil then
         return false
     end
@@ -224,8 +322,13 @@ function TheContractorBreedersPen.isTrailerAtShow(trailer, scene)
     if TCShowScene.findBay(scene, x, z) ~= nil then
         return true
     end
-    local stand = TCShowScene.getBreederStand(scene)
-    return stand ~= nil and math.sqrt((x - stand.x) ^ 2 + (z - stand.z) ^ 2) <= TCBreedersPen.REACH
+    for _, pen in ipairs(TCShowScene.getBreederPens(scene)) do
+        if pen.placed and (index == nil or pen.index == index) and
+                math.sqrt((x - pen.x) ^ 2 + (z - pen.z) ^ 2) <= TCBreedersPen.REACH then
+            return true
+        end
+    end
+    return false
 end
 
 -- Whether an animal of a subtype could go to a place: it takes the
@@ -242,8 +345,9 @@ end
 
 -- Where a farm could have an animal of a subtype go now: its livestock
 -- trailers at the show (free), then its husbandries (the delivery fee).
--- { { object, objectId, isHusbandry, fee } }.
-function TheContractorBreedersPen:getTargets(farmId, subTypeIndex)
+-- index: the breeder it's bought from. { { object, objectId, isHusbandry,
+-- fee } }.
+function TheContractorBreedersPen:getTargets(farmId, subTypeIndex, index)
     local targets = {}
     if subTypeIndex == nil then
         return targets
@@ -252,7 +356,7 @@ function TheContractorBreedersPen:getTargets(farmId, subTypeIndex)
     local husbandrySystem = g_currentMission.husbandrySystem
     for _, trailer in ipairs(husbandrySystem ~= nil and husbandrySystem.livestockTrailers or {}) do
         if TCShowAnimals.isTrailer(trailer) and trailer:getOwnerFarmId() == farmId and not self:isTrailer(trailer) and
-                TheContractorBreedersPen.isTrailerAtShow(trailer, scene) and hasRoom(trailer, subTypeIndex) then
+                TheContractorBreedersPen.isTrailerAtShow(trailer, scene, index) and hasRoom(trailer, subTypeIndex) then
             table.insert(targets, { object = trailer, objectId = NetworkUtil.getObjectId(trailer), isHusbandry = false,
                 fee = 0 })
         end
@@ -267,141 +371,232 @@ function TheContractorBreedersPen:getTargets(farmId, subTypeIndex)
     return targets
 end
 
--- Setting out and clearing away (server) -------------------------------------------------------
-
--- The stock to put out: { { typeName, classes, model, count } }, one a
--- trailer, for the types the store has a trailer for.
-function TheContractorBreedersPen:planStock()
-    local plan = {}
-    local classes = TCShowClasses.listClasses(g_currentMission.animalSystem)
-    local types = TCBreedersPen.pickTypes(classes, #classes, function(n)
-        return self.random(n)
-    end)
-    for _, entry in ipairs(types) do
-        if #plan >= TCBreedersPen.TYPES then
-            break
-        end
-        local model, slots = self.engine.pickTrailerModel(entry.typeName, TCBreedersPen.PER_TRAILER)
-        if model ~= nil then
-            table.insert(plan, { typeName = entry.typeName, classes = entry.classes, model = model,
-                count = math.min(TCBreedersPen.PER_TRAILER, slots) })
-        end
+-- The breeders' pens for the scene (Show:setOut, the competition's
+-- getBreeders): one a breeder, in order (an absent one too, so the indices
+-- hold; it isn't placed if there's no room). nil with none.
+function TheContractorBreedersPen:getSceneBreeders(event)
+    if event == nil or self.showId ~= event.id or #self.breeders == 0 then
+        return nil
     end
-    return plan
+    local list = {}
+    for _, breeder in ipairs(self.breeders) do
+        table.insert(list, { length = breeder.pen.length, depth = breeder.pen.depth,
+            trailer = breeder.model ~= nil or breeder.hasTrailer == true, typeName = breeder.typeName })
+    end
+    return list
 end
 
--- Server, as the show's set out: the breeder's trailers out and stocked.
--- Returns nil, or why there's no pen.
+-- Planning (server) ---------------------------------------------------------------------------
+
+-- Server: the breeders start again for a show (or none), any trailers out
+-- taken away.
+function TheContractorBreedersPen:reset(showId)
+    self:closeTrailers()
+    local changed = self.showId ~= showId or #self.breeders > 0
+    self.showId = showId
+    self.breeders = {}
+    self.planned = false
+    self.present = false
+    self.farmId = 0
+    if changed then
+        self.version = self.version + 1
+        self:sync()
+    end
+end
+
+-- A plan of the showground (164's) as TCShowScene lays it out, for how many
+-- breeders it has room for, or nil with no plan.
+function TheContractorBreedersPen.getPlanningScene(pens)
+    local tc = getTC()
+    local showSite = tc ~= nil and tc.ShowSite or nil
+    local plan = showSite ~= nil and showSite.site ~= nil and showSite.site.plan or nil
+    if plan == nil or plan.showRect == nil then
+        return nil
+    end
+    local layout = TCAuctionLayout.layOutOpenRect(plan.showRect, plan.entrance)
+    local scene = TCAuctionLayout.getScene(layout, plan.entrance, 0)
+    scene.dressing = TCShowScene.DRESSING
+    scene.pens = pens
+    return scene
+end
+
+-- Server (ShowLivestock, when entries close or at set-out): the breeders
+-- for a show, planned once. pens: the small pens beside the ring (188: the
+-- farmers' row; the room they take). Returns the breeders.
+function TheContractorBreedersPen:plan(event, pens)
+    if event == nil or not g_currentMission:getIsServer() then
+        return self.breeders
+    end
+    if self.planned and self.showId == event.id then
+        return self.breeders
+    end
+    if self.showId ~= event.id then
+        self:reset(event.id)
+    end
+    self.planned = true
+    local tc = getTC()
+    local farmers = {}
+    for _, farmer in ipairs(tc.Farmers ~= nil and tc.Farmers:getFarmers() or {}) do
+        if farmer.id ~= event.hostFarmerId then
+            table.insert(farmers, farmer)
+        end
+    end
+    -- RL's stock comes in trailers, on a spare farm id.
+    local api = TCRealisticLivestock.getAPI()
+    local spare = api ~= nil and TCBreedersPen.pickFarmId(farmExists, FarmManager.MAX_NUM_FARMS) or nil
+    local models = {}
+    local capacity = nil
+    if spare ~= nil then
+        capacity = function(typeName, count)
+            local model, slots = self.engine.pickTrailerModel(typeName, count)
+            models[typeName] = model
+            return model ~= nil and slots or 0
+        end
+    end
+    local breeders = TCBreedersPen.planBreeders(TCShowClasses.listClasses(g_currentMission.animalSystem), farmers,
+        TCBreedersPen.MAX_BREEDERS, self.random, capacity)
+    for _, breeder in ipairs(breeders) do
+        breeder.trailerIds = {}
+        if spare ~= nil then
+            breeder.model = models[breeder.typeName]
+            breeder.hasTrailer = breeder.model ~= nil
+        end
+    end
+    -- As many as the showground's plan has room for.
+    self.breeders = breeders
+    local scene = TheContractorBreedersPen.getPlanningScene(pens)
+    if scene ~= nil then
+        scene.breeders = self:getSceneBreeders(event)
+        local kept = {}
+        for _, pen in ipairs(TCShowScene.getBreederPens(scene)) do
+            if pen.placed then
+                table.insert(kept, breeders[pen.index])
+            end
+        end
+        self.breeders = kept
+    end
+    self.version = self.version + 1
+    TCLog.info("TheContractor: show %d: %d breeder(s) coming (%d planned)%s", event.id, #self.breeders, #breeders,
+        spare ~= nil and string.format(", their stock RL's on farm id %d", spare) or ", no stock for sale")
+    self:sync()
+    return self.breeders
+end
+
+-- Setting out and clearing away (server) -------------------------------------------------------
+
+-- Server, as the show's set out: a breeder the showground hasn't room for
+-- stays away; with RL, the breeders' trailers out and stocked. Returns nil,
+-- or why nothing's for sale.
 function TheContractorBreedersPen:open(event)
     if not g_currentMission:getIsServer() then
         return "not the server"
     end
+    if self.showId ~= event.id or #self.breeders == 0 then
+        return "no breeders"
+    end
     -- Set out again (the console's show day): what's out stays.
-    if self.showId == event.id and self.farmId > 0 then
+    if #self:getTrailerIds() > 0 then
         return nil
     end
-    self:close()
+    local scene = getScene()
+    local pens = TCShowScene.getBreederPens(scene)
+    local dropped = 0
+    for index, breeder in ipairs(self.breeders) do
+        local pen = pens[index]
+        if (pen == nil or not pen.placed) and not breeder.absent then
+            breeder.absent = true
+            dropped = dropped + 1
+        end
+    end
+    if dropped > 0 then
+        TCLog.info("TheContractor: show %d: %d breeder(s) stay away, no room on the showground", event.id, dropped)
+        local tc = getTC()
+        if tc.ShowLivestock ~= nil then
+            tc.ShowLivestock:onBreedersAway(event)
+        end
+    end
+    self.version = self.version + 1
     local problem = nil
     local api = TCRealisticLivestock.getAPI()
-    local farmId = TCBreedersPen.pickFarmId(farmExists, FarmManager.MAX_NUM_FARMS)
-    local scene = getScene()
-    local stand = TCShowScene.getBreederStand(scene)
-    local plan = (api ~= nil and farmId ~= nil and stand ~= nil) and self:planStock() or {}
-    local bays = TCShowScene.getBreederBays(scene, #plan)
+    local farmId = api ~= nil and TCBreedersPen.pickFarmId(farmExists, FarmManager.MAX_NUM_FARMS) or nil
     if api == nil then
         problem = "no RealisticLivestock API"
     elseif farmId == nil then
         problem = "every farm id is in use"
-    elseif stand == nil then
-        problem = "no stand left on the showground"
-    elseif #plan == 0 then
-        problem = "no animal type the store has a livestock trailer for"
-    elseif #bays == 0 then
-        problem = "no trailer line bay to spare"
     end
-    if problem ~= nil then
-        TCLog.info("TheContractor: no breeders' pen at show %d: %s", event.id, problem)
-        return problem
+    if problem == nil then
+        self.farmId = farmId
+        self.generation = self.generation + 1
+        local spawned = 0
+        for index, breeder in ipairs(self.breeders) do
+            local pen = pens[index]
+            if not breeder.absent and breeder.model ~= nil and pen ~= nil and pen.trailer ~= nil then
+                self.engine.spawnTrailer(self, index, pen.trailer, self.generation)
+                spawned = spawned + 1
+            end
+        end
+        TCLog.info("TheContractor: show %d's breeders: farm id %d, %d trailer(s) on their way", event.id, farmId,
+            spawned)
+    else
+        TCLog.info("TheContractor: show %d's breeders have nothing to sell: %s", event.id, problem)
     end
-    self.showId = event.id
-    self.farmId = farmId
-    self.breederId = self:pickBreeder(event) or 0
-    self.generation = self.generation + 1
-    for i, bay in ipairs(bays) do
-        self.engine.spawnTrailer(self, plan[i], bay, self.generation)
-    end
-    TCLog.info("TheContractor: show %d's breeders' pen: farm id %d, breeder %d, %d trailer(s) on their way", event.id,
-        farmId, self.breederId, #bays)
     self:sync()
-    return nil
-end
-
--- The breeder: a farmer at the show who isn't the host, at a plot (169),
--- or walking the showground (171).
-function TheContractorBreedersPen:pickBreeder(event)
-    local tc = getTC()
-    if tc.Farmers == nil then
-        return nil
-    end
-    local excluded = { [event.hostFarmerId or 0] = true }
-    if tc.ShowStands ~= nil then
-        for _, id in ipairs(tc.ShowStands:getFarmersAtShow()) do
-            excluded[id] = true
-        end
-    end
-    local match = tc.PloughingMatch
-    for _, plot in ipairs(match ~= nil and match.plots or {}) do
-        if (plot.farmerId or 0) > 0 then
-            excluded[plot.farmerId] = true
-        end
-    end
-    return TCBreedersPen.pickBreeder(event.id, tc.Farmers:getFarmers(), excluded)
+    return problem
 end
 
 -- Server: a trailer's loaded (the engine's spawnTrailer, done): kept and
--- stocked, or dropped if the pen's been closed since.
-function TheContractorBreedersPen:onTrailerSpawned(vehicle, entry, generation)
+-- stocked, or dropped if the show's been cleared since.
+function TheContractorBreedersPen:onTrailerSpawned(vehicle, index, generation)
     if vehicle == nil then
         return
     end
-    if generation ~= self.generation or self.farmId <= 0 then
+    local breeder = self.breeders[index]
+    if generation ~= self.generation or self.farmId <= 0 or breeder == nil then
         self.engine.deleteVehicle(NetworkUtil.getObjectId(vehicle), vehicle)
         return
     end
-    local added = self:stock(vehicle, entry)
+    local added = self:stock(vehicle, breeder)
     if added == 0 then
-        TCLog.warning("TheContractor: the breeder's %s trailer got no animals: taken away", entry.typeName)
+        TCLog.warning("TheContractor: breeder %d's %s trailer got no animals: taken away", index, breeder.typeName)
         self.engine.deleteVehicle(NetworkUtil.getObjectId(vehicle), vehicle)
         return
     end
-    table.insert(self.trailerIds, NetworkUtil.getObjectId(vehicle))
+    table.insert(breeder.trailerIds, NetworkUtil.getObjectId(vehicle))
+    self.version = self.version + 1
     self:sync()
 end
 
--- Server: a trailer stocked with RL's premium animals of its type. Returns
--- how many went in.
-function TheContractorBreedersPen:stock(trailer, entry)
+-- Server: a breeder's trailer stocked with RL's premium animals as planned
+-- (each animal's subtype and age), each given its RL key and coat. One RL
+-- won't make well is missing (not in the pen; its entry a no-show).
+-- Returns how many went in.
+function TheContractorBreedersPen:stock(trailer, breeder)
     local api = TCRealisticLivestock.getAPI()
-    if api == nil or #entry.classes == 0 then
+    if api == nil then
         return 0
     end
-    local animals = {}
-    local random = self.random
-    for _ = 1, entry.count do
+    local animals, records = {}, {}
+    for _, record in ipairs(breeder.animals) do
+        local made = nil
         for _ = 1, TCBreedersPen.TRIES do
-            local class = entry.classes[random(#entry.classes)]
             local animal, reason = api.createAnimal({
-                subType = class.subTypeName,
-                age = TCBreedersPen.rollAge(class.band, random),
+                subType = record.subTypeName,
+                age = record.age,
                 quality = TCBreedersPen.QUALITY,
             })
             local info = animal ~= nil and api.describeAnimal(animal) or nil
             if info ~= nil and not info.diseased then
-                table.insert(animals, animal)
+                made = { animal = animal, info = info }
                 break
             end
-            TCLog.info("TheContractor: the breeder's %s: drawn again (%s)", class.subTypeName,
+            TCLog.info("TheContractor: a breeder's %s: drawn again (%s)", record.subTypeName,
                 tostring(reason or (info ~= nil and "sick" or "no description")))
+        end
+        if made ~= nil then
+            table.insert(animals, made.animal)
+            table.insert(records, { record = record, info = made.info })
+        else
+            record.missing = true
         end
     end
     if #animals == 0 then
@@ -409,37 +604,85 @@ function TheContractorBreedersPen:stock(trailer, entry)
     end
     local ok, reason = api.addAnimalsTo(trailer, animals, self.farmId)
     if not ok then
-        TCLog.warning("TheContractor: RealisticLivestock wouldn't put the breeder's %d %s in their trailer: %s",
-            #animals, entry.typeName, tostring(reason))
+        TCLog.warning("TheContractor: RealisticLivestock wouldn't put a breeder's %d %s in their trailer: %s",
+            #animals, breeder.typeName, tostring(reason))
+        for _, made in ipairs(records) do
+            made.record.missing = true
+        end
         return 0
     end
-    TCLog.info("TheContractor: the breeder's trailer stocked with %d %s", #animals, entry.typeName)
+    -- Each animal's key, and its coat as the trailer has it (matched by
+    -- subtype and age, each cluster once).
+    local clusters = {}
+    local read = TCShowAnimals.readTrailer(trailer)
+    for _, cluster in ipairs(read ~= nil and read.entries or {}) do
+        table.insert(clusters, cluster)
+    end
+    for _, made in ipairs(records) do
+        made.record.key = TCRealisticLivestock.getAPIKey(made.info)
+        made.record.age = made.info.age or made.record.age
+        for i, cluster in ipairs(clusters) do
+            if cluster.subTypeName == made.record.subTypeName and cluster.age == made.record.age then
+                if cluster.animal ~= nil and cluster.animal.variation ~= nil then
+                    made.record.variation = cluster.animal.variation
+                end
+                table.remove(clusters, i)
+                break
+            end
+        end
+    end
+    TCLog.info("TheContractor: a breeder's trailer stocked with %d %s", #animals, breeder.typeName)
     return #animals
 end
 
--- Server: the trailers and any unsold animals taken away.
-function TheContractorBreedersPen:close()
+-- Server: the trailers and any unsold animals taken away (the breeders
+-- stay, with nothing for sale).
+function TheContractorBreedersPen:closeTrailers()
     self.generation = self.generation + 1
-    local changed = #self.trailerIds > 0 or self.farmId > 0
-    for _, trailerId in ipairs(self.trailerIds) do
-        self.engine.deleteVehicle(trailerId, NetworkUtil.getObject(trailerId))
+    local changed = false
+    for _, breeder in ipairs(self.breeders) do
+        for _, trailerId in ipairs(breeder.trailerIds or {}) do
+            self.engine.deleteVehicle(trailerId, NetworkUtil.getObject(trailerId))
+            changed = true
+        end
+        breeder.trailerIds = {}
     end
-    self.trailerIds = {}
+    if self.farmId > 0 then
+        changed = true
+    end
     self.farmId = 0
-    self.breederId = 0
-    self.showId = nil
     if changed then
-        TCLog.info("TheContractor: the breeders' pen taken away")
+        TCLog.info("TheContractor: the breeders' trailers taken away")
+        self.version = self.version + 1
+    end
+    return changed
+end
+
+-- Server (MessageType.FARM_CREATED): a new farm on the spare id has the
+-- trailers taken away before it can own them.
+function TheContractorBreedersPen:onFarmCreated(farmId)
+    if self.farmId > 0 and farmId == self.farmId then
+        TCLog.info("TheContractor: farm %d created, the breeders' farm id: their trailers are taken away", farmId)
+        self:closeTrailers()
+        for _, breeder in ipairs(self.breeders) do
+            for _, animal in ipairs(breeder.animals) do
+                if animal.key ~= nil and not animal.sold then
+                    animal.missing = true
+                end
+            end
+        end
         self:sync()
     end
 end
 
--- Server (MessageType.FARM_CREATED): a new farm on the spare id closes the
--- pen before it can own the trailers.
-function TheContractorBreedersPen:onFarmCreated(farmId)
-    if self.farmId > 0 and farmId == self.farmId then
-        TCLog.info("TheContractor: farm %d created, the breeders' pen's farm id: the pen's closed", farmId)
-        self:close()
+-- Server (ShowLivestock, every second): whether the breeders' animals are
+-- in their pens (the gates open).
+function TheContractorBreedersPen:setPresent(present)
+    present = present == true
+    if self.present ~= present then
+        self.present = present
+        self.version = self.version + 1
+        self:sync()
     end
 end
 
@@ -475,9 +718,14 @@ function TheContractorBreedersPen:handleBuy(farmId, key, targetId, connection)
     if entry.info.diseased then
         return ANSWER.SICK, 0
     end
+    -- 188: an entry stays till its class is over.
+    local livestock = getTC().ShowLivestock
+    if entry.record ~= nil and livestock ~= nil and livestock:getHeldUntil(entry.breeder, entry.record.id) ~= nil then
+        return ANSWER.ENTERED, 0
+    end
     local target = NetworkUtil.getObject(targetId)
     local found = nil
-    for _, candidate in ipairs(self:getTargets(farmId, entry.subTypeIndex)) do
+    for _, candidate in ipairs(self:getTargets(farmId, entry.subTypeIndex, entry.breeder)) do
         if candidate.object == target then
             found = candidate
         end
@@ -493,11 +741,16 @@ function TheContractorBreedersPen:handleBuy(farmId, key, targetId, connection)
     local trailer = NetworkUtil.getObject(entry.trailerId)
     local ok, reason = api.moveAnimals(trailer, target, { entry.animal }, farmId)
     if not ok then
-        TCLog.info("TheContractor: farm %d couldn't have the breeder's %s: %s", farmId, entry.key, tostring(reason))
+        TCLog.info("TheContractor: farm %d couldn't have a breeder's %s: %s", farmId, entry.key, tostring(reason))
         return TCBreedersPen.getAnswerForReason(api.REASON, reason), 0
     end
     g_currentMission:addMoney(-total, farmId, MoneyType.TC_BREEDER_STOCK, true, true)
-    TCLog.info("TheContractor: farm %d bought the breeder's %s (%s) for %d%s", farmId, entry.key,
+    if entry.record ~= nil then
+        entry.record.sold = true
+        self.version = self.version + 1
+        self:sync()
+    end
+    TCLog.info("TheContractor: farm %d bought breeder %d's %s (%s) for %d%s", farmId, entry.breeder, entry.key,
         tostring(entry.info.subType), entry.price, found.fee > 0 and string.format(", delivered for %d", found.fee) or "")
     return ANSWER.BOUGHT, total
 end
@@ -505,20 +758,28 @@ end
 -- Farmers and vehicles -------------------------------------------------------------------------------
 
 -- Every machine (128, through the show): a retired breeder's successor
--- takes the stand. Returns how many.
+-- brings their stock. Returns how many.
 function TheContractorBreedersPen:replacePerson(oldId, newId)
-    if self.breederId > 0 and self.breederId == oldId then
-        self.breederId = newId
-        return 1
+    local count = 0
+    for _, breeder in ipairs(self.breeders) do
+        if breeder.farmerId == oldId then
+            breeder.farmerId = newId
+            count = count + 1
+        end
     end
-    return 0
+    if count > 0 then
+        self.version = self.version + 1
+    end
+    return count
 end
 
 -- Every machine (TCVehicleReplace): a trailer swapped for a copy.
 function TheContractorBreedersPen:remapVehicle(oldId, newId)
-    for i, id in ipairs(self.trailerIds) do
-        if id == oldId then
-            self.trailerIds[i] = newId
+    for _, breeder in ipairs(self.breeders) do
+        for i, id in ipairs(breeder.trailerIds or {}) do
+            if id == oldId then
+                breeder.trailerIds[i] = newId
+            end
         end
     end
 end
@@ -534,31 +795,78 @@ end
 function TheContractorBreedersPen.writeState(streamId, state)
     streamWriteInt32(streamId, state.showId or -1)
     streamWriteUInt8(streamId, state.farmId or 0)
-    streamWriteInt32(streamId, state.breederId or 0)
-    streamWriteUInt8(streamId, #state.trailerIds)
-    for _, id in ipairs(state.trailerIds) do
-        streamWriteInt32(streamId, id)
+    streamWriteBool(streamId, state.present == true)
+    streamWriteUInt8(streamId, #state.breeders)
+    for _, breeder in ipairs(state.breeders) do
+        streamWriteInt32(streamId, breeder.farmerId or 0)
+        streamWriteString(streamId, breeder.typeName or "")
+        streamWriteUInt8(streamId, breeder.pen.length or 2)
+        streamWriteUInt8(streamId, breeder.pen.depth or 2)
+        streamWriteBool(streamId, breeder.absent == true)
+        streamWriteBool(streamId, breeder.hasTrailer == true or breeder.model ~= nil)
+        streamWriteUInt8(streamId, #(breeder.trailerIds or {}))
+        for _, id in ipairs(breeder.trailerIds or {}) do
+            streamWriteInt32(streamId, id)
+        end
+        streamWriteUInt8(streamId, #breeder.animals)
+        for _, animal in ipairs(breeder.animals) do
+            streamWriteUInt8(streamId, animal.id)
+            streamWriteString(streamId, animal.classKey or "")
+            streamWriteString(streamId, animal.subTypeName or "")
+            streamWriteInt16(streamId, animal.age or 0)
+            streamWriteUInt8(streamId, animal.variation or 1)
+            streamWriteString(streamId, animal.key or "")
+            streamWriteBool(streamId, animal.sold == true)
+            streamWriteBool(streamId, animal.missing == true)
+        end
     end
 end
 
+local function readOptionalString(streamId)
+    local value = streamReadString(streamId)
+    return value ~= "" and value or nil
+end
+
 function TheContractorBreedersPen.readState(streamId)
-    local state = { trailerIds = {} }
+    local state = { breeders = {} }
     local showId = streamReadInt32(streamId)
     state.showId = showId >= 0 and showId or nil
     state.farmId = streamReadUInt8(streamId)
-    state.breederId = streamReadInt32(streamId)
+    state.present = streamReadBool(streamId)
     for _ = 1, streamReadUInt8(streamId) do
-        table.insert(state.trailerIds, streamReadInt32(streamId))
+        local breeder = { farmerId = streamReadInt32(streamId), typeName = readOptionalString(streamId), pen = {},
+            trailerIds = {}, animals = {} }
+        breeder.pen.length = streamReadUInt8(streamId)
+        breeder.pen.depth = streamReadUInt8(streamId)
+        breeder.absent = streamReadBool(streamId) or nil
+        breeder.hasTrailer = streamReadBool(streamId)
+        for _ = 1, streamReadUInt8(streamId) do
+            table.insert(breeder.trailerIds, streamReadInt32(streamId))
+        end
+        for _ = 1, streamReadUInt8(streamId) do
+            table.insert(breeder.animals, {
+                id = streamReadUInt8(streamId),
+                classKey = readOptionalString(streamId),
+                subTypeName = readOptionalString(streamId),
+                age = streamReadInt16(streamId),
+                variation = streamReadUInt8(streamId),
+                key = readOptionalString(streamId),
+                sold = streamReadBool(streamId) or nil,
+                missing = streamReadBool(streamId) or nil,
+            })
+        end
+        table.insert(state.breeders, breeder)
     end
     return state
 end
 
--- A client: the pen as the server sent it.
+-- A client: the breeders as the server sent them.
 function TheContractorBreedersPen:applyState(state)
     self.showId = state.showId
     self.farmId = state.farmId
-    self.breederId = state.breederId
-    self.trailerIds = state.trailerIds
+    self.present = state.present
+    self.breeders = state.breeders
+    self.version = self.version + 1
 end
 
 function TheContractorBreedersPen:writeInitialClientState(streamId, connection)
@@ -578,15 +886,44 @@ function TheContractorBreedersPen:saveToXmlFile(xmlFile)
     local key = TheContractor.SaveKey .. "." .. TheContractorBreedersPen.SAVE_KEY
     setXMLInt(xmlFile, key .. "#showId", self.showId)
     setXMLInt(xmlFile, key .. "#farmId", self.farmId)
-    setXMLInt(xmlFile, key .. "#breederId", self.breederId)
-    local i = 0
-    for _, trailerId in ipairs(self.trailerIds) do
-        local uniqueId = TCVehicleIds.getUniqueId(trailerId)
-        if uniqueId ~= nil then
-            setXMLString(xmlFile, string.format("%s.trailer(%d)#uniqueId", key, i), uniqueId)
-            i = i + 1
+    setXMLBool(xmlFile, key .. "#planned", self.planned)
+    for i, breeder in ipairs(self.breeders) do
+        local breederKey = string.format("%s.breeder(%d)", key, i - 1)
+        setXMLInt(xmlFile, breederKey .. "#farmerId", breeder.farmerId or 0)
+        setXMLString(xmlFile, breederKey .. "#type", breeder.typeName or "")
+        setXMLInt(xmlFile, breederKey .. "#penLength", breeder.pen.length)
+        setXMLInt(xmlFile, breederKey .. "#penDepth", breeder.pen.depth)
+        setXMLBool(xmlFile, breederKey .. "#absent", breeder.absent == true)
+        if breeder.model ~= nil then
+            setXMLString(xmlFile, breederKey .. "#trailerModel", breeder.model.xmlFilename)
+        end
+        local t = 0
+        for _, trailerId in ipairs(breeder.trailerIds or {}) do
+            local uniqueId = TCVehicleIds.getUniqueId(trailerId)
+            if uniqueId ~= nil then
+                setXMLString(xmlFile, string.format("%s.trailer(%d)#uniqueId", breederKey, t), uniqueId)
+                t = t + 1
+            end
+        end
+        for j, animal in ipairs(breeder.animals) do
+            local animalKey = string.format("%s.animal(%d)", breederKey, j - 1)
+            setXMLInt(xmlFile, animalKey .. "#id", animal.id)
+            setXMLString(xmlFile, animalKey .. "#classKey", animal.classKey or "")
+            setXMLString(xmlFile, animalKey .. "#subType", animal.subTypeName or "")
+            setXMLInt(xmlFile, animalKey .. "#age", animal.age or 0)
+            setXMLInt(xmlFile, animalKey .. "#variation", animal.variation or 1)
+            if animal.key ~= nil then
+                setXMLString(xmlFile, animalKey .. "#key", animal.key)
+            end
+            setXMLBool(xmlFile, animalKey .. "#sold", animal.sold == true)
+            setXMLBool(xmlFile, animalKey .. "#missing", animal.missing == true)
         end
     end
+end
+
+local function readString(xmlFile, path)
+    local value = getXMLString(xmlFile, path)
+    return value ~= nil and value ~= "" and value or nil
 end
 
 function TheContractorBreedersPen:loadFromXMLFile(xmlFile)
@@ -596,44 +933,137 @@ function TheContractorBreedersPen:loadFromXMLFile(xmlFile)
     local key = TheContractor.SaveKey .. "." .. TheContractorBreedersPen.SAVE_KEY
     self.showId = getXMLInt(xmlFile, key .. "#showId")
     self.farmId = getXMLInt(xmlFile, key .. "#farmId") or 0
-    self.breederId = getXMLInt(xmlFile, key .. "#breederId") or 0
-    self.trailerIds = {}
-    self.savedUniqueIds = {}
-    local i = 0
+    self.planned = getXMLBool(xmlFile, key .. "#planned") == true
+    self.breeders = {}
+    -- 173's save had the trailers under the pen, not a breeder: those are
+    -- only taken away now (resolveSavedVehicles).
+    self.legacyUniqueIds = {}
+    local l = 0
     while true do
-        local uniqueId = getXMLString(xmlFile, string.format("%s.trailer(%d)#uniqueId", key, i))
+        local uniqueId = getXMLString(xmlFile, string.format("%s.trailer(%d)#uniqueId", key, l))
         if uniqueId == nil then
             break
         end
-        table.insert(self.savedUniqueIds, uniqueId)
+        table.insert(self.legacyUniqueIds, uniqueId)
+        l = l + 1
+    end
+    local i = 0
+    while hasXMLProperty(xmlFile, string.format("%s.breeder(%d)", key, i)) do
+        local breederKey = string.format("%s.breeder(%d)", key, i)
+        local breeder = {
+            farmerId = getXMLInt(xmlFile, breederKey .. "#farmerId") or 0,
+            typeName = readString(xmlFile, breederKey .. "#type"),
+            pen = { length = getXMLInt(xmlFile, breederKey .. "#penLength") or 2,
+                depth = getXMLInt(xmlFile, breederKey .. "#penDepth") or 2 },
+            absent = getXMLBool(xmlFile, breederKey .. "#absent") == true or nil,
+            trailerIds = {},
+            savedUniqueIds = {},
+            animals = {},
+        }
+        local model = readString(xmlFile, breederKey .. "#trailerModel")
+        if model ~= nil then
+            breeder.model = { xmlFilename = model }
+            breeder.hasTrailer = true
+        end
+        local t = 0
+        while true do
+            local uniqueId = getXMLString(xmlFile, string.format("%s.trailer(%d)#uniqueId", breederKey, t))
+            if uniqueId == nil then
+                break
+            end
+            table.insert(breeder.savedUniqueIds, uniqueId)
+            t = t + 1
+        end
+        local j = 0
+        while hasXMLProperty(xmlFile, string.format("%s.animal(%d)", breederKey, j)) do
+            local animalKey = string.format("%s.animal(%d)", breederKey, j)
+            table.insert(breeder.animals, {
+                id = getXMLInt(xmlFile, animalKey .. "#id") or (j + 1),
+                classKey = readString(xmlFile, animalKey .. "#classKey"),
+                subTypeName = readString(xmlFile, animalKey .. "#subType"),
+                age = getXMLInt(xmlFile, animalKey .. "#age") or 0,
+                variation = getXMLInt(xmlFile, animalKey .. "#variation") or 1,
+                key = readString(xmlFile, animalKey .. "#key"),
+                sold = getXMLBool(xmlFile, animalKey .. "#sold") == true or nil,
+                missing = getXMLBool(xmlFile, animalKey .. "#missing") == true or nil,
+            })
+            j = j + 1
+        end
+        table.insert(self.breeders, breeder)
         i = i + 1
     end
 end
 
+-- Server: a breeder's trailer the save lost track of (one left by an older
+-- version, or a save made as one spawned) taken away: a livestock trailer
+-- on loan to the show (MISSION) whose farm id is nobody's, and not one of
+-- the breeders' now. Only ours are like that: a real farm owns any other.
+function TheContractorBreedersPen:removeStrays()
+    local vehicleSystem = g_currentMission.vehicleSystem
+    if vehicleSystem == nil or vehicleSystem.vehicles == nil or VehiclePropertyState == nil then
+        return 0
+    end
+    local ours = {}
+    for _, trailerId in ipairs(self:getTrailerIds()) do
+        ours[trailerId] = true
+    end
+    local strays = {}
+    for _, vehicle in ipairs(vehicleSystem.vehicles) do
+        local farmId = vehicle.getOwnerFarmId ~= nil and vehicle:getOwnerFarmId() or 0
+        if vehicle.spec_livestockTrailer ~= nil and vehicle.propertyState == VehiclePropertyState.MISSION and
+            farmId > 0 and not farmExists(farmId) and not ours[NetworkUtil.getObjectId(vehicle)] then
+            table.insert(strays, vehicle)
+        end
+    end
+    for _, vehicle in ipairs(strays) do
+        TCLog.info("TheContractor: a stray breeder's trailer (farm id %d) taken away", vehicle:getOwnerFarmId())
+        self.engine.deleteVehicle(NetworkUtil.getObjectId(vehicle), vehicle)
+    end
+    return #strays
+end
+
 -- Server, once vehicles exist: the trailers' object ids from their
 -- uniqueIds. Kept only for the show that's still on, its day not past, and
--- while their farm id's still nobody's; otherwise taken away.
+-- while their farm id's still nobody's; otherwise taken away (and the
+-- breeders too once the show's day is past).
 function TheContractorBreedersPen:resolveSavedVehicles()
-    local uniqueIds = self.savedUniqueIds or {}
-    self.savedUniqueIds = nil
-    for _, uniqueId in ipairs(uniqueIds) do
+    for _, uniqueId in ipairs(self.legacyUniqueIds or {}) do
         local vehicleId = TCVehicleIds.getObjectId(uniqueId)
         if vehicleId ~= nil then
-            table.insert(self.trailerIds, vehicleId)
+            TCLog.info("TheContractor: a breeder's trailer from an older save taken away")
+            self.engine.deleteVehicle(vehicleId, NetworkUtil.getObject(vehicleId))
         end
     end
+    self.legacyUniqueIds = nil
+    local any = false
+    for _, breeder in ipairs(self.breeders) do
+        for _, uniqueId in ipairs(breeder.savedUniqueIds or {}) do
+            local vehicleId = TCVehicleIds.getObjectId(uniqueId)
+            if vehicleId ~= nil then
+                table.insert(breeder.trailerIds, vehicleId)
+                any = true
+            end
+        end
+        breeder.savedUniqueIds = nil
+    end
+    self:removeStrays()
     local event = getShowEvent()
     local today = g_currentMission.environment.currentMonotonicDay
-    local keep = #self.trailerIds > 0 and self.farmId > 0 and event ~= nil and event.id == self.showId and
-        today <= event.day and not farmExists(self.farmId)
-    if not keep then
-        if #self.trailerIds > 0 or self.showId ~= nil then
-            TCLog.info("TheContractor: the breeders' pen from the save is over: taken away")
+    local showOn = event ~= nil and event.id == self.showId and today <= event.day
+    if not showOn then
+        if self.showId ~= nil then
+            TCLog.info("TheContractor: the breeders from the save are for a show that's over: gone")
         end
-        self:close()
+        self:reset(nil)
         return
     end
-    TCLog.info("TheContractor: the breeders' pen's %d trailer(s) back from the save", #self.trailerIds)
+    if any and (self.farmId <= 0 or farmExists(self.farmId)) then
+        TCLog.info("TheContractor: the breeders' trailers from the save can't stay (their farm id's taken)")
+        self:closeTrailers()
+    elseif any then
+        TCLog.info("TheContractor: the breeders' %d trailer(s) back from the save", #self:getTrailerIds())
+    end
+    self.version = self.version + 1
     self:sync()
 end
 
@@ -683,23 +1113,26 @@ function ENGINE.pickTrailerModel(typeName, count)
     return TCBreedersPen.pickTrailerModel(ENGINE.getTrailerModels(), typeName, count)
 end
 
--- A trailer out at a bay, owned by the spare farm id, MISSION state.
-function ENGINE.spawnTrailer(pen, entry, bay, generation)
-    local storeItem = g_storeManager:getItemByXMLFilename(entry.model.xmlFilename)
+-- A breeder's trailer out behind their pen (spot: TCShowScene.
+-- getBreederPens' trailer), owned by the spare farm id, MISSION state.
+function ENGINE.spawnTrailer(pen, index, spot, generation)
+    local breeder = pen.breeders[index]
+    local storeItem = breeder ~= nil and breeder.model ~= nil and
+        g_storeManager:getItemByXMLFilename(breeder.model.xmlFilename) or nil
     if storeItem == nil or VehicleLoadingData == nil then
         return
     end
     local loadingData = VehicleLoadingData.new()
     loadingData:setStoreItem(storeItem)
     TCStoreConfigurations.apply(loadingData, storeItem)
-    loadingData:setPosition(bay.x, nil, bay.z, TCParking.PLACE_HEIGHT_OFFSET)
-    loadingData:setRotation(0, bay.yaw, 0)
+    loadingData:setPosition(spot.x, nil, spot.z, TCParking.PLACE_HEIGHT_OFFSET)
+    loadingData:setRotation(0, spot.yaw, 0)
     loadingData:setPropertyState(VehiclePropertyState.MISSION)
     loadingData:setOwnerFarmId(pen.farmId)
     loadingData:load(function(_, vehicles, loadingState)
         local vehicle = vehicles ~= nil and vehicles[1] or nil
         if vehicle == nil or loadingState ~= VehicleLoadingState.OK then
-            TCLog.warning("TheContractor: the breeder's %s trailer didn't load", entry.typeName)
+            TCLog.warning("TheContractor: breeder %d's %s trailer didn't load", index, tostring(breeder.typeName))
             for _, loaded in ipairs(vehicles or {}) do
                 if not loaded.isDeleted then
                     loaded:delete()
@@ -707,7 +1140,7 @@ function ENGINE.spawnTrailer(pen, entry, bay, generation)
             end
             return
         end
-        pen:onTrailerSpawned(vehicle, entry, generation)
+        pen:onTrailerSpawned(vehicle, index, generation)
     end, nil, nil)
 end
 
@@ -730,43 +1163,59 @@ local function formatGenetics(genetics)
     return table.concat(parts, ", ")
 end
 
--- tcShow breeder: the pen, its trailers and what's in them at what price.
-function TheContractorBreedersPen:describe()
-    if not TCRealisticLivestock.hasAPI() then
-        return "The breeders' pen needs RealisticLivestock (with its RealisticLivestockAPI): it's off."
+-- tcShow breeder [n]: the breeders, or one, with their animals (and, with
+-- RL, what's for sale at what price).
+function TheContractorBreedersPen:describe(only)
+    local breeders = self:getBreeders()
+    if #breeders == 0 then
+        return "No breeders are coming yet: they're planned when the show's entries close."
     end
-    if not self:isOut() then
-        return "There's no breeders' pen out: it's set out with the show, at midnight before its day."
-    end
-    local breeder = self:getBreeder()
-    local lines = {
-        string.format("Show %d's breeders' pen (%s now), farm id %d, breeder %s, %d trailer(s):", self.showId,
-            self:isOpen() and "open" or "closed", self.farmId, breeder ~= nil and breeder.name or "-",
-            #self.trailerIds),
-    }
+    local livestock = getTC().ShowLivestock
+    local lines = { string.format("Show %d's breeders (%s now)%s:", self.showId, self:isOpen() and "at their pens" or
+        "not at their pens", self:hasSales() and string.format(", their stock RL's on farm id %d", self.farmId) or
+        ", nothing for sale") }
     local catalogue = self:getCatalogue(true)
-    for _, entry in ipairs(catalogue) do
-        local info = entry.info
-        table.insert(lines, string.format("  %s: %s, %d months%s, %.0f kg, health %.0f, %s; value %.0f, price %d%s",
-            entry.key, entry.title or tostring(info.subType), info.age or 0,
-            info.pregnant and ", pregnant" or "", info.weight or 0, info.health or 0,
-            formatGenetics(info.genetics), entry.value, entry.price, info.diseased and " (sick: not for sale)" or ""))
-    end
-    if #catalogue == 0 then
-        table.insert(lines, "  Sold out.")
+    for _, item in ipairs(breeders) do
+        if only == nil or only == item.index then
+            local person = self:getPerson(item.index)
+            local breeder = item.breeder
+            table.insert(lines, string.format("  %d: %s, %s, %d trailer(s):", item.index,
+                person ~= nil and person.name or string.format("farmer %d", breeder.farmerId),
+                breeder.typeName or "-", #(breeder.trailerIds or {})))
+            for _, animal in ipairs(breeder.animals) do
+                local held = livestock ~= nil and livestock:getHeldUntil(item.index, animal.id) or nil
+                local state = animal.sold and "sold" or (animal.missing and "missing" or "here")
+                local entered = livestock ~= nil and livestock:getBreederEntryClass(item.index, animal.id) or nil
+                local sale = ""
+                for _, entry in ipairs(catalogue) do
+                    if entry.breeder == item.index and entry.key == animal.key then
+                        sale = string.format("; %s, %.0f kg, health %.0f, %s; value %.0f, price %d%s",
+                            entry.key, entry.info.weight or 0, entry.info.health or 0, formatGenetics(entry.info.genetics),
+                            entry.value, entry.price, entry.info.diseased and " (sick: not for sale)" or "")
+                    end
+                end
+                table.insert(lines, string.format("    animal %d: %s, %d months, %s%s%s%s", animal.id,
+                    animal.subTypeName or "-", animal.age or 0, state,
+                    entered ~= nil and string.format(", entered in %s", entered) or "",
+                    held ~= nil and string.format(" (held till %s)", TCShowRing.formatMinute(held)) or "", sale))
+            end
+        end
     end
     return table.concat(lines, "\n")
 end
 
 function TheContractorBreedersPen.registerConsoleCommands()
     TCConsole.register("show", "breeder", {
-        description = "The show's breeders' pen (RealisticLivestock only): its trailers, and each animal for sale and its price",
+        args = "[breeder]",
+        description = "The show's breeders, or one by number: their animals, which are entered, and (with RealisticLivestock) what's for sale and its price",
+        hints = { breeder = "a breeder's number (tcShow breeder lists them)" },
         serverOnly = false,
         run = function(_, args)
-            if args[1] ~= nil then
+            local only = args[1] ~= nil and tonumber(args[1]) or nil
+            if (args[1] ~= nil and only == nil) or args[2] ~= nil then
                 return false
             end
-            return g_currentMission.TheContractor.BreedersPen:describe()
+            return g_currentMission.TheContractor.BreedersPen:describe(only ~= nil and math.floor(only) or nil)
         end,
     })
 end

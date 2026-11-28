@@ -58,22 +58,44 @@ test("one field: the showground at the road's end, a divide, then the ploughing 
     local R = TCShowSite.RULES
     local rect = { cx = 0, cz = 0, angle = 0, halfU = 180, halfV = 80 }
     local split = TCShowSite.splitSingle(rect, { x = 250, z = 0 })
+    local length = split.showRect.halfU * 2
     assertEquals(split.nearSign, 1)
-    assertNear(split.showRect.halfU * 2, R.showgroundLength, 0.001)
-    assertNear(split.showRect.cx, 180 - R.showgroundLength / 2, 0.001)
-    assertNear(split.ploughRect.halfU * 2, 360 - R.showgroundLength - R.divide, 0.001)
+    assertNear(split.showRect.cx, 180 - length / 2, 0.001)
+    assertNear(split.ploughRect.halfU * 2, 360 - length - R.divide, 0.001)
     assertNear(split.ploughRect.cx, -180 + split.ploughRect.halfU, 0.001)
     assertNear(split.showRect.halfV, 80, 0.001)
     -- The line's in the divide, its normal towards the showground.
-    assertNear(split.line.x, 180 - R.showgroundLength - R.divide / 2, 0.001)
+    assertNear(split.line.x, 180 - length - R.divide / 2, 0.001)
     assertNear(split.line.nx, 1, 0.001)
 
     -- The road at the other end, or none: the showground's at -u.
     local other = TCShowSite.splitSingle(rect, { x = -250, z = 0 })
     assertEquals(other.nearSign, -1)
-    assertNear(other.showRect.cx, -180 + R.showgroundLength / 2, 0.001)
+    assertNear(other.showRect.cx, -180 + length / 2, 0.001)
     assertNear(other.line.nx, -1, 0.001)
     assertEquals(TCShowSite.splitSingle(rect, nil).nearSign, -1)
+end)
+
+test("188: the showground as long as it can be while the ploughing ground keeps its plots", function()
+    setup()
+    local R = TCShowSite.RULES
+    -- 360 m: the plots in a row along the ploughing ground, 5 at 120 m; at
+    -- 160 m only 4 fit, at 150 m still 5.
+    local rect = { cx = 0, cz = 0, angle = 0, halfU = 180, halfV = 80 }
+    local split = TCShowSite.splitSingle(rect, { x = 250, z = 0 })
+    local length = split.showRect.halfU * 2
+    local atShortest = TCShowSite.countPlots(TCShowSite.splitAt(rect, nil, R, R.showgroundLength).ploughRect)
+    assertTrue(length > R.showgroundLength and length <= R.maxShowgroundLength, "longer than the least")
+    assertEquals(TCShowSite.countPlots(split.ploughRect), atShortest, "no plot lost")
+    assertTrue(TCShowSite.countPlots(TCShowSite.splitAt(rect, nil, R, length + R.showgroundStep).ploughRect) < atShortest
+        or length + R.showgroundStep > R.maxShowgroundLength, "a step longer would lose one")
+    -- A field with plots to spare takes the longest.
+    local long = TCShowSite.splitSingle({ cx = 0, cz = 0, angle = 0, halfU = 300, halfV = 80 }, nil)
+    assertNear(long.showRect.halfU * 2, R.maxShowgroundLength, 0.001)
+    -- Room for breeders: long enough, or wide enough.
+    assertTrue(TCShowSite.isRoomy({ halfU = R.roomyLength / 2, halfV = 30 }))
+    assertTrue(TCShowSite.isRoomy({ halfU = 60, halfV = R.roomyWidth / 2 }))
+    assertTrue(not TCShowSite.isRoomy({ halfU = 60, halfV = 30 }))
 end)
 
 test("one field too short or too narrow for the showground and a plot can't be split", function()
@@ -222,6 +244,19 @@ test("ranking: those that can hold the show first, one field before a pair, then
     assertEquals(ranked[6].problems[1], P_.TOO_STEEP)
     assertEquals(ranked[7].problems[1], P_.NO_SHOWGROUND)
     assertEquals(ranked[7].problems[2], P_.TOO_FEW_PLOTS)
+
+    -- 188: a roomy showground first, before the plots' count, after one
+    -- field before a pair.
+    ranked = TCShowSite.rankCandidates({
+        candidate(1, S),
+        candidate(2, S, { roomy = true, plotCount = R.minPlots }),
+        candidate(3, P, { roomy = true }),
+    })
+    order = {}
+    for _, c in ipairs(ranked) do
+        table.insert(order, c.fieldIds[1])
+    end
+    assertEquals(table.concat(order, ","), "2,1,3")
 end)
 
 -- The engine half ------------------------------------------------------------------------------

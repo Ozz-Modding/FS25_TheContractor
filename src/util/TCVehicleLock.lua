@@ -154,7 +154,7 @@ local function collectLockedVehicleIds()
             shouldLock[vehicleId] = reason
         end
     end
-    -- 173: the breeder's trailers.
+    -- 173: the breeders' trailers.
     if tc.BreedersPen ~= nil then
         for _, vehicleId in ipairs(tc.BreedersPen:getTrailerIds()) do
             shouldLock[vehicleId] = TCVehicleLock.REASON_BREEDER
@@ -255,7 +255,7 @@ function TCVehicleLock.isBusyForSale(vehicle)
         if match ~= nil and match:isKit(vehicle) then
             return true
         end
-        -- 173: nor the breeder's trailers.
+        -- 173: nor the breeders' trailers.
         local pen = g_currentMission.TheContractor.BreedersPen
         if pen ~= nil and pen:isTrailer(vehicle) then
             return true

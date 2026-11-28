@@ -966,7 +966,8 @@ end
 
 -- Which tabs are shown: the Workshop only with ADS (100), the Auction only
 -- on an auction's sale day, while its lots are out (138), the Show only in
--- the show's month (or its results' month, 165). Every other tab always,
+-- the show's month (or its results' month, 165) or while its entries are
+-- open (188). Every other tab always,
 -- its content gated instead.
 function MenuContractor.isSubCategoryShown(category)
     local S = MenuContractor.SUB_CATEGORY
@@ -1280,7 +1281,17 @@ function MenuContractor:getPageTooltips()
         finances:addTarget(self.financesYearInvoiced, MenuContractor.getYearTotalsTooltipContent)
         finances:addTarget(self.financesYearReceived, MenuContractor.getYearTotalsTooltipContent)
 
-        self.pageTooltips = { overview, inbox, staff, finances }
+        -- 188: the Show tab's rows are short; a row's tooltip has the rest.
+        local show = newTooltip("show")
+        show:addListTarget(self.showTimetableTable, function(index)
+            local row = self.showTimetableRows[index]
+            if row == nil or row.tip == nil then
+                return nil
+            end
+            return row.tipTitle or "", row.tip
+        end)
+
+        self.pageTooltips = { overview, inbox, staff, finances, show }
     end
     return self.pageTooltips
 end
@@ -8598,9 +8609,11 @@ function MenuContractor:refreshShowState()
             summary = summary .. " " .. string.format(g_i18n:getText("tc_show_tabPloughField"),
                 ploughField ~= nil and ploughField:getName() or tostring(event.ploughFieldId))
         end
-        if TheContractorShow.isEntryOpen(event, today) then
+        -- 188: one deadline for the animals, 09:30 on the day (the rest's
+        -- in the entry rows' tooltips).
+        if tc.ShowLivestock ~= nil and tc.ShowLivestock:isEntryWindow(event) then
             summary = summary .. " " .. string.format(g_i18n:getText("tc_show_tabEntriesClose"),
-                formatMonotonicDay(event.entriesCloseDay))
+                TCShowRing.formatMinute(TheContractorShow.ENTRY_CLOSE_MINUTE))
         end
         self.showSummaryText:setText(summary)
     else
@@ -8619,6 +8632,7 @@ function MenuContractor:refreshShowState()
         end
         table.insert(rows, { time = time, text = g_i18n:getText("tc_show_timetable_" .. entry.key), state = states[i] })
     end
+    self:addShowRingRows(rows, event, today)
     self:addShowEntryRows(rows, event, today)
     self:addShowPloughRows(rows, event)
     self:addShowDayOffRows(rows, event)
@@ -8658,6 +8672,23 @@ function MenuContractor:refreshShowState()
     self.showResultsEmptyText:setText(string.format(g_i18n:getText(emptyKey), TheContractorShow.RESULTS_HOUR))
 end
 
+-- 188: the ring's timetable, once it's made (when entries close): each
+-- class's time and name, done or in the ring now.
+function MenuContractor:addShowRingRows(rows, event, today)
+    local livestock = g_currentMission.TheContractor.ShowLivestock
+    if livestock == nil or event == nil or livestock.showId ~= event.id or #livestock.timetable == 0 then
+        return
+    end
+    table.insert(rows, { section = g_i18n:getText("tc_showRing_section") })
+    local minute = math.floor((g_currentMission.environment.dayTime or 0) / 60000)
+    local states = TCShowRing.getSlotStates(livestock.timetable, today, event.day, minute)
+    for i, slot in ipairs(livestock.timetable) do
+        local time = string.format("%s-%s", TCShowRing.formatMinute(slot.from), TCShowRing.formatMinute(slot.to))
+        local title = TCShowClasses.getTitle(slot.key)
+        table.insert(rows, { time = time, text = title, state = states[i], tipTitle = title, tip = time })
+    end
+end
+
 -- 167: the farm's livestock entries (this show's, or the last one's until
 -- the next is announced), or a line on entering.
 function MenuContractor:addShowEntryRows(rows, event, today)
@@ -8667,19 +8698,27 @@ function MenuContractor:addShowEntryRows(rows, event, today)
     end
     table.insert(rows, { section = g_i18n:getText("tc_show_sectionEntries") })
     local entries = livestock:getFarmEntries(g_currentMission:getFarmId())
+    -- 188: how entering works, in a tooltip (the rows are short).
+    local tipTitle, tip = nil, nil
+    if event ~= nil and livestock:isEntryWindow(event) then
+        tipTitle = g_i18n:getText("tc_showEntry_tipTitle")
+        local deadline = TCShowRing.formatMinute(TheContractorShow.ENTRY_CLOSE_MINUTE)
+        tip = string.format(g_i18n:getText("tc_showEntry_tip"), deadline)
+    end
     for _, entry in ipairs(entries) do
-        table.insert(rows, { entry = entry })
+        table.insert(rows, { entry = entry, tipTitle = TCShowClasses.getTitle(entry.classKey),
+            tip = MenuContractor.getShowEntryRowText(entry) })
     end
     if #entries > 0 then
         return
     end
     local noteKey = "tc_showEntry_none"
-    if event ~= nil and TheContractorShow.isEntryOpen(event, today) then
+    if event ~= nil and livestock:isEntryWindow(event) then
         noteKey = self:hasCompany() and "tc_showEntry_noneOpen" or "tc_showEntry_needCompany"
     elseif event ~= nil then
         noteKey = "tc_showEntry_noneClosed"
     end
-    table.insert(rows, { note = g_i18n:getText(noteKey) })
+    table.insert(rows, { note = g_i18n:getText(noteKey), tipTitle = tipTitle, tip = tip })
 end
 
 -- 172: once the farm's been asked about the staff's day off for this show
@@ -8763,7 +8802,10 @@ function MenuContractor:addShowPloughRows(rows, event)
         table.insert(rows, { workerEntry = workerEntry })
     elseif event ~= nil and showWorker ~= nil and self:hasCompany() and
             TheContractorShow.isEntryOpen(event, g_currentMission.environment.currentMonotonicDay) then
-        table.insert(rows, { note = g_i18n:getText("tc_showWorker_noteEnter") })
+        local by = formatMonotonicDay(event.entriesCloseDay)
+        table.insert(rows, { note = string.format(g_i18n:getText("tc_showWorker_noteEnter"), by),
+            tipTitle = g_i18n:getText("tc_showWorker_tipTitle"),
+            tip = string.format(g_i18n:getText("tc_showWorker_tip"), by) })
     end
     local isThisShow = event ~= nil and match.showId == event.id
     if #match.plots > 0 and (isThisShow or event == nil) then
@@ -8771,8 +8813,12 @@ function MenuContractor:addShowPloughRows(rows, event)
             table.insert(rows, { plot = plot })
         end
     elseif event ~= nil then
-        table.insert(rows, { note = g_i18n:getText(self:hasCompany() and "tc_ploughMatch_noteTakePlot" or
-            "tc_ploughMatch_noteNeedCompany") })
+        local row = { note = g_i18n:getText(self:hasCompany() and "tc_ploughMatch_noteTakePlot" or
+            "tc_ploughMatch_noteNeedCompany") }
+        if self:hasCompany() then
+            row.tipTitle, row.tip = g_i18n:getText("tc_ploughMatch_section"), g_i18n:getText("tc_ploughMatch_tipTakePlot")
+        end
+        table.insert(rows, row)
     end
     local best = match:getBest(farmId)
     if best ~= nil then
@@ -8874,6 +8920,19 @@ local function getShowEntryWhat(entry)
     return nil
 end
 
+-- An entry's row: its class, what it is and (188) when it's judged.
+function MenuContractor.getShowEntryRowText(entry)
+    local title = TCShowClasses.getTitle(entry.classKey)
+    local what = getShowEntryWhat(entry)
+    local text = what ~= nil and string.format("%s: %s", title, what) or title
+    local livestock = g_currentMission.TheContractor.ShowLivestock
+    local slot = livestock ~= nil and TCShowRing.findSlot(livestock.timetable, entry.classKey) or nil
+    if slot ~= nil then
+        text = string.format(g_i18n:getText("tc_showEntry_atTime"), text, TCShowRing.formatMinute(slot.from))
+    end
+    return text
+end
+
 function MenuContractor:populateShowTimetableCell(index, cell)
     local row = self.showTimetableRows[index]
     if row == nil then
@@ -8898,9 +8957,7 @@ function MenuContractor:populateShowTimetableCell(index, cell)
             chipText, tone = g_i18n:getText(chip.key), chip.tone
         end
     elseif row.entry ~= nil then
-        local title = TCShowClasses.getTitle(row.entry.classKey)
-        local what = getShowEntryWhat(row.entry)
-        cell:getAttribute("entry"):setText(what ~= nil and string.format("%s: %s", title, what) or title)
+        cell:getAttribute("entry"):setText(MenuContractor.getShowEntryRowText(row.entry))
         chipText, tone = getShowEntryChip(row.entry)
     elseif row.plot ~= nil then
         cell:getAttribute("entry"):setText(getShowPlotText(row.plot))
@@ -8948,16 +9005,19 @@ function MenuContractor:populateShowResultCell(index, cell)
 end
 
 -- The bottom bar: Show on map while there's a show; Enter while entries are
--- open (a company's); on a highlighted entry (170: or the entered worker),
--- Withdraw while they're open, or the Judge's card once it's been judged.
+-- open (a company's; 188: or late, animals only); on a highlighted entry
+-- (170: or the entered worker), Withdraw while it could be entered, or the
+-- Judge's card once it's been judged.
 function MenuContractor:getShowButtonInfo()
     local buttons = { self.btnBack, self.btnNextPage, self.btnPrevPage }
     local event = MenuContractor.getShow()
+    local livestock = g_currentMission.TheContractor.ShowLivestock
     local isOpen = event ~= nil and
         TheContractorShow.isEntryOpen(event, g_currentMission.environment.currentMonotonicDay)
+    local animalsOpen = event ~= nil and livestock ~= nil and livestock:isEntryWindow(event)
     if event ~= nil then
         table.insert(buttons, self.btnShowShowOnMap)
-        if isOpen and self:hasCompany() then
+        if (isOpen or animalsOpen) and self:hasCompany() then
             table.insert(buttons, self.btnShowEnter)
         end
     end
@@ -8966,7 +9026,7 @@ function MenuContractor:getShowButtonInfo()
         table.insert(buttons, self.btnShowWithdraw)
     end
     if entry ~= nil then
-        if isOpen then
+        if event ~= nil and livestock ~= nil and livestock:getWindowProblem(event, entry.classKey) == nil then
             table.insert(buttons, self.btnShowWithdraw)
         elseif entry.status ~= TheContractorShowLivestock.STATUS.ENTERED then
             table.insert(buttons, self.btnShowCard)
@@ -9032,8 +9092,14 @@ function MenuContractor:onClickShowShowOnMap()
     end
 end
 
--- Enter: animals (167) or, 170, a worker in the ploughing match.
+-- Enter: animals (167) or, 170, a worker in the ploughing match (188: only
+-- animals once entries have closed, late).
 function MenuContractor:onClickShowEnter()
+    local event = MenuContractor.getShow()
+    if event ~= nil and not TheContractorShow.isEntryOpen(event, g_currentMission.environment.currentMonotonicDay) then
+        self:enterShowAnimals()
+        return
+    end
     local options = { g_i18n:getText("tc_showEntry_optionAnimals"), g_i18n:getText("tc_showEntry_optionWorker") }
     OptionDialog.show(function(index)
         if index == 1 then
@@ -9084,7 +9150,9 @@ end
 -- answer lands.
 function MenuContractor:enterShowAnimals()
     local farmId = g_currentMission:getFarmId()
-    local husbandries = TCShowAnimals.getFarmHusbandries(farmId)
+    -- 188: its husbandries, and its livestock trailers (animals loaded
+    -- already).
+    local husbandries = TCShowAnimals.getFarmSources(farmId)
     if #husbandries == 0 then
         InfoDialog.show(g_i18n:getText("tc_showEntry_noHusbandries"))
         return
@@ -9092,11 +9160,12 @@ function MenuContractor:enterShowAnimals()
     local options = {}
     for _, husbandry in ipairs(husbandries) do
         local count = 0
-        for _, read in ipairs(TCShowAnimals.readHusbandry(husbandry)) do
+        for _, read in ipairs(TCShowAnimals.readSource(husbandry)) do
             count = count + read.count
         end
-        table.insert(options, string.format(g_i18n:getText("tc_showEntry_husbandryOption"),
-            TCShowAnimals.getHusbandryName(husbandry), count))
+        local key = TCShowAnimals.isTrailer(husbandry) and "tc_showEntry_trailerOption" or
+            "tc_showEntry_husbandryOption"
+        table.insert(options, string.format(g_i18n:getText(key), TCShowAnimals.getSourceName(husbandry), count))
     end
     OptionDialog.show(function(index)
         local husbandry = husbandries[index]
@@ -9106,14 +9175,29 @@ function MenuContractor:enterShowAnimals()
     end, g_i18n:getText("tc_showEntry_pickHusbandry"), g_i18n:getText("tc_showEntry_title"), options)
 end
 
+-- 188: late, only the classes on the ring's timetable (getWindowProblem).
 function MenuContractor:pickShowClass(farmId, husbandry)
+    local livestock = g_currentMission.TheContractor.ShowLivestock
+    local event = MenuContractor.getShow()
+    local function canEnter(classKey)
+        return event ~= nil and livestock:getWindowProblem(event, classKey) == nil
+    end
     local classes = TheContractorShowLivestock.getHusbandryClasses(husbandry)
-    local choices = { { classKey = TCShowClasses.HERD_KEY } }
-    local options = { TCShowClasses.getTitle(TCShowClasses.HERD_KEY) }
+    local choices, options = {}, {}
+    if TCShowAnimals.isHusbandry(husbandry) and canEnter(TCShowClasses.HERD_KEY) then
+        table.insert(choices, { classKey = TCShowClasses.HERD_KEY })
+        table.insert(options, TCShowClasses.getTitle(TCShowClasses.HERD_KEY))
+    end
     for _, item in ipairs(classes) do
-        table.insert(choices, item)
-        table.insert(options, string.format(g_i18n:getText("tc_showEntry_classOption"),
-            TCShowClasses.getTitle(item.classKey), item.count))
+        if canEnter(item.classKey) then
+            table.insert(choices, item)
+            table.insert(options, string.format(g_i18n:getText("tc_showEntry_classOption"),
+                TCShowClasses.getTitle(item.classKey), item.count))
+        end
+    end
+    if #choices == 0 then
+        InfoDialog.show(g_i18n:getText(TheContractorShowLivestock.PROBLEMS.noAnimal))
+        return
     end
     OptionDialog.show(function(index)
         local choice = choices[index]
@@ -9125,7 +9209,7 @@ function MenuContractor:pickShowClass(farmId, husbandry)
         else
             self:pickShowAnimal(farmId, husbandry, choice)
         end
-    end, string.format(g_i18n:getText("tc_showEntry_pickClass"), TCShowAnimals.getHusbandryName(husbandry)),
+    end, string.format(g_i18n:getText("tc_showEntry_pickClass"), TCShowAnimals.getSourceName(husbandry)),
         g_i18n:getText("tc_showEntry_title"), options)
 end
 

@@ -121,8 +121,18 @@ function TCAuctionSiteEvent.writeScene(streamId, scene)
             streamWriteFloat32(streamId, plot[key] or 0)
         end
     end
-    -- 182: the show's pens (0: the scene's default).
-    streamWriteUInt8(streamId, scene.pens or 0)
+    -- 182: the show's pens (188: 255 for the scene's default, so 0 is
+    -- none).
+    streamWriteUInt8(streamId, scene.pens or 255)
+    -- 188: the show's breeders' pens.
+    local breeders = scene.breeders or {}
+    streamWriteUInt8(streamId, #breeders)
+    for _, breeder in ipairs(breeders) do
+        streamWriteUInt8(streamId, breeder.length or 2)
+        streamWriteUInt8(streamId, breeder.depth or 2)
+        streamWriteBool(streamId, breeder.trailer == true)
+        streamWriteString(streamId, breeder.typeName or "")
+    end
 end
 
 function TCAuctionSiteEvent.readScene(streamId)
@@ -166,7 +176,18 @@ function TCAuctionSiteEvent.readScene(streamId)
         table.insert(scene.plots, plot)
     end
     local pens = streamReadUInt8(streamId)
-    scene.pens = pens > 0 and pens or nil
+    scene.pens = pens < 255 and pens or nil
+    local count = streamReadUInt8(streamId)
+    if count > 0 then
+        scene.breeders = {}
+        for _ = 1, count do
+            local breeder = { length = streamReadUInt8(streamId), depth = streamReadUInt8(streamId),
+                trailer = streamReadBool(streamId) }
+            local typeName = streamReadString(streamId)
+            breeder.typeName = typeName ~= "" and typeName or nil
+            table.insert(scene.breeders, breeder)
+        end
+    end
     return scene
 end
 

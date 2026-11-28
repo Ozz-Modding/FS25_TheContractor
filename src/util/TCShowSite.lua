@@ -9,7 +9,9 @@
 --     search) split across its long side. The showground takes the end
 --     nearest the road (the entrance), SHOWGROUND_LENGTH along and at least
 --     SHOWGROUND_WIDTH across; a DIVIDE strip; the ploughing ground the rest
---     (splitSingle). The line across the field between them (perpendicular
+--     (splitSingle). 188: the showground's longer, up to
+--     MAX_SHOWGROUND_LENGTH, when the ploughing ground still has as many
+--     plots, so the breeders' pens have room past the trailer lines. The line across the field between them (perpendicular
 --     to the long side, through the divide) is where the ground's dressed
 --     one way or the other (clipPolygon).
 --   Two fields next to each other when no one field will do (findPairs:
@@ -33,8 +35,16 @@ TCShowSite.RULES = {
     plotGap = 6,                 -- between neighbouring plots
     minPlots = 4,
     maxPlots = 6,
-    showgroundLength = 120,      -- along the field, from the entrance end
+    showgroundLength = 120,      -- along the field, from the entrance end, at least
+    -- 188: up to this long, in steps, while the ploughing ground still has
+    -- as many plots (splitSingle), so the breeders' pens have room.
+    maxShowgroundLength = 160,
+    showgroundStep = 10,
     showgroundWidth = 60,        -- across it, at least
+    -- 188: a showground this long or this wide has room for breeders'
+    -- pens (TCShowScene's), and ranks first (rankCandidates).
+    roomyLength = 140,
+    roomyWidth = 100,
     divide = 10,                 -- between the showground and the plots
     maxPlotSlopePercent = 6,     -- the steepest 8 m in a plot
     maxShowgroundSlopePercent = 8,
@@ -137,19 +147,55 @@ end
 --     and its normal, towards the showground),
 --   nearSign (1: the showground's at the rectangle's +u end),
 -- }.
+-- 188: the most plots a ploughing ground's rows can run (pure, by
+-- layPlots' rows; the flattest run's for pickPlots).
+function TCShowSite.countPlots(region, rules)
+    rules = rules or TCShowSite.RULES
+    local best = 0
+    for _, row in ipairs(TCShowSite.layPlots(region, rules)) do
+        best = math.max(best, math.min(rules.maxPlots, #row))
+    end
+    return best
+end
+
+-- 188: whether a showground has room for breeders' pens (pure).
+function TCShowSite.isRoomy(rect, rules)
+    rules = rules or TCShowSite.RULES
+    return rect ~= nil and (2 * rect.halfU >= rules.roomyLength - 0.001 or 2 * rect.halfV >= rules.roomyWidth - 0.001)
+end
+
 function TCShowSite.splitSingle(rect, entrance, rules)
     rules = rules or TCShowSite.RULES
     local length = 2 * rect.halfU
     if length < rules.showgroundLength + rules.divide + rules.plotSize or 2 * rect.halfV < rules.showgroundWidth then
         return nil
     end
+    -- 188: as long as it can be (to maxShowgroundLength) while the
+    -- ploughing ground keeps the plots it has at the shortest.
+    local showLength = rules.showgroundLength
+    local fewest = TCShowSite.countPlots(TCShowSite.splitAt(rect, entrance, rules, showLength).ploughRect, rules)
+    local step = rules.showgroundStep or 10
+    local try = rules.maxShowgroundLength or showLength
+    while try > showLength + 0.001 do
+        if length >= try + rules.divide + rules.plotSize and
+                TCShowSite.countPlots(TCShowSite.splitAt(rect, entrance, rules, try).ploughRect, rules) >= fewest then
+            showLength = try
+            break
+        end
+        try = try - step
+    end
+    return TCShowSite.splitAt(rect, entrance, rules, showLength)
+end
+
+-- The split with a showground showLength long (splitSingle's).
+function TCShowSite.splitAt(rect, entrance, rules, showLength)
     local nearSign = -1
     if entrance ~= nil then
         local eu = TCShowSite.toLocal(rect, entrance.x, entrance.z)
         nearSign = eu >= 0 and 1 or -1
     end
     local halfU, halfV = rect.halfU, rect.halfV
-    local showInner = halfU - rules.showgroundLength
+    local showInner = halfU - showLength
     local ploughInner = showInner - rules.divide
     local showRect, ploughRect
     if nearSign > 0 then
@@ -356,8 +402,9 @@ function TCShowSite.getProblems(candidate, rules)
 end
 
 -- The candidates best first (pure): those that can hold the show first,
--- one field before a pair, then the most plots, the flattest plots, the
--- biggest. Each gets its problems. Returns a new list.
+-- one field before a pair, then (188) a roomy showground (candidate.roomy:
+-- isRoomy's, room for breeders' pens), then the most plots, the flattest
+-- plots, the biggest. Each gets its problems. Returns a new list.
 function TCShowSite.rankCandidates(candidates, rules)
     local ranked = {}
     for i, candidate in ipairs(candidates) do
@@ -372,6 +419,10 @@ function TCShowSite.rankCandidates(candidates, rules)
         local aSingle, bSingle = a.mode == TCShowSite.MODE.SINGLE, b.mode == TCShowSite.MODE.SINGLE
         if aSingle ~= bSingle then
             return aSingle
+        end
+        -- 188: a showground with room for breeders' pens.
+        if (a.roomy == true) ~= (b.roomy == true) then
+            return a.roomy == true
         end
         if (a.plotCount or 0) ~= (b.plotCount or 0) then
             return (a.plotCount or 0) > (b.plotCount or 0)

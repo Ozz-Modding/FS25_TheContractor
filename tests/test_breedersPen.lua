@@ -1,12 +1,14 @@
--- 173: the show's breeders' pen (RealisticLivestock only). The rules (the
--- spare farm id, the price, the trailer model, the types, ages and
--- breeder), the breeder's stand and bays on the showground, RL's API
--- found or not, the pen set out and stocked through the API, buying (all
--- or nothing: nothing charged unless RL moved it), a farm created on the
--- spare id, and the pen's sync, save and load.
+-- 173, 188: the show's breeders. The rules (the spare farm id, the price,
+-- the trailer model, the breeders' plan: their types, stock, pens and
+-- entries), RL's API found or not, the breeders planned for the room the
+-- showground has, set out with their trailers behind their pens and
+-- stocked through the API, buying (all or nothing: nothing charged unless
+-- RL moved it; an entered animal held till its class is over), a farm
+-- created on the spare id, and the breeders' sync, save and load.
 --
--- The real show scene, classes, show animals, RL wrapper and pen; RL's API,
--- the show, its stands, the farmers and the world's vehicles faked.
+-- The real show scene, classes, show animals, RL wrapper and breeders;
+-- RL's API, the show, its site, stands and livestock, the farmers and the
+-- world's vehicles faked.
 
 local SHOW_DAY = 51
 local HOST_ID = 7
@@ -145,7 +147,18 @@ local function addPlace(world, kind, farmId, x, z, freeSlots)
     return place
 end
 
-local function setup()
+-- A showground of 164's (halfU, halfV), its entrance at the +u end, as
+-- its plan and as the scene laid out on it (with the breeders' pens).
+local function makeShowground(world, halfU, halfV)
+    local rect = { cx = 100, cz = 50, angle = 0, halfU = halfU, halfV = halfV }
+    local entrance = { x = rect.cx + rect.halfU + 10, z = rect.cz }
+    world.plan = { showRect = rect, entrance = entrance }
+    world.scene = TCAuctionLayout.getScene(TCAuctionLayout.layOutOpenRect(rect, entrance), entrance, 99)
+    world.scene.dressing = "show"
+    world.scene.pens = 0
+end
+
+local function setup(halfU, halfV)
     local world = stubs.install()
     TheContractor = { SaveKey = "TheContractor" }
     FinanceStats = { statNames = {}, statNameToIndex = {} }
@@ -202,6 +215,8 @@ local function setup()
     world:load("src/util/TCAuctionScene.lua")
     world:load("src/util/TCShowScene.lua")
     world:load("src/util/TCShowClasses.lua")
+    world:load("src/util/TCShowPens.lua")
+    world:load("src/util/TCShowRing.lua")
     world:load("src/util/TCShowAnimals.lua")
     world:load("src/util/TCVehicleIds.lua")
     world:load("src/util/TCRealisticLivestock.lua")
@@ -214,11 +229,8 @@ local function setup()
     world.costScale = 1
     tc.Settings = { scaleCost = function(_, amount) return amount * world.costScale end }
 
-    -- The showground (tests/test_showStands.lua's).
-    local rect = { cx = 100, cz = 50, angle = 0, halfU = 60, halfV = 30 }
-    local entrance = { x = rect.cx + rect.halfU + 10, z = rect.cz }
-    world.scene = TCAuctionLayout.getScene(TCAuctionLayout.layOutOpenRect(rect, entrance), entrance, 99)
-    world.scene.dressing = "show"
+    -- 164's showground: 160 x 100 m, room for every breeder.
+    makeShowground(world, halfU or 80, halfV or 50)
     world.open = true
     world.event = { id = 3, day = SHOW_DAY, hostFarmerId = HOST_ID }
     world.competitions = {}
@@ -226,10 +238,18 @@ local function setup()
         getEvent = function() return world.event end,
         registerCompetition = function(_, key, def) world.competitions[key] = def end,
     }
+    tc.ShowSite = { site = { plan = world.plan } }
     tc.ShowStands = {
         getScene = function() return world.scene end,
         isOpen = function() return world.open end,
-        getFarmersAtShow = function() return { HOST_ID, 8, 9 } end,
+    }
+    -- The livestock: which animals are held for their classes.
+    world.held = {}
+    world.away = 0
+    tc.ShowLivestock = {
+        getHeldUntil = function(_, breeder, animal) return world.held[breeder .. ":" .. animal] end,
+        getBreederEntryClass = function() return nil end,
+        onBreedersAway = function() world.away = world.away + 1 end,
     }
     world.people = {}
     for id = 7, 12 do
@@ -252,22 +272,22 @@ local function setup()
     local nextUnique = 1
     pen.engine = {
         pickTrailerModel = function(typeName, count)
-            if world.noModels then
+            if world.noModels or (world.noModelFor ~= nil and world.noModelFor[typeName]) then
                 return nil, 0
             end
-            return { xmlFilename = typeName .. ".xml" }, 5
+            return { xmlFilename = typeName .. ".xml" }, world.trailerSlots or 5
         end,
-        spawnTrailer = function(spawner, entry, bay, generation)
-            local trailer = world:addVehicle({ name = entry.typeName .. " trailer", farmId = spawner.farmId })
+        spawnTrailer = function(spawner, index, spot, generation)
+            local trailer = world:addVehicle({ name = "breeder trailer", farmId = spawner.farmId })
             trailer.uniqueId = "breeder" .. nextUnique
             nextUnique = nextUnique + 1
             function trailer:getUniqueId() return self.uniqueId end
-            trailer.bay = bay
-            table.insert(world.spawned, { trailer = trailer, entry = entry })
+            trailer.spot = spot
+            table.insert(world.spawned, { trailer = trailer, index = index })
             if world.deferSpawns then
-                table.insert(world.pendingSpawns, { trailer = trailer, entry = entry, generation = generation })
+                table.insert(world.pendingSpawns, { trailer = trailer, index = index, generation = generation })
             else
-                spawner:onTrailerSpawned(trailer, entry, generation)
+                spawner:onTrailerSpawned(trailer, index, generation)
             end
         end,
         deleteVehicle = function(vehicleId)
@@ -285,6 +305,20 @@ local function setup()
     world.tc = tc
     world.pen = pen
     return world
+end
+
+-- The breeders planned (as entries close) and laid out on the scene, as the
+-- show's set-out does.
+local function plan(world)
+    world.pen:plan(world.event, 0)
+    world.scene.breeders = world.competitions.breedersPen.getBreeders(world.event)
+    return world.pen.breeders
+end
+
+local function setOut(world)
+    plan(world)
+    world.competitions.breedersPen.onSetOut(world.event)
+    world.pen:setPresent(true)
 end
 
 local A = nil
@@ -331,28 +365,99 @@ test("a trailer model: the base game's, the fewest slots that take the stock, el
     assertEquals(TCBreedersPen.pickTrailerModel(modOnly, "COW", 3).xmlFilename, "modBig.xml", "a mod's if that's all")
 end)
 
-test("the types come from the show's classes, an age inside a class's band, the breeder from the show", function()
+test("188: the breeders' plan: the types by their weights, never chickens, a pen and stock each, their animals in their classes' prime, some of each class entered", function()
     setup()
     local classes = TCShowClasses.listClasses(g_currentMission.animalSystem)
-    local types = TCBreedersPen.pickTypes(classes, 5, function() return 1 end)
-    local names = {}
-    for _, entry in ipairs(types) do
-        names[entry.typeName] = #entry.classes
+    local farmers = { { id = 8 }, { id = 9 }, { id = 10 }, { id = 11 }, { id = 12 } }
+    local first = function(a, b)
+        if b ~= nil then
+            return a
+        end
+        return 1
     end
-    assertEquals(names.CHICKEN, nil, "never chickens: no trailer takes them")
-    assertTrue(names.COW ~= nil and names.SHEEP ~= nil)
-    assertEquals(#TCBreedersPen.pickTypes(classes, 1, function() return 1 end), 1, "no more than asked")
+    local breeders = TCBreedersPen.planBreeders(classes, farmers, 6, first)
+    assertEquals(#breeders, 5, "as many as there are farmers to come")
+    local types = {}
+    for i, breeder in ipairs(breeders) do
+        assertTrue(breeder.typeName ~= "CHICKEN")
+        types[i] = breeder.typeName
+        local stock = TCBreedersPen.getStock(breeder.typeName)
+        assertEquals(breeder.pen.length, stock.length)
+        assertEquals(breeder.pen.depth, stock.depth)
+        assertTrue(#breeder.animals >= stock.min and #breeder.animals <= stock.max)
+        local entered = {}
+        for _, id in ipairs(breeder.entries) do
+            entered[id] = true
+        end
+        local classesEntered, classesHeld = {}, {}
+        for id, animal in ipairs(breeder.animals) do
+            assertEquals(animal.id, id)
+            local class = TCShowClasses.getClass(g_currentMission.animalSystem, animal.classKey)
+            assertEquals(class.subTypeName, animal.subTypeName)
+            assertEquals(class.typeName, breeder.typeName, "of the breeder's own type")
+            assertEquals(animal.age, class.band.primeFrom, "in its band's prime")
+            classesHeld[animal.classKey] = true
+            if entered[id] then
+                classesEntered[animal.classKey] = (classesEntered[animal.classKey] or 0) + 1
+            end
+        end
+        for classKey in pairs(classesHeld) do
+            local count = classesEntered[classKey] or 0
+            assertTrue(count >= TCBreedersPen.ENTRIES_PER_CLASS[1] and count <= TCBreedersPen.ENTRIES_PER_CLASS[2],
+                "some of each class it has stock for entered")
+        end
+    end
+    -- Five breeders: one full round of draws, each type its weight's times.
+    local counts = {}
+    for _, typeName in ipairs(types) do
+        counts[typeName] = (counts[typeName] or 0) + 1
+    end
+    assertEquals(counts.COW, TCBreedersPen.TYPE_WEIGHTS.COW)
+    assertEquals(counts.SHEEP, TCBreedersPen.TYPE_WEIGHTS.SHEEP)
+    -- Breeders of a type share its breeds, so they compete.
+    local firstOf = {}
+    for _, breeder in ipairs(breeders) do
+        local key = breeder.animals[1].classKey
+        firstOf[breeder.typeName] = firstOf[breeder.typeName] or key
+        assertEquals(TCShowClasses.getClass(g_currentMission.animalSystem, key).subTypeName,
+            TCShowClasses.getClass(g_currentMission.animalSystem, firstOf[breeder.typeName]).subTypeName)
+    end
+    -- Not every sheep entered: some for sale all day.
+    for _, breeder in ipairs(breeders) do
+        if breeder.typeName == "SHEEP" then
+            assertTrue(#breeder.entries < #breeder.animals)
+        end
+    end
 
-    local band = { from = 6, to = 24 }
-    assertEquals(TCBreedersPen.rollAge(band, function(a) return a end), 6)
-    assertEquals(TCBreedersPen.rollAge(band, function(_, b) return b end), 23, "inside the band")
-    assertEquals(TCBreedersPen.rollAge({ from = 24 }, function(_, b) return b end), 24 + TCBreedersPen.ADULT_SPAN - 1)
+    -- An excluded breed (water buffalo) is never brought: a type with only
+    -- that breed has no breeder.
+    local buffalo = {}
+    for _, class in ipairs(classes) do
+        if class.typeName == "COW" then
+            local copy = {}
+            for k, v in pairs(class) do
+                copy[k] = v
+            end
+            copy.subTypeName = "COW_WATERBUFFALO"
+            table.insert(buffalo, copy)
+        elseif class.typeName == "SHEEP" then
+            table.insert(buffalo, class)
+        end
+    end
+    for _, breeder in ipairs(TCBreedersPen.planBreeders(buffalo, farmers, 6, first)) do
+        assertEquals(breeder.typeName, "SHEEP")
+    end
 
-    local farmers = { { id = 7 }, { id = 8 }, { id = 9 }, { id = 10 }, { id = 11 } }
-    local breeder = TCBreedersPen.pickBreeder(3, farmers, { [7] = true })
-    assertTrue(breeder ~= nil and breeder ~= 7, "never one excluded")
-    assertEquals(TCBreedersPen.pickBreeder(3, farmers, { [7] = true }), breeder, "the same on every machine")
-    assertEquals(TCBreedersPen.pickBreeder(3, { { id = 7 } }, { [7] = true }), nil, "nobody to spare")
+    -- A trailer takes fewer: that many come. A type with no trailer
+    -- (capacity 0) doesn't come at all.
+    local capped = TCBreedersPen.planBreeders(classes, farmers, 6, first, function(typeName)
+        return typeName == "SHEEP" and 0 or 2
+    end)
+    for _, breeder in ipairs(capped) do
+        assertEquals(breeder.typeName, "COW")
+        assertEquals(#breeder.animals, 2)
+    end
+    assertEquals(#TCBreedersPen.planBreeders(classes, {}, 6, first), 0, "no farmers, no breeders")
 end)
 
 test("RL's refusals: gone is sold, no room is no room, anything else failed", function()
@@ -363,30 +468,6 @@ test("RL's refusals: gone is sold, no room is no room, anything else failed", fu
     assertEquals(TCBreedersPen.getAnswerForReason(reasons, reasons.WRONG_FARM), A.NO_ROOM)
     assertEquals(TCBreedersPen.getAnswerForReason(reasons, reasons.FAILED), A.FAILED)
     assertEquals(TCBreedersPen.getAnswerForReason(reasons, "somethingNew"), A.FAILED)
-end)
-
--- The showground ----------------------------------------------------------------------------------------
-
-test("the breeder's stand is one that isn't a stall, and their bays leave one for the entrants", function()
-    local world = setup()
-    local stand = TCShowScene.getBreederStand(world.scene)
-    assertTrue(stand ~= nil, "a stand for the breeder")
-    for _, index in pairs(TCShowScene.getStallStands(#TCShowScene.getAreas(world.scene).stands)) do
-        assertTrue(index ~= stand.index, "not a stall's")
-    end
-    local layout = TCShowScene.layOut(world.scene)
-    for _, stall in ipairs(layout.stalls) do
-        assertTrue(math.abs(stall.x - stand.x) > 0.5 or math.abs(stall.z - stand.z) > 0.5, "not where a stallholder is")
-    end
-    local bays = TCShowScene.getBreederBays(world.scene, 20)
-    local areas = TCShowScene.getAreas(world.scene)
-    assertEquals(#bays, areas.lines.count - 1, "one bay left for the entrants")
-    assertEquals(bays[1].bay, areas.lines.count, "from the stands' end")
-    for _, bay in ipairs(bays) do
-        assertEquals(TCShowScene.findBay(world.scene, bay.x, bay.z), bay.bay, "parked in its bay")
-    end
-    assertEquals(#TCShowScene.getBreederBays(world.scene, 2), 2)
-    assertEquals(TCShowScene.getBreederStand(nil), nil)
 end)
 
 -- RL's API -----------------------------------------------------------------------------------------------
@@ -412,107 +493,190 @@ test("RL's API is used only when it's there, new enough, complete and ready", fu
     api.moveAnimals = moveAnimals
     assertEquals(TCRealisticLivestock.getAPIKey({ id = { type = "COW", country = "DE", herd = "1", number = "2" } }),
         "COW DE 1 2")
+    -- 188: what the judge reads of one, from its description.
+    local read = TCRealisticLivestock.readDescribed(api.describeAnimal({ subType = "COW_HOLSTEIN", age = 14,
+        number = 3 }))
+    assertEquals(read.subTypeName, "COW_HOLSTEIN")
+    assertEquals(read.age, 14)
+    assertEquals(read.health, 98)
+    assertEquals(read.animal.weight, 500)
+    assertEquals(read.animal.genetics.quality, 1.4)
+    assertEquals(read.animal.key, "COW DE 214598 3")
+end)
+
+-- Planning ------------------------------------------------------------------------------------------------
+
+test("188: planned once for the show, never the host, as many as the showground has room for", function()
+    local world = setup()
+    RealisticLivestockAPI = nil
+    local breeders = plan(world)
+    assertEquals(#breeders, 5, "room for all")
+    for _, breeder in ipairs(breeders) do
+        assertTrue(breeder.farmerId ~= HOST_ID)
+        assertTrue(not breeder.hasTrailer, "without RL nothing comes in a trailer")
+    end
+    assertEquals(world.pen.farmId, 0)
+    assertTrue(world.pen:isOut())
+    assertTrue(world.pen:isBreeder(breeders[1].farmerId))
+    assertTrue(not world.pen:isBreeder(HOST_ID))
+    assertTrue(world.events[#world.events].pen == world.pen, "sent to every machine")
+    local again = world.pen:plan(world.event, 0)
+    assertEquals(again, breeders, "planned once")
+    local pens = TCShowScene.getBreederPens(world.scene)
+    assertEquals(#pens, #breeders)
+    for _, pen in ipairs(pens) do
+        assertTrue(pen.placed)
+        assertEquals(pen.trailer, nil, "no trailer to park")
+    end
+
+    -- A small showground (120 x 60 m) has room for none; a longer one
+    -- (130 m) for some, past the trailer lines.
+    local small = setup(60, 30)
+    RealisticLivestockAPI = nil
+    assertEquals(#plan(small), 0)
+    local longer = setup(65, 30)
+    RealisticLivestockAPI = nil
+    local some = #plan(longer)
+    assertTrue(some > 0 and some < 5, "some")
+    assertEquals(TCShowScene.countBreederPens(longer.scene), some)
 end)
 
 -- Setting out ----------------------------------------------------------------------------------------------
 
-test("without RL's API there's no pen, and nothing's put out", function()
-    local world = setup()
-    RealisticLivestockAPI = nil
-    assertTrue(world.pen:open(world.event) ~= nil, "a reason why not")
-    assertEquals(#world.spawned, 0)
-    assertTrue(not world.pen:isOut())
-end)
-
-test("set out: trailers on the spare farm id, stocked with RL's premium animals of the show's types", function()
+test("set out with RL: each breeder's trailer behind their pen on the spare farm id, stocked as planned with premium animals", function()
     local world = setup()
     installAPI(world)
-    world.competitions.breedersPen.onSetOut(world.event)
+    setOut(world)
     local pen = world.pen
     assertEquals(pen.farmId, 8)
     assertEquals(pen.showId, world.event.id)
-    assertEquals(#pen.trailerIds, TCBreedersPen.TYPES, "a trailer a type")
-    assertTrue(pen:isOut() and pen:isOpen())
-    local typesSeen = {}
+    assertTrue(pen:isOut() and pen:isOpen() and pen:hasSales())
+    local pens = TCShowScene.getBreederPens(world.scene)
+    assertEquals(#world.spawned, #pen.breeders, "a trailer a breeder")
     for _, spawn in ipairs(world.spawned) do
         assertEquals(spawn.trailer:getOwnerFarmId(), 8, "the spare farm id's")
-        typesSeen[spawn.entry.typeName] = true
+        local spot = pens[spawn.index].trailer
+        assertNear(spawn.trailer.spot.x, spot.x, 0.001, "behind its breeder's pen")
+        assertNear(spawn.trailer.spot.z, spot.z, 0.001)
     end
-    assertTrue(typesSeen.COW and typesSeen.SHEEP and not typesSeen.CHICKEN)
-    assertEquals(#world.adds, TCBreedersPen.TYPES)
     for _, add in ipairs(world.adds) do
         assertEquals(add.farmId, 8, "stocked as the spare farm id")
-        assertEquals(#add.animals, TCBreedersPen.PER_TRAILER)
     end
-    for _, animal in ipairs(world.created) do
-        assertEquals(animal.quality, TCBreedersPen.QUALITY)
-        assertTrue(animal.age ~= nil and animal.age >= 3, "an age inside a band")
+    local made = 0
+    for _, breeder in ipairs(pen.breeders) do
+        assertEquals(#breeder.trailerIds, 1)
+        for _, animal in ipairs(breeder.animals) do
+            made = made + 1
+            assertTrue(animal.key ~= nil, "its RL key")
+            assertTrue(not animal.missing)
+        end
     end
-    local breeder = pen:getBreeder()
-    assertTrue(breeder ~= nil, "a breeder")
-    assertTrue(breeder.id ~= HOST_ID and breeder.id ~= 8 and breeder.id ~= 9, "not the host or a farmer about")
-    assertEquals(#pen:getCatalogue(), TCBreedersPen.TYPES * TCBreedersPen.PER_TRAILER)
-    assertTrue(world.events[#world.events].pen == pen, "sent to every machine")
+    assertEquals(#world.created, made, "one made an animal")
+    for i, animal in ipairs(world.created) do
+        assertEquals(animal.quality, TCBreedersPen.QUALITY, "premium only")
+        assertTrue(animal.age ~= nil)
+    end
+    -- What RL made is what was planned.
+    local first = pen.breeders[1].animals[1]
+    assertEquals(world.created[1].subType, first.subTypeName)
+    assertEquals(world.created[1].age, first.age)
+    assertEquals(#pen:getCatalogue(), made)
+    assertEquals(#pen:getCatalogue(false, 2), #pen.breeders[2].animals, "one breeder's")
 
     -- Set out again (the console's show day): what's out stays.
     world.competitions.breedersPen.onSetOut(world.event)
-    assertEquals(#world.spawned, TCBreedersPen.TYPES)
+    assertEquals(#world.spawned, #pen.breeders)
 end)
 
-test("a sick animal's drawn again, and a farm on 8 means the pen's on 7, none spare none", function()
+test("a sick animal's drawn again, a farm on 8 puts them on 7; with no spare id or no RL they come with nothing to sell", function()
     local world = setup()
     installAPI(world)
     world.sickQueue = { true, true }
     world.existingFarms[8] = true
-    world.pen:open(world.event)
+    setOut(world)
     assertEquals(world.pen.farmId, 7)
     for _, entry in ipairs(world.pen:getCatalogue(true)) do
         assertTrue(not entry.info.diseased, "no sick one put out")
     end
-    assertEquals(#world.created, TCBreedersPen.TYPES * TCBreedersPen.PER_TRAILER + 2, "two drawn again")
+    local made = 0
+    for _, breeder in ipairs(world.pen.breeders) do
+        made = made + #breeder.animals
+    end
+    assertEquals(#world.created, made + 2, "two drawn again")
 
     local full = setup()
     installAPI(full)
     for id = 1, 8 do
         full.existingFarms[id] = true
     end
-    assertTrue(full.pen:open(full.event) ~= nil)
-    assertEquals(#full.spawned, 0, "no spare id, no pen")
+    setOut(full)
+    assertEquals(#full.spawned, 0, "no spare id, no trailers")
+    assertTrue(full.pen:isOut(), "the breeders still come")
+    assertTrue(not full.pen:hasSales())
+
+    local plain = setup()
+    RealisticLivestockAPI = nil
+    setOut(plain)
+    assertEquals(#plain.spawned, 0)
+    assertTrue(plain.pen:isOpen() and not plain.pen:hasSales())
 end)
 
-test("a trailer that loads after the pen's closed is taken away", function()
+test("188: a breeder the real showground has no room for stays away, and the livestock's told", function()
+    local world = setup()
+    RealisticLivestockAPI = nil
+    plan(world)
+    local count = #world.pen.breeders
+    -- The scene laid out smaller than planned.
+    makeShowground(world, 65, 30)
+    world.scene.breeders = world.competitions.breedersPen.getBreeders(world.event)
+    world.competitions.breedersPen.onSetOut(world.event)
+    local away = 0
+    for _, breeder in ipairs(world.pen.breeders) do
+        if breeder.absent then
+            away = away + 1
+        end
+    end
+    assertTrue(away > 0 and away < count)
+    assertEquals(#world.pen:getBreeders(), count - away)
+    assertEquals(world.away, 1)
+end)
+
+test("a trailer that loads after the show's cleared is taken away", function()
     local world = setup()
     installAPI(world)
     world.deferSpawns = true
-    world.pen:open(world.event)
-    world.pen:close()
+    setOut(world)
+    world.competitions.breedersPen.onFinished(world.event)
     local pending = world.pendingSpawns[1]
-    world.pen:onTrailerSpawned(pending.trailer, pending.entry, pending.generation)
-    assertEquals(#world.pen.trailerIds, 0)
+    world.pen:onTrailerSpawned(pending.trailer, pending.index, pending.generation)
+    assertEquals(#world.pen:getTrailerIds(), 0)
     assertEquals(world.deleted[#world.deleted], pending.trailer.id)
 end)
 
 -- Buying -----------------------------------------------------------------------------------------------------
 
-local function openPen(world)
+local function openPens(world)
     installAPI(world)
-    world.pen:open(world.event)
-    local stand = TCShowScene.getBreederStand(world.scene)
-    world.trailer = addPlace(world, "trailer", 1, stand.x + 5, stand.z)
+    setOut(world)
+    local pen = TCShowScene.getBreederPens(world.scene)[1]
+    world.trailer = addPlace(world, "trailer", 1, pen.x + 5, pen.z)
     world.barn = addPlace(world, "husbandry", 1, 0, 0)
-    return world.pen:getCatalogue()
+    return world.pen:getCatalogue(false, 1)
 end
 
-test("bought into a trailer at the show: RL moves it, then the farm's charged the price, once", function()
+test("bought into a trailer at the show: RL moves it, then the farm's charged the price, once, and it's gone from the pen", function()
     local world = setup()
-    local catalogue = openPen(world)
+    local catalogue = openPens(world)
     local entry = catalogue[1]
-    local targets = world.pen:getTargets(1, entry.subTypeIndex)
-    assertEquals(#targets, 2, "the trailer at the show and the barn")
+    assertEquals(entry.breeder, 1)
+    assertTrue(entry.record ~= nil, "our record of it")
+    local targets = world.pen:getTargets(1, entry.subTypeIndex, 1)
+    assertEquals(#targets, 2, "the trailer by the pen and the barn")
     assertEquals(targets[1].object, world.trailer)
     assertEquals(targets[1].fee, 0, "free into a trailer")
     assertEquals(targets[2].fee, TCBreedersPen.DELIVERY_FEE, "the barn's delivered")
 
+    local version = world.pen.version
     local answer, paid = world.pen:handleBuy(1, entry.key, world.trailer.id, nil)
     assertEquals(answer, A.BOUGHT)
     assertEquals(paid, entry.price)
@@ -522,16 +686,29 @@ test("bought into a trailer at the show: RL moves it, then the farm's charged th
     assertEquals(#world.money, 1)
     assertEquals(world.money[1].amount, -entry.price)
     assertEquals(world.money[1].moneyType, MoneyType.TC_BREEDER_STOCK)
-    assertEquals(#world.pen:getCatalogue(), #catalogue - 1, "gone from the stand")
+    assertEquals(#world.pen:getCatalogue(false, 1), #catalogue - 1, "gone from the breeder")
+    assertTrue(entry.record.sold, "and from their pen")
+    assertTrue(world.pen.version > version)
 
     local again = world.pen:handleBuy(2, entry.key, world.trailer.id, nil)
     assertEquals(again, A.SOLD, "a second buyer finds it gone")
     assertEquals(#world.money, 1, "and pays nothing")
 end)
 
+test("188: an entered animal isn't sold till its class is over", function()
+    local world = setup()
+    local entry = openPens(world)[1]
+    world.held["1:" .. entry.record.id] = 11 * 60
+    assertEquals(world.pen:handleBuy(1, entry.key, world.trailer.id, nil), A.ENTERED)
+    assertEquals(#world.moves, 0)
+    assertEquals(#world.money, 0)
+    world.held["1:" .. entry.record.id] = nil
+    assertEquals(world.pen:handleBuy(1, entry.key, world.trailer.id, nil), A.BOUGHT, "after its class")
+end)
+
 test("delivered to a barn costs the fee on top, scaled as any fixed cost", function()
     local world = setup()
-    local entry = openPen(world)[2]
+    local entry = openPens(world)[2]
     world.costScale = 2
     local answer, paid = world.pen:handleBuy(1, entry.key, world.barn.id, nil)
     assertEquals(answer, A.BOUGHT)
@@ -541,7 +718,7 @@ end)
 
 test("nothing's charged unless RL moved it", function()
     local world = setup()
-    local entry = openPen(world)[1]
+    local entry = openPens(world)[1]
     world.moveRefusal = world.api.REASON.NOT_ENOUGH_SPACE
     assertEquals(world.pen:handleBuy(1, entry.key, world.trailer.id, nil), A.NO_ROOM)
     world.moveRefusal = world.api.REASON.FAILED
@@ -555,14 +732,18 @@ test("nothing's charged unless RL moved it", function()
     world.noPermission = false
     assertEquals(#world.money, 0)
     assertEquals(#world.moves, 0)
+    assertTrue(not entry.record.sold)
 end)
 
 test("refused: closed, a place not the farm's or not at the show, and one that's fallen sick", function()
     local world = setup()
-    local entry = openPen(world)[1]
+    local entry = openPens(world)[1]
     world.open = false
     assertEquals(world.pen:handleBuy(1, entry.key, world.trailer.id, nil), A.CLOSED, "the stands are shut")
     world.open = true
+    world.pen:setPresent(false)
+    assertEquals(world.pen:handleBuy(1, entry.key, world.trailer.id, nil), A.CLOSED, "the gates are shut")
+    world.pen:setPresent(true)
     local away = addPlace(world, "trailer", 1, 5000, 5000)
     assertEquals(world.pen:handleBuy(1, entry.key, away.id, nil), A.NO_ROOM, "a trailer left at home")
     local others = addPlace(world, "trailer", 2, world.trailer.rootNode.x, world.trailer.rootNode.z)
@@ -578,47 +759,72 @@ end)
 
 -- Closing ----------------------------------------------------------------------------------------------------
 
-test("a farm made on the spare id closes the pen at once; another id doesn't", function()
+test("a farm made on the spare id has the trailers taken away at once (the breeders stay, nothing to sell); another id doesn't", function()
     local world = setup()
-    openPen(world)
+    openPens(world)
     local subscription = world.subscriptions[1]
     assertEquals(subscription.messageType, MessageType.FARM_CREATED)
-    local trailers = { world.pen.trailerIds[1], world.pen.trailerIds[2] }
+    local trailers = world.pen:getTrailerIds()
     subscription.callback(subscription.target, 3)
-    assertTrue(world.pen:isOut(), "farm 3's nothing to do with it")
+    assertTrue(world.pen:hasSales(), "farm 3's nothing to do with it")
     subscription.callback(subscription.target, 8)
-    assertTrue(not world.pen:isOut())
+    assertTrue(not world.pen:hasSales())
     assertEquals(world.pen.farmId, 0)
+    assertEquals(#world.deleted, #trailers)
     assertEquals(world.deleted[1], trailers[1])
-    assertEquals(world.deleted[2], trailers[2])
+    assertTrue(world.pen:isOut(), "the breeders are still there")
+    assertTrue(world.pen.breeders[1].animals[1].missing, "their RL stock gone with the trailers")
 end)
 
-test("at the show's end, or called off, the trailers and anything unsold go", function()
+test("at the show's end, or called off, the trailers and anything unsold go, and the breeders", function()
     local world = setup()
-    openPen(world)
+    openPens(world)
+    local trailers = #world.pen:getTrailerIds()
     world.competitions.breedersPen.onFinished(world.event)
-    assertEquals(#world.deleted, TCBreedersPen.TYPES)
+    assertEquals(#world.deleted, trailers)
     assertTrue(not world.pen:isOut())
-    openPen(world)
+    assertEquals(#world.pen.breeders, 0)
+    openPens(world)
     world.competitions.breedersPen.onCancelled(world.event)
     assertTrue(not world.pen:isOut())
+    -- A new show's announced: the last one's gone.
+    plan(world)
+    world.competitions.breedersPen.onAnnounced({ id = 4 })
+    assertEquals(#world.pen.breeders, 0)
+    assertEquals(world.pen.showId, 4)
 end)
 
 -- Sync, save, people and vehicles ---------------------------------------------------------------------------
 
-test("the pen goes to every machine, and into the save, kept only while its show's on and its farm id spare", function()
+test("the breeders go to every machine, and into the save, their trailers kept only while the show's on and the farm id spare", function()
     local world = setup()
-    openPen(world)
+    openPens(world)
     local pen = world.pen
+    pen.breeders[2].animals[1].sold = true
     local stream = world:newStream()
     TheContractorBreedersPen.writeState(stream, pen)
     local client = TheContractorBreedersPen.new()
     client:applyState(TheContractorBreedersPen.readState(stream))
     assertEquals(client.showId, pen.showId)
     assertEquals(client.farmId, 8)
-    assertEquals(client.breederId, pen.breederId)
-    assertEquals(#client.trailerIds, #pen.trailerIds)
-    assertEquals(client.trailerIds[1], pen.trailerIds[1])
+    assertTrue(client.present)
+    assertEquals(#client.breeders, #pen.breeders)
+    for i, breeder in ipairs(pen.breeders) do
+        local copy = client.breeders[i]
+        assertEquals(copy.farmerId, breeder.farmerId)
+        assertEquals(copy.typeName, breeder.typeName)
+        assertEquals(copy.pen.length, breeder.pen.length)
+        assertTrue(copy.hasTrailer)
+        assertEquals(copy.trailerIds[1], breeder.trailerIds[1])
+        assertEquals(#copy.animals, #breeder.animals)
+        for j, animal in ipairs(breeder.animals) do
+            for _, field in ipairs({ "id", "classKey", "subTypeName", "age", "variation", "key" }) do
+                assertEquals(copy.animals[j][field], animal[field], field)
+            end
+        end
+    end
+    assertTrue(client.breeders[2].animals[1].sold)
+    assertEquals(client.breeders[1].entries, nil, "the plan's entries are the livestock's to send")
 
     local xml = {}
     pen:saveToXmlFile(xml)
@@ -627,8 +833,12 @@ test("the pen goes to every machine, and into the save, kept only while its show
     loaded:loadFromXMLFile(xml)
     loaded:resolveSavedVehicles()
     assertEquals(loaded.farmId, 8)
-    assertEquals(#loaded.trailerIds, #pen.trailerIds, "the same trailers, with the same animals in them")
-    assertEquals(loaded.trailerIds[1], pen.trailerIds[1])
+    assertEquals(#loaded.breeders, #pen.breeders)
+    assertEquals(#loaded:getTrailerIds(), #pen:getTrailerIds(), "the same trailers, with the same animals in them")
+    assertEquals(loaded.breeders[1].trailerIds[1], pen.breeders[1].trailerIds[1])
+    assertEquals(loaded.breeders[1].animals[1].key, pen.breeders[1].animals[1].key)
+    assertTrue(loaded.breeders[2].animals[1].sold)
+    assertEquals(loaded.breeders[1].model.xmlFilename, pen.breeders[1].model.xmlFilename)
 
     world.existingFarms[8] = true
     local taken = TheContractorBreedersPen.new()
@@ -636,8 +846,9 @@ test("the pen goes to every machine, and into the save, kept only while its show
     taken:loadFromXMLFile(xml)
     local deleted = #world.deleted
     taken:resolveSavedVehicles()
-    assertEquals(#taken.trailerIds, 0, "farm 8's somebody's now")
-    assertEquals(#world.deleted, deleted + #pen.trailerIds)
+    assertEquals(#taken:getTrailerIds(), 0, "farm 8's somebody's now")
+    assertEquals(#world.deleted, deleted + #pen:getTrailerIds())
+    assertEquals(#taken.breeders, #pen.breeders, "the breeders stay")
 
     world.existingFarms[8] = nil
     g_currentMission.environment.currentMonotonicDay = SHOW_DAY + 1
@@ -645,19 +856,64 @@ test("the pen goes to every machine, and into the save, kept only while its show
     late.engine = pen.engine
     late:loadFromXMLFile(xml)
     late:resolveSavedVehicles()
-    assertEquals(#late.trailerIds, 0, "the show's day's past")
+    assertEquals(#late:getTrailerIds(), 0, "the show's day's past")
+    assertEquals(#late.breeders, 0)
 end)
 
-test("a retired breeder's successor takes the stand, and a replaced trailer keeps its place", function()
+test("trailers the save lost track of go: 173's under the pen, and any stray on the spare id", function()
     local world = setup()
-    openPen(world)
+    openPens(world)
     local pen = world.pen
-    local breederId = pen.breederId
+    VehiclePropertyState = { OWNED = 1, MISSION = 4 }
+    for _, trailerId in ipairs(pen:getTrailerIds()) do
+        NetworkUtil.getObject(trailerId).propertyState = VehiclePropertyState.MISSION
+    end
+    -- 173's save: one trailer under the pen itself.
+    local old = world:addVehicle({ name = "old breeder trailer", farmId = 8 })
+    old.uniqueId = "old173"
+    function old:getUniqueId() return self.uniqueId end
+    -- One nothing saved, on the spare id; a player's own, and a lent one
+    -- of a real farm's, stay.
+    local stray = world:addVehicle({ name = "stray", farmId = 7 })
+    local mine = world:addVehicle({ name = "mine", farmId = 1 })
+    local lent = world:addVehicle({ name = "lent", farmId = 1 })
+    for _, vehicle in ipairs({ old, stray, mine, lent }) do
+        vehicle.spec_livestockTrailer = {}
+        vehicle.propertyState = VehiclePropertyState.MISSION
+    end
+    mine.propertyState = VehiclePropertyState.OWNED
+    local xml = {}
+    pen:saveToXmlFile(xml)
+    xml[TheContractor.SaveKey .. "." .. TheContractorBreedersPen.SAVE_KEY .. ".trailer(0)#uniqueId"] = "old173"
+    local loaded = TheContractorBreedersPen.new()
+    loaded.engine = pen.engine
+    loaded:loadFromXMLFile(xml)
+    local deleted = #world.deleted
+    loaded:resolveSavedVehicles()
+    local gone = {}
+    for k = deleted + 1, #world.deleted do
+        gone[world.deleted[k]] = true
+    end
+    assertTrue(gone[NetworkUtil.getObjectId(old)], "173's")
+    assertTrue(gone[NetworkUtil.getObjectId(stray)], "the stray")
+    assertTrue(not gone[NetworkUtil.getObjectId(mine)] and not gone[NetworkUtil.getObjectId(lent)])
+    assertEquals(#loaded:getTrailerIds(), #pen:getTrailerIds(), "the breeders' own stay")
+    for _, trailerId in ipairs(pen:getTrailerIds()) do
+        assertTrue(not gone[trailerId])
+    end
+    VehiclePropertyState = nil
+end)
+
+test("a retired breeder's successor brings their stock, and a replaced trailer keeps its place", function()
+    local world = setup()
+    openPens(world)
+    local pen = world.pen
+    local breederId = pen.breeders[1].farmerId
     assertEquals(world.competitions.breedersPen.replacePerson(99, 100), 0)
     assertEquals(world.competitions.breedersPen.replacePerson(breederId, 100), 1)
-    assertEquals(pen.breederId, 100)
-    local oldId = pen.trailerIds[1]
+    assertEquals(pen.breeders[1].farmerId, 100)
+    local oldId = pen.breeders[1].trailerIds[1]
     pen:remapVehicle(oldId, 777)
-    assertEquals(pen.trailerIds[1], 777)
+    assertEquals(pen.breeders[1].trailerIds[1], 777)
     assertTrue(not pen:isTrailer(world.trailer))
 end)

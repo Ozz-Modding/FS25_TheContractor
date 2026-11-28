@@ -188,6 +188,40 @@ function TCRealisticLivestock.getAPIKey(info)
         tostring(id.number))
 end
 
+-- 188: what the judge reads of an animal from RL's API (describeAnimal's
+-- plain data), in readCluster's shape: { count 1, subTypeName, age,
+-- health, animal = { key, name, gender, weight, targetWeight, genetics,
+-- isPregnant, isLactating, isCastrated, isSick } }, or nil.
+function TCRealisticLivestock.readDescribed(info)
+    if type(info) ~= "table" then
+        return nil
+    end
+    local genetics = {}
+    if type(info.genetics) == "table" then
+        for _, trait in ipairs(TCRealisticLivestock.GENETICS) do
+            genetics[trait] = readNumber(info.genetics[trait])
+        end
+    end
+    return {
+        count = 1,
+        subTypeName = readString(info.subType),
+        age = readNumber(info.age),
+        health = readNumber(info.health),
+        animal = {
+            key = TCRealisticLivestock.getAPIKey(info),
+            name = readString(info.name),
+            gender = readString(info.gender),
+            weight = readNumber(info.weight),
+            targetWeight = readNumber(info.targetWeight),
+            genetics = genetics,
+            isPregnant = info.pregnant == true,
+            isLactating = info.lactating == true,
+            isCastrated = info.castrated == true,
+            isSick = info.diseased == true,
+        },
+    }
+end
+
 -- Tests.
 function TCRealisticLivestock.reset()
     capabilities = {}
